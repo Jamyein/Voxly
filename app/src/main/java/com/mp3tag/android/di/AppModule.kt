@@ -3,11 +3,20 @@ package com.mp3tag.android.di
 import android.content.Context
 import com.mp3tag.android.data.local.AudioFileScanner
 import com.mp3tag.android.data.local.metadata.JaudiotaggerMetadataProcessor
+import com.mp3tag.android.data.local.replaygain.ReplayGainScanner
+import com.mp3tag.android.data.remote.itunes.ITunesApi
+import com.mp3tag.android.data.remote.itunes.ITunesRepository
+import com.mp3tag.android.data.repository.AggregatedOnlineMetadataRepository
 import com.mp3tag.android.data.remote.musicbrainz.MusicBrainzApi
+import com.mp3tag.android.data.remote.musicbrainz.MusicBrainzRepository
 import com.mp3tag.android.data.repository.AudioRepositoryImpl
 import com.mp3tag.android.data.repository.ReplayGainRepositoryImpl
 import com.mp3tag.android.domain.repository.AudioRepository
+import com.mp3tag.android.domain.repository.OnlineMetadataRepository
 import com.mp3tag.android.domain.repository.ReplayGainRepository
+import com.mp3tag.android.domain.usecase.BatchAlbumArtUseCase
+import com.mp3tag.android.domain.usecase.BatchEditMetadataUseCase
+import com.mp3tag.android.domain.usecase.BatchReplayGainUseCase
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -19,6 +28,7 @@ import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
@@ -45,7 +55,8 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    @Named("musicbrainz")
+    fun provideMusicBrainzRetrofit(okHttpClient: OkHttpClient): Retrofit {
         return Retrofit.Builder()
             .baseUrl(MusicBrainzApi.BASE_URL)
             .client(okHttpClient)
@@ -55,8 +66,25 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideMusicBrainzApi(retrofit: Retrofit): MusicBrainzApi {
+    fun provideMusicBrainzApi(@Named("musicbrainz") retrofit: Retrofit): MusicBrainzApi {
         return retrofit.create(MusicBrainzApi::class.java)
+    }
+
+    @Provides
+    @Singleton
+    @Named("itunes")
+    fun provideITunesRetrofit(okHttpClient: OkHttpClient): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl(ITunesApi.BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideITunesApi(@Named("itunes") retrofit: Retrofit): ITunesApi {
+        return retrofit.create(ITunesApi::class.java)
     }
 
     @Provides
@@ -73,6 +101,56 @@ object AppModule {
         @ApplicationContext context: Context
     ): JaudiotaggerMetadataProcessor {
         return JaudiotaggerMetadataProcessor(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideReplayGainScanner(
+        @ApplicationContext context: Context
+    ): ReplayGainScanner {
+        return ReplayGainScanner(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideMusicBrainzRepository(
+        @ApplicationContext context: Context,
+        musicBrainzApi: MusicBrainzApi
+    ): MusicBrainzRepository {
+        return MusicBrainzRepository(context, musicBrainzApi)
+    }
+
+    @Provides
+    @Singleton
+    fun provideITunesRepository(
+        @ApplicationContext context: Context,
+        iTunesApi: ITunesApi
+    ): ITunesRepository {
+        return ITunesRepository(context, iTunesApi)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBatchEditMetadataUseCase(
+        audioRepository: AudioRepository
+    ): BatchEditMetadataUseCase {
+        return BatchEditMetadataUseCase(audioRepository)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBatchReplayGainUseCase(
+        replayGainRepository: ReplayGainRepository
+    ): BatchReplayGainUseCase {
+        return BatchReplayGainUseCase(replayGainRepository)
+    }
+
+    @Provides
+    @Singleton
+    fun provideBatchAlbumArtUseCase(
+        audioRepository: AudioRepository
+    ): BatchAlbumArtUseCase {
+        return BatchAlbumArtUseCase(audioRepository)
     }
 }
 
@@ -94,4 +172,10 @@ abstract class RepositoryModule {
     abstract fun bindReplayGainRepository(
         replayGainRepositoryImpl: ReplayGainRepositoryImpl
     ): ReplayGainRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindOnlineMetadataRepository(
+        aggregatedRepository: AggregatedOnlineMetadataRepository
+    ): OnlineMetadataRepository
 }

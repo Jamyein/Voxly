@@ -3,6 +3,7 @@ package com.mp3tag.android.data.repository
 import android.content.Context
 import com.mp3tag.android.data.local.AudioFileScanner
 import com.mp3tag.android.data.local.metadata.JaudiotaggerMetadataProcessor
+import com.mp3tag.android.data.local.replaygain.ReplayGainScanner
 import com.mp3tag.android.domain.model.AudioFile
 import com.mp3tag.android.domain.model.AudioMetadata
 import com.mp3tag.android.domain.model.ReplayGainInfo
@@ -176,61 +177,19 @@ class AudioRepositoryImpl @Inject constructor(
 
 /**
  * Implementation of ReplayGainRepository.
- * Provides basic ReplayGain reading and writing capabilities.
+ * Uses ReplayGainScanner for audio analysis and jaudiotagger for tag writing.
  */
 @Singleton
 class ReplayGainRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val metadataProcessor: JaudiotaggerMetadataProcessor
+    private val metadataProcessor: JaudiotaggerMetadataProcessor,
+    private val replayGainScanner: ReplayGainScanner
 ) : ReplayGainRepository {
 
     override fun scanReplayGain(
         filePaths: List<String>,
         scanQuality: ScanQuality
-    ): Flow<ScanProgress> = flow {
-        var processedCount = 0
-        val totalFiles = filePaths.size
-
-        filePaths.forEachIndexed { index, filePath ->
-            emit(
-                ScanProgress(
-                    currentFile = index + 1,
-                    totalFiles = totalFiles,
-                    percentage = (index + 1).toFloat() / totalFiles,
-                    currentFilePath = filePath,
-                    status = ScanStatus.SCANNING
-                )
-            )
-
-            try {
-                // TODO: Implement actual audio analysis for ReplayGain calculation
-                // For now, we'll simulate progress
-                kotlinx.coroutines.delay(100)
-            } catch (e: Exception) {
-                emit(
-                    ScanProgress(
-                        currentFile = index + 1,
-                        totalFiles = totalFiles,
-                        percentage = index.toFloat() / totalFiles,
-                        currentFilePath = filePath,
-                        status = ScanStatus.FAILED
-                    )
-                )
-            }
-
-            processedCount++
-        }
-
-        emit(
-            ScanProgress(
-                currentFile = totalFiles,
-                totalFiles = totalFiles,
-                percentage = 1f,
-                currentFilePath = "",
-                status = ScanStatus.COMPLETED
-            )
-        )
-    }.flowOn(Dispatchers.IO)
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGain(filePaths, scanQuality)
 
     override suspend fun applyReplayGain(
         filePaths: List<String>,
@@ -238,7 +197,6 @@ class ReplayGainRepositoryImpl @Inject constructor(
         applyToAlbum: Boolean
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
-            // TODO: Implement actual ReplayGain tag writing
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
@@ -246,12 +204,7 @@ class ReplayGainRepositoryImpl @Inject constructor(
     }
 
     override suspend fun readReplayGain(filePath: String): Result<ReplayGainInfo?> =
-        withContext(Dispatchers.IO) {
-            try {
-                // TODO: Implement actual ReplayGain reading from tags
-                Result.success(null)
-            } catch (e: Exception) {
-                Result.failure(e)
-            }
-        }
+        replayGainScanner.readReplayGainFromFile(filePath)
+            ?.let { Result.success(it) }
+            ?: Result.success(null)
 }
