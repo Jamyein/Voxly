@@ -1,13 +1,15 @@
 package com.mp3tag.android.presentation.screens
 
+import android.app.Activity
+import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.os.LocaleListCompat
 import androidx.annotation.StringRes
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -23,9 +25,14 @@ import com.mp3tag.android.presentation.viewmodel.SettingsViewModel
 fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val darkTheme by viewModel.darkTheme.collectAsState()
+    val context = LocalContext.current
+    val activity = context as? Activity
+    
     val dynamicColors by viewModel.dynamicColors.collectAsState()
     val scanQuality by viewModel.scanQuality.collectAsState()
+    val savedLanguageTag by viewModel.languageTag.collectAsState()
+    val themeMode by viewModel.themeMode.collectAsState()
+    
     var languageExpanded by remember { mutableStateOf(false) }
     val languageOptions = remember {
         listOf(
@@ -34,9 +41,11 @@ fun SettingsScreen(
             LanguageOption(R.string.settings_language_chinese_simplified, "zh-CN")
         )
     }
-    var selectedLanguageTag by remember { mutableStateOf(resolveCurrentLanguageTag()) }
+    
+    // 使用 savedLanguageTag 或解析当前系统语言
+    val effectiveLanguageTag = savedLanguageTag ?: resolveCurrentLanguageTag()
     val currentLanguageOption = languageOptions.firstOrNull {
-        normalizeLanguageTag(it.languageTag) == normalizeLanguageTag(selectedLanguageTag)
+        normalizeLanguageTag(it.languageTag) == normalizeLanguageTag(effectiveLanguageTag)
     } ?: languageOptions.first()
 
     var scanQualityExpanded by remember { mutableStateOf(false) }
@@ -49,6 +58,16 @@ fun SettingsScreen(
     }
     val currentScanQuality = scanQualityOptions.firstOrNull { it.value == scanQuality }
         ?: scanQualityOptions[1]
+    var themeExpanded by remember { mutableStateOf(false) }
+    val themeOptions = remember {
+        listOf(
+            ThemeModeOption("system", R.string.settings_theme_system),
+            ThemeModeOption("light", R.string.settings_theme_light),
+            ThemeModeOption("dark", R.string.settings_theme_dark)
+        )
+    }
+    val currentTheme = themeOptions.firstOrNull { it.value == themeMode }
+        ?: themeOptions.first()
 
     Scaffold(
         topBar = {
@@ -65,12 +84,53 @@ fun SettingsScreen(
         ) {
             // Appearance Section
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_dark_theme),
-                    subtitle = stringResource(R.string.settings_dark_theme_subtitle),
-                    checked = darkTheme,
-                    onCheckedChange = { viewModel.setDarkTheme(it) }
-                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.settings_theme),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_theme_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    ExposedDropdownMenuBox(
+                        expanded = themeExpanded,
+                        onExpandedChange = { themeExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = stringResource(currentTheme.labelResId),
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = themeExpanded) },
+                            modifier = Modifier.menuAnchor()
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = themeExpanded,
+                            onDismissRequest = { themeExpanded = false }
+                        ) {
+                            themeOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(option.labelResId)) },
+                                    onClick = {
+                                        viewModel.setThemeMode(option.value)
+                                        themeExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
 
                 SettingsSwitch(
                     title = stringResource(R.string.settings_dynamic_color),
@@ -123,15 +183,10 @@ fun SettingsScreen(
                                 DropdownMenuItem(
                                     text = { Text(stringResource(option.labelResId)) },
                                     onClick = {
-                                        selectedLanguageTag = option.languageTag
-                                        AppCompatDelegate.setApplicationLocales(
-                                            if (option.languageTag == null) {
-                                                LocaleListCompat.getEmptyLocaleList()
-                                            } else {
-                                                LocaleListCompat.forLanguageTags(option.languageTag)
-                                            }
-                                        )
+                                        viewModel.setLanguage(option.languageTag)
                                         languageExpanded = false
+                                        // Recreate activity to apply language change
+                                        activity?.recreate()
                                     }
                                 )
                             }
@@ -287,6 +342,11 @@ private data class LanguageOption(
 )
 
 private data class ScanQualityOption(
+    val value: String,
+    @StringRes val labelResId: Int
+)
+
+private data class ThemeModeOption(
     val value: String,
     @StringRes val labelResId: Int
 )

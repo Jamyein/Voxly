@@ -3,6 +3,8 @@ package com.mp3tag.android.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mp3tag.android.data.local.SettingsDataStore
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -50,6 +52,26 @@ class SettingsViewModel @Inject constructor(
         )
 
     /**
+     * Language tag state (null means system default)
+     */
+    val languageTag: StateFlow<String?> = settingsDataStore.languageTag
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = null
+        )
+
+    /**
+     * Theme mode state (system | light | dark)
+     */
+    val themeMode: StateFlow<String> = settingsDataStore.themeMode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "system"
+        )
+
+    /**
      * Set dark theme preference
      */
     fun setDarkTheme(enabled: Boolean) {
@@ -73,6 +95,35 @@ class SettingsViewModel @Inject constructor(
     fun setScanQuality(quality: String) {
         viewModelScope.launch {
             settingsDataStore.setScanQuality(quality)
+        }
+    }
+
+    /**
+     * Set theme mode preference
+     */
+    fun setThemeMode(mode: String) {
+        viewModelScope.launch {
+            settingsDataStore.setThemeMode(mode)
+        }
+    }
+
+    /**
+     * Set language preference and apply it immediately
+     * @param tag Language tag (e.g., "en", "zh-CN") or null for system default
+     */
+    fun setLanguage(tag: String?) {
+        viewModelScope.launch {
+            // Save to DataStore
+            settingsDataStore.setLanguageTag(tag)
+            
+            // Apply immediately using AppCompatDelegate
+            AppCompatDelegate.setApplicationLocales(
+                if (tag == null) {
+                    LocaleListCompat.getEmptyLocaleList()
+                } else {
+                    LocaleListCompat.forLanguageTags(tag)
+                }
+            )
         }
     }
 }

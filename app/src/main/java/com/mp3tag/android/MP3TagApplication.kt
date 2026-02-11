@@ -12,6 +12,6 @@ class MP3TagApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        // Initialize any application-level dependencies here
+        // AppCompatDelegate automatically persists and restores language settings
     }
 }

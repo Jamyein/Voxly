@@ -61,6 +61,7 @@
     <string name="settings_theme_dark">Dark</string>
     <string name="settings_theme_system">System Default</string>
     <string name="settings_dynamic_color">Dynamic Colors</string>
+    <string name="settings_theme_subtitle">Follow system or choose light/dark</string>
     <string name="settings_scan_quality">Scan Quality</string>
     <string name="settings_scan_quality_fast">Fast</string>
     <string name="settings_scan_quality_normal">Normal</string>

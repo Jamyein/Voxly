@@ -61,6 +61,7 @@
     <string name="settings_theme_dark">深色</string>
     <string name="settings_theme_system">跟随系统</string>
     <string name="settings_dynamic_color">动态颜色</string>
+    <string name="settings_theme_subtitle">跟随系统或选择浅色/深色</string>
     <string name="settings_scan_quality">扫描质量</string>
     <string name="settings_scan_quality_fast">快速</string>
     <string name="settings_scan_quality_normal">普通</string>

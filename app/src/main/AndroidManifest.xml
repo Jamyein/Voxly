@@ -21,8 +21,17 @@
         android:label="@string/app_name"
         android:supportsRtl="true"
         android:theme="@style/Theme.MP3TagAndroid"
+        android:localeConfig="@xml/locales_config"
         android:requestLegacyExternalStorage="true"
         tools:targetApi="34">
+
+        <service
+            android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+            android:exported="false">
+            <meta-data
+                android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
+                android:value="androidx.appcompat.app.AppLocalesMetadataHolderService" />
+        </service>
 
         <activity
             android:name=".presentation.MainActivity"
