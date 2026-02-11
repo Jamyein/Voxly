@@ -6,12 +6,15 @@ import com.mp3tag.android.data.local.metadata.JaudiotaggerMetadataProcessor
 import com.mp3tag.android.data.local.replaygain.ReplayGainScanner
 import com.mp3tag.android.data.remote.itunes.ITunesApi
 import com.mp3tag.android.data.remote.itunes.ITunesRepository
+import com.mp3tag.android.data.remote.lrclib.LRCLibApi
 import com.mp3tag.android.data.repository.AggregatedOnlineMetadataRepository
 import com.mp3tag.android.data.remote.musicbrainz.MusicBrainzApi
 import com.mp3tag.android.data.remote.musicbrainz.MusicBrainzRepository
 import com.mp3tag.android.data.repository.AudioRepositoryImpl
+import com.mp3tag.android.data.repository.LyricsRepositoryImpl
 import com.mp3tag.android.data.repository.ReplayGainRepositoryImpl
 import com.mp3tag.android.domain.repository.AudioRepository
+import com.mp3tag.android.domain.repository.LyricsRepository
 import com.mp3tag.android.domain.repository.OnlineMetadataRepository
 import com.mp3tag.android.domain.repository.ReplayGainRepository
 import com.mp3tag.android.domain.usecase.BatchAlbumArtUseCase
@@ -89,6 +92,23 @@ object AppModule {
 
     @Provides
     @Singleton
+    @Named("lrclib")
+    fun provideLRCLibRetrofit(okHttpClient: OkHttpClient): Retrofit {
+        return Retrofit.Builder()
+            .baseUrl(LRCLibApi.BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(GsonConverterFactory.create())
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideLRCLibApi(@Named("lrclib") retrofit: Retrofit): LRCLibApi {
+        return retrofit.create(LRCLibApi::class.java)
+    }
+
+    @Provides
+    @Singleton
     fun provideAudioFileScanner(
         @ApplicationContext context: Context
     ): AudioFileScanner {
@@ -151,6 +171,16 @@ object AppModule {
         audioRepository: AudioRepository
     ): BatchAlbumArtUseCase {
         return BatchAlbumArtUseCase(audioRepository)
+    }
+
+    @Provides
+    @Singleton
+    fun provideLyricsRepository(
+        @ApplicationContext context: Context,
+        metadataProcessor: JaudiotaggerMetadataProcessor,
+        lrclibApi: LRCLibApi
+    ): LyricsRepository {
+        return LyricsRepositoryImpl(context, metadataProcessor, lrclibApi)
     }
 }
 

@@ -34,6 +34,7 @@ import com.mp3tag.android.presentation.screens.MetadataEditorScreen
 import com.mp3tag.android.presentation.screens.RecentEditsScreen
 import com.mp3tag.android.presentation.screens.ReplayGainScannerScreen
 import com.mp3tag.android.presentation.screens.SettingsScreen
+import com.mp3tag.android.presentation.screens.metadata.LyricsEditorScreen
 import java.net.URLDecoder
 
 /**
@@ -134,6 +135,9 @@ fun MP3TagNavHost(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToOnlineMetadata = {
                         navController.navigate(Screen.OnlineMetadata.createRoute(filePath))
+                    },
+                    onNavigateToLyrics = { trackName, artistName ->
+                        navController.navigate(Screen.LyricsEditor.createRoute(filePath, trackName, artistName))
                     }
                 )
             }
@@ -154,6 +158,26 @@ fun MP3TagNavHost(
                             popUpTo(Screen.FileBrowser.route)
                         }
                     }
+                )
+            }
+
+            composable(
+                route = Screen.LyricsEditor.route,
+                arguments = listOf(
+                    navArgument("filePath") { type = NavType.StringType },
+                    navArgument("trackName") { type = NavType.StringType },
+                    navArgument("artistName") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
+                val encodedTrack = backStackEntry.arguments?.getString("trackName") ?: ""
+                val encodedArtist = backStackEntry.arguments?.getString("artistName") ?: ""
+                
+                LyricsEditorScreen(
+                    filePath = URLDecoder.decode(encodedPath, "UTF-8"),
+                    trackName = URLDecoder.decode(encodedTrack, "UTF-8"),
+                    artistName = URLDecoder.decode(encodedArtist, "UTF-8"),
+                    onNavigateBack = { navController.popBackStack() }
                 )
             }
         }

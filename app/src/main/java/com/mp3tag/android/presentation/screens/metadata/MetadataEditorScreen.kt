@@ -6,6 +6,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,7 +27,8 @@ fun MetadataEditorScreen(
     filePath: String,
     viewModel: MetadataEditorViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
-    onNavigateToOnlineMetadata: () -> Unit
+    onNavigateToOnlineMetadata: () -> Unit,
+    onNavigateToLyrics: (trackName: String, artistName: String) -> Unit = { _, _ -> }
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val editedMetadata by viewModel.editedMetadata.collectAsState()
@@ -131,7 +133,13 @@ fun MetadataEditorScreen(
                                 total.toIntOrNull()
                             )
                         },
-                        onAlbumArtChange = { viewModel.updateAlbumArt(it) }
+                        onAlbumArtChange = { viewModel.updateAlbumArt(it) },
+                        onEditLyrics = {
+                            onNavigateToLyrics(
+                                state.editedMetadata.title ?: state.audioFile.name,
+                                state.editedMetadata.artist ?: "Unknown Artist"
+                            )
+                        }
                     )
                 }
                 is MetadataEditorUiState.Error -> {
@@ -194,7 +202,8 @@ private fun MetadataForm(
     onComposerChange: (String) -> Unit,
     onTrackNumberChange: (String, String) -> Unit,
     onDiscNumberChange: (String, String) -> Unit,
-    onAlbumArtChange: (ByteArray?) -> Unit
+    onAlbumArtChange: (ByteArray?) -> Unit,
+    onEditLyrics: () -> Unit = {}
 ) {
     Column(
         modifier = Modifier
@@ -337,6 +346,54 @@ private fun MetadataForm(
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Lyrics Section
+        SectionTitle("Lyrics")
+
+        OutlinedCard(
+            onClick = onEditLyrics,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Column {
+                        Text(
+                            text = "Edit Lyrics",
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = if (metadata.lyrics.isNullOrBlank()) {
+                                "No lyrics added"
+                            } else {
+                                "Lyrics available"
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Icon(
+                    Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
 
         Spacer(modifier = Modifier.height(16.dp))
 
