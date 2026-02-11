@@ -1,6 +1,8 @@
 package com.mp3tag.android.presentation.screens.metadata
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -10,10 +12,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mp3tag.android.R
 import com.mp3tag.android.presentation.viewmodel.LyricsEditorUiState
 import com.mp3tag.android.presentation.viewmodel.LyricsEditorViewModel
 
@@ -43,7 +47,7 @@ fun LyricsEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Edit Lyrics") },
+                title = { Text(stringResource(R.string.edit_lyrics)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         if (hasChanges) {
@@ -52,17 +56,17 @@ fun LyricsEditorScreen(
                             onNavigateBack()
                         }
                     }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 actions = {
                     if (hasChanges) {
                         IconButton(onClick = { viewModel.saveLyrics() }) {
-                            Icon(Icons.Default.Save, contentDescription = "Save")
+                            Icon(Icons.Default.Save, contentDescription = stringResource(R.string.dialog_save))
                         }
                     }
                     IconButton(onClick = { viewModel.searchOnlineLyrics() }) {
-                        Icon(Icons.Default.CloudDownload, contentDescription = "Search Online")
+                        Icon(Icons.Default.CloudDownload, contentDescription = stringResource(R.string.search_online))
                     }
                 }
             )
@@ -72,7 +76,7 @@ fun LyricsEditorScreen(
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.saveLyrics() },
                     icon = { Icon(Icons.Default.Save, contentDescription = null) },
-                    text = { Text("Save Lyrics") }
+                    text = { Text(stringResource(R.string.save_lyrics)) }
                 )
             }
         }
@@ -90,10 +94,7 @@ fun LyricsEditorScreen(
                     SavingContent()
                 }
                 is LyricsEditorUiState.Error -> {
-                    ErrorContent(
-                        message = state.message,
-                        onRetry = { viewModel.loadLyrics() }
-                    )
+                    ErrorContent(message = state.message)
                 }
                 is LyricsEditorUiState.Success -> {
                     LyricsEditorContent(
@@ -128,19 +129,19 @@ fun LyricsEditorScreen(
     if (showDiscardDialog) {
         AlertDialog(
             onDismissRequest = { showDiscardDialog = false },
-            title = { Text("Unsaved Changes") },
-            text = { Text("You have unsaved changes. Discard them?") },
+            title = { Text(stringResource(R.string.dialog_unsaved_changes)) },
+            text = { Text(stringResource(R.string.dialog_discard_changes_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.discardChanges()
                     showDiscardDialog = false
                 }) {
-                    Text("Discard")
+                    Text(stringResource(R.string.dialog_discard))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDiscardDialog = false }) {
-                    Text("Keep Editing")
+                    Text(stringResource(R.string.keep_editing))
                 }
             }
         )
@@ -198,7 +199,7 @@ private fun LyricsEditorContent(
             // Synced toggle
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    text = "Synchronized Lyrics",
+                    text = stringResource(R.string.synchronized_lyrics),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 Spacer(modifier = Modifier.width(8.dp))
@@ -214,7 +215,7 @@ private fun LyricsEditorContent(
                     IconButton(onClick = onFormatLrc) {
                         Icon(
                             Icons.Default.Schedule,
-                            contentDescription = "Auto-format timestamps"
+                            contentDescription = stringResource(R.string.auto_format_timestamps)
                         )
                     }
                 }
@@ -222,7 +223,7 @@ private fun LyricsEditorContent(
                     IconButton(onClick = onRemoveLyrics) {
                         Icon(
                             Icons.Default.Delete,
-                            contentDescription = "Remove lyrics",
+                            contentDescription = stringResource(R.string.remove_lyrics),
                             tint = MaterialTheme.colorScheme.error
                         )
                     }
@@ -235,9 +236,9 @@ private fun LyricsEditorContent(
         // Hint text
         Text(
             text = if (isSynced) {
-                "Format: [mm:ss.xx] Lyrics text"
+                stringResource(R.string.lyrics_format_hint_synced)
             } else {
-                "Plain text lyrics"
+                stringResource(R.string.lyrics_format_hint_plain)
             },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -255,9 +256,9 @@ private fun LyricsEditorContent(
             placeholder = {
                 Text(
                     if (isSynced) {
-                        "[00:00.00] Enter synchronized lyrics here...\n[00:05.00] Each line should have a timestamp"
+                        stringResource(R.string.lyrics_placeholder_synced)
                     } else {
-                        "Enter lyrics here..."
+                        stringResource(R.string.lyrics_placeholder_plain)
                     }
                 )
             },
@@ -282,7 +283,7 @@ private fun LoadingContent() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Loading lyrics...")
+            Text(stringResource(R.string.loading_lyrics))
         }
     }
 }
@@ -296,7 +297,7 @@ private fun SavingContent() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Saving lyrics...")
+            Text(stringResource(R.string.saving_lyrics))
         }
     }
 }
@@ -304,7 +305,7 @@ private fun SavingContent() {
 @Composable
 private fun ErrorContent(
     message: String,
-    onRetry: () -> Unit
+    onRetry: (() -> Unit)? = null
 ) {
     Box(
         modifier = Modifier.fillMaxSize(),
@@ -322,9 +323,11 @@ private fun ErrorContent(
                 text = message,
                 color = MaterialTheme.colorScheme.error
             )
-            Spacer(modifier = Modifier.height(16.dp))
-            Button(onClick = onRetry) {
-                Text("Retry")
+            if (onRetry != null) {
+                Spacer(modifier = Modifier.height(16.dp))
+                Button(onClick = onRetry) {
+                    Text(stringResource(R.string.retry))
+                }
             }
         }
     }
@@ -342,11 +345,11 @@ private fun OnlineLyricsSearchDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Search Online Lyrics") },
+        title = { Text(stringResource(R.string.search_online_lyrics)) },
         text = {
             Column {
                 Text(
-                    text = "Searching for: $trackName - $artistName",
+                    text = stringResource(R.string.searching_for, trackName, artistName),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -370,7 +373,7 @@ private fun OnlineLyricsSearchDialog(
                         contentAlignment = Alignment.Center
                     ) {
                         Text(
-                            "No lyrics found online",
+                            stringResource(R.string.no_lyrics_found_online),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
@@ -391,7 +394,7 @@ private fun OnlineLyricsSearchDialog(
         confirmButton = {},
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Cancel")
+                Text(stringResource(R.string.dialog_cancel))
             }
         }
     )
@@ -437,7 +440,7 @@ private fun OnlineLyricsResultItem(
                 if (result.hasSyncedLyrics) {
                     AssistChip(
                         onClick = {},
-                        label = { Text("Synced") },
+                        label = { Text(stringResource(R.string.synced)) },
                         leadingIcon = {
                             Icon(
                                 Icons.Default.Schedule,
@@ -451,7 +454,7 @@ private fun OnlineLyricsResultItem(
                     Spacer(modifier = Modifier.width(4.dp))
                     AssistChip(
                         onClick = {},
-                        label = { Text("Instrumental") }
+                        label = { Text(stringResource(R.string.instrumental)) }
                     )
                 }
             }

@@ -1,0 +1,213 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MP3标签编辑器</string>
+
+    <!-- Navigation -->
+    <string name="nav_file_browser">文件</string>
+    <string name="nav_recent_edits">最近</string>
+    <string name="nav_batch_operations">批量</string>
+    <string name="nav_settings">设置</string>
+
+    <!-- File Browser -->
+    <string name="select_directory">选择目录</string>
+    <string name="no_audio_files">未找到音频文件</string>
+    <string name="file_count">%d 个文件</string>
+    <string name="loading">加载中...</string>
+
+    <!-- Metadata -->
+    <string name="metadata_title">标题</string>
+    <string name="metadata_artist">艺术家</string>
+    <string name="metadata_album">专辑</string>
+    <string name="metadata_year">年份</string>
+    <string name="metadata_genre">流派</string>
+    <string name="metadata_track_number">曲目编号</string>
+    <string name="metadata_disc_number">碟片编号</string>
+    <string name="metadata_composer">作曲家</string>
+    <string name="metadata_lyrics">歌词</string>
+    <string name="metadata_album_art">专辑封面</string>
+    <string name="metadata_bitrate">比特率</string>
+    <string name="metadata_sample_rate">采样率</string>
+    <string name="metadata_duration">时长</string>
+    <string name="metadata_file_size">文件大小</string>
+
+    <!-- Actions -->
+    <string name="edit_metadata">编辑元数据</string>
+    <string name="save_changes">保存更改</string>
+    <string name="discard_changes">放弃</string>
+    <string name="scan_replay_gain">扫描 ReplayGain</string>
+    <string name="fetch_online_metadata">获取在线元数据</string>
+    <string name="extract_album_art">提取专辑封面</string>
+    <string name="remove_album_art">移除专辑封面</string>
+    <string name="select_album_art">选择专辑封面</string>
+
+    <!-- ReplayGain -->
+    <string name="replay_gain_track">曲目增益</string>
+    <string name="replay_gain_album">专辑增益</string>
+    <string name="replay_gain_peak">峰值</string>
+    <string name="replay_gain_scan_progress">扫描中：%d%%</string>
+    <string name="replay_gain_scan_complete">扫描完成</string>
+    <string name="replay_gain_scan_failed">扫描失败</string>
+
+    <!-- Batch Operations -->
+    <string name="batch_edit">批量编辑</string>
+    <string name="batch_scan">批量扫描</string>
+    <string name="select_files">选择文件</string>
+    <string name="files_selected">已选择 %d 个文件</string>
+    <string name="apply_to_selected">应用到所选</string>
+
+    <!-- Settings -->
+    <string name="settings_theme">主题</string>
+    <string name="settings_theme_light">浅色</string>
+    <string name="settings_theme_dark">深色</string>
+    <string name="settings_theme_system">跟随系统</string>
+    <string name="settings_dynamic_color">动态颜色</string>
+    <string name="settings_scan_quality">扫描质量</string>
+    <string name="settings_scan_quality_fast">快速</string>
+    <string name="settings_scan_quality_normal">普通</string>
+    <string name="settings_scan_quality_accurate">精确</string>
+    <string name="settings_about">关于</string>
+    <string name="settings_version">版本 %s</string>
+
+    <!-- Messages -->
+    <string name="changes_saved">更改已保存</string>
+    <string name="changes_discarded">更改已丢弃</string>
+    <string name="error_loading_file">加载文件出错</string>
+    <string name="error_saving_file">保存文件出错</string>
+    <string name="error_network">网络错误。请检查你的连接。</string>
+    <string name="error_no_results">未找到结果</string>
+    <string name="permission_required">需要权限</string>
+    <string name="permission_storage_message">需要存储权限才能访问音频文件。</string>
+    <string name="grant_permission">授予权限</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_confirm_delete">确认删除</string>
+    <string name="dialog_confirm_delete_message">确定要删除此文件吗？</string>
+    <string name="dialog_unsaved_changes">未保存的更改</string>
+    <string name="dialog_unsaved_changes_message">你有未保存的更改。要保存吗？</string>
+    <string name="dialog_save">保存</string>
+    <string name="dialog_discard">丢弃</string>
+    <string name="dialog_cancel">取消</string>
+    <string name="dialog_ok">确定</string>
+
+    <!-- Content Descriptions -->
+    <string name="cd_album_art">专辑封面</string>
+    <string name="cd_play_preview">播放音频预览</string>
+    <string name="cd_more_options">更多选项</string>
+    <string name="cd_back">返回</string>
+    <string name="cd_search">搜索</string>
+
+    <!-- File Browser -->
+    <string name="loading_audio_files">正在加载音频文件...</string>
+    <string name="import_audio_files_or_select_folder">导入音频文件或选择文件夹</string>
+    <string name="error_loading_files">加载文件出错</string>
+    <string name="selected_count">%d 个已选</string>
+    <string name="clear_selection">清除选择</string>
+    <string name="select_all">全选</string>
+    <string name="replay_gain">ReplayGain</string>
+    <string name="selected">已选</string>
+    <string name="unknown_artist">未知艺术家</string>
+
+    <!-- Batch Operations -->
+    <string name="batch_operations_title">批量操作</string>
+    <string name="no_files_selected">未选择文件</string>
+    <string name="select_files_first">请先选择文件</string>
+    <string name="select_files_instruction">前往“文件”标签并选择多个文件以执行批量操作</string>
+    <string name="processing">处理中...</string>
+    <string name="batch_progress">第 %1$d / %2$d 个</string>
+    <string name="operation_complete">操作完成！</string>
+    <string name="success">成功</string>
+    <string name="failed">失败</string>
+    <string name="perform_another_operation">继续执行其他操作</string>
+    <string name="available_operations">可用操作</string>
+    <string name="set_album_art">设置专辑封面</string>
+    <string name="operation_edit_metadata_description">将相同的元数据字段应用到所有已选文件</string>
+    <string name="operation_scan_replay_gain_description">计算并应用 ReplayGain 值以保持音量一致</string>
+    <string name="operation_set_album_art_description">将相同的专辑封面应用到所有已选文件</string>
+    <string name="operation_remove_album_art_description">从所有已选文件中移除专辑封面</string>
+    <string name="dismiss">关闭</string>
+    <string name="batch_edit_metadata_title">批量编辑元数据</string>
+    <string name="batch_edit_metadata_placeholder">批量元数据编辑器将在此实现</string>
+    <string name="album_art_picker_title">选择专辑封面</string>
+    <string name="album_art_picker_placeholder">专辑封面选择器将在此实现</string>
+
+    <!-- ReplayGain -->
+    <string name="replay_gain_scanner_title">ReplayGain 扫描器</string>
+    <string name="files_queued">已加入 %d 个文件</string>
+    <string name="start_scanning">开始扫描</string>
+
+    <!-- Metadata -->
+    <string name="metadata_album_artist">专辑艺术家</string>
+    <string name="label_track">曲目</string>
+    <string name="label_total">总数</string>
+    <string name="label_disc">碟片</string>
+    <string name="basic_information">基本信息</string>
+    <string name="track_information">曲目信息</string>
+    <string name="additional_information">附加信息</string>
+    <string name="lyrics_section_title">歌词</string>
+    <string name="file_information">文件信息</string>
+    <string name="edit_lyrics">编辑歌词</string>
+    <string name="no_lyrics_added">未添加歌词</string>
+    <string name="lyrics_available">已有歌词</string>
+    <string name="file_info_format">格式</string>
+    <string name="file_info_channels">声道</string>
+    <string name="file_info_size">大小</string>
+    <string name="no_album_art">没有专辑封面</string>
+    <string name="saving_metadata">正在保存元数据...</string>
+
+    <!-- Recent Edits -->
+    <string name="recent_edits_title">最近编辑</string>
+    <string name="recent_edits_placeholder">你最近编辑的文件会显示在这里</string>
+
+    <!-- Lyrics Editor -->
+    <string name="save_lyrics">保存歌词</string>
+    <string name="search_online">在线搜索</string>
+    <string name="synchronized_lyrics">同步歌词</string>
+    <string name="auto_format_timestamps">自动格式化时间戳</string>
+    <string name="remove_lyrics">移除歌词</string>
+    <string name="lyrics_format_hint_synced">格式：[mm:ss.xx] 歌词文本</string>
+    <string name="lyrics_format_hint_plain">纯文本歌词</string>
+    <string name="lyrics_placeholder_synced">[00:00.00] 在此输入同步歌词...\n[00:05.00] 每行应包含时间戳</string>
+    <string name="lyrics_placeholder_plain">在此输入歌词...</string>
+    <string name="loading_lyrics">正在加载歌词...</string>
+    <string name="saving_lyrics">正在保存歌词...</string>
+    <string name="retry">重试</string>
+    <string name="search_online_lyrics">在线搜索歌词</string>
+    <string name="searching_for">正在搜索：%1$s - %2$s</string>
+    <string name="no_lyrics_found_online">未找到在线歌词</string>
+    <string name="keep_editing">继续编辑</string>
+    <string name="synced">同步</string>
+    <string name="instrumental">纯音乐</string>
+
+    <!-- Settings -->
+    <string name="settings_section_appearance">外观</string>
+    <string name="settings_section_language">语言</string>
+    <string name="settings_section_scanning">扫描</string>
+    <string name="settings_section_about">关于</string>
+    <string name="settings_section_online_metadata">在线元数据</string>
+    <string name="settings_dark_theme">深色主题</string>
+    <string name="settings_dark_theme_subtitle">使用深色配色方案</string>
+    <string name="settings_dynamic_color_subtitle">使用来自壁纸的颜色（Android 12+）</string>
+    <string name="settings_scan_quality_subtitle">质量越高，扫描越慢</string>
+    <string name="settings_language">应用语言</string>
+    <string name="settings_language_subtitle">切换应用显示语言</string>
+    <string name="settings_language_system">跟随系统</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_chinese_simplified">简体中文</string>
+    <string name="settings_version_label">版本</string>
+    <string name="settings_developer_label">开发者</string>
+    <string name="settings_developer_value">MP3 Tag 团队</string>
+    <string name="settings_metadata_source">元数据来源</string>
+    <string name="settings_metadata_source_subtitle">选择获取元数据的来源</string>
+    <string name="settings_metadata_source_musicbrainz">MusicBrainz</string>
+    <string name="settings_metadata_source_apple_music">Apple Music</string>
+    <string name="settings_metadata_source_both">全部来源</string>
+    <string name="settings_metadata_source_description_musicbrainz">MusicBrainz：开放的音乐百科，元数据详细</string>
+    <string name="settings_metadata_source_description_apple_music">Apple Music：高质量封面与完整曲库</string>
+    <string name="settings_metadata_source_description_both">全部来源：合并各来源结果以获得最佳覆盖</string>
+    <string name="settings_data_sources_label">数据来源</string>
+    <string name="settings_data_sources_value">MusicBrainz + Apple Music</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_close">关闭</string>
+    <string name="dialog_discard_changes_message">你有未保存的更改。要丢弃吗？</string>
+</resources>

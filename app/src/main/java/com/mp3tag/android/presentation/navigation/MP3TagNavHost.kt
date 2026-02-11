@@ -19,6 +19,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -28,9 +29,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.mp3tag.android.R
 import com.mp3tag.android.presentation.screens.BatchOperationsScreen
-import com.mp3tag.android.presentation.screens.FileBrowserScreen
-import com.mp3tag.android.presentation.screens.MetadataEditorScreen
+import com.mp3tag.android.presentation.screens.filebrowser.FileBrowserScreen
+import com.mp3tag.android.presentation.screens.metadata.MetadataEditorScreen
 import com.mp3tag.android.presentation.screens.RecentEditsScreen
 import com.mp3tag.android.presentation.screens.ReplayGainScannerScreen
 import com.mp3tag.android.presentation.screens.SettingsScreen
@@ -62,14 +64,15 @@ fun MP3TagNavHost(
                 NavigationBar {
                     bottomNavItems.forEach { item ->
                         val selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
+                        val label = stringResource(item.labelResId)
                         NavigationBarItem(
                             icon = {
                                 Icon(
                                     imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
-                                    contentDescription = item.label
+                                    contentDescription = label
                                 )
                             },
-                            label = { Text(item.label) },
+                            label = { Text(label) },
                             selected = selected,
                             onClick = {
                                 navController.navigate(item.screen.route) {
@@ -189,7 +192,7 @@ fun MP3TagNavHost(
  */
 data class BottomNavItemData(
     val screen: Screen,
-    val label: String,
+    val labelResId: Int,
     val selectedIcon: ImageVector,
     val unselectedIcon: ImageVector
 )
@@ -200,25 +203,25 @@ data class BottomNavItemData(
 private val bottomNavItems = listOf(
     BottomNavItemData(
         screen = Screen.FileBrowser,
-        label = "Files",
+        labelResId = R.string.nav_file_browser,
         selectedIcon = Icons.Filled.Folder,
         unselectedIcon = Icons.Outlined.Folder
     ),
     BottomNavItemData(
         screen = Screen.RecentEdits,
-        label = "Recent",
+        labelResId = R.string.nav_recent_edits,
         selectedIcon = Icons.Filled.History,
         unselectedIcon = Icons.Outlined.History
     ),
     BottomNavItemData(
         screen = Screen.BatchOperations,
-        label = "Batch",
+        labelResId = R.string.nav_batch_operations,
         selectedIcon = Icons.Filled.PlaylistAdd,
         unselectedIcon = Icons.Outlined.PlaylistAdd
     ),
     BottomNavItemData(
         screen = Screen.Settings,
-        label = "Settings",
+        labelResId = R.string.nav_settings,
         selectedIcon = Icons.Filled.Settings,
         unselectedIcon = Icons.Outlined.Settings
     )

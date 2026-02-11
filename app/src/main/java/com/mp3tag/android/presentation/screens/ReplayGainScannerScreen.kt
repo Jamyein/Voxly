@@ -8,7 +8,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.mp3tag.android.R
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /**
  * Placeholder screen for ReplayGain scanner.
@@ -23,14 +27,15 @@ fun ReplayGainScannerScreen(
     var isScanning by remember { mutableStateOf(false) }
     var progress by remember { mutableFloatStateOf(0f) }
     var currentFile by remember { mutableStateOf("") }
+    val scope = rememberCoroutineScope()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("ReplayGain Scanner") },
+                title = { Text(stringResource(R.string.replay_gain_scanner_title)) },
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 }
             )
@@ -54,14 +59,14 @@ fun ReplayGainScannerScreen(
             Spacer(modifier = Modifier.height(24.dp))
 
             Text(
-                text = "ReplayGain Scanner",
+                text = stringResource(R.string.replay_gain_scanner_title),
                 style = MaterialTheme.typography.headlineSmall
             )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "${filePaths.size} files queued",
+                text = stringResource(R.string.files_queued, filePaths.size),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -86,7 +91,7 @@ fun ReplayGainScannerScreen(
                     )
 
                     Text(
-                        text = "${(progress * 100).toInt()}%",
+                        text = stringResource(R.string.replay_gain_scan_progress, (progress * 100).toInt()),
                         style = MaterialTheme.typography.titleMedium
                     )
 
@@ -97,7 +102,7 @@ fun ReplayGainScannerScreen(
                             isScanning = false
                         }
                     ) {
-                        Text("Cancel")
+                        Text(stringResource(R.string.dialog_cancel))
                     }
                 }
             } else {
@@ -105,10 +110,10 @@ fun ReplayGainScannerScreen(
                     onClick = {
                         isScanning = true
                         // Simulate scanning progress
-                        kotlinx.coroutines.GlobalScope.launch {
+                        scope.launch {
                             filePaths.forEachIndexed { index, path ->
                                 currentFile = path.substringAfterLast("/")
-                                delay(500)
+                                kotlinx.coroutines.delay(500)
                                 progress = (index + 1).toFloat() / filePaths.size
                             }
                             isScanning = false
@@ -116,19 +121,9 @@ fun ReplayGainScannerScreen(
                     },
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Text("Start Scanning")
+                    Text(stringResource(R.string.start_scanning))
                 }
             }
         }
-    }
-}
-
-private fun delay(timeMillis: Long) {
-    Thread.sleep(timeMillis)
-}
-
-private fun kotlinx.coroutines.GlobalScope.launch(block: suspend () -> Unit) {
-    kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.Default).launch {
-        block()
     }
 }

@@ -42,8 +42,8 @@
 
     <!-- ReplayGain -->
     <string name="replay_gain_track">Track Gain</string>
-    <string name="replay_gain_album</string>
-    ">Album Gain<string name="replay_gain_peak">Peak</string>
+    <string name="replay_gain_album">Album Gain</string>
+    <string name="replay_gain_peak">Peak</string>
     <string name="replay_gain_scan_progress">Scanning: %d%%</string>
     <string name="replay_gain_scan_complete">Scan Complete</string>
     <string name="replay_gain_scan_failed">Scan Failed</string>
@@ -95,4 +95,119 @@
     <string name="cd_more_options">More options</string>
     <string name="cd_back">Go back</string>
     <string name="cd_search">Search</string>
+
+    <!-- File Browser -->
+    <string name="loading_audio_files">Loading audio files...</string>
+    <string name="import_audio_files_or_select_folder">Import audio files or select a folder</string>
+    <string name="error_loading_files">Error loading files</string>
+    <string name="selected_count">%d selected</string>
+    <string name="clear_selection">Clear selection</string>
+    <string name="select_all">Select All</string>
+    <string name="replay_gain">ReplayGain</string>
+    <string name="selected">Selected</string>
+    <string name="unknown_artist">Unknown Artist</string>
+
+    <!-- Batch Operations -->
+    <string name="batch_operations_title">Batch Operations</string>
+    <string name="no_files_selected">No files selected</string>
+    <string name="select_files_first">Select Files First</string>
+    <string name="select_files_instruction">Go to the Files tab and select multiple files to perform batch operations</string>
+    <string name="processing">Processing...</string>
+    <string name="batch_progress">%1$d of %2$d</string>
+    <string name="operation_complete">Operation Complete!</string>
+    <string name="success">Success</string>
+    <string name="failed">Failed</string>
+    <string name="perform_another_operation">Perform Another Operation</string>
+    <string name="available_operations">Available Operations</string>
+    <string name="set_album_art">Set Album Art</string>
+    <string name="operation_edit_metadata_description">Apply the same metadata fields to all selected files</string>
+    <string name="operation_scan_replay_gain_description">Calculate and apply ReplayGain values for consistent volume</string>
+    <string name="operation_set_album_art_description">Apply the same album artwork to all selected files</string>
+    <string name="operation_remove_album_art_description">Remove album artwork from all selected files</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="batch_edit_metadata_title">Batch Edit Metadata</string>
+    <string name="batch_edit_metadata_placeholder">Batch metadata editor will be implemented here</string>
+    <string name="album_art_picker_title">Select Album Art</string>
+    <string name="album_art_picker_placeholder">Album art picker will be implemented here</string>
+
+    <!-- ReplayGain -->
+    <string name="replay_gain_scanner_title">ReplayGain Scanner</string>
+    <string name="files_queued">%d files queued</string>
+    <string name="start_scanning">Start Scanning</string>
+
+    <!-- Metadata -->
+    <string name="metadata_album_artist">Album Artist</string>
+    <string name="label_track">Track</string>
+    <string name="label_total">Total</string>
+    <string name="label_disc">Disc</string>
+    <string name="basic_information">Basic Information</string>
+    <string name="track_information">Track Information</string>
+    <string name="additional_information">Additional Information</string>
+    <string name="lyrics_section_title">Lyrics</string>
+    <string name="file_information">File Information</string>
+    <string name="edit_lyrics">Edit Lyrics</string>
+    <string name="no_lyrics_added">No lyrics added</string>
+    <string name="lyrics_available">Lyrics available</string>
+    <string name="file_info_format">Format</string>
+    <string name="file_info_channels">Channels</string>
+    <string name="file_info_size">Size</string>
+    <string name="no_album_art">No album art</string>
+    <string name="saving_metadata">Saving metadata...</string>
+
+    <!-- Recent Edits -->
+    <string name="recent_edits_title">Recent Edits</string>
+    <string name="recent_edits_placeholder">Your recently edited files will appear here</string>
+
+    <!-- Lyrics Editor -->
+    <string name="save_lyrics">Save Lyrics</string>
+    <string name="search_online">Search Online</string>
+    <string name="synchronized_lyrics">Synchronized Lyrics</string>
+    <string name="auto_format_timestamps">Auto-format timestamps</string>
+    <string name="remove_lyrics">Remove lyrics</string>
+    <string name="lyrics_format_hint_synced">Format: [mm:ss.xx] Lyrics text</string>
+    <string name="lyrics_format_hint_plain">Plain text lyrics</string>
+    <string name="lyrics_placeholder_synced">[00:00.00] Enter synchronized lyrics here...\n[00:05.00] Each line should have a timestamp</string>
+    <string name="lyrics_placeholder_plain">Enter lyrics here...</string>
+    <string name="loading_lyrics">Loading lyrics...</string>
+    <string name="saving_lyrics">Saving lyrics...</string>
+    <string name="retry">Retry</string>
+    <string name="search_online_lyrics">Search Online Lyrics</string>
+    <string name="searching_for">Searching for: %1$s - %2$s</string>
+    <string name="no_lyrics_found_online">No lyrics found online</string>
+    <string name="keep_editing">Keep Editing</string>
+    <string name="synced">Synced</string>
+    <string name="instrumental">Instrumental</string>
+
+    <!-- Settings -->
+    <string name="settings_section_appearance">Appearance</string>
+    <string name="settings_section_language">Language</string>
+    <string name="settings_section_scanning">Scanning</string>
+    <string name="settings_section_about">About</string>
+    <string name="settings_section_online_metadata">Online Metadata</string>
+    <string name="settings_dark_theme">Dark Theme</string>
+    <string name="settings_dark_theme_subtitle">Use dark color scheme</string>
+    <string name="settings_dynamic_color_subtitle">Use colors from your wallpaper (Android 12+)</string>
+    <string name="settings_scan_quality_subtitle">Higher quality = slower scanning</string>
+    <string name="settings_language">App Language</string>
+    <string name="settings_language_subtitle">Change the app language</string>
+    <string name="settings_language_system">System Default</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_chinese_simplified">简体中文</string>
+    <string name="settings_version_label">Version</string>
+    <string name="settings_developer_label">Developer</string>
+    <string name="settings_developer_value">MP3 Tag Team</string>
+    <string name="settings_metadata_source">Metadata Source</string>
+    <string name="settings_metadata_source_subtitle">Choose where to fetch metadata from</string>
+    <string name="settings_metadata_source_musicbrainz">MusicBrainz</string>
+    <string name="settings_metadata_source_apple_music">Apple Music</string>
+    <string name="settings_metadata_source_both">Both Sources</string>
+    <string name="settings_metadata_source_description_musicbrainz">MusicBrainz: Open music encyclopedia with detailed metadata</string>
+    <string name="settings_metadata_source_description_apple_music">Apple Music: High-quality artwork and comprehensive catalog</string>
+    <string name="settings_metadata_source_description_both">Both: Combines results from all sources for best coverage</string>
+    <string name="settings_data_sources_label">Data Sources</string>
+    <string name="settings_data_sources_value">MusicBrainz + Apple Music</string>
+
+    <!-- Dialogs -->
+    <string name="dialog_close">Close</string>
+    <string name="dialog_discard_changes_message">You have unsaved changes. Discard them?</string>
 </resources>

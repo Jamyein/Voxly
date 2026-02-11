@@ -9,9 +9,11 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mp3tag.android.R
 import com.mp3tag.android.domain.usecase.BatchStatus
 import com.mp3tag.android.domain.usecase.MetadataField
 import com.mp3tag.android.presentation.viewmodel.BatchOperationsViewModel
@@ -38,11 +40,11 @@ fun BatchOperationsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Batch Operations") },
+                title = { Text(stringResource(R.string.batch_operations_title)) },
                 actions = {
                     if (selectedFiles.isNotEmpty()) {
                         IconButton(onClick = { viewModel.clearSelection() }) {
-                            Icon(Icons.Default.Clear, contentDescription = "Clear selection")
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear_selection))
                         }
                     }
                 }
@@ -149,9 +151,9 @@ private fun FileCountCard(fileCount: Int) {
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
                     text = if (fileCount > 0) {
-                        "$fileCount files selected"
+                        stringResource(R.string.files_selected, fileCount)
                     } else {
-                        "No files selected"
+                        stringResource(R.string.no_files_selected)
                     },
                     style = MaterialTheme.typography.titleMedium,
                     color = if (fileCount > 0) {
@@ -195,13 +197,13 @@ private fun EmptySelectionContent() {
         )
         Spacer(modifier = Modifier.height(16.dp))
         Text(
-            text = "Select Files First",
+            text = stringResource(R.string.select_files_first),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
-            text = "Go to the Files tab and select multiple files to perform batch operations",
+            text = stringResource(R.string.select_files_instruction),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.outline,
             textAlign = TextAlign.Center,
@@ -228,7 +230,7 @@ private fun ProcessingContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "Processing...",
+            text = stringResource(R.string.processing),
             style = MaterialTheme.typography.titleMedium
         )
 
@@ -236,7 +238,7 @@ private fun ProcessingContent(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "${progress.currentFile} of ${progress.totalFiles}",
+                text = stringResource(R.string.batch_progress, progress.currentFile, progress.totalFiles),
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -270,7 +272,7 @@ private fun ProcessingContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         OutlinedButton(onClick = onCancel) {
-            Text("Cancel")
+            Text(stringResource(R.string.dialog_cancel))
         }
     }
 }
@@ -296,7 +298,7 @@ private fun CompletionContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
-            text = "Operation Complete!",
+            text = stringResource(R.string.operation_complete),
             style = MaterialTheme.typography.titleMedium,
             color = MaterialTheme.colorScheme.primary
         )
@@ -309,12 +311,12 @@ private fun CompletionContent(
                 horizontalArrangement = Arrangement.SpaceEvenly
             ) {
                 StatCard(
-                    title = "Success",
+                    title = stringResource(R.string.success),
                     value = progress.successCount.toString(),
                     color = MaterialTheme.colorScheme.primary
                 )
                 StatCard(
-                    title = "Failed",
+                    title = stringResource(R.string.failed),
                     value = progress.failureCount.toString(),
                     color = MaterialTheme.colorScheme.error
                 )
@@ -324,7 +326,7 @@ private fun CompletionContent(
         Spacer(modifier = Modifier.height(24.dp))
 
         Button(onClick = onReset) {
-            Text("Perform Another Operation")
+            Text(stringResource(R.string.perform_another_operation))
         }
     }
 }
@@ -362,7 +364,7 @@ private fun OperationsList(
     onRemoveAlbumArt: () -> Unit
 ) {
     Text(
-        text = "Available Operations",
+        text = stringResource(R.string.available_operations),
         style = MaterialTheme.typography.titleMedium,
         modifier = Modifier.padding(bottom = 8.dp)
     )
@@ -370,29 +372,29 @@ private fun OperationsList(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OperationCard(
             icon = Icons.Default.Edit,
-            title = "Edit Metadata",
-            description = "Apply the same metadata fields to all selected files",
+            title = stringResource(R.string.edit_metadata),
+            description = stringResource(R.string.operation_edit_metadata_description),
             onClick = onEditMetadata
         )
 
         OperationCard(
             icon = Icons.Default.Equalizer,
-            title = "Scan ReplayGain",
-            description = "Calculate and apply ReplayGain values for consistent volume",
+            title = stringResource(R.string.scan_replay_gain),
+            description = stringResource(R.string.operation_scan_replay_gain_description),
             onClick = onReplayGain
         )
 
         OperationCard(
             icon = Icons.Default.Image,
-            title = "Set Album Art",
-            description = "Apply the same album artwork to all selected files",
+            title = stringResource(R.string.set_album_art),
+            description = stringResource(R.string.operation_set_album_art_description),
             onClick = onSetAlbumArt
         )
 
         OperationCard(
             icon = Icons.Default.HideImage,
-            title = "Remove Album Art",
-            description = "Remove album artwork from all selected files",
+            title = stringResource(R.string.remove_album_art),
+            description = stringResource(R.string.operation_remove_album_art_description),
             onClick = onRemoveAlbumArt,
             isDestructive = true
         )
@@ -487,7 +489,7 @@ private fun ErrorCard(error: String, onDismiss: () -> Unit) {
             IconButton(onClick = onDismiss) {
                 Icon(
                     Icons.Default.Close,
-                    contentDescription = "Dismiss",
+                    contentDescription = stringResource(R.string.dismiss),
                     tint = MaterialTheme.colorScheme.onErrorContainer
                 )
             }
@@ -503,11 +505,11 @@ private fun BatchEditDialog(
     // TODO: Implement batch edit dialog with field selection
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Batch Edit Metadata") },
-        text = { Text("Batch metadata editor will be implemented here") },
+        title = { Text(stringResource(R.string.batch_edit_metadata_title)) },
+        text = { Text(stringResource(R.string.batch_edit_metadata_placeholder)) },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close")
+                Text(stringResource(R.string.dialog_close))
             }
         }
     )
@@ -521,11 +523,11 @@ private fun AlbumArtPickerDialog(
     // TODO: Implement album art picker dialog
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Select Album Art") },
-        text = { Text("Album art picker will be implemented here") },
+        title = { Text(stringResource(R.string.album_art_picker_title)) },
+        text = { Text(stringResource(R.string.album_art_picker_placeholder)) },
         confirmButton = {
             TextButton(onClick = onDismiss) {
-                Text("Close")
+                Text(stringResource(R.string.dialog_close))
             }
         }
     )

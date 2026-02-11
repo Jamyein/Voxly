@@ -7,7 +7,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.mp3tag.android.R
 
 /**
  * Placeholder screen for recent edits.
@@ -29,12 +31,12 @@ fun RecentEditsScreen(
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                "Recent Edits",
+                stringResource(R.string.recent_edits_title),
                 style = MaterialTheme.typography.titleMedium
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "Your recently edited files will appear here",
+                stringResource(R.string.recent_edits_placeholder),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

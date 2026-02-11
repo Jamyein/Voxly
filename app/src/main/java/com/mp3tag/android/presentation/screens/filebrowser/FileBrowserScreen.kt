@@ -1,5 +1,7 @@
 package com.mp3tag.android.presentation.screens.filebrowser
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,10 +12,13 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.mp3tag.android.R
 import com.mp3tag.android.domain.model.AudioFile
 import com.mp3tag.android.presentation.viewmodel.FileBrowserUiState
 import com.mp3tag.android.presentation.viewmodel.FileBrowserViewModel
@@ -28,10 +33,23 @@ fun FileBrowserScreen(
     onNavigateToMetadata: (String) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val selectedFiles by viewModel.selectedFiles.collectAsState()
 
-    var showSelectionMode by remember { mutableStateOf(false) }
+    // 文件夹选择器启动器
+    val folderPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri ->
+        uri?.let {
+            // 持久化 URI 权限
+            context.contentResolver.takePersistableUriPermission(
+                it,
+                android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+            )
+            viewModel.loadFromDirectory(it)
+        }
+    }
 
     LaunchedEffect(Unit) {
         viewModel.loadAudioFiles()
@@ -50,7 +68,7 @@ fun FileBrowserScreen(
                 )
             } else {
                 TopAppBar(
-                    title = { Text("MP3 Tag Editor") },
+                    title = { Text(stringResource(R.string.app_name)) },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.primaryContainer,
                         titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -61,9 +79,9 @@ fun FileBrowserScreen(
         floatingActionButton = {
             if (selectedFiles.isEmpty()) {
                 ExtendedFloatingActionButton(
-                    onClick = { showSelectionMode = true },
+                    onClick = { folderPickerLauncher.launch(null) },
                     icon = { Icon(Icons.Default.Folder, contentDescription = null) },
-                    text = { Text("Select Folder") }
+                    text = { Text(stringResource(R.string.select_directory)) }
                 )
             }
         }
@@ -113,15 +131,15 @@ private fun SelectionTopBar(
     onNavigateToReplayGain: () -> Unit
 ) {
     TopAppBar(
-        title = { Text("$selectedCount selected") },
+        title = { Text(stringResource(R.string.selected_count, selectedCount)) },
         navigationIcon = {
             IconButton(onClick = onClearSelection) {
-                Icon(Icons.Default.Close, contentDescription = "Clear selection")
+                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_selection))
             }
         },
         actions = {
             TextButton(onClick = onSelectAll) {
-                Text("Select All")
+                Text(stringResource(R.string.select_all))
             }
             FilledTonalButton(
                 onClick = onNavigateToReplayGain,
@@ -129,7 +147,7 @@ private fun SelectionTopBar(
             ) {
                 Icon(Icons.Default.Equalizer, contentDescription = null)
                 Spacer(modifier = Modifier.width(4.dp))
-                Text("ReplayGain")
+                Text(stringResource(R.string.replay_gain))
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
@@ -147,7 +165,7 @@ private fun LoadingContent() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
             Spacer(modifier = Modifier.height(16.dp))
-            Text("Loading audio files...")
+            Text(stringResource(R.string.loading_audio_files))
         }
     }
 }
@@ -167,13 +185,13 @@ private fun EmptyContent() {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                "No audio files found",
+                stringResource(R.string.no_audio_files),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                "Import audio files or select a folder",
+                stringResource(R.string.import_audio_files_or_select_folder),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.outline
             )
@@ -196,7 +214,7 @@ private fun ErrorContent(message: String) {
             )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
-                "Error loading files",
+                stringResource(R.string.error_loading_files),
                 style = MaterialTheme.typography.titleMedium,
                 color = MaterialTheme.colorScheme.error
             )
@@ -265,7 +283,7 @@ private fun AudioFileItem(
                 if (audioFile.metadata.albumArt != null) {
                     AsyncImage(
                         model = audioFile.metadata.albumArt,
-                        contentDescription = "Album art",
+                        contentDescription = stringResource(R.string.cd_album_art),
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
@@ -288,7 +306,7 @@ private fun AudioFileItem(
                 )
                 Text(
                     text = buildString {
-                        append(audioFile.metadata.artist ?: "Unknown Artist")
+                        append(audioFile.metadata.artist ?: stringResource(R.string.unknown_artist))
                         audioFile.metadata.album?.let { append(" - $it") }
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -312,7 +330,7 @@ private fun AudioFileItem(
             if (isSelected) {
                 Icon(
                     Icons.Default.CheckCircle,
-                    contentDescription = "Selected",
+                    contentDescription = stringResource(R.string.selected),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }

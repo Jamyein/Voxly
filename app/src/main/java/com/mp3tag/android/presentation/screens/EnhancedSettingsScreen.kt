@@ -1,16 +1,15 @@
 package com.mp3tag.android.presentation.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Cloud
-import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.mp3tag.android.BuildConfig
+import com.mp3tag.android.R
 import com.mp3tag.android.presentation.viewmodel.EnhancedOnlineMetadataViewModel
 
 /**
@@ -23,11 +22,19 @@ fun EnhancedSettingsScreen(
 ) {
     val dataSource by viewModel.dataSource.collectAsState()
     var expanded by remember { mutableStateOf(false) }
+    val currentDataSourceLabel = when (dataSource) {
+        EnhancedOnlineMetadataViewModel.DataSource.MUSICBRAINZ ->
+            stringResource(R.string.settings_metadata_source_musicbrainz)
+        EnhancedOnlineMetadataViewModel.DataSource.ITUNES_APPLE_MUSIC ->
+            stringResource(R.string.settings_metadata_source_apple_music)
+        EnhancedOnlineMetadataViewModel.DataSource.BOTH ->
+            stringResource(R.string.settings_metadata_source_both)
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") }
+                title = { Text(stringResource(R.string.nav_settings)) }
             )
         }
     ) { innerPadding ->
@@ -38,7 +45,7 @@ fun EnhancedSettingsScreen(
                 .padding(16.dp)
         ) {
             // Online Metadata Section
-            SettingsSection(title = "Online Metadata") {
+            SettingsSection(title = stringResource(R.string.settings_section_online_metadata)) {
                 Card(
                     modifier = Modifier.fillMaxWidth()
                 ) {
@@ -52,11 +59,11 @@ fun EnhancedSettingsScreen(
                         ) {
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Metadata Source",
+                                    text = stringResource(R.string.settings_metadata_source),
                                     style = MaterialTheme.typography.bodyLarge
                                 )
                                 Text(
-                                    text = "Choose where to fetch metadata from",
+                                    text = stringResource(R.string.settings_metadata_source_subtitle),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -67,7 +74,7 @@ fun EnhancedSettingsScreen(
                                 onExpandedChange = { expanded = it }
                             ) {
                                 OutlinedTextField(
-                                    value = viewModel.getDataSourceName(dataSource),
+                                    value = currentDataSourceLabel,
                                     onValueChange = {},
                                     readOnly = true,
                                     trailingIcon = { 
@@ -81,21 +88,21 @@ fun EnhancedSettingsScreen(
                                     onDismissRequest = { expanded = false }
                                 ) {
                                     DropdownMenuItem(
-                                        text = { Text("MusicBrainz") },
+                                        text = { Text(stringResource(R.string.settings_metadata_source_musicbrainz)) },
                                         onClick = {
                                             viewModel.setDataSource(EnhancedOnlineMetadataViewModel.DataSource.MUSICBRAINZ)
                                             expanded = false
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Apple Music") },
+                                        text = { Text(stringResource(R.string.settings_metadata_source_apple_music)) },
                                         onClick = {
                                             viewModel.setDataSource(EnhancedOnlineMetadataViewModel.DataSource.ITUNES_APPLE_MUSIC)
                                             expanded = false
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Both Sources") },
+                                        text = { Text(stringResource(R.string.settings_metadata_source_both)) },
                                         onClick = {
                                             viewModel.setDataSource(EnhancedOnlineMetadataViewModel.DataSource.BOTH)
                                             expanded = false
@@ -111,11 +118,11 @@ fun EnhancedSettingsScreen(
                         Text(
                             text = when (dataSource) {
                                 EnhancedOnlineMetadataViewModel.DataSource.MUSICBRAINZ -> 
-                                    "MusicBrainz: Open music encyclopedia with detailed metadata"
+                                    stringResource(R.string.settings_metadata_source_description_musicbrainz)
                                 EnhancedOnlineMetadataViewModel.DataSource.ITUNES_APPLE_MUSIC -> 
-                                    "Apple Music: High-quality artwork and comprehensive catalog"
+                                    stringResource(R.string.settings_metadata_source_description_apple_music)
                                 EnhancedOnlineMetadataViewModel.DataSource.BOTH -> 
-                                    "Both: Combines results from all sources for best coverage"
+                                    stringResource(R.string.settings_metadata_source_description_both)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -127,9 +134,9 @@ fun EnhancedSettingsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // About Section
-            SettingsSection(title = "About") {
-                SettingsInfoRow(title = "Version", value = "1.1.0")
-                SettingsInfoRow(title = "Data Sources", value = "MusicBrainz + Apple Music")
+            SettingsSection(title = stringResource(R.string.settings_section_about)) {
+                SettingsInfoRow(title = stringResource(R.string.settings_version_label), value = BuildConfig.VERSION_NAME)
+                SettingsInfoRow(title = stringResource(R.string.settings_data_sources_label), value = stringResource(R.string.settings_data_sources_value))
             }
         }
     }

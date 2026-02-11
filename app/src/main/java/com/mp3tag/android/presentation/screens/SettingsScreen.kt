@@ -1,28 +1,59 @@
 package com.mp3tag.android.presentation.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.core.os.LocaleListCompat
+import androidx.annotation.StringRes
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.mp3tag.android.BuildConfig
+import com.mp3tag.android.R
+import com.mp3tag.android.presentation.viewmodel.SettingsViewModel
 
 /**
  * Settings screen for application preferences.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen() {
-    var darkTheme by remember { mutableStateOf(false) }
-    var dynamicColors by remember { mutableStateOf(true) }
-    var scanQuality by remember { mutableStateOf("Normal") }
+fun SettingsScreen(
+    viewModel: SettingsViewModel = hiltViewModel()
+) {
+    val darkTheme by viewModel.darkTheme.collectAsState()
+    val dynamicColors by viewModel.dynamicColors.collectAsState()
+    val scanQuality by viewModel.scanQuality.collectAsState()
+    var languageExpanded by remember { mutableStateOf(false) }
+    val languageOptions = remember {
+        listOf(
+            LanguageOption(R.string.settings_language_system, null),
+            LanguageOption(R.string.settings_language_english, "en"),
+            LanguageOption(R.string.settings_language_chinese_simplified, "zh-CN")
+        )
+    }
+    var selectedLanguageTag by remember { mutableStateOf(resolveCurrentLanguageTag()) }
+    val currentLanguageOption = languageOptions.firstOrNull {
+        normalizeLanguageTag(it.languageTag) == normalizeLanguageTag(selectedLanguageTag)
+    } ?: languageOptions.first()
+
+    var scanQualityExpanded by remember { mutableStateOf(false) }
+    val scanQualityOptions = remember {
+        listOf(
+            ScanQualityOption("Fast", R.string.settings_scan_quality_fast),
+            ScanQualityOption("Normal", R.string.settings_scan_quality_normal),
+            ScanQualityOption("Accurate", R.string.settings_scan_quality_accurate)
+        )
+    }
+    val currentScanQuality = scanQualityOptions.firstOrNull { it.value == scanQuality }
+        ?: scanQualityOptions[1]
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") }
+                title = { Text(stringResource(R.string.nav_settings)) }
             )
         }
     ) { innerPadding ->
@@ -33,28 +64,26 @@ fun SettingsScreen() {
                 .padding(16.dp)
         ) {
             // Appearance Section
-            SettingsSection(title = "Appearance") {
+            SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
                 SettingsSwitch(
-                    title = "Dark Theme",
-                    subtitle = "Use dark color scheme",
+                    title = stringResource(R.string.settings_dark_theme),
+                    subtitle = stringResource(R.string.settings_dark_theme_subtitle),
                     checked = darkTheme,
-                    onCheckedChange = { darkTheme = it }
+                    onCheckedChange = { viewModel.setDarkTheme(it) }
                 )
 
                 SettingsSwitch(
-                    title = "Dynamic Colors",
-                    subtitle = "Use colors from your wallpaper (Android 12+)",
+                    title = stringResource(R.string.settings_dynamic_color),
+                    subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
                     checked = dynamicColors,
-                    onCheckedChange = { dynamicColors = it }
+                    onCheckedChange = { viewModel.setDynamicColors(it) }
                 )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Scanning Section
-            SettingsSection(title = "Scanning") {
-                var expanded by remember { mutableStateOf(false) }
-
+            // Language Section
+            SettingsSection(title = stringResource(R.string.settings_section_language)) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -64,53 +93,101 @@ fun SettingsScreen() {
                 ) {
                     Column {
                         Text(
-                            text = "Scan Quality",
+                            text = stringResource(R.string.settings_language),
                             style = MaterialTheme.typography.bodyLarge
                         )
                         Text(
-                            text = "Higher quality = slower scanning",
+                            text = stringResource(R.string.settings_language_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
 
                     ExposedDropdownMenuBox(
-                        expanded = expanded,
-                        onExpandedChange = { expanded = it }
+                        expanded = languageExpanded,
+                        onExpandedChange = { languageExpanded = it }
                     ) {
                         OutlinedTextField(
-                            value = scanQuality,
+                            value = stringResource(currentLanguageOption.labelResId),
                             onValueChange = {},
                             readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = languageExpanded) },
                             modifier = Modifier.menuAnchor()
                         )
 
                         ExposedDropdownMenu(
-                            expanded = expanded,
-                            onDismissRequest = { expanded = false }
+                            expanded = languageExpanded,
+                            onDismissRequest = { languageExpanded = false }
                         ) {
-                            DropdownMenuItem(
-                                text = { Text("Fast") },
-                                onClick = {
-                                    scanQuality = "Fast"
-                                    expanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Normal") },
-                                onClick = {
-                                    scanQuality = "Normal"
-                                    expanded = false
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text("Accurate") },
-                                onClick = {
-                                    scanQuality = "Accurate"
-                                    expanded = false
-                                }
-                            )
+                            languageOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(option.labelResId)) },
+                                    onClick = {
+                                        selectedLanguageTag = option.languageTag
+                                        AppCompatDelegate.setApplicationLocales(
+                                            if (option.languageTag == null) {
+                                                LocaleListCompat.getEmptyLocaleList()
+                                            } else {
+                                                LocaleListCompat.forLanguageTags(option.languageTag)
+                                            }
+                                        )
+                                        languageExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Scanning Section
+            SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.settings_scan_quality),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = stringResource(R.string.settings_scan_quality_subtitle),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    ExposedDropdownMenuBox(
+                        expanded = scanQualityExpanded,
+                        onExpandedChange = { scanQualityExpanded = it }
+                    ) {
+                        OutlinedTextField(
+                            value = stringResource(currentScanQuality.labelResId),
+                            onValueChange = {},
+                            readOnly = true,
+                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = scanQualityExpanded) },
+                            modifier = Modifier.menuAnchor()
+                        )
+
+                        ExposedDropdownMenu(
+                            expanded = scanQualityExpanded,
+                            onDismissRequest = { scanQualityExpanded = false }
+                        ) {
+                            scanQualityOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(option.labelResId)) },
+                                    onClick = {
+                                        viewModel.setScanQuality(option.value)
+                                        scanQualityExpanded = false
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -119,9 +196,9 @@ fun SettingsScreen() {
             Spacer(modifier = Modifier.height(16.dp))
 
             // About Section
-            SettingsSection(title = "About") {
-                SettingsInfoRow(title = "Version", value = "1.0.0")
-                SettingsInfoRow(title = "Developer", value = "MP3 Tag Team")
+            SettingsSection(title = stringResource(R.string.settings_section_about)) {
+                SettingsInfoRow(title = stringResource(R.string.settings_version_label), value = BuildConfig.VERSION_NAME)
+                SettingsInfoRow(title = stringResource(R.string.settings_developer_label), value = stringResource(R.string.settings_developer_value))
             }
         }
     }
@@ -203,3 +280,33 @@ private fun SettingsInfoRow(title: String, value: String) {
         )
     }
 }
+
+private data class LanguageOption(
+    @StringRes val labelResId: Int,
+    val languageTag: String?
+)
+
+private data class ScanQualityOption(
+    val value: String,
+    @StringRes val labelResId: Int
+)
+
+private fun resolveCurrentLanguageTag(): String? {
+    val locales = AppCompatDelegate.getApplicationLocales()
+    if (locales.isEmpty) {
+        return null
+    }
+    val firstTag = locales.toLanguageTags()
+        .split(",")
+        .firstOrNull()
+        ?.trim()
+        ?.ifBlank { null }
+        ?: return null
+    return when {
+        firstTag.startsWith("zh", ignoreCase = true) -> "zh-CN"
+        firstTag.startsWith("en", ignoreCase = true) -> "en"
+        else -> firstTag
+    }
+}
+
+private fun normalizeLanguageTag(tag: String?): String? = tag?.lowercase()

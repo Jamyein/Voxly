@@ -268,6 +268,13 @@ data class MusicBrainzTrack(
      * Gets duration in milliseconds.
      */
     fun getDurationMs(): Long? = length ?: recording?.length
+
+    /**
+     * Gets the primary artist name.
+     */
+    fun getArtistName(): String? {
+        return artistCredit?.joinToString(" & ") { it.artist?.name ?: "" }
+    }
 }
 
 /**

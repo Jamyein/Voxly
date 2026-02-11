@@ -43,9 +43,7 @@ class AudioFileScanner @Inject constructor(
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.SIZE,
             MediaStore.Audio.Media.MIME_TYPE,
-            MediaStore.Audio.Media.BITRATE,
-            MediaStore.Audio.Media.SAMPLE_RATE,
-            MediaStore.Audio.Media.CHANNELS
+            MediaStore.Audio.Media.BITRATE
         )
     }
 
@@ -80,8 +78,6 @@ class AudioFileScanner @Inject constructor(
             val sizeColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
             val mimeTypeColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
             val bitrateColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
-            val sampleRateColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.SAMPLE_RATE)
-            val channelsColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.CHANNELS)
 
             while (it.moveToNext()) {
                 val filePath = it.getString(dataColumn)
@@ -97,8 +93,8 @@ class AudioFileScanner @Inject constructor(
                         duration = it.getLong(durationColumn),
                         format = extension.uppercase(),
                         bitrate = it.getInt(bitrateColumn),
-                        sampleRate = it.getInt(sampleRateColumn),
-                        channels = it.getInt(channelsColumn),
+                        sampleRate = 0,
+                        channels = 0,
                         metadata = parseBasicMetadata(
                             title = it.getString(titleColumn),
                             artist = it.getString(artistColumn),

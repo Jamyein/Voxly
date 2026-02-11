@@ -3,8 +3,6 @@ package com.mp3tag.android.core.utils
 import android.content.Context
 import android.os.Build
 import coil.ImageLoader
-import coil.decode.ImageDecoderDecoder
-import coil.decode.SvgDecoder
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import coil.request.CachePolicy
@@ -38,13 +36,6 @@ class PerformanceUtils @Inject constructor(
                     .build()
             }
             .crossfade(true)
-            .apply {
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-                    components {
-                        add(ImageDecoderDecoder.Factory())
-                    }
-                }
-            }
             .build()
     }
 

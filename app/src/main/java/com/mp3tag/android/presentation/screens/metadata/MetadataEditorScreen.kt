@@ -11,10 +11,12 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.mp3tag.android.R
 import com.mp3tag.android.presentation.viewmodel.MetadataEditorUiState
 import com.mp3tag.android.presentation.viewmodel.MetadataEditorViewModel
 
@@ -34,6 +36,7 @@ fun MetadataEditorScreen(
     val editedMetadata by viewModel.editedMetadata.collectAsState()
     val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsState()
     val saveResult by viewModel.saveResult.collectAsState()
+    val unknownArtist = stringResource(R.string.unknown_artist)
 
     var showDiscardDialog by remember { mutableStateOf(false) }
 
@@ -47,7 +50,7 @@ fun MetadataEditorScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Edit Metadata") },
+                title = { Text(stringResource(R.string.edit_metadata)) },
                 navigationIcon = {
                     IconButton(onClick = {
                         if (hasUnsavedChanges) {
@@ -56,7 +59,7 @@ fun MetadataEditorScreen(
                             onNavigateBack()
                         }
                     }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
                 },
                 actions = {
@@ -70,7 +73,7 @@ fun MetadataEditorScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text("Save")
+                            Text(stringResource(R.string.dialog_save))
                         }
                     }
                 }
@@ -80,7 +83,7 @@ fun MetadataEditorScreen(
             ExtendedFloatingActionButton(
                 onClick = onNavigateToOnlineMetadata,
                 icon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
-                text = { Text("Fetch Online") }
+                text = { Text(stringResource(R.string.fetch_online_metadata)) }
             )
         }
     ) { innerPadding ->
@@ -106,7 +109,7 @@ fun MetadataEditorScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             CircularProgressIndicator()
                             Spacer(modifier = Modifier.height(16.dp))
-                            Text("Saving metadata...")
+                            Text(stringResource(R.string.saving_metadata))
                         }
                     }
                 }
@@ -137,7 +140,7 @@ fun MetadataEditorScreen(
                         onEditLyrics = {
                             onNavigateToLyrics(
                                 state.editedMetadata.title ?: state.audioFile.name,
-                                state.editedMetadata.artist ?: "Unknown Artist"
+                                state.editedMetadata.artist ?: unknownArtist
                             )
                         }
                     )
@@ -169,20 +172,20 @@ fun MetadataEditorScreen(
     if (showDiscardDialog) {
         AlertDialog(
             onDismissRequest = { showDiscardDialog = false },
-            title = { Text("Unsaved Changes") },
-            text = { Text("You have unsaved changes. Discard them?") },
+            title = { Text(stringResource(R.string.dialog_unsaved_changes)) },
+            text = { Text(stringResource(R.string.dialog_discard_changes_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.discardChanges()
                     showDiscardDialog = false
                     onNavigateBack()
                 }) {
-                    Text("Discard")
+                    Text(stringResource(R.string.dialog_discard))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { showDiscardDialog = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.dialog_cancel))
                 }
             }
         )
@@ -220,12 +223,12 @@ private fun MetadataForm(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Basic Information
-        SectionTitle("Basic Information")
+        SectionTitle(stringResource(R.string.basic_information))
 
         OutlinedTextField(
             value = metadata.title ?: "",
             onValueChange = onTitleChange,
-            label = { Text("Title") },
+            label = { Text(stringResource(R.string.metadata_title)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -235,7 +238,7 @@ private fun MetadataForm(
         OutlinedTextField(
             value = metadata.artist ?: "",
             onValueChange = onArtistChange,
-            label = { Text("Artist") },
+            label = { Text(stringResource(R.string.metadata_artist)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -245,7 +248,7 @@ private fun MetadataForm(
         OutlinedTextField(
             value = metadata.album ?: "",
             onValueChange = onAlbumChange,
-            label = { Text("Album") },
+            label = { Text(stringResource(R.string.metadata_album)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -255,7 +258,7 @@ private fun MetadataForm(
         OutlinedTextField(
             value = metadata.albumArtist ?: "",
             onValueChange = onAlbumArtistChange,
-            label = { Text("Album Artist") },
+            label = { Text(stringResource(R.string.metadata_album_artist)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -263,13 +266,13 @@ private fun MetadataForm(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Track Information
-        SectionTitle("Track Information")
+        SectionTitle(stringResource(R.string.track_information))
 
         Row(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = metadata.trackNumber?.toString() ?: "",
                 onValueChange = { onTrackNumberChange(it, metadata.totalTracks?.toString() ?: "") },
-                label = { Text("Track") },
+                label = { Text(stringResource(R.string.label_track)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -280,7 +283,7 @@ private fun MetadataForm(
             OutlinedTextField(
                 value = metadata.totalTracks?.toString() ?: "",
                 onValueChange = { onTrackNumberChange(metadata.trackNumber?.toString() ?: "", it) },
-                label = { Text("Total") },
+                label = { Text(stringResource(R.string.label_total)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -293,7 +296,7 @@ private fun MetadataForm(
             OutlinedTextField(
                 value = metadata.discNumber?.toString() ?: "",
                 onValueChange = { onDiscNumberChange(it, metadata.totalDiscs?.toString() ?: "") },
-                label = { Text("Disc") },
+                label = { Text(stringResource(R.string.label_disc)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -304,7 +307,7 @@ private fun MetadataForm(
             OutlinedTextField(
                 value = metadata.totalDiscs?.toString() ?: "",
                 onValueChange = { onDiscNumberChange(metadata.discNumber?.toString() ?: "", it) },
-                label = { Text("Total") },
+                label = { Text(stringResource(R.string.label_total)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -314,13 +317,13 @@ private fun MetadataForm(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Additional Information
-        SectionTitle("Additional Information")
+        SectionTitle(stringResource(R.string.additional_information))
 
         Row(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = metadata.year ?: "",
                 onValueChange = onYearChange,
-                label = { Text("Year") },
+                label = { Text(stringResource(R.string.metadata_year)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number)
@@ -331,7 +334,7 @@ private fun MetadataForm(
             OutlinedTextField(
                 value = metadata.genre ?: "",
                 onValueChange = onGenreChange,
-                label = { Text("Genre") },
+                label = { Text(stringResource(R.string.metadata_genre)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true
             )
@@ -342,7 +345,7 @@ private fun MetadataForm(
         OutlinedTextField(
             value = metadata.composer ?: "",
             onValueChange = onComposerChange,
-            label = { Text("Composer") },
+            label = { Text(stringResource(R.string.metadata_composer)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true
         )
@@ -350,7 +353,7 @@ private fun MetadataForm(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Lyrics Section
-        SectionTitle("Lyrics")
+        SectionTitle(stringResource(R.string.lyrics_section_title))
 
         OutlinedCard(
             onClick = onEditLyrics,
@@ -372,14 +375,14 @@ private fun MetadataForm(
                     Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(
-                            text = "Edit Lyrics",
+                            text = stringResource(R.string.edit_lyrics),
                             style = MaterialTheme.typography.bodyLarge
                         )
                         Text(
                             text = if (metadata.lyrics.isNullOrBlank()) {
-                                "No lyrics added"
+                                stringResource(R.string.no_lyrics_added)
                             } else {
-                                "Lyrics available"
+                                stringResource(R.string.lyrics_available)
                             },
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -398,14 +401,14 @@ private fun MetadataForm(
         Spacer(modifier = Modifier.height(16.dp))
 
         // File Information (read-only)
-        SectionTitle("File Information")
+        SectionTitle(stringResource(R.string.file_information))
 
-        FileInfoRow("Format", audioFile.format)
-        FileInfoRow("Bitrate", "${audioFile.bitrate} kbps")
-        FileInfoRow("Sample Rate", "${audioFile.sampleRate} Hz")
-        FileInfoRow("Channels", audioFile.channels.toString())
-        FileInfoRow("Duration", audioFile.getFormattedDuration())
-        FileInfoRow("Size", audioFile.getFormattedSize())
+        FileInfoRow(stringResource(R.string.file_info_format), audioFile.format)
+        FileInfoRow(stringResource(R.string.metadata_bitrate), "${audioFile.bitrate} kbps")
+        FileInfoRow(stringResource(R.string.metadata_sample_rate), "${audioFile.sampleRate} Hz")
+        FileInfoRow(stringResource(R.string.file_info_channels), audioFile.channels.toString())
+        FileInfoRow(stringResource(R.string.metadata_duration), audioFile.getFormattedDuration())
+        FileInfoRow(stringResource(R.string.file_info_size), audioFile.getFormattedSize())
 
         // Bottom spacing for FAB
         Spacer(modifier = Modifier.height(80.dp))
@@ -462,7 +465,7 @@ private fun AlbumArtSection(
             if (albumArt != null) {
                 AsyncImage(
                     model = albumArt,
-                    contentDescription = "Album art",
+                    contentDescription = stringResource(R.string.cd_album_art),
                     modifier = Modifier.fillMaxSize()
                 )
             } else {
@@ -475,7 +478,7 @@ private fun AlbumArtSection(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        "No album art",
+                        stringResource(R.string.no_album_art),
                         color = MaterialTheme.colorScheme.outline
                     )
                 }

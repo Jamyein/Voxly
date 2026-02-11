@@ -110,7 +110,11 @@ class JaudiotaggerMetadataProcessor @Inject constructor(
 
                 // Set album art
                 metadata.albumArt?.let { artBytes ->
-                    val artwork = Artwork.createArtworkFromFile(artBytes.inputStream())
+                    val artwork = org.jaudiotagger.tag.images.StandardArtwork()
+                    artwork.setBinaryData(artBytes)
+                    artwork.setMimeType("image/jpeg")
+                    artwork.setDescription("")
+                    artwork.setPictureType(org.jaudiotagger.tag.reference.PictureTypes.DEFAULT_ID)
                     tag.setField(artwork)
                 } ?: run {
                     // Remove album art if bytes are null
@@ -169,9 +173,9 @@ class JaudiotaggerMetadataProcessor @Inject constructor(
             val header: AudioHeader = audioFile.audioHeader
 
             Triple(
-                header.bitrate,
-                header.sampleRateAsInt,
-                header.channels
+                header.bitRate?.toIntOrNull() ?: 0,
+                header.sampleRate?.toIntOrNull() ?: 0,
+                header.channels?.toIntOrNull() ?: 0
             )
         } catch (e: Exception) {
             null
