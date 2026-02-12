@@ -12,14 +12,10 @@ import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
-import com.voxly.domain.repository.ScanStatus
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,33 +38,12 @@ class AudioRepositoryImpl @Inject constructor(
             audioFileScanner.scanAllAudioFiles()
         } else {
             audioFileScanner.scanDirectory(directoryPath)
-        }.map { audioFiles ->
-            // Bulk metadata parsing is expensive; keep it off the main thread.
-            withContext(Dispatchers.IO) {
-                audioFiles.map { audioFile ->
-                    runCatching {
-                        metadataProcessor.readMetadata(
-                            filePath = audioFile.path,
-                            includeAlbumArt = false
-                        )
-                    }.onFailure { error ->
-                        Log.w(TAG, "Metadata read failed for ${audioFile.path}", error)
-                    }.getOrNull()?.let { detailedMetadata ->
-                        audioFile.copy(metadata = detailedMetadata)
-                    } ?: audioFile
-                }
-            }
         }.flowOn(Dispatchers.IO)
     }
 
     override suspend fun getAudioFile(filePath: String): Result<AudioFile> =
         withContext(Dispatchers.IO) {
             try {
-                // Check if file is accessible
-                if (!audioFileScanner.isFileAccessible(filePath)) {
-                    return@withContext Result.failure(Exception("File not accessible: $filePath"))
-                }
-
                 // Read basic info from file
                 val javaFile = java.io.File(filePath)
                 val extension = filePath.substringAfterLast('.').lowercase()
@@ -103,6 +78,8 @@ class AudioRepositoryImpl @Inject constructor(
                 )
 
                 Result.success(enhancedAudioFile)
+            } catch (e: SecurityException) {
+                Result.failure(Exception("File not accessible due to storage permission/scope: $filePath", e))
             } catch (e: Exception) {
                 Result.failure(e)
             }

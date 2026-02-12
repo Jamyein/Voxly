@@ -71,6 +71,48 @@ class SettingsViewModel @Inject constructor(
             initialValue = "system"
         )
 
+    val appleCountryCode: StateFlow<String> = settingsDataStore.appleCountryCode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "us"
+        )
+
+    val onlineSearchLimit: StateFlow<Int> = settingsDataStore.onlineSearchLimit
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 25
+        )
+
+    val sourceEnabledMusicBrainz: StateFlow<Boolean> = settingsDataStore.sourceEnabledMusicBrainz
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val sourceEnabledITunes: StateFlow<Boolean> = settingsDataStore.sourceEnabledITunes
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val sourceEnabledNetease: StateFlow<Boolean> = settingsDataStore.sourceEnabledNetease
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val sourceEnabledQQMusic: StateFlow<Boolean> = settingsDataStore.sourceEnabledQQMusic
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     /**
      * Set dark theme preference
      */
@@ -124,6 +166,42 @@ class SettingsViewModel @Inject constructor(
                     LocaleListCompat.forLanguageTags(tag)
                 }
             )
+        }
+    }
+
+    fun setAppleCountryCode(code: String) {
+        viewModelScope.launch {
+            settingsDataStore.setAppleCountryCode(code)
+        }
+    }
+
+    fun setOnlineSearchLimit(limit: Int) {
+        viewModelScope.launch {
+            settingsDataStore.setOnlineSearchLimit(limit)
+        }
+    }
+
+    fun setSourceEnabledMusicBrainz(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setSourceEnabledMusicBrainz(enabled)
+        }
+    }
+
+    fun setSourceEnabledITunes(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setSourceEnabledITunes(enabled)
+        }
+    }
+
+    fun setSourceEnabledNetease(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setSourceEnabledNetease(enabled)
+        }
+    }
+
+    fun setSourceEnabledQQMusic(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setSourceEnabledQQMusic(enabled)
         }
     }
 }

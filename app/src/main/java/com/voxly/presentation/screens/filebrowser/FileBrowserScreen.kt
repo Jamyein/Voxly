@@ -1,8 +1,12 @@
 package com.voxly.presentation.screens.filebrowser
 
 import android.Manifest
+import android.graphics.BitmapFactory
+import android.graphics.BitmapFactory.Options
+import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
+import androidx.compose.foundation.Image
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -16,10 +20,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Error
-import androidx.compose.material.icons.filled.Equalizer
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -29,11 +29,13 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.viewmodel.FileBrowserUiState
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
@@ -78,9 +80,6 @@ fun FileBrowserScreen(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         hasReadPermission = granted
-        if (granted) {
-            viewModel.loadAudioFiles()
-        }
     }
 
     // 文件夹选择器启动器
@@ -99,8 +98,8 @@ fun FileBrowserScreen(
         }
     }
 
-    LaunchedEffect(selectedDirectories, hasReadPermission) {
-        if (selectedDirectories.isNotEmpty() || hasReadPermission) {
+    LaunchedEffect(hasReadPermission) {
+        if (hasReadPermission) {
             viewModel.loadAudioFiles()
         } else {
             readPermissionLauncher.launch(readPermission)
@@ -147,7 +146,8 @@ fun FileBrowserScreen(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                         titleContentColor = MaterialTheme.colorScheme.onSurface
-                    )
+                    ),
+                    windowInsets = TopAppBarDefaults.windowInsets
                 )
             } else {
                 TopAppBar(
@@ -163,7 +163,8 @@ fun FileBrowserScreen(
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface,
                         titleContentColor = MaterialTheme.colorScheme.onSurface
-                    )
+                    ),
+                    windowInsets = TopAppBarDefaults.windowInsets
                 )
             }
         },
@@ -171,7 +172,7 @@ fun FileBrowserScreen(
             if (selectedFiles.isEmpty() && openedDirectory == null) {
                 ExtendedFloatingActionButton(
                     onClick = { folderPickerLauncher.launch(null) },
-                    icon = { Icon(Icons.Default.Folder, contentDescription = null) },
+                    icon = { Icon(painter = appIconPainter(AppIcon.Folder), contentDescription = null) },
                     text = { Text(stringResource(R.string.add_directory)) }
                 )
             }
@@ -257,14 +258,15 @@ private fun SelectionTopBar(
                 onClick = onNavigateToReplayGain,
                 modifier = Modifier.padding(horizontal = 8.dp)
             ) {
-                Icon(Icons.Default.Equalizer, contentDescription = null)
+                Icon(painter = appIconPainter(AppIcon.Equalizer), contentDescription = null)
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(R.string.replay_gain))
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
-        )
+        ),
+        windowInsets = TopAppBarDefaults.windowInsets
     )
 }
 
@@ -330,7 +332,7 @@ private fun EmptyContent() {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
-                Icons.Default.MusicNote,
+                painter = appIconPainter(AppIcon.MusicNote),
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.outline
@@ -359,7 +361,7 @@ private fun ErrorContent(message: String) {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
-                Icons.Default.Error,
+                painter = appIconPainter(AppIcon.Error),
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.error
@@ -409,6 +411,7 @@ private fun AudioFileItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val context = LocalContext.current
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -436,15 +439,37 @@ private fun AudioFileItem(
                 modifier = Modifier.size(48.dp),
                 contentAlignment = Alignment.Center
             ) {
+                val mediaStoreBitmap = remember(audioFile.mediaStoreAlbumId) {
+                    loadMediaStoreAlbumBitmap(context, audioFile.mediaStoreAlbumId)
+                }
                 if (audioFile.metadata.albumArt != null) {
-                    AsyncImage(
-                        model = audioFile.metadata.albumArt,
+                    val bitmap = remember(audioFile.metadata.albumArt) {
+                        audioFile.metadata.albumArt?.let { bytes ->
+                            decodeThumbnailBitmap(bytes)
+                        }
+                    }
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                        contentDescription = stringResource(R.string.cd_album_art),
+                        modifier = Modifier.fillMaxSize()
+                        )
+                    } else {
+                        Icon(
+                            painter = appIconPainter(AppIcon.MusicNote),
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                } else if (mediaStoreBitmap != null) {
+                    Image(
+                        bitmap = mediaStoreBitmap.asImageBitmap(),
                         contentDescription = stringResource(R.string.cd_album_art),
                         modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     Icon(
-                        Icons.Default.MusicNote,
+                        painter = appIconPainter(AppIcon.MusicNote),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.outline
                     )
@@ -494,6 +519,46 @@ private fun AudioFileItem(
     }
 }
 
+private fun loadMediaStoreAlbumBitmap(
+    context: android.content.Context,
+    albumId: Long?
+): android.graphics.Bitmap? {
+    if (albumId == null || albumId <= 0L) return null
+    val uri = Uri.withAppendedPath(
+        Uri.parse("content://media/external/audio/albumart"),
+        albumId.toString()
+    )
+    return runCatching {
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            val bytes = stream.readBytes()
+            decodeThumbnailBitmap(bytes)
+        }
+    }.getOrNull()
+}
+
+private fun decodeThumbnailBitmap(
+    bytes: ByteArray,
+    targetSizePx: Int = 96
+): android.graphics.Bitmap? {
+    val bounds = Options().apply {
+        inJustDecodeBounds = true
+    }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+
+    val rawWidth = bounds.outWidth.coerceAtLeast(1)
+    val rawHeight = bounds.outHeight.coerceAtLeast(1)
+    var inSampleSize = 1
+    while ((rawWidth / inSampleSize) > targetSizePx || (rawHeight / inSampleSize) > targetSizePx) {
+        inSampleSize *= 2
+    }
+
+    val opts = Options().apply {
+        inSampleSize = inSampleSize
+        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+    }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+}
+
 @Composable
 private fun DirectoryItem(
     directory: SelectedDirectory,
@@ -517,7 +582,7 @@ private fun DirectoryItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = Icons.Default.Folder,
+                painter = appIconPainter(AppIcon.Folder),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.primary
             )

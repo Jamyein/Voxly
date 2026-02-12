@@ -18,6 +18,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
+import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.viewmodel.LyricsEditorUiState
 import com.voxly.presentation.viewmodel.LyricsEditorViewModel
 
@@ -62,20 +64,27 @@ fun LyricsEditorScreen(
                 actions = {
                     if (hasChanges) {
                         IconButton(onClick = { viewModel.saveLyrics() }) {
-                            Icon(Icons.Default.Save, contentDescription = stringResource(R.string.dialog_save))
+                            Icon(
+                                painter = appIconPainter(AppIcon.Save),
+                                contentDescription = stringResource(R.string.dialog_save)
+                            )
                         }
                     }
                     IconButton(onClick = { viewModel.searchOnlineLyrics() }) {
-                        Icon(Icons.Default.CloudDownload, contentDescription = stringResource(R.string.search_online))
+                        Icon(
+                            painter = appIconPainter(AppIcon.CloudDownload),
+                            contentDescription = stringResource(R.string.search_online)
+                        )
                     }
-                }
+                },
+                windowInsets = TopAppBarDefaults.windowInsets
             )
         },
         floatingActionButton = {
             if (editedText.isNotBlank()) {
                 ExtendedFloatingActionButton(
                     onClick = { viewModel.saveLyrics() },
-                    icon = { Icon(Icons.Default.Save, contentDescription = null) },
+                    icon = { Icon(painter = appIconPainter(AppIcon.Save), contentDescription = null) },
                     text = { Text(stringResource(R.string.save_lyrics)) }
                 )
             }
@@ -214,7 +223,7 @@ private fun LyricsEditorContent(
                 if (isSynced && lyrics.isNotBlank()) {
                     IconButton(onClick = onFormatLrc) {
                         Icon(
-                            Icons.Default.Schedule,
+                            painter = appIconPainter(AppIcon.Schedule),
                             contentDescription = stringResource(R.string.auto_format_timestamps)
                         )
                     }
@@ -313,7 +322,7 @@ private fun ErrorContent(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
-                Icons.Default.Error,
+                painter = appIconPainter(AppIcon.Error),
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.error
@@ -443,7 +452,7 @@ private fun OnlineLyricsResultItem(
                         label = { Text(stringResource(R.string.synced)) },
                         leadingIcon = {
                             Icon(
-                                Icons.Default.Schedule,
+                                painter = appIconPainter(AppIcon.Schedule),
                                 contentDescription = null,
                                 modifier = Modifier.size(16.dp)
                             )

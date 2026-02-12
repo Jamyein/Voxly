@@ -1,8 +1,6 @@
 package com.voxly.presentation.screens
 
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -10,6 +8,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
+import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.icons.appIconPainter
 
 /**
  * Placeholder screen for recent edits.
@@ -24,7 +24,7 @@ fun RecentEditsScreen(
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
-                Icons.Default.History,
+                painter = appIconPainter(AppIcon.History),
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.outline

@@ -1,5 +1,6 @@
 package com.voxly.data.repository
 
+import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.remote.itunes.ITunesRepository
 import com.voxly.data.remote.musicbrainz.MusicBrainzRepository
 import com.voxly.data.remote.tengx.TengxRepository
@@ -10,6 +11,7 @@ import com.voxly.domain.repository.OnlineReleaseDetails
 import com.voxly.domain.repository.OnlineRecording
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.first
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,6 +24,7 @@ import javax.inject.Singleton
  */
 @Singleton
 class AggregatedOnlineMetadataRepository @Inject constructor(
+    private val settingsDataStore: SettingsDataStore,
     private val musicBrainzRepository: MusicBrainzRepository,
     private val iTunesRepository: ITunesRepository,
     private val wangyRepository: WangyRepository,
@@ -48,12 +51,42 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String,
         album: String
     ): Result<List<OnlineRelease>> {
+        val settings = getOnlineSourceSettings()
+        if (!settings.hasAnyEnabledSource) {
+            return Result.failure(Exception("No metadata sources enabled"))
+        }
         return when (preferredSource) {
-            DataSource.MUSICBRAINZ -> musicBrainzRepository.searchByArtistAlbum(artist, album)
-            DataSource.ITUNES -> iTunesRepository.searchByArtistAlbum(artist, album)
-            DataSource.NETEASE -> searchNeteaseByArtistAlbum(artist, album)
-            DataSource.QQ_MUSIC -> searchQQMusicByArtistAlbum(artist, album)
-            DataSource.BOTH -> searchAllSources(artist, album)
+            DataSource.MUSICBRAINZ -> {
+                if (settings.enableMusicBrainz) {
+                    musicBrainzRepository.searchByArtistAlbum(artist, album)
+                        .map { it.take(settings.searchLimit) }
+                } else {
+                    Result.success(emptyList())
+                }
+            }
+            DataSource.ITUNES -> {
+                if (settings.enableITunes) {
+                    iTunesRepository.searchByArtistAlbum(artist, album)
+                        .map { it.take(settings.searchLimit) }
+                } else {
+                    Result.success(emptyList())
+                }
+            }
+            DataSource.NETEASE -> {
+                if (settings.enableNetease) {
+                    searchNeteaseByArtistAlbum(artist, album, settings.searchLimit)
+                } else {
+                    Result.success(emptyList())
+                }
+            }
+            DataSource.QQ_MUSIC -> {
+                if (settings.enableQQMusic) {
+                    searchQQMusicByArtistAlbum(artist, album, settings.searchLimit)
+                } else {
+                    Result.success(emptyList())
+                }
+            }
+            DataSource.BOTH -> searchAllSources(artist, album, settings)
         }
     }
 
@@ -62,37 +95,37 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
      */
     private suspend fun searchAllSources(
         artist: String,
-        album: String
+        album: String,
+        settings: OnlineSourceSettings
     ): Result<List<OnlineRelease>> = coroutineScope {
-        // Query all sources concurrently
-        val musicBrainzDeferred = async {
-            musicBrainzRepository.searchByArtistAlbum(artist, album)
-        }
-        val iTunesDeferred = async {
-            iTunesRepository.searchByArtistAlbum(artist, album)
-        }
-        val neteaseDeferred = async {
-            searchNeteaseByArtistAlbum(artist, album)
-        }
-        val qqMusicDeferred = async {
-            searchQQMusicByArtistAlbum(artist, album)
-        }
+        val musicBrainzDeferred = if (settings.enableMusicBrainz) {
+            async { musicBrainzRepository.searchByArtistAlbum(artist, album) }
+        } else null
+        val iTunesDeferred = if (settings.enableITunes) {
+            async { iTunesRepository.searchByArtistAlbum(artist, album) }
+        } else null
+        val neteaseDeferred = if (settings.enableNetease) {
+            async { searchNeteaseByArtistAlbum(artist, album, settings.searchLimit) }
+        } else null
+        val qqMusicDeferred = if (settings.enableQQMusic) {
+            async { searchQQMusicByArtistAlbum(artist, album, settings.searchLimit) }
+        } else null
 
-        val musicBrainzResult = musicBrainzDeferred.await()
-        val iTunesResult = iTunesDeferred.await()
-        val neteaseResult = neteaseDeferred.await()
-        val qqMusicResult = qqMusicDeferred.await()
+        val musicBrainzResult = musicBrainzDeferred?.await()?.map { it.take(settings.searchLimit) }
+        val iTunesResult = iTunesDeferred?.await()?.map { it.take(settings.searchLimit) }
+        val neteaseResult = neteaseDeferred?.await()
+        val qqMusicResult = qqMusicDeferred?.await()
 
         // Merge results
         val mergedResults = mutableListOf<OnlineRelease>()
         
         // Add MusicBrainz results first
-        if (musicBrainzResult.isSuccess) {
+        if (musicBrainzResult?.isSuccess == true) {
             mergedResults.addAll(musicBrainzResult.getOrNull() ?: emptyList())
         }
 
         // Add iTunes results
-        if (iTunesResult.isSuccess) {
+        if (iTunesResult?.isSuccess == true) {
             val iTunesReleases = iTunesResult.getOrNull() ?: emptyList()
             iTunesReleases.forEach { release ->
                 val isDuplicate = mergedResults.any { existing ->
@@ -105,7 +138,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         }
 
         // Add NetEase results (for Chinese music)
-        if (neteaseResult.isSuccess) {
+        if (neteaseResult?.isSuccess == true) {
             val neteaseReleases = neteaseResult.getOrNull() ?: emptyList()
             neteaseReleases.forEach { release ->
                 val isDuplicate = mergedResults.any { existing ->
@@ -118,7 +151,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         }
 
         // Add QQ Music results (for Chinese music)
-        if (qqMusicResult.isSuccess) {
+        if (qqMusicResult?.isSuccess == true) {
             val qqReleases = qqMusicResult.getOrNull() ?: emptyList()
             qqReleases.forEach { release ->
                 val isDuplicate = mergedResults.any { existing ->
@@ -139,7 +172,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             score
         }
 
-        Result.success(sortedResults)
+        Result.success(sortedResults.take(settings.searchLimit))
     }
 
     /**
@@ -147,13 +180,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
      */
     private suspend fun searchNeteaseByArtistAlbum(
         artist: String,
-        album: String
+        album: String,
+        limit: Int
     ): Result<List<OnlineRelease>> {
         return try {
             val searchResult = wangyRepository.searchSongs(
                 keywords = "$artist $album",
                 page = 1,
-                limit = 30
+                limit = limit
             )
 
             if (searchResult.isSuccess) {
@@ -188,13 +222,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
      */
     private suspend fun searchQQMusicByArtistAlbum(
         artist: String,
-        album: String
+        album: String,
+        limit: Int
     ): Result<List<OnlineRelease>> {
         return try {
             val searchResult = tengxRepository.searchSongs(
                 keywords = "$artist $album",
                 pageNum = 1,
-                pageSize = 30
+                pageSize = limit
             )
 
             if (searchResult.isSuccess) {
@@ -229,35 +264,64 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         title: String,
         artist: String?
     ): Result<List<OnlineRecording>> {
+        val settings = getOnlineSourceSettings()
+        if (!settings.hasAnyEnabledSource) {
+            return Result.failure(Exception("No metadata sources enabled"))
+        }
         return when (preferredSource) {
-            DataSource.MUSICBRAINZ -> musicBrainzRepository.searchByTrack(title, artist)
-            DataSource.ITUNES -> iTunesRepository.searchByTrack(title, artist)
-            DataSource.NETEASE -> searchNeteaseByTrack(title, artist)
-            DataSource.QQ_MUSIC -> searchQQMusicByTrack(title, artist)
+            DataSource.MUSICBRAINZ -> {
+                if (settings.enableMusicBrainz) {
+                    musicBrainzRepository.searchByTrack(title, artist)
+                        .map { it.take(settings.searchLimit) }
+                } else {
+                    Result.success(emptyList())
+                }
+            }
+            DataSource.ITUNES -> {
+                if (settings.enableITunes) {
+                    iTunesRepository.searchByTrack(title, artist)
+                        .map { it.take(settings.searchLimit) }
+                } else {
+                    Result.success(emptyList())
+                }
+            }
+            DataSource.NETEASE -> {
+                if (settings.enableNetease) {
+                    searchNeteaseByTrack(title, artist, settings.searchLimit)
+                } else {
+                    Result.success(emptyList())
+                }
+            }
+            DataSource.QQ_MUSIC -> {
+                if (settings.enableQQMusic) {
+                    searchQQMusicByTrack(title, artist, settings.searchLimit)
+                } else {
+                    Result.success(emptyList())
+                }
+            }
             DataSource.BOTH -> {
-                // For track search, try all sources
                 coroutineScope {
-                    val musicBrainzDeferred = async { 
-                        musicBrainzRepository.searchByTrack(title, artist) 
-                    }
-                    val iTunesDeferred = async { 
-                        iTunesRepository.searchByTrack(title, artist) 
-                    }
-                    val neteaseDeferred = async { 
-                        searchNeteaseByTrack(title, artist) 
-                    }
-                    val qqMusicDeferred = async { 
-                        searchQQMusicByTrack(title, artist) 
-                    }
+                    val musicBrainzDeferred = if (settings.enableMusicBrainz) {
+                        async { musicBrainzRepository.searchByTrack(title, artist) }
+                    } else null
+                    val iTunesDeferred = if (settings.enableITunes) {
+                        async { iTunesRepository.searchByTrack(title, artist) }
+                    } else null
+                    val neteaseDeferred = if (settings.enableNetease) {
+                        async { searchNeteaseByTrack(title, artist, settings.searchLimit) }
+                    } else null
+                    val qqMusicDeferred = if (settings.enableQQMusic) {
+                        async { searchQQMusicByTrack(title, artist, settings.searchLimit) }
+                    } else null
 
                     val results = mutableListOf<OnlineRecording>()
                     
-                    musicBrainzDeferred.await().getOrNull()?.let { results.addAll(it) }
-                    iTunesDeferred.await().getOrNull()?.let { results.addAll(it) }
-                    neteaseDeferred.await().getOrNull()?.let { results.addAll(it) }
-                    qqMusicDeferred.await().getOrNull()?.let { results.addAll(it) }
+                    musicBrainzDeferred?.await()?.getOrNull()?.let { results.addAll(it.take(settings.searchLimit)) }
+                    iTunesDeferred?.await()?.getOrNull()?.let { results.addAll(it.take(settings.searchLimit)) }
+                    neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
+                    qqMusicDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
 
-                    Result.success(results)
+                    Result.success(results.take(settings.searchLimit))
                 }
             }
         }
@@ -268,13 +332,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
      */
     private suspend fun searchNeteaseByTrack(
         title: String,
-        artist: String?
+        artist: String?,
+        limit: Int
     ): Result<List<OnlineRecording>> {
         return try {
             val searchResult = wangyRepository.searchSongs(
                 keywords = if (artist != null) "$artist $title" else title,
                 page = 1,
-                limit = 20
+                limit = limit
             )
 
             if (searchResult.isSuccess) {
@@ -304,13 +369,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
      */
     private suspend fun searchQQMusicByTrack(
         title: String,
-        artist: String?
+        artist: String?,
+        limit: Int
     ): Result<List<OnlineRecording>> {
         return try {
             val searchResult = tengxRepository.searchSongs(
                 keywords = title,
                 pageNum = 1,
-                pageSize = 20
+                pageSize = limit
             )
 
             if (searchResult.isSuccess) {
@@ -336,18 +402,43 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     }
 
     override suspend fun getReleaseDetails(releaseId: String): Result<OnlineReleaseDetails> {
+        val settings = getOnlineSourceSettings()
         return when (preferredSource) {
-            DataSource.MUSICBRAINZ -> musicBrainzRepository.getReleaseDetails(releaseId)
-            DataSource.ITUNES -> iTunesRepository.getReleaseDetails(releaseId)
-            DataSource.NETEASE -> getNeteaseAlbumDetails(releaseId)
-            DataSource.QQ_MUSIC -> getQQMusicAlbumDetails(releaseId)
+            DataSource.MUSICBRAINZ -> if (settings.enableMusicBrainz) {
+                musicBrainzRepository.getReleaseDetails(releaseId)
+            } else {
+                Result.failure(Exception("MusicBrainz source is disabled"))
+            }
+            DataSource.ITUNES -> if (settings.enableITunes) {
+                iTunesRepository.getReleaseDetails(releaseId)
+            } else {
+                Result.failure(Exception("Apple Music source is disabled"))
+            }
+            DataSource.NETEASE -> if (settings.enableNetease) {
+                getNeteaseAlbumDetails(releaseId)
+            } else {
+                Result.failure(Exception("NetEase source is disabled"))
+            }
+            DataSource.QQ_MUSIC -> if (settings.enableQQMusic) {
+                getQQMusicAlbumDetails(releaseId)
+            } else {
+                Result.failure(Exception("QQ Music source is disabled"))
+            }
             DataSource.BOTH -> {
-                // Try iTunes first for better cover art, then fall back
-                val iTunesResult = iTunesRepository.getReleaseDetails(releaseId)
-                if (iTunesResult.isSuccess) {
-                    iTunesResult
-                } else {
+                if (!settings.hasAnyEnabledSource) {
+                    return Result.failure(Exception("No metadata sources enabled"))
+                }
+
+                if (settings.enableITunes) {
+                    val iTunesResult = iTunesRepository.getReleaseDetails(releaseId)
+                    if (iTunesResult.isSuccess) {
+                        return iTunesResult
+                    }
+                }
+                if (settings.enableMusicBrainz) {
                     musicBrainzRepository.getReleaseDetails(releaseId)
+                } else {
+                    Result.failure(Exception("No release details source enabled"))
                 }
             }
         }
@@ -410,18 +501,43 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     }
 
     override suspend fun getCoverArt(releaseId: String): Result<ByteArray?> {
+        val settings = getOnlineSourceSettings()
         return when (preferredSource) {
-            DataSource.MUSICBRAINZ -> musicBrainzRepository.getCoverArt(releaseId)
-            DataSource.ITUNES -> iTunesRepository.getCoverArt(releaseId)
-            DataSource.NETEASE -> getNeteaseCoverArt(releaseId)
-            DataSource.QQ_MUSIC -> getQQMusicCoverArt(releaseId)
+            DataSource.MUSICBRAINZ -> if (settings.enableMusicBrainz) {
+                musicBrainzRepository.getCoverArt(releaseId)
+            } else {
+                Result.failure(Exception("MusicBrainz source is disabled"))
+            }
+            DataSource.ITUNES -> if (settings.enableITunes) {
+                iTunesRepository.getCoverArt(releaseId)
+            } else {
+                Result.failure(Exception("Apple Music source is disabled"))
+            }
+            DataSource.NETEASE -> if (settings.enableNetease) {
+                getNeteaseCoverArt(releaseId)
+            } else {
+                Result.failure(Exception("NetEase source is disabled"))
+            }
+            DataSource.QQ_MUSIC -> if (settings.enableQQMusic) {
+                getQQMusicCoverArt(releaseId)
+            } else {
+                Result.failure(Exception("QQ Music source is disabled"))
+            }
             DataSource.BOTH -> {
-                // Try iTunes first for higher quality artwork
-                val iTunesResult = iTunesRepository.getCoverArt(releaseId)
-                if (iTunesResult.isSuccess && iTunesResult.getOrNull() != null) {
-                    iTunesResult
-                } else {
+                if (!settings.hasAnyEnabledSource) {
+                    return Result.failure(Exception("No metadata sources enabled"))
+                }
+
+                if (settings.enableITunes) {
+                    val iTunesResult = iTunesRepository.getCoverArt(releaseId)
+                    if (iTunesResult.isSuccess && iTunesResult.getOrNull() != null) {
+                        return iTunesResult
+                    }
+                }
+                if (settings.enableMusicBrainz) {
                     musicBrainzRepository.getCoverArt(releaseId)
+                } else {
+                    Result.success(null)
                 }
             }
         }
@@ -502,7 +618,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String,
         album: String
     ): Result<List<OnlineRelease>> {
-        return searchNeteaseByArtistAlbum(artist, album)
+        return searchNeteaseByArtistAlbum(artist, album, getOnlineSourceSettings().searchLimit)
     }
 
     /**
@@ -512,7 +628,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String,
         album: String
     ): Result<List<OnlineRelease>> {
-        return searchQQMusicByArtistAlbum(artist, album)
+        return searchQQMusicByArtistAlbum(artist, album, getOnlineSourceSettings().searchLimit)
     }
 
     /**
@@ -533,5 +649,26 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val artist2 = release2.artist.lowercase().trim()
         
         return artist1 == artist2 && (title1.contains(title2) || title2.contains(title1))
+    }
+
+    private suspend fun getOnlineSourceSettings(): OnlineSourceSettings {
+        return OnlineSourceSettings(
+            enableMusicBrainz = settingsDataStore.sourceEnabledMusicBrainz.first(),
+            enableITunes = settingsDataStore.sourceEnabledITunes.first(),
+            enableNetease = settingsDataStore.sourceEnabledNetease.first(),
+            enableQQMusic = settingsDataStore.sourceEnabledQQMusic.first(),
+            searchLimit = settingsDataStore.onlineSearchLimit.first().coerceIn(5, 50)
+        )
+    }
+
+    private data class OnlineSourceSettings(
+        val enableMusicBrainz: Boolean,
+        val enableITunes: Boolean,
+        val enableNetease: Boolean,
+        val enableQQMusic: Boolean,
+        val searchLimit: Int
+    ) {
+        val hasAnyEnabledSource: Boolean
+            get() = enableMusicBrainz || enableITunes || enableNetease || enableQQMusic
     }
 }

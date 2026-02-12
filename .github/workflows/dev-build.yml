@@ -39,12 +39,29 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - name: Build Debug APK
-        run: ./gradlew assembleDebug
+      - name: Build Slim Debug APK (dist)
+        run: ./gradlew assembleDist
+
+      - name: Rename APK with hash and timestamp
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="$(find app/build -type f -path "*/apk/dist/*.apk" | head -n 1)"
+          if [ -z "${APK_PATH}" ]; then
+            echo "No dist APK found"
+            exit 1
+          fi
+          TS="$(date +%Y%m%d%H%M%S)"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          OUT_DIR="app/build/outputs/renamed"
+          mkdir -p "${OUT_DIR}"
+          OUT_NAME="Voxly-debug-${SHORT_SHA}-${TS}.apk"
+          cp "${APK_PATH}" "${OUT_DIR}/${OUT_NAME}"
+          echo "RENAMED_APK=${OUT_DIR}/${OUT_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: Voxly-debug
+          path: ${{ env.RENAMED_APK }}
           retention-days: 30

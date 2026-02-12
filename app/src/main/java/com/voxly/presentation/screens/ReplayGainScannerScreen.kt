@@ -3,7 +3,6 @@ package com.voxly.presentation.screens
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.Equalizer
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -11,6 +10,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
+import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.icons.appIconPainter
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
@@ -37,7 +38,8 @@ fun ReplayGainScannerScreen(
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
                     }
-                }
+                },
+                windowInsets = TopAppBarDefaults.windowInsets
             )
         }
     ) { innerPadding ->
@@ -50,7 +52,7 @@ fun ReplayGainScannerScreen(
             verticalArrangement = Arrangement.Center
         ) {
             Icon(
-                Icons.Default.Equalizer,
+                painter = appIconPainter(AppIcon.Equalizer),
                 contentDescription = null,
                 modifier = Modifier.size(96.dp),
                 tint = MaterialTheme.colorScheme.primary

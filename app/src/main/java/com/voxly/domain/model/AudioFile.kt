@@ -14,7 +14,8 @@ data class AudioFile(
     val sampleRate: Int,
     val channels: Int,
     val metadata: AudioMetadata,
-    val replayGainInfo: ReplayGainInfo? = null
+    val replayGainInfo: ReplayGainInfo? = null,
+    val mediaStoreAlbumId: Long? = null
 ) {
     /**
      * Returns a human-readable duration string.

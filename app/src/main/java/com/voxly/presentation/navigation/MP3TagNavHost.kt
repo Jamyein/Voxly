@@ -1,22 +1,17 @@
 package com.voxly.presentation.navigation
 
+import android.widget.Toast
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Folder
-import androidx.compose.material.icons.filled.History
-import androidx.compose.material.icons.filled.PlaylistAdd
-import androidx.compose.material.icons.outlined.Folder
-import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.PlaylistAdd
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -28,12 +23,16 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.voxly.R
+import com.voxly.core.util.LogManager
+import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.screens.BatchOperationsScreen
 import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
 import com.voxly.presentation.screens.RecentEditsScreen
 import com.voxly.presentation.screens.ReplayGainScannerScreen
 import com.voxly.presentation.screens.SettingsScreen
+import com.voxly.presentation.screens.log.LogViewerScreen
 import com.voxly.presentation.screens.metadata.LyricsEditorScreen
 import java.net.URLDecoder
 
@@ -56,6 +55,7 @@ fun MP3TagNavHost(
     )
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar {
@@ -65,7 +65,7 @@ fun MP3TagNavHost(
                         NavigationBarItem(
                             icon = {
                                 Icon(
-                                    imageVector = if (selected) item.selectedIcon else item.unselectedIcon,
+                                    painter = appIconPainter(if (selected) item.selectedIcon else item.unselectedIcon),
                                     contentDescription = label
                                 )
                             },
@@ -122,7 +122,40 @@ fun MP3TagNavHost(
             }
 
             composable(Screen.Settings.route) {
+                val context = LocalContext.current
                 SettingsScreen(
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToLogViewer = {
+                        navController.navigate(Screen.LogViewer.route)
+                    },
+                    onExportLogs = {
+                        val viewModel = com.voxly.presentation.screens.log.LogViewerViewModel()
+                        viewModel.exportLogs(context) { uri ->
+                            if (uri != null) {
+                                val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                    type = "application/zip"
+                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(android.content.Intent.createChooser(intent, "Share Logs"))
+                            } else {
+                                Toast.makeText(context, R.string.settings_logging_no_logs, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    onCleanupLogs = {
+                        val deletedCount = LogManager.cleanupOldLogs()
+                        Toast.makeText(
+                            context,
+                            context.getString(R.string.settings_logging_cleanup_complete, deletedCount),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                )
+            }
+
+            composable(Screen.LogViewer.route) {
+                LogViewerScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -195,8 +228,8 @@ fun MP3TagNavHost(
 data class BottomNavItemData(
     val screen: Screen,
     val labelResId: Int,
-    val selectedIcon: ImageVector,
-    val unselectedIcon: ImageVector
+    val selectedIcon: AppIcon,
+    val unselectedIcon: AppIcon
 )
 
 /**
@@ -206,19 +239,19 @@ private val bottomNavItems = listOf(
     BottomNavItemData(
         screen = Screen.FileBrowser,
         labelResId = R.string.nav_file_browser,
-        selectedIcon = Icons.Filled.Folder,
-        unselectedIcon = Icons.Outlined.Folder
+        selectedIcon = AppIcon.Folder,
+        unselectedIcon = AppIcon.Folder
     ),
     BottomNavItemData(
         screen = Screen.RecentEdits,
         labelResId = R.string.nav_recent_edits,
-        selectedIcon = Icons.Filled.History,
-        unselectedIcon = Icons.Outlined.History
+        selectedIcon = AppIcon.History,
+        unselectedIcon = AppIcon.History
     ),
     BottomNavItemData(
         screen = Screen.BatchOperations,
         labelResId = R.string.nav_batch_operations,
-        selectedIcon = Icons.Filled.PlaylistAdd,
-        unselectedIcon = Icons.Outlined.PlaylistAdd
+        selectedIcon = AppIcon.PlaylistAdd,
+        unselectedIcon = AppIcon.PlaylistAdd
     )
 )

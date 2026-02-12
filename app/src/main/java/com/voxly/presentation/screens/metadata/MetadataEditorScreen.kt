@@ -1,5 +1,7 @@
 package com.voxly.presentation.screens.metadata
 
+import android.graphics.BitmapFactory
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -10,13 +12,15 @@ import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import coil.compose.AsyncImage
 import com.voxly.R
+import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 
@@ -76,13 +80,14 @@ fun MetadataEditorScreen(
                             Text(stringResource(R.string.dialog_save))
                         }
                     }
-                }
+                },
+                windowInsets = TopAppBarDefaults.windowInsets
             )
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
                 onClick = onNavigateToOnlineMetadata,
-                icon = { Icon(Icons.Default.CloudDownload, contentDescription = null) },
+                icon = { Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = null) },
                 text = { Text(stringResource(R.string.fetch_online_metadata)) }
             )
         }
@@ -152,7 +157,7 @@ fun MetadataEditorScreen(
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
-                                Icons.Default.Error,
+                                painter = appIconPainter(AppIcon.Error),
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.error
                             )
@@ -368,7 +373,7 @@ private fun MetadataForm(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Icon(
-                        Icons.Default.MusicNote,
+                        painter = appIconPainter(AppIcon.MusicNote),
                         contentDescription = null,
                         tint = MaterialTheme.colorScheme.primary
                     )
@@ -391,7 +396,7 @@ private fun MetadataForm(
                 }
 
                 Icon(
-                    Icons.Default.ChevronRight,
+                    painter = appIconPainter(AppIcon.ChevronRight),
                     contentDescription = null,
                     tint = MaterialTheme.colorScheme.outline
                 )
@@ -463,15 +468,34 @@ private fun AlbumArtSection(
             contentAlignment = Alignment.Center
         ) {
             if (albumArt != null) {
-                AsyncImage(
-                    model = albumArt,
-                    contentDescription = stringResource(R.string.cd_album_art),
-                    modifier = Modifier.fillMaxSize()
-                )
+                val bitmap = remember(albumArt) {
+                    BitmapFactory.decodeByteArray(albumArt, 0, albumArt.size)
+                }
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = stringResource(R.string.cd_album_art),
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Icon(
+                            painter = appIconPainter(AppIcon.Image),
+                            contentDescription = null,
+                            modifier = Modifier.size(64.dp),
+                            tint = MaterialTheme.colorScheme.outline
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            stringResource(R.string.no_album_art),
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    }
+                }
             } else {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        Icons.Default.Image,
+                        painter = appIconPainter(AppIcon.Image),
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
                         tint = MaterialTheme.colorScheme.outline

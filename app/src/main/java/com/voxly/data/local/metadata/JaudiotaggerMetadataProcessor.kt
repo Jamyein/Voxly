@@ -40,7 +40,7 @@ class JaudiotaggerMetadataProcessor @Inject constructor(
     ): AudioMetadata? = withContext(Dispatchers.IO) {
         try {
             val file = File(filePath)
-            if (!file.exists() || !file.canRead()) {
+            if (!file.exists()) {
                 return@withContext null
             }
 

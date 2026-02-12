@@ -95,6 +95,7 @@ class AudioFileScanner @Inject constructor(
                         bitrate = it.getInt(bitrateColumn),
                         sampleRate = 0,
                         channels = 0,
+                        mediaStoreAlbumId = it.getLong(albumIdColumn).takeIf { albumId -> albumId > 0L },
                         metadata = parseBasicMetadata(
                             title = it.getString(titleColumn),
                             artist = it.getString(artistColumn),

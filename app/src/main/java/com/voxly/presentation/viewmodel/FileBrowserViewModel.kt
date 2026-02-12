@@ -53,6 +53,7 @@ class FileBrowserViewModel @Inject constructor(
     val openedDirectoryUri: StateFlow<String?> = _openedDirectoryUri.asStateFlow()
 
     private var scanJob: Job? = null
+    private var cachedGlobalFiles: List<AudioFile>? = null
 
     init {
         restoreSelectedDirectories()
@@ -61,23 +62,17 @@ class FileBrowserViewModel @Inject constructor(
     /**
      * Loads all audio files from device storage.
      */
-    fun loadAudioFiles() {
+    fun loadAudioFiles(forceRefresh: Boolean = false) {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             if (_selectedDirectories.value.isNotEmpty()) {
-                scanSelectedDirectories(_selectedDirectories.value)
+                scanSelectedDirectories(_selectedDirectories.value, forceRefresh)
                 return@launch
             }
 
             _uiState.value = FileBrowserUiState.Loading
-
-            audioRepository.scanAudioFiles()
-                .catch { e ->
-                    if (e is CancellationException) return@catch
-                    Log.e(TAG, "Global audio scan failed", e)
-                    _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
-                }
-                .collect { files ->
+            if (!forceRefresh) {
+                cachedGlobalFiles?.let { files ->
                     _directoryFiles.value = emptyMap()
                     _uiState.value = if (files.isEmpty()) {
                         FileBrowserUiState.Empty
@@ -87,6 +82,27 @@ class FileBrowserViewModel @Inject constructor(
                             selectedCount = _selectedFiles.value.size
                         )
                     }
+                    return@launch
+                }
+            }
+
+            runCatching { audioRepository.scanAudioFiles().first() }
+                .onSuccess { files ->
+                    cachedGlobalFiles = files
+                    _directoryFiles.value = emptyMap()
+                    _uiState.value = if (files.isEmpty()) {
+                        FileBrowserUiState.Empty
+                    } else {
+                        FileBrowserUiState.Success(
+                            files = files,
+                            selectedCount = _selectedFiles.value.size
+                        )
+                    }
+                }
+                .onFailure { e ->
+                    if (e is CancellationException) return@onFailure
+                    Log.e(TAG, "Global audio scan failed", e)
+                    _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
                 }
         }
     }
@@ -285,24 +301,27 @@ class FileBrowserViewModel @Inject constructor(
         }
     }
 
-    private suspend fun scanSelectedDirectories(directories: List<SelectedDirectory>) {
+    private suspend fun scanSelectedDirectories(
+        directories: List<SelectedDirectory>,
+        forceRefresh: Boolean = false
+    ) {
         _uiState.value = FileBrowserUiState.Loading
         runCatching {
-            var globalScannedFiles: List<AudioFile>? = null
+            val globalScannedFiles = if (!forceRefresh) {
+                cachedGlobalFiles
+            } else {
+                null
+            } ?: audioRepository.scanAudioFiles().first().also { cachedGlobalFiles = it }
+
             directories.associate { directory ->
                 val filesForDirectory = if (directory.path.isBlank()) {
                     emptyList()
                 } else {
-                    val scannedByPath = audioRepository.scanAudioFiles(directory.path).first()
-                    if (scannedByPath.isNotEmpty()) {
-                        scannedByPath
-                    } else {
-                        val mediaStoreFiles = globalScannedFiles ?: audioRepository.scanAudioFiles().first()
-                            .also { globalScannedFiles = it }
-                        mediaStoreFiles.filter { audioFile ->
-                            isInDirectory(directory.path, audioFile.path)
-                        }
+                    val filteredFromGlobal = globalScannedFiles.filter { audioFile ->
+                        isInDirectory(directory.path, audioFile.path)
                     }
+                    if (filteredFromGlobal.isNotEmpty()) filteredFromGlobal
+                    else audioRepository.scanAudioFiles(directory.path).first()
                 }.distinctBy { it.path }
                 directory.uri to filesForDirectory
             }

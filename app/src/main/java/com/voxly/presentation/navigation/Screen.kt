@@ -8,6 +8,7 @@ sealed class Screen(val route: String) {
     data object RecentEdits : Screen("recent_edits")
     data object BatchOperations : Screen("batch_operations")
     data object Settings : Screen("settings")
+    data object LogViewer : Screen("log_viewer")
     data object MetadataEditor : Screen("metadata_editor/{filePath}") {
         fun createRoute(filePath: String) = "metadata_editor/${java.net.URLEncoder.encode(filePath, "UTF-8")}"
     }
@@ -19,7 +20,7 @@ sealed class Screen(val route: String) {
         fun createRoute(filePath: String) = "online_metadata/${java.net.URLEncoder.encode(filePath, "UTF-8")}"
     }
     data object LyricsEditor : Screen("lyrics_editor/{filePath}/{trackName}/{artistName}") {
-        fun createRoute(filePath: String, trackName: String, artistName: String) = 
+        fun createRoute(filePath: String, trackName: String, artistName: String) =
             "lyrics_editor/${java.net.URLEncoder.encode(filePath, "UTF-8")}/${java.net.URLEncoder.encode(trackName, "UTF-8")}/${java.net.URLEncoder.encode(artistName, "UTF-8")}"
     }
 }

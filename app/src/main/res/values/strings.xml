@@ -210,6 +210,59 @@
     <string name="settings_metadata_source_description_both">Both: Combines results from all sources for best coverage</string>
     <string name="settings_data_sources_label">Data Sources</string>
     <string name="settings_data_sources_value">MusicBrainz + Apple Music</string>
+    <string name="settings_source_musicbrainz">Enable MusicBrainz</string>
+    <string name="settings_source_musicbrainz_subtitle">Use MusicBrainz for online metadata search</string>
+    <string name="settings_source_apple_music">Enable Apple Music</string>
+    <string name="settings_source_apple_music_subtitle">Use Apple Music/iTunes for metadata and cover art</string>
+    <string name="settings_source_netease">Enable NetEase</string>
+    <string name="settings_source_netease_subtitle">Include NetEase Cloud Music results</string>
+    <string name="settings_source_qq_music">Enable QQ Music</string>
+    <string name="settings_source_qq_music_subtitle">Include QQ Music results</string>
+    <string name="settings_apple_country">Apple Store Region</string>
+    <string name="settings_apple_country_subtitle">Country/region used for Apple Music search</string>
+    <string name="settings_apple_country_us">United States (US)</string>
+    <string name="settings_apple_country_cn">China (CN)</string>
+    <string name="settings_apple_country_jp">Japan (JP)</string>
+    <string name="settings_apple_country_gb">United Kingdom (GB)</string>
+    <string name="settings_apple_country_de">Germany (DE)</string>
+    <string name="settings_apple_country_fr">France (FR)</string>
+    <string name="settings_apple_country_ca">Canada (CA)</string>
+    <string name="settings_apple_country_au">Australia (AU)</string>
+    <string name="settings_online_search_limit">Search Result Limit</string>
+    <string name="settings_online_search_limit_subtitle">Maximum results returned per online search</string>
+
+    <!-- Logging -->
+    <string name="settings_section_logging">Logging</string>
+    <string name="settings_logging_enabled">Enable Logging</string>
+    <string name="settings_logging_enabled_subtitle">Record debug information during app usage</string>
+    <string name="settings_logging_file">File Logging</string>
+    <string name="settings_logging_file_subtitle">Save logs to local files for later review</string>
+    <string name="settings_logging_crash">Crash Reporting</string>
+    <string name="settings_logging_crash_subtitle">Automatically record uncaught exceptions</string>
+    <string name="settings_logging_size">Log Storage Used</string>
+    <string name="settings_logging_view">View Logs</string>
+    <string name="settings_logging_view_subtitle">Browse and search through application logs</string>
+    <string name="settings_logging_export">Export Logs</string>
+    <string name="settings_logging_export_subtitle">Share all logs as a compressed file</string>
+    <string name="settings_logging_cleanup">Clean Up Logs</string>
+    <string name="settings_logging_cleanup_subtitle">Delete logs older than 7 days</string>
+    <string name="settings_logging_exported">Logs exported successfully</string>
+    <string name="settings_logging_cleanup_complete">%d old log files deleted</string>
+    <string name="settings_logging_no_logs">No logs to export</string>
+
+    <!-- Log Viewer -->
+    <string name="log_viewer_title">Log Viewer</string>
+    <string name="log_viewer_search_hint">Search logs...</string>
+    <string name="log_viewer_filter_all">All</string>
+    <string name="log_viewer_filter_error">Error</string>
+    <string name="log_viewer_filter_warn">Warning</string>
+    <string name="log_viewer_filter_info">Info</string>
+    <string name="log_viewer_filter_debug">Debug</string>
+    <string name="log_viewer_share">Share</string>
+    <string name="log_viewer_delete">Delete</string>
+    <string name="log_viewer_delete_confirm">Delete this log file?</string>
+    <string name="log_viewer_no_logs">No logs available</string>
+    <string name="log_viewer_loading">Loading logs...</string>
 
     <!-- Dialogs -->
     <string name="dialog_close">Close</string>

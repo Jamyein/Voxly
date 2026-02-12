@@ -1,9 +1,9 @@
 package com.voxly.data.remote.itunes
 
-import android.content.Context
+import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.repository.*
-import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.net.URL
 import javax.inject.Inject
@@ -21,8 +21,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class ITunesRepository @Inject constructor(
-    @ApplicationContext private val context: Context,
-    private val iTunesApi: ITunesApi
+    private val iTunesApi: ITunesApi,
+    private val settingsDataStore: SettingsDataStore
 ) : OnlineMetadataRepository {
 
     companion object {
@@ -42,10 +42,12 @@ class ITunesRepository @Inject constructor(
                     append(album)
                 }
             }
+            val searchSettings = getSearchSettings()
 
             val response = iTunesApi.searchAlbums(
                 term = searchTerm,
-                limit = DEFAULT_LIMIT
+                limit = searchSettings.limit,
+                country = searchSettings.countryCode
             )
 
             if (response.isSuccessful) {
@@ -88,10 +90,12 @@ class ITunesRepository @Inject constructor(
                 }
                 append(title)
             }
+            val searchSettings = getSearchSettings()
 
             val response = iTunesApi.searchSongs(
                 term = searchTerm,
-                limit = DEFAULT_LIMIT
+                limit = searchSettings.limit,
+                country = searchSettings.countryCode
             )
 
             if (response.isSuccessful) {
@@ -139,7 +143,8 @@ class ITunesRepository @Inject constructor(
             val tracksResponse = iTunesApi.search(
                 term = "${albumResult.artistName} ${albumResult.collectionName}",
                 entity = ITunesEntity.MUSIC_TRACK.value,
-                limit = MAX_LIMIT
+                limit = MAX_LIMIT,
+                country = getSearchSettings().countryCode
             )
 
             val tracks = if (tracksResponse.isSuccessful) {
@@ -253,4 +258,18 @@ class ITunesRepository @Inject constructor(
     fun getHighResArtworkUrl(artworkUrl: String?, size: Int = 600): String? {
         return artworkUrl?.replace(Regex("\\d+x\\d+"), "${size}x${size}")
     }
+
+    private suspend fun getSearchSettings(): SearchSettings {
+        val countryCode = settingsDataStore.appleCountryCode.first()
+            .trim()
+            .lowercase()
+            .ifBlank { "us" }
+        val limit = settingsDataStore.onlineSearchLimit.first().coerceIn(1, MAX_LIMIT)
+        return SearchSettings(countryCode, limit)
+    }
+
+    private data class SearchSettings(
+        val countryCode: String,
+        val limit: Int
+    )
 }

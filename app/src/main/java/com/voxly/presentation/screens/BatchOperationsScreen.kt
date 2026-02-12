@@ -9,6 +9,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -16,6 +17,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.usecase.BatchStatus
 import com.voxly.domain.usecase.MetadataField
+import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.viewmodel.BatchOperationsViewModel
 
 /**
@@ -47,7 +50,8 @@ fun BatchOperationsScreen(
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear_selection))
                         }
                     }
-                }
+                },
+                windowInsets = TopAppBarDefaults.windowInsets
             )
         }
     ) { innerPadding ->
@@ -140,7 +144,7 @@ private fun FileCountCard(fileCount: Int) {
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
-                    Icons.Default.AudioFile,
+                    painter = appIconPainter(AppIcon.AudioFile),
                     contentDescription = null,
                     tint = if (fileCount > 0) {
                         MaterialTheme.colorScheme.onPrimaryContainer
@@ -190,7 +194,7 @@ private fun EmptySelectionContent() {
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
-            Icons.Default.FolderOpen,
+            painter = appIconPainter(AppIcon.FolderOpen),
             contentDescription = null,
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.outline
@@ -378,21 +382,21 @@ private fun OperationsList(
         )
 
         OperationCard(
-            icon = Icons.Default.Equalizer,
+            icon = AppIcon.Equalizer,
             title = stringResource(R.string.scan_replay_gain),
             description = stringResource(R.string.operation_scan_replay_gain_description),
             onClick = onReplayGain
         )
 
         OperationCard(
-            icon = Icons.Default.Image,
+            icon = AppIcon.Image,
             title = stringResource(R.string.set_album_art),
             description = stringResource(R.string.operation_set_album_art_description),
             onClick = onSetAlbumArt
         )
 
         OperationCard(
-            icon = Icons.Default.HideImage,
+            icon = AppIcon.HideImage,
             title = stringResource(R.string.remove_album_art),
             description = stringResource(R.string.operation_remove_album_art_description),
             onClick = onRemoveAlbumArt,
@@ -403,7 +407,7 @@ private fun OperationsList(
 
 @Composable
 private fun OperationCard(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    icon: Any,
     title: String,
     description: String,
     onClick: () -> Unit,
@@ -426,15 +430,26 @@ private fun OperationCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = if (isDestructive) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.primary
-                }
-            )
+            when (icon) {
+                is ImageVector -> Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = if (isDestructive) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    }
+                )
+                is AppIcon -> Icon(
+                    painter = appIconPainter(icon),
+                    contentDescription = null,
+                    tint = if (isDestructive) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.primary
+                    }
+                )
+            }
 
             Spacer(modifier = Modifier.width(16.dp))
 
@@ -451,7 +466,7 @@ private fun OperationCard(
             }
 
             Icon(
-                Icons.Default.ChevronRight,
+                painter = appIconPainter(AppIcon.ChevronRight),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.outline
             )
@@ -473,7 +488,7 @@ private fun ErrorCard(error: String, onDismiss: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                Icons.Default.Error,
+                painter = appIconPainter(AppIcon.Error),
                 contentDescription = null,
                 tint = MaterialTheme.colorScheme.error
             )

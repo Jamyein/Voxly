@@ -210,6 +210,59 @@
     <string name="settings_metadata_source_description_both">全部来源：合并各来源结果以获得最佳覆盖</string>
     <string name="settings_data_sources_label">数据来源</string>
     <string name="settings_data_sources_value">MusicBrainz + Apple Music</string>
+    <string name="settings_source_musicbrainz">启用 MusicBrainz</string>
+    <string name="settings_source_musicbrainz_subtitle">在线元数据搜索中使用 MusicBrainz</string>
+    <string name="settings_source_apple_music">启用 Apple Music</string>
+    <string name="settings_source_apple_music_subtitle">使用 Apple Music/iTunes 获取元数据和封面</string>
+    <string name="settings_source_netease">启用网易云音乐</string>
+    <string name="settings_source_netease_subtitle">在线搜索中包含网易云结果</string>
+    <string name="settings_source_qq_music">启用 QQ 音乐</string>
+    <string name="settings_source_qq_music_subtitle">在线搜索中包含 QQ 音乐结果</string>
+    <string name="settings_apple_country">Apple 商店区域</string>
+    <string name="settings_apple_country_subtitle">Apple Music 搜索使用的国家/地区</string>
+    <string name="settings_apple_country_us">美国 (US)</string>
+    <string name="settings_apple_country_cn">中国 (CN)</string>
+    <string name="settings_apple_country_jp">日本 (JP)</string>
+    <string name="settings_apple_country_gb">英国 (GB)</string>
+    <string name="settings_apple_country_de">德国 (DE)</string>
+    <string name="settings_apple_country_fr">法国 (FR)</string>
+    <string name="settings_apple_country_ca">加拿大 (CA)</string>
+    <string name="settings_apple_country_au">澳大利亚 (AU)</string>
+    <string name="settings_online_search_limit">搜索结果条数限制</string>
+    <string name="settings_online_search_limit_subtitle">每次在线搜索返回的最大结果数</string>
+
+    <!-- Logging -->
+    <string name="settings_section_logging">日志</string>
+    <string name="settings_logging_enabled">启用日志</string>
+    <string name="settings_logging_enabled_subtitle">记录应用使用期间的调试信息</string>
+    <string name="settings_logging_file">文件日志</string>
+    <string name="settings_logging_file_subtitle">将日志保存到本地文件以供后续查看</string>
+    <string name="settings_logging_crash">崩溃报告</string>
+    <string name="settings_logging_crash_subtitle">自动记录未捕获的异常</string>
+    <string name="settings_logging_size">日志存储占用</string>
+    <string name="settings_logging_view">查看日志</string>
+    <string name="settings_logging_view_subtitle">浏览和搜索应用日志</string>
+    <string name="settings_logging_export">导出日志</string>
+    <string name="settings_logging_export_subtitle">将所有日志分享为压缩文件</string>
+    <string name="settings_logging_cleanup">清理日志</string>
+    <string name="settings_logging_cleanup_subtitle">删除 7 天前的旧日志</string>
+    <string name="settings_logging_exported">日志导出成功</string>
+    <string name="settings_logging_cleanup_complete">已删除 %d 个旧日志文件</string>
+    <string name="settings_logging_no_logs">没有可导出的日志</string>
+
+    <!-- Log Viewer -->
+    <string name="log_viewer_title">日志查看器</string>
+    <string name="log_viewer_search_hint">搜索日志...</string>
+    <string name="log_viewer_filter_all">全部</string>
+    <string name="log_viewer_filter_error">错误</string>
+    <string name="log_viewer_filter_warn">警告</string>
+    <string name="log_viewer_filter_info">信息</string>
+    <string name="log_viewer_filter_debug">调试</string>
+    <string name="log_viewer_share">分享</string>
+    <string name="log_viewer_delete">删除</string>
+    <string name="log_viewer_delete_confirm">确定要删除此日志文件吗？</string>
+    <string name="log_viewer_no_logs">没有可用的日志</string>
+    <string name="log_viewer_loading">正在加载日志...</string>
 
     <!-- Dialogs -->
     <string name="dialog_close">关闭</string>

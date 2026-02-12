@@ -2,6 +2,7 @@ package com.voxly.di
 
 import android.content.Context
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.JaudiotaggerMetadataProcessor
 import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.data.remote.itunes.ITunesApi
@@ -199,10 +200,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideITunesRepository(
-        @ApplicationContext context: Context,
-        iTunesApi: ITunesApi
+        iTunesApi: ITunesApi,
+        settingsDataStore: SettingsDataStore
     ): ITunesRepository {
-        return ITunesRepository(context, iTunesApi)
+        return ITunesRepository(iTunesApi, settingsDataStore)
     }
 
     @Provides

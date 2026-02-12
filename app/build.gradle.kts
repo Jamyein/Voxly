@@ -14,7 +14,7 @@ android {
         minSdk = 28
         targetSdk = 36
         versionCode = 1
-        versionName = "0.0.1"
+        versionName = "0.1.0"
 
         resourceConfigurations += listOf("en", "zh-rCN")
 
@@ -25,6 +25,27 @@ android {
     }
 
     buildTypes {
+        debug {
+            isMinifyEnabled = false
+            isShrinkResources = false
+        }
+
+        create("dist") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".dist"
+            // AGP limitation: debuggable=true disables R8 optimization/obfuscation.
+            // Keep this variant slim for distribution testing.
+            isDebuggable = false
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+                "proguard-debug.pro"
+            )
+            matchingFallbacks += listOf("debug")
+        }
+
         release {
             isMinifyEnabled = false
             proguardFiles(
@@ -54,6 +75,15 @@ android {
         }
     }
 
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("arm64-v8a")
+            isUniversalApk = false
+        }
+    }
+
     lint {
         warningsAsErrors = false
         abortOnError = false
@@ -73,7 +103,7 @@ dependencies {
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.appcompat:appcompat:1.7.0")
 
     // Navigation
@@ -100,14 +130,6 @@ dependencies {
     implementation("com.squareup.retrofit2:converter-gson:2.9.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
-    // Image Loading
-    implementation("io.coil-kt:coil-compose:2.5.0")
-
-    // Room Database
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    ksp("androidx.room:room-compiler:2.6.1")
-
     // DataStore Preferences
     implementation("androidx.datastore:datastore-preferences:1.0.0")
 
@@ -122,6 +144,6 @@ dependencies {
     androidTestImplementation(platform("androidx.compose:compose-bom:2023.10.00"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
+    // Keep preview tooling out of runtime APK.
+    debugCompileOnly("androidx.compose.ui:ui-tooling")
 }

@@ -34,7 +34,8 @@ fun EnhancedSettingsScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.nav_settings)) }
+                title = { Text(stringResource(R.string.nav_settings)) },
+                windowInsets = TopAppBarDefaults.windowInsets
             )
         }
     ) { innerPadding ->

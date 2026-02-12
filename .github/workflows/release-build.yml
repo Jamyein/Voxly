@@ -1,0 +1,79 @@
+name: Release Build
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "Release tag (e.g. v0.1.0)"
+        required: true
+        default: "v0.1.0"
+      release_name:
+        description: "Release title"
+        required: true
+        default: "Voxly Release"
+      prerelease:
+        description: "Mark as prerelease"
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: "17"
+          distribution: "temurin"
+          cache: gradle
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x gradlew
+
+      - name: Build Release APK
+        run: ./gradlew assembleRelease
+
+      - name: Prepare release artifact name
+        shell: bash
+        run: |
+          set -euo pipefail
+          APK_PATH="$(find app/build -type f -path "*/apk/release/*.apk" | head -n 1)"
+          if [ -z "${APK_PATH}" ]; then
+            echo "No release APK found"
+            exit 1
+          fi
+
+          APK_FILE="$(basename "${APK_PATH}")"
+          ABI="universal"
+          if [[ "${APK_FILE}" =~ ^app-(.*)-release\.apk$ ]]; then
+            ABI="${BASH_REMATCH[1]}"
+          fi
+
+          VERSION_NAME="$(sed -n 's/^[[:space:]]*versionName[[:space:]]*=[[:space:]]*"\(.*\)".*/\1/p' app/build.gradle.kts | head -n 1)"
+          if [ -z "${VERSION_NAME}" ]; then
+            echo "Failed to parse versionName from app/build.gradle.kts"
+            exit 1
+          fi
+
+          OUT_DIR="app/build/outputs/release-assets"
+          mkdir -p "${OUT_DIR}"
+          OUT_NAME="Voxly-${ABI}-${VERSION_NAME}.apk"
+          cp "${APK_PATH}" "${OUT_DIR}/${OUT_NAME}"
+          echo "RELEASE_APK=${OUT_DIR}/${OUT_NAME}" >> "$GITHUB_ENV"
+
+      - name: Create GitHub Release and upload APK
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.inputs.tag_name }}
+          name: ${{ github.event.inputs.release_name }}
+          prerelease: ${{ github.event.inputs.prerelease }}
+          generate_release_notes: true
+          files: ${{ env.RELEASE_APK }}

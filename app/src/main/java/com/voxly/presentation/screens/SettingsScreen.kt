@@ -1,7 +1,10 @@
 package com.voxly.presentation.screens
 
 import android.app.Activity
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
@@ -17,6 +20,7 @@ import androidx.annotation.StringRes
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.BuildConfig
 import com.voxly.R
+import com.voxly.core.util.LogManager
 import com.voxly.presentation.viewmodel.SettingsViewModel
 
 /**
@@ -26,6 +30,9 @@ import com.voxly.presentation.viewmodel.SettingsViewModel
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToLogViewer: () -> Unit,
+    onExportLogs: () -> Unit,
+    onCleanupLogs: () -> Unit,
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -35,6 +42,12 @@ fun SettingsScreen(
     val scanQuality by viewModel.scanQuality.collectAsState()
     val savedLanguageTag by viewModel.languageTag.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
+    val appleCountryCode by viewModel.appleCountryCode.collectAsState()
+    val onlineSearchLimit by viewModel.onlineSearchLimit.collectAsState()
+    val sourceEnabledMusicBrainz by viewModel.sourceEnabledMusicBrainz.collectAsState()
+    val sourceEnabledITunes by viewModel.sourceEnabledITunes.collectAsState()
+    val sourceEnabledNetease by viewModel.sourceEnabledNetease.collectAsState()
+    val sourceEnabledQQMusic by viewModel.sourceEnabledQQMusic.collectAsState()
     
     var languageExpanded by remember { mutableStateOf(false) }
     val languageOptions = remember {
@@ -71,6 +84,32 @@ fun SettingsScreen(
     }
     val currentTheme = themeOptions.firstOrNull { it.value == themeMode }
         ?: themeOptions.first()
+    var appleCountryExpanded by remember { mutableStateOf(false) }
+    val appleCountryOptions = remember {
+        listOf(
+            AppleCountryOption("us", R.string.settings_apple_country_us),
+            AppleCountryOption("cn", R.string.settings_apple_country_cn),
+            AppleCountryOption("jp", R.string.settings_apple_country_jp),
+            AppleCountryOption("gb", R.string.settings_apple_country_gb),
+            AppleCountryOption("de", R.string.settings_apple_country_de),
+            AppleCountryOption("fr", R.string.settings_apple_country_fr),
+            AppleCountryOption("ca", R.string.settings_apple_country_ca),
+            AppleCountryOption("au", R.string.settings_apple_country_au)
+        )
+    }
+    val currentAppleCountry = appleCountryOptions.firstOrNull { it.value == appleCountryCode.lowercase() }
+        ?: appleCountryOptions.first()
+
+    var searchLimitExpanded by remember { mutableStateOf(false) }
+    val searchLimitOptions = remember {
+        listOf(
+            SearchLimitOption(10),
+            SearchLimitOption(25),
+            SearchLimitOption(50)
+        )
+    }
+    val currentSearchLimit = searchLimitOptions.firstOrNull { it.value == onlineSearchLimit }
+        ?: searchLimitOptions[1]
 
     Scaffold(
         topBar = {
@@ -83,7 +122,8 @@ fun SettingsScreen(
                             contentDescription = stringResource(R.string.cd_back)
                         )
                     }
-                }
+                },
+                windowInsets = TopAppBarDefaults.windowInsets
             )
         }
     ) { innerPadding ->
@@ -92,6 +132,7 @@ fun SettingsScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
             // Appearance Section
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
@@ -168,6 +209,139 @@ fun SettingsScreen(
                         )
                     }
                 }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            SettingsSection(title = stringResource(R.string.settings_section_online_metadata)) {
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_musicbrainz),
+                    subtitle = stringResource(R.string.settings_source_musicbrainz_subtitle),
+                    checked = sourceEnabledMusicBrainz,
+                    onCheckedChange = { viewModel.setSourceEnabledMusicBrainz(it) }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_apple_music),
+                    subtitle = stringResource(R.string.settings_source_apple_music_subtitle),
+                    checked = sourceEnabledITunes,
+                    onCheckedChange = { viewModel.setSourceEnabledITunes(it) }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsDropdownRow(
+                    title = stringResource(R.string.settings_apple_country),
+                    subtitle = stringResource(R.string.settings_apple_country_subtitle),
+                    selectedLabel = stringResource(currentAppleCountry.labelResId),
+                    expanded = appleCountryExpanded,
+                    onExpandedChange = { appleCountryExpanded = it }
+                ) {
+                    appleCountryOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(option.labelResId)) },
+                            onClick = {
+                                viewModel.setAppleCountryCode(option.value)
+                                appleCountryExpanded = false
+                            }
+                        )
+                    }
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_netease),
+                    subtitle = stringResource(R.string.settings_source_netease_subtitle),
+                    checked = sourceEnabledNetease,
+                    onCheckedChange = { viewModel.setSourceEnabledNetease(it) }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_qq_music),
+                    subtitle = stringResource(R.string.settings_source_qq_music_subtitle),
+                    checked = sourceEnabledQQMusic,
+                    onCheckedChange = { viewModel.setSourceEnabledQQMusic(it) }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsDropdownRow(
+                    title = stringResource(R.string.settings_online_search_limit),
+                    subtitle = stringResource(R.string.settings_online_search_limit_subtitle),
+                    selectedLabel = currentSearchLimit.value.toString(),
+                    expanded = searchLimitExpanded,
+                    onExpandedChange = { searchLimitExpanded = it }
+                ) {
+                    searchLimitOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(option.value.toString()) },
+                            onClick = {
+                                viewModel.setOnlineSearchLimit(option.value)
+                                searchLimitExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Logging Section
+            SettingsSection(title = stringResource(R.string.settings_section_logging)) {
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_logging_enabled),
+                    subtitle = stringResource(R.string.settings_logging_enabled_subtitle),
+                    checked = LogManager.isLoggingEnabled,
+                    onCheckedChange = { LogManager.isLoggingEnabled = it }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_logging_file),
+                    subtitle = stringResource(R.string.settings_logging_file_subtitle),
+                    checked = LogManager.isFileLoggingEnabled,
+                    onCheckedChange = { LogManager.isFileLoggingEnabled = it }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_logging_crash),
+                    subtitle = stringResource(R.string.settings_logging_crash_subtitle),
+                    checked = LogManager.isCrashReportingEnabled,
+                    onCheckedChange = { LogManager.isCrashReportingEnabled = it }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_logging_size)) },
+                    supportingContent = { Text(LogManager.formatLogSize(LogManager.getLogDirectorySize())) },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                )
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_logging_view)) },
+                    supportingContent = { Text(stringResource(R.string.settings_logging_view_subtitle)) },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    modifier = Modifier.clickable { onNavigateToLogViewer() }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_logging_export)) },
+                    supportingContent = { Text(stringResource(R.string.settings_logging_export_subtitle)) },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    modifier = Modifier.clickable { onExportLogs() }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_logging_cleanup)) },
+                    supportingContent = { Text(stringResource(R.string.settings_logging_cleanup_subtitle)) },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    modifier = Modifier.clickable { onCleanupLogs() }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -308,6 +482,15 @@ private data class ScanQualityOption(
 private data class ThemeModeOption(
     val value: String,
     @StringRes val labelResId: Int
+)
+
+private data class AppleCountryOption(
+    val value: String,
+    @StringRes val labelResId: Int
+)
+
+private data class SearchLimitOption(
+    val value: Int
 )
 
 private fun resolveCurrentLanguageTag(): String? {
