@@ -17,5 +17,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MP3-tag-Android"
+rootProject.name = "Voxly"
 include(":app")

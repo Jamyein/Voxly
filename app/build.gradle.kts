@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.mp3tag.android"
+    namespace = "com.voxly"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.mp3tag.android"
+        applicationId = "com.voxly"
         minSdk = 28
         targetSdk = 36
         versionCode = 1

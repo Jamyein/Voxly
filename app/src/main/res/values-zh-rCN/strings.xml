@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">MP3标签编辑器</string>
+    <string name="app_name">Voxly</string>
 
     <!-- Navigation -->
     <string name="nav_file_browser">文件</string>
@@ -100,6 +100,9 @@
     <!-- File Browser -->
     <string name="loading_audio_files">正在加载音频文件...</string>
     <string name="import_audio_files_or_select_folder">导入音频文件或选择文件夹</string>
+    <string name="add_directory">添加目录</string>
+    <string name="selected_directories_count">已选择 %d 个目录</string>
+    <string name="clear_directories">清空目录</string>
     <string name="error_loading_files">加载文件出错</string>
     <string name="selected_count">%d 个已选</string>
     <string name="clear_selection">清除选择</string>

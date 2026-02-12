@@ -1,0 +1,212 @@
+package com.voxly.domain.model
+
+/**
+ * Domain model representing an audio file with its metadata and replay gain information.
+ */
+data class AudioFile(
+    val id: String,
+    val path: String,
+    val name: String,
+    val size: Long,
+    val duration: Long,
+    val format: String,
+    val bitrate: Int,
+    val sampleRate: Int,
+    val channels: Int,
+    val metadata: AudioMetadata,
+    val replayGainInfo: ReplayGainInfo? = null
+) {
+    /**
+     * Returns a human-readable duration string.
+     */
+    fun getFormattedDuration(): String {
+        val hours = duration / 3600000
+        val minutes = (duration % 3600000) / 60000
+        val seconds = (duration % 60000) / 1000
+
+        return if (hours > 0) {
+            String.format("%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%d:%02d", minutes, seconds)
+        }
+    }
+
+    /**
+     * Returns a human-readable file size string.
+     */
+    fun getFormattedSize(): String {
+        return when {
+            size >= 1_000_000_000 -> String.format("%.2f GB", size / 1_000_000_000.0)
+            size >= 1_000_000 -> String.format("%.2f MB", size / 1_000_000.0)
+            size >= 1_000 -> String.format("%.2f KB", size / 1_000.0)
+            else -> "$size B"
+        }
+    }
+}
+
+/**
+ * Domain model representing audio metadata (ID3 tags, etc.).
+ */
+data class AudioMetadata(
+    val title: String? = null,
+    val artist: String? = null,
+    val album: String? = null,
+    val albumArtist: String? = null,
+    val year: String? = null,
+    val genre: String? = null,
+    val trackNumber: Int? = null,
+    val totalTracks: Int? = null,
+    val discNumber: Int? = null,
+    val totalDiscs: Int? = null,
+    val composer: String? = null,
+    val lyricist: String? = null,
+    val conductor: String? = null,
+    val originalArtist: String? = null,
+    val comment: String? = null,
+    val lyrics: String? = null,
+    val albumArt: ByteArray? = null,
+    val customFields: Map<String, String> = emptyMap()
+) {
+    /**
+     * Returns a display-friendly title, falling back to filename if title is empty.
+     */
+    fun getDisplayTitle(fileName: String): String {
+        return title?.takeIf { it.isNotBlank() } ?: fileName.substringBeforeLast(".")
+    }
+
+    /**
+     * Returns a formatted track string (e.g., "3/12").
+     */
+    fun getFormattedTrackNumber(): String {
+        return when {
+            trackNumber != null && totalTracks != null -> "$trackNumber/$totalTracks"
+            trackNumber != null -> trackNumber.toString()
+            else -> ""
+        }
+    }
+
+    /**
+     * Returns a formatted disc string (e.g., "1/2").
+     */
+    fun getFormattedDiscNumber(): String {
+        return when {
+            discNumber != null && totalDiscs != null -> "$discNumber/$totalDiscs"
+            discNumber != null -> discNumber.toString()
+            else -> ""
+        }
+    }
+
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as AudioMetadata
+
+        if (title != other.title) return false
+        if (artist != other.artist) return false
+        if (album != other.album) return false
+        if (albumArtist != other.albumArtist) return false
+        if (year != other.year) return false
+        if (genre != other.genre) return false
+        if (trackNumber != other.trackNumber) return false
+        if (totalTracks != other.totalTracks) return false
+        if (discNumber != other.discNumber) return false
+        if (totalDiscs != other.totalDiscs) return false
+        if (composer != other.composer) return false
+        if (lyricist != other.lyricist) return false
+        if (conductor != other.conductor) return false
+        if (originalArtist != other.originalArtist) return false
+        if (comment != other.comment) return false
+        if (lyrics != other.lyrics) return false
+        if (!albumArt.contentEquals(other.albumArt)) return false
+        if (customFields != other.customFields) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = title?.hashCode() ?: 0
+        result = 31 * result + (artist?.hashCode() ?: 0)
+        result = 31 * result + (album?.hashCode() ?: 0)
+        result = 31 * result + (albumArtist?.hashCode() ?: 0)
+        result = 31 * result + (year?.hashCode() ?: 0)
+        result = 31 * result + (genre?.hashCode() ?: 0)
+        result = 31 * result + (trackNumber ?: 0)
+        result = 31 * result + (totalTracks ?: 0)
+        result = 31 * result + (discNumber ?: 0)
+        result = 31 * result + (totalDiscs ?: 0)
+        result = 31 * result + (composer?.hashCode() ?: 0)
+        result = 31 * result + (lyricist?.hashCode() ?: 0)
+        result = 31 * result + (conductor?.hashCode() ?: 0)
+        result = 31 * result + (originalArtist?.hashCode() ?: 0)
+        result = 31 * result + (comment?.hashCode() ?: 0)
+        result = 31 * result + (lyrics?.hashCode() ?: 0)
+        result = 31 * result + albumArt.contentHashCode()
+        result = 31 * result + customFields.hashCode()
+        return result
+    }
+}
+
+/**
+ * Domain model representing ReplayGain information.
+ */
+data class ReplayGainInfo(
+    val trackGain: Float = 0f,
+    val trackPeak: Float = 0f,
+    val albumGain: Float? = null,
+    val albumPeak: Float? = null
+) {
+    /**
+     * Returns track gain in dB format.
+     */
+    fun getFormattedTrackGain(): String {
+        return String.format("%.2f dB", trackGain)
+    }
+
+    /**
+     * Returns album gain in dB format.
+     */
+    fun getFormattedAlbumGain(): String {
+        return albumGain?.let { String.format("%.2f dB", it) } ?: "N/A"
+    }
+
+    /**
+     * Returns track peak as a percentage.
+     */
+    fun getFormattedTrackPeak(): String {
+        return String.format("%.4f", trackPeak)
+    }
+}
+
+/**
+ * Domain model representing a directory entry.
+ */
+data class DirectoryEntry(
+    val path: String,
+    val name: String,
+    val isDirectory: Boolean,
+    val audioFiles: List<AudioFile> = emptyList(),
+    val subDirectories: List<DirectoryEntry> = emptyList()
+)
+
+/**
+ * Enum representing audio file formats.
+ */
+enum class AudioFormat(val extensions: List<String>, val displayName: String) {
+    MP3(listOf("mp3"), "MP3"),
+    FLAC(listOf("flac"), "FLAC"),
+    OGG(listOf("ogg", "oga"), "OGG Vorbis"),
+    M4A(listOf("m4a", "mp4"), "M4A (AAC)"),
+    WMA(listOf("wma"), "Windows Media Audio"),
+    WAV(listOf("wav"), "WAV"),
+    APE(listOf("ape"), "APE"),
+    WavPack(listOf("wv"), "WavPack"),
+    OPUS(listOf("opus"), "Opus"),
+    OTHER(listOf(), "Unknown");
+
+    companion object {
+        fun fromExtension(extension: String): AudioFormat {
+            return entries.find { it.extensions.contains(extension.lowercase()) } ?: OTHER
+        }
+    }
+}
