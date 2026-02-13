@@ -8,6 +8,7 @@ sealed class Screen(val route: String) {
     data object RecentEdits : Screen("recent_edits")
     data object BatchOperations : Screen("batch_operations")
     data object Settings : Screen("settings")
+    data object DirectoryManagement : Screen("directory_management")
     data object LogViewer : Screen("log_viewer")
     data object MetadataEditor : Screen("metadata_editor/{filePath}") {
         fun createRoute(filePath: String) = "metadata_editor/${java.net.URLEncoder.encode(filePath, "UTF-8")}"

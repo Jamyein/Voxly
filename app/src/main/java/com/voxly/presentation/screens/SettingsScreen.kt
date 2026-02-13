@@ -30,6 +30,7 @@ import com.voxly.presentation.viewmodel.SettingsViewModel
 @Composable
 fun SettingsScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToDirectoryManagement: () -> Unit,
     onNavigateToLogViewer: () -> Unit,
     onExportLogs: () -> Unit,
     onCleanupLogs: () -> Unit,
@@ -48,6 +49,9 @@ fun SettingsScreen(
     val sourceEnabledITunes by viewModel.sourceEnabledITunes.collectAsState()
     val sourceEnabledNetease by viewModel.sourceEnabledNetease.collectAsState()
     val sourceEnabledQQMusic by viewModel.sourceEnabledQQMusic.collectAsState()
+    val loggingEnabled by viewModel.loggingEnabled.collectAsState()
+    val fileLoggingEnabled by viewModel.fileLoggingEnabled.collectAsState()
+    val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
     
     var languageExpanded by remember { mutableStateOf(false) }
     val languageOptions = remember {
@@ -89,6 +93,7 @@ fun SettingsScreen(
         listOf(
             AppleCountryOption("us", R.string.settings_apple_country_us),
             AppleCountryOption("cn", R.string.settings_apple_country_cn),
+            AppleCountryOption("hk", R.string.settings_apple_country_hk),
             AppleCountryOption("jp", R.string.settings_apple_country_jp),
             AppleCountryOption("gb", R.string.settings_apple_country_gb),
             AppleCountryOption("de", R.string.settings_apple_country_de),
@@ -103,6 +108,7 @@ fun SettingsScreen(
     var searchLimitExpanded by remember { mutableStateOf(false) }
     val searchLimitOptions = remember {
         listOf(
+            SearchLimitOption(0, R.string.settings_online_search_limit_unlimited),
             SearchLimitOption(10),
             SearchLimitOption(25),
             SearchLimitOption(50)
@@ -209,6 +215,13 @@ fun SettingsScreen(
                         )
                     }
                 }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.settings_directory_management)) },
+                    supportingContent = { Text(stringResource(R.string.settings_directory_management_subtitle)) },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    modifier = Modifier.clickable { onNavigateToDirectoryManagement() }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -268,13 +281,13 @@ fun SettingsScreen(
                 SettingsDropdownRow(
                     title = stringResource(R.string.settings_online_search_limit),
                     subtitle = stringResource(R.string.settings_online_search_limit_subtitle),
-                    selectedLabel = currentSearchLimit.value.toString(),
+                    selectedLabel = currentSearchLimit.displayLabel(),
                     expanded = searchLimitExpanded,
                     onExpandedChange = { searchLimitExpanded = it }
                 ) {
                     searchLimitOptions.forEach { option ->
                         DropdownMenuItem(
-                            text = { Text(option.value.toString()) },
+                            text = { Text(option.displayLabel()) },
                             onClick = {
                                 viewModel.setOnlineSearchLimit(option.value)
                                 searchLimitExpanded = false
@@ -291,24 +304,33 @@ fun SettingsScreen(
                 SettingsSwitch(
                     title = stringResource(R.string.settings_logging_enabled),
                     subtitle = stringResource(R.string.settings_logging_enabled_subtitle),
-                    checked = LogManager.isLoggingEnabled,
-                    onCheckedChange = { LogManager.isLoggingEnabled = it }
+                    checked = loggingEnabled,
+                    onCheckedChange = {
+                        LogManager.isLoggingEnabled = it
+                        viewModel.setLoggingEnabled(it)
+                    }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                 SettingsSwitch(
                     title = stringResource(R.string.settings_logging_file),
                     subtitle = stringResource(R.string.settings_logging_file_subtitle),
-                    checked = LogManager.isFileLoggingEnabled,
-                    onCheckedChange = { LogManager.isFileLoggingEnabled = it }
+                    checked = fileLoggingEnabled,
+                    onCheckedChange = {
+                        LogManager.isFileLoggingEnabled = it
+                        viewModel.setFileLoggingEnabled(it)
+                    }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                 SettingsSwitch(
                     title = stringResource(R.string.settings_logging_crash),
                     subtitle = stringResource(R.string.settings_logging_crash_subtitle),
-                    checked = LogManager.isCrashReportingEnabled,
-                    onCheckedChange = { LogManager.isCrashReportingEnabled = it }
+                    checked = crashReportingEnabled,
+                    onCheckedChange = {
+                        LogManager.isCrashReportingEnabled = it
+                        viewModel.setCrashReportingEnabled(it)
+                    }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
@@ -490,8 +512,14 @@ private data class AppleCountryOption(
 )
 
 private data class SearchLimitOption(
-    val value: Int
+    val value: Int,
+    @StringRes val labelResId: Int? = null
 )
+
+@Composable
+private fun SearchLimitOption.displayLabel(): String {
+    return labelResId?.let { stringResource(it) } ?: value.toString()
+}
 
 private fun resolveCurrentLanguageTag(): String? {
     val locales = AppCompatDelegate.getApplicationLocales()

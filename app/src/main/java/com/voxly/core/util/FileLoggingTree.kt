@@ -7,6 +7,7 @@ import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
 
@@ -17,18 +18,13 @@ class FileLoggingTree {
 
     private val executor = Executors.newSingleThreadExecutor()
     private val writeQueue = ConcurrentLinkedQueue<LogEntry>()
+    private val isDraining = AtomicBoolean(false)
 
     private var currentLogFile: File? = null
     private var currentFileDate: String? = null
     private var currentFileSize: Long = 0
 
     private val lock = Any()
-
-    init {
-        executor.submit {
-            processQueue()
-        }
-    }
 
     fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
         if (!LogManager.isFileLoggingEnabled) return
@@ -42,11 +38,26 @@ class FileLoggingTree {
         )
 
         writeQueue.offer(entry)
+        scheduleDrain()
+    }
+
+    private fun scheduleDrain() {
+        if (!isDraining.compareAndSet(false, true)) return
+        executor.execute {
+            try {
+                processQueue()
+            } finally {
+                isDraining.set(false)
+                if (writeQueue.isNotEmpty()) {
+                    scheduleDrain()
+                }
+            }
+        }
     }
 
     private fun processQueue() {
         while (true) {
-            val entry = writeQueue.poll() ?: break
+            val entry = writeQueue.poll() ?: return
             writeToFile(entry)
         }
     }
@@ -110,7 +121,7 @@ class FileLoggingTree {
         }
 
         if (currentFileSize >= LogManager.MAX_LOG_FILE_SIZE) {
-            val newFileName = "voxly_${today}_1.log"
+            val newFileName = nextRotatedFileName(today)
             currentLogFile = File(LogManager.getLogDirectory(), newFileName)
             currentFileSize = 0
 
@@ -137,6 +148,19 @@ class FileLoggingTree {
             Log.ASSERT -> "A"
             else -> "?"
         }
+    }
+
+    private fun nextRotatedFileName(today: String): String {
+        val prefix = "voxly_${today}_"
+        val suffix = ".log"
+        val maxIndex = LogManager.getLogFiles()
+            .mapNotNull { file ->
+                val name = file.name
+                if (!name.startsWith(prefix) || !name.endsWith(suffix)) return@mapNotNull null
+                name.removePrefix(prefix).removeSuffix(suffix).toIntOrNull()
+            }
+            .maxOrNull() ?: 0
+        return "${prefix}${maxIndex + 1}$suffix"
     }
 
     fun shutdown() {

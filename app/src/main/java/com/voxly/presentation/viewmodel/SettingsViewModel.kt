@@ -113,6 +113,34 @@ class SettingsViewModel @Inject constructor(
             initialValue = true
         )
 
+    val loggingEnabled: StateFlow<Boolean> = settingsDataStore.loggingEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val fileLoggingEnabled: StateFlow<Boolean> = settingsDataStore.fileLoggingEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
+    val consoleLoggingEnabled: StateFlow<Boolean> = settingsDataStore.consoleLoggingEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = false
+        )
+
+    val crashReportingEnabled: StateFlow<Boolean> = settingsDataStore.crashReportingEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     /**
      * Set dark theme preference
      */
@@ -202,6 +230,30 @@ class SettingsViewModel @Inject constructor(
     fun setSourceEnabledQQMusic(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.setSourceEnabledQQMusic(enabled)
+        }
+    }
+
+    fun setLoggingEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setLoggingEnabled(enabled)
+        }
+    }
+
+    fun setFileLoggingEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setFileLoggingEnabled(enabled)
+        }
+    }
+
+    fun setConsoleLoggingEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setConsoleLoggingEnabled(enabled)
+        }
+    }
+
+    fun setCrashReportingEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setCrashReportingEnabled(enabled)
         }
     }
 }

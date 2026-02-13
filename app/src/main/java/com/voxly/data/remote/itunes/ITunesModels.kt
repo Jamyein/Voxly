@@ -159,6 +159,7 @@ enum class ITunesEntity(val value: String) {
 enum class ITunesCountry(val code: String) {
     UNITED_STATES("us"),
     CHINA("cn"),
+    HONG_KONG("hk"),
     JAPAN("jp"),
     UNITED_KINGDOM("gb"),
     GERMANY("de"),

@@ -7,6 +7,7 @@ import androidx.core.content.FileProvider
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.core.util.LogManager
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -19,6 +20,7 @@ import java.util.Date
 import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipOutputStream
+import javax.inject.Inject
 
 data class LogFileItem(
     val name: String,
@@ -40,7 +42,8 @@ enum class LogFilter {
     ALL, ERROR, WARN, INFO, DEBUG
 }
 
-class LogViewerViewModel : ViewModel() {
+@HiltViewModel
+class LogViewerViewModel @Inject constructor() : ViewModel() {
 
     private val _uiState = MutableStateFlow(LogViewerUiState())
     val uiState: StateFlow<LogViewerUiState> = _uiState.asStateFlow()
@@ -119,7 +122,10 @@ class LogViewerViewModel : ViewModel() {
     fun exportLogs(context: Context, onComplete: (Uri?) -> Unit) {
         viewModelScope.launch {
             try {
-                val files = _uiState.value.logFiles.map { it.file }
+                val files = withContext(Dispatchers.IO) {
+                    (LogManager.getLogFiles() + LogManager.getCrashFiles())
+                        .filter { it.exists() && it.isFile && it.length() > 0L }
+                }
                 if (files.isEmpty()) {
                     onComplete(null)
                     return@launch
@@ -179,13 +185,19 @@ class LogViewerViewModel : ViewModel() {
 
             val matchesFilter = when (state.selectedFilter) {
                 LogFilter.ALL -> true
-                LogFilter.ERROR -> line.contains("[ERROR]") || line.contains("[WTF]")
-                LogFilter.WARN -> line.contains("[WARN]")
-                LogFilter.INFO -> line.contains("[INFO]")
-                LogFilter.DEBUG -> line.contains("[DEBUG]")
+                LogFilter.ERROR -> isLevel(line, 'E') || isLevel(line, 'A')
+                LogFilter.WARN -> isLevel(line, 'W')
+                LogFilter.INFO -> isLevel(line, 'I')
+                LogFilter.DEBUG -> isLevel(line, 'D') || isLevel(line, 'V')
             }
 
             matchesSearch && matchesFilter
         }
     }
+
+    private fun isLevel(line: String, level: Char): Boolean {
+        val token = LOG_LEVEL_TOKEN_REGEX.find(line)?.value ?: return false
+        return token.length > 1 && token[1] == level
+    }
 }
+private val LOG_LEVEL_TOKEN_REGEX = Regex("""\[[VDIWEA]\s*\]""")

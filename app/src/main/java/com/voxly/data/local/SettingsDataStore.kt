@@ -37,6 +37,10 @@ class SettingsDataStore @Inject constructor(
         val SOURCE_ENABLED_ITUNES = booleanPreferencesKey("source_enabled_itunes")
         val SOURCE_ENABLED_NETEASE = booleanPreferencesKey("source_enabled_netease")
         val SOURCE_ENABLED_QQ_MUSIC = booleanPreferencesKey("source_enabled_qq_music")
+        val LOGGING_ENABLED = booleanPreferencesKey("logging_enabled")
+        val FILE_LOGGING_ENABLED = booleanPreferencesKey("file_logging_enabled")
+        val CONSOLE_LOGGING_ENABLED = booleanPreferencesKey("console_logging_enabled")
+        val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
     }
 
     /**
@@ -104,7 +108,7 @@ class SettingsDataStore @Inject constructor(
      */
     val onlineSearchLimit: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            (preferences[ONLINE_SEARCH_LIMIT] ?: 25).coerceIn(5, 50)
+            normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT] ?: 25)
         }
 
     val sourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
@@ -125,6 +129,26 @@ class SettingsDataStore @Inject constructor(
     val sourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[SOURCE_ENABLED_QQ_MUSIC] ?: true
+        }
+
+    val loggingEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[LOGGING_ENABLED] ?: true
+        }
+
+    val fileLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[FILE_LOGGING_ENABLED] ?: true
+        }
+
+    val consoleLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[CONSOLE_LOGGING_ENABLED] ?: false
+        }
+
+    val crashReportingEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[CRASH_REPORTING_ENABLED] ?: true
         }
 
     /**
@@ -197,8 +221,12 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun setOnlineSearchLimit(limit: Int) {
         context.settingsDataStore.edit { preferences ->
-            preferences[ONLINE_SEARCH_LIMIT] = limit.coerceIn(5, 50)
+            preferences[ONLINE_SEARCH_LIMIT] = normalizeOnlineSearchLimit(limit)
         }
+    }
+
+    private fun normalizeOnlineSearchLimit(limit: Int): Int {
+        return if (limit <= 0) 0 else limit.coerceIn(5, 200)
     }
 
     suspend fun setSourceEnabledMusicBrainz(enabled: Boolean) {
@@ -222,6 +250,30 @@ class SettingsDataStore @Inject constructor(
     suspend fun setSourceEnabledQQMusic(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[SOURCE_ENABLED_QQ_MUSIC] = enabled
+        }
+    }
+
+    suspend fun setLoggingEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LOGGING_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setFileLoggingEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FILE_LOGGING_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setConsoleLoggingEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CONSOLE_LOGGING_ENABLED] = enabled
+        }
+    }
+
+    suspend fun setCrashReportingEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[CRASH_REPORTING_ENABLED] = enabled
         }
     }
 }

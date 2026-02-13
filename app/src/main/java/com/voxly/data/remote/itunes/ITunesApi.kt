@@ -96,6 +96,7 @@ interface ITunesApi {
     @GET("lookup")
     suspend fun lookup(
         @Query("id") id: Long,
-        @Query("entity") entity: String? = null
+        @Query("entity") entity: String? = null,
+        @Query("country") country: String? = null
     ): Response<ITunesSearchResponse>
 }

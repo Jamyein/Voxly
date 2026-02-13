@@ -1,7 +1,6 @@
 package com.voxly.core.util
 
 import android.os.Environment
-import com.voxly.BuildConfig
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -28,10 +27,14 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
             val timestamp = dateTimeFormat.format(Date())
             val fileName = "crash_${timestamp}.log"
 
-            val crashDir = File(
-                getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS),
-                "crashes"
-            ).apply {
+            val crashDir = runCatching {
+                LogManager.getCrashDirectory()
+            }.getOrElse {
+                File(
+                    Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS),
+                    "crashes"
+                )
+            }.apply {
                 if (!exists()) mkdirs()
             }
 
@@ -59,10 +62,6 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
         } catch (e: Exception) {
             android.util.Log.e("CrashHandler", "Failed to save crash report: ${e.message}")
         }
-    }
-
-    private fun getExternalFilesDir(directory: String): File? {
-        return android.os.Environment.getExternalStoragePublicDirectory(directory)
     }
 
     fun getCrashReports(): List<File> {

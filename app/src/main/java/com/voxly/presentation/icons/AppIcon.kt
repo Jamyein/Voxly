@@ -1,29 +1,47 @@
 package com.voxly.presentation.icons
 
-import androidx.annotation.DrawableRes
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.FolderOpen
+import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.outlined.Folder
+import androidx.compose.material.icons.outlined.History
+import androidx.compose.material.icons.outlined.PlaylistAdd
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.painter.Painter
-import androidx.compose.ui.res.painterResource
-import com.voxly.R
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 
 enum class AppIcon(
-    @DrawableRes val resId: Int
+    val vector: ImageVector
 ) {
-    Folder(R.drawable.ic_folder),
-    History(android.R.drawable.ic_menu_recent_history),
-    PlaylistAdd(android.R.drawable.ic_input_add),
-    AudioFile(android.R.drawable.ic_media_play),
-    FolderOpen(R.drawable.ic_folder_open),
-    Equalizer(android.R.drawable.ic_media_ff),
-    Image(android.R.drawable.ic_menu_gallery),
-    HideImage(android.R.drawable.ic_menu_close_clear_cancel),
-    ChevronRight(android.R.drawable.ic_media_next),
-    Error(android.R.drawable.stat_notify_error),
-    MusicNote(android.R.drawable.ic_media_play),
-    Save(android.R.drawable.ic_menu_save),
-    CloudDownload(android.R.drawable.stat_sys_download),
-    Schedule(android.R.drawable.ic_menu_recent_history)
+    Folder(Icons.Filled.Folder),
+    FolderOutlined(Icons.Outlined.Folder),
+    History(Icons.Filled.History),
+    HistoryOutlined(Icons.Outlined.History),
+    PlaylistAdd(Icons.Filled.PlaylistAdd),
+    PlaylistAddOutlined(Icons.Outlined.PlaylistAdd),
+    AudioFile(Icons.Filled.MusicNote),
+    FolderOpen(Icons.Filled.FolderOpen),
+    Equalizer(Icons.Filled.GraphicEq),
+    Image(Icons.Filled.Image),
+    HideImage(Icons.Filled.Image),
+    ChevronRight(Icons.Filled.ChevronRight),
+    Error(Icons.Filled.Error),
+    MusicNote(Icons.Filled.MusicNote),
+    Save(Icons.Filled.Save),
+    CloudDownload(Icons.Filled.CloudDownload),
+    Schedule(Icons.Filled.Schedule)
 }
 
 @Composable
-fun appIconPainter(icon: AppIcon): Painter = painterResource(id = icon.resId)
+fun appIconPainter(icon: AppIcon): Painter = rememberVectorPainter(image = icon.vector)

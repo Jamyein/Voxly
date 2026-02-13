@@ -96,10 +96,19 @@
     <string name="cd_more_options">More options</string>
     <string name="cd_back">Go back</string>
     <string name="cd_search">Search</string>
+    <string name="refresh_files">Refresh files</string>
+    <string name="back_to_top">Back to top</string>
+    <string name="back_to_top_short">Top</string>
 
     <!-- File Browser -->
     <string name="loading_audio_files">Loading audio files...</string>
     <string name="import_audio_files_or_select_folder">Import audio files or select a folder</string>
+    <string name="file_search_hint">Search files, artist, album...</string>
+    <string name="file_sort_label">Sort</string>
+    <string name="file_sort_name_asc">Name (A-Z)</string>
+    <string name="file_sort_name_desc">Name (Z-A)</string>
+    <string name="file_sort_size_desc">Size (Large-Small)</string>
+    <string name="file_sort_duration_desc">Duration (Long-Short)</string>
     <string name="add_directory">Add Directory</string>
     <string name="selected_directories_count">%d directories selected</string>
     <string name="clear_directories">Clear directories</string>
@@ -186,6 +195,9 @@
     <string name="settings_section_appearance">Appearance</string>
     <string name="settings_section_language">Language</string>
     <string name="settings_section_scanning">Scanning</string>
+    <string name="settings_directory_management">Directory Management</string>
+    <string name="settings_directory_management_subtitle">Add or remove folders used by the Files page</string>
+    <string name="directory_management_empty">No directories added. Tap + to add one.</string>
     <string name="settings_section_about">About</string>
     <string name="settings_section_online_metadata">Online Metadata</string>
     <string name="settings_dark_theme">Dark Theme</string>
@@ -203,25 +215,26 @@
     <string name="settings_metadata_source">Metadata Source</string>
     <string name="settings_metadata_source_subtitle">Choose where to fetch metadata from</string>
     <string name="settings_metadata_source_musicbrainz">MusicBrainz</string>
-    <string name="settings_metadata_source_apple_music">Apple Music</string>
+    <string name="settings_metadata_source_apple_music">iTunes</string>
     <string name="settings_metadata_source_both">Both Sources</string>
     <string name="settings_metadata_source_description_musicbrainz">MusicBrainz: Open music encyclopedia with detailed metadata</string>
-    <string name="settings_metadata_source_description_apple_music">Apple Music: High-quality artwork and comprehensive catalog</string>
+    <string name="settings_metadata_source_description_apple_music">iTunes: High-quality artwork and comprehensive catalog</string>
     <string name="settings_metadata_source_description_both">Both: Combines results from all sources for best coverage</string>
     <string name="settings_data_sources_label">Data Sources</string>
-    <string name="settings_data_sources_value">MusicBrainz + Apple Music</string>
+    <string name="settings_data_sources_value">MusicBrainz + iTunes</string>
     <string name="settings_source_musicbrainz">Enable MusicBrainz</string>
     <string name="settings_source_musicbrainz_subtitle">Use MusicBrainz for online metadata search</string>
-    <string name="settings_source_apple_music">Enable Apple Music</string>
-    <string name="settings_source_apple_music_subtitle">Use Apple Music/iTunes for metadata and cover art</string>
+    <string name="settings_source_apple_music">Enable iTunes</string>
+    <string name="settings_source_apple_music_subtitle">Use iTunes for metadata and cover art</string>
     <string name="settings_source_netease">Enable NetEase</string>
     <string name="settings_source_netease_subtitle">Include NetEase Cloud Music results</string>
     <string name="settings_source_qq_music">Enable QQ Music</string>
     <string name="settings_source_qq_music_subtitle">Include QQ Music results</string>
     <string name="settings_apple_country">Apple Store Region</string>
-    <string name="settings_apple_country_subtitle">Country/region used for Apple Music search</string>
+    <string name="settings_apple_country_subtitle">Country/region used for iTunes search</string>
     <string name="settings_apple_country_us">United States (US)</string>
     <string name="settings_apple_country_cn">China (CN)</string>
+    <string name="settings_apple_country_hk">Hong Kong (HK)</string>
     <string name="settings_apple_country_jp">Japan (JP)</string>
     <string name="settings_apple_country_gb">United Kingdom (GB)</string>
     <string name="settings_apple_country_de">Germany (DE)</string>
@@ -230,6 +243,7 @@
     <string name="settings_apple_country_au">Australia (AU)</string>
     <string name="settings_online_search_limit">Search Result Limit</string>
     <string name="settings_online_search_limit_subtitle">Maximum results returned per online search</string>
+    <string name="settings_online_search_limit_unlimited">Unlimited</string>
 
     <!-- Logging -->
     <string name="settings_section_logging">Logging</string>

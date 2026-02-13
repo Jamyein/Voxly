@@ -16,15 +16,22 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,6 +46,9 @@ import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.viewmodel.FileBrowserUiState
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.launch
 
 /**
  * File browser screen for browsing and selecting audio files.
@@ -60,10 +70,29 @@ fun FileBrowserScreen(
     val openedDirectory = selectedDirectories.firstOrNull { it.uri == openedDirectoryUri }
     val openedDirectoryFiles = openedDirectoryUri?.let { directoryFiles[it].orEmpty() }.orEmpty()
     val isDirectoryListLevel = selectedDirectories.isNotEmpty() && openedDirectory == null
-    val visibleFiles = when (val state = uiState) {
+    val visibleFilesRaw = when (val state = uiState) {
         is FileBrowserUiState.Success -> if (openedDirectory != null) openedDirectoryFiles else state.files
         else -> emptyList()
     }
+    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var sortOption by rememberSaveable { mutableStateOf(FileSortOption.NAME_ASC.name) }
+    val visibleFiles = remember(visibleFilesRaw, searchQuery, sortOption) {
+        applySearchAndSort(
+            files = visibleFilesRaw,
+            query = searchQuery,
+            sortOption = FileSortOption.valueOf(sortOption)
+        )
+    }
+    val currentListKey = openedDirectoryUri ?: "__global__"
+    val initialScrollPosition = remember(currentListKey) {
+        viewModel.getScrollPosition(currentListKey)
+    }
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = initialScrollPosition.index,
+        initialFirstVisibleItemScrollOffset = initialScrollPosition.offset
+    )
+    val coroutineScope = rememberCoroutineScope()
+    val canScrollToTop = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
     val readPermission = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -82,28 +111,20 @@ fun FileBrowserScreen(
         hasReadPermission = granted
     }
 
-    // 文件夹选择器启动器
-    val folderPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocumentTree()
-    ) { uri ->
-        uri?.let {
-            // 持久化 URI 权限
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(
-                    it,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            }
-            viewModel.addDirectory(it)
-        }
-    }
-
     LaunchedEffect(hasReadPermission) {
         if (hasReadPermission) {
             viewModel.loadAudioFiles()
         } else {
             readPermissionLauncher.launch(readPermission)
         }
+    }
+    LaunchedEffect(currentListKey, listState) {
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .map { (index, offset) -> Triple(currentListKey, index, offset) }
+            .distinctUntilChanged()
+            .collect { (key, index, offset) ->
+                viewModel.saveScrollPosition(key, index, offset)
+            }
     }
     BackHandler(enabled = openedDirectory != null && selectedFiles.isEmpty()) {
         viewModel.closeOpenedDirectory()
@@ -136,6 +157,12 @@ fun FileBrowserScreen(
                         }
                     },
                     actions = {
+                        IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = stringResource(R.string.refresh_files)
+                            )
+                        }
                         IconButton(onClick = onNavigateToSettings) {
                             Icon(
                                 imageVector = Icons.Default.Settings,
@@ -153,6 +180,12 @@ fun FileBrowserScreen(
                 TopAppBar(
                     title = { Text(stringResource(R.string.app_name)) },
                     actions = {
+                        IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
+                            Icon(
+                                imageVector = Icons.Default.Refresh,
+                                contentDescription = stringResource(R.string.refresh_files)
+                            )
+                        }
                         IconButton(onClick = onNavigateToSettings) {
                             Icon(
                                 imageVector = Icons.Default.Settings,
@@ -169,12 +202,24 @@ fun FileBrowserScreen(
             }
         },
         floatingActionButton = {
-            if (selectedFiles.isEmpty() && openedDirectory == null) {
-                ExtendedFloatingActionButton(
-                    onClick = { folderPickerLauncher.launch(null) },
-                    icon = { Icon(painter = appIconPainter(AppIcon.Folder), contentDescription = null) },
-                    text = { Text(stringResource(R.string.add_directory)) }
-                )
+            if (selectedFiles.isEmpty()) {
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    if (canScrollToTop && visibleFiles.isNotEmpty()) {
+                        SmallFloatingActionButton(
+                            onClick = {
+                                coroutineScope.launch {
+                                    listState.animateScrollToItem(0)
+                                }
+                            }
+                        ) {
+                            Text(stringResource(R.string.back_to_top_short))
+                        }
+                    }
+
+                }
             }
         }
     ) { innerPadding ->
@@ -187,9 +232,7 @@ fun FileBrowserScreen(
                 DirectoryOverviewContent(
                     directories = selectedDirectories,
                     directoryFiles = directoryFiles,
-                    onOpenDirectory = viewModel::openDirectory,
-                    onRemoveDirectory = viewModel::removeDirectory,
-                    onClearDirectories = viewModel::clearDirectories
+                    onOpenDirectory = viewModel::openDirectory
                 )
             } else {
                 Box(modifier = Modifier.fillMaxSize()) {
@@ -201,28 +244,33 @@ fun FileBrowserScreen(
                         EmptyContent()
                     }
                     is FileBrowserUiState.Success -> {
-                        val filesToShow = if (openedDirectory != null) {
-                            openedDirectoryFiles
-                        } else {
-                            state.files
-                        }
+                        val filesToShow = visibleFiles
                         if (filesToShow.isEmpty()) {
                             EmptyContent()
                         } else {
-                            AudioFileList(
-                                files = filesToShow,
-                                selectedFiles = selectedFiles,
-                                onFileClick = { audioFile ->
-                                    if (selectedFiles.isNotEmpty()) {
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                SearchAndSortBar(
+                                    query = searchQuery,
+                                    onQueryChange = { searchQuery = it },
+                                    sortOption = FileSortOption.valueOf(sortOption),
+                                    onSortOptionChange = { sortOption = it.name }
+                                )
+                                AudioFileList(
+                                    files = filesToShow,
+                                    listState = listState,
+                                    selectedFiles = selectedFiles,
+                                    onFileClick = { audioFile ->
+                                        if (selectedFiles.isNotEmpty()) {
+                                            viewModel.toggleFileSelection(audioFile.path)
+                                        } else {
+                                            onNavigateToMetadata(audioFile.path)
+                                        }
+                                    },
+                                    onFileLongClick = { audioFile ->
                                         viewModel.toggleFileSelection(audioFile.path)
-                                    } else {
-                                        onNavigateToMetadata(audioFile.path)
                                     }
-                                },
-                                onFileLongClick = { audioFile ->
-                                    viewModel.toggleFileSelection(audioFile.path)
-                                }
-                            )
+                                )
+                            }
                         }
                     }
                     is FileBrowserUiState.Error -> {
@@ -233,6 +281,117 @@ fun FileBrowserScreen(
             }
         }
     }
+}
+
+private enum class FileSortOption {
+    NAME_ASC,
+    NAME_DESC,
+    SIZE_DESC,
+    DURATION_DESC
+}
+
+private fun applySearchAndSort(
+    files: List<AudioFile>,
+    query: String,
+    sortOption: FileSortOption
+): List<AudioFile> {
+    val normalizedQuery = query.trim().lowercase()
+    val filtered = if (normalizedQuery.isBlank()) {
+        files
+    } else {
+        files.filter { audioFile ->
+            val title = audioFile.metadata.title.orEmpty()
+            val artist = audioFile.metadata.artist.orEmpty()
+            val album = audioFile.metadata.album.orEmpty()
+            listOf(audioFile.name, title, artist, album).any { text ->
+                text.lowercase().contains(normalizedQuery)
+            }
+        }
+    }
+
+    return when (sortOption) {
+        FileSortOption.NAME_ASC -> filtered.sortedBy { it.metadata.getDisplayTitle(it.name).lowercase() }
+        FileSortOption.NAME_DESC -> filtered.sortedByDescending { it.metadata.getDisplayTitle(it.name).lowercase() }
+        FileSortOption.SIZE_DESC -> filtered.sortedByDescending { it.size }
+        FileSortOption.DURATION_DESC -> filtered.sortedByDescending { it.duration }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchAndSortBar(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    sortOption: FileSortOption,
+    onSortOptionChange: (FileSortOption) -> Unit
+) {
+    var sortExpanded by remember { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        OutlinedTextField(
+            value = query,
+            onValueChange = onQueryChange,
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true,
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null
+                )
+            },
+            placeholder = { Text(stringResource(R.string.file_search_hint)) }
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        ExposedDropdownMenuBox(
+            expanded = sortExpanded,
+            onExpandedChange = { sortExpanded = it }
+        ) {
+            OutlinedTextField(
+                value = stringResource(sortOption.labelResId()),
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                label = { Text(stringResource(R.string.file_sort_label)) },
+                trailingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.ArrowDropDown,
+                        contentDescription = null
+                    )
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .menuAnchor()
+            )
+
+            ExposedDropdownMenu(
+                expanded = sortExpanded,
+                onDismissRequest = { sortExpanded = false }
+            ) {
+                FileSortOption.entries.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(option.labelResId())) },
+                        onClick = {
+                            onSortOptionChange(option)
+                            sortExpanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun FileSortOption.labelResId(): Int = when (this) {
+    FileSortOption.NAME_ASC -> R.string.file_sort_name_asc
+    FileSortOption.NAME_DESC -> R.string.file_sort_name_desc
+    FileSortOption.SIZE_DESC -> R.string.file_sort_size_desc
+    FileSortOption.DURATION_DESC -> R.string.file_sort_duration_desc
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -274,25 +433,13 @@ private fun SelectionTopBar(
 private fun DirectoryOverviewContent(
     directories: List<SelectedDirectory>,
     directoryFiles: Map<String, List<AudioFile>>,
-    onOpenDirectory: (String) -> Unit,
-    onRemoveDirectory: (String) -> Unit,
-    onClearDirectories: () -> Unit
+    onOpenDirectory: (String) -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = stringResource(R.string.selected_directories_count, directories.size),
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.weight(1f)
-        )
-        TextButton(onClick = onClearDirectories) {
-            Text(stringResource(R.string.clear_directories))
-        }
-    }
+    Text(
+        text = stringResource(R.string.selected_directories_count, directories.size),
+        style = MaterialTheme.typography.labelLarge,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+    )
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -303,7 +450,6 @@ private fun DirectoryOverviewContent(
                 directory = directory,
                 fileCount = directoryFiles[directory.uri]?.size ?: 0,
                 onClick = { onOpenDirectory(directory.uri) },
-                onRemove = { onRemoveDirectory(directory.uri) },
                 modifier = Modifier.padding(vertical = 4.dp)
             )
         }
@@ -385,11 +531,13 @@ private fun ErrorContent(message: String) {
 @Composable
 private fun AudioFileList(
     files: List<AudioFile>,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     selectedFiles: Set<String>,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit
 ) {
     LazyColumn(
+        state = listState,
         contentPadding = PaddingValues(vertical = 8.dp)
     ) {
         items(files, key = { it.path }) { audioFile ->
@@ -436,7 +584,9 @@ private fun AudioFileItem(
         ) {
             // Album art placeholder
             Box(
-                modifier = Modifier.size(48.dp),
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 val mediaStoreBitmap = remember(audioFile.mediaStoreAlbumId) {
@@ -564,7 +714,6 @@ private fun DirectoryItem(
     directory: SelectedDirectory,
     fileCount: Int,
     onClick: () -> Unit,
-    onRemove: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     Card(
@@ -605,12 +754,6 @@ private fun DirectoryItem(
                     text = "$fileCount",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
-                )
-            }
-            IconButton(onClick = onRemove) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.clear_selection)
                 )
             }
         }

@@ -127,8 +127,12 @@ class ITunesRepository @Inject constructor(
         releaseId: String
     ): Result<OnlineReleaseDetails> = withContext(Dispatchers.IO) {
         try {
+            val searchSettings = getSearchSettings()
             // First lookup the album
-            val lookupResponse = iTunesApi.lookup(id = releaseId.toLong())
+            val lookupResponse = iTunesApi.lookup(
+                id = releaseId.toLong(),
+                country = searchSettings.countryCode
+            )
             
             if (!lookupResponse.isSuccessful) {
                 return@withContext Result.failure(
@@ -144,7 +148,7 @@ class ITunesRepository @Inject constructor(
                 term = "${albumResult.artistName} ${albumResult.collectionName}",
                 entity = ITunesEntity.MUSIC_TRACK.value,
                 limit = MAX_LIMIT,
-                country = getSearchSettings().countryCode
+                country = searchSettings.countryCode
             )
 
             val tracks = if (tracksResponse.isSuccessful) {
@@ -183,8 +187,12 @@ class ITunesRepository @Inject constructor(
     override suspend fun getCoverArt(releaseId: String): Result<ByteArray?> =
         withContext(Dispatchers.IO) {
             try {
+                val searchSettings = getSearchSettings()
                 // Get the album details to find the artwork URL
-                val lookupResponse = iTunesApi.lookup(id = releaseId.toLong())
+                val lookupResponse = iTunesApi.lookup(
+                    id = releaseId.toLong(),
+                    country = searchSettings.countryCode
+                )
                 
                 if (!lookupResponse.isSuccessful) {
                     return@withContext Result.success(null)
@@ -230,11 +238,12 @@ class ITunesRepository @Inject constructor(
         country: ITunesCountry? = null
     ): Result<List<ITunesResult>> = withContext(Dispatchers.IO) {
         try {
+            val fallbackCountry = getSearchSettings().countryCode
             val response = iTunesApi.search(
                 term = term,
                 entity = entity.value,
                 limit = limit.coerceIn(1, MAX_LIMIT),
-                country = country?.code
+                country = country?.code ?: fallbackCountry
             )
 
             if (response.isSuccessful) {
@@ -264,7 +273,8 @@ class ITunesRepository @Inject constructor(
             .trim()
             .lowercase()
             .ifBlank { "us" }
-        val limit = settingsDataStore.onlineSearchLimit.first().coerceIn(1, MAX_LIMIT)
+        val rawLimit = settingsDataStore.onlineSearchLimit.first()
+        val limit = if (rawLimit <= 0) MAX_LIMIT else rawLimit.coerceIn(1, MAX_LIMIT)
         return SearchSettings(countryCode, limit)
     }
 

@@ -96,10 +96,19 @@
     <string name="cd_more_options">更多选项</string>
     <string name="cd_back">返回</string>
     <string name="cd_search">搜索</string>
+    <string name="refresh_files">刷新文件</string>
+    <string name="back_to_top">返回顶部</string>
+    <string name="back_to_top_short">顶部</string>
 
     <!-- File Browser -->
     <string name="loading_audio_files">正在加载音频文件...</string>
     <string name="import_audio_files_or_select_folder">导入音频文件或选择文件夹</string>
+    <string name="file_search_hint">搜索文件、艺术家、专辑...</string>
+    <string name="file_sort_label">排序</string>
+    <string name="file_sort_name_asc">名称 (A-Z)</string>
+    <string name="file_sort_name_desc">名称 (Z-A)</string>
+    <string name="file_sort_size_desc">大小 (大-小)</string>
+    <string name="file_sort_duration_desc">时长 (长-短)</string>
     <string name="add_directory">添加目录</string>
     <string name="selected_directories_count">已选择 %d 个目录</string>
     <string name="clear_directories">清空目录</string>
@@ -186,6 +195,9 @@
     <string name="settings_section_appearance">外观</string>
     <string name="settings_section_language">语言</string>
     <string name="settings_section_scanning">扫描</string>
+    <string name="settings_directory_management">目录管理</string>
+    <string name="settings_directory_management_subtitle">添加或移除文件页面使用的文件夹</string>
+    <string name="directory_management_empty">尚未添加目录，点击右上角 + 添加。</string>
     <string name="settings_section_about">关于</string>
     <string name="settings_section_online_metadata">在线元数据</string>
     <string name="settings_dark_theme">深色主题</string>
@@ -203,25 +215,26 @@
     <string name="settings_metadata_source">元数据来源</string>
     <string name="settings_metadata_source_subtitle">选择获取元数据的来源</string>
     <string name="settings_metadata_source_musicbrainz">MusicBrainz</string>
-    <string name="settings_metadata_source_apple_music">Apple Music</string>
+    <string name="settings_metadata_source_apple_music">iTunes</string>
     <string name="settings_metadata_source_both">全部来源</string>
     <string name="settings_metadata_source_description_musicbrainz">MusicBrainz：开放的音乐百科，元数据详细</string>
-    <string name="settings_metadata_source_description_apple_music">Apple Music：高质量封面与完整曲库</string>
+    <string name="settings_metadata_source_description_apple_music">iTunes：高质量封面与完整曲库</string>
     <string name="settings_metadata_source_description_both">全部来源：合并各来源结果以获得最佳覆盖</string>
     <string name="settings_data_sources_label">数据来源</string>
-    <string name="settings_data_sources_value">MusicBrainz + Apple Music</string>
+    <string name="settings_data_sources_value">MusicBrainz + iTunes</string>
     <string name="settings_source_musicbrainz">启用 MusicBrainz</string>
     <string name="settings_source_musicbrainz_subtitle">在线元数据搜索中使用 MusicBrainz</string>
-    <string name="settings_source_apple_music">启用 Apple Music</string>
-    <string name="settings_source_apple_music_subtitle">使用 Apple Music/iTunes 获取元数据和封面</string>
+    <string name="settings_source_apple_music">启用 iTunes</string>
+    <string name="settings_source_apple_music_subtitle">使用 iTunes 获取元数据和封面</string>
     <string name="settings_source_netease">启用网易云音乐</string>
     <string name="settings_source_netease_subtitle">在线搜索中包含网易云结果</string>
     <string name="settings_source_qq_music">启用 QQ 音乐</string>
     <string name="settings_source_qq_music_subtitle">在线搜索中包含 QQ 音乐结果</string>
     <string name="settings_apple_country">Apple 商店区域</string>
-    <string name="settings_apple_country_subtitle">Apple Music 搜索使用的国家/地区</string>
+    <string name="settings_apple_country_subtitle">iTunes 搜索使用的国家/地区</string>
     <string name="settings_apple_country_us">美国 (US)</string>
     <string name="settings_apple_country_cn">中国 (CN)</string>
+    <string name="settings_apple_country_hk">中国香港 (HK)</string>
     <string name="settings_apple_country_jp">日本 (JP)</string>
     <string name="settings_apple_country_gb">英国 (GB)</string>
     <string name="settings_apple_country_de">德国 (DE)</string>
@@ -230,6 +243,7 @@
     <string name="settings_apple_country_au">澳大利亚 (AU)</string>
     <string name="settings_online_search_limit">搜索结果条数限制</string>
     <string name="settings_online_search_limit_subtitle">每次在线搜索返回的最大结果数</string>
+    <string name="settings_online_search_limit_unlimited">无限制</string>
 
     <!-- Logging -->
     <string name="settings_section_logging">日志</string>

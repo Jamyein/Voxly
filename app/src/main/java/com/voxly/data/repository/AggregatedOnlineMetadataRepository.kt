@@ -59,7 +59,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.MUSICBRAINZ -> {
                 if (settings.enableMusicBrainz) {
                     musicBrainzRepository.searchByArtistAlbum(artist, album)
-                        .map { it.take(settings.searchLimit) }
+                        .map { applyLimit(it, settings.searchLimit) }
                 } else {
                     Result.success(emptyList())
                 }
@@ -67,21 +67,21 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.ITUNES -> {
                 if (settings.enableITunes) {
                     iTunesRepository.searchByArtistAlbum(artist, album)
-                        .map { it.take(settings.searchLimit) }
+                        .map { applyLimit(it, settings.searchLimit) }
                 } else {
                     Result.success(emptyList())
                 }
             }
             DataSource.NETEASE -> {
                 if (settings.enableNetease) {
-                    searchNeteaseByArtistAlbum(artist, album, settings.searchLimit)
+                    searchNeteaseByArtistAlbum(artist, album, settings.requestLimit)
                 } else {
                     Result.success(emptyList())
                 }
             }
             DataSource.QQ_MUSIC -> {
                 if (settings.enableQQMusic) {
-                    searchQQMusicByArtistAlbum(artist, album, settings.searchLimit)
+                    searchQQMusicByArtistAlbum(artist, album, settings.requestLimit)
                 } else {
                     Result.success(emptyList())
                 }
@@ -105,14 +105,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             async { iTunesRepository.searchByArtistAlbum(artist, album) }
         } else null
         val neteaseDeferred = if (settings.enableNetease) {
-            async { searchNeteaseByArtistAlbum(artist, album, settings.searchLimit) }
+            async { searchNeteaseByArtistAlbum(artist, album, settings.requestLimit) }
         } else null
         val qqMusicDeferred = if (settings.enableQQMusic) {
-            async { searchQQMusicByArtistAlbum(artist, album, settings.searchLimit) }
+            async { searchQQMusicByArtistAlbum(artist, album, settings.requestLimit) }
         } else null
 
-        val musicBrainzResult = musicBrainzDeferred?.await()?.map { it.take(settings.searchLimit) }
-        val iTunesResult = iTunesDeferred?.await()?.map { it.take(settings.searchLimit) }
+        val musicBrainzResult = musicBrainzDeferred?.await()?.map { applyLimit(it, settings.searchLimit) }
+        val iTunesResult = iTunesDeferred?.await()?.map { applyLimit(it, settings.searchLimit) }
         val neteaseResult = neteaseDeferred?.await()
         val qqMusicResult = qqMusicDeferred?.await()
 
@@ -172,7 +172,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             score
         }
 
-        Result.success(sortedResults.take(settings.searchLimit))
+        Result.success(applyLimit(sortedResults, settings.searchLimit))
     }
 
     /**
@@ -272,7 +272,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.MUSICBRAINZ -> {
                 if (settings.enableMusicBrainz) {
                     musicBrainzRepository.searchByTrack(title, artist)
-                        .map { it.take(settings.searchLimit) }
+                        .map { applyLimit(it, settings.searchLimit) }
                 } else {
                     Result.success(emptyList())
                 }
@@ -280,21 +280,21 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.ITUNES -> {
                 if (settings.enableITunes) {
                     iTunesRepository.searchByTrack(title, artist)
-                        .map { it.take(settings.searchLimit) }
+                        .map { applyLimit(it, settings.searchLimit) }
                 } else {
                     Result.success(emptyList())
                 }
             }
             DataSource.NETEASE -> {
                 if (settings.enableNetease) {
-                    searchNeteaseByTrack(title, artist, settings.searchLimit)
+                    searchNeteaseByTrack(title, artist, settings.requestLimit)
                 } else {
                     Result.success(emptyList())
                 }
             }
             DataSource.QQ_MUSIC -> {
                 if (settings.enableQQMusic) {
-                    searchQQMusicByTrack(title, artist, settings.searchLimit)
+                    searchQQMusicByTrack(title, artist, settings.requestLimit)
                 } else {
                     Result.success(emptyList())
                 }
@@ -308,20 +308,20 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         async { iTunesRepository.searchByTrack(title, artist) }
                     } else null
                     val neteaseDeferred = if (settings.enableNetease) {
-                        async { searchNeteaseByTrack(title, artist, settings.searchLimit) }
+                        async { searchNeteaseByTrack(title, artist, settings.requestLimit) }
                     } else null
                     val qqMusicDeferred = if (settings.enableQQMusic) {
-                        async { searchQQMusicByTrack(title, artist, settings.searchLimit) }
+                        async { searchQQMusicByTrack(title, artist, settings.requestLimit) }
                     } else null
 
                     val results = mutableListOf<OnlineRecording>()
                     
-                    musicBrainzDeferred?.await()?.getOrNull()?.let { results.addAll(it.take(settings.searchLimit)) }
-                    iTunesDeferred?.await()?.getOrNull()?.let { results.addAll(it.take(settings.searchLimit)) }
+                    musicBrainzDeferred?.await()?.getOrNull()?.let { results.addAll(applyLimit(it, settings.searchLimit)) }
+                    iTunesDeferred?.await()?.getOrNull()?.let { results.addAll(applyLimit(it, settings.searchLimit)) }
                     neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
                     qqMusicDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
 
-                    Result.success(results.take(settings.searchLimit))
+                    Result.success(applyLimit(results, settings.searchLimit))
                 }
             }
         }
@@ -618,7 +618,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String,
         album: String
     ): Result<List<OnlineRelease>> {
-        return searchNeteaseByArtistAlbum(artist, album, getOnlineSourceSettings().searchLimit)
+        return searchNeteaseByArtistAlbum(artist, album, getOnlineSourceSettings().requestLimit)
     }
 
     /**
@@ -628,7 +628,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String,
         album: String
     ): Result<List<OnlineRelease>> {
-        return searchQQMusicByArtistAlbum(artist, album, getOnlineSourceSettings().searchLimit)
+        return searchQQMusicByArtistAlbum(artist, album, getOnlineSourceSettings().requestLimit)
     }
 
     /**
@@ -657,8 +657,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             enableITunes = settingsDataStore.sourceEnabledITunes.first(),
             enableNetease = settingsDataStore.sourceEnabledNetease.first(),
             enableQQMusic = settingsDataStore.sourceEnabledQQMusic.first(),
-            searchLimit = settingsDataStore.onlineSearchLimit.first().coerceIn(5, 50)
+            searchLimit = normalizeSearchLimit(settingsDataStore.onlineSearchLimit.first())
         )
+    }
+
+    private fun normalizeSearchLimit(limit: Int): Int {
+        return if (limit <= 0) 0 else limit.coerceIn(5, 200)
+    }
+
+    private fun <T> applyLimit(list: List<T>, limit: Int): List<T> {
+        return if (limit <= 0) list else list.take(limit)
     }
 
     private data class OnlineSourceSettings(
@@ -668,6 +676,9 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val enableQQMusic: Boolean,
         val searchLimit: Int
     ) {
+        val requestLimit: Int
+            get() = if (searchLimit <= 0) 200 else searchLimit
+
         val hasAnyEnabledSource: Boolean
             get() = enableMusicBrainz || enableITunes || enableNetease || enableQQMusic
     }

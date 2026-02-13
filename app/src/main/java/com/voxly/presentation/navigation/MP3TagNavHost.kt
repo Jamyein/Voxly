@@ -27,6 +27,7 @@ import com.voxly.core.util.LogManager
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.screens.BatchOperationsScreen
+import com.voxly.presentation.screens.DirectoryManagementScreen
 import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
 import com.voxly.presentation.screens.RecentEditsScreen
@@ -125,6 +126,9 @@ fun MP3TagNavHost(
                 val context = LocalContext.current
                 SettingsScreen(
                     onNavigateBack = { navController.popBackStack() },
+                    onNavigateToDirectoryManagement = {
+                        navController.navigate(Screen.DirectoryManagement.route)
+                    },
                     onNavigateToLogViewer = {
                         navController.navigate(Screen.LogViewer.route)
                     },
@@ -156,6 +160,12 @@ fun MP3TagNavHost(
 
             composable(Screen.LogViewer.route) {
                 LogViewerScreen(
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.DirectoryManagement.route) {
+                DirectoryManagementScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -240,18 +250,18 @@ private val bottomNavItems = listOf(
         screen = Screen.FileBrowser,
         labelResId = R.string.nav_file_browser,
         selectedIcon = AppIcon.Folder,
-        unselectedIcon = AppIcon.Folder
+        unselectedIcon = AppIcon.FolderOutlined
     ),
     BottomNavItemData(
         screen = Screen.RecentEdits,
         labelResId = R.string.nav_recent_edits,
         selectedIcon = AppIcon.History,
-        unselectedIcon = AppIcon.History
+        unselectedIcon = AppIcon.HistoryOutlined
     ),
     BottomNavItemData(
         screen = Screen.BatchOperations,
         labelResId = R.string.nav_batch_operations,
         selectedIcon = AppIcon.PlaylistAdd,
-        unselectedIcon = AppIcon.PlaylistAdd
+        unselectedIcon = AppIcon.PlaylistAddOutlined
     )
 )

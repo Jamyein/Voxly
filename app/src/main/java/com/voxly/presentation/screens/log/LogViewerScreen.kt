@@ -300,18 +300,19 @@ private fun SearchBar(
 
 @Composable
 private fun LogLine(line: String) {
+    val levelToken = lineLevelToken(line)
     val backgroundColor = when {
-        line.contains("[ERROR]") || line.contains("[WTF]") -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-        line.contains("[WARN]") -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
-        line.contains("[DEBUG]") -> MaterialTheme.colorScheme.surfaceVariant
+        levelToken == "E" || levelToken == "A" -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
+        levelToken == "W" -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.3f)
+        levelToken == "D" || levelToken == "V" -> MaterialTheme.colorScheme.surfaceVariant
         else -> Color.Transparent
     }
 
     val textColor = when {
-        line.contains("[ERROR]") || line.contains("[WTF]") -> MaterialTheme.colorScheme.error
-        line.contains("[WARN]") -> MaterialTheme.colorScheme.tertiary
-        line.contains("[INFO]") -> MaterialTheme.colorScheme.primary
-        line.contains("[DEBUG]") -> MaterialTheme.colorScheme.outline
+        levelToken == "E" || levelToken == "A" -> MaterialTheme.colorScheme.error
+        levelToken == "W" -> MaterialTheme.colorScheme.tertiary
+        levelToken == "I" -> MaterialTheme.colorScheme.primary
+        levelToken == "D" || levelToken == "V" -> MaterialTheme.colorScheme.outline
         else -> MaterialTheme.colorScheme.onSurface
     }
 
@@ -325,4 +326,9 @@ private fun LogLine(line: String) {
         fontFamily = FontFamily.Monospace,
         fontSize = 12.sp
     )
+}
+
+private fun lineLevelToken(line: String): String? {
+    val match = Regex("""\[[VDIWEA]\s*\]""").find(line)?.value ?: return null
+    return match.getOrNull(1)?.toString()
 }

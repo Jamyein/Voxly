@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens.metadata
 
 import android.graphics.BitmapFactory
+import android.graphics.BitmapFactory.Options
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -469,7 +470,7 @@ private fun AlbumArtSection(
         ) {
             if (albumArt != null) {
                 val bitmap = remember(albumArt) {
-                    BitmapFactory.decodeByteArray(albumArt, 0, albumArt.size)
+                    decodeAlbumArtPreview(albumArt)
                 }
                 if (bitmap != null) {
                     Image(
@@ -509,4 +510,27 @@ private fun AlbumArtSection(
             }
         }
     }
+}
+
+private fun decodeAlbumArtPreview(
+    bytes: ByteArray,
+    targetSizePx: Int = 1024
+): android.graphics.Bitmap? {
+    return runCatching {
+        val bounds = Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+
+        val rawWidth = bounds.outWidth.coerceAtLeast(1)
+        val rawHeight = bounds.outHeight.coerceAtLeast(1)
+        var inSampleSize = 1
+        while ((rawWidth / inSampleSize) > targetSizePx || (rawHeight / inSampleSize) > targetSizePx) {
+            inSampleSize *= 2
+        }
+
+        val opts = Options().apply {
+            this.inSampleSize = inSampleSize
+            inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
+        }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+    }.getOrNull()
 }

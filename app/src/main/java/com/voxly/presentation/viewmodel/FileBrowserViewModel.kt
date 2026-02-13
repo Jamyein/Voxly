@@ -54,6 +54,7 @@ class FileBrowserViewModel @Inject constructor(
 
     private var scanJob: Job? = null
     private var cachedGlobalFiles: List<AudioFile>? = null
+    private val scrollPositions = mutableMapOf<String, ScrollPosition>()
 
     init {
         restoreSelectedDirectories()
@@ -65,6 +66,8 @@ class FileBrowserViewModel @Inject constructor(
     fun loadAudioFiles(forceRefresh: Boolean = false) {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
+            syncSelectedDirectoriesFromStorage()
+
             if (_selectedDirectories.value.isNotEmpty()) {
                 scanSelectedDirectories(_selectedDirectories.value, forceRefresh)
                 return@launch
@@ -104,6 +107,25 @@ class FileBrowserViewModel @Inject constructor(
                     Log.e(TAG, "Global audio scan failed", e)
                     _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
                 }
+        }
+    }
+
+    private suspend fun syncSelectedDirectoriesFromStorage() {
+        val uris = settingsDataStore.selectedDirectoryUris.first()
+        val restored = uris.mapNotNull { uriString ->
+            val parsed = runCatching { Uri.parse(uriString) }.getOrNull() ?: return@mapNotNull null
+            val path = getPathFromUri(parsed)
+            if (path.isBlank()) null else SelectedDirectory(uri = uriString, path = path)
+        }
+        if (restored.map { it.uri } != _selectedDirectories.value.map { it.uri }) {
+            _selectedDirectories.value = restored
+            _directoryFiles.value = _directoryFiles.value.filterKeys { key ->
+                restored.any { it.uri == key }
+            }
+            if (_openedDirectoryUri.value != null && restored.none { it.uri == _openedDirectoryUri.value }) {
+                _openedDirectoryUri.value = null
+                clearSelection()
+            }
         }
     }
 
@@ -358,11 +380,24 @@ class FileBrowserViewModel @Inject constructor(
             .getOrElse { File(filePath).absolutePath }
         return fileCanonical.startsWith("$directoryCanonical${File.separatorChar}")
     }
+
+    fun saveScrollPosition(listKey: String, index: Int, offset: Int) {
+        scrollPositions[listKey] = ScrollPosition(index = index, offset = offset)
+    }
+
+    fun getScrollPosition(listKey: String): ScrollPosition {
+        return scrollPositions[listKey] ?: ScrollPosition()
+    }
 }
 
 data class SelectedDirectory(
     val uri: String,
     val path: String
+)
+
+data class ScrollPosition(
+    val index: Int = 0,
+    val offset: Int = 0
 )
 
 /**
