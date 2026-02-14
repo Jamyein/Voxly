@@ -43,11 +43,11 @@ interface LyricsRepository {
     ): Result<List<OnlineLyricsResult>>
 
     /**
-     * Gets lyrics from online source by ID.
-     * @param id The online lyrics ID
+     * Gets lyrics from online source using a selected search result.
+     * @param result Selected online lyrics result
      * @return Result containing Lyrics object
      */
-    suspend fun getOnlineLyricsById(id: Long): Result<Lyrics>
+    suspend fun getOnlineLyrics(result: OnlineLyricsResult): Result<Lyrics>
 
     /**
      * Gets cached lyrics for a song.
@@ -91,6 +91,7 @@ data class OnlineLyricsResult(
     val hasPlainLyrics: Boolean,
     val isInstrumental: Boolean,
     val source: String, // Source: "LRCLIB", "NetEase", "QQ Music"
+    val sourceKey: String? = null, // Source-specific key (e.g. QQ Music songMid)
     val preview: String? // First few lines for preview
 )
 

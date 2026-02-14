@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("com.google.devtools.ksp")
@@ -24,6 +26,29 @@ android {
         }
     }
 
+    // Load signing configuration from local.properties or environment variables
+    val localProperties = rootProject.file("local.properties")
+    val signingEnabled = if (localProperties.exists()) {
+        Properties().apply { load(localProperties.inputStream()) }
+            .getProperty("RELEASE_STORE_PASSWORD") != null
+    } else {
+        System.getenv("SIGNING_STORE_PASSWORD") != null
+    }
+
+    signingConfigs {
+        create("release") {
+            val storePass = if (localProperties.exists()) {
+                Properties().apply { load(localProperties.inputStream()) }
+                    .getProperty("RELEASE_STORE_PASSWORD")
+            } else null
+
+            storeFile = file("voxly-release.keystore")
+            storePassword = storePass ?: System.getenv("SIGNING_STORE_PASSWORD") ?: ""
+            keyAlias = "voxly"
+            keyPassword = storePass ?: System.getenv("SIGNING_KEY_PASSWORD") ?: ""
+        }
+    }
+
     buildTypes {
         debug {
             isMinifyEnabled = false
@@ -44,6 +69,9 @@ android {
                 "proguard-debug.pro"
             )
             matchingFallbacks += listOf("debug")
+            if (signingEnabled) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
 
         release {
@@ -52,6 +80,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (signingEnabled) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
 

@@ -28,6 +28,13 @@ class JaudiotaggerMetadataProcessor @Inject constructor(
         private const val TAG = "MetadataProcessor"
     }
 
+    data class AudioInfo(
+        val bitrate: Int,
+        val sampleRate: Int,
+        val channels: Int,
+        val durationMs: Long
+    )
+
     /**
      * Reads metadata from an audio file.
      * @param filePath Path to the audio file
@@ -78,12 +85,14 @@ class JaudiotaggerMetadataProcessor @Inject constructor(
      * @param metadata Metadata to write
      * @return true if successful, false otherwise
      */
-    suspend fun updateMetadata(filePath: String, metadata: AudioMetadata): Boolean =
+    suspend fun updateMetadata(filePath: String, metadata: AudioMetadata): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
                 val file = File(filePath)
-                if (!file.exists() || !file.canRead() || !file.canWrite()) {
-                    return@withContext false
+                if (!file.exists()) {
+                    return@withContext Result.failure(
+                        IllegalStateException("File does not exist: $filePath")
+                    )
                 }
 
                 val audioFile: AudioFile = AudioFileIO.read(file)
@@ -132,10 +141,15 @@ class JaudiotaggerMetadataProcessor @Inject constructor(
 
                 // Save the file
                 AudioFileIO.write(audioFile)
-                true
+                Result.success(Unit)
+            } catch (e: SecurityException) {
+                Log.e(TAG, "No permission to write metadata: $filePath", e)
+                Result.failure(
+                    IllegalStateException("No permission to write file: $filePath", e)
+                )
             } catch (e: Exception) {
-                e.printStackTrace()
-                false
+                Log.e(TAG, "Failed to update metadata: $filePath", e)
+                Result.failure(e)
             }
         }
 
@@ -173,18 +187,19 @@ class JaudiotaggerMetadataProcessor @Inject constructor(
     /**
      * Reads audio file technical information.
      * @param filePath Path to the audio file
-     * @return Triple of (bitrate, sampleRate, channels) or null if reading fails
+     * @return AudioInfo with bitrate/sample rate/channels/duration, or null if reading fails
      */
-    suspend fun readAudioInfo(filePath: String): Triple<Int, Int, Int>? = withContext(Dispatchers.IO) {
+    suspend fun readAudioInfo(filePath: String): AudioInfo? = withContext(Dispatchers.IO) {
         try {
             val file = File(filePath)
             val audioFile: AudioFile = AudioFileIO.read(file)
             val header: AudioHeader = audioFile.audioHeader
 
-            Triple(
-                header.bitRate?.toIntOrNull() ?: 0,
-                header.sampleRate?.toIntOrNull() ?: 0,
-                header.channels?.toIntOrNull() ?: 0
+            AudioInfo(
+                bitrate = header.bitRate?.toIntOrNull() ?: 0,
+                sampleRate = header.sampleRate?.toIntOrNull() ?: 0,
+                channels = header.channels?.toIntOrNull() ?: 0,
+                durationMs = (header.trackLength?.toLong() ?: 0L) * 1000L
             )
         } catch (e: Exception) {
             null

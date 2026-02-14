@@ -130,7 +130,7 @@ fun LyricsEditorScreen(
             trackName = trackName,
             artistName = artistName,
             onDismiss = { viewModel.closeOnlineSearch() },
-            onResultSelected = { viewModel.fetchOnlineLyrics(it.id) }
+            onResultSelected = { viewModel.fetchOnlineLyrics(it) }
         )
     }
 

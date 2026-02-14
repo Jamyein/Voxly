@@ -67,14 +67,10 @@ class AudioRepositoryImpl @Inject constructor(
 
                 val enhancedAudioFile = audioFile.copy(
                     metadata = detailedMetadata ?: AudioMetadata(),
-                    duration = audioInfo?.let { (bitrate, _, _) ->
-                        // Estimate duration from file size and bitrate
-                        val bytesPerSecond = bitrate / 8
-                        if (bytesPerSecond > 0) (javaFile.length() / bytesPerSecond) * 1000 else 0L
-                    } ?: 0L,
-                    bitrate = audioInfo?.first ?: 0,
-                    sampleRate = audioInfo?.second ?: 0,
-                    channels = audioInfo?.third ?: 0
+                    duration = audioInfo?.durationMs ?: 0L,
+                    bitrate = audioInfo?.bitrate ?: 0,
+                    sampleRate = audioInfo?.sampleRate ?: 0,
+                    channels = audioInfo?.channels ?: 0
                 )
 
                 Result.success(enhancedAudioFile)
@@ -102,12 +98,14 @@ class AudioRepositoryImpl @Inject constructor(
     override suspend fun updateMetadata(filePath: String, metadata: AudioMetadata): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
-                val success = metadataProcessor.updateMetadata(filePath, metadata)
-                if (success) {
-                    Result.success(Unit)
-                } else {
-                    Result.failure(Exception("Failed to update metadata for: $filePath"))
-                }
+                metadataProcessor.updateMetadata(filePath, metadata).fold(
+                    onSuccess = { Result.success(Unit) },
+                    onFailure = { cause ->
+                        Result.failure(
+                            Exception("Failed to update metadata for: $filePath. ${cause.message}", cause)
+                        )
+                    }
+                )
             } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -128,12 +126,14 @@ class AudioRepositoryImpl @Inject constructor(
                 val currentMetadata = metadataProcessor.readMetadata(filePath)
                 if (currentMetadata != null) {
                     val updatedMetadata = currentMetadata.copy(albumArt = albumArtBytes)
-                    val success = metadataProcessor.updateMetadata(filePath, updatedMetadata)
-                    if (success) {
-                        Result.success(Unit)
-                    } else {
-                        Result.failure(Exception("Failed to set album art for: $filePath"))
-                    }
+                    metadataProcessor.updateMetadata(filePath, updatedMetadata).fold(
+                        onSuccess = { Result.success(Unit) },
+                        onFailure = { cause ->
+                            Result.failure(
+                                Exception("Failed to set album art for: $filePath. ${cause.message}", cause)
+                            )
+                        }
+                    )
                 } else {
                     Result.failure(Exception("Could not read metadata from: $filePath"))
                 }
@@ -148,12 +148,14 @@ class AudioRepositoryImpl @Inject constructor(
                 val currentMetadata = metadataProcessor.readMetadata(filePath)
                 if (currentMetadata != null) {
                     val updatedMetadata = currentMetadata.copy(albumArt = null)
-                    val success = metadataProcessor.updateMetadata(filePath, updatedMetadata)
-                    if (success) {
-                        Result.success(Unit)
-                    } else {
-                        Result.failure(Exception("Failed to remove album art from: $filePath"))
-                    }
+                    metadataProcessor.updateMetadata(filePath, updatedMetadata).fold(
+                        onSuccess = { Result.success(Unit) },
+                        onFailure = { cause ->
+                            Result.failure(
+                                Exception("Failed to remove album art from: $filePath. ${cause.message}", cause)
+                            )
+                        }
+                    )
                 } else {
                     Result.failure(Exception("Could not read metadata from: $filePath"))
                 }

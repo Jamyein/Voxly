@@ -13,6 +13,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -20,9 +23,10 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -59,7 +63,8 @@ fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel(),
     onNavigateToMetadata: (String) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
-    onNavigateToSettings: () -> Unit
+    onNavigateToSettings: () -> Unit,
+    onBottomBarVisibilityChange: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -76,6 +81,8 @@ fun FileBrowserScreen(
     }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var sortOption by rememberSaveable { mutableStateOf(FileSortOption.NAME_ASC.name) }
+    var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
+    var isSortExpanded by rememberSaveable { mutableStateOf(false) }
     val visibleFiles = remember(visibleFilesRaw, searchQuery, sortOption) {
         applySearchAndSort(
             files = visibleFilesRaw,
@@ -92,7 +99,43 @@ fun FileBrowserScreen(
         initialFirstVisibleItemScrollOffset = initialScrollPosition.offset
     )
     val coroutineScope = rememberCoroutineScope()
+
+    // Scroll detection for hiding/showing top bar and bottom bar
+    var isTopBarVisible by rememberSaveable { mutableStateOf(true) }
+    var previousScrollOffset by remember { mutableIntStateOf(0) }
     val canScrollToTop = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+
+    // Reset previousScrollOffset when switching directories
+    LaunchedEffect(currentListKey) {
+        previousScrollOffset = listState.firstVisibleItemScrollOffset
+        isTopBarVisible = true
+        onBottomBarVisibilityChange(true)
+    }
+
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.firstVisibleItemScrollOffset }
+            .collect { currentOffset ->
+                // Skip if no files to avoid unnecessary calculations
+                if (visibleFiles.isEmpty()) return@collect
+                
+                val scrollDelta = currentOffset - previousScrollOffset
+                // Hide when scrolling down (positive delta), show when scrolling up (negative delta)
+                // Only trigger when delta is significant to avoid jitter
+                if (scrollDelta > 10) {
+                    isTopBarVisible = false
+                    onBottomBarVisibilityChange(false)
+                } else if (scrollDelta < -10) {
+                    isTopBarVisible = true
+                    onBottomBarVisibilityChange(true)
+                }
+                // Always show bars when at the top
+                if (listState.firstVisibleItemIndex == 0 && currentOffset == 0) {
+                    isTopBarVisible = true
+                    onBottomBarVisibilityChange(true)
+                }
+                previousScrollOffset = currentOffset
+            }
+    }
     val readPermission = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -141,64 +184,116 @@ fun FileBrowserScreen(
                         onNavigateToReplayGain(viewModel.getSelectedFilePaths())
                     }
                 )
-            } else if (openedDirectory != null) {
-                TopAppBar(
-                    title = {
-                        Text(
-                            openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }
-                        )
-                    },
-                    navigationIcon = {
-                        IconButton(onClick = viewModel::closeOpenedDirectory) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.cd_back)
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = stringResource(R.string.refresh_files)
-                            )
-                        }
-                        IconButton(onClick = onNavigateToSettings) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = stringResource(R.string.nav_settings)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    windowInsets = TopAppBarDefaults.windowInsets
-                )
             } else {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.app_name)) },
-                    actions = {
-                        IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
-                            Icon(
-                                imageVector = Icons.Default.Refresh,
-                                contentDescription = stringResource(R.string.refresh_files)
-                            )
-                        }
-                        IconButton(onClick = onNavigateToSettings) {
-                            Icon(
-                                imageVector = Icons.Default.Settings,
-                                contentDescription = stringResource(R.string.nav_settings)
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    windowInsets = TopAppBarDefaults.windowInsets
-                )
+                AnimatedVisibility(
+                    visible = isTopBarVisible,
+                    enter = slideInVertically(initialOffsetY = { -it }),
+                    exit = slideOutVertically(targetOffsetY = { -it })
+                ) {
+                    if (openedDirectory != null) {
+                        TopAppBar(
+                            title = {
+                                Text(
+                                    openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }
+                                )
+                            },
+                            navigationIcon = {
+                                IconButton(onClick = viewModel::closeOpenedDirectory) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = stringResource(R.string.cd_back)
+                                    )
+                                }
+                            },
+                            actions = {
+                                IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = stringResource(R.string.cd_search),
+                                        tint = if (isSearchExpanded || searchQuery.isNotEmpty()) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                }
+                                IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Sort,
+                                        contentDescription = stringResource(R.string.file_sort_label),
+                                        tint = if (isSortExpanded) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                }
+                                IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = stringResource(R.string.refresh_files)
+                                    )
+                                }
+                                IconButton(onClick = onNavigateToSettings) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = stringResource(R.string.nav_settings)
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                titleContentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            windowInsets = TopAppBarDefaults.windowInsets
+                        )
+                    } else {
+                        TopAppBar(
+                            title = { Text(stringResource(R.string.app_name)) },
+                            actions = {
+                                IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = stringResource(R.string.cd_search),
+                                        tint = if (isSearchExpanded || searchQuery.isNotEmpty()) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                }
+                                IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Sort,
+                                        contentDescription = stringResource(R.string.file_sort_label),
+                                        tint = if (isSortExpanded) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                }
+                                IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = stringResource(R.string.refresh_files)
+                                    )
+                                }
+                                IconButton(onClick = onNavigateToSettings) {
+                                    Icon(
+                                        imageVector = Icons.Default.Settings,
+                                        contentDescription = stringResource(R.string.nav_settings)
+                                    )
+                                }
+                            },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                titleContentColor = MaterialTheme.colorScheme.onSurface
+                            ),
+                            windowInsets = TopAppBarDefaults.windowInsets
+                        )
+                    }
+                }
             }
         },
         floatingActionButton = {
@@ -215,7 +310,10 @@ fun FileBrowserScreen(
                                 }
                             }
                         ) {
-                            Text(stringResource(R.string.back_to_top_short))
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = stringResource(R.string.back_to_top)
+                            )
                         }
                     }
 
@@ -249,11 +347,16 @@ fun FileBrowserScreen(
                             EmptyContent()
                         } else {
                             Column(modifier = Modifier.fillMaxSize()) {
-                                SearchAndSortBar(
+                                SearchBar(
+                                    isExpanded = isSearchExpanded,
                                     query = searchQuery,
-                                    onQueryChange = { searchQuery = it },
-                                    sortOption = FileSortOption.valueOf(sortOption),
-                                    onSortOptionChange = { sortOption = it.name }
+                                    onQueryChange = { searchQuery = it }
+                                )
+                                SortMenu(
+                                    isExpanded = isSortExpanded,
+                                    currentSortOption = FileSortOption.valueOf(sortOption),
+                                    onSortOptionChange = { sortOption = it.name },
+                                    onDismiss = { isSortExpanded = false }
                                 )
                                 AudioFileList(
                                     files = filesToShow,
@@ -319,69 +422,79 @@ private fun applySearchAndSort(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SearchAndSortBar(
+private fun SearchBar(
+    isExpanded: Boolean,
     query: String,
-    onQueryChange: (String) -> Unit,
-    sortOption: FileSortOption,
-    onSortOptionChange: (FileSortOption) -> Unit
+    onQueryChange: (String) -> Unit
 ) {
-    var sortExpanded by remember { mutableStateOf(false) }
-
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        OutlinedTextField(
-            value = query,
-            onValueChange = onQueryChange,
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true,
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null
-                )
-            },
-            placeholder = { Text(stringResource(R.string.file_search_hint)) }
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        ExposedDropdownMenuBox(
-            expanded = sortExpanded,
-            onExpandedChange = { sortExpanded = it }
-        ) {
+        // Search field - only shown when expanded
+        androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
             OutlinedTextField(
-                value = stringResource(sortOption.labelResId()),
-                onValueChange = {},
-                readOnly = true,
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.fillMaxWidth(),
                 singleLine = true,
-                label = { Text(stringResource(R.string.file_sort_label)) },
-                trailingIcon = {
+                leadingIcon = {
                     Icon(
-                        imageVector = Icons.Default.ArrowDropDown,
+                        imageVector = Icons.Default.Search,
                         contentDescription = null
                     )
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .menuAnchor()
-            )
-
-            ExposedDropdownMenu(
-                expanded = sortExpanded,
-                onDismissRequest = { sortExpanded = false }
-            ) {
-                FileSortOption.entries.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(stringResource(option.labelResId())) },
-                        onClick = {
-                            onSortOptionChange(option)
-                            sortExpanded = false
+                trailingIcon = {
+                    if (query.isNotEmpty()) {
+                        IconButton(onClick = { onQueryChange("") }) {
+                            Icon(
+                                imageVector = Icons.Default.Close,
+                                contentDescription = stringResource(R.string.clear_selection)
+                            )
                         }
-                    )
-                }
+                    }
+                },
+                placeholder = { Text(stringResource(R.string.file_search_hint)) },
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
+                )
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SortMenu(
+    isExpanded: Boolean,
+    currentSortOption: FileSortOption,
+    onSortOptionChange: (FileSortOption) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        DropdownMenu(
+            expanded = isExpanded,
+            onDismissRequest = onDismiss,
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            FileSortOption.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(option.labelResId())) },
+                    leadingIcon = if (option == currentSortOption) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else null,
+                    onClick = {
+                        onSortOptionChange(option)
+                        onDismiss()
+                    }
+                )
             }
         }
     }

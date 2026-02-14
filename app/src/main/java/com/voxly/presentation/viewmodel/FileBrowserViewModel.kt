@@ -12,13 +12,15 @@ import com.voxly.domain.repository.AudioRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import java.io.File
 import javax.inject.Inject
 
 /**
@@ -329,23 +331,22 @@ class FileBrowserViewModel @Inject constructor(
     ) {
         _uiState.value = FileBrowserUiState.Loading
         runCatching {
-            val globalScannedFiles = if (!forceRefresh) {
-                cachedGlobalFiles
-            } else {
-                null
-            } ?: audioRepository.scanAudioFiles().first().also { cachedGlobalFiles = it }
-
-            directories.associate { directory ->
-                val filesForDirectory = if (directory.path.isBlank()) {
-                    emptyList()
-                } else {
-                    val filteredFromGlobal = globalScannedFiles.filter { audioFile ->
-                        isInDirectory(directory.path, audioFile.path)
+            val previousDirectoryFiles = _directoryFiles.value
+            coroutineScope {
+                directories.map { directory ->
+                    async {
+                        val filesForDirectory = when {
+                            directory.path.isBlank() -> emptyList()
+                            !forceRefresh && previousDirectoryFiles.containsKey(directory.uri) -> {
+                                previousDirectoryFiles[directory.uri].orEmpty()
+                            }
+                            else -> {
+                                audioRepository.scanAudioFiles(directory.path).first()
+                            }
+                        }.distinctBy { it.path }
+                        directory.uri to filesForDirectory
                     }
-                    if (filteredFromGlobal.isNotEmpty()) filteredFromGlobal
-                    else audioRepository.scanAudioFiles(directory.path).first()
-                }.distinctBy { it.path }
-                directory.uri to filesForDirectory
+                }.awaitAll().toMap()
             }
         }.onSuccess { filesByDirectory ->
             _directoryFiles.value = filesByDirectory
@@ -370,15 +371,6 @@ class FileBrowserViewModel @Inject constructor(
             Log.e(TAG, "Directory scan failed for ${directories.joinToString { it.path }}", error)
             _uiState.value = FileBrowserUiState.Error(error.message ?: "Unknown error")
         }
-    }
-
-    private fun isInDirectory(directoryPath: String, filePath: String): Boolean {
-        val directoryCanonical = runCatching { File(directoryPath).canonicalPath }
-            .getOrElse { File(directoryPath).absolutePath }
-            .trimEnd(File.separatorChar)
-        val fileCanonical = runCatching { File(filePath).canonicalPath }
-            .getOrElse { File(filePath).absolutePath }
-        return fileCanonical.startsWith("$directoryCanonical${File.separatorChar}")
     }
 
     fun saveScrollPosition(listKey: String, index: Int, offset: Int) {

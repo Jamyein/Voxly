@@ -459,7 +459,7 @@ private fun AlbumArtSection(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .height(200.dp),
+            .aspectRatio(1f),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )

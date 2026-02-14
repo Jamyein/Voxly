@@ -41,6 +41,8 @@ data class TengxSongResult(
 data class TengxSong(
     /** Song ID */
     val id: Long,
+    /** Song MID (used by lyrics API) */
+    val mid: String = "",
     /** Song name */
     val name: String,
     /** Song title (often same as name) */

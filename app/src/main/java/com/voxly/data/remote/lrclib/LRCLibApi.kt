@@ -30,7 +30,7 @@ interface LRCLibApi {
         @Query("track_name") trackName: String,
         @Query("artist_name") artistName: String? = null,
         @Query("album_name") albumName: String? = null
-    ): Response<LRCLibSearchResponse>
+    ): Response<List<LRCLibSearchResponse>>
 
     /**
      * Gets lyrics by ID.
@@ -68,14 +68,11 @@ data class LRCLibSearchResponse(
     @SerializedName("id")
     val id: Long,
 
-    @SerializedName("name")
-    val name: String,
-
     @SerializedName("trackName")
-    val trackName: String,
+    val trackName: String = "",
 
     @SerializedName("artistName")
-    val artistName: String,
+    val artistName: String = "",
 
     @SerializedName("albumName")
     val albumName: String? = null,

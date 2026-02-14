@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.net.URLDecoder
 import javax.inject.Inject
 
 /**
@@ -23,7 +24,7 @@ class OnlineMetadataViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val filePath: String = savedStateHandle.get<String>("filePath") ?: ""
+    private val filePath: String = decodeNavArg(savedStateHandle.get<String>("filePath"))
 
     private val _uiState = MutableStateFlow<OnlineMetadataUiState>(OnlineMetadataUiState.Idle)
     val uiState: StateFlow<OnlineMetadataUiState> = _uiState.asStateFlow()
@@ -192,6 +193,12 @@ class OnlineMetadataViewModel @Inject constructor(
      */
     fun clearSelection() {
         _selectedRelease.value = null
+    }
+
+    private fun decodeNavArg(value: String?): String {
+        val raw = value ?: return ""
+        if (!raw.contains("%")) return raw
+        return runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
     }
 }
 

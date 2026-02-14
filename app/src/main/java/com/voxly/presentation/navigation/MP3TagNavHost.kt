@@ -1,6 +1,17 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.FastOutLinearInEasing
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -10,6 +21,9 @@ import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -21,6 +35,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.navArgument
 import com.voxly.R
 import com.voxly.core.util.LogManager
@@ -36,6 +51,7 @@ import com.voxly.presentation.screens.SettingsScreen
 import com.voxly.presentation.screens.log.LogViewerScreen
 import com.voxly.presentation.screens.metadata.LyricsEditorScreen
 import java.net.URLDecoder
+import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 
 /**
  * Main navigation host for the MP3 Tag Editor app.
@@ -55,10 +71,23 @@ fun MP3TagNavHost(
         Screen.BatchOperations.route
     )
 
+    // Scroll state for controlling bottom bar visibility
+    var isBottomBarVisible by rememberSaveable { mutableStateOf(true) }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            if (showBottomBar) {
+            AnimatedVisibility(
+                visible = showBottomBar && isBottomBarVisible,
+                enter = slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing)
+                ) + fadeIn(animationSpec = tween(durationMillis = 150)),
+                exit = slideOutVertically(
+                    targetOffsetY = { it },
+                    animationSpec = tween(durationMillis = 140, easing = FastOutLinearInEasing)
+                ) + fadeOut(animationSpec = tween(durationMillis = 120))
+            ) {
                 NavigationBar {
                     bottomNavItems.forEach { item ->
                         val selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
@@ -90,7 +119,43 @@ fun MP3TagNavHost(
         NavHost(
             navController = navController,
             startDestination = Screen.FileBrowser.route,
-            modifier = Modifier.padding(innerPadding)
+            modifier = Modifier.padding(innerPadding),
+            enterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { fullWidth -> (fullWidth * 0.12f).toInt() },
+                    animationSpec = tween(
+                        durationMillis = FORWARD_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    )
+                ) + fadeIn(animationSpec = tween(durationMillis = FORWARD_DURATION_MS - 20))
+            },
+            exitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> -(fullWidth * 0.06f).toInt() },
+                    animationSpec = tween(
+                        durationMillis = FORWARD_DURATION_MS - 20,
+                        easing = FastOutLinearInEasing
+                    )
+                ) + fadeOut(animationSpec = tween(durationMillis = FORWARD_DURATION_MS - 40))
+            },
+            popEnterTransition = {
+                slideInHorizontally(
+                    initialOffsetX = { fullWidth -> -(fullWidth * 0.1f).toInt() },
+                    animationSpec = tween(
+                        durationMillis = BACK_DURATION_MS,
+                        easing = FastOutSlowInEasing
+                    )
+                ) + fadeIn(animationSpec = tween(durationMillis = BACK_DURATION_MS - 10))
+            },
+            popExitTransition = {
+                slideOutHorizontally(
+                    targetOffsetX = { fullWidth -> (fullWidth * 0.1f).toInt() },
+                    animationSpec = tween(
+                        durationMillis = BACK_DURATION_MS - 10,
+                        easing = FastOutLinearInEasing
+                    )
+                ) + fadeOut(animationSpec = tween(durationMillis = BACK_DURATION_MS - 30))
+            }
         ) {
             composable(Screen.FileBrowser.route) {
                 FileBrowserScreen(
@@ -102,6 +167,9 @@ fun MP3TagNavHost(
                     },
                     onNavigateToSettings = {
                         navController.navigate(Screen.Settings.route)
+                    },
+                    onBottomBarVisibilityChange = { isVisible ->
+                        isBottomBarVisible = isVisible
                     }
                 )
             }
@@ -210,6 +278,19 @@ fun MP3TagNavHost(
             }
 
             composable(
+                route = Screen.OnlineMetadata.route,
+                arguments = listOf(
+                    navArgument("filePath") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
+                OnlineMetadataScreen(
+                    filePath = URLDecoder.decode(encodedPath, "UTF-8"),
+                    onNavigateBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(
                 route = Screen.LyricsEditor.route,
                 arguments = listOf(
                     navArgument("filePath") { type = NavType.StringType },
@@ -265,3 +346,6 @@ private val bottomNavItems = listOf(
         unselectedIcon = AppIcon.PlaylistAddOutlined
     )
 )
+
+private const val FORWARD_DURATION_MS = 240
+private const val BACK_DURATION_MS = 210

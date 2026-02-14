@@ -71,3 +71,5 @@ docs/APPLE_MUSIC_INTEGRATION.md
 APPLE_MUSIC_ADDITION.md
 /@.opencode
 /.opencode
+/app/dist
+/app/release

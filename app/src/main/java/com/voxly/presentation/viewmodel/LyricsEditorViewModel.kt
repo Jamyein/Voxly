@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.net.URLDecoder
 import javax.inject.Inject
 
 /**
@@ -23,9 +24,9 @@ class LyricsEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val filePath: String = savedStateHandle.get<String>("filePath") ?: ""
-    private val trackName: String = savedStateHandle.get<String>("trackName") ?: ""
-    private val artistName: String = savedStateHandle.get<String>("artistName") ?: ""
+    private val filePath: String = decodeNavArg(savedStateHandle.get<String>("filePath"))
+    private val trackName: String = decodeNavArg(savedStateHandle.get<String>("trackName"))
+    private val artistName: String = decodeNavArg(savedStateHandle.get<String>("artistName"))
 
     private val _uiState = MutableStateFlow<LyricsEditorUiState>(LyricsEditorUiState.Loading)
     val uiState: StateFlow<LyricsEditorUiState> = _uiState.asStateFlow()
@@ -181,11 +182,11 @@ class LyricsEditorViewModel @Inject constructor(
     /**
      * Fetches lyrics by online ID.
      */
-    fun fetchOnlineLyrics(id: Long) {
+    fun fetchOnlineLyrics(resultItem: OnlineLyricsResult) {
         viewModelScope.launch {
             _uiState.value = LyricsEditorUiState.Loading
 
-            val result = lyricsRepository.getOnlineLyricsById(id)
+            val result = lyricsRepository.getOnlineLyrics(resultItem)
 
             result.fold(
                 onSuccess = { lyrics ->
@@ -244,6 +245,12 @@ class LyricsEditorViewModel @Inject constructor(
         if (_uiState.value is LyricsEditorUiState.Error) {
             _uiState.value = LyricsEditorUiState.Success(_lyrics.value)
         }
+    }
+
+    private fun decodeNavArg(value: String?): String {
+        val raw = value ?: return ""
+        if (!raw.contains("%")) return raw
+        return runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
     }
 }
 

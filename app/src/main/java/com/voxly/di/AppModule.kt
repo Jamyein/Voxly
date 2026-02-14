@@ -166,30 +166,6 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideAudioFileScanner(
-        @ApplicationContext context: Context
-    ): AudioFileScanner {
-        return AudioFileScanner(context)
-    }
-
-    @Provides
-    @Singleton
-    fun provideJaudiotaggerMetadataProcessor(
-        @ApplicationContext context: Context
-    ): JaudiotaggerMetadataProcessor {
-        return JaudiotaggerMetadataProcessor(context)
-    }
-
-    @Provides
-    @Singleton
-    fun provideReplayGainScanner(
-        @ApplicationContext context: Context
-    ): ReplayGainScanner {
-        return ReplayGainScanner(context)
-    }
-
-    @Provides
-    @Singleton
     fun provideMusicBrainzRepository(
         @ApplicationContext context: Context,
         musicBrainzApi: MusicBrainzApi
@@ -235,11 +211,19 @@ object AppModule {
     fun provideLyricsRepository(
         @ApplicationContext context: Context,
         metadataProcessor: JaudiotaggerMetadataProcessor,
+        settingsDataStore: SettingsDataStore,
         lrclibApi: LRCLibApi,
         wangyRepository: WangyRepository,
         tengxRepository: TengxRepository
     ): LyricsRepository {
-        return LyricsRepositoryImpl(context, metadataProcessor, lrclibApi, wangyRepository, tengxRepository)
+        return LyricsRepositoryImpl(
+            context = context,
+            metadataProcessor = metadataProcessor,
+            settingsDataStore = settingsDataStore,
+            lrclibApi = lrclibApi,
+            wangyRepository = wangyRepository,
+            tengxRepository = tengxRepository
+        )
     }
 }
 

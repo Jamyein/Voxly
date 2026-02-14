@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.net.URLDecoder
 import javax.inject.Inject
 
 /**
@@ -25,7 +26,7 @@ class MetadataEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
-    private val filePath: String = savedStateHandle.get<String>("filePath") ?: ""
+    private val filePath: String = decodeNavArg(savedStateHandle.get<String>("filePath"))
 
     private val _uiState = MutableStateFlow<MetadataEditorUiState>(MetadataEditorUiState.Loading)
     val uiState: StateFlow<MetadataEditorUiState> = _uiState.asStateFlow()
@@ -233,6 +234,12 @@ class MetadataEditorViewModel @Inject constructor(
     private fun metadataToStorageState(metadata: AudioMetadata): AudioMetadata {
         // Return a copy that represents the saved state
         return metadata.copy()
+    }
+
+    private fun decodeNavArg(value: String?): String {
+        val raw = value ?: return ""
+        if (!raw.contains("%")) return raw
+        return runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
     }
 }
 

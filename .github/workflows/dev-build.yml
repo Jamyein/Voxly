@@ -39,8 +39,19 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
+      - name: Decode signing keystore
+        run: |
+          echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > app/voxly-release.keystore
+
       - name: Build Slim Debug APK (dist)
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
         run: ./gradlew assembleDist
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f app/voxly-release.keystore
 
       - name: Rename APK with hash and timestamp
         shell: bash

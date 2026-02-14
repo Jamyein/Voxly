@@ -1,0 +1,10 @@
+# Local configuration for Voxly development
+# Copy this file to local.properties and fill in your values
+
+# Release signing configuration
+# Uncomment and fill in the following lines to enable release signing for local builds
+# RELEASE_STORE_PASSWORD=your_keystore_password
+# RELEASE_KEY_PASSWORD=your_key_password
+
+# Note: The keystore file (voxly-release.keystore) should be placed in the app/ directory
+# or in the project root directory

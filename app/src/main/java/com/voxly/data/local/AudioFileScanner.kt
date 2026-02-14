@@ -5,6 +5,8 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.Log
+import com.voxly.data.local.metadata.JaudiotaggerMetadataProcessor
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioFormat
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -23,11 +25,13 @@ import javax.inject.Singleton
  */
 @Singleton
 class AudioFileScanner @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val metadataProcessor: JaudiotaggerMetadataProcessor
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
 
     companion object {
+        private const val TAG = "AudioFileScanner"
         private val AUDIO_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         private val ALBUM_ART_URI = Uri.parse("content://media/external/audio/albumart")
 
@@ -85,6 +89,16 @@ class AudioFileScanner @Inject constructor(
 
                 // Only process supported audio formats
                 if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
+                    // Read full metadata including lyrics from file tags
+                    val fullMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
+                        ?: parseBasicMetadata(
+                            title = it.getString(titleColumn),
+                            artist = it.getString(artistColumn),
+                            album = it.getString(albumColumn),
+                            year = it.getString(yearColumn),
+                            albumId = it.getLong(albumIdColumn)
+                        )
+
                     val audioFile = AudioFile(
                         id = it.getLong(idColumn).toString(),
                         path = filePath,
@@ -96,13 +110,7 @@ class AudioFileScanner @Inject constructor(
                         sampleRate = 0,
                         channels = 0,
                         mediaStoreAlbumId = it.getLong(albumIdColumn).takeIf { albumId -> albumId > 0L },
-                        metadata = parseBasicMetadata(
-                            title = it.getString(titleColumn),
-                            artist = it.getString(artistColumn),
-                            album = it.getString(albumColumn),
-                            year = it.getString(yearColumn),
-                            albumId = it.getLong(albumIdColumn)
-                        )
+                        metadata = fullMetadata
                     )
                     audioFiles.add(audioFile)
                 }
@@ -129,9 +137,24 @@ class AudioFileScanner @Inject constructor(
     }.flowOn(Dispatchers.IO)
 
     /**
-     * Recursively scans a directory for audio files.
+     * Gets lyrics for a specific audio file.
+     * @param filePath Path to the audio file
+     * @return Lyrics string or null if not found
      */
-    private fun scanDirectoryRecursive(directory: File, audioFiles: MutableList<AudioFile>) {
+    suspend fun getLyrics(filePath: String): String? = withContext(Dispatchers.IO) {
+        try {
+            metadataProcessor.readMetadata(filePath, includeAlbumArt = false)?.lyrics
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to read lyrics from: $filePath", e)
+            null
+        }
+    }
+
+    /**
+     * Recursively scans a directory for audio files.
+     * Now reads full metadata including lyrics from file tags.
+     */
+    private suspend fun scanDirectoryRecursive(directory: File, audioFiles: MutableList<AudioFile>) {
         val audioExtensions = setOf("mp3", "flac", "ogg", "m4a", "mp4", "wma", "wav", "ape", "opus")
 
         directory.listFiles()?.forEach { file ->
@@ -140,7 +163,8 @@ class AudioFileScanner @Inject constructor(
             } else {
                 val extension = file.name.substringAfterLast('.').lowercase()
                 if (extension in audioExtensions && file.canRead()) {
-                    audioFiles.add(createAudioFileFromPath(file.absolutePath))
+                    val audioFile = createAudioFileFromPath(file.absolutePath)
+                    audioFiles.add(audioFile)
                 }
             }
         }
@@ -148,11 +172,16 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Creates an AudioFile from a file path without querying MediaStore.
+     * Reads full metadata including lyrics from file tags.
      * Used for files not in MediaStore database.
      */
-    private fun createAudioFileFromPath(filePath: String): AudioFile {
+    private suspend fun createAudioFileFromPath(filePath: String): AudioFile {
         val file = File(filePath)
         val extension = file.name.substringAfterLast('.').lowercase()
+
+        // Read full metadata including lyrics from file tags
+        val fullMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
+            ?: com.voxly.domain.model.AudioMetadata()
 
         return AudioFile(
             id = filePath.hashCode().toString(),
@@ -164,7 +193,7 @@ class AudioFileScanner @Inject constructor(
             bitrate = 0,
             sampleRate = 0,
             channels = 0,
-            metadata = com.voxly.domain.model.AudioMetadata()
+            metadata = fullMetadata
         )
     }
 
