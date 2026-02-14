@@ -8,9 +8,14 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.AudioRepository
+import com.voxly.domain.repository.OnlineMetadataRepository
+import com.voxly.domain.usecase.BatchProgress
+import com.voxly.domain.usecase.BatchStatus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -21,15 +26,18 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
 import javax.inject.Inject
 
 /**
  * ViewModel for the file browser screen.
- * Handles audio file scanning and selection.
+ * Handles audio file scanning, selection, and batch operations.
  */
 @HiltViewModel
 class FileBrowserViewModel @Inject constructor(
     private val audioRepository: AudioRepository,
+    private val onlineMetadataRepository: OnlineMetadataRepository,
     private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
     companion object {
@@ -54,7 +62,18 @@ class FileBrowserViewModel @Inject constructor(
     private val _openedDirectoryUri = MutableStateFlow<String?>(null)
     val openedDirectoryUri: StateFlow<String?> = _openedDirectoryUri.asStateFlow()
 
+    // Batch operation states
+    private val _isBatchProcessing = MutableStateFlow(false)
+    val isBatchProcessing: StateFlow<Boolean> = _isBatchProcessing.asStateFlow()
+
+    private val _batchProgress = MutableStateFlow<BatchProgress?>(null)
+    val batchProgress: StateFlow<BatchProgress?> = _batchProgress.asStateFlow()
+
+    private val _batchError = MutableStateFlow<String?>(null)
+    val batchError: StateFlow<String?> = _batchError.asStateFlow()
+
     private var scanJob: Job? = null
+    private var batchJob: Job? = null
     private var cachedGlobalFiles: List<AudioFile>? = null
     private val scrollPositions = mutableMapOf<String, ScrollPosition>()
 
@@ -70,45 +89,45 @@ class FileBrowserViewModel @Inject constructor(
         scanJob = viewModelScope.launch {
             syncSelectedDirectoriesFromStorage()
 
-            if (_selectedDirectories.value.isNotEmpty()) {
-                scanSelectedDirectories(_selectedDirectories.value, forceRefresh)
-                return@launch
-            }
-
-            _uiState.value = FileBrowserUiState.Loading
-            if (!forceRefresh) {
-                cachedGlobalFiles?.let { files ->
-                    _directoryFiles.value = emptyMap()
-                    _uiState.value = if (files.isEmpty()) {
-                        FileBrowserUiState.Empty
-                    } else {
-                        FileBrowserUiState.Success(
-                            files = files,
-                            selectedCount = _selectedFiles.value.size
-                        )
-                    }
+                if (_selectedDirectories.value.isNotEmpty()) {
+                    scanSelectedDirectories(_selectedDirectories.value, forceRefresh)
                     return@launch
                 }
-            }
 
-            runCatching { audioRepository.scanAudioFiles().first() }
-                .onSuccess { files ->
-                    cachedGlobalFiles = files
-                    _directoryFiles.value = emptyMap()
-                    _uiState.value = if (files.isEmpty()) {
-                        FileBrowserUiState.Empty
-                    } else {
-                        FileBrowserUiState.Success(
-                            files = files,
-                            selectedCount = _selectedFiles.value.size
-                        )
+                _uiState.value = FileBrowserUiState.Loading
+                if (!forceRefresh) {
+                    cachedGlobalFiles?.let { files ->
+                        _directoryFiles.value = emptyMap()
+                        _uiState.value = if (files.isEmpty()) {
+                            FileBrowserUiState.Empty
+                        } else {
+                            FileBrowserUiState.Success(
+                                files = files,
+                                selectedCount = _selectedFiles.value.size
+                            )
+                        }
+                        return@launch
                     }
                 }
-                .onFailure { e ->
-                    if (e is CancellationException) return@onFailure
-                    Log.e(TAG, "Global audio scan failed", e)
-                    _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
-                }
+
+                runCatching { audioRepository.scanAudioFiles().first() }
+                    .onSuccess { files ->
+                        cachedGlobalFiles = files
+                        _directoryFiles.value = emptyMap()
+                        _uiState.value = if (files.isEmpty()) {
+                            FileBrowserUiState.Empty
+                        } else {
+                            FileBrowserUiState.Success(
+                                files = files,
+                                selectedCount = _selectedFiles.value.size
+                            )
+                        }
+                    }
+                    .onFailure { e ->
+                        if (e is CancellationException) return@onFailure
+                        Log.e(TAG, "Global audio scan failed", e)
+                        _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
+                    }
         }
     }
 
@@ -261,12 +280,652 @@ class FileBrowserViewModel @Inject constructor(
         return _selectedFiles.value.toList()
     }
 
+    fun renameSingleFile(
+        filePath: String,
+        targetName: String,
+        onComplete: (success: Boolean, message: String?) -> Unit = { _, _ -> }
+    ) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val file = File(filePath)
+                    if (!file.exists()) {
+                        return@runCatching false to "File not found"
+                    }
+
+                    val sanitizedName = targetName.trim()
+                        .replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                    if (sanitizedName.isBlank()) {
+                        return@runCatching false to "File name cannot be empty"
+                    }
+
+                    val extension = file.extension
+                    val finalName = if (
+                        extension.isNotBlank() &&
+                        !sanitizedName.endsWith(".$extension", ignoreCase = true)
+                    ) {
+                        "$sanitizedName.$extension"
+                    } else {
+                        sanitizedName
+                    }
+
+                    val targetFile = File(file.parentFile, finalName)
+                    if (targetFile.absolutePath.equals(file.absolutePath, ignoreCase = true)) {
+                        return@runCatching true to null
+                    }
+                    if (targetFile.exists()) {
+                        return@runCatching false to "Target file already exists"
+                    }
+
+                    if (file.renameTo(targetFile)) {
+                        true to null
+                    } else {
+                        false to "Failed to rename file"
+                    }
+                }.getOrElse { false to (it.message ?: "Failed to rename file") }
+            }
+
+            onComplete(result.first, result.second)
+            if (result.first) {
+                _selectedFiles.value = _selectedFiles.value - filePath
+                loadAudioFiles(forceRefresh = true)
+            }
+        }
+    }
+
+    fun deleteSingleFile(
+        filePath: String,
+        onComplete: (success: Boolean, message: String?) -> Unit = { _, _ -> }
+    ) {
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                runCatching {
+                    val file = File(filePath)
+                    if (!file.exists()) {
+                        return@runCatching false to "File not found"
+                    }
+                    if (file.delete()) {
+                        true to null
+                    } else {
+                        false to "Failed to delete file"
+                    }
+                }.getOrElse { false to (it.message ?: "Failed to delete file") }
+            }
+
+            onComplete(result.first, result.second)
+            if (result.first) {
+                _selectedFiles.value = _selectedFiles.value - filePath
+                loadAudioFiles(forceRefresh = true)
+            }
+        }
+    }
+
+    // ==================== Batch Operations ====================
+
+    /**
+     * Batch fetch online metadata for files.
+     */
+    fun batchFetchOnlineMetadata(
+        filePaths: List<String>,
+        options: com.voxly.presentation.screens.filebrowser.OnlineMetadataOptions
+    ) {
+        batchJob?.cancel()
+        batchJob = viewModelScope.launch {
+            _isBatchProcessing.value = true
+            _batchError.value = null
+            var successCount = 0
+            var failureCount = 0
+
+            filePaths.forEachIndexed { index, filePath ->
+                _batchProgress.value = BatchProgress(
+                    currentFile = index + 1,
+                    totalFiles = filePaths.size,
+                    percentage = (index + 1).toFloat() / filePaths.size,
+                    currentFilePath = filePath,
+                    status = BatchStatus.PROCESSING,
+                    successCount = successCount,
+                    failureCount = failureCount
+                )
+
+                try {
+                    // Read current metadata to get search query
+                    val currentMetadata = audioRepository.readMetadata(filePath).getOrNull()
+                    if (currentMetadata != null) {
+                        val searchTitle = currentMetadata.title ?: File(filePath).nameWithoutExtension
+                        val artistQuery = currentMetadata.artist
+
+                        // Search online metadata
+                        val searchResult = onlineMetadataRepository.searchByTrack(searchTitle, artistQuery)
+                        
+                        if (searchResult.isSuccess) {
+                            val searchResults = searchResult.getOrNull()
+                            if (!searchResults.isNullOrEmpty()) {
+                                val bestMatch = searchResults.first()
+                                
+                                // Get release details for more complete metadata
+                                val releaseDetailsResult = bestMatch.releaseId?.let {
+                                    onlineMetadataRepository.getReleaseDetails(it)
+                                }
+                                
+                                val releaseDetails = releaseDetailsResult?.getOrNull()
+                                
+                                // Try to find track number from release details
+                                val trackNumber = releaseDetails?.tracks?.find { track ->
+                                    track.title.equals(bestMatch.title, ignoreCase = true) ||
+                                    track.artist?.equals(bestMatch.artist, ignoreCase = true) == true
+                                }?.number
+                                
+                                // Only update if overwrite is enabled or field is empty
+                                val updatedMetadata = currentMetadata.copy(
+                                    title = if (options.overwriteExisting || currentMetadata.title.isNullOrBlank()) 
+                                        bestMatch.title else currentMetadata.title,
+                                    artist = if (options.overwriteExisting || currentMetadata.artist.isNullOrBlank()) 
+                                        bestMatch.artist else currentMetadata.artist,
+                                    album = if (options.overwriteExisting || currentMetadata.album.isNullOrBlank()) 
+                                        releaseDetails?.title ?: currentMetadata.album else currentMetadata.album,
+                                    year = if (options.overwriteExisting || currentMetadata.year == null) 
+                                        releaseDetails?.year?.toString() else currentMetadata.year,
+                                    genre = if (options.overwriteExisting || currentMetadata.genre.isNullOrBlank()) 
+                                        releaseDetails?.genre ?: currentMetadata.genre else currentMetadata.genre,
+                                    trackNumber = if (options.overwriteExisting || currentMetadata.trackNumber == null) 
+                                        trackNumber else currentMetadata.trackNumber
+                                )
+
+                                // Update metadata
+                                val result = audioRepository.updateMetadata(filePath, updatedMetadata)
+                                
+                                // Fetch album art if requested
+                                if (options.fetchAlbumArt && bestMatch.releaseId != null) {
+                                    try {
+                                        val coverArtResult = onlineMetadataRepository.getCoverArt(bestMatch.releaseId)
+                                        if (coverArtResult.isSuccess) {
+                                            coverArtResult.getOrNull()?.let { albumArtBytes ->
+                                                audioRepository.setAlbumArt(filePath, albumArtBytes)
+                                            }
+                                        }
+                                    } catch (e: Exception) {
+                                        Log.w(TAG, "Failed to fetch album art for $filePath", e)
+                                    }
+                                }
+
+                                if (result.isSuccess) {
+                                    successCount++
+                                } else {
+                                    failureCount++
+                                }
+                            } else {
+                                failureCount++
+                            }
+                        } else {
+                            failureCount++
+                        }
+                    } else {
+                        failureCount++
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to process $filePath", e)
+                    failureCount++
+                }
+            }
+
+            _batchProgress.value = BatchProgress(
+                currentFile = filePaths.size,
+                totalFiles = filePaths.size,
+                percentage = 1f,
+                currentFilePath = "",
+                status = BatchStatus.COMPLETED,
+                successCount = successCount,
+                failureCount = failureCount
+            )
+            _isBatchProcessing.value = false
+            
+            // Refresh files to show updated metadata
+            loadAudioFiles(forceRefresh = true)
+        }
+    }
+
+    /**
+     * Batch rename files based on pattern.
+     */
+    fun batchRenameFiles(filePaths: List<String>, pattern: String, startNumber: Int) {
+        batchJob?.cancel()
+        batchJob = viewModelScope.launch {
+            _isBatchProcessing.value = true
+            _batchError.value = null
+            var successCount = 0
+            var failureCount = 0
+
+            filePaths.forEachIndexed { index, filePath ->
+                _batchProgress.value = BatchProgress(
+                    currentFile = index + 1,
+                    totalFiles = filePaths.size,
+                    percentage = (index + 1).toFloat() / filePaths.size,
+                    currentFilePath = filePath,
+                    status = BatchStatus.PROCESSING,
+                    successCount = successCount,
+                    failureCount = failureCount
+                )
+
+                try {
+                    val file = File(filePath)
+                    if (!file.exists()) {
+                        failureCount++
+                        return@forEachIndexed
+                    }
+
+                    // Read metadata for pattern substitution
+                    val metadata = audioRepository.readMetadata(filePath).getOrNull()
+                    
+                    // Generate new filename
+                    var newName = pattern
+                        .replace("{title}", metadata?.title ?: file.nameWithoutExtension)
+                        .replace("{artist}", metadata?.artist ?: "Unknown")
+                        .replace("{album}", metadata?.album ?: "Unknown")
+                        .replace("{track}", (startNumber + index).toString().padStart(2, '0'))
+                        .replace("{track00}", (startNumber + index).toString().padStart(2, '0'))
+                        .replace("{track000}", (startNumber + index).toString().padStart(3, '0'))
+
+                    // Sanitize filename
+                    newName = newName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
+                    
+                    // Add original extension
+                    newName = "$newName.${file.extension}"
+
+                    // Rename file
+                    val newFile = File(file.parent, newName)
+                    if (file.renameTo(newFile)) {
+                        successCount++
+                    } else {
+                        failureCount++
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to rename $filePath", e)
+                    failureCount++
+                }
+            }
+
+            _batchProgress.value = BatchProgress(
+                currentFile = filePaths.size,
+                totalFiles = filePaths.size,
+                percentage = 1f,
+                currentFilePath = "",
+                status = BatchStatus.COMPLETED,
+                successCount = successCount,
+                failureCount = failureCount
+            )
+            _isBatchProcessing.value = false
+            
+            // Refresh files
+            loadAudioFiles(forceRefresh = true)
+        }
+    }
+
+    /**
+     * Batch fix metadata (auto-correct common issues).
+     */
+    fun batchFixMetadata(
+        filePaths: List<String>,
+        options: com.voxly.presentation.screens.filebrowser.FixMetadataOptions
+    ) {
+        batchJob?.cancel()
+        batchJob = viewModelScope.launch {
+            _isBatchProcessing.value = true
+            _batchError.value = null
+            var successCount = 0
+            var failureCount = 0
+
+            filePaths.forEachIndexed { index, filePath ->
+                _batchProgress.value = BatchProgress(
+                    currentFile = index + 1,
+                    totalFiles = filePaths.size,
+                    percentage = (index + 1).toFloat() / filePaths.size,
+                    currentFilePath = filePath,
+                    status = BatchStatus.PROCESSING,
+                    successCount = successCount,
+                    failureCount = failureCount
+                )
+
+                try {
+                    val metadataResult = audioRepository.readMetadata(filePath)
+                    if (metadataResult.isSuccess) {
+                        val metadata = metadataResult.getOrNull()!!
+                        var updatedMetadata = metadata
+                        var hasChanges = false
+
+                        // Auto title case
+                        if (options.autoTitleCase) {
+                            updatedMetadata = updatedMetadata.copy(
+                                title = metadata.title?.toTitleCase()?.also { if (it != metadata.title) hasChanges = true } ?: metadata.title,
+                                artist = metadata.artist?.toTitleCase()?.also { if (it != metadata.artist) hasChanges = true } ?: metadata.artist,
+                                album = metadata.album?.toTitleCase()?.also { if (it != metadata.album) hasChanges = true } ?: metadata.album
+                            )
+                        }
+
+                        // Remove extra spaces
+                        if (options.removeExtraSpaces) {
+                            updatedMetadata = updatedMetadata.copy(
+                                title = metadata.title?.trim()?.replace(Regex("\\s+"), " ")?.also { if (it != metadata.title) hasChanges = true } ?: metadata.title,
+                                artist = metadata.artist?.trim()?.replace(Regex("\\s+"), " ")?.also { if (it != metadata.artist) hasChanges = true } ?: metadata.artist,
+                                album = metadata.album?.trim()?.replace(Regex("\\s+"), " ")?.also { if (it != metadata.album) hasChanges = true } ?: metadata.album
+                            )
+                        }
+
+                        // Fix track numbers (ensure proper format)
+                        if (options.fixTrackNumbers) {
+                            val trackNum = metadata.trackNumber
+                            if (trackNum != null && trackNum < 1) {
+                                updatedMetadata = updatedMetadata.copy(trackNumber = null)
+                                hasChanges = true
+                            }
+                        }
+
+                        // Apply changes if any
+                        if (hasChanges) {
+                            val result = audioRepository.updateMetadata(filePath, updatedMetadata)
+                            if (result.isSuccess) {
+                                successCount++
+                            } else {
+                                failureCount++
+                            }
+                        } else {
+                            successCount++ // No changes needed
+                        }
+                    } else {
+                        failureCount++
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to fix metadata for $filePath", e)
+                    failureCount++
+                }
+            }
+
+            _batchProgress.value = BatchProgress(
+                currentFile = filePaths.size,
+                totalFiles = filePaths.size,
+                percentage = 1f,
+                currentFilePath = "",
+                status = BatchStatus.COMPLETED,
+                successCount = successCount,
+                failureCount = failureCount
+            )
+            _isBatchProcessing.value = false
+            
+            // Refresh files
+            loadAudioFiles(forceRefresh = true)
+        }
+    }
+
+    /**
+     * Cancel current batch operation.
+     */
+    fun cancelBatchOperation() {
+        batchJob?.cancel()
+        _isBatchProcessing.value = false
+        _batchProgress.value = _batchProgress.value?.copy(status = BatchStatus.CANCELLED)
+    }
+
+    /**
+     * Reset batch operation state.
+     */
+    fun resetBatchOperation() {
+        _isBatchProcessing.value = false
+        _batchProgress.value = null
+        _batchError.value = null
+    }
+
+    /**
+     * Clear batch error.
+     */
+    fun clearBatchError() {
+        _batchError.value = null
+    }
+
+    /**
+     * Batch set a field to the same value for all selected files.
+     */
+    fun batchSetUnifiedField(filePaths: List<String>, field: String, value: String) {
+        batchJob?.cancel()
+        batchJob = viewModelScope.launch {
+            _isBatchProcessing.value = true
+            _batchError.value = null
+            var successCount = 0
+            var failureCount = 0
+
+            filePaths.forEachIndexed { index, filePath ->
+                _batchProgress.value = BatchProgress(
+                    currentFile = index + 1,
+                    totalFiles = filePaths.size,
+                    percentage = (index + 1).toFloat() / filePaths.size,
+                    currentFilePath = filePath,
+                    status = BatchStatus.PROCESSING,
+                    successCount = successCount,
+                    failureCount = failureCount
+                )
+
+                try {
+                    val metadataResult = audioRepository.readMetadata(filePath)
+                    if (metadataResult.isSuccess) {
+                        val metadata = metadataResult.getOrNull()!!
+                        val updatedMetadata = when (field) {
+                            "artist" -> metadata.copy(artist = value)
+                            "album" -> metadata.copy(album = value)
+                            "albumArtist" -> metadata.copy(albumArtist = value)
+                            "year" -> metadata.copy(year = value)
+                            "genre" -> metadata.copy(genre = value)
+                            "composer" -> metadata.copy(composer = value)
+                            else -> metadata
+                        }
+
+                        val result = audioRepository.updateMetadata(filePath, updatedMetadata)
+                        if (result.isSuccess) {
+                            successCount++
+                        } else {
+                            failureCount++
+                        }
+                    } else {
+                        failureCount++
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to set unified field for $filePath", e)
+                    failureCount++
+                }
+            }
+
+            _batchProgress.value = BatchProgress(
+                currentFile = filePaths.size,
+                totalFiles = filePaths.size,
+                percentage = 1f,
+                currentFilePath = "",
+                status = BatchStatus.COMPLETED,
+                successCount = successCount,
+                failureCount = failureCount
+            )
+            _isBatchProcessing.value = false
+
+            // Refresh files
+            loadAudioFiles(forceRefresh = true)
+        }
+    }
+
+    /**
+     * Batch find and replace text in metadata fields.
+     */
+    fun batchReplaceText(
+        filePaths: List<String>,
+        field: String,
+        searchText: String,
+        replaceText: String,
+        useRegex: Boolean
+    ) {
+        batchJob?.cancel()
+        batchJob = viewModelScope.launch {
+            _isBatchProcessing.value = true
+            _batchError.value = null
+            var successCount = 0
+            var failureCount = 0
+
+            filePaths.forEachIndexed { index, filePath ->
+                _batchProgress.value = BatchProgress(
+                    currentFile = index + 1,
+                    totalFiles = filePaths.size,
+                    percentage = (index + 1).toFloat() / filePaths.size,
+                    currentFilePath = filePath,
+                    status = BatchStatus.PROCESSING,
+                    successCount = successCount,
+                    failureCount = failureCount
+                )
+
+                try {
+                    val metadataResult = audioRepository.readMetadata(filePath)
+                    if (metadataResult.isSuccess) {
+                        val metadata = metadataResult.getOrNull()!!
+                        var updatedMetadata = metadata
+                        var hasChanges = false
+
+                        val replaceFunction: (String?) -> String? = { originalValue ->
+                            if (originalValue != null) {
+                                if (useRegex) {
+                                    originalValue.replace(Regex(searchText), replaceText)
+                                } else {
+                                    originalValue.replace(searchText, replaceText)
+                                }.also { if (it != originalValue) hasChanges = true }
+                            } else null
+                        }
+
+                        when (field) {
+                            "title" -> updatedMetadata = metadata.copy(title = replaceFunction(metadata.title))
+                            "artist" -> updatedMetadata = metadata.copy(artist = replaceFunction(metadata.artist))
+                            "album" -> updatedMetadata = metadata.copy(album = replaceFunction(metadata.album))
+                            "all" -> {
+                                updatedMetadata = metadata.copy(
+                                    title = replaceFunction(metadata.title),
+                                    artist = replaceFunction(metadata.artist),
+                                    album = replaceFunction(metadata.album),
+                                    albumArtist = replaceFunction(metadata.albumArtist),
+                                    genre = replaceFunction(metadata.genre),
+                                    composer = replaceFunction(metadata.composer)
+                                )
+                            }
+                        }
+
+                        if (hasChanges) {
+                            val result = audioRepository.updateMetadata(filePath, updatedMetadata)
+                            if (result.isSuccess) {
+                                successCount++
+                            } else {
+                                failureCount++
+                            }
+                        } else {
+                            successCount++ // No changes needed
+                        }
+                    } else {
+                        failureCount++
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to replace text for $filePath", e)
+                    failureCount++
+                }
+            }
+
+            _batchProgress.value = BatchProgress(
+                currentFile = filePaths.size,
+                totalFiles = filePaths.size,
+                percentage = 1f,
+                currentFilePath = "",
+                status = BatchStatus.COMPLETED,
+                successCount = successCount,
+                failureCount = failureCount
+            )
+            _isBatchProcessing.value = false
+
+            // Refresh files
+            loadAudioFiles(forceRefresh = true)
+        }
+    }
+
+    /**
+     * Batch auto-number tracks with sequential numbers.
+     */
+    fun batchAutoNumberTracks(
+        filePaths: List<String>,
+        startNumber: Int,
+        step: Int,
+        totalTracks: Int?
+    ) {
+        batchJob?.cancel()
+        batchJob = viewModelScope.launch {
+            _isBatchProcessing.value = true
+            _batchError.value = null
+            var successCount = 0
+            var failureCount = 0
+
+            filePaths.forEachIndexed { index, filePath ->
+                _batchProgress.value = BatchProgress(
+                    currentFile = index + 1,
+                    totalFiles = filePaths.size,
+                    percentage = (index + 1).toFloat() / filePaths.size,
+                    currentFilePath = filePath,
+                    status = BatchStatus.PROCESSING,
+                    successCount = successCount,
+                    failureCount = failureCount
+                )
+
+                try {
+                    val metadataResult = audioRepository.readMetadata(filePath)
+                    if (metadataResult.isSuccess) {
+                        val metadata = metadataResult.getOrNull()!!
+                        val trackNumber = startNumber + index * step
+
+                        val updatedMetadata = metadata.copy(
+                            trackNumber = trackNumber,
+                            totalTracks = totalTracks
+                        )
+
+                        val result = audioRepository.updateMetadata(filePath, updatedMetadata)
+                        if (result.isSuccess) {
+                            successCount++
+                        } else {
+                            failureCount++
+                        }
+                    } else {
+                        failureCount++
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to auto-number track for $filePath", e)
+                    failureCount++
+                }
+            }
+
+            _batchProgress.value = BatchProgress(
+                currentFile = filePaths.size,
+                totalFiles = filePaths.size,
+                percentage = 1f,
+                currentFilePath = "",
+                status = BatchStatus.COMPLETED,
+                successCount = successCount,
+                failureCount = failureCount
+            )
+            _isBatchProcessing.value = false
+
+            // Refresh files
+            loadAudioFiles(forceRefresh = true)
+        }
+    }
+
+    // Helper function to convert string to Title Case
+    private fun String.toTitleCase(): String {
+        return this.split(" ").joinToString(" ") { word ->
+            word.replaceFirstChar { if (it.isLowerCase()) it.titlecase() else it.toString() }
+        }
+    }
+
+    // ==================== Utility Methods ====================
+
     /**
      * Converts a content URI to a file path.
      */
     private fun getPathFromUri(uri: Uri): String {
         return runCatching {
-            // Handle direct file URIs first.
             if (uri.scheme == "file") {
                 return@runCatching uri.path.orEmpty()
             }

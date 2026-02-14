@@ -163,14 +163,17 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         }
 
-        // Sort by relevance
-        val sortedResults = mergedResults.sortedByDescending { release ->
-            var score = 0
-            if (release.coverArtUrl != null) score += 2
-            if (release.year != null) score += 1
-            if (release.trackCount != null) score += 1
-            score
-        }
+        // Sort by source priority first, then by relevance.
+        val sortedResults = mergedResults.sortedWith(
+            compareBy<OnlineRelease> { sourcePriorityIndex(it.source, settings.metadataPriority) }
+                .thenByDescending { release ->
+                    var score = 0
+                    if (release.coverArtUrl != null) score += 2
+                    if (release.year != null) score += 1
+                    if (release.trackCount != null) score += 1
+                    score
+                }
+        )
 
         Result.success(applyLimit(sortedResults, settings.searchLimit))
     }
@@ -205,7 +208,9 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         year = null, // NetEase API doesn't provide year in search
                         format = "Digital",
                         trackCount = albumSongs.size,
-                        coverArtUrl = firstSong.album?.picUrl
+                        coverArtUrl = firstSong.album?.picUrl,
+                        source = "NetEase",
+                        albumTitle = firstSong.album?.name
                     )
                 }
                 Result.success(albums)
@@ -247,7 +252,9 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             year = null,
                             format = "Digital",
                             trackCount = albumSongs.size,
-                            coverArtUrl = "https://y.gtimg.cn/music/photo_new/T002R500x500M000${id}.jpg"
+                            coverArtUrl = "https://y.gtimg.cn/music/photo_new/T002R500x500M000${id}.jpg",
+                            source = "QQ Music",
+                            albumTitle = firstSong.album?.name
                         )
                     }
                 }
@@ -321,10 +328,48 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                     neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
                     qqMusicDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
 
-                    Result.success(applyLimit(results, settings.searchLimit))
+                    val sorted = results.sortedBy { sourcePriorityIndex(it.source, settings.metadataPriority) }
+                    Result.success(applyLimit(sorted, settings.searchLimit))
                 }
             }
         }
+    }
+
+    /**
+     * Searches track candidates for cover fetching flow.
+     * Uses cover source toggles and cover source priority.
+     */
+    suspend fun searchByTrackForCover(
+        title: String,
+        artist: String?
+    ): Result<List<OnlineRecording>> = coroutineScope {
+        val settings = getOnlineSourceSettings()
+        if (!settings.hasAnyCoverEnabledSource) {
+            return@coroutineScope Result.failure(Exception("No cover sources enabled"))
+        }
+
+        val results = mutableListOf<OnlineRecording>()
+
+        val musicBrainzDeferred = if (settings.coverEnableMusicBrainz) {
+            async { musicBrainzRepository.searchByTrack(title, artist) }
+        } else null
+        val iTunesDeferred = if (settings.coverEnableITunes) {
+            async { iTunesRepository.searchByTrack(title, artist) }
+        } else null
+        val neteaseDeferred = if (settings.coverEnableNetease) {
+            async { searchNeteaseByTrack(title, artist, settings.requestLimit) }
+        } else null
+        val qqDeferred = if (settings.coverEnableQQMusic) {
+            async { searchQQMusicByTrack(title, artist, settings.requestLimit) }
+        } else null
+
+        musicBrainzDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
+        iTunesDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
+        neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
+        qqDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
+
+        val sorted = results.sortedBy { sourcePriorityIndex(it.source, settings.coverPriority) }
+        Result.success(applyLimit(sorted, settings.searchLimit))
     }
 
     /**
@@ -346,14 +391,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 val response = searchResult.getOrNull()
                 val songs = response?.result?.songs ?: emptyList()
                 
-                val recordings = songs.map { song ->
-                    OnlineRecording(
-                        id = song.id.toString(),
-                        title = song.name,
-                        artist = song.artists.joinToString(", ") { it.name },
-                        duration = (song.duration / 1000).toInt(),
-                        releaseId = song.album?.id?.toString()
-                    )
+                    val recordings = songs.map { song ->
+                        OnlineRecording(
+                            id = song.id.toString(),
+                            title = song.name,
+                            artist = song.artists.joinToString(", ") { it.name },
+                            duration = (song.duration / 1000).toInt(),
+                            releaseId = song.album?.id?.toString(),
+                            source = "NetEase",
+                            coverArtUrl = song.album?.picUrl
+                        )
                 }
                 Result.success(recordings)
             } else {
@@ -389,7 +436,9 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         title = song.name,
                         artist = song.singer.joinToString(", ") { it.name },
                         duration = song.interval,
-                        releaseId = song.album?.id?.toString()
+                        releaseId = song.album?.id?.toString(),
+                        source = "QQ Music",
+                        coverArtUrl = song.album?.pic
                     )
                 }
                 Result.success(recordings)
@@ -503,42 +552,51 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     override suspend fun getCoverArt(releaseId: String): Result<ByteArray?> {
         val settings = getOnlineSourceSettings()
         return when (preferredSource) {
-            DataSource.MUSICBRAINZ -> if (settings.enableMusicBrainz) {
+            DataSource.MUSICBRAINZ -> if (settings.coverEnableMusicBrainz) {
                 musicBrainzRepository.getCoverArt(releaseId)
             } else {
                 Result.failure(Exception("MusicBrainz source is disabled"))
             }
-            DataSource.ITUNES -> if (settings.enableITunes) {
+            DataSource.ITUNES -> if (settings.coverEnableITunes) {
                 iTunesRepository.getCoverArt(releaseId)
             } else {
                 Result.failure(Exception("Apple Music source is disabled"))
             }
-            DataSource.NETEASE -> if (settings.enableNetease) {
+            DataSource.NETEASE -> if (settings.coverEnableNetease) {
                 getNeteaseCoverArt(releaseId)
             } else {
                 Result.failure(Exception("NetEase source is disabled"))
             }
-            DataSource.QQ_MUSIC -> if (settings.enableQQMusic) {
+            DataSource.QQ_MUSIC -> if (settings.coverEnableQQMusic) {
                 getQQMusicCoverArt(releaseId)
             } else {
                 Result.failure(Exception("QQ Music source is disabled"))
             }
             DataSource.BOTH -> {
-                if (!settings.hasAnyEnabledSource) {
-                    return Result.failure(Exception("No metadata sources enabled"))
+                if (!settings.hasAnyCoverEnabledSource) {
+                    return Result.failure(Exception("No cover sources enabled"))
                 }
-
-                if (settings.enableITunes) {
-                    val iTunesResult = iTunesRepository.getCoverArt(releaseId)
-                    if (iTunesResult.isSuccess && iTunesResult.getOrNull() != null) {
-                        return iTunesResult
+                for (source in settings.coverPriority) {
+                    when (source) {
+                        "itunes" -> if (settings.coverEnableITunes) {
+                            val result = iTunesRepository.getCoverArt(releaseId)
+                            if (result.isSuccess && result.getOrNull() != null) return result
+                        }
+                        "musicbrainz" -> if (settings.coverEnableMusicBrainz) {
+                            val result = musicBrainzRepository.getCoverArt(releaseId)
+                            if (result.isSuccess && result.getOrNull() != null) return result
+                        }
+                        "netease" -> if (settings.coverEnableNetease) {
+                            val result = getNeteaseCoverArt(releaseId)
+                            if (result.isSuccess && result.getOrNull() != null) return result
+                        }
+                        "qq_music" -> if (settings.coverEnableQQMusic) {
+                            val result = getQQMusicCoverArt(releaseId)
+                            if (result.isSuccess && result.getOrNull() != null) return result
+                        }
                     }
                 }
-                if (settings.enableMusicBrainz) {
-                    musicBrainzRepository.getCoverArt(releaseId)
-                } else {
-                    Result.success(null)
-                }
+                Result.success(null)
             }
         }
     }
@@ -653,11 +711,17 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
     private suspend fun getOnlineSourceSettings(): OnlineSourceSettings {
         return OnlineSourceSettings(
-            enableMusicBrainz = settingsDataStore.sourceEnabledMusicBrainz.first(),
-            enableITunes = settingsDataStore.sourceEnabledITunes.first(),
-            enableNetease = settingsDataStore.sourceEnabledNetease.first(),
-            enableQQMusic = settingsDataStore.sourceEnabledQQMusic.first(),
-            searchLimit = normalizeSearchLimit(settingsDataStore.onlineSearchLimit.first())
+            enableMusicBrainz = settingsDataStore.metadataSourceEnabledMusicBrainz.first(),
+            enableITunes = settingsDataStore.metadataSourceEnabledITunes.first(),
+            enableNetease = settingsDataStore.metadataSourceEnabledNetease.first(),
+            enableQQMusic = settingsDataStore.metadataSourceEnabledQQMusic.first(),
+            coverEnableMusicBrainz = settingsDataStore.coverSourceEnabledMusicBrainz.first(),
+            coverEnableITunes = settingsDataStore.coverSourceEnabledITunes.first(),
+            coverEnableNetease = settingsDataStore.coverSourceEnabledNetease.first(),
+            coverEnableQQMusic = settingsDataStore.coverSourceEnabledQQMusic.first(),
+            searchLimit = normalizeSearchLimit(settingsDataStore.onlineSearchLimit.first()),
+            metadataPriority = settingsDataStore.metadataSourcePriority.first(),
+            coverPriority = settingsDataStore.coverSourcePriority.first()
         )
     }
 
@@ -674,12 +738,33 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val enableITunes: Boolean,
         val enableNetease: Boolean,
         val enableQQMusic: Boolean,
-        val searchLimit: Int
+        val coverEnableMusicBrainz: Boolean,
+        val coverEnableITunes: Boolean,
+        val coverEnableNetease: Boolean,
+        val coverEnableQQMusic: Boolean,
+        val searchLimit: Int,
+        val metadataPriority: List<String>,
+        val coverPriority: List<String>
     ) {
         val requestLimit: Int
             get() = if (searchLimit <= 0) 200 else searchLimit
 
         val hasAnyEnabledSource: Boolean
             get() = enableMusicBrainz || enableITunes || enableNetease || enableQQMusic
+
+        val hasAnyCoverEnabledSource: Boolean
+            get() = coverEnableMusicBrainz || coverEnableITunes || coverEnableNetease || coverEnableQQMusic
+    }
+
+    private fun sourcePriorityIndex(source: String, priority: List<String>): Int {
+        val key = when (source) {
+            "iTunes" -> "itunes"
+            "MusicBrainz" -> "musicbrainz"
+            "NetEase" -> "netease"
+            "QQ Music" -> "qq_music"
+            else -> "unknown"
+        }
+        val index = priority.indexOf(key)
+        return if (index >= 0) index else Int.MAX_VALUE
     }
 }

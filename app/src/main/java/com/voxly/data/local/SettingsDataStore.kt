@@ -37,6 +37,21 @@ class SettingsDataStore @Inject constructor(
         val SOURCE_ENABLED_ITUNES = booleanPreferencesKey("source_enabled_itunes")
         val SOURCE_ENABLED_NETEASE = booleanPreferencesKey("source_enabled_netease")
         val SOURCE_ENABLED_QQ_MUSIC = booleanPreferencesKey("source_enabled_qq_music")
+        val METADATA_SOURCE_ENABLED_MUSICBRAINZ = booleanPreferencesKey("metadata_source_enabled_musicbrainz")
+        val METADATA_SOURCE_ENABLED_ITUNES = booleanPreferencesKey("metadata_source_enabled_itunes")
+        val METADATA_SOURCE_ENABLED_NETEASE = booleanPreferencesKey("metadata_source_enabled_netease")
+        val METADATA_SOURCE_ENABLED_QQ_MUSIC = booleanPreferencesKey("metadata_source_enabled_qq_music")
+        val LYRICS_SOURCE_ENABLED_MUSICBRAINZ = booleanPreferencesKey("lyrics_source_enabled_musicbrainz")
+        val LYRICS_SOURCE_ENABLED_ITUNES = booleanPreferencesKey("lyrics_source_enabled_itunes")
+        val LYRICS_SOURCE_ENABLED_NETEASE = booleanPreferencesKey("lyrics_source_enabled_netease")
+        val LYRICS_SOURCE_ENABLED_QQ_MUSIC = booleanPreferencesKey("lyrics_source_enabled_qq_music")
+        val COVER_SOURCE_ENABLED_MUSICBRAINZ = booleanPreferencesKey("cover_source_enabled_musicbrainz")
+        val COVER_SOURCE_ENABLED_ITUNES = booleanPreferencesKey("cover_source_enabled_itunes")
+        val COVER_SOURCE_ENABLED_NETEASE = booleanPreferencesKey("cover_source_enabled_netease")
+        val COVER_SOURCE_ENABLED_QQ_MUSIC = booleanPreferencesKey("cover_source_enabled_qq_music")
+        val PRIORITY_METADATA_SOURCES = stringPreferencesKey("priority_metadata_sources")
+        val PRIORITY_LYRICS_SOURCES = stringPreferencesKey("priority_lyrics_sources")
+        val PRIORITY_COVER_SOURCES = stringPreferencesKey("priority_cover_sources")
         val LOGGING_ENABLED = booleanPreferencesKey("logging_enabled")
         val FILE_LOGGING_ENABLED = booleanPreferencesKey("file_logging_enabled")
         val CONSOLE_LOGGING_ENABLED = booleanPreferencesKey("console_logging_enabled")
@@ -129,6 +144,105 @@ class SettingsDataStore @Inject constructor(
     val sourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[SOURCE_ENABLED_QQ_MUSIC] ?: true
+        }
+
+    val metadataSourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[METADATA_SOURCE_ENABLED_MUSICBRAINZ]
+                ?: preferences[SOURCE_ENABLED_MUSICBRAINZ]
+                ?: true
+        }
+
+    val metadataSourceEnabledITunes: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[METADATA_SOURCE_ENABLED_ITUNES]
+                ?: preferences[SOURCE_ENABLED_ITUNES]
+                ?: true
+        }
+
+    val metadataSourceEnabledNetease: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[METADATA_SOURCE_ENABLED_NETEASE]
+                ?: preferences[SOURCE_ENABLED_NETEASE]
+                ?: true
+        }
+
+    val metadataSourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[METADATA_SOURCE_ENABLED_QQ_MUSIC]
+                ?: preferences[SOURCE_ENABLED_QQ_MUSIC]
+                ?: true
+        }
+
+    val lyricsSourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[LYRICS_SOURCE_ENABLED_MUSICBRAINZ]
+                ?: preferences[SOURCE_ENABLED_MUSICBRAINZ]
+                ?: true
+        }
+
+    val lyricsSourceEnabledITunes: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[LYRICS_SOURCE_ENABLED_ITUNES]
+                ?: preferences[SOURCE_ENABLED_ITUNES]
+                ?: true
+        }
+
+    val lyricsSourceEnabledNetease: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[LYRICS_SOURCE_ENABLED_NETEASE]
+                ?: preferences[SOURCE_ENABLED_NETEASE]
+                ?: true
+        }
+
+    val lyricsSourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[LYRICS_SOURCE_ENABLED_QQ_MUSIC]
+                ?: preferences[SOURCE_ENABLED_QQ_MUSIC]
+                ?: true
+        }
+
+    val coverSourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[COVER_SOURCE_ENABLED_MUSICBRAINZ]
+                ?: preferences[SOURCE_ENABLED_MUSICBRAINZ]
+                ?: true
+        }
+
+    val coverSourceEnabledITunes: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[COVER_SOURCE_ENABLED_ITUNES]
+                ?: preferences[SOURCE_ENABLED_ITUNES]
+                ?: true
+        }
+
+    val coverSourceEnabledNetease: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[COVER_SOURCE_ENABLED_NETEASE]
+                ?: preferences[SOURCE_ENABLED_NETEASE]
+                ?: true
+        }
+
+    val coverSourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[COVER_SOURCE_ENABLED_QQ_MUSIC]
+                ?: preferences[SOURCE_ENABLED_QQ_MUSIC]
+                ?: true
+        }
+
+    val metadataSourcePriority: Flow<List<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            parsePriority(preferences[PRIORITY_METADATA_SOURCES], defaultSourcePriority())
+        }
+
+    val lyricsSourcePriority: Flow<List<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            parsePriority(preferences[PRIORITY_LYRICS_SOURCES], defaultSourcePriority())
+        }
+
+    val coverSourcePriority: Flow<List<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            parsePriority(preferences[PRIORITY_COVER_SOURCES], defaultSourcePriority())
         }
 
     val loggingEnabled: Flow<Boolean> = context.settingsDataStore.data
@@ -253,6 +367,96 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
+    suspend fun setMetadataSourceEnabledMusicBrainz(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[METADATA_SOURCE_ENABLED_MUSICBRAINZ] = enabled
+        }
+    }
+
+    suspend fun setMetadataSourceEnabledITunes(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[METADATA_SOURCE_ENABLED_ITUNES] = enabled
+        }
+    }
+
+    suspend fun setMetadataSourceEnabledNetease(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[METADATA_SOURCE_ENABLED_NETEASE] = enabled
+        }
+    }
+
+    suspend fun setMetadataSourceEnabledQQMusic(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[METADATA_SOURCE_ENABLED_QQ_MUSIC] = enabled
+        }
+    }
+
+    suspend fun setLyricsSourceEnabledMusicBrainz(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LYRICS_SOURCE_ENABLED_MUSICBRAINZ] = enabled
+        }
+    }
+
+    suspend fun setLyricsSourceEnabledITunes(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LYRICS_SOURCE_ENABLED_ITUNES] = enabled
+        }
+    }
+
+    suspend fun setLyricsSourceEnabledNetease(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LYRICS_SOURCE_ENABLED_NETEASE] = enabled
+        }
+    }
+
+    suspend fun setLyricsSourceEnabledQQMusic(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LYRICS_SOURCE_ENABLED_QQ_MUSIC] = enabled
+        }
+    }
+
+    suspend fun setCoverSourceEnabledMusicBrainz(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[COVER_SOURCE_ENABLED_MUSICBRAINZ] = enabled
+        }
+    }
+
+    suspend fun setCoverSourceEnabledITunes(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[COVER_SOURCE_ENABLED_ITUNES] = enabled
+        }
+    }
+
+    suspend fun setCoverSourceEnabledNetease(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[COVER_SOURCE_ENABLED_NETEASE] = enabled
+        }
+    }
+
+    suspend fun setCoverSourceEnabledQQMusic(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[COVER_SOURCE_ENABLED_QQ_MUSIC] = enabled
+        }
+    }
+
+    suspend fun setMetadataSourcePriority(priority: List<String>) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PRIORITY_METADATA_SOURCES] = normalizePriority(priority).joinToString(",")
+        }
+    }
+
+    suspend fun setLyricsSourcePriority(priority: List<String>) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PRIORITY_LYRICS_SOURCES] = normalizePriority(priority).joinToString(",")
+        }
+    }
+
+    suspend fun setCoverSourcePriority(priority: List<String>) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PRIORITY_COVER_SOURCES] = normalizePriority(priority).joinToString(",")
+        }
+    }
+
     suspend fun setLoggingEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[LOGGING_ENABLED] = enabled
@@ -275,5 +479,22 @@ class SettingsDataStore @Inject constructor(
         context.settingsDataStore.edit { preferences ->
             preferences[CRASH_REPORTING_ENABLED] = enabled
         }
+    }
+
+    private fun parsePriority(raw: String?, fallback: List<String>): List<String> {
+        if (raw.isNullOrBlank()) return fallback
+        return normalizePriority(
+            raw.split(",").map { it.trim() }.filter { it.isNotBlank() }
+        )
+    }
+
+    private fun normalizePriority(priority: List<String>): List<String> {
+        val allowed = defaultSourcePriority()
+        val normalized = priority.map { it.lowercase() }.filter { it in allowed }
+        return (normalized + allowed).distinct()
+    }
+
+    private fun defaultSourcePriority(): List<String> {
+        return listOf("itunes", "musicbrainz", "netease", "qq_music")
     }
 }

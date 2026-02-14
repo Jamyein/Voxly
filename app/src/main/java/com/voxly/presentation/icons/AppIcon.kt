@@ -13,9 +13,18 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.DriveFileRenameOutline
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.PlaylistAdd
+import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.painter.Painter
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -40,7 +49,16 @@ enum class AppIcon(
     MusicNote(Icons.Filled.MusicNote),
     Save(Icons.Filled.Save),
     CloudDownload(Icons.Filled.CloudDownload),
-    Schedule(Icons.Filled.Schedule)
+    Schedule(Icons.Filled.Schedule),
+    Edit(Icons.Filled.Edit),
+    Rename(Icons.Filled.DriveFileRenameOutline),
+    AutoFix(Icons.Filled.AutoFixHigh),
+    MoreVert(Icons.Filled.MoreVert),
+    Check(Icons.Filled.Check),
+    Close(Icons.Filled.Close),
+    Settings(Icons.Filled.Settings),
+    SettingsOutlined(Icons.Outlined.Settings),
+    BarChart(Icons.Filled.BarChart)
 }
 
 @Composable

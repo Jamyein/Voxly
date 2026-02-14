@@ -3,9 +3,9 @@
     <string name="app_name">Voxly</string>
 
     <!-- Navigation -->
-    <string name="nav_file_browser">文件</string>
+    <string name="nav_file_browser">音乐库</string>
     <string name="nav_recent_edits">最近</string>
-    <string name="nav_batch_operations">批量</string>
+    <string name="nav_statistics">统计</string>
     <string name="nav_settings">设置</string>
 
     <!-- File Browser -->
@@ -23,6 +23,12 @@
     <string name="metadata_track_number">曲目编号</string>
     <string name="metadata_disc_number">碟片编号</string>
     <string name="metadata_composer">作曲家</string>
+    <string name="metadata_lyricist">作词</string>
+    <string name="metadata_comment">注释</string>
+    <string name="metadata_record_label">唱片公司</string>
+    <string name="metadata_encoder">编码器</string>
+    <string name="metadata_isrc">ISRC</string>
+    <string name="metadata_copyright">版权</string>
     <string name="metadata_lyrics">歌词</string>
     <string name="metadata_album_art">专辑封面</string>
     <string name="metadata_bitrate">比特率</string>
@@ -36,17 +42,13 @@
     <string name="discard_changes">放弃</string>
     <string name="scan_replay_gain">扫描 ReplayGain</string>
     <string name="fetch_online_metadata">获取在线元数据</string>
+    <string name="fetch_online_cover_art">获取在线封面</string>
     <string name="extract_album_art">提取专辑封面</string>
     <string name="remove_album_art">移除专辑封面</string>
     <string name="select_album_art">选择专辑封面</string>
-
-    <!-- ReplayGain -->
-    <string name="replay_gain_track">曲目增益</string>
-    <string name="replay_gain_album">专辑增益</string>
-    <string name="replay_gain_peak">峰值</string>
-    <string name="replay_gain_scan_progress">扫描中：%d%%</string>
-    <string name="replay_gain_scan_complete">扫描完成</string>
-    <string name="replay_gain_scan_failed">扫描失败</string>
+    <string name="take_photo">拍照</string>
+    <string name="album_art_zoom">查看大图</string>
+    <string name="album_art_rotate">旋转</string>
 
     <!-- Batch Operations -->
     <string name="batch_edit">批量编辑</string>
@@ -83,6 +85,7 @@
     <!-- Dialogs -->
     <string name="dialog_confirm_delete">确认删除</string>
     <string name="dialog_confirm_delete_message">确定要删除此文件吗？</string>
+    <string name="dialog_confirm_delete_single_file_message">确定要删除“%1$s”吗？</string>
     <string name="dialog_unsaved_changes">未保存的更改</string>
     <string name="dialog_unsaved_changes_message">你有未保存的更改。要保存吗？</string>
     <string name="dialog_save">保存</string>
@@ -143,8 +146,67 @@
     <string name="album_art_picker_title">选择专辑封面</string>
     <string name="album_art_picker_placeholder">专辑封面选择器将在此实现</string>
 
+    <!-- Batch Operations (Integrated) -->
+    <string name="batch_operations">批量操作</string>
+    <string name="batch_online_metadata">自动获取元数据</string>
+    <string name="batch_rename_files">修改文件名</string>
+    <string name="rename_file">重命名文件</string>
+    <string name="new_file_name">新文件名</string>
+    <string name="rename_file_failed">重命名失败</string>
+    <string name="delete_file_failed">删除失败</string>
+    <string name="file_item_actions">文件操作</string>
+    <string name="batch_fix_metadata">修正元数据</string>
+    <string name="batch_fix_metadata_title">修正元数据</string>
+    <string name="fix_auto_title_case">自动标题大小写</string>
+    <string name="fix_remove_extra_spaces">去除多余空格</string>
+    <string name="fix_track_numbers">修正曲目编号</string>
+    <string name="fix_remove_empty_tags">移除空标签</string>
+    <string name="batch_target_files">目标文件: %d</string>
+    <string name="batch_start">开始</string>
+    <string name="batch_processing">处理中…</string>
+    <string name="batch_complete">完成!</string>
+    <string name="batch_cancelled">已取消</string>
+    <string name="batch_progress_format">%1$d / %2$d</string>
+
+    <!-- Batch Online Metadata Options -->
+    <string name="batch_online_metadata_title">自动获取在线元数据</string>
+    <string name="batch_overwrite_existing">覆盖已有元数据</string>
+    <string name="batch_fetch_album_art">获取专辑封面</string>
+    <string name="batch_fetch_lyrics">获取歌词</string>
+
+    <!-- Batch Rename Options -->
+    <string name="batch_rename_title">批量修改文件名</string>
+    <string name="rename_pattern">命名模式</string>
+    <string name="start_number">起始编号</string>
+    <string name="rename_pattern_help">可用标签: {title}, {artist}, {album}, {track}</string>
+    <string name="pattern_artist_title">艺术家 - 标题</string>
+    <string name="pattern_title">仅标题</string>
+    <string name="pattern_track_title">曲目. 标题</string>
+    <string name="pattern_full">艺术家 - 专辑 - 曲目. 标题</string>
+
+    <!-- Batch Unified Field -->
+    <string name="batch_unified_field">统一设置字段</string>
+    <string name="batch_unified_field_title">设置字段值</string>
+    <string name="select_field">选择字段</string>
+    <string name="field_value">字段值</string>
+
+    <!-- Batch Replace Text -->
+    <string name="batch_replace_text">替换文本</string>
+    <string name="batch_replace_text_title">查找和替换</string>
+    <string name="all_fields">所有字段</string>
+    <string name="search_text">搜索文本</string>
+    <string name="replace_text">替换为</string>
+    <string name="use_regex">使用正则表达式</string>
+
+    <!-- Batch Auto Number -->
+    <string name="batch_auto_number">自动编号</string>
+    <string name="batch_auto_number_title">自动编号曲目</string>
+    <string name="step">步长</string>
+    <string name="set_total_tracks">设置总曲目数</string>
+    <string name="total_tracks">总曲目数</string>
+    <string name="number_preview">预览: %s</string>
+
     <!-- ReplayGain -->
-    <string name="replay_gain_scanner_title">ReplayGain 扫描器</string>
     <string name="files_queued">已加入 %d 个文件</string>
     <string name="start_scanning">开始扫描</string>
 
@@ -166,6 +228,23 @@
     <string name="file_info_size">大小</string>
     <string name="no_album_art">没有专辑封面</string>
     <string name="saving_metadata">正在保存元数据...</string>
+
+    <!-- Statistics -->
+    <string name="statistics_title">统计</string>
+    <string name="statistics_overview">概览</string>
+    <string name="statistics_format_distribution">格式分布</string>
+    <string name="statistics_top_artists">热门艺术家</string>
+    <string name="statistics_top_albums">热门专辑</string>
+    <string name="statistics_recent_activity">近期活动</string>
+    <string name="statistics_empty_title">暂无统计数据</string>
+    <string name="statistics_empty_subtitle">编辑一些音频文件以查看你的音乐库统计</string>
+    <string name="total_files">文件总数</string>
+    <string name="total_duration">总时长</string>
+    <string name="total_size">总大小</string>
+    <string name="edited_files">已编辑文件</string>
+    <string name="today">今天</string>
+    <string name="this_week">本周</string>
+    <string name="this_month">本月</string>
 
     <!-- Recent Edits -->
     <string name="recent_edits_title">最近编辑</string>
@@ -244,6 +323,13 @@
     <string name="settings_online_search_limit">搜索结果条数限制</string>
     <string name="settings_online_search_limit_subtitle">每次在线搜索返回的最大结果数</string>
     <string name="settings_online_search_limit_unlimited">无限制</string>
+    <string name="settings_source_group_metadata">组合数据源</string>
+    <string name="settings_source_group_metadata_subtitle">设置元数据搜索来源的开关和优先级</string>
+    <string name="settings_source_group_lyrics">歌词数据源</string>
+    <string name="settings_source_group_lyrics_subtitle">设置时间轴歌词搜索的数据源优先级</string>
+    <string name="settings_source_group_cover">封面数据源</string>
+    <string name="settings_source_group_cover_subtitle">设置封面获取的数据源优先级</string>
+    <string name="settings_source_priority_hint">优先级越高，结果越靠前，也会优先使用。</string>
 
     <!-- Logging -->
     <string name="settings_section_logging">日志</string>
@@ -264,6 +350,9 @@
     <string name="settings_logging_cleanup_complete">已删除 %d 个旧日志文件</string>
     <string name="settings_logging_no_logs">没有可导出的日志</string>
 
+    <!-- Album Art -->
+    <string name="tap_to_add_album_art">点击添加专辑封面</string>
+
     <!-- Log Viewer -->
     <string name="log_viewer_title">日志查看器</string>
     <string name="log_viewer_search_hint">搜索日志...</string>
@@ -281,4 +370,34 @@
     <!-- Dialogs -->
     <string name="dialog_close">关闭</string>
     <string name="dialog_discard_changes_message">你有未保存的更改。要丢弃吗？</string>
+
+    <!-- ReplayGain -->
+    <string name="replay_gain_track">曲目增益</string>
+    <string name="replay_gain_album">专辑增益</string>
+    <string name="replay_gain_peak">曲目峰值</string>
+    <string name="replay_gain_scan_progress">扫描中 %d%%</string>
+    <string name="replay_gain_scan_complete">扫描完成</string>
+    <string name="replay_gain_scan_failed">扫描失败</string>
+    <string name="replay_gain_section_title">回放增益</string>
+    <string name="replay_gain_scanning">分析中…</string>
+    <string name="replay_gain_no_info">暂无增益信息</string>
+    <string name="replay_gain_scan">扫描增益</string>
+    <string name="replay_gain_rescan">重新扫描</string>
+    <string name="replay_gain_clear">清除</string>
+    <string name="replay_gain_album_peak">专辑峰值</string>
+    <string name="replay_gain_scanner_title">ReplayGain 扫描器</string>
+    <string name="replay_gain_scan_type">扫描类型</string>
+    <string name="replay_gain_scan_track_only">仅曲目增益</string>
+    <string name="replay_gain_scan_album">曲目 + 专辑增益</string>
+    <string name="replay_gain_target_loudness">目标响度</string>
+    <string name="replay_gain_default_loudness">默认 (-18 LUFS)</string>
+    <string name="replay_gain_settings">回放增益设置</string>
+    <string name="replay_gain_loudness_desc">调整参考响度级别</string>
+    <string name="replay_gain_quality">扫描质量</string>
+    <string name="replay_gain_quality_fast">快速</string>
+    <string name="replay_gain_quality_normal">标准</string>
+    <string name="replay_gain_quality_accurate">精确</string>
+    <string name="expand">展开</string>
+    <string name="collapse">收起</string>
+
 </resources>

@@ -113,6 +113,54 @@ class SettingsViewModel @Inject constructor(
             initialValue = true
         )
 
+    val metadataSourceEnabledMusicBrainz: StateFlow<Boolean> = settingsDataStore.metadataSourceEnabledMusicBrainz
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val metadataSourceEnabledITunes: StateFlow<Boolean> = settingsDataStore.metadataSourceEnabledITunes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val metadataSourceEnabledNetease: StateFlow<Boolean> = settingsDataStore.metadataSourceEnabledNetease
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val metadataSourceEnabledQQMusic: StateFlow<Boolean> = settingsDataStore.metadataSourceEnabledQQMusic
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val lyricsSourceEnabledMusicBrainz: StateFlow<Boolean> = settingsDataStore.lyricsSourceEnabledMusicBrainz
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val lyricsSourceEnabledITunes: StateFlow<Boolean> = settingsDataStore.lyricsSourceEnabledITunes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val lyricsSourceEnabledNetease: StateFlow<Boolean> = settingsDataStore.lyricsSourceEnabledNetease
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val lyricsSourceEnabledQQMusic: StateFlow<Boolean> = settingsDataStore.lyricsSourceEnabledQQMusic
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val coverSourceEnabledMusicBrainz: StateFlow<Boolean> = settingsDataStore.coverSourceEnabledMusicBrainz
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val coverSourceEnabledITunes: StateFlow<Boolean> = settingsDataStore.coverSourceEnabledITunes
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val coverSourceEnabledNetease: StateFlow<Boolean> = settingsDataStore.coverSourceEnabledNetease
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+    val coverSourceEnabledQQMusic: StateFlow<Boolean> = settingsDataStore.coverSourceEnabledQQMusic
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), true)
+
+    val metadataSourcePriority: StateFlow<List<String>> = settingsDataStore.metadataSourcePriority
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = listOf("itunes", "musicbrainz", "netease", "qq_music")
+        )
+
+    val lyricsSourcePriority: StateFlow<List<String>> = settingsDataStore.lyricsSourcePriority
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = listOf("itunes", "musicbrainz", "netease", "qq_music")
+        )
+
+    val coverSourcePriority: StateFlow<List<String>> = settingsDataStore.coverSourcePriority
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = listOf("itunes", "musicbrainz", "netease", "qq_music")
+        )
+
     val loggingEnabled: StateFlow<Boolean> = settingsDataStore.loggingEnabled
         .stateIn(
             scope = viewModelScope,
@@ -230,6 +278,72 @@ class SettingsViewModel @Inject constructor(
     fun setSourceEnabledQQMusic(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.setSourceEnabledQQMusic(enabled)
+        }
+    }
+
+    fun setMetadataSourceEnabledMusicBrainz(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setMetadataSourceEnabledMusicBrainz(enabled) }
+    }
+
+    fun setMetadataSourceEnabledITunes(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setMetadataSourceEnabledITunes(enabled) }
+    }
+
+    fun setMetadataSourceEnabledNetease(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setMetadataSourceEnabledNetease(enabled) }
+    }
+
+    fun setMetadataSourceEnabledQQMusic(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setMetadataSourceEnabledQQMusic(enabled) }
+    }
+
+    fun setLyricsSourceEnabledMusicBrainz(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setLyricsSourceEnabledMusicBrainz(enabled) }
+    }
+
+    fun setLyricsSourceEnabledITunes(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setLyricsSourceEnabledITunes(enabled) }
+    }
+
+    fun setLyricsSourceEnabledNetease(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setLyricsSourceEnabledNetease(enabled) }
+    }
+
+    fun setLyricsSourceEnabledQQMusic(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setLyricsSourceEnabledQQMusic(enabled) }
+    }
+
+    fun setCoverSourceEnabledMusicBrainz(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setCoverSourceEnabledMusicBrainz(enabled) }
+    }
+
+    fun setCoverSourceEnabledITunes(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setCoverSourceEnabledITunes(enabled) }
+    }
+
+    fun setCoverSourceEnabledNetease(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setCoverSourceEnabledNetease(enabled) }
+    }
+
+    fun setCoverSourceEnabledQQMusic(enabled: Boolean) {
+        viewModelScope.launch { settingsDataStore.setCoverSourceEnabledQQMusic(enabled) }
+    }
+
+    fun setMetadataSourcePriority(priority: List<String>) {
+        viewModelScope.launch {
+            settingsDataStore.setMetadataSourcePriority(priority)
+        }
+    }
+
+    fun setLyricsSourcePriority(priority: List<String>) {
+        viewModelScope.launch {
+            settingsDataStore.setLyricsSourcePriority(priority)
+        }
+    }
+
+    fun setCoverSourcePriority(priority: List<String>) {
+        viewModelScope.launch {
+            settingsDataStore.setCoverSourcePriority(priority)
         }
     }
 

@@ -31,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -53,6 +54,18 @@ fun DirectoryManagementScreen(
     val context = LocalContext.current
     val directories by viewModel.directories.collectAsState()
 
+    LaunchedEffect(directories) {
+        directories.forEach { directory ->
+            runCatching {
+                context.contentResolver.takePersistableUriPermission(
+                    android.net.Uri.parse(directory.uri),
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+            }
+        }
+    }
+
     val folderPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -60,7 +73,8 @@ fun DirectoryManagementScreen(
             runCatching {
                 context.contentResolver.takePersistableUriPermission(
                     it,
-                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION
+                    android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
             }
             viewModel.addDirectory(it)

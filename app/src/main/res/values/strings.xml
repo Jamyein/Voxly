@@ -3,9 +3,9 @@
     <string name="app_name">Voxly</string>
 
     <!-- Navigation -->
-    <string name="nav_file_browser">Files</string>
+    <string name="nav_file_browser">Library</string>
     <string name="nav_recent_edits">Recent</string>
-    <string name="nav_batch_operations">Batch</string>
+    <string name="nav_statistics">Statistics</string>
     <string name="nav_settings">Settings</string>
 
     <!-- File Browser -->
@@ -23,6 +23,12 @@
     <string name="metadata_track_number">Track Number</string>
     <string name="metadata_disc_number">Disc Number</string>
     <string name="metadata_composer">Composer</string>
+    <string name="metadata_lyricist">Lyricist</string>
+    <string name="metadata_comment">Comment</string>
+    <string name="metadata_record_label">Record Label</string>
+    <string name="metadata_encoder">Encoder</string>
+    <string name="metadata_isrc">ISRC</string>
+    <string name="metadata_copyright">Copyright</string>
     <string name="metadata_lyrics">Lyrics</string>
     <string name="metadata_album_art">Album Art</string>
     <string name="metadata_bitrate">Bitrate</string>
@@ -36,9 +42,13 @@
     <string name="discard_changes">Discard</string>
     <string name="scan_replay_gain">Scan ReplayGain</string>
     <string name="fetch_online_metadata">Fetch Online Metadata</string>
+    <string name="fetch_online_cover_art">Fetch Online Cover Art</string>
     <string name="extract_album_art">Extract Album Art</string>
     <string name="remove_album_art">Remove Album Art</string>
     <string name="select_album_art">Select Album Art</string>
+    <string name="take_photo">Take Photo</string>
+    <string name="album_art_zoom">Zoom</string>
+    <string name="album_art_rotate">Rotate</string>
 
     <!-- ReplayGain -->
     <string name="replay_gain_track">Track Gain</string>
@@ -83,6 +93,7 @@
     <!-- Dialogs -->
     <string name="dialog_confirm_delete">Confirm Delete</string>
     <string name="dialog_confirm_delete_message">Are you sure you want to delete this file?</string>
+    <string name="dialog_confirm_delete_single_file_message">Are you sure you want to delete \"%1$s\"?</string>
     <string name="dialog_unsaved_changes">Unsaved Changes</string>
     <string name="dialog_unsaved_changes_message">You have unsaved changes. Do you want to save them?</string>
     <string name="dialog_save">Save</string>
@@ -143,8 +154,67 @@
     <string name="album_art_picker_title">Select Album Art</string>
     <string name="album_art_picker_placeholder">Album art picker will be implemented here</string>
 
+    <!-- Batch Operations (Integrated) -->
+    <string name="batch_operations">Batch Operations</string>
+    <string name="batch_online_metadata">Auto Fetch Metadata</string>
+    <string name="batch_rename_files">Rename Files</string>
+    <string name="rename_file">Rename File</string>
+    <string name="new_file_name">New file name</string>
+    <string name="rename_file_failed">Rename failed</string>
+    <string name="delete_file_failed">Delete failed</string>
+    <string name="file_item_actions">File actions</string>
+    <string name="batch_fix_metadata">Fix Metadata</string>
+    <string name="batch_fix_metadata_title">Fix Metadata</string>
+    <string name="fix_auto_title_case">Auto title case</string>
+    <string name="fix_remove_extra_spaces">Remove extra spaces</string>
+    <string name="fix_track_numbers">Fix track numbers</string>
+    <string name="fix_remove_empty_tags">Remove empty tags</string>
+    <string name="batch_target_files">Target files: %d</string>
+    <string name="batch_start">Start</string>
+    <string name="batch_processing">Processing…</string>
+    <string name="batch_complete">Complete!</string>
+    <string name="batch_cancelled">Cancelled</string>
+    <string name="batch_progress_format">%1$d of %2$d</string>
+
+    <!-- Batch Online Metadata Options -->
+    <string name="batch_online_metadata_title">Auto Fetch Online Metadata</string>
+    <string name="batch_overwrite_existing">Overwrite existing metadata</string>
+    <string name="batch_fetch_album_art">Fetch album artwork</string>
+    <string name="batch_fetch_lyrics">Fetch lyrics</string>
+
+    <!-- Batch Rename Options -->
+    <string name="batch_rename_title">Batch Rename Files</string>
+    <string name="rename_pattern">Naming Pattern</string>
+    <string name="start_number">Start Number</string>
+    <string name="rename_pattern_help">Available tags: {title}, {artist}, {album}, {track}</string>
+    <string name="pattern_artist_title">Artist - Title</string>
+    <string name="pattern_title">Title only</string>
+    <string name="pattern_track_title">Track. Title</string>
+    <string name="pattern_full">Artist - Album - Track. Title</string>
+
+    <!-- Batch Unified Field -->
+    <string name="batch_unified_field">Set Field</string>
+    <string name="batch_unified_field_title">Set Field Value</string>
+    <string name="select_field">Select Field</string>
+    <string name="field_value">Field Value</string>
+
+    <!-- Batch Replace Text -->
+    <string name="batch_replace_text">Replace Text</string>
+    <string name="batch_replace_text_title">Find and Replace</string>
+    <string name="all_fields">All Fields</string>
+    <string name="search_text">Search Text</string>
+    <string name="replace_text">Replace Text</string>
+    <string name="use_regex">Use Regular Expression</string>
+
+    <!-- Batch Auto Number -->
+    <string name="batch_auto_number">Auto Number Tracks</string>
+    <string name="batch_auto_number_title">Auto Number Tracks</string>
+    <string name="step">Step</string>
+    <string name="set_total_tracks">Set Total Tracks</string>
+    <string name="total_tracks">Total Tracks</string>
+    <string name="number_preview">Preview: %s</string>
+
     <!-- ReplayGain -->
-    <string name="replay_gain_scanner_title">ReplayGain Scanner</string>
     <string name="files_queued">%d files queued</string>
     <string name="start_scanning">Start Scanning</string>
 
@@ -166,6 +236,23 @@
     <string name="file_info_size">Size</string>
     <string name="no_album_art">No album art</string>
     <string name="saving_metadata">Saving metadata...</string>
+
+    <!-- Statistics -->
+    <string name="statistics_title">Statistics</string>
+    <string name="statistics_overview">Overview</string>
+    <string name="statistics_format_distribution">Format Distribution</string>
+    <string name="statistics_top_artists">Top Artists</string>
+    <string name="statistics_top_albums">Top Albums</string>
+    <string name="statistics_recent_activity">Recent Activity</string>
+    <string name="statistics_empty_title">No Statistics Available</string>
+    <string name="statistics_empty_subtitle">Edit some audio files to see your library statistics</string>
+    <string name="total_files">Total Files</string>
+    <string name="total_duration">Total Duration</string>
+    <string name="total_size">Total Size</string>
+    <string name="edited_files">Edited Files</string>
+    <string name="today">Today</string>
+    <string name="this_week">This Week</string>
+    <string name="this_month">This Month</string>
 
     <!-- Recent Edits -->
     <string name="recent_edits_title">Recent Edits</string>
@@ -244,6 +331,13 @@
     <string name="settings_online_search_limit">Search Result Limit</string>
     <string name="settings_online_search_limit_subtitle">Maximum results returned per online search</string>
     <string name="settings_online_search_limit_unlimited">Unlimited</string>
+    <string name="settings_source_group_metadata">Metadata Sources</string>
+    <string name="settings_source_group_metadata_subtitle">Enable and prioritize sources for metadata results</string>
+    <string name="settings_source_group_lyrics">Lyrics Sources</string>
+    <string name="settings_source_group_lyrics_subtitle">Set priority used when searching timeline lyrics</string>
+    <string name="settings_source_group_cover">Cover Sources</string>
+    <string name="settings_source_group_cover_subtitle">Set priority used when fetching cover artwork</string>
+    <string name="settings_source_priority_hint">Higher priority sources are shown first and used first.</string>
 
     <!-- Logging -->
     <string name="settings_section_logging">Logging</string>
@@ -264,6 +358,9 @@
     <string name="settings_logging_cleanup_complete">%d old log files deleted</string>
     <string name="settings_logging_no_logs">No logs to export</string>
 
+    <!-- Album Art -->
+    <string name="tap_to_add_album_art">Tap to add album art</string>
+
     <!-- Log Viewer -->
     <string name="log_viewer_title">Log Viewer</string>
     <string name="log_viewer_search_hint">Search logs...</string>
@@ -281,4 +378,27 @@
     <!-- Dialogs -->
     <string name="dialog_close">Close</string>
     <string name="dialog_discard_changes_message">You have unsaved changes. Discard them?</string>
+
+    <!-- ReplayGain -->
+    <string name="replay_gain_section_title">ReplayGain</string>
+    <string name="replay_gain_scanning">Analyzing…</string>
+    <string name="replay_gain_no_info">No gain information</string>
+    <string name="replay_gain_scan">Scan Gain</string>
+    <string name="replay_gain_rescan">Re-scan</string>
+    <string name="replay_gain_clear">Clear</string>
+    <string name="replay_gain_album_peak">Album Peak</string>
+    <string name="replay_gain_scanner_title">ReplayGain Scanner</string>
+    <string name="replay_gain_scan_type">Scan Type</string>
+    <string name="replay_gain_scan_track_only">Track Gain Only</string>
+    <string name="replay_gain_scan_album">Track + Album Gain</string>
+    <string name="replay_gain_target_loudness">Target Loudness</string>
+    <string name="replay_gain_default_loudness">Default (-18 LUFS)</string>
+    <string name="replay_gain_settings">ReplayGain Settings</string>
+    <string name="replay_gain_loudness_desc">Adjust the reference loudness level</string>
+    <string name="replay_gain_quality">Scan Quality</string>
+    <string name="replay_gain_quality_fast">Fast</string>
+    <string name="replay_gain_quality_normal">Normal</string>
+    <string name="replay_gain_quality_accurate">Accurate</string>
+    <string name="expand">Expand</string>
+    <string name="collapse">Collapse</string>
 </resources>

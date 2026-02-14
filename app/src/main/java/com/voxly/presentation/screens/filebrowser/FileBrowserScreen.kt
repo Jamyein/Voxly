@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory.Options
 import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
+import android.widget.Toast
 import androidx.compose.foundation.Image
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -14,6 +15,12 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.*
@@ -24,27 +31,35 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.repeatOnLifecycle
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.usecase.BatchProgress
+import com.voxly.domain.usecase.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.viewmodel.FileBrowserUiState
@@ -63,10 +78,10 @@ fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel(),
     onNavigateToMetadata: (String) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
-    onNavigateToSettings: () -> Unit,
     onBottomBarVisibilityChange: (Boolean) -> Unit = {}
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val uiState by viewModel.uiState.collectAsState()
     val selectedFiles by viewModel.selectedFiles.collectAsState()
     val selectedDirectories by viewModel.selectedDirectories.collectAsState()
@@ -79,10 +94,30 @@ fun FileBrowserScreen(
         is FileBrowserUiState.Success -> if (openedDirectory != null) openedDirectoryFiles else state.files
         else -> emptyList()
     }
+    
+    // Batch operation states
+    val isBatchProcessing by viewModel.isBatchProcessing.collectAsState()
+    val batchProgress by viewModel.batchProgress.collectAsState()
+    val batchError by viewModel.batchError.collectAsState()
+    
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var sortOption by rememberSaveable { mutableStateOf(FileSortOption.NAME_ASC.name) }
     var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var isSortExpanded by rememberSaveable { mutableStateOf(false) }
+    
+    // Dialog states
+    var showBatchMenu by remember { mutableStateOf(false) }
+    var showBatchOperationsMenu by remember { mutableStateOf(false) }
+    var showOnlineMetadataDialog by remember { mutableStateOf(false) }
+    var showRenameDialog by remember { mutableStateOf(false) }
+    var showFixMetadataDialog by remember { mutableStateOf(false) }
+    var showUnifiedFieldDialog by remember { mutableStateOf(false) }
+    var showReplaceTextDialog by remember { mutableStateOf(false) }
+    var showAutoNumberDialog by remember { mutableStateOf(false) }
+    var showBatchProgress by remember { mutableStateOf(false) }
+    var renameTargetFile by remember { mutableStateOf<AudioFile?>(null) }
+    var deleteTargetFile by remember { mutableStateOf<AudioFile?>(null) }
+    
     val visibleFiles = remember(visibleFilesRaw, searchQuery, sortOption) {
         applySearchAndSort(
             files = visibleFilesRaw,
@@ -115,12 +150,9 @@ fun FileBrowserScreen(
     LaunchedEffect(listState) {
         snapshotFlow { listState.firstVisibleItemScrollOffset }
             .collect { currentOffset ->
-                // Skip if no files to avoid unnecessary calculations
                 if (visibleFiles.isEmpty()) return@collect
                 
                 val scrollDelta = currentOffset - previousScrollOffset
-                // Hide when scrolling down (positive delta), show when scrolling up (negative delta)
-                // Only trigger when delta is significant to avoid jitter
                 if (scrollDelta > 10) {
                     isTopBarVisible = false
                     onBottomBarVisibilityChange(false)
@@ -128,7 +160,6 @@ fun FileBrowserScreen(
                     isTopBarVisible = true
                     onBottomBarVisibilityChange(true)
                 }
-                // Always show bars when at the top
                 if (listState.firstVisibleItemIndex == 0 && currentOffset == 0) {
                     isTopBarVisible = true
                     onBottomBarVisibilityChange(true)
@@ -136,6 +167,22 @@ fun FileBrowserScreen(
                 previousScrollOffset = currentOffset
             }
     }
+    
+    // Show progress dialog when batch processing starts
+    LaunchedEffect(isBatchProcessing) {
+        if (isBatchProcessing) {
+            showBatchProgress = true
+        }
+    }
+    
+    // Auto-hide progress dialog when complete
+    LaunchedEffect(batchProgress) {
+        if (batchProgress?.status == BatchStatus.COMPLETED) {
+            kotlinx.coroutines.delay(1500)
+            showBatchProgress = false
+        }
+    }
+    
     val readPermission = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -157,8 +204,14 @@ fun FileBrowserScreen(
     LaunchedEffect(hasReadPermission) {
         if (hasReadPermission) {
             viewModel.loadAudioFiles()
-        } else {
+        } else if (!hasReadPermission) {
             readPermissionLauncher.launch(readPermission)
+        }
+    }
+    LaunchedEffect(hasReadPermission, lifecycleOwner) {
+        if (!hasReadPermission) return@LaunchedEffect
+        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+            viewModel.loadAudioFiles(forceRefresh = true)
         }
     }
     LaunchedEffect(currentListKey, listState) {
@@ -173,6 +226,7 @@ fun FileBrowserScreen(
         viewModel.closeOpenedDirectory()
     }
 
+
     Scaffold(
         topBar = {
             if (selectedFiles.isNotEmpty()) {
@@ -182,6 +236,9 @@ fun FileBrowserScreen(
                     onClearSelection = { viewModel.clearSelection() },
                     onNavigateToReplayGain = {
                         onNavigateToReplayGain(viewModel.getSelectedFilePaths())
+                    },
+                    onBatchOperations = {
+                        showBatchOperationsMenu = true
                     }
                 )
             } else {
@@ -234,12 +291,6 @@ fun FileBrowserScreen(
                                         contentDescription = stringResource(R.string.refresh_files)
                                     )
                                 }
-                                IconButton(onClick = onNavigateToSettings) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = stringResource(R.string.nav_settings)
-                                    )
-                                }
                             },
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surface,
@@ -279,12 +330,6 @@ fun FileBrowserScreen(
                                         contentDescription = stringResource(R.string.refresh_files)
                                     )
                                 }
-                                IconButton(onClick = onNavigateToSettings) {
-                                    Icon(
-                                        imageVector = Icons.Default.Settings,
-                                        contentDescription = stringResource(R.string.nav_settings)
-                                    )
-                                }
                             },
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surface,
@@ -297,26 +342,36 @@ fun FileBrowserScreen(
             }
         },
         floatingActionButton = {
-            if (selectedFiles.isEmpty()) {
-                Column(
-                    horizontalAlignment = Alignment.End,
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (canScrollToTop && visibleFiles.isNotEmpty()) {
-                        SmallFloatingActionButton(
-                            onClick = {
-                                coroutineScope.launch {
-                                    listState.animateScrollToItem(0)
-                                }
-                            }
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowUp,
-                                contentDescription = stringResource(R.string.back_to_top)
-                            )
+            // Show batch operation FAB only when in directory view
+            if (openedDirectory != null && selectedFiles.isEmpty() && !isBatchProcessing) {
+                BatchOperationsFAB(
+                    expanded = showBatchMenu,
+                    onExpandChange = { showBatchMenu = it },
+                    onOnlineMetadata = { 
+                        showBatchMenu = false
+                        showOnlineMetadataDialog = true 
+                    },
+                    onRenameFiles = { 
+                        showBatchMenu = false
+                        showRenameDialog = true 
+                    },
+                    onFixMetadata = { 
+                        showBatchMenu = false
+                        showFixMetadataDialog = true 
+                    }
+                )
+            } else if (selectedFiles.isEmpty() && canScrollToTop && visibleFiles.isNotEmpty()) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            listState.animateScrollToItem(0)
                         }
                     }
-
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = stringResource(R.string.back_to_top)
+                    )
                 }
             }
         }
@@ -371,6 +426,15 @@ fun FileBrowserScreen(
                                     },
                                     onFileLongClick = { audioFile ->
                                         viewModel.toggleFileSelection(audioFile.path)
+                                    },
+                                    onEditFileMetadata = { audioFile ->
+                                        onNavigateToMetadata(audioFile.path)
+                                    },
+                                    onRenameFile = { audioFile ->
+                                        renameTargetFile = audioFile
+                                    },
+                                    onDeleteFile = { audioFile ->
+                                        deleteTargetFile = audioFile
                                     }
                                 )
                             }
@@ -384,7 +448,803 @@ fun FileBrowserScreen(
             }
         }
     }
+    
+    // Batch Progress Dialog
+    if (showBatchProgress && batchProgress != null) {
+        BatchProgressDialog(
+            progress = batchProgress!!,
+            onDismiss = { 
+                if (batchProgress?.status == BatchStatus.COMPLETED || batchProgress?.status == BatchStatus.CANCELLED) {
+                    showBatchProgress = false
+                    viewModel.resetBatchOperation()
+                }
+            }
+        )
+    }
+    
+    // Error Snackbar
+    if (batchError != null) {
+        LaunchedEffect(batchError) {
+            kotlinx.coroutines.delay(3000)
+            viewModel.clearBatchError()
+        }
+    }
+    
+    // Online Metadata Dialog
+    if (showOnlineMetadataDialog) {
+        BatchOnlineMetadataDialog(
+            targetFilesCount = if (selectedFiles.isEmpty()) visibleFiles.size else selectedFiles.size,
+            onDismiss = { showOnlineMetadataDialog = false },
+            onConfirm = { options ->
+                val targetFiles = if (selectedFiles.isEmpty()) {
+                    visibleFiles.map { it.path }
+                } else {
+                    selectedFiles.toList()
+                }
+                viewModel.batchFetchOnlineMetadata(targetFiles, options)
+                showOnlineMetadataDialog = false
+            }
+        )
+    }
+    
+    // Rename Dialog
+    if (showRenameDialog) {
+        BatchRenameDialog(
+            targetFilesCount = if (selectedFiles.isEmpty()) visibleFiles.size else selectedFiles.size,
+            onDismiss = { showRenameDialog = false },
+            onConfirm = { pattern, startNumber ->
+                val targetFiles = if (selectedFiles.isEmpty()) {
+                    visibleFiles.map { it.path }
+                } else {
+                    selectedFiles.toList()
+                }
+                viewModel.batchRenameFiles(targetFiles, pattern, startNumber)
+                showRenameDialog = false
+            }
+        )
+    }
+    
+    // Fix Metadata Dialog
+    if (showFixMetadataDialog) {
+        BatchFixMetadataDialog(
+            targetFilesCount = if (selectedFiles.isEmpty()) visibleFiles.size else selectedFiles.size,
+            onDismiss = { showFixMetadataDialog = false },
+            onConfirm = { options ->
+                val targetFiles = if (selectedFiles.isEmpty()) {
+                    visibleFiles.map { it.path }
+                } else {
+                    selectedFiles.toList()
+                }
+                viewModel.batchFixMetadata(targetFiles, options)
+                showFixMetadataDialog = false
+            }
+        )
+    }
+
+    // Batch Operations Menu Dialog (when files are selected)
+    if (showBatchOperationsMenu) {
+        BatchOperationsMenuDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showBatchOperationsMenu = false },
+            onOnlineMetadata = {
+                showBatchOperationsMenu = false
+                showOnlineMetadataDialog = true
+            },
+            onUnifiedField = {
+                showBatchOperationsMenu = false
+                showUnifiedFieldDialog = true
+            },
+            onReplaceText = {
+                showBatchOperationsMenu = false
+                showReplaceTextDialog = true
+            },
+            onAutoNumber = {
+                showBatchOperationsMenu = false
+                showAutoNumberDialog = true
+            },
+            onRenameFiles = {
+                showBatchOperationsMenu = false
+                showRenameDialog = true
+            },
+            onFixMetadata = {
+                showBatchOperationsMenu = false
+                showFixMetadataDialog = true
+            }
+        )
+    }
+
+    // Unified Field Dialog
+    if (showUnifiedFieldDialog) {
+        UnifiedFieldDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showUnifiedFieldDialog = false },
+            onConfirm = { field, value ->
+                viewModel.batchSetUnifiedField(selectedFiles.toList(), field, value)
+                showUnifiedFieldDialog = false
+            }
+        )
+    }
+
+    // Replace Text Dialog
+    if (showReplaceTextDialog) {
+        ReplaceTextDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showReplaceTextDialog = false },
+            onConfirm = { field, searchText, replaceText, useRegex ->
+                viewModel.batchReplaceText(selectedFiles.toList(), field, searchText, replaceText, useRegex)
+                showReplaceTextDialog = false
+            }
+        )
+    }
+
+    // Auto Number Dialog
+    if (showAutoNumberDialog) {
+        AutoNumberDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showAutoNumberDialog = false },
+            onConfirm = { startNumber, step, totalTracks ->
+                viewModel.batchAutoNumberTracks(selectedFiles.toList(), startNumber, step, totalTracks)
+                showAutoNumberDialog = false
+            }
+        )
+    }
+
+    if (renameTargetFile != null) {
+        SingleFileRenameDialog(
+            audioFile = renameTargetFile!!,
+            onDismiss = { renameTargetFile = null },
+            onConfirm = { newName ->
+                val target = renameTargetFile ?: return@SingleFileRenameDialog
+                viewModel.renameSingleFile(target.path, newName) { success, message ->
+                    if (!success) {
+                        Toast.makeText(
+                            context,
+                            message ?: context.getString(R.string.rename_file_failed),
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
+                renameTargetFile = null
+            }
+        )
+    }
+
+    if (deleteTargetFile != null) {
+        AlertDialog(
+            onDismissRequest = { deleteTargetFile = null },
+            title = { Text(stringResource(R.string.dialog_confirm_delete)) },
+            text = {
+                Text(
+                    text = stringResource(
+                        R.string.dialog_confirm_delete_single_file_message,
+                        deleteTargetFile?.name.orEmpty()
+                    )
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val target = deleteTargetFile ?: return@TextButton
+                        viewModel.deleteSingleFile(target.path) { success, message ->
+                            if (!success) {
+                                Toast.makeText(
+                                    context,
+                                    message ?: context.getString(R.string.delete_file_failed),
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        }
+                        deleteTargetFile = null
+                    }
+                ) {
+                    Text(stringResource(R.string.dialog_ok))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { deleteTargetFile = null }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            }
+        )
+    }
 }
+
+/**
+ * Batch Operations FAB with expandable menu (Speed Dial style)
+ */
+@Composable
+private fun BatchOperationsFAB(
+    expanded: Boolean,
+    onExpandChange: (Boolean) -> Unit,
+    onOnlineMetadata: () -> Unit,
+    onRenameFiles: () -> Unit,
+    onFixMetadata: () -> Unit
+) {
+    val rotation by animateFloatAsState(
+        targetValue = if (expanded) 45f else 0f,
+        animationSpec = tween(durationMillis = 200),
+        label = "fab_rotation"
+    )
+    
+    Column(
+        horizontalAlignment = Alignment.End,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        // Menu items
+        AnimatedVisibility(
+            visible = expanded,
+            enter = fadeIn(animationSpec = tween(150)) + expandVertically(),
+            exit = fadeOut(animationSpec = tween(150)) + shrinkVertically()
+        ) {
+            Column(
+                horizontalAlignment = Alignment.End,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(bottom = 8.dp)
+            ) {
+                // Online Metadata
+                MenuItem(
+                    label = stringResource(R.string.batch_online_metadata),
+                    icon = AppIcon.CloudDownload,
+                    onClick = onOnlineMetadata
+                )
+                
+                // Rename Files
+                MenuItem(
+                    label = stringResource(R.string.batch_rename_files),
+                    icon = AppIcon.Rename,
+                    onClick = onRenameFiles
+                )
+                
+                // Fix Metadata
+                MenuItem(
+                    label = stringResource(R.string.batch_fix_metadata),
+                    icon = AppIcon.AutoFix,
+                    onClick = onFixMetadata
+                )
+            }
+        }
+        
+        // Main FAB
+        FloatingActionButton(
+            onClick = { onExpandChange(!expanded) },
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+        ) {
+            Icon(
+                imageVector = Icons.Default.Add,
+                contentDescription = stringResource(R.string.batch_operations),
+                modifier = Modifier.rotate(rotation)
+            )
+        }
+    }
+}
+
+@Composable
+private fun MenuItem(
+    label: String,
+    icon: AppIcon,
+    onClick: () -> Unit
+) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(horizontal = 8.dp)
+    ) {
+        // Label
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = RoundedCornerShape(4.dp),
+            modifier = Modifier.padding(end = 12.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        
+        // Icon
+        SmallFloatingActionButton(
+            onClick = onClick,
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+        ) {
+            Icon(
+                painter = appIconPainter(icon),
+                contentDescription = label
+            )
+        }
+    }
+}
+
+/**
+ * Batch Progress Dialog (MD3 compliant)
+ */
+@Composable
+private fun BatchProgressDialog(
+    progress: BatchProgress,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = progress.status != BatchStatus.PROCESSING,
+            dismissOnClickOutside = progress.status != BatchStatus.PROCESSING
+        )
+    ) {
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Icon/Progress indicator
+                when (progress.status) {
+                    BatchStatus.PROCESSING -> {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(48.dp),
+                            strokeWidth = 4.dp
+                        )
+                    }
+                    BatchStatus.COMPLETED -> {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    BatchStatus.CANCELLED -> {
+                        Icon(
+                            painter = appIconPainter(AppIcon.Close),
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Title
+                Text(
+                    text = when (progress.status) {
+                        BatchStatus.PROCESSING -> stringResource(R.string.batch_processing)
+                        BatchStatus.COMPLETED -> stringResource(R.string.batch_complete)
+                        BatchStatus.CANCELLED -> stringResource(R.string.batch_cancelled)
+                    },
+                    style = MaterialTheme.typography.headlineSmall
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Progress text
+                Text(
+                    text = stringResource(R.string.batch_progress_format, progress.currentFile, progress.totalFiles),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                
+                // Current file
+                if (progress.currentFilePath.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = progress.currentFilePath.substringAfterLast("/"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Progress indicator
+                LinearProgressIndicator(
+                    progress = { progress.percentage },
+                    modifier = Modifier.fillMaxWidth()
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Percentage
+                Text(
+                    text = "${(progress.percentage * 100).toInt()}%",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Stats
+                if (progress.status != BatchStatus.PROCESSING) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        BatchStatItem(
+                            label = stringResource(R.string.success),
+                            value = progress.successCount,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        BatchStatItem(
+                            label = stringResource(R.string.failed),
+                            value = progress.failureCount,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+                
+                // Action buttons
+                if (progress.status != BatchStatus.PROCESSING) {
+                    TextButton(onClick = onDismiss) {
+                        Text(stringResource(R.string.dialog_close))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BatchStatItem(
+    label: String,
+    value: Int,
+    color: androidx.compose.ui.graphics.Color
+) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            text = value.toString(),
+            style = MaterialTheme.typography.titleLarge,
+            color = color
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = color.copy(alpha = 0.8f)
+        )
+    }
+}
+
+/**
+ * Batch Online Metadata Dialog
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BatchOnlineMetadataDialog(
+    targetFilesCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (OnlineMetadataOptions) -> Unit
+) {
+    var overwriteExisting by remember { mutableStateOf(false) }
+    var fetchAlbumArt by remember { mutableStateOf(true) }
+    var fetchLyrics by remember { mutableStateOf(false) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = null) },
+        title = { Text(stringResource(R.string.batch_online_metadata_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.batch_target_files, targetFilesCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // Options
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { overwriteExisting = !overwriteExisting }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Checkbox(
+                            checked = overwriteExisting,
+                            onCheckedChange = { overwriteExisting = it }
+                        )
+                        Text(
+                            text = stringResource(R.string.batch_overwrite_existing),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { fetchAlbumArt = !fetchAlbumArt }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Checkbox(
+                            checked = fetchAlbumArt,
+                            onCheckedChange = { fetchAlbumArt = it }
+                        )
+                        Text(
+                            text = stringResource(R.string.batch_fetch_album_art),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { fetchLyrics = !fetchLyrics }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Checkbox(
+                            checked = fetchLyrics,
+                            onCheckedChange = { fetchLyrics = it }
+                        )
+                        Text(
+                            text = stringResource(R.string.batch_fetch_lyrics),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { 
+                    onConfirm(OnlineMetadataOptions(overwriteExisting, fetchAlbumArt, fetchLyrics))
+                }
+            ) {
+                Text(stringResource(R.string.batch_start))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
+}
+
+data class OnlineMetadataOptions(
+    val overwriteExisting: Boolean,
+    val fetchAlbumArt: Boolean,
+    val fetchLyrics: Boolean
+)
+
+/**
+ * Batch Rename Dialog
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BatchRenameDialog(
+    targetFilesCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (String, Int) -> Unit
+) {
+    var pattern by remember { mutableStateOf("{artist} - {title}") }
+    var startNumber by remember { mutableIntStateOf(1) }
+    var expanded by remember { mutableStateOf(false) }
+    
+    val patterns = listOf(
+        "{artist} - {title}" to stringResource(R.string.pattern_artist_title),
+        "{title}" to stringResource(R.string.pattern_title),
+        "{track}. {title}" to stringResource(R.string.pattern_track_title),
+        "{artist} - {album} - {track}. {title}" to stringResource(R.string.pattern_full)
+    )
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(painter = appIconPainter(AppIcon.Rename), contentDescription = null) },
+        title = { Text(stringResource(R.string.batch_rename_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.batch_target_files, targetFilesCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // Pattern selector
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = patterns.find { it.first == pattern }?.second ?: pattern,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.rename_pattern)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier.menuAnchor()
+                    )
+                    
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        patterns.forEach { (pat, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    pattern = pat
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Start number
+                OutlinedTextField(
+                    value = startNumber.toString(),
+                    onValueChange = { 
+                        startNumber = it.toIntOrNull() ?: 1
+                    },
+                    label = { Text(stringResource(R.string.start_number)) },
+                    singleLine = true
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Help text
+                Text(
+                    text = stringResource(R.string.rename_pattern_help),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(pattern, startNumber) }) {
+                Text(stringResource(R.string.batch_start))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * Batch Fix Metadata Dialog
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BatchFixMetadataDialog(
+    targetFilesCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (FixMetadataOptions) -> Unit
+) {
+    var autoTitleCase by remember { mutableStateOf(true) }
+    var removeExtraSpaces by remember { mutableStateOf(true) }
+    var fixTrackNumbers by remember { mutableStateOf(true) }
+    var removeEmptyTags by remember { mutableStateOf(false) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = null) },
+        title = { Text(stringResource(R.string.batch_fix_metadata_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.batch_target_files, targetFilesCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // Options
+                Column {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { autoTitleCase = !autoTitleCase }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Checkbox(
+                            checked = autoTitleCase,
+                            onCheckedChange = { autoTitleCase = it }
+                        )
+                        Text(
+                            text = stringResource(R.string.fix_auto_title_case),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { removeExtraSpaces = !removeExtraSpaces }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Checkbox(
+                            checked = removeExtraSpaces,
+                            onCheckedChange = { removeExtraSpaces = it }
+                        )
+                        Text(
+                            text = stringResource(R.string.fix_remove_extra_spaces),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { fixTrackNumbers = !fixTrackNumbers }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Checkbox(
+                            checked = fixTrackNumbers,
+                            onCheckedChange = { fixTrackNumbers = it }
+                        )
+                        Text(
+                            text = stringResource(R.string.fix_track_numbers),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                    
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { removeEmptyTags = !removeEmptyTags }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Checkbox(
+                            checked = removeEmptyTags,
+                            onCheckedChange = { removeEmptyTags = it }
+                        )
+                        Text(
+                            text = stringResource(R.string.fix_remove_empty_tags),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { 
+                    onConfirm(FixMetadataOptions(autoTitleCase, removeExtraSpaces, fixTrackNumbers, removeEmptyTags))
+                }
+            ) {
+                Text(stringResource(R.string.batch_start))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
+}
+
+data class FixMetadataOptions(
+    val autoTitleCase: Boolean,
+    val removeExtraSpaces: Boolean,
+    val fixTrackNumbers: Boolean,
+    val removeEmptyTags: Boolean
+)
 
 private enum class FileSortOption {
     NAME_ASC,
@@ -432,7 +1292,6 @@ private fun SearchBar(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        // Search field - only shown when expanded
         androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
             OutlinedTextField(
                 value = query,
@@ -513,7 +1372,8 @@ private fun SelectionTopBar(
     selectedCount: Int,
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
-    onNavigateToReplayGain: () -> Unit
+    onNavigateToReplayGain: () -> Unit,
+    onBatchOperations: () -> Unit
 ) {
     TopAppBar(
         title = { Text(stringResource(R.string.selected_count, selectedCount)) },
@@ -526,6 +1386,34 @@ private fun SelectionTopBar(
             TextButton(onClick = onSelectAll) {
                 Text(stringResource(R.string.select_all))
             }
+            // Batch Operations Menu
+            Box {
+                var expanded by remember { mutableStateOf(false) }
+                
+                IconButton(onClick = { expanded = true }) {
+                    Icon(
+                        painter = appIconPainter(AppIcon.MoreVert),
+                        contentDescription = stringResource(R.string.batch_operations)
+                    )
+                }
+                
+                DropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { expanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.batch_online_metadata)) },
+                        leadingIcon = {
+                            Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = null)
+                        },
+                        onClick = {
+                            expanded = false
+                            onBatchOperations()
+                        }
+                    )
+                }
+            }
+            
             FilledTonalButton(
                 onClick = onNavigateToReplayGain,
                 modifier = Modifier.padding(horizontal = 8.dp)
@@ -647,8 +1535,12 @@ private fun AudioFileList(
     listState: androidx.compose.foundation.lazy.LazyListState,
     selectedFiles: Set<String>,
     onFileClick: (AudioFile) -> Unit,
-    onFileLongClick: (AudioFile) -> Unit
+    onFileLongClick: (AudioFile) -> Unit,
+    onEditFileMetadata: (AudioFile) -> Unit,
+    onRenameFile: (AudioFile) -> Unit,
+    onDeleteFile: (AudioFile) -> Unit
 ) {
+    val isSelectionMode = selectedFiles.isNotEmpty()
     LazyColumn(
         state = listState,
         contentPadding = PaddingValues(vertical = 8.dp)
@@ -658,7 +1550,11 @@ private fun AudioFileList(
                 audioFile = audioFile,
                 isSelected = audioFile.path in selectedFiles,
                 onClick = { onFileClick(audioFile) },
-                onLongClick = { onFileLongClick(audioFile) }
+                onLongClick = { onFileLongClick(audioFile) },
+                showActions = !isSelectionMode,
+                onEditMetadata = { onEditFileMetadata(audioFile) },
+                onRename = { onRenameFile(audioFile) },
+                onDelete = { onDeleteFile(audioFile) }
             )
         }
     }
@@ -670,11 +1566,16 @@ private fun AudioFileItem(
     audioFile: AudioFile,
     isSelected: Boolean,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    showActions: Boolean,
+    onEditMetadata: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
     Card(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
             .combinedClickable(
@@ -695,38 +1596,21 @@ private fun AudioFileItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Album art placeholder
+            // Album art display
             Box(
                 modifier = Modifier
                     .size(48.dp)
                     .clip(RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                val mediaStoreBitmap = remember(audioFile.mediaStoreAlbumId) {
-                    loadMediaStoreAlbumBitmap(context, audioFile.mediaStoreAlbumId)
+                // Load album art on-demand
+                val albumArtBitmap = remember(audioFile.path) {
+                    loadAlbumArt(context, audioFile)
                 }
-                if (audioFile.metadata.albumArt != null) {
-                    val bitmap = remember(audioFile.metadata.albumArt) {
-                        audioFile.metadata.albumArt?.let { bytes ->
-                            decodeThumbnailBitmap(bytes)
-                        }
-                    }
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                        contentDescription = stringResource(R.string.cd_album_art),
-                        modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Icon(
-                            painter = appIconPainter(AppIcon.MusicNote),
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.outline
-                        )
-                    }
-                } else if (mediaStoreBitmap != null) {
+                
+                if (albumArtBitmap != null) {
                     Image(
-                        bitmap = mediaStoreBitmap.asImageBitmap(),
+                        bitmap = albumArtBitmap.asImageBitmap(),
                         contentDescription = stringResource(R.string.cd_album_art),
                         modifier = Modifier.fillMaxSize()
                     )
@@ -777,9 +1661,162 @@ private fun AudioFileItem(
                     contentDescription = stringResource(R.string.selected),
                     tint = MaterialTheme.colorScheme.primary
                 )
+            } else if (showActions) {
+                FileActionsMenu(
+                    onEditMetadata = onEditMetadata,
+                    onRename = onRename,
+                    onDelete = onDelete
+                )
             }
         }
     }
+}
+
+@Composable
+private fun FileActionsMenu(
+    onEditMetadata: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                painter = appIconPainter(AppIcon.MoreVert),
+                contentDescription = stringResource(R.string.file_item_actions)
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.edit_metadata)) },
+                leadingIcon = {
+                    Icon(
+                        painter = appIconPainter(AppIcon.Edit),
+                        contentDescription = null
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onEditMetadata()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.rename_file)) },
+                leadingIcon = {
+                    Icon(
+                        painter = appIconPainter(AppIcon.Rename),
+                        contentDescription = null
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onRename()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.log_viewer_delete)) },
+                onClick = {
+                    expanded = false
+                    onDelete()
+                }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SingleFileRenameDialog(
+    audioFile: AudioFile,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var newName by remember(audioFile.path) { mutableStateOf(audioFile.name.substringBeforeLast(".")) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.rename_file)) },
+        text = {
+            Column {
+                Text(
+                    text = audioFile.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+                OutlinedTextField(
+                    value = newName,
+                    onValueChange = { newName = it },
+                    label = { Text(stringResource(R.string.new_file_name)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(newName) },
+                enabled = newName.trim().isNotEmpty()
+            ) {
+                Text(stringResource(R.string.dialog_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * Loads album art from multiple sources:
+ * 1. Embedded album art from the audio file
+ * 2. MediaStore album art
+ * Returns null if no album art is found.
+ */
+private fun loadAlbumArt(
+    context: android.content.Context,
+    audioFile: AudioFile
+): android.graphics.Bitmap? {
+    // First try embedded album art from the file
+    val embeddedArt = loadEmbeddedAlbumArt(context, audioFile.path)
+    if (embeddedArt != null) {
+        return embeddedArt
+    }
+
+    // Then try MediaStore album art
+    if (audioFile.mediaStoreAlbumId != null && audioFile.mediaStoreAlbumId > 0L) {
+        val mediaStoreArt = loadMediaStoreAlbumBitmap(context, audioFile.mediaStoreAlbumId)
+        if (mediaStoreArt != null) {
+            return mediaStoreArt
+        }
+    }
+
+    return null
+}
+
+/**
+ * Loads embedded album art directly from the audio file using MediaMetadataRetriever.
+ */
+private fun loadEmbeddedAlbumArt(context: android.content.Context, filePath: String): android.graphics.Bitmap? {
+    return runCatching {
+        val retriever = android.media.MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(filePath)
+            val artBytes = retriever.embeddedPicture
+            if (artBytes != null) {
+                decodeThumbnailBitmap(artBytes)
+            } else {
+                null
+            }
+        } finally {
+            retriever.release()
+        }
+    }.getOrNull()
 }
 
 private fun loadMediaStoreAlbumBitmap(
@@ -871,4 +1908,432 @@ private fun DirectoryItem(
             }
         }
     }
+}
+
+/**
+ * Batch Operations Menu Dialog (when files are selected)
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun BatchOperationsMenuDialog(
+    targetFilesCount: Int,
+    onDismiss: () -> Unit,
+    onOnlineMetadata: () -> Unit,
+    onUnifiedField: () -> Unit,
+    onReplaceText: () -> Unit,
+    onAutoNumber: () -> Unit,
+    onRenameFiles: () -> Unit,
+    onFixMetadata: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = null) },
+        title = { Text(stringResource(R.string.batch_operations)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.batch_target_files, targetFilesCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // Menu items
+                Column {
+                    BatchMenuItem(
+                        icon = AppIcon.CloudDownload,
+                        label = stringResource(R.string.batch_online_metadata),
+                        onClick = onOnlineMetadata
+                    )
+                    
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    
+                    BatchMenuItem(
+                        icon = AppIcon.Edit,
+                        label = stringResource(R.string.batch_unified_field),
+                        onClick = onUnifiedField
+                    )
+                    
+                    BatchMenuItem(
+                        icon = AppIcon.AutoFix,
+                        label = stringResource(R.string.batch_replace_text),
+                        onClick = onReplaceText
+                    )
+                    
+                    BatchMenuItem(
+                        icon = AppIcon.Schedule,
+                        label = stringResource(R.string.batch_auto_number),
+                        onClick = onAutoNumber
+                    )
+                    
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                    
+                    BatchMenuItem(
+                        icon = AppIcon.Rename,
+                        label = stringResource(R.string.batch_rename_files),
+                        onClick = onRenameFiles
+                    )
+                    
+                    BatchMenuItem(
+                        icon = AppIcon.Check,
+                        label = stringResource(R.string.batch_fix_metadata),
+                        onClick = onFixMetadata
+                    )
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
+}
+
+@Composable
+private fun BatchMenuItem(
+    icon: AppIcon,
+    label: String,
+    onClick: () -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(label) },
+        leadingContent = {
+            Icon(
+                painter = appIconPainter(icon),
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+        },
+        modifier = Modifier.clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surface)
+    )
+}
+
+/**
+ * Unified Field Dialog - Set a field to the same value for all selected files
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun UnifiedFieldDialog(
+    targetFilesCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (field: String, value: String) -> Unit
+) {
+    var selectedField by remember { mutableStateOf("artist") }
+    var fieldValue by remember { mutableStateOf("") }
+    
+    val fields = listOf(
+        "artist" to stringResource(R.string.metadata_artist),
+        "album" to stringResource(R.string.metadata_album),
+        "albumArtist" to stringResource(R.string.metadata_album_artist),
+        "year" to stringResource(R.string.metadata_year),
+        "genre" to stringResource(R.string.metadata_genre),
+        "composer" to stringResource(R.string.metadata_composer)
+    )
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = null) },
+        title = { Text(stringResource(R.string.batch_unified_field_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.batch_target_files, targetFilesCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // Field selector
+                Text(
+                    text = stringResource(R.string.select_field),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                Column {
+                    fields.forEach { (fieldKey, fieldLabel) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedField = fieldKey }
+                                .padding(vertical = 8.dp)
+                        ) {
+                            RadioButton(
+                                selected = selectedField == fieldKey,
+                                onClick = { selectedField = fieldKey }
+                            )
+                            Text(
+                                text = fieldLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Value input
+                OutlinedTextField(
+                    value = fieldValue,
+                    onValueChange = { fieldValue = it },
+                    label = { Text(stringResource(R.string.field_value)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(selectedField, fieldValue) },
+                enabled = fieldValue.isNotBlank()
+            ) {
+                Text(stringResource(R.string.batch_start))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * Replace Text Dialog - Find and replace text in fields
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ReplaceTextDialog(
+    targetFilesCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (field: String, searchText: String, replaceText: String, useRegex: Boolean) -> Unit
+) {
+    var selectedField by remember { mutableStateOf("title") }
+    var searchText by remember { mutableStateOf("") }
+    var replaceText by remember { mutableStateOf("") }
+    var useRegex by remember { mutableStateOf(false) }
+    
+    val fields = listOf(
+        "title" to stringResource(R.string.metadata_title),
+        "artist" to stringResource(R.string.metadata_artist),
+        "album" to stringResource(R.string.metadata_album),
+        "all" to stringResource(R.string.all_fields)
+    )
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = null) },
+        title = { Text(stringResource(R.string.batch_replace_text_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.batch_target_files, targetFilesCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // Field selector
+                Text(
+                    text = stringResource(R.string.select_field),
+                    style = MaterialTheme.typography.labelLarge,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+                
+                Column {
+                    fields.forEach { (fieldKey, fieldLabel) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { selectedField = fieldKey }
+                                .padding(vertical = 6.dp)
+                        ) {
+                            RadioButton(
+                                selected = selectedField == fieldKey,
+                                onClick = { selectedField = fieldKey }
+                            )
+                            Text(
+                                text = fieldLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                modifier = Modifier.padding(start = 8.dp)
+                            )
+                        }
+                    }
+                }
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                // Search text
+                OutlinedTextField(
+                    value = searchText,
+                    onValueChange = { searchText = it },
+                    label = { Text(stringResource(R.string.search_text)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Replace text
+                OutlinedTextField(
+                    value = replaceText,
+                    onValueChange = { replaceText = it },
+                    label = { Text(stringResource(R.string.replace_text)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Use regex option
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { useRegex = !useRegex }
+                        .padding(vertical = 8.dp)
+                ) {
+                    Checkbox(
+                        checked = useRegex,
+                        onCheckedChange = { useRegex = it }
+                    )
+                    Text(
+                        text = stringResource(R.string.use_regex),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(selectedField, searchText, replaceText, useRegex) },
+                enabled = searchText.isNotBlank()
+            ) {
+                Text(stringResource(R.string.batch_start))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
+}
+
+/**
+ * Auto Number Dialog - Generate sequential track numbers
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AutoNumberDialog(
+    targetFilesCount: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (startNumber: Int, step: Int, totalTracks: Int?) -> Unit
+) {
+    var startNumber by remember { mutableIntStateOf(1) }
+    var step by remember { mutableIntStateOf(1) }
+    var setTotalTracks by remember { mutableStateOf(false) }
+    var totalTracks by remember { mutableIntStateOf(targetFilesCount) }
+    
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = { Icon(painter = appIconPainter(AppIcon.Schedule), contentDescription = null) },
+        title = { Text(stringResource(R.string.batch_auto_number_title)) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.batch_target_files, targetFilesCount),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(bottom = 16.dp)
+                )
+                
+                // Start number
+                OutlinedTextField(
+                    value = startNumber.toString(),
+                    onValueChange = { startNumber = it.toIntOrNull() ?: 1 },
+                    label = { Text(stringResource(R.string.start_number)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Step
+                OutlinedTextField(
+                    value = step.toString(),
+                    onValueChange = { step = it.toIntOrNull() ?: 1 },
+                    label = { Text(stringResource(R.string.step)) },
+                    modifier = Modifier.fillMaxWidth(),
+                    singleLine = true
+                )
+                
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                // Set total tracks option
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { setTotalTracks = !setTotalTracks }
+                        .padding(vertical = 8.dp)
+                ) {
+                    Checkbox(
+                        checked = setTotalTracks,
+                        onCheckedChange = { setTotalTracks = it }
+                    )
+                    Text(
+                        text = stringResource(R.string.set_total_tracks),
+                        style = MaterialTheme.typography.bodyMedium,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
+                
+                // Total tracks input
+                if (setTotalTracks) {
+                    OutlinedTextField(
+                        value = totalTracks.toString(),
+                        onValueChange = { totalTracks = it.toIntOrNull() ?: targetFilesCount },
+                        label = { Text(stringResource(R.string.total_tracks)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Preview
+                val preview = (0..minOf(2, targetFilesCount - 1)).joinToString(", ") { index ->
+                    (startNumber + index * step).toString()
+                } + if (targetFilesCount > 3) ", ..." else ""
+                
+                Text(
+                    text = stringResource(R.string.number_preview, preview),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { 
+                    onConfirm(startNumber, step, if (setTotalTracks) totalTracks else null) 
+                }
+            ) {
+                Text(stringResource(R.string.batch_start))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
 }

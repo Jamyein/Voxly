@@ -1,14 +1,15 @@
 package com.voxly.presentation.screens
 
 import android.app.Activity
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -29,11 +30,10 @@ import com.voxly.presentation.viewmodel.SettingsViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    onNavigateBack: () -> Unit,
-    onNavigateToDirectoryManagement: () -> Unit,
-    onNavigateToLogViewer: () -> Unit,
-    onExportLogs: () -> Unit,
-    onCleanupLogs: () -> Unit,
+    onNavigateToDirectoryManagement: () -> Unit = {},
+    onNavigateToLogViewer: () -> Unit = {},
+    onExportLogs: () -> Unit = {},
+    onCleanupLogs: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
@@ -45,10 +45,21 @@ fun SettingsScreen(
     val themeMode by viewModel.themeMode.collectAsState()
     val appleCountryCode by viewModel.appleCountryCode.collectAsState()
     val onlineSearchLimit by viewModel.onlineSearchLimit.collectAsState()
-    val sourceEnabledMusicBrainz by viewModel.sourceEnabledMusicBrainz.collectAsState()
-    val sourceEnabledITunes by viewModel.sourceEnabledITunes.collectAsState()
-    val sourceEnabledNetease by viewModel.sourceEnabledNetease.collectAsState()
-    val sourceEnabledQQMusic by viewModel.sourceEnabledQQMusic.collectAsState()
+    val metadataSourceEnabledMusicBrainz by viewModel.metadataSourceEnabledMusicBrainz.collectAsState()
+    val metadataSourceEnabledITunes by viewModel.metadataSourceEnabledITunes.collectAsState()
+    val metadataSourceEnabledNetease by viewModel.metadataSourceEnabledNetease.collectAsState()
+    val metadataSourceEnabledQQMusic by viewModel.metadataSourceEnabledQQMusic.collectAsState()
+    val lyricsSourceEnabledMusicBrainz by viewModel.lyricsSourceEnabledMusicBrainz.collectAsState()
+    val lyricsSourceEnabledITunes by viewModel.lyricsSourceEnabledITunes.collectAsState()
+    val lyricsSourceEnabledNetease by viewModel.lyricsSourceEnabledNetease.collectAsState()
+    val lyricsSourceEnabledQQMusic by viewModel.lyricsSourceEnabledQQMusic.collectAsState()
+    val coverSourceEnabledMusicBrainz by viewModel.coverSourceEnabledMusicBrainz.collectAsState()
+    val coverSourceEnabledITunes by viewModel.coverSourceEnabledITunes.collectAsState()
+    val coverSourceEnabledNetease by viewModel.coverSourceEnabledNetease.collectAsState()
+    val coverSourceEnabledQQMusic by viewModel.coverSourceEnabledQQMusic.collectAsState()
+    val metadataSourcePriority by viewModel.metadataSourcePriority.collectAsState()
+    val lyricsSourcePriority by viewModel.lyricsSourcePriority.collectAsState()
+    val coverSourcePriority by viewModel.coverSourcePriority.collectAsState()
     val loggingEnabled by viewModel.loggingEnabled.collectAsState()
     val fileLoggingEnabled by viewModel.fileLoggingEnabled.collectAsState()
     val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
@@ -106,6 +117,9 @@ fun SettingsScreen(
         ?: appleCountryOptions.first()
 
     var searchLimitExpanded by remember { mutableStateOf(false) }
+    var showMetadataSourceDialog by remember { mutableStateOf(false) }
+    var showLyricsSourceDialog by remember { mutableStateOf(false) }
+    var showCoverSourceDialog by remember { mutableStateOf(false) }
     val searchLimitOptions = remember {
         listOf(
             SearchLimitOption(0, R.string.settings_online_search_limit_unlimited),
@@ -121,14 +135,6 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.nav_settings)) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_back)
-                        )
-                    }
-                },
                 windowInsets = TopAppBarDefaults.windowInsets
             )
         }
@@ -227,54 +233,22 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             SettingsSection(title = stringResource(R.string.settings_section_online_metadata)) {
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_musicbrainz),
-                    subtitle = stringResource(R.string.settings_source_musicbrainz_subtitle),
-                    checked = sourceEnabledMusicBrainz,
-                    onCheckedChange = { viewModel.setSourceEnabledMusicBrainz(it) }
+                SettingsSubmenuRow(
+                    title = stringResource(R.string.settings_source_group_metadata),
+                    subtitle = stringResource(R.string.settings_source_group_metadata_subtitle),
+                    onClick = { showMetadataSourceDialog = true }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_apple_music),
-                    subtitle = stringResource(R.string.settings_source_apple_music_subtitle),
-                    checked = sourceEnabledITunes,
-                    onCheckedChange = { viewModel.setSourceEnabledITunes(it) }
+                SettingsSubmenuRow(
+                    title = stringResource(R.string.settings_source_group_lyrics),
+                    subtitle = stringResource(R.string.settings_source_group_lyrics_subtitle),
+                    onClick = { showLyricsSourceDialog = true }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                SettingsDropdownRow(
-                    title = stringResource(R.string.settings_apple_country),
-                    subtitle = stringResource(R.string.settings_apple_country_subtitle),
-                    selectedLabel = stringResource(currentAppleCountry.labelResId),
-                    expanded = appleCountryExpanded,
-                    onExpandedChange = { appleCountryExpanded = it }
-                ) {
-                    appleCountryOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(stringResource(option.labelResId)) },
-                            onClick = {
-                                viewModel.setAppleCountryCode(option.value)
-                                appleCountryExpanded = false
-                            }
-                        )
-                    }
-                }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_netease),
-                    subtitle = stringResource(R.string.settings_source_netease_subtitle),
-                    checked = sourceEnabledNetease,
-                    onCheckedChange = { viewModel.setSourceEnabledNetease(it) }
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_qq_music),
-                    subtitle = stringResource(R.string.settings_source_qq_music_subtitle),
-                    checked = sourceEnabledQQMusic,
-                    onCheckedChange = { viewModel.setSourceEnabledQQMusic(it) }
+                SettingsSubmenuRow(
+                    title = stringResource(R.string.settings_source_group_cover),
+                    subtitle = stringResource(R.string.settings_source_group_cover_subtitle),
+                    onClick = { showCoverSourceDialog = true }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
@@ -368,6 +342,48 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            // ReplayGain Section
+            var replayGainTargetLoudness by remember { mutableFloatStateOf(-18f) }
+            var replayGainExpanded by remember { mutableStateOf(false) }
+            
+            SettingsSection(title = stringResource(R.string.replay_gain_settings)) {
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.replay_gain_target_loudness)) },
+                    supportingContent = { 
+                        Text(stringResource(R.string.replay_gain_default_loudness))
+                    },
+                    trailingContent = {
+                        Text(
+                            text = String.format("%.1f LUFS", replayGainTargetLoudness),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                )
+                
+                if (replayGainExpanded) {
+                    Slider(
+                        value = replayGainTargetLoudness,
+                        onValueChange = { replayGainTargetLoudness = it },
+                        valueRange = -24f..-14f,
+                        steps = 10,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                    )
+                }
+                
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.replay_gain_scanner_title)) },
+                    supportingContent = { Text("View scan history and results") },
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    modifier = Modifier.clickable { /* Navigate to scan history */ }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             // About Section
             SettingsSection(title = stringResource(R.string.settings_section_about)) {
                 SettingsInfoRow(title = stringResource(R.string.settings_version_label), value = BuildConfig.VERSION_NAME)
@@ -375,6 +391,138 @@ fun SettingsScreen(
                 SettingsInfoRow(title = stringResource(R.string.settings_developer_label), value = stringResource(R.string.settings_developer_value))
             }
         }
+    }
+
+    if (showMetadataSourceDialog) {
+        SourcePriorityDialog(
+            title = stringResource(R.string.settings_source_group_metadata),
+            priority = metadataSourcePriority,
+            onDismiss = { showMetadataSourceDialog = false },
+            onPriorityChange = viewModel::setMetadataSourcePriority,
+            extraContent = {
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_musicbrainz),
+                    subtitle = stringResource(R.string.settings_source_musicbrainz_subtitle),
+                    checked = metadataSourceEnabledMusicBrainz,
+                    onCheckedChange = { viewModel.setMetadataSourceEnabledMusicBrainz(it) }
+                )
+                HorizontalDivider()
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_apple_music),
+                    subtitle = stringResource(R.string.settings_source_apple_music_subtitle),
+                    checked = metadataSourceEnabledITunes,
+                    onCheckedChange = { viewModel.setMetadataSourceEnabledITunes(it) }
+                )
+                HorizontalDivider()
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_netease),
+                    subtitle = stringResource(R.string.settings_source_netease_subtitle),
+                    checked = metadataSourceEnabledNetease,
+                    onCheckedChange = { viewModel.setMetadataSourceEnabledNetease(it) }
+                )
+                HorizontalDivider()
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_qq_music),
+                    subtitle = stringResource(R.string.settings_source_qq_music_subtitle),
+                    checked = metadataSourceEnabledQQMusic,
+                    onCheckedChange = { viewModel.setMetadataSourceEnabledQQMusic(it) }
+                )
+                HorizontalDivider()
+                SettingsDropdownRow(
+                    title = stringResource(R.string.settings_apple_country),
+                    subtitle = stringResource(R.string.settings_apple_country_subtitle),
+                    selectedLabel = stringResource(currentAppleCountry.labelResId),
+                    expanded = appleCountryExpanded,
+                    onExpandedChange = { appleCountryExpanded = it }
+                ) {
+                    appleCountryOptions.forEach { option ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(option.labelResId)) },
+                            onClick = {
+                                viewModel.setAppleCountryCode(option.value)
+                                appleCountryExpanded = false
+                            }
+                        )
+                    }
+                }
+            }
+        )
+    }
+
+    if (showLyricsSourceDialog) {
+        SourcePriorityDialog(
+            title = stringResource(R.string.settings_source_group_lyrics),
+            priority = lyricsSourcePriority,
+            onDismiss = { showLyricsSourceDialog = false },
+            onPriorityChange = viewModel::setLyricsSourcePriority,
+            extraContent = {
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_musicbrainz),
+                    subtitle = stringResource(R.string.settings_source_musicbrainz_subtitle),
+                    checked = lyricsSourceEnabledMusicBrainz,
+                    onCheckedChange = { viewModel.setLyricsSourceEnabledMusicBrainz(it) }
+                )
+                HorizontalDivider()
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_apple_music),
+                    subtitle = stringResource(R.string.settings_source_apple_music_subtitle),
+                    checked = lyricsSourceEnabledITunes,
+                    onCheckedChange = { viewModel.setLyricsSourceEnabledITunes(it) }
+                )
+                HorizontalDivider()
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_netease),
+                    subtitle = stringResource(R.string.settings_source_netease_subtitle),
+                    checked = lyricsSourceEnabledNetease,
+                    onCheckedChange = { viewModel.setLyricsSourceEnabledNetease(it) }
+                )
+                HorizontalDivider()
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_qq_music),
+                    subtitle = stringResource(R.string.settings_source_qq_music_subtitle),
+                    checked = lyricsSourceEnabledQQMusic,
+                    onCheckedChange = { viewModel.setLyricsSourceEnabledQQMusic(it) }
+                )
+            }
+        )
+    }
+
+    if (showCoverSourceDialog) {
+        SourcePriorityDialog(
+            title = stringResource(R.string.settings_source_group_cover),
+            priority = coverSourcePriority,
+            onDismiss = { showCoverSourceDialog = false },
+            onPriorityChange = viewModel::setCoverSourcePriority,
+            extraContent = {
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_musicbrainz),
+                    subtitle = stringResource(R.string.settings_source_musicbrainz_subtitle),
+                    checked = coverSourceEnabledMusicBrainz,
+                    onCheckedChange = { viewModel.setCoverSourceEnabledMusicBrainz(it) }
+                )
+                HorizontalDivider()
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_apple_music),
+                    subtitle = stringResource(R.string.settings_source_apple_music_subtitle),
+                    checked = coverSourceEnabledITunes,
+                    onCheckedChange = { viewModel.setCoverSourceEnabledITunes(it) }
+                )
+                HorizontalDivider()
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_netease),
+                    subtitle = stringResource(R.string.settings_source_netease_subtitle),
+                    checked = coverSourceEnabledNetease,
+                    onCheckedChange = { viewModel.setCoverSourceEnabledNetease(it) }
+                )
+                HorizontalDivider()
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_source_qq_music),
+                    subtitle = stringResource(R.string.settings_source_qq_music_subtitle),
+                    checked = coverSourceEnabledQQMusic,
+                    onCheckedChange = { viewModel.setCoverSourceEnabledQQMusic(it) }
+                )
+            }
+        )
     }
 }
 
@@ -440,6 +588,99 @@ private fun SettingsInfoRow(title: String, value: String) {
         trailingContent = { Text(text = value) },
         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     )
+}
+
+@Composable
+private fun SettingsSubmenuRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(text = title) },
+        supportingContent = { Text(text = subtitle) },
+        trailingContent = {
+            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    )
+}
+
+@Composable
+private fun SourcePriorityDialog(
+    title: String,
+    priority: List<String>,
+    onDismiss: () -> Unit,
+    onPriorityChange: (List<String>) -> Unit,
+    extraContent: @Composable ColumnScope.() -> Unit = {}
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = stringResource(R.string.settings_source_priority_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                priority.forEachIndexed { index, source ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                    ) {
+                        Text(text = sourceToDisplayName(source))
+                        Row {
+                            IconButton(
+                                onClick = {
+                                    if (index > 0) {
+                                        val next = priority.toMutableList()
+                                        val temp = next[index - 1]
+                                        next[index - 1] = next[index]
+                                        next[index] = temp
+                                        onPriorityChange(next)
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Up")
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (index < priority.lastIndex) {
+                                        val next = priority.toMutableList()
+                                        val temp = next[index + 1]
+                                        next[index + 1] = next[index]
+                                        next[index] = temp
+                                        onPriorityChange(next)
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Down")
+                            }
+                        }
+                    }
+                }
+                extraContent()
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_ok))
+            }
+        }
+    )
+}
+
+private fun sourceToDisplayName(source: String): String = when (source) {
+    "itunes" -> "iTunes"
+    "musicbrainz" -> "MusicBrainz"
+    "netease" -> "NetEase"
+    "qq_music" -> "QQ Music"
+    else -> source
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

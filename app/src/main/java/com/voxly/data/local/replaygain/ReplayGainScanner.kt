@@ -264,17 +264,133 @@ class ReplayGainScanner @Inject constructor(
      * Saves ReplayGain information to file metadata.
      * Uses jaudiotagger to write REPLAYGAIN_TRACK_GAIN and related tags.
      */
-    private suspend fun saveReplayGainToFile(
+    suspend fun saveReplayGainToFile(
         filePath: String,
         replayGainInfo: ReplayGainInfo
     ): Boolean = withContext(Dispatchers.IO) {
         try {
-            // Use jaudiotagger to save ReplayGain tags
-            // This would be implemented by reading the file, adding ReplayGain tags,
-            // and saving it back
-            // For now, return true as placeholder
+            val file = File(filePath)
+            if (!file.exists()) return@withContext false
+
+            val extension = file.extension.lowercase()
+            
+            when (extension) {
+                "mp3" -> saveReplayGainToMp3(file, replayGainInfo)
+                "flac", "ogg" -> saveReplayGainToVorbis(file, replayGainInfo)
+                "m4a", "mp4" -> saveReplayGainToMp4(file, replayGainInfo)
+                else -> false
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Saves ReplayGain to MP3 files using ID3v2 TXXX frames.
+     */
+    private fun saveReplayGainToMp3(file: File, replayGainInfo: ReplayGainInfo): Boolean {
+        return try {
+            val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+            val tag = audioFile.tagOrCreateAndSetDefault
+            
+            // Create TXXX frames for ReplayGain
+            val trackGainFrame = org.jaudiotagger.tag.id3.framebody.FrameBodyTXXX()
+            trackGainFrame.description = "REPLAYGAIN_TRACK_GAIN"
+            trackGainFrame.text = String.format("%.2f dB", replayGainInfo.trackGain)
+            
+            val trackPeakFrame = org.jaudiotagger.tag.id3.framebody.FrameBodyTXXX()
+            trackPeakFrame.description = "REPLAYGAIN_TRACK_PEAK"
+            trackPeakFrame.text = String.format("%.6f", replayGainInfo.trackPeak)
+            
+            // Add frames to tag
+            tag.setField(org.jaudiotagger.tag.id3.ID3v24Frame(org.jaudiotagger.tag.id3.ID3v24Frames.FRAME_ID_USER_DEFINED_INFO).apply {
+                body = trackGainFrame
+            })
+            tag.setField(org.jaudiotagger.tag.id3.ID3v24Frame(org.jaudiotagger.tag.id3.ID3v24Frames.FRAME_ID_USER_DEFINED_INFO).apply {
+                body = trackPeakFrame
+            })
+            
+            // Add album gain if present
+            replayGainInfo.albumGain?.let { albumGain ->
+                val albumGainFrame = org.jaudiotagger.tag.id3.framebody.FrameBodyTXXX()
+                albumGainFrame.description = "REPLAYGAIN_ALBUM_GAIN"
+                albumGainFrame.text = String.format("%.2f dB", albumGain)
+                tag.setField(org.jaudiotagger.tag.id3.ID3v24Frame(org.jaudiotagger.tag.id3.ID3v24Frames.FRAME_ID_USER_DEFINED_INFO).apply {
+                    body = albumGainFrame
+                })
+            }
+            
+            replayGainInfo.albumPeak?.let { albumPeak ->
+                val albumPeakFrame = org.jaudiotagger.tag.id3.framebody.FrameBodyTXXX()
+                albumPeakFrame.description = "REPLAYGAIN_ALBUM_PEAK"
+                albumPeakFrame.text = String.format("%.6f", albumPeak)
+                tag.setField(org.jaudiotagger.tag.id3.ID3v24Frame(org.jaudiotagger.tag.id3.ID3v24Frames.FRAME_ID_USER_DEFINED_INFO).apply {
+                    body = albumPeakFrame
+                })
+            }
+            
+            audioFile.commit()
             true
         } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Saves ReplayGain to FLAC/OGG files using Vorbis Comments.
+     */
+    private fun saveReplayGainToVorbis(file: File, replayGainInfo: ReplayGainInfo): Boolean {
+        return try {
+            val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+            val tag = audioFile.tagOrCreateAndSetDefault
+            
+            // Add Vorbis comments for ReplayGain
+            tag.setField(org.jaudiotagger.tag.FieldKey.CUSTOM1, "REPLAYGAIN_TRACK_GAIN=${String.format("%.2f dB", replayGainInfo.trackGain)}")
+            tag.setField(org.jaudiotagger.tag.FieldKey.CUSTOM2, "REPLAYGAIN_TRACK_PEAK=${String.format("%.6f", replayGainInfo.trackPeak)}")
+            
+            replayGainInfo.albumGain?.let {
+                tag.setField(org.jaudiotagger.tag.FieldKey.CUSTOM3, "REPLAYGAIN_ALBUM_GAIN=${String.format("%.2f dB", it)}")
+            }
+            
+            replayGainInfo.albumPeak?.let {
+                tag.setField(org.jaudiotagger.tag.FieldKey.CUSTOM4, "REPLAYGAIN_ALBUM_PEAK=${String.format("%.6f", it)}")
+            }
+            
+            audioFile.commit()
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
+        }
+    }
+
+    /**
+     * Saves ReplayGain to MP4/M4A files using custom atoms.
+     */
+    private fun saveReplayGainToMp4(file: File, replayGainInfo: ReplayGainInfo): Boolean {
+        return try {
+            val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+            val tag = audioFile.tagOrCreateAndSetDefault
+            
+            // For MP4, we'll use custom fields
+            // Note: Full MP4 ReplayGain support may require additional handling
+            tag.setField(org.jaudiotagger.tag.FieldKey.CUSTOM1, "REPLAYGAIN_TRACK_GAIN=${String.format("%.2f dB", replayGainInfo.trackGain)}")
+            tag.setField(org.jaudiotagger.tag.FieldKey.CUSTOM2, "REPLAYGAIN_TRACK_PEAK=${String.format("%.6f", replayGainInfo.trackPeak)}")
+            
+            replayGainInfo.albumGain?.let {
+                tag.setField(org.jaudiotagger.tag.FieldKey.CUSTOM3, "REPLAYGAIN_ALBUM_GAIN=${String.format("%.2f dB", it)}")
+            }
+            
+            replayGainInfo.albumPeak?.let {
+                tag.setField(org.jaudiotagger.tag.FieldKey.CUSTOM4, "REPLAYGAIN_ALBUM_PEAK=${String.format("%.6f", it)}")
+            }
+            
+            audioFile.commit()
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
             false
         }
     }
@@ -287,12 +403,189 @@ class ReplayGainScanner @Inject constructor(
     suspend fun readReplayGainFromFile(filePath: String): ReplayGainInfo? =
         withContext(Dispatchers.IO) {
             try {
-                // Use jaudiotagger to read ReplayGain tags
-                // Parse REPLAYGAIN_TRACK_GAIN, REPLAYGAIN_TRACK_PEAK, etc.
-                // For now, return null as placeholder
-                null
+                val file = File(filePath)
+                if (!file.exists()) return@withContext null
+
+                val extension = file.extension.lowercase()
+                
+                when (extension) {
+                    "mp3" -> readReplayGainFromMp3(file)
+                    "flac", "ogg" -> readReplayGainFromVorbis(file)
+                    "m4a", "mp4" -> readReplayGainFromMp4(file)
+                    else -> null
+                }
             } catch (e: Exception) {
                 null
             }
         }
+
+    /**
+     * Reads ReplayGain from MP3 files using ID3v2 TXXX frames.
+     */
+    private fun readReplayGainFromMp3(file: File): ReplayGainInfo? {
+        return try {
+            val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+            val tag = audioFile.tag
+            
+            var trackGain: Float? = null
+            var trackPeak: Float? = null
+            var albumGain: Float? = null
+            var albumPeak: Float? = null
+            
+            // Read TXXX frames
+            if (tag is org.jaudiotagger.tag.id3.AbstractID3v2Tag) {
+                val fields = tag.getFields(org.jaudiotagger.tag.id3.ID3v24Frames.FRAME_ID_USER_DEFINED_INFO)
+                for (field in fields) {
+                    if (field is org.jaudiotagger.tag.id3.AbstractID3v2Frame) {
+                        val body = field.body
+                        if (body is org.jaudiotagger.tag.id3.framebody.FrameBodyTXXX) {
+                            when (body.description) {
+                                "REPLAYGAIN_TRACK_GAIN" -> {
+                                    trackGain = parseGainValue(body.text)
+                                }
+                                "REPLAYGAIN_TRACK_PEAK" -> {
+                                    trackPeak = parsePeakValue(body.text)
+                                }
+                                "REPLAYGAIN_ALBUM_GAIN" -> {
+                                    albumGain = parseGainValue(body.text)
+                                }
+                                "REPLAYGAIN_ALBUM_PEAK" -> {
+                                    albumPeak = parsePeakValue(body.text)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            
+            if (trackGain != null || trackPeak != null) {
+                ReplayGainInfo(
+                    trackGain = trackGain ?: 0f,
+                    trackPeak = trackPeak ?: 0f,
+                    albumGain = albumGain,
+                    albumPeak = albumPeak
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Reads ReplayGain from FLAC/OGG files using Vorbis Comments.
+     */
+    private fun readReplayGainFromVorbis(file: File): ReplayGainInfo? {
+        return try {
+            val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+            val tag = audioFile.tag
+            
+            var trackGain: Float? = null
+            var trackPeak: Float? = null
+            var albumGain: Float? = null
+            var albumPeak: Float? = null
+            
+            // Read custom fields
+            val custom1 = tag.getFirst(org.jaudiotagger.tag.FieldKey.CUSTOM1)
+            val custom2 = tag.getFirst(org.jaudiotagger.tag.FieldKey.CUSTOM2)
+            val custom3 = tag.getFirst(org.jaudiotagger.tag.FieldKey.CUSTOM3)
+            val custom4 = tag.getFirst(org.jaudiotagger.tag.FieldKey.CUSTOM4)
+            
+            if (custom1.startsWith("REPLAYGAIN_TRACK_GAIN=")) {
+                trackGain = parseGainValue(custom1.substringAfter("="))
+            }
+            if (custom2.startsWith("REPLAYGAIN_TRACK_PEAK=")) {
+                trackPeak = parsePeakValue(custom2.substringAfter("="))
+            }
+            if (custom3.startsWith("REPLAYGAIN_ALBUM_GAIN=")) {
+                albumGain = parseGainValue(custom3.substringAfter("="))
+            }
+            if (custom4.startsWith("REPLAYGAIN_ALBUM_PEAK=")) {
+                albumPeak = parsePeakValue(custom4.substringAfter("="))
+            }
+            
+            if (trackGain != null || trackPeak != null) {
+                ReplayGainInfo(
+                    trackGain = trackGain ?: 0f,
+                    trackPeak = trackPeak ?: 0f,
+                    albumGain = albumGain,
+                    albumPeak = albumPeak
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Reads ReplayGain from MP4/M4A files.
+     */
+    private fun readReplayGainFromMp4(file: File): ReplayGainInfo? {
+        return try {
+            val audioFile = org.jaudiotagger.audio.AudioFileIO.read(file)
+            val tag = audioFile.tag
+            
+            var trackGain: Float? = null
+            var trackPeak: Float? = null
+            var albumGain: Float? = null
+            var albumPeak: Float? = null
+            
+            // Read custom fields
+            val custom1 = tag.getFirst(org.jaudiotagger.tag.FieldKey.CUSTOM1)
+            val custom2 = tag.getFirst(org.jaudiotagger.tag.FieldKey.CUSTOM2)
+            val custom3 = tag.getFirst(org.jaudiotagger.tag.FieldKey.CUSTOM3)
+            val custom4 = tag.getFirst(org.jaudiotagger.tag.FieldKey.CUSTOM4)
+            
+            if (custom1.startsWith("REPLAYGAIN_TRACK_GAIN=")) {
+                trackGain = parseGainValue(custom1.substringAfter("="))
+            }
+            if (custom2.startsWith("REPLAYGAIN_TRACK_PEAK=")) {
+                trackPeak = parsePeakValue(custom2.substringAfter("="))
+            }
+            if (custom3.startsWith("REPLAYGAIN_ALBUM_GAIN=")) {
+                albumGain = parseGainValue(custom3.substringAfter("="))
+            }
+            if (custom4.startsWith("REPLAYGAIN_ALBUM_PEAK=")) {
+                albumPeak = parsePeakValue(custom4.substringAfter("="))
+            }
+            
+            if (trackGain != null || trackPeak != null) {
+                ReplayGainInfo(
+                    trackGain = trackGain ?: 0f,
+                    trackPeak = trackPeak ?: 0f,
+                    albumGain = albumGain,
+                    albumPeak = albumPeak
+                )
+            } else {
+                null
+            }
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Parses a gain value string (e.g., "-6.50 dB") to float.
+     */
+    private fun parseGainValue(value: String): Float? {
+        return try {
+            value.replace(" dB", "").replace("dB", "").trim().toFloatOrNull()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Parses a peak value string to float.
+     */
+    private fun parsePeakValue(value: String): Float? {
+        return try {
+            value.trim().toFloatOrNull()
+        } catch (e: Exception) {
+            null
+        }
+    }
 }

@@ -64,7 +64,9 @@ class ITunesRepository @Inject constructor(
                             year = result.getReleaseYear(),
                             format = "iTunes Album",
                             trackCount = result.trackCount,
-                            coverArtUrl = result.getBestArtworkUrl()?.replace("100x100", "600x600")
+                            coverArtUrl = result.getBestArtworkUrl()?.replace("100x100", "600x600"),
+                            source = "iTunes",
+                            albumTitle = result.collectionName
                         )
                     }
                     .distinctBy { it.id } // Remove duplicates
@@ -109,7 +111,9 @@ class ITunesRepository @Inject constructor(
                             title = result.trackName ?: "Unknown Track",
                             artist = result.artistName ?: "Unknown Artist",
                             duration = result.getDurationSeconds(),
-                            releaseId = result.collectionId?.toString()
+                            releaseId = result.collectionId?.toString(),
+                            source = "iTunes",
+                            coverArtUrl = getHighResArtworkUrl(result.getBestArtworkUrl())
                         )
                     }
                     .filter { it.id.isNotBlank() }

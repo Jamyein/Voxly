@@ -342,7 +342,9 @@ class LyricsRepositoryImpl @Inject constructor(
         allResults.addAll(qqMusicResults)
 
         // Sort by relevance: prioritize results with synced lyrics and matching artist
-        val sortedResults = allResults.sortedWith(compareByDescending<OnlineLyricsResult> {
+        val sortedResults = allResults.sortedWith(compareBy<OnlineLyricsResult> {
+            sourcePriorityIndex(it.source, settings.priority)
+        }.thenByDescending {
             if (it.hasSyncedLyrics) 2 else 0
         }.thenByDescending {
             if (artistName != null && 
@@ -509,13 +511,14 @@ class LyricsRepositoryImpl @Inject constructor(
     }
 
     private suspend fun getLyricsSourceSettings(): LyricsSourceSettings {
-        val enableMusicBrainz = settingsDataStore.sourceEnabledMusicBrainz.first()
-        val enableITunes = settingsDataStore.sourceEnabledITunes.first()
+        val enableMusicBrainz = settingsDataStore.lyricsSourceEnabledMusicBrainz.first()
+        val enableITunes = settingsDataStore.lyricsSourceEnabledITunes.first()
         return LyricsSourceSettings(
             enableLrclib = enableMusicBrainz || enableITunes,
-            enableNetease = settingsDataStore.sourceEnabledNetease.first(),
-            enableQQMusic = settingsDataStore.sourceEnabledQQMusic.first(),
-            searchLimit = normalizeSearchLimit(settingsDataStore.onlineSearchLimit.first())
+            enableNetease = settingsDataStore.lyricsSourceEnabledNetease.first(),
+            enableQQMusic = settingsDataStore.lyricsSourceEnabledQQMusic.first(),
+            searchLimit = normalizeSearchLimit(settingsDataStore.onlineSearchLimit.first()),
+            priority = settingsDataStore.lyricsSourcePriority.first()
         )
     }
 
@@ -531,9 +534,21 @@ class LyricsRepositoryImpl @Inject constructor(
         val enableLrclib: Boolean,
         val enableNetease: Boolean,
         val enableQQMusic: Boolean,
-        val searchLimit: Int
+        val searchLimit: Int,
+        val priority: List<String>
     ) {
         val hasAnyEnabledSource: Boolean
             get() = enableLrclib || enableNetease || enableQQMusic
+    }
+
+    private fun sourcePriorityIndex(source: String, priority: List<String>): Int {
+        val key = when (source) {
+            "LRCLIB" -> "musicbrainz"
+            "NetEase" -> "netease"
+            "QQ Music" -> "qq_music"
+            else -> "unknown"
+        }
+        val idx = priority.indexOf(key)
+        return if (idx >= 0) idx else Int.MAX_VALUE
     }
 }

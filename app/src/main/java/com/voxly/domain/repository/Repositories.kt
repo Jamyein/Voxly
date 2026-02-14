@@ -91,6 +91,17 @@ interface ReplayGainRepository {
     ): Result<Unit>
 
     /**
+     * Saves ReplayGain information to audio files.
+     * @param filePath The path to the audio file
+     * @param replayGainInfo The ReplayGain info to save
+     * @return Result indicating success or failure
+     */
+    suspend fun saveReplayGain(
+        filePath: String,
+        replayGainInfo: ReplayGainInfo
+    ): Result<Unit>
+
+    /**
      * Reads existing ReplayGain information from a file.
      * @param filePath The path to the audio file
      * @return Result containing the ReplayGain info or null if not found
@@ -202,7 +213,11 @@ data class OnlineRelease(
     val year: Int?,
     val format: String?,
     val trackCount: Int?,
-    val coverArtUrl: String?
+    val coverArtUrl: String?,
+    val source: String = "Unknown",
+    val songTitle: String? = null,
+    val albumTitle: String? = null,
+    val hasSyncedLyrics: Boolean = false
 )
 
 /**
@@ -213,7 +228,9 @@ data class OnlineRecording(
     val title: String,
     val artist: String,
     val duration: Int?,
-    val releaseId: String?
+    val releaseId: String?,
+    val source: String = "Unknown",
+    val coverArtUrl: String? = null
 )
 
 /**

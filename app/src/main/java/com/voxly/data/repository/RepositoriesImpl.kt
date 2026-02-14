@@ -187,14 +187,37 @@ class ReplayGainRepositoryImpl @Inject constructor(
         applyToAlbum: Boolean
     ): Result<Unit> = withContext(Dispatchers.IO) {
         try {
+            // This method is used for applying already scanned ReplayGain
+            // For now, return success as the actual scan and save is done through scanReplayGain
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
         }
     }
 
+    override suspend fun saveReplayGain(
+        filePath: String,
+        replayGainInfo: ReplayGainInfo
+    ): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val success = replayGainScanner.saveReplayGainToFile(filePath, replayGainInfo)
+            if (success) {
+                Result.success(Unit)
+            } else {
+                Result.failure(Exception("Failed to save ReplayGain information"))
+            }
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
     override suspend fun readReplayGain(filePath: String): Result<ReplayGainInfo?> =
-        replayGainScanner.readReplayGainFromFile(filePath)
-            ?.let { Result.success(it) }
-            ?: Result.success(null)
+        withContext(Dispatchers.IO) {
+            try {
+                val info = replayGainScanner.readReplayGainFromFile(filePath)
+                Result.success(info)
+            } catch (e: Exception) {
+                Result.failure(e)
+            }
+        }
 }

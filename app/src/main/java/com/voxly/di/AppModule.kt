@@ -18,11 +18,13 @@ import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.data.remote.musicbrainz.MusicBrainzApi
 import com.voxly.data.remote.musicbrainz.MusicBrainzRepository
 import com.voxly.data.repository.AudioRepositoryImpl
+import com.voxly.data.repository.DataStoreRecentEditsRepository
 import com.voxly.data.repository.LyricsRepositoryImpl
 import com.voxly.data.repository.ReplayGainRepositoryImpl
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
+import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.usecase.BatchAlbumArtUseCase
 import com.voxly.domain.usecase.BatchEditMetadataUseCase
@@ -251,4 +253,10 @@ abstract class RepositoryModule {
     abstract fun bindOnlineMetadataRepository(
         aggregatedRepository: AggregatedOnlineMetadataRepository
     ): OnlineMetadataRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindRecentEditsRepository(
+        recentEditsRepository: DataStoreRecentEditsRepository
+    ): RecentEditsRepository
 }

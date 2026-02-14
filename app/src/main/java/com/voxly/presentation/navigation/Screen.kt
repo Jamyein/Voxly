@@ -6,6 +6,7 @@ package com.voxly.presentation.navigation
 sealed class Screen(val route: String) {
     data object FileBrowser : Screen("file_browser")
     data object RecentEdits : Screen("recent_edits")
+    data object Statistics : Screen("statistics")
     data object BatchOperations : Screen("batch_operations")
     data object Settings : Screen("settings")
     data object DirectoryManagement : Screen("directory_management")
@@ -20,10 +21,6 @@ sealed class Screen(val route: String) {
     data object OnlineMetadata : Screen("online_metadata/{filePath}") {
         fun createRoute(filePath: String) = "online_metadata/${java.net.URLEncoder.encode(filePath, "UTF-8")}"
     }
-    data object LyricsEditor : Screen("lyrics_editor/{filePath}/{trackName}/{artistName}") {
-        fun createRoute(filePath: String, trackName: String, artistName: String) =
-            "lyrics_editor/${java.net.URLEncoder.encode(filePath, "UTF-8")}/${java.net.URLEncoder.encode(trackName, "UTF-8")}/${java.net.URLEncoder.encode(artistName, "UTF-8")}"
-    }
 }
 
 /**
@@ -36,5 +33,6 @@ enum class BottomNavItem(
 ) {
     FILE_BROWSER(Screen.FileBrowser, "Files", "folder"),
     RECENT_EDITS(Screen.RecentEdits, "Recent", "history"),
-    BATCH_OPERATIONS(Screen.BatchOperations, "Batch", "playlist_add")
+    STATISTICS(Screen.Statistics, "Statistics", "bar_chart"),
+    SETTINGS(Screen.Settings, "Settings", "settings")
 }

@@ -41,15 +41,15 @@ import com.voxly.R
 import com.voxly.core.util.LogManager
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.screens.BatchOperationsScreen
+
 import com.voxly.presentation.screens.DirectoryManagementScreen
 import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
 import com.voxly.presentation.screens.RecentEditsScreen
 import com.voxly.presentation.screens.ReplayGainScannerScreen
 import com.voxly.presentation.screens.SettingsScreen
+import com.voxly.presentation.screens.StatisticsScreen
 import com.voxly.presentation.screens.log.LogViewerScreen
-import com.voxly.presentation.screens.metadata.LyricsEditorScreen
 import java.net.URLDecoder
 import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 
@@ -68,7 +68,8 @@ fun MP3TagNavHost(
     val showBottomBar = currentDestination?.route in listOf(
         Screen.FileBrowser.route,
         Screen.RecentEdits.route,
-        Screen.BatchOperations.route
+        Screen.Statistics.route,
+        Screen.Settings.route
     )
 
     // Scroll state for controlling bottom bar visibility
@@ -165,9 +166,6 @@ fun MP3TagNavHost(
                     onNavigateToReplayGain = { filePaths ->
                         navController.navigate(Screen.ReplayGainScanner.createRoute(filePaths))
                     },
-                    onNavigateToSettings = {
-                        navController.navigate(Screen.Settings.route)
-                    },
                     onBottomBarVisibilityChange = { isVisible ->
                         isBottomBarVisible = isVisible
                     }
@@ -182,10 +180,10 @@ fun MP3TagNavHost(
                 )
             }
 
-            composable(Screen.BatchOperations.route) {
-                BatchOperationsScreen(
-                    onNavigateToReplayGain = { filePaths ->
-                        navController.navigate(Screen.ReplayGainScanner.createRoute(filePaths))
+            composable(Screen.Statistics.route) {
+                StatisticsScreen(
+                    onNavigateToSettings = {
+                        navController.navigate(Screen.Settings.route)
                     }
                 )
             }
@@ -193,7 +191,6 @@ fun MP3TagNavHost(
             composable(Screen.Settings.route) {
                 val context = LocalContext.current
                 SettingsScreen(
-                    onNavigateBack = { navController.popBackStack() },
                     onNavigateToDirectoryManagement = {
                         navController.navigate(Screen.DirectoryManagement.route)
                     },
@@ -251,9 +248,6 @@ fun MP3TagNavHost(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToOnlineMetadata = {
                         navController.navigate(Screen.OnlineMetadata.createRoute(filePath))
-                    },
-                    onNavigateToLyrics = { trackName, artistName ->
-                        navController.navigate(Screen.LyricsEditor.createRoute(filePath, trackName, artistName))
                     }
                 )
             }
@@ -290,25 +284,6 @@ fun MP3TagNavHost(
                 )
             }
 
-            composable(
-                route = Screen.LyricsEditor.route,
-                arguments = listOf(
-                    navArgument("filePath") { type = NavType.StringType },
-                    navArgument("trackName") { type = NavType.StringType },
-                    navArgument("artistName") { type = NavType.StringType }
-                )
-            ) { backStackEntry ->
-                val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
-                val encodedTrack = backStackEntry.arguments?.getString("trackName") ?: ""
-                val encodedArtist = backStackEntry.arguments?.getString("artistName") ?: ""
-                
-                LyricsEditorScreen(
-                    filePath = URLDecoder.decode(encodedPath, "UTF-8"),
-                    trackName = URLDecoder.decode(encodedTrack, "UTF-8"),
-                    artistName = URLDecoder.decode(encodedArtist, "UTF-8"),
-                    onNavigateBack = { navController.popBackStack() }
-                )
-            }
         }
     }
 }
@@ -340,10 +315,16 @@ private val bottomNavItems = listOf(
         unselectedIcon = AppIcon.HistoryOutlined
     ),
     BottomNavItemData(
-        screen = Screen.BatchOperations,
-        labelResId = R.string.nav_batch_operations,
-        selectedIcon = AppIcon.PlaylistAdd,
-        unselectedIcon = AppIcon.PlaylistAddOutlined
+        screen = Screen.Statistics,
+        labelResId = R.string.nav_statistics,
+        selectedIcon = AppIcon.BarChart,
+        unselectedIcon = AppIcon.BarChart
+    ),
+    BottomNavItemData(
+        screen = Screen.Settings,
+        labelResId = R.string.nav_settings,
+        selectedIcon = AppIcon.Settings,
+        unselectedIcon = AppIcon.SettingsOutlined
     )
 )
 

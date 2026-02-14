@@ -1,20 +1,33 @@
 package com.voxly.presentation.screens.metadata
 
+import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.BitmapFactory.Options
+import android.graphics.Matrix
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -24,6 +37,10 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
+import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import com.voxly.presentation.ui.loadImageBitmapFromUrl
 
 /**
  * Metadata editor screen for viewing and editing audio file metadata.
@@ -34,21 +51,65 @@ fun MetadataEditorScreen(
     filePath: String,
     viewModel: MetadataEditorViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
-    onNavigateToOnlineMetadata: () -> Unit,
-    onNavigateToLyrics: (trackName: String, artistName: String) -> Unit = { _, _ -> }
+    onNavigateToOnlineMetadata: () -> Unit
 ) {
+    val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
-    val editedMetadata by viewModel.editedMetadata.collectAsState()
     val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsState()
     val saveResult by viewModel.saveResult.collectAsState()
-    val unknownArtist = stringResource(R.string.unknown_artist)
-
     var showDiscardDialog by remember { mutableStateOf(false) }
+    var exitAfterSave by remember { mutableStateOf(false) }
+    var showAlbumArtOptions by remember { mutableStateOf(false) }
+    var showAlbumArtPreview by remember { mutableStateOf(false) }
+    var showOnlineLyricsDialog by remember { mutableStateOf(false) }
+    var showOnlineCoverDialog by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    
+    // ReplayGain state from ViewModel
+    val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsState()
+    val pendingReplayGainInfo by viewModel.pendingReplayGainInfo.collectAsState()
+    var currentReplayGainInfo by remember { mutableStateOf<com.voxly.domain.model.ReplayGainInfo?>(null) }
+    val onlineLyricsResults by viewModel.onlineLyricsResults.collectAsState()
+    val isOnlineLyricsLoading by viewModel.isOnlineLyricsLoading.collectAsState()
+    val onlineLyricsError by viewModel.onlineLyricsError.collectAsState()
+    val onlineCoverResults by viewModel.onlineCoverResults.collectAsState()
+    val isOnlineCoverLoading by viewModel.isOnlineCoverLoading.collectAsState()
+    val onlineCoverError by viewModel.onlineCoverError.collectAsState()
+    val coverFetchMessage by viewModel.coverFetchMessage.collectAsState()
+
+    LaunchedEffect(coverFetchMessage) {
+        coverFetchMessage?.let {
+            Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+            viewModel.clearCoverFetchMessage()
+        }
+    }
 
     // Handle save result
     LaunchedEffect(saveResult) {
         if (saveResult is com.voxly.presentation.viewmodel.SaveResult.Success) {
+            if (exitAfterSave) {
+                exitAfterSave = false
+                onNavigateBack()
+            }
             viewModel.clearSaveResult()
+        } else if (saveResult is com.voxly.presentation.viewmodel.SaveResult.Error) {
+            exitAfterSave = false
+            viewModel.clearSaveResult()
+        }
+    }
+
+    val galleryPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        val bytes = uri?.let { readBytesFromUri(context, it) }
+        bytes?.let { viewModel.updateAlbumArt(it) }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        bitmap?.let { image ->
+            bitmapToJpegBytes(image)?.let { bytes -> viewModel.updateAlbumArt(bytes) }
         }
     }
 
@@ -68,7 +129,7 @@ fun MetadataEditorScreen(
                     }
                 },
                 actions = {
-                    TextButton(
+                    IconButton(
                         onClick = { viewModel.saveMetadata() },
                         enabled = hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving
                     ) {
@@ -78,7 +139,7 @@ fun MetadataEditorScreen(
                                 strokeWidth = 2.dp
                             )
                         } else {
-                            Text(stringResource(R.string.dialog_save))
+                            Icon(Icons.Default.Save, contentDescription = stringResource(R.string.dialog_save))
                         }
                     }
                 },
@@ -86,11 +147,32 @@ fun MetadataEditorScreen(
             )
         },
         floatingActionButton = {
-            ExtendedFloatingActionButton(
-                onClick = onNavigateToOnlineMetadata,
-                icon = { Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = null) },
-                text = { Text(stringResource(R.string.fetch_online_metadata)) }
-            )
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SmallFloatingActionButton(onClick = {
+                    showOnlineLyricsDialog = true
+                    viewModel.searchOnlineLyrics()
+                }) {
+                    Icon(
+                        painter = appIconPainter(AppIcon.Edit),
+                        contentDescription = stringResource(R.string.search_online_lyrics)
+                    )
+                }
+                SmallFloatingActionButton(onClick = onNavigateToOnlineMetadata) {
+                    Icon(
+                        painter = appIconPainter(AppIcon.CloudDownload),
+                        contentDescription = stringResource(R.string.fetch_online_metadata)
+                    )
+                }
+                FloatingActionButton(
+                    onClick = {
+                        if (hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving) {
+                            viewModel.saveMetadata()
+                        }
+                    }
+                ) {
+                    Icon(Icons.Default.Save, contentDescription = stringResource(R.string.dialog_save))
+                }
+            }
         }
     ) { innerPadding ->
         Box(
@@ -120,6 +202,13 @@ fun MetadataEditorScreen(
                     }
                 }
                 is MetadataEditorUiState.Success -> {
+                    // Load ReplayGain info from audio file on first load
+                    LaunchedEffect(state.audioFile.path) {
+                        if (currentReplayGainInfo == null && pendingReplayGainInfo == null) {
+                            currentReplayGainInfo = state.audioFile.replayGainInfo
+                        }
+                    }
+                    
                     MetadataForm(
                         metadata = state.editedMetadata,
                         audioFile = state.audioFile,
@@ -130,6 +219,13 @@ fun MetadataEditorScreen(
                         onYearChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.YEAR, it) },
                         onGenreChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.GENRE, it) },
                         onComposerChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.COMPOSER, it) },
+                        onLyricistChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.LYRICIST, it) },
+                        onCommentChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.COMMENT, it) },
+                        onRecordLabelChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.RECORD_LABEL, it) },
+                        onEncoderChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.ENCODER, it) },
+                        onIsrcChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.ISRC, it) },
+                        onCopyrightChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.COPYRIGHT, it) },
+                        onLyricsChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.LYRICS, it) },
                         onTrackNumberChange = { track, total ->
                             viewModel.updateTrackNumber(
                                 track.toIntOrNull(),
@@ -142,13 +238,23 @@ fun MetadataEditorScreen(
                                 total.toIntOrNull()
                             )
                         },
-                        onAlbumArtChange = { viewModel.updateAlbumArt(it) },
-                        onEditLyrics = {
-                            onNavigateToLyrics(
-                                state.editedMetadata.title ?: state.audioFile.name,
-                                state.editedMetadata.artist ?: unknownArtist
-                            )
-                        }
+                        onPickAlbumArt = { showAlbumArtOptions = true },
+                        onZoomAlbumArt = { showAlbumArtPreview = true },
+                        onRotateAlbumArt = {
+                            state.editedMetadata.albumArt?.let { bytes ->
+                                rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
+                            }
+                        },
+                        onRemoveAlbumArt = { viewModel.updateAlbumArt(null) },
+                        onScanReplayGain = {
+                            viewModel.scanReplayGain()
+                        },
+                        onClearReplayGain = {
+                            viewModel.clearReplayGainInfo()
+                            currentReplayGainInfo = null
+                        },
+                        isScanningReplayGain = isScanningReplayGain,
+                        replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo
                     )
                 }
                 is MetadataEditorUiState.Error -> {
@@ -182,15 +288,258 @@ fun MetadataEditorScreen(
             text = { Text(stringResource(R.string.dialog_discard_changes_message)) },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.discardChanges()
                     showDiscardDialog = false
+                    exitAfterSave = true
+                    viewModel.saveMetadata()
+                }) {
+                    Text(stringResource(R.string.dialog_save))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showDiscardDialog = false
+                    viewModel.discardChanges()
                     onNavigateBack()
                 }) {
                     Text(stringResource(R.string.dialog_discard))
                 }
+            }
+        )
+    }
+
+    if (showAlbumArtOptions) {
+        ModalBottomSheet(
+            onDismissRequest = { showAlbumArtOptions = false },
+            sheetState = rememberModalBottomSheetState()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.album_art_picker_title),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
+                )
+                
+                HorizontalDivider()
+                
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.select_album_art)) },
+                    leadingContent = {
+                        Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                    },
+                    modifier = Modifier.clickable {
+                        showAlbumArtOptions = false
+                        galleryPickerLauncher.launch("image/*")
+                    }
+                )
+                
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.take_photo)) },
+                    leadingContent = {
+                        Icon(Icons.Default.CameraAlt, contentDescription = null)
+                    },
+                    modifier = Modifier.clickable {
+                        showAlbumArtOptions = false
+                        cameraLauncher.launch(null)
+                    }
+                )
+                
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.fetch_online_cover_art)) },
+                    leadingContent = {
+                        Icon(Icons.Default.CloudDownload, contentDescription = null)
+                    },
+                    modifier = Modifier.clickable {
+                        showAlbumArtOptions = false
+                        showOnlineCoverDialog = true
+                        viewModel.searchOnlineCoverCandidates()
+                    }
+                )
+
+                ListItem(
+                    headlineContent = { Text(stringResource(R.string.search_online_lyrics)) },
+                    leadingContent = {
+                        Icon(Icons.Default.Search, contentDescription = null)
+                    },
+                    modifier = Modifier.clickable {
+                        showAlbumArtOptions = false
+                        showOnlineLyricsDialog = true
+                        viewModel.searchOnlineLyrics()
+                    }
+                )
+            }
+        }
+    }
+
+    if (showAlbumArtPreview) {
+        val previewBytes = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt
+        if (previewBytes != null) {
+            AlertDialog(
+                onDismissRequest = { showAlbumArtPreview = false },
+                title = { Text(stringResource(R.string.metadata_album_art)) },
+                text = {
+                    val preview = remember(previewBytes) { decodeAlbumArtPreview(previewBytes, 2048) }
+                    if (preview != null) {
+                        Image(
+                            bitmap = preview.asImageBitmap(),
+                            contentDescription = stringResource(R.string.cd_album_art),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Text(stringResource(R.string.no_album_art))
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showAlbumArtPreview = false }) {
+                        Text(stringResource(R.string.dialog_close))
+                    }
+                }
+            )
+        }
+    }
+
+    if (showOnlineLyricsDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showOnlineLyricsDialog = false
+                viewModel.clearOnlineLyricsResults()
+            },
+            title = { Text(stringResource(R.string.search_online_lyrics)) },
+            text = {
+                when {
+                    isOnlineLyricsLoading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                            contentAlignment = Alignment.Center
+                        ) { CircularProgressIndicator() }
+                    }
+                    !onlineLyricsError.isNullOrBlank() -> {
+                        Text(
+                            text = onlineLyricsError.orEmpty(),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    onlineLyricsResults.isEmpty() -> {
+                        Text(stringResource(R.string.error_no_results))
+                    }
+                    else -> {
+                        LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                            items(onlineLyricsResults) { item ->
+                                ListItem(
+                                    headlineContent = { Text(item.trackName) },
+                                    supportingContent = {
+                                        Text("${item.artistName} • ${item.albumName ?: "-"} • ${item.source}")
+                                    },
+                                    trailingContent = {
+                                        if (item.hasSyncedLyrics) {
+                                            Text("LRC", color = MaterialTheme.colorScheme.primary)
+                                        }
+                                    },
+                                    modifier = Modifier.clickable {
+                                        viewModel.applyOnlineLyrics(item)
+                                        showOnlineLyricsDialog = false
+                                        viewModel.clearOnlineLyricsResults()
+                                    }
+                                )
+                                HorizontalDivider()
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.searchOnlineLyrics()
+                    }
+                ) {
+                    Text(stringResource(R.string.fetch_online_metadata))
+                }
             },
             dismissButton = {
-                TextButton(onClick = { showDiscardDialog = false }) {
+                TextButton(
+                    onClick = {
+                        showOnlineLyricsDialog = false
+                        viewModel.clearOnlineLyricsResults()
+                    }
+                ) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            }
+        )
+    }
+
+    if (showOnlineCoverDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showOnlineCoverDialog = false
+                viewModel.clearOnlineCoverResults()
+            },
+            title = { Text(stringResource(R.string.fetch_online_cover_art)) },
+            text = {
+                when {
+                    isOnlineCoverLoading -> {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                            contentAlignment = Alignment.Center
+                        ) { CircularProgressIndicator() }
+                    }
+                    !onlineCoverError.isNullOrBlank() -> {
+                        Text(
+                            text = onlineCoverError.orEmpty(),
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    }
+                    onlineCoverResults.isEmpty() -> {
+                        Text(stringResource(R.string.error_no_results))
+                    }
+                    else -> {
+                        LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
+                            items(onlineCoverResults) { item ->
+                        ListItem(
+                            leadingContent = {
+                                CoverCandidateThumbnail(
+                                    coverArtUrl = item.coverArtUrl,
+                                    modifier = Modifier.size(56.dp)
+                                )
+                            },
+                            headlineContent = { Text(item.title) },
+                            supportingContent = {
+                                Text("${item.artist} • ${item.source}")
+                            },
+                            modifier = Modifier.clickable {
+                                viewModel.applyOnlineCover(item)
+                                showOnlineCoverDialog = false
+                                viewModel.clearOnlineCoverResults()
+                            }
+                        )
+                                HorizontalDivider()
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { viewModel.searchOnlineCoverCandidates() }
+                ) {
+                    Text(stringResource(R.string.retry))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showOnlineCoverDialog = false
+                        viewModel.clearOnlineCoverResults()
+                    }
+                ) {
                     Text(stringResource(R.string.dialog_cancel))
                 }
             }
@@ -209,10 +558,23 @@ private fun MetadataForm(
     onYearChange: (String) -> Unit,
     onGenreChange: (String) -> Unit,
     onComposerChange: (String) -> Unit,
+    onLyricistChange: (String) -> Unit,
+    onCommentChange: (String) -> Unit,
+    onRecordLabelChange: (String) -> Unit,
+    onEncoderChange: (String) -> Unit,
+    onIsrcChange: (String) -> Unit,
+    onCopyrightChange: (String) -> Unit,
+    onLyricsChange: (String) -> Unit,
     onTrackNumberChange: (String, String) -> Unit,
     onDiscNumberChange: (String, String) -> Unit,
-    onAlbumArtChange: (ByteArray?) -> Unit,
-    onEditLyrics: () -> Unit = {}
+    onPickAlbumArt: () -> Unit,
+    onZoomAlbumArt: () -> Unit,
+    onRotateAlbumArt: () -> Unit,
+    onRemoveAlbumArt: () -> Unit,
+    onScanReplayGain: () -> Unit = {},
+    onClearReplayGain: () -> Unit = {},
+    isScanningReplayGain: Boolean = false,
+    replayGainInfo: com.voxly.domain.model.ReplayGainInfo? = null
 ) {
     Column(
         modifier = Modifier
@@ -223,7 +585,10 @@ private fun MetadataForm(
         // Album Art Section
         AlbumArtSection(
             albumArt = metadata.albumArt,
-            onAlbumArtChange = onAlbumArtChange
+            onPickAlbumArt = onPickAlbumArt,
+            onZoomAlbumArt = onZoomAlbumArt,
+            onRotateAlbumArt = onRotateAlbumArt,
+            onRemoveAlbumArt = onRemoveAlbumArt
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -356,53 +721,81 @@ private fun MetadataForm(
             singleLine = true
         )
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = metadata.lyricist ?: "",
+            onValueChange = onLyricistChange,
+            label = { Text(stringResource(R.string.metadata_lyricist)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = metadata.customFields["record_label"] ?: "",
+            onValueChange = onRecordLabelChange,
+            label = { Text(stringResource(R.string.metadata_record_label)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
+            OutlinedTextField(
+                value = metadata.customFields["encoder"] ?: "",
+                onValueChange = onEncoderChange,
+                label = { Text(stringResource(R.string.metadata_encoder)) },
+                modifier = Modifier.weight(1f),
+                singleLine = true
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            OutlinedTextField(
+                value = metadata.customFields["isrc"] ?: "",
+                onValueChange = onIsrcChange,
+                label = { Text(stringResource(R.string.metadata_isrc)) },
+                modifier = Modifier.weight(1f),
+                singleLine = true
+            )
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = metadata.customFields["copyright"] ?: "",
+            onValueChange = onCopyrightChange,
+            label = { Text(stringResource(R.string.metadata_copyright)) },
+            modifier = Modifier.fillMaxWidth(),
+            singleLine = true
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedTextField(
+            value = metadata.comment ?: "",
+            onValueChange = onCommentChange,
+            label = { Text(stringResource(R.string.metadata_comment)) },
+            modifier = Modifier.fillMaxWidth(),
+            minLines = 3
+        )
+
         Spacer(modifier = Modifier.height(16.dp))
 
         // Lyrics Section
         SectionTitle(stringResource(R.string.lyrics_section_title))
 
-        OutlinedCard(
-            onClick = onEditLyrics,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        painter = appIconPainter(AppIcon.MusicNote),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Column {
-                        Text(
-                            text = stringResource(R.string.edit_lyrics),
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            text = if (metadata.lyrics.isNullOrBlank()) {
-                                stringResource(R.string.no_lyrics_added)
-                            } else {
-                                stringResource(R.string.lyrics_available)
-                            },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Icon(
-                    painter = appIconPainter(AppIcon.ChevronRight),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline
-                )
-            }
-        }
+        OutlinedTextField(
+            value = metadata.lyrics ?: "",
+            onValueChange = onLyricsChange,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 140.dp),
+            label = { Text(stringResource(R.string.edit_lyrics)) },
+            placeholder = { Text(stringResource(R.string.no_lyrics_added)) },
+            minLines = 6
+        )
 
         Spacer(modifier = Modifier.height(16.dp))
 
@@ -415,6 +808,16 @@ private fun MetadataForm(
         FileInfoRow(stringResource(R.string.file_info_channels), audioFile.channels.toString())
         FileInfoRow(stringResource(R.string.metadata_duration), audioFile.getFormattedDuration())
         FileInfoRow(stringResource(R.string.file_info_size), audioFile.getFormattedSize())
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // ReplayGain Section (collapsible)
+        ReplayGainSection(
+            replayGainInfo = replayGainInfo,
+            isScanning = isScanningReplayGain,
+            onScan = onScanReplayGain,
+            onClear = onClearReplayGain
+        )
 
         // Bottom spacing for FAB
         Spacer(modifier = Modifier.height(80.dp))
@@ -452,63 +855,252 @@ private fun FileInfoRow(label: String, value: String) {
 }
 
 @Composable
+private fun ReplayGainSection(
+    replayGainInfo: com.voxly.domain.model.ReplayGainInfo?,
+    isScanning: Boolean,
+    onScan: () -> Unit,
+    onClear: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            // Header - clickable to expand/collapse
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { expanded = !expanded },
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        painter = appIconPainter(AppIcon.Equalizer),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = stringResource(R.string.replay_gain_section_title),
+                        style = MaterialTheme.typography.titleSmall
+                    )
+                }
+                Icon(
+                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
+                    contentDescription = if (expanded) stringResource(R.string.collapse) else stringResource(R.string.expand)
+                )
+            }
+            
+            // Expanded content
+            if (expanded) {
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                if (isScanning) {
+                    // Scanning state
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            strokeWidth = 2.dp
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
+                        Text(
+                            text = stringResource(R.string.replay_gain_scanning),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
+                } else if (replayGainInfo != null) {
+                    // Display existing ReplayGain values
+                    ReplayGainRow(
+                        label = stringResource(R.string.replay_gain_track),
+                        value = replayGainInfo.getFormattedTrackGain()
+                    )
+                    ReplayGainRow(
+                        label = stringResource(R.string.replay_gain_peak),
+                        value = replayGainInfo.getFormattedTrackPeak()
+                    )
+                    replayGainInfo.albumGain?.let { albumGain ->
+                        ReplayGainRow(
+                            label = stringResource(R.string.replay_gain_album),
+                            value = String.format("%.2f dB", albumGain)
+                        )
+                    }
+                    replayGainInfo.albumPeak?.let { albumPeak ->
+                        ReplayGainRow(
+                            label = stringResource(R.string.replay_gain_album_peak),
+                            value = String.format("%.4f", albumPeak)
+                        )
+                    }
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    // Action buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onScan,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(stringResource(R.string.replay_gain_rescan))
+                        }
+                        OutlinedButton(
+                            onClick = onClear,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Delete, contentDescription = null)
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(stringResource(R.string.replay_gain_clear))
+                        }
+                    }
+                } else {
+                    // No ReplayGain info
+                    Text(
+                        text = stringResource(R.string.replay_gain_no_info),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    
+                    Spacer(modifier = Modifier.height(12.dp))
+                    
+                    Button(
+                        onClick = onScan,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(Icons.Default.Equalizer, contentDescription = null)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.replay_gain_scan))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ReplayGainRow(
+    label: String,
+    value: String
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
+}
+
+@Composable
 private fun AlbumArtSection(
     albumArt: ByteArray?,
-    onAlbumArtChange: (ByteArray?) -> Unit
+    onPickAlbumArt: () -> Unit,
+    onZoomAlbumArt: () -> Unit,
+    onRotateAlbumArt: () -> Unit,
+    onRemoveAlbumArt: () -> Unit
 ) {
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(1f),
+            .aspectRatio(1f)
+            .clickable(onClick = onPickAlbumArt),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        ),
+        shape = MaterialTheme.shapes.large
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            if (albumArt != null) {
-                val bitmap = remember(albumArt) {
-                    decodeAlbumArtPreview(albumArt)
-                }
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = stringResource(R.string.cd_album_art),
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Icon(
-                            painter = appIconPainter(AppIcon.Image),
-                            contentDescription = null,
-                            modifier = Modifier.size(64.dp),
-                            tint = MaterialTheme.colorScheme.outline
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            stringResource(R.string.no_album_art),
-                            color = MaterialTheme.colorScheme.outline
-                        )
+            // Use Crossfade for smooth album art transitions
+            Crossfade(
+                targetState = albumArt != null,
+                label = "album_art_crossfade"
+            ) { hasArt ->
+                if (hasArt && albumArt != null) {
+                    val bitmap = remember(albumArt) {
+                        decodeAlbumArtPreview(albumArt)
                     }
-                }
-            } else {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Icon(
-                        painter = appIconPainter(AppIcon.Image),
-                        contentDescription = null,
-                        modifier = Modifier.size(64.dp),
-                        tint = MaterialTheme.colorScheme.outline
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        stringResource(R.string.no_album_art),
-                        color = MaterialTheme.colorScheme.outline
-                    )
+                    if (bitmap != null) {
+                        Image(
+                            bitmap = bitmap.asImageBitmap(),
+                            contentDescription = stringResource(R.string.cd_album_art),
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            FilledTonalIconButton(onClick = onZoomAlbumArt) {
+                                Icon(Icons.Default.ZoomIn, contentDescription = stringResource(R.string.album_art_zoom))
+                            }
+                            FilledTonalIconButton(onClick = onRotateAlbumArt) {
+                                Icon(Icons.Default.RotateRight, contentDescription = stringResource(R.string.album_art_rotate))
+                            }
+                            FilledTonalIconButton(onClick = onRemoveAlbumArt) {
+                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.remove_album_art))
+                            }
+                        }
+                    } else {
+                        EmptyAlbumArtContent()
+                    }
+                } else {
+                    EmptyAlbumArtContent()
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EmptyAlbumArtContent() {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier.padding(16.dp)
+    ) {
+        Icon(
+            painter = appIconPainter(AppIcon.MusicNote),
+            contentDescription = null,
+            modifier = Modifier.size(64.dp),
+            tint = MaterialTheme.colorScheme.outline
+        )
+        Spacer(modifier = Modifier.height(8.dp))
+        Text(
+            text = stringResource(R.string.tap_to_add_album_art),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -532,5 +1124,58 @@ private fun decodeAlbumArtPreview(
             inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
         }
         BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+    }.getOrNull()
+}
+
+@Composable
+private fun CoverCandidateThumbnail(
+    coverArtUrl: String?,
+    modifier: Modifier = Modifier
+) {
+    val bitmap by produceState<ImageBitmap?>(initialValue = null, key1 = coverArtUrl) {
+        value = loadImageBitmapFromUrl(coverArtUrl)
+    }
+
+    if (bitmap != null) {
+        Image(
+            bitmap = bitmap!!,
+            contentDescription = null,
+            modifier = modifier
+        )
+    } else {
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Image,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
+}
+
+private fun readBytesFromUri(context: Context, uri: Uri): ByteArray? {
+    return runCatching {
+        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
+    }.getOrNull()
+}
+
+private fun bitmapToJpegBytes(bitmap: Bitmap, quality: Int = 92): ByteArray? {
+    return runCatching {
+        val output = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(10, 100), output)
+        output.toByteArray()
+    }.getOrNull()
+}
+
+private fun rotateJpegBytes(bytes: ByteArray, degrees: Float): ByteArray? {
+    return runCatching {
+        val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            ?: throw IllegalArgumentException("Invalid image bytes")
+        val matrix = Matrix().apply { postRotate(degrees) }
+        val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
+        bitmapToJpegBytes(rotated) ?: throw IllegalStateException("Failed to encode rotated image")
     }.getOrNull()
 }
