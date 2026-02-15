@@ -2,30 +2,29 @@ package com.voxly.data.remote.tengx
 
 import com.voxly.data.remote.tengx.model.TengxAlbumDetail
 import com.voxly.data.remote.tengx.model.TengxLyricsResponse
-import com.voxly.data.remote.tengx.model.TengxSearchRequest
 import com.voxly.data.remote.tengx.model.TengxSearchResponse
 import com.voxly.data.remote.tengx.model.TengxSongDetail
 import retrofit2.Response
-import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
-import retrofit2.http.POST
 import retrofit2.http.Query
 import retrofit2.http.Url
 
 /**
  * Retrofit API interface for TengX Music.
  * Provides endpoints for searching, retrieving song details, lyrics, and album information.
- * 
+ *
+ * Uses simplified web API (no complex JSON body required).
+ *
  * Base URLs:
- * - Search API: https://u.y.qq.com/
+ * - Search API: https://c.y.qq.com/
  * - Lyrics API: https://c.y.qq.com/
  */
 interface TengxApi {
 
     companion object {
         /** Search API base URL */
-        const val SEARCH_BASE_URL = "https://u.y.qq.com/"
+        const val SEARCH_BASE_URL = "https://c.y.qq.com/"
         /** Lyrics API base URL */
         const val LYRIC_BASE_URL = "https://c.y.qq.com/"
         /** Default g_tk parameter for QQ Music API */
@@ -33,14 +32,26 @@ interface TengxApi {
     }
 
     /**
-     * Searches for songs using POST request with JSON body.
+     * Searches for songs using simple GET request.
+     * Endpoint: /soso/fcgi-bin/client_search_cp
      *
-     * @param request Search request body containing query parameters
+     * @param keyword Search keywords
+     * @param page Page number (starts from 1)
+     * @param perPage Results per page
      * @return Search response with song/album/artist results
      */
-    @POST("cgi-bin/musicu.fcg")
+    @GET("soso/fcgi-bin/client_search_cp")
     suspend fun search(
-        @Body request: TengxSearchRequest
+        @Query("w") keyword: String,
+        @Query("p") page: Int = 1,
+        @Query("n") perPage: Int = 20,
+        @Query("ct") ct: Int = 24,
+        @Query("qqmusic_ver") qqmusic_ver: Int = 1298,
+        @Query("new_json") new_json: Int = 1,
+        @Query("remoteplace") remoteplace: String = "txt.yqq.song",
+        @Query("g_tk") g_tk: Int = G_TK,
+        @Query("format") format: String = "json",
+        @Header("Referer") referer: String = "https://y.qq.com/"
     ): Response<TengxSearchResponse>
 
     /**

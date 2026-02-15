@@ -3,14 +3,15 @@ package com.voxly.data.remote.tengx
 import android.util.Base64
 import com.voxly.data.remote.tengx.model.TengxAlbumDetail
 import com.voxly.data.remote.tengx.model.TengxLyricsResponse
-import com.voxly.data.remote.tengx.model.TengxSearchRequest
 import com.voxly.data.remote.tengx.model.TengxSearchResponse
 import com.voxly.data.remote.tengx.model.TengxSongDetail
 
 /**
  * Repository for TengX Music API operations.
  * Handles API communication for QQ Music service.
- * 
+ *
+ * Uses simplified web API (no complex JSON body required).
+ *
  * Features:
  * - Song search with pagination
  * - Lyrics retrieval with Base64 decoding
@@ -92,8 +93,12 @@ class TengxRepositoryImpl(
         type: Int
     ): Result<TengxSearchResponse> {
         return try {
-            val request = buildSearchRequest(keywords, pageNum, pageSize, type)
-            val response = api.search(request)
+            // Call API directly with parameters (no complex JSON body needed)
+            val response = api.search(
+                keyword = keywords,
+                page = pageNum + 1,  // API uses 1-based indexing
+                perPage = pageSize
+            )
 
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
@@ -164,33 +169,6 @@ class TengxRepositoryImpl(
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }
-
-    /**
-     * Builds the search request body for POST request.
-     */
-    private fun buildSearchRequest(
-        keyword: String,
-        pageNum: Int,
-        pageSize: Int,
-        searchType: Int
-    ): TengxSearchRequest {
-        return TengxSearchRequest(
-            comm = com.voxly.data.remote.tengx.model.TengxCommParams(
-                ct = 11,
-                cv = "14090508"
-            ),
-            req = com.voxly.data.remote.tengx.model.TengxSearchReqParams(
-                module = "music.search.SearchCgiService",
-                method = "DoSearchForQQMusicMobile",
-                param = com.voxly.data.remote.tengx.model.TengxSearchParam(
-                    search_type = searchType,
-                    query = keyword,
-                    page_num = pageNum,
-                    num_per_page = pageSize
-                )
-            )
-        )
     }
 
     /**

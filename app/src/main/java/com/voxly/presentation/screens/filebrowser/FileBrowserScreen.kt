@@ -1,8 +1,6 @@
 package com.voxly.presentation.screens.filebrowser
 
 import android.Manifest
-import android.graphics.BitmapFactory
-import android.graphics.BitmapFactory.Options
 import android.net.Uri
 import android.content.pm.PackageManager
 import android.os.Build
@@ -62,6 +60,7 @@ import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.viewmodel.FileBrowserUiState
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
@@ -211,7 +210,8 @@ fun FileBrowserScreen(
     LaunchedEffect(hasReadPermission, lifecycleOwner) {
         if (!hasReadPermission) return@LaunchedEffect
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            viewModel.loadAudioFiles(forceRefresh = true)
+            // 改用增量扫描，只检测变化的文件，避免全量刷新
+            viewModel.loadAudioFiles(forceRefresh = false)
         }
     }
     LaunchedEffect(currentListKey, listState) {
@@ -1840,23 +1840,7 @@ private fun decodeThumbnailBitmap(
     bytes: ByteArray,
     targetSizePx: Int = 96
 ): android.graphics.Bitmap? {
-    val bounds = Options().apply {
-        inJustDecodeBounds = true
-    }
-    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-
-    val rawWidth = bounds.outWidth.coerceAtLeast(1)
-    val rawHeight = bounds.outHeight.coerceAtLeast(1)
-    var inSampleSize = 1
-    while ((rawWidth / inSampleSize) > targetSizePx || (rawHeight / inSampleSize) > targetSizePx) {
-        inSampleSize *= 2
-    }
-
-    val opts = Options().apply {
-        inSampleSize = inSampleSize
-        inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
-    }
-    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
+    return decodeBitmapFromBytes(bytes, targetSizePx)
 }
 
 @Composable

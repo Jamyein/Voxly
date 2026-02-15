@@ -12,26 +12,26 @@ import org.junit.Assert.*
 import java.io.File
 
 /**
- * Unit tests for JaudiotaggerMetadataProcessor.
+ * Unit tests for TagLibMetadataProcessor.
  */
-class JaudiotaggerMetadataProcessorTest {
+class TagLibMetadataProcessorTest {
 
     private lateinit var context: Context
-    private lateinit var processor: JaudiotaggerMetadataProcessor
+    private lateinit var processor: TagLibMetadataProcessor
 
     @Before
     fun setup() {
         MockKAnnotations.init(this)
         context = mockk()
         every { context.applicationContext } returns context
-        processor = JaudiotaggerMetadataProcessor(context)
+        processor = TagLibMetadataProcessor(context)
     }
 
     @Test
     fun `isFormatSupported returns true for supported formats`() = runBlocking {
         // Note: This test requires actual file system access
         // In real implementation, you'd mock the file checks
-        val supportedExtensions = listOf("mp3", "flac", "ogg", "m4a", "wma", "wav")
+        val supportedExtensions = listOf("mp3", "flac", "ogg", "m4a", "wma", "wav", "ape", "opus", "wv")
         
         supportedExtensions.forEach { ext ->
             val isSupported = processor.isFormatSupported("test.$ext")

@@ -3,7 +3,7 @@ package com.voxly.data.repository
 import android.content.Context
 import android.util.Log
 import com.voxly.data.local.AudioFileScanner
-import com.voxly.data.local.metadata.JaudiotaggerMetadataProcessor
+import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
@@ -27,7 +27,7 @@ import javax.inject.Singleton
 class AudioRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val audioFileScanner: AudioFileScanner,
-    private val metadataProcessor: JaudiotaggerMetadataProcessor
+    private val metadataProcessor: TagLibMetadataProcessor
 ) : AudioRepository {
     companion object {
         private const val TAG = "AudioRepositoryImpl"
@@ -35,11 +35,49 @@ class AudioRepositoryImpl @Inject constructor(
 
     override fun scanAudioFiles(directoryPath: String?): Flow<List<AudioFile>> {
         return if (directoryPath == null) {
-            audioFileScanner.scanAllAudioFiles()
+            // Use optimized scanning with cache
+            audioFileScanner.scanAudioFilesOptimized(forceRefresh = false)
         } else {
             audioFileScanner.scanDirectory(directoryPath)
         }.flowOn(Dispatchers.IO)
     }
+
+    /**
+     * Perform incremental scan - only scan new/modified files.
+     * Much faster for large libraries.
+     */
+    fun scanAudioFilesIncremental(): Flow<List<AudioFile>> {
+        return audioFileScanner.scanIncremental()
+    }
+
+    /**
+     * Force full refresh of scan cache.
+     */
+    fun scanAudioFilesForceRefresh(): Flow<List<AudioFile>> {
+        return audioFileScanner.scanAudioFilesOptimized(forceRefresh = true)
+    }
+
+    /**
+     * Get cached files immediately (for fast initial display).
+     */
+    fun getCachedAudioFiles(): Flow<List<AudioFile>> {
+        return audioFileScanner.getCachedAudioFiles()
+    }
+
+    /**
+     * Check if cached data exists.
+     */
+    suspend fun hasCachedData(): Boolean = audioFileScanner.hasCachedData()
+
+    /**
+     * Get cached file count.
+     */
+    suspend fun getCachedFileCount(): Int = audioFileScanner.getCachedFileCount()
+
+    /**
+     * Clear scan cache.
+     */
+    suspend fun clearScanCache(): Unit = audioFileScanner.clearCache()
 
     override suspend fun getAudioFile(filePath: String): Result<AudioFile> =
         withContext(Dispatchers.IO) {
@@ -172,7 +210,7 @@ class AudioRepositoryImpl @Inject constructor(
 @Singleton
 class ReplayGainRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val metadataProcessor: JaudiotaggerMetadataProcessor,
+    private val metadataProcessor: TagLibMetadataProcessor,
     private val replayGainScanner: ReplayGainScanner
 ) : ReplayGainRepository {
 

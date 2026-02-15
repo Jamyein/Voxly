@@ -5,93 +5,85 @@ import com.voxly.data.remote.wangy.model.WangyLyricsResponse
 import com.voxly.data.remote.wangy.model.WangySearchResponse
 import com.voxly.data.remote.wangy.model.WangySongDetail
 import retrofit2.Response
-import retrofit2.http.Body
+import retrofit2.http.GET
 import retrofit2.http.Headers
-import retrofit2.http.POST
-import retrofit2.http.Url
+import retrofit2.http.Query
 
 /**
  * Retrofit API interface for WangY Music.
- * Provides endpoints for searching, retrieving song details, lyrics, and album information.
- * 
- * Uses EAPI and WeAPI encryption schemes based on the any-listen reference implementation.
+ * Uses simplified web API endpoints (no encryption required).
+ *
+ * Reference: https://note.ldper.com/netease-music-api-interface.html
  */
 interface WangyApi {
 
     companion object {
-        const val BASE_URL = "https://interface3.music.163.com/"
-        const val WEB_URL = "https://music.163.com/"
-        const val USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36"
+        const val BASE_URL = "https://music.163.com/"
+        const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     }
 
     /**
-     * Searches for songs using EAPI encryption.
-     * Endpoint: /eapi/search/song/list/page
-     * 
-     * @param url Full URL with path
-     * @param encryptedParams EAPI encrypted parameters containing:
-     *   - keyword: search keywords
-     *   - offset: result offset
-     *   - limit: max results
-     *   - scene: "normal"
-     *   - channel: "typing"
+     * Searches for songs using simple GET request (no encryption).
+     * Endpoint: /api/search/get
+     *
+     * @param keyword Search keywords
+     * @param type Search type: 1=song, 100=artist, 10=album, 1000=playlist
+     * @param offset Result offset for pagination
+     * @param limit Max results per page
      * @return Search response
      */
-    @POST
-    @Headers("User-Agent: ${USER_AGENT}", "origin: https://music.163.com")
+    @GET("api/search/get")
+    @Headers("User-Agent: $USER_AGENT")
     suspend fun searchSongs(
-        @Url url: String = "${BASE_URL}eapi/search/song/list/page",
-        @Body encryptedParams: Map<String, String>
+        @Query("s") keyword: String,
+        @Query("type") type: Int = 1,
+        @Query("offset") offset: Int = 0,
+        @Query("limit") limit: Int = 30,
+        @Query("total") total: Boolean = true
     ): Response<WangySearchResponse>
 
     /**
-     * Gets lyrics for a song using EAPI encryption.
-     * Endpoint: /eapi/song/lyric/v1
-     * 
-     * @param url Full URL with path
-     * @param encryptedParams EAPI encrypted parameters containing:
-     *   - id: song ID
-     *   - cp: false
-     *   - tv: 0, lv: 0, kv: 0, rv: 0, yv: 0, ytv: 0, rvk: 0, ytk: 0
+     * Gets lyrics for a song using simple GET request.
+     * Endpoint: /api/song/lyric
+     *
+     * @param songId Song ID
+     * @param os OS parameter (pc, android, iphone)
+     * @param lv Lyrics version (-1 for all)
+     * @param tv Translation version (-1 for all)
      * @return Lyrics response
      */
-    @POST
-    @Headers("User-Agent: ${USER_AGENT}", "origin: https://music.163.com")
+    @GET("api/song/lyric")
+    @Headers("User-Agent: $USER_AGENT")
     suspend fun getLyrics(
-        @Url url: String = "${BASE_URL}eapi/song/lyric/v1",
-        @Body encryptedParams: Map<String, String>
+        @Query("id") songId: Long,
+        @Query("os") os: String = "pc",
+        @Query("lv") lv: Int = -1,
+        @Query("tv") tv: Int = -1
     ): Response<WangyLyricsResponse>
 
     /**
-     * Gets detailed information about songs using WeAPI encryption.
-     * Endpoint: /weapi/v3/song/detail
-     * 
-     * @param url Full URL with path
-     * @param encryptedParams WeAPI encrypted parameters containing:
-     *   - c: JSON array of song objects
-     *   - ids: JSON array of song IDs
+     * Gets detailed information about songs.
+     * Endpoint: /api/song/detail
+     *
+     * @param songIds Comma-separated song IDs in format: [id1,id2,...]
      * @return Song detail response
      */
-    @POST
-    @Headers("User-Agent: ${USER_AGENT}", "origin: https://music.163.com")
+    @GET("api/song/detail")
+    @Headers("User-Agent: $USER_AGENT")
     suspend fun getSongDetail(
-        @Url url: String = "${WEB_URL}weapi/v3/song/detail",
-        @Body encryptedParams: Map<String, String>
+        @Query("ids") songIds: String
     ): Response<WangySongDetail>
 
     /**
-     * Gets album details using WeAPI encryption.
-     * Endpoint: /weapi/v1/album/detail
-     * 
-     * @param url Full URL with path
-     * @param encryptedParams WeAPI encrypted parameters containing:
-     *   - id: album ID
+     * Gets album details.
+     * Endpoint: /api/album/detail
+     *
+     * @param albumId Album ID
      * @return Album detail response
      */
-    @POST
-    @Headers("User-Agent: ${USER_AGENT}", "origin: https://music.163.com")
+    @GET("api/album/detail")
+    @Headers("User-Agent: $USER_AGENT")
     suspend fun getAlbumDetail(
-        @Url url: String = "${WEB_URL}weapi/v1/album/detail",
-        @Body encryptedParams: Map<String, String>
+        @Query("id") albumId: Long
     ): Response<WangyAlbumDetail>
 }

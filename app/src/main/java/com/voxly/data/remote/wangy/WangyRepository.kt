@@ -1,6 +1,5 @@
 package com.voxly.data.remote.wangy
 
-import com.voxly.data.remote.wangy.crypto.WangyCrypto
 import com.voxly.data.remote.wangy.model.WangyAlbumDetail
 import com.voxly.data.remote.wangy.model.WangyLyricsResponse
 import com.voxly.data.remote.wangy.model.WangySearchResponse
@@ -12,7 +11,7 @@ import javax.inject.Singleton
 
 /**
  * Repository for WangY Music API operations.
- * Handles encryption and API communication.
+ * Uses simplified web API (no encryption required).
  */
 interface WangyRepository {
 
@@ -72,26 +71,13 @@ class WangyRepositoryImpl @Inject constructor(
     ): Result<WangySearchResponse> = withContext(Dispatchers.IO) {
         try {
             val offset = (page - 1) * limit
-            
-            // Prepare parameters for EAPI encryption
-            val params = mapOf<String, Any>(
-                "keyword" to keywords,
-                "offset" to offset,
-                "limit" to limit,
-                "scene" to "normal",
-                "channel" to "typing",
-                "needCorrect" to "1",
-                "total" to true
-            )
 
-            // Encrypt using EAPI
-            val encryptedParams = WangyCrypto.eapiEncrypt(
-                "/api/search/song/list/page",
-                params
+            // Make API call directly with parameters (no encryption needed)
+            val response = api.searchSongs(
+                keyword = keywords,
+                offset = offset,
+                limit = limit
             )
-
-            // Make API call
-            val response = api.searchSongs(encryptedParams = encryptedParams)
 
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
@@ -105,17 +91,10 @@ class WangyRepositoryImpl @Inject constructor(
 
     override suspend fun getSongDetail(songId: Long): Result<WangySongDetail> = withContext(Dispatchers.IO) {
         try {
-            // Prepare parameters for WeAPI encryption
-            val params = mapOf<String, Any>(
-                "c" to "[{\"id\":$songId}]",
-                "ids" to "[$songId]"
+            // Make API call directly with parameters (no encryption needed)
+            val response = api.getSongDetail(
+                songIds = "[$songId]"
             )
-
-            // Encrypt using WeAPI
-            val encryptedParams = WangyCrypto.weapiEncrypt(params)
-
-            // Make API call
-            val response = api.getSongDetail(encryptedParams = encryptedParams)
 
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
@@ -129,28 +108,10 @@ class WangyRepositoryImpl @Inject constructor(
 
     override suspend fun getLyrics(songId: Long): Result<WangyLyricsResponse> = withContext(Dispatchers.IO) {
         try {
-            // Prepare parameters for EAPI encryption
-            val params = mapOf<String, Any>(
-                "id" to songId,
-                "cp" to false,
-                "tv" to 0,
-                "lv" to 0,
-                "rv" to 0,
-                "kv" to 0,
-                "yv" to 0,
-                "ytv" to 0,
-                "rvk" to 0,
-                "ytk" to 0
+            // Make API call directly with parameters (no encryption needed)
+            val response = api.getLyrics(
+                songId = songId
             )
-
-            // Encrypt using EAPI
-            val encryptedParams = WangyCrypto.eapiEncrypt(
-                "/api/song/lyric/v1",
-                params
-            )
-
-            // Make API call
-            val response = api.getLyrics(encryptedParams = encryptedParams)
 
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
@@ -164,16 +125,10 @@ class WangyRepositoryImpl @Inject constructor(
 
     override suspend fun getAlbumDetail(albumId: Long): Result<WangyAlbumDetail> = withContext(Dispatchers.IO) {
         try {
-            // Prepare parameters for WeAPI encryption
-            val params = mapOf<String, Any>(
-                "id" to albumId
+            // Make API call directly with parameters (no encryption needed)
+            val response = api.getAlbumDetail(
+                albumId = albumId
             )
-
-            // Encrypt using WeAPI
-            val encryptedParams = WangyCrypto.weapiEncrypt(params)
-
-            // Make API call
-            val response = api.getAlbumDetail(encryptedParams = encryptedParams)
 
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)

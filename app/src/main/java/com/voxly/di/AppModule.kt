@@ -3,7 +3,7 @@ package com.voxly.di
 import android.content.Context
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
-import com.voxly.data.local.metadata.JaudiotaggerMetadataProcessor
+import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.data.remote.itunes.ITunesApi
 import com.voxly.data.remote.itunes.ITunesRepository
@@ -212,7 +212,7 @@ object AppModule {
     @Singleton
     fun provideLyricsRepository(
         @ApplicationContext context: Context,
-        metadataProcessor: JaudiotaggerMetadataProcessor,
+        metadataProcessor: TagLibMetadataProcessor,
         settingsDataStore: SettingsDataStore,
         lrclibApi: LRCLibApi,
         wangyRepository: WangyRepository,

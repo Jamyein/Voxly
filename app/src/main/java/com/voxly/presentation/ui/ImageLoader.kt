@@ -1,6 +1,5 @@
 package com.voxly.presentation.ui
 
-import android.graphics.BitmapFactory
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
@@ -17,7 +16,7 @@ suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
                 val base64 = url.substringAfter("base64,", "")
                 if (base64.isNotBlank()) {
                     val bytes = Base64.getDecoder().decode(base64)
-                    return@runCatching BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+                    return@runCatching decodeBitmapFromBytes(bytes)?.asImageBitmap()
                 }
             }
             val connection = (URL(url).openConnection() as HttpURLConnection).apply {
@@ -27,7 +26,8 @@ suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
                 setRequestProperty("Referer", "https://y.qq.com")
             }
             connection.inputStream.use { stream ->
-                BitmapFactory.decodeStream(stream)?.asImageBitmap()
+                val bytes = stream.readBytes()
+                decodeBitmapFromBytes(bytes)?.asImageBitmap()
             }
         }.getOrNull()
     }

@@ -2,11 +2,12 @@ package com.voxly.data.repository
 
 import android.content.Context
 import com.voxly.data.local.SettingsDataStore
-import com.voxly.data.local.metadata.JaudiotaggerMetadataProcessor
+import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.remote.lrclib.LRCLibApi
 import com.voxly.data.remote.lrclib.LRCLibLyrics
 import com.voxly.data.remote.tengx.TengxRepository
 import com.voxly.data.remote.wangy.WangyRepository
+import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.Lyrics
 import com.voxly.domain.repository.LyricsException
 import com.voxly.domain.repository.LyricsRepository
@@ -17,10 +18,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
-import org.jaudiotagger.audio.AudioFile
-import org.jaudiotagger.audio.AudioFileIO
-import org.jaudiotagger.tag.FieldKey
-import org.jaudiotagger.tag.Tag
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -35,7 +32,7 @@ import javax.inject.Singleton
 @Singleton
 class LyricsRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val metadataProcessor: JaudiotaggerMetadataProcessor,
+    private val metadataProcessor: TagLibMetadataProcessor,
     private val settingsDataStore: SettingsDataStore,
     private val lrclibApi: LRCLibApi,
     private val wangyRepository: WangyRepository,
@@ -63,15 +60,15 @@ class LyricsRepositoryImpl @Inject constructor(
                     return@withContext Result.failure(LyricsException("File not found: $filePath"))
                 }
 
-                val audioFile: AudioFile = AudioFileIO.read(file)
-                val tag: Tag = audioFile.tag ?: return@withContext Result.success(null)
+                // Use TagLibMetadataProcessor to read lyrics
+                val metadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
 
-                // Try to read unsynchronized lyrics (USLT)
-                val lyricsText = tag.getFirst(FieldKey.LYRICS)
+                // Try to read lyrics from LYRICS field
+                val lyricsText = metadata?.lyrics
 
                 if (lyricsText.isNullOrBlank()) {
-                    // Try to read from custom field or comment
-                    val comment = tag.getFirst(FieldKey.COMMENT)
+                    // Try to read from comment field
+                    val comment = metadata?.comment
                     if (!comment.isNullOrBlank() && comment.contains("[")) {
                         // Might be LRC format in comment
                         return@withContext Result.success(Lyrics.parseLrc(comment))
@@ -100,9 +97,6 @@ class LyricsRepositoryImpl @Inject constructor(
                     return@withContext Result.failure(LyricsException("File not accessible: $filePath"))
                 }
 
-                val audioFile: AudioFile = AudioFileIO.read(file)
-                val tag = audioFile.tag ?: audioFile.createDefaultTag()
-
                 // Save lyrics as USLT (Unsynchronized Lyrics)
                 // If synced, save in LRC format; otherwise save as plain text
                 val lyricsText = if (lyrics.isSynced) {
@@ -111,9 +105,20 @@ class LyricsRepositoryImpl @Inject constructor(
                     lyrics.text
                 }
 
-                tag.setField(FieldKey.LYRICS, lyricsText)
-                audioFile.tag = tag
-                AudioFileIO.write(audioFile)
+                // Read existing metadata and update with lyrics
+                val existingMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
+                val updatedMetadata = existingMetadata?.copy(lyrics = lyricsText)
+                    ?: com.voxly.domain.model.AudioMetadata(
+                        title = null,
+                        artist = null,
+                        album = null,
+                        lyrics = lyricsText
+                    )
+
+                val result = metadataProcessor.updateMetadata(filePath, updatedMetadata)
+                if (result.isFailure) {
+                    return@withContext Result.failure(LyricsException("Failed to save lyrics"))
+                }
 
                 Result.success(Unit)
             } catch (e: Exception) {
@@ -129,13 +134,15 @@ class LyricsRepositoryImpl @Inject constructor(
                     return@withContext Result.failure(LyricsException("File not accessible: $filePath"))
                 }
 
-                val audioFile: AudioFile = AudioFileIO.read(file)
-                val tag = audioFile.tag ?: return@withContext Result.success(Unit)
+                // Use metadataProcessor to remove lyrics field by setting it to empty
+                val existingMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
+                val updatedMetadata = existingMetadata?.copy(lyrics = "")
+                    ?: return@withContext Result.failure(LyricsException("Cannot read file metadata"))
 
-                // Remove lyrics field
-                tag.deleteField(FieldKey.LYRICS)
-                audioFile.tag = tag
-                AudioFileIO.write(audioFile)
+                val result = metadataProcessor.updateMetadata(filePath, updatedMetadata)
+                if (result.isFailure) {
+                    return@withContext Result.failure(LyricsException("Failed to remove lyrics"))
+                }
 
                 Result.success(Unit)
             } catch (e: Exception) {

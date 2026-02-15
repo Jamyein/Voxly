@@ -15,8 +15,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.1"
+        versionCode = 2
+        versionName = "0.2.0"
 
         resourceConfigurations += listOf("en", "zh-rCN")
 
@@ -154,8 +154,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.7.3")
 
-    // Audio Processing
-    implementation("net.jthink:jaudiotagger:3.0.1")
+    // Audio Processing - Kyant0/taglib from Maven Central (supports Android SAF)
+    // Replaces KTagLib which had JitPack reliability issues
+    implementation("io.github.kyant0:taglib:1.0.5")
 
     // Networking for MusicBrainz API
     implementation("com.squareup.retrofit2:retrofit:2.9.0")
@@ -164,6 +165,9 @@ dependencies {
 
     // DataStore Preferences
     implementation("androidx.datastore:datastore-preferences:1.0.0")
+
+    // Gson for JSON serialization
+    implementation("com.google.code.gson:gson:2.10.1")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

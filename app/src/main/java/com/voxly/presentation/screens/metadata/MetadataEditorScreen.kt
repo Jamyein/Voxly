@@ -2,8 +2,6 @@ package com.voxly.presentation.screens.metadata
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.graphics.BitmapFactory.Options
 import android.graphics.Matrix
 import android.net.Uri
 import android.widget.Toast
@@ -40,6 +38,7 @@ import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.ui.loadImageBitmapFromUrl
 
 /**
@@ -1108,23 +1107,7 @@ private fun decodeAlbumArtPreview(
     bytes: ByteArray,
     targetSizePx: Int = 1024
 ): android.graphics.Bitmap? {
-    return runCatching {
-        val bounds = Options().apply { inJustDecodeBounds = true }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-
-        val rawWidth = bounds.outWidth.coerceAtLeast(1)
-        val rawHeight = bounds.outHeight.coerceAtLeast(1)
-        var inSampleSize = 1
-        while ((rawWidth / inSampleSize) > targetSizePx || (rawHeight / inSampleSize) > targetSizePx) {
-            inSampleSize *= 2
-        }
-
-        val opts = Options().apply {
-            this.inSampleSize = inSampleSize
-            inPreferredConfig = android.graphics.Bitmap.Config.RGB_565
-        }
-        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, opts)
-    }.getOrNull()
+    return decodeBitmapFromBytes(bytes, targetSizePx)
 }
 
 @Composable
@@ -1172,7 +1155,7 @@ private fun bitmapToJpegBytes(bitmap: Bitmap, quality: Int = 92): ByteArray? {
 
 private fun rotateJpegBytes(bytes: ByteArray, degrees: Float): ByteArray? {
     return runCatching {
-        val src = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+        val src = decodeBitmapFromBytes(bytes)
             ?: throw IllegalArgumentException("Invalid image bytes")
         val matrix = Matrix().apply { postRotate(degrees) }
         val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)

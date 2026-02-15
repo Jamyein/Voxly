@@ -328,7 +328,7 @@ class FileBrowserViewModel @Inject constructor(
             onComplete(result.first, result.second)
             if (result.first) {
                 _selectedFiles.value = _selectedFiles.value - filePath
-                loadAudioFiles(forceRefresh = true)
+                loadAudioFiles(forceRefresh = false)
             }
         }
     }
@@ -355,7 +355,7 @@ class FileBrowserViewModel @Inject constructor(
             onComplete(result.first, result.second)
             if (result.first) {
                 _selectedFiles.value = _selectedFiles.value - filePath
-                loadAudioFiles(forceRefresh = true)
+                loadAudioFiles(forceRefresh = false)
             }
         }
     }
@@ -480,7 +480,7 @@ class FileBrowserViewModel @Inject constructor(
             _isBatchProcessing.value = false
             
             // Refresh files to show updated metadata
-            loadAudioFiles(forceRefresh = true)
+            loadAudioFiles(forceRefresh = false)
         }
     }
 
@@ -556,7 +556,7 @@ class FileBrowserViewModel @Inject constructor(
             _isBatchProcessing.value = false
             
             // Refresh files
-            loadAudioFiles(forceRefresh = true)
+            loadAudioFiles(forceRefresh = false)
         }
     }
 
@@ -651,7 +651,7 @@ class FileBrowserViewModel @Inject constructor(
             _isBatchProcessing.value = false
             
             // Refresh files
-            loadAudioFiles(forceRefresh = true)
+            loadAudioFiles(forceRefresh = false)
         }
     }
 
@@ -743,7 +743,7 @@ class FileBrowserViewModel @Inject constructor(
             _isBatchProcessing.value = false
 
             // Refresh files
-            loadAudioFiles(forceRefresh = true)
+            loadAudioFiles(forceRefresh = false)
         }
     }
 
@@ -839,7 +839,7 @@ class FileBrowserViewModel @Inject constructor(
             _isBatchProcessing.value = false
 
             // Refresh files
-            loadAudioFiles(forceRefresh = true)
+            loadAudioFiles(forceRefresh = false)
         }
     }
 
@@ -908,7 +908,7 @@ class FileBrowserViewModel @Inject constructor(
             _isBatchProcessing.value = false
 
             // Refresh files
-            loadAudioFiles(forceRefresh = true)
+            loadAudioFiles(forceRefresh = false)
         }
     }
 
