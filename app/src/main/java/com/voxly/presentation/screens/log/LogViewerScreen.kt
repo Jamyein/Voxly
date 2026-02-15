@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.log
 
+import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
@@ -8,10 +9,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -20,7 +20,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -85,6 +84,31 @@ fun LogViewerScreen(
                 },
                 windowInsets = TopAppBarDefaults.windowInsets
             )
+        },
+        floatingActionButton = {
+            if (uiState.selectedLogFile == null && uiState.logFiles.isNotEmpty()) {
+                FloatingActionButton(
+                    onClick = {
+                        viewModel.exportLogs(context) { uri ->
+                            if (uri != null) {
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/zip"
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Export Logs"))
+                            } else {
+                                Toast.makeText(context, "Failed to export logs", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Archive,
+                        contentDescription = stringResource(R.string.log_viewer_export)
+                    )
+                }
+            }
         }
     ) { innerPadding ->
         Column(
@@ -329,6 +353,18 @@ private fun LogLine(line: String) {
 }
 
 private fun lineLevelToken(line: String): String? {
-    val match = Regex("""\[[VDIWEA]\s*\]""").find(line)?.value ?: return null
-    return match.getOrNull(1)?.toString()
+    // Match new format: [VERBOSE], [DEBUG], [INFO], [WARN], [ERROR], [ASSERT]
+    val newFormat = Regex("""\[(VERBOSE|DEBUG|INFO|WARN|ERROR|ASSERT)\]""").find(line)
+    if (newFormat != null) {
+        return when (newFormat.groupValues[1]) {
+            "VERBOSE", "DEBUG" -> "D"
+            "INFO" -> "I"
+            "WARN" -> "W"
+            "ERROR", "ASSERT" -> "E"
+            else -> null
+        }
+    }
+    // Fallback to old format: [V], [D], [I], [W], [E], [A]
+    val oldFormat = Regex("""\[[VDIWEA]\s*\]""").find(line)?.value ?: return null
+    return oldFormat.getOrNull(1)?.toString()
 }

@@ -22,7 +22,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -73,22 +73,13 @@ fun MP3TagNavHost(
     )
 
     // Scroll state for controlling bottom bar visibility
-    var isBottomBarVisible by rememberSaveable { mutableStateOf(true) }
+    var isBottomBarVisible by remember { mutableStateOf(true) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            AnimatedVisibility(
-                visible = showBottomBar && isBottomBarVisible,
-                enter = slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = tween(durationMillis = 180, easing = LinearOutSlowInEasing)
-                ) + fadeIn(animationSpec = tween(durationMillis = 150)),
-                exit = slideOutVertically(
-                    targetOffsetY = { it },
-                    animationSpec = tween(durationMillis = 140, easing = FastOutLinearInEasing)
-                ) + fadeOut(animationSpec = tween(durationMillis = 120))
-            ) {
+            // Simple conditional - no animation overhead for better scroll performance
+            if (showBottomBar && isBottomBarVisible) {
                 NavigationBar {
                     bottomNavItems.forEach { item ->
                         val selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true

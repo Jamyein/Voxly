@@ -247,12 +247,12 @@ class SettingsDataStore @Inject constructor(
 
     val loggingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LOGGING_ENABLED] ?: true
+            preferences[LOGGING_ENABLED] ?: false
         }
 
     val fileLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[FILE_LOGGING_ENABLED] ?: true
+            preferences[FILE_LOGGING_ENABLED] ?: false
         }
 
     val consoleLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data

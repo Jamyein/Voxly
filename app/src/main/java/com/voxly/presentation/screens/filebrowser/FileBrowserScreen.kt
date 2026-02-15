@@ -134,8 +134,11 @@ fun FileBrowserScreen(
     )
     val coroutineScope = rememberCoroutineScope()
 
+    // Scroll detection threshold - increased to reduce frequent state changes
+    val ScrollHideThreshold = 30
+
     // Scroll detection for hiding/showing top bar and bottom bar
-    var isTopBarVisible by rememberSaveable { mutableStateOf(true) }
+    var isTopBarVisible by remember { mutableStateOf(true) }
     var previousScrollOffset by remember { mutableIntStateOf(0) }
     val canScrollToTop = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
 
@@ -152,10 +155,10 @@ fun FileBrowserScreen(
                 if (visibleFiles.isEmpty()) return@collect
                 
                 val scrollDelta = currentOffset - previousScrollOffset
-                if (scrollDelta > 10) {
+                if (scrollDelta > ScrollHideThreshold) {
                     isTopBarVisible = false
                     onBottomBarVisibilityChange(false)
-                } else if (scrollDelta < -10) {
+                } else if (scrollDelta < -ScrollHideThreshold) {
                     isTopBarVisible = true
                     onBottomBarVisibilityChange(true)
                 }

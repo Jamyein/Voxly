@@ -12,8 +12,11 @@ import com.voxly.domain.repository.OnlineRecording
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "AggregatedMetadata"
 
 /**
  * Aggregated repository that combines multiple online metadata sources.
@@ -517,6 +520,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 Result.failure(Exception("Failed to get NetEase album details"))
             }
         } catch (e: Exception) {
+            Timber.e(TAG, "NetEase album details failed: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -545,6 +549,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 Result.failure(Exception("Failed to get QQ Music album details"))
             }
         } catch (e: Exception) {
+            Timber.e(TAG, "QQ Music album details failed: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -624,6 +629,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 Result.success(null)
             }
         } catch (e: Exception) {
+            Timber.e(TAG, "NetEase cover art failed: ${e.message}", e)
             Result.failure(e)
         }
     }
@@ -641,6 +647,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             val bytes = connection.getInputStream().use { it.readBytes() }
             Result.success(bytes)
         } catch (e: Exception) {
+            Timber.e(TAG, "QQ Music cover art failed: ${e.message}", e)
             Result.failure(e)
         }
     }

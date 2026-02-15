@@ -169,6 +169,9 @@ dependencies {
     // Gson for JSON serialization
     implementation("com.google.code.gson:gson:2.10.1")
 
+    // Timber for logging
+    implementation("com.jakewharton.timber:timber:5.0.1")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")

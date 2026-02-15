@@ -1,6 +1,7 @@
 package com.voxly.core.util
 
 import android.os.Environment
+import timber.log.Timber
 import java.io.File
 import java.io.FileWriter
 import java.io.PrintWriter
@@ -58,7 +59,7 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
                 writer.appendLine("================================================================================")
             }
 
-            Logger.e("Crash report saved to: ${crashFile.absolutePath}")
+            Timber.e("Crash report saved to: ${crashFile.absolutePath}")
         } catch (e: Exception) {
             android.util.Log.e("CrashHandler", "Failed to save crash report: ${e.message}")
         }
@@ -78,5 +79,5 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
 }
 
 fun logCrash(tag: String, message: String, throwable: Throwable) {
-    Logger.e("[$tag] $message", throwable, "CRASH")
+    Timber.e("[$tag] $message", throwable)
 }

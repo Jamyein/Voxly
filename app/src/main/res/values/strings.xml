@@ -370,6 +370,7 @@
     <string name="log_viewer_filter_info">Info</string>
     <string name="log_viewer_filter_debug">Debug</string>
     <string name="log_viewer_share">Share</string>
+    <string name="log_viewer_export">Export</string>
     <string name="log_viewer_delete">Delete</string>
     <string name="log_viewer_delete_confirm">Delete this log file?</string>
     <string name="log_viewer_no_logs">No logs available</string>

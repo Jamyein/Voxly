@@ -1,8 +1,10 @@
 package com.voxly.core.util
 
 import android.util.Log
+import timber.log.Timber
 import java.io.File
-import java.io.FileWriter
+import java.io.FileInputStream
+import java.io.FileOutputStream
 import java.io.IOException
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -10,29 +12,42 @@ import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.Executors
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 
-class FileLoggingTree {
+/**
+ * Timber Tree that writes logs to files asynchronously.
+ * Extends Timber.Tree to integrate with Timber's logging system.
+ */
+class FileLoggingTree : Timber.Tree() {
 
-    private val dateTimeFormat = SimpleDateFormat("HH:mm:ss.SSS", Locale.US)
-    private val fileDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
+    companion object {
+        private const val MAX_FILE_SIZE = 5 * 1024 * 1024L // 5MB
+        private const val MAX_FILES = 5
+        private const val MAX_TOTAL_SIZE = 50 * 1024 * 1024L // 50MB
 
-    private val executor = Executors.newSingleThreadExecutor()
+        private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+    }
+
+    private val executor = Executors.newSingleThreadExecutor { r ->
+        Thread(r, "FileLoggingTree-Writer").apply { isDaemon = true }
+    }
     private val writeQueue = ConcurrentLinkedQueue<LogEntry>()
     private val isDraining = AtomicBoolean(false)
 
     private var currentLogFile: File? = null
-    private var currentFileDate: String? = null
+    private var currentFileIndex: Int = 0
     private var currentFileSize: Long = 0
 
     private val lock = Any()
 
-    fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
+    override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
         if (!LogManager.isFileLoggingEnabled) return
 
         val entry = LogEntry(
             timestamp = System.currentTimeMillis(),
             priority = priority,
-            tag = tag ?: "UNKNOWN",
+            tag = tag ?: "Voxly",
             message = message,
             throwable = t
         )
@@ -65,17 +80,20 @@ class FileLoggingTree {
     private fun writeToFile(entry: LogEntry) {
         synchronized(lock) {
             val logFile = getOrCreateLogFile()
-            if (logFile == null) return
+            if (logFile == null) {
+                Log.e("FileLoggingTree", "Failed to get log file")
+                return
+            }
 
             try {
                 val formattedTime = dateTimeFormat.format(Date(entry.timestamp))
-                val priorityChar = getPriorityChar(entry.priority)
+                val priorityStr = getPriorityString(entry.priority)
                 val logLine = buildString {
                     append("[")
                     append(formattedTime)
-                    append("][")
-                    append(priorityChar.padEnd(5))
-                    append("][")
+                    append("] [")
+                    append(priorityStr)
+                    append("] [")
                     append(entry.tag.take(12).padEnd(12))
                     append("] ")
                     appendLine(entry.message)
@@ -87,8 +105,8 @@ class FileLoggingTree {
                     }
                 }
 
-                FileWriter(logFile, true).use { writer ->
-                    writer.append(logLine)
+                FileOutputStream(logFile, true).use { fos ->
+                    fos.write(logLine.toByteArray())
                 }
 
                 currentFileSize = logFile.length()
@@ -99,38 +117,32 @@ class FileLoggingTree {
     }
 
     private fun getOrCreateLogFile(): File? {
-        val today = fileDateFormat.format(Date())
-        val fileName = "voxly_$today.log"
-
-        if (currentLogFile == null || currentFileDate != today) {
-            val existingFile = LogManager.getLogFiles().find { it.name == fileName }
-            currentLogFile = existingFile ?: File(LogManager.getLogDirectory(), fileName)
-            currentFileDate = today
-            currentFileSize = currentLogFile!!.length()
-
-            if (existingFile == null) {
-                try {
-                    FileWriter(currentLogFile!!, true).use { writer ->
-                        writer.append(LogManager.createLogHeader())
-                    }
-                } catch (e: IOException) {
-                    Log.e("FileLoggingTree", "Failed to create log file header: ${e.message}")
-                    return null
-                }
-            }
+        // Get existing log files and sort by index
+        val existingFiles = getLogFilesWithIndex()
+        
+        // Find current file or create new one
+        if (currentLogFile == null || !currentLogFile!!.exists()) {
+            // Find the latest file with content
+            currentFileIndex = existingFiles.maxOfOrNull { it.first } ?: 0
+            currentLogFile = getLogFile(currentFileIndex)
+            currentFileSize = currentLogFile?.length() ?: 0
         }
 
-        if (currentFileSize >= LogManager.MAX_LOG_FILE_SIZE) {
-            val newFileName = nextRotatedFileName(today)
-            currentLogFile = File(LogManager.getLogDirectory(), newFileName)
+        // Check if we need to rotate
+        if (currentFileSize >= MAX_FILE_SIZE) {
+            currentFileIndex++
+            if (currentFileIndex >= MAX_FILES) {
+                // Rotate: delete oldest (index 0), shift others
+                rotateFiles()
+                currentFileIndex = MAX_FILES - 1
+            }
+            currentLogFile = getLogFile(currentFileIndex)
             currentFileSize = 0
-
+            
             try {
-                FileWriter(currentLogFile!!, true).use { writer ->
-                    writer.append(LogManager.createLogHeader())
-                }
+                currentLogFile?.createNewFile()
             } catch (e: IOException) {
-                Log.e("FileLoggingTree", "Failed to create rotated log file: ${e.message}")
+                Log.e("FileLoggingTree", "Failed to create new log file: ${e.message}")
                 return null
             }
         }
@@ -138,29 +150,105 @@ class FileLoggingTree {
         return currentLogFile
     }
 
-    private fun getPriorityChar(priority: Int): String {
-        return when (priority) {
-            Log.VERBOSE -> "V"
-            Log.DEBUG -> "D"
-            Log.INFO -> "I"
-            Log.WARN -> "W"
-            Log.ERROR -> "E"
-            Log.ASSERT -> "A"
-            else -> "?"
+    private fun getLogFilesWithIndex(): List<Pair<Int, File>> {
+        val logDir = LogManager.getLogDirectory()
+        val prefix = "voxly_"
+        val suffix = ".log"
+        
+        return logDir.listFiles { file ->
+            file.isFile &&
+            file.name.startsWith(prefix) &&
+            file.name.endsWith(suffix) &&
+            file.name.removePrefix(prefix).removeSuffix(suffix).toIntOrNull() != null
+        }?.mapNotNull { file ->
+            val index = file.name.removePrefix(prefix).removeSuffix(suffix).toIntOrNull()
+            index?.let { Pair(it, file) }
+        } ?: emptyList()
+    }
+
+    private fun getLogFile(index: Int): File {
+        val logDir = LogManager.getLogDirectory()
+        return File(logDir, "voxly_${String.format(Locale.US, "%03d", index)}.log")
+    }
+
+    private fun rotateFiles() {
+        // Delete the oldest file (index 0)
+        val oldestFile = getLogFile(0)
+        if (oldestFile.exists()) {
+            oldestFile.delete()
+        }
+
+        // Shift all files: voxly_1 -> voxly_0, voxly_2 -> voxly_1, etc.
+        for (i in 0 until MAX_FILES - 1) {
+            val currentFile = getLogFile(i)
+            val nextFile = getLogFile(i + 1)
+            if (nextFile.exists()) {
+                nextFile.renameTo(currentFile)
+            }
         }
     }
 
-    private fun nextRotatedFileName(today: String): String {
-        val prefix = "voxly_${today}_"
-        val suffix = ".log"
-        val maxIndex = LogManager.getLogFiles()
-            .mapNotNull { file ->
-                val name = file.name
-                if (!name.startsWith(prefix) || !name.endsWith(suffix)) return@mapNotNull null
-                name.removePrefix(prefix).removeSuffix(suffix).toIntOrNull()
+    private fun getPriorityString(priority: Int): String {
+        return when (priority) {
+            Log.VERBOSE -> "VERBOSE"
+            Log.DEBUG -> "DEBUG"
+            Log.INFO -> "INFO"
+            Log.WARN -> "WARN"
+            Log.ERROR -> "ERROR"
+            Log.ASSERT -> "ASSERT"
+            else -> "UNKNOWN"
+        }
+    }
+
+    /**
+     * Cleanup old log files to maintain total size limit.
+     * Called at application startup.
+     */
+    fun cleanupExcessLogs() {
+        synchronized(lock) {
+            val logDir = LogManager.getLogDirectory()
+            val files = getLogFilesWithIndex().sortedBy { it.first }
+            
+            var totalSize = files.sumOf { it.second.length() }
+            
+            // Delete oldest files until we're under the limit
+            for ((index, file) in files) {
+                if (totalSize <= MAX_TOTAL_SIZE) break
+                if (file.exists() && file.delete()) {
+                    totalSize -= file.length()
+                }
             }
-            .maxOrNull() ?: 0
-        return "${prefix}${maxIndex + 1}$suffix"
+        }
+    }
+
+    /**
+     * Export all log files to a ZIP archive.
+     * @return ZIP file path, or null if failed
+     */
+    fun exportToZip(): File? {
+        synchronized(lock) {
+            val logDir = LogManager.getLogDirectory()
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val zipFile = File(logDir.parentFile, "logs_$timestamp.zip")
+
+            try {
+                ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
+                    getLogFilesWithIndex().sortedBy { it.first }.forEach { (_, file) ->
+                        if (file.exists()) {
+                            zos.putNextEntry(ZipEntry(file.name))
+                            FileInputStream(file).use { fis ->
+                                fis.copyTo(zos)
+                            }
+                            zos.closeEntry()
+                        }
+                    }
+                }
+                return zipFile
+            } catch (e: IOException) {
+                Log.e("FileLoggingTree", "Failed to export logs to ZIP: ${e.message}")
+                return null
+            }
+        }
     }
 
     fun shutdown() {

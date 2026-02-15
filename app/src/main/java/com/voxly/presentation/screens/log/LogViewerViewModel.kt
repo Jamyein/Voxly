@@ -196,8 +196,16 @@ class LogViewerViewModel @Inject constructor() : ViewModel() {
     }
 
     private fun isLevel(line: String, level: Char): Boolean {
-        val token = LOG_LEVEL_TOKEN_REGEX.find(line)?.value ?: return false
-        return token.length > 1 && token[1] == level
+        // Match new format: [VERBOSE], [DEBUG], [INFO], [WARN], [ERROR], [ASSERT]
+        val newMatch = LOG_LEVEL_TOKEN_REGEX.find(line) ?: return false
+        val levelStr = newMatch.groupValues[1]
+        return when (level) {
+            'V', 'D' -> levelStr == "VERBOSE" || levelStr == "DEBUG"
+            'I' -> levelStr == "INFO"
+            'W' -> levelStr == "WARN"
+            'E' -> levelStr == "ERROR" || levelStr == "ASSERT"
+            else -> false
+        }
     }
 }
-private val LOG_LEVEL_TOKEN_REGEX = Regex("""\[[VDIWEA]\s*\]""")
+private val LOG_LEVEL_TOKEN_REGEX = Regex("""\[(VERBOSE|DEBUG|INFO|WARN|ERROR|ASSERT)\]""")

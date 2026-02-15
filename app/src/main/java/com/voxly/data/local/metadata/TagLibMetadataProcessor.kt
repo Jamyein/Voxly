@@ -37,6 +37,12 @@ class TagLibMetadataProcessor @Inject constructor(
         const val CUSTOM_ISRC = "ISRC"
         const val CUSTOM_COPYRIGHT = "COPYRIGHT"
         
+        // ReplayGain field keys
+        const val CUSTOM_REPLAYGAIN_TRACK_GAIN = "REPLAYGAIN_TRACK_GAIN"
+        const val CUSTOM_REPLAYGAIN_TRACK_PEAK = "REPLAYGAIN_TRACK_PEAK"
+        const val CUSTOM_REPLAYGAIN_ALBUM_GAIN = "REPLAYGAIN_ALBUM_GAIN"
+        const val CUSTOM_REPLAYGAIN_ALBUM_PEAK = "REPLAYGAIN_ALBUM_PEAK"
+        
         // Supported extensions
         private val SUPPORTED_EXTENSIONS = setOf(
             "mp3", "flac", "ogg", "m4a", "mp4", "wav", "wma", "ape", "opus", "wv"
@@ -98,6 +104,12 @@ class TagLibMetadataProcessor @Inject constructor(
             propertyMap[CUSTOM_ENCODER]?.firstOrNull()?.let { customFields[CUSTOM_ENCODER] = it }
             propertyMap[CUSTOM_ISRC]?.firstOrNull()?.let { customFields[CUSTOM_ISRC] = it }
             propertyMap[CUSTOM_COPYRIGHT]?.firstOrNull()?.let { customFields[CUSTOM_COPYRIGHT] = it }
+            
+            // Read ReplayGain fields
+            propertyMap[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN] = it }
+            propertyMap[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK] = it }
+            propertyMap[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = it }
+            propertyMap[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
 
             // Get album art from pictures
             val albumArt = if (includeAlbumArt) {
