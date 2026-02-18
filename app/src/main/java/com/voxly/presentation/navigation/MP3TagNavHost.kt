@@ -19,6 +19,7 @@ import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -41,6 +42,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.navArgument
 import com.voxly.R
 import com.voxly.core.util.LogManager
+import com.voxly.domain.model.AudioMetadata
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 
@@ -255,11 +257,18 @@ fun MP3TagNavHost(
             ) { backStackEntry ->
                 val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
                 val filePath = URLDecoder.decode(encodedPath, "UTF-8")
+                val pendingOnlineMetadata by backStackEntry.savedStateHandle
+                    .getStateFlow<AudioMetadata?>("online_metadata_result", null)
+                    .collectAsState()
                 MetadataEditorScreen(
                     filePath = filePath,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToOnlineMetadata = {
                         navController.navigate(Screen.OnlineMetadata.createRoute(filePath))
+                    },
+                    pendingOnlineMetadata = pendingOnlineMetadata,
+                    onConsumePendingOnlineMetadata = {
+                        backStackEntry.savedStateHandle.remove<AudioMetadata>("online_metadata_result")
                     }
                 )
             }
@@ -292,7 +301,13 @@ fun MP3TagNavHost(
                 val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
                 OnlineMetadataScreen(
                     filePath = URLDecoder.decode(encodedPath, "UTF-8"),
-                    onNavigateBack = { navController.popBackStack() }
+                    onNavigateBack = { navController.popBackStack() },
+                    onApplyMetadata = { metadata ->
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("online_metadata_result", metadata)
+                        navController.popBackStack()
+                    }
                 )
             }
 

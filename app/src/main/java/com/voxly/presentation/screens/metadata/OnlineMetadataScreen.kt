@@ -22,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Button
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -36,6 +37,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.voxly.R
+import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.presentation.ui.loadImageBitmapFromUrl
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
@@ -47,7 +50,8 @@ import com.voxly.presentation.viewmodel.SearchProgressState
 fun OnlineMetadataScreen(
     filePath: String,
     viewModel: OnlineMetadataViewModel = hiltViewModel(),
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onApplyMetadata: (AudioMetadata) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
@@ -147,6 +151,16 @@ fun OnlineMetadataScreen(
                             text = "Tracks: ${selectedRelease?.trackCount ?: 0}  File: ${filePath.substringAfterLast('/')}",
                             style = MaterialTheme.typography.bodySmall
                         )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = {
+                                viewModel.applyMetadata()?.let(onApplyMetadata)
+                            },
+                            enabled = !isLoading,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = androidx.compose.ui.res.stringResource(R.string.apply_to_selected))
+                        }
                     }
                 }
             }

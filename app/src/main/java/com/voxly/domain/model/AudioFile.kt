@@ -1,6 +1,7 @@
 package com.voxly.domain.model
 
 import android.net.Uri
+import java.io.Serializable
 
 /**
  * Domain model representing an audio file with its metadata and replay gain information.
@@ -85,7 +86,7 @@ data class AudioMetadata(
     val lyrics: String? = null,
     val albumArt: ByteArray? = null,
     val customFields: Map<String, String> = emptyMap()
-) {
+) : Serializable {
     /**
      * Returns a display-friendly title, falling back to filename if title is empty.
      */

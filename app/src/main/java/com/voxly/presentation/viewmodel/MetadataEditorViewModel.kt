@@ -551,6 +551,29 @@ class MetadataEditorViewModel @Inject constructor(
         _lyricsSearchState.value = LyricsSearchState()
     }
 
+    fun applyOnlineMetadata(metadata: AudioMetadata) {
+        val currentMetadata = _editedMetadata.value ?: return
+        val updatedMetadata = currentMetadata.copy(
+            title = metadata.title ?: currentMetadata.title,
+            artist = metadata.artist ?: currentMetadata.artist,
+            album = metadata.album ?: currentMetadata.album,
+            albumArtist = metadata.albumArtist ?: currentMetadata.albumArtist,
+            year = metadata.year ?: currentMetadata.year,
+            genre = metadata.genre ?: currentMetadata.genre,
+            trackNumber = metadata.trackNumber ?: currentMetadata.trackNumber,
+            totalTracks = metadata.totalTracks ?: currentMetadata.totalTracks,
+            lyrics = metadata.lyrics ?: currentMetadata.lyrics
+        )
+
+        _editedMetadata.value = updatedMetadata
+        _hasUnsavedChanges.value = true
+
+        val currentState = _uiState.value
+        if (currentState is MetadataEditorUiState.Success) {
+            _uiState.value = currentState.copy(editedMetadata = updatedMetadata)
+        }
+    }
+
     private fun metadataToStorageState(metadata: AudioMetadata): AudioMetadata {
         // Return a copy that represents the saved state
         return metadata.copy()

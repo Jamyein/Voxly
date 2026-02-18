@@ -50,7 +50,9 @@ fun MetadataEditorScreen(
     filePath: String,
     viewModel: MetadataEditorViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
-    onNavigateToOnlineMetadata: () -> Unit
+    onNavigateToOnlineMetadata: () -> Unit,
+    pendingOnlineMetadata: com.voxly.domain.model.AudioMetadata? = null,
+    onConsumePendingOnlineMetadata: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -81,6 +83,12 @@ fun MetadataEditorScreen(
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
             viewModel.clearCoverFetchMessage()
         }
+    }
+
+    LaunchedEffect(pendingOnlineMetadata) {
+        val metadata = pendingOnlineMetadata ?: return@LaunchedEffect
+        viewModel.applyOnlineMetadata(metadata)
+        onConsumePendingOnlineMetadata()
     }
 
     // Handle save result
