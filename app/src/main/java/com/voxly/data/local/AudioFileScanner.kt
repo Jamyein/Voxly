@@ -45,7 +45,8 @@ class AudioFileScanner @Inject constructor(
         private val AUDIO_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         private val ALBUM_ART_URI = Uri.parse("content://media/external/audio/albumart")
 
-        private val PROJECTION = arrayOf(
+        // Fast projection - only MediaStore columns, no file parsing needed
+        private val FAST_PROJECTION = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.DATA,
@@ -57,12 +58,17 @@ class AudioFileScanner @Inject constructor(
             MediaStore.Audio.Media.DURATION,
             MediaStore.Audio.Media.SIZE,
             MediaStore.Audio.Media.MIME_TYPE,
-            MediaStore.Audio.Media.BITRATE
+            MediaStore.Audio.Media.BITRATE,
+            MediaStore.Audio.Media.TRACK
         )
+
+        // Legacy projection - kept for compatibility
+        private val PROJECTION = FAST_PROJECTION
     }
 
     /**
      * Scans all audio files from external storage.
+     * OPTIMIZED: Uses MediaStore only - no file parsing for fast display.
      * @return Flow emitting lists of audio files as they're discovered
      */
     fun scanAllAudioFiles(): Flow<List<AudioFile>> = flow {
@@ -73,7 +79,7 @@ class AudioFileScanner @Inject constructor(
 
         val cursor: Cursor? = contentResolver.query(
             AUDIO_URI,
-            PROJECTION,
+            FAST_PROJECTION,
             selection,
             null,
             sortOrder
@@ -90,8 +96,8 @@ class AudioFileScanner @Inject constructor(
             val yearColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
             val durationColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val sizeColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
-            val mimeTypeColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
             val bitrateColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
+            val trackColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
 
             while (it.moveToNext()) {
                 val filePath = it.getString(dataColumn)
@@ -99,31 +105,43 @@ class AudioFileScanner @Inject constructor(
 
                 // Only process supported audio formats
                 if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
-                    // Read full metadata including lyrics from file tags
-                    val fullMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
-                        ?: parseBasicMetadata(
-                            title = it.getString(titleColumn),
-                            artist = it.getString(artistColumn),
-                            album = it.getString(albumColumn),
-                            year = it.getString(yearColumn),
-                            albumId = it.getLong(albumIdColumn)
-                        )
-
-                    // Read precise audio info using TagLib (more accurate than MediaStore)
-                    val audioInfo = metadataProcessor.readAudioInfo(filePath)
+                    val albumId = it.getLong(albumIdColumn).takeIf { albumId -> albumId > 0L }
+                    
+                    // FAST: Use MediaStore data directly - no file parsing
+                    val metadata = com.voxly.domain.model.AudioMetadata(
+                        title = it.getString(titleColumn)?.takeIf { s -> s.isNotBlank() },
+                        artist = it.getString(artistColumn)?.takeIf { s -> s.isNotBlank() },
+                        album = it.getString(albumColumn)?.takeIf { s -> s.isNotBlank() },
+                        year = it.getString(yearColumn)?.takeIf { s -> s.isNotBlank() },
+                        trackNumber = it.getInt(trackColumn).takeIf { n -> n > 0 },
+                        albumArt = null,
+                        // Detailed fields loaded on-demand via loadDetailedMetadata()
+                        albumArtist = null,
+                        genre = null,
+                        totalTracks = null,
+                        discNumber = null,
+                        totalDiscs = null,
+                        composer = null,
+                        lyricist = null,
+                        conductor = null,
+                        originalArtist = null,
+                        comment = null,
+                        lyrics = null,
+                        customFields = emptyMap()
+                    )
 
                     val audioFile = AudioFile(
                         id = it.getLong(idColumn).toString(),
                         path = filePath,
                         name = it.getString(nameColumn) ?: filePath.substringAfterLast('/'),
                         size = it.getLong(sizeColumn),
-                        duration = audioInfo?.durationMs ?: it.getLong(durationColumn),
+                        duration = it.getLong(durationColumn),
                         format = extension.uppercase(),
-                        bitrate = audioInfo?.bitrate ?: it.getInt(bitrateColumn),
-                        sampleRate = audioInfo?.sampleRate ?: 0,
-                        channels = audioInfo?.channels ?: 0,
-                        mediaStoreAlbumId = it.getLong(albumIdColumn).takeIf { albumId -> albumId > 0L },
-                        metadata = fullMetadata
+                        bitrate = it.getInt(bitrateColumn),
+                        sampleRate = 0,
+                        channels = 0,
+                        mediaStoreAlbumId = albumId,
+                        metadata = metadata
                     )
                     audioFiles.add(audioFile)
                 }
@@ -162,6 +180,43 @@ class AudioFileScanner @Inject constructor(
             null
         }
     }
+
+    /**
+     * Loads detailed metadata on-demand (lazy loading).
+     * Call this when user views song details, edits metadata, or needs lyrics.
+     * 
+     * @param filePath Path to the audio file
+     * @param includeAlbumArt Whether to include album art bytes
+     * @return Full AudioMetadata including lyrics, ReplayGain, composer, etc.
+     */
+    suspend fun loadDetailedMetadata(
+        filePath: String, 
+        includeAlbumArt: Boolean = false
+    ): com.voxly.domain.model.AudioMetadata? = withContext(Dispatchers.IO) {
+        try {
+            metadataProcessor.readMetadata(filePath, includeAlbumArt)
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to load detailed metadata: $filePath", e)
+            null
+        }
+    }
+
+    /**
+     * Loads audio properties on-demand (lazy loading).
+     * Call this when precise sample rate, channels, or accurate bitrate is needed.
+     * 
+     * @param filePath Path to the audio file
+     * @return AudioInfo with bitrate, sampleRate, channels, durationMs
+     */
+    suspend fun loadAudioProperties(filePath: String): TagLibMetadataProcessor.AudioInfo? = 
+        withContext(Dispatchers.IO) {
+            try {
+                metadataProcessor.readAudioInfo(filePath)
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to load audio properties: $filePath", e)
+                null
+            }
+        }
 
     /**
      * Recursively scans a directory for audio files.
@@ -262,26 +317,26 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Optimized full scan that uses cache when available.
-     * - First returns cached data (if forceRefresh is false)
-     * - Then performs incremental scan in background
-     * - Updates cache with new/modified files
+     * - If cache exists and forceRefresh is false, return cache immediately (no scan)
+     * - If forceRefresh is true or no cache exists, perform full scan and update cache
      * 
      * @param forceRefresh If true, ignore cache and rescan everything
      * @return Flow emitting scan results
      */
     fun scanAudioFilesOptimized(forceRefresh: Boolean = false): Flow<List<AudioFile>> = flow {
+        // If not forcing refresh and cache exists, return cached data only
         if (!forceRefresh && libraryCache.hasCache()) {
-            // Return cached data first (fast)
             val cachedFiles = mutableListOf<AudioFile>()
             libraryCache.getCachedAudioFiles().collect { cached ->
                 cachedFiles.addAll(cached)
             }
             if (cachedFiles.isNotEmpty()) {
                 emit(cachedFiles.sortedBy { it.metadata.getDisplayTitle(it.name) })
+                return@flow  // Return cache only - no full scan needed
             }
         }
 
-        // Perform full scan and cache results
+        // No cache or force refresh: perform full scan and cache results
         val allFiles = mutableListOf<AudioFile>()
         scanAllFilesForCache(allFiles)
         
@@ -400,6 +455,8 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Scan all audio files and return full AudioFile objects.
+     * OPTIMIZED: Uses MediaStore only - no file-level metadata reading.
+     * Detailed metadata (lyrics, ReplayGain, etc.) is loaded on-demand.
      */
     private suspend fun scanAllFilesForCache(output: MutableList<AudioFile>) {
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
@@ -407,7 +464,7 @@ class AudioFileScanner @Inject constructor(
 
         val cursor: Cursor? = contentResolver.query(
             AUDIO_URI,
-            PROJECTION,
+            FAST_PROJECTION,
             selection,
             null,
             sortOrder
@@ -424,38 +481,52 @@ class AudioFileScanner @Inject constructor(
             val yearColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
             val durationColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
             val sizeColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
-            val mimeTypeColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
             val bitrateColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
+            val trackColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
 
             while (it.moveToNext()) {
                 val filePath = it.getString(dataColumn)
                 val extension = filePath.substringAfterLast('.', "")
 
                 if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
-                    val fullMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
-                        ?: parseBasicMetadata(
-                            title = it.getString(titleColumn),
-                            artist = it.getString(artistColumn),
-                            album = it.getString(albumColumn),
-                            year = it.getString(yearColumn),
-                            albumId = it.getLong(albumIdColumn)
-                        )
-
-                    // Read precise audio info using TagLib (more accurate than MediaStore)
-                    val audioInfo = metadataProcessor.readAudioInfo(filePath)
+                    val albumId = it.getLong(albumIdColumn).takeIf { albumId -> albumId > 0L }
+                    
+                    // FAST: Use MediaStore data directly - no file parsing
+                    val metadata = com.voxly.domain.model.AudioMetadata(
+                        title = it.getString(titleColumn)?.takeIf { s -> s.isNotBlank() },
+                        artist = it.getString(artistColumn)?.takeIf { s -> s.isNotBlank() },
+                        album = it.getString(albumColumn)?.takeIf { s -> s.isNotBlank() },
+                        year = it.getString(yearColumn)?.takeIf { s -> s.isNotBlank() },
+                        trackNumber = it.getInt(trackColumn).takeIf { n -> n > 0 },
+                        // Album art URI is built from albumId - no bytes loaded
+                        albumArt = null,
+                        // Detailed fields (lyrics, ReplayGain, composer, etc.) loaded on-demand
+                        albumArtist = null,
+                        genre = null,
+                        totalTracks = null,
+                        discNumber = null,
+                        totalDiscs = null,
+                        composer = null,
+                        lyricist = null,
+                        conductor = null,
+                        originalArtist = null,
+                        comment = null,
+                        lyrics = null,
+                        customFields = emptyMap()
+                    )
 
                     val audioFile = AudioFile(
                         id = it.getLong(idColumn).toString(),
                         path = filePath,
                         name = it.getString(nameColumn) ?: filePath.substringAfterLast('/'),
                         size = it.getLong(sizeColumn),
-                        duration = audioInfo?.durationMs ?: it.getLong(durationColumn),
+                        duration = it.getLong(durationColumn),
                         format = extension.uppercase(),
-                        bitrate = audioInfo?.bitrate ?: it.getInt(bitrateColumn),
-                        sampleRate = audioInfo?.sampleRate ?: 0,
-                        channels = audioInfo?.channels ?: 0,
-                        mediaStoreAlbumId = it.getLong(albumIdColumn).takeIf { albumId -> albumId > 0L },
-                        metadata = fullMetadata
+                        bitrate = it.getInt(bitrateColumn),
+                        sampleRate = 0,  // Not in MediaStore, loaded on-demand
+                        channels = 0,    // Not in MediaStore, loaded on-demand
+                        mediaStoreAlbumId = albumId,
+                        metadata = metadata
                     )
                     output.add(audioFile)
                 }
@@ -466,7 +537,7 @@ class AudioFileScanner @Inject constructor(
     /**
      * Clear the scan cache.
      */
-    suspend fun clearCache(): Unit = libraryCache.clearCache()
+    suspend fun clearCache(): Int = libraryCache.clearCache()
 
     /**
      * Remove a file from cache (e.g., when file is deleted).

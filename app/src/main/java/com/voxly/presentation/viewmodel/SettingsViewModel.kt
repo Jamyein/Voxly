@@ -189,6 +189,13 @@ class SettingsViewModel @Inject constructor(
             initialValue = true
         )
 
+    val replayGainTargetLoudness: StateFlow<Float> = settingsDataStore.replayGainTargetLoudness
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = -18f
+        )
+
     /**
      * Set dark theme preference
      */
@@ -368,6 +375,12 @@ class SettingsViewModel @Inject constructor(
     fun setCrashReportingEnabled(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.setCrashReportingEnabled(enabled)
+        }
+    }
+
+    fun setReplayGainTargetLoudness(loudness: Float) {
+        viewModelScope.launch {
+            settingsDataStore.setReplayGainTargetLoudness(loudness)
         }
     }
 }

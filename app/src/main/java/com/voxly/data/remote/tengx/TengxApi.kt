@@ -7,6 +7,7 @@ import com.voxly.data.remote.tengx.model.TengxSongDetail
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Header
+import retrofit2.http.Headers
 import retrofit2.http.Query
 import retrofit2.http.Url
 
@@ -29,6 +30,8 @@ interface TengxApi {
         const val LYRIC_BASE_URL = "https://c.y.qq.com/"
         /** Default g_tk parameter for QQ Music API */
         const val G_TK = 5381
+        /** User Agent for QQ Music API */
+        const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
     }
 
     /**
@@ -41,6 +44,11 @@ interface TengxApi {
      * @return Search response with song/album/artist results
      */
     @GET("soso/fcgi-bin/client_search_cp")
+    @Headers(
+        "User-Agent: $USER_AGENT",
+        "Accept: application/json",
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
+    )
     suspend fun search(
         @Query("w") keyword: String,
         @Query("p") page: Int = 1,
@@ -70,6 +78,10 @@ interface TengxApi {
      * @return Lyrics response with Base64 encoded lyrics content
      */
     @GET
+    @Headers(
+        "User-Agent: $USER_AGENT",
+        "Accept: application/json"
+    )
     suspend fun getLyrics(
         @Url url: String = "https://c.y.qq.com/lyric/fcgi-bin/fcg_query_lyric_new.fcg",
         @Query("songmid") songmid: String,
@@ -91,6 +103,11 @@ interface TengxApi {
      * @return Song detail response
      */
     @GET("cgi-bin/musicu.fcg")
+    @Headers(
+        "User-Agent: $USER_AGENT",
+        "Referer: https://y.qq.com/",
+        "Accept: application/json"
+    )
     suspend fun getSongDetail(
         @Query("songids") songIds: String,
         @Query("format") format: String = "json"
@@ -104,6 +121,11 @@ interface TengxApi {
      * @return Album detail response
      */
     @GET("cgi-bin/musicu.fcg")
+    @Headers(
+        "User-Agent: $USER_AGENT",
+        "Referer: https://y.qq.com/",
+        "Accept: application/json"
+    )
     suspend fun getAlbumDetail(
         @Query("albumid") albumId: Long,
         @Query("format") format: String = "json"

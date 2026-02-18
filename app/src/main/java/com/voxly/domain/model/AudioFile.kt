@@ -1,5 +1,7 @@
 package com.voxly.domain.model
 
+import android.net.Uri
+
 /**
  * Domain model representing an audio file with its metadata and replay gain information.
  */
@@ -17,6 +19,22 @@ data class AudioFile(
     val replayGainInfo: ReplayGainInfo? = null,
     val mediaStoreAlbumId: Long? = null
 ) {
+    companion object {
+        private val ALBUM_ART_URI = Uri.parse("content://media/external/audio/albumart")
+    }
+
+    /**
+     * Returns the album art URI for fast thumbnail loading via MediaStore.
+     * Use this with Coil/Glide for efficient image loading without file parsing.
+     * 
+     * @return Uri for album art, or null if no album ID available
+     */
+    fun getAlbumArtUri(): Uri? {
+        return mediaStoreAlbumId?.let { albumId ->
+            Uri.withAppendedPath(ALBUM_ART_URI, albumId.toString())
+        }
+    }
+
     /**
      * Returns a human-readable duration string.
      */

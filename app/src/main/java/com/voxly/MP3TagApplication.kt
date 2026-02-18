@@ -30,18 +30,17 @@ class MP3TagApplication : Application() {
         LogManager.init(this)
         applyLoggingSettings()
 
-        // Initialize Timber
+        // Always plant file logging tree - it checks isFileLoggingEnabled internally
+        fileLoggingTree = FileLoggingTree()
+        Timber.plant(fileLoggingTree)
+
+        // Plant debug tree only in debug builds
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
+
+        // Cleanup excess logs on startup
         if (LogManager.isLoggingEnabled) {
-            // Always plant file logging tree
-            fileLoggingTree = FileLoggingTree()
-            Timber.plant(fileLoggingTree)
-
-            // Plant debug tree only in debug builds
-            if (BuildConfig.DEBUG) {
-                Timber.plant(Timber.DebugTree())
-            }
-
-            // Cleanup excess logs on startup
             fileLoggingTree.cleanupExcessLogs()
         }
 

@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -56,6 +57,7 @@ class SettingsDataStore @Inject constructor(
         val FILE_LOGGING_ENABLED = booleanPreferencesKey("file_logging_enabled")
         val CONSOLE_LOGGING_ENABLED = booleanPreferencesKey("console_logging_enabled")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
+        val REPLAY_GAIN_TARGET_LOUDNESS = floatPreferencesKey("replay_gain_target_loudness")
     }
 
     /**
@@ -247,12 +249,12 @@ class SettingsDataStore @Inject constructor(
 
     val loggingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LOGGING_ENABLED] ?: false
+            preferences[LOGGING_ENABLED] ?: true
         }
 
     val fileLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[FILE_LOGGING_ENABLED] ?: false
+            preferences[FILE_LOGGING_ENABLED] ?: true
         }
 
     val consoleLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data
@@ -263,6 +265,14 @@ class SettingsDataStore @Inject constructor(
     val crashReportingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[CRASH_REPORTING_ENABLED] ?: true
+        }
+
+    /**
+     * ReplayGain target loudness preference flow (in LUFS, default -18.0)
+     */
+    val replayGainTargetLoudness: Flow<Float> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[REPLAY_GAIN_TARGET_LOUDNESS] ?: -18f
         }
 
     /**
@@ -478,6 +488,15 @@ class SettingsDataStore @Inject constructor(
     suspend fun setCrashReportingEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[CRASH_REPORTING_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Save ReplayGain target loudness preference
+     */
+    suspend fun setReplayGainTargetLoudness(loudness: Float) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[REPLAY_GAIN_TARGET_LOUDNESS] = loudness.coerceIn(-24f, -14f)
         }
     }
 

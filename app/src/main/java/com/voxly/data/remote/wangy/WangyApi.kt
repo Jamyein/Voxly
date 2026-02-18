@@ -19,7 +19,8 @@ interface WangyApi {
 
     companion object {
         const val BASE_URL = "https://music.163.com/"
-        const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        const val REFERER = "https://music.163.com/"
     }
 
     /**
@@ -33,7 +34,12 @@ interface WangyApi {
      * @return Search response
      */
     @GET("api/search/get")
-    @Headers("User-Agent: $USER_AGENT")
+    @Headers(
+        "User-Agent: $USER_AGENT",
+        "Referer: $REFERER",
+        "Accept: application/json",
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
+    )
     suspend fun searchSongs(
         @Query("s") keyword: String,
         @Query("type") type: Int = 1,
@@ -53,7 +59,11 @@ interface WangyApi {
      * @return Lyrics response
      */
     @GET("api/song/lyric")
-    @Headers("User-Agent: $USER_AGENT")
+    @Headers(
+        "User-Agent: $USER_AGENT",
+        "Referer: $REFERER",
+        "Accept: application/json"
+    )
     suspend fun getLyrics(
         @Query("id") songId: Long,
         @Query("os") os: String = "pc",
@@ -69,7 +79,11 @@ interface WangyApi {
      * @return Song detail response
      */
     @GET("api/song/detail")
-    @Headers("User-Agent: $USER_AGENT")
+    @Headers(
+        "User-Agent: $USER_AGENT",
+        "Referer: $REFERER",
+        "Accept: application/json"
+    )
     suspend fun getSongDetail(
         @Query("ids") songIds: String
     ): Response<WangySongDetail>
@@ -82,7 +96,11 @@ interface WangyApi {
      * @return Album detail response
      */
     @GET("api/album/detail")
-    @Headers("User-Agent: $USER_AGENT")
+    @Headers(
+        "User-Agent: $USER_AGENT",
+        "Referer: $REFERER",
+        "Accept: application/json"
+    )
     suspend fun getAlbumDetail(
         @Query("id") albumId: Long
     ): Response<WangyAlbumDetail>

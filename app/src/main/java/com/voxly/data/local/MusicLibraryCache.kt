@@ -1,226 +1,285 @@
 package com.voxly.data.local
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.util.Log
 import com.google.gson.Gson
-import com.google.gson.GsonBuilder
-import com.google.gson.reflect.TypeToken
+import com.voxly.data.local.cache.*
 import com.voxly.domain.model.AudioFile
-import com.voxly.domain.model.AudioMetadata
-import com.voxly.domain.model.ReplayGainInfo
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
-import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
 /**
- * Music library cache manager for optimized scanning.
- * Uses JSON file-based caching for persistence.
+ * Room-based music library cache for optimized scanning and instant app startup.
+ * 
+ * Features:
+ * - Fast database queries instead of JSON file parsing
+ * - Album art thumbnail caching for instant display
+ * - Efficient batch operations for large libraries
+ * - Incremental scanning support
+ * 
+ * Replaces the previous JSON file-based caching for better performance.
  */
 @Singleton
 class MusicLibraryCache @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val databaseProvider: MusicCacheDatabaseProvider
 ) {
     companion object {
         private const val TAG = "MusicLibraryCache"
-        private const val CACHE_FILE_NAME = "music_library_cache.json"
+        private const val THUMBNAIL_SIZE = 256  // 256x256 pixels
+        private const val THUMBNAIL_QUALITY = 80  // JPEG quality
+        private val ALBUM_ART_URI = Uri.parse("content://media/external/audio/albumart")
     }
-
-    private val cacheFile: File by lazy {
-        File(context.filesDir, CACHE_FILE_NAME)
-    }
-
-    private val gson: Gson = GsonBuilder().create()
-
-    @Volatile
-    private var cachedFiles: MutableMap<String, CachedAudioFile> = mutableMapOf()
-
-    init {
-        loadCacheFromDisk()
-    }
-
-    data class CachedAudioFile(
-        val path: String,
-        val name: String,
-        val size: Long,
-        val duration: Long,
-        val format: String,
-        val bitrate: Int,
-        val sampleRate: Int,
-        val channels: Int,
-        val mediaStoreAlbumId: Long?,
-        val metadata: CachedMetadata,
-        val replayGainInfo: CachedReplayGainInfo?,
-        val lastScannedAt: Long,
-        val fileLastModifiedAt: Long
-    )
-
-    data class CachedMetadata(
-        val title: String?, val artist: String?, val album: String?, val albumArtist: String?,
-        val year: String?, val genre: String?, val trackNumber: Int?, val totalTracks: Int?,
-        val discNumber: Int?, val totalDiscs: Int?, val composer: String?, val lyricist: String?,
-        val conductor: String?, val originalArtist: String?, val comment: String?, val lyrics: String?,
-        val customFields: Map<String, String>
-    )
-
-    data class CachedReplayGainInfo(
-        val trackGain: Float, val trackPeak: Float, val albumGain: Float?, val albumPeak: Float?
-    )
-
-    fun getCachedAudioFiles(): Flow<List<AudioFile>> = flow {
-        val audioFiles = cachedFiles.values.mapNotNull { cached ->
-            try { cached.toAudioFile() } catch (e: Exception) { null }
+    
+    private val gson = Gson()
+    private val database: MusicCacheDatabase by lazy { databaseProvider.getDatabase() }
+    private val audioFileDao: CachedAudioFileDao by lazy { database.audioFileDao() }
+    private val albumThumbnailDao: AlbumThumbnailDao by lazy { database.albumThumbnailDao() }
+    
+    // ==================== Audio File Cache Operations ====================
+    
+    /**
+     * Gets all cached audio files as a Flow for reactive UI updates.
+     */
+    fun getCachedAudioFiles(): Flow<List<AudioFile>> {
+        return audioFileDao.getAllAudioFiles().map { entities ->
+            entities.map { it.toAudioFile() }
         }
-        emit(audioFiles.sortedBy { it.metadata.getDisplayTitle(it.name) })
-    }.flowOn(Dispatchers.IO)
-
-    fun getCachedAudioFilesByDirectory(directoryPath: String): Flow<List<AudioFile>> = flow {
-        val audioFiles = cachedFiles.values.filter { it.path.startsWith(directoryPath) }
-            .mapNotNull { cached -> try { cached.toAudioFile() } catch (e: Exception) { null } }
-        emit(audioFiles.sortedBy { it.path })
-    }.flowOn(Dispatchers.IO)
-
-    suspend fun getCachedFileCount(): Int = withContext(Dispatchers.IO) { cachedFiles.size }
+    }
+    
+    /**
+     * Gets cached audio files for a specific directory.
+     */
+    fun getCachedAudioFilesByDirectory(directoryPath: String): Flow<List<AudioFile>> {
+        return audioFileDao.getAudioFilesByDirectory(directoryPath).map { entities ->
+            entities.map { it.toAudioFile() }
+        }
+    }
+    
+    /**
+     * Gets a single cached audio file by path.
+     */
+    suspend fun getCachedFile(filePath: String): AudioFile? = withContext(Dispatchers.IO) {
+        audioFileDao.getAudioFileByPath(filePath)?.toAudioFile()
+    }
+    
+    /**
+     * Gets the count of cached files.
+     */
+    suspend fun getCachedFileCount(): Int = withContext(Dispatchers.IO) {
+        audioFileDao.getCachedFileCount()
+    }
+    
+    /**
+     * Gets the last scan timestamp.
+     */
     suspend fun getLastScanTime(): Long? = withContext(Dispatchers.IO) {
-        cachedFiles.values.maxOfOrNull { it.lastScannedAt }
+        audioFileDao.getLastScanTime()
     }
-    suspend fun hasCache(): Boolean = withContext(Dispatchers.IO) { cachedFiles.isNotEmpty() }
-
-    suspend fun clearCache(): Unit = withContext(Dispatchers.IO) {
-        cachedFiles.clear()
-        saveCacheToDisk()
+    
+    /**
+     * Checks if cache has any data.
+     */
+    suspend fun hasCache(): Boolean = withContext(Dispatchers.IO) {
+        audioFileDao.hasCache()
     }
-
-    suspend fun removeFromCache(filePath: String): Unit = withContext(Dispatchers.IO) {
-        cachedFiles.remove(filePath)
-        saveCacheToDisk()
-    }
-
-    suspend fun updateCache(audioFiles: List<AudioFile>): Unit = withContext(Dispatchers.IO) {
-        val currentTime = System.currentTimeMillis()
-        audioFiles.forEach { audioFile ->
+    
+    /**
+     * Updates the cache with new audio files.
+     * Uses efficient batch insert for large libraries.
+     */
+    suspend fun updateCache(audioFiles: List<AudioFile>) = withContext(Dispatchers.IO) {
+        val entities = audioFiles.map { audioFile ->
             val file = File(audioFile.path)
-            cachedFiles[audioFile.path] = CachedAudioFile(
-                path = audioFile.path, name = audioFile.name, size = audioFile.size,
-                duration = audioFile.duration, format = audioFile.format, bitrate = audioFile.bitrate,
-                sampleRate = audioFile.sampleRate, channels = audioFile.channels,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
-                metadata = CachedMetadata(
-                    audioFile.metadata.title, audioFile.metadata.artist, audioFile.metadata.album,
-                    audioFile.metadata.albumArtist, audioFile.metadata.year, audioFile.metadata.genre,
-                    audioFile.metadata.trackNumber, audioFile.metadata.totalTracks,
-                    audioFile.metadata.discNumber, audioFile.metadata.totalDiscs,
-                    audioFile.metadata.composer, audioFile.metadata.lyricist,
-                    audioFile.metadata.conductor, audioFile.metadata.originalArtist,
-                    audioFile.metadata.comment, audioFile.metadata.lyrics,
-                    audioFile.metadata.customFields
-                ),
-                replayGainInfo = audioFile.replayGainInfo?.let {
-                    CachedReplayGainInfo(it.trackGain, it.trackPeak, it.albumGain, it.albumPeak)
-                },
-                lastScannedAt = currentTime, fileLastModifiedAt = file.lastModified()
+            val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
+                gson.toJson(audioFile.metadata.customFields)
+            } else null
+            
+            CachedAudioFileEntity.fromAudioFile(
+                audioFile = audioFile,
+                fileLastModified = file.lastModified(),
+                customFieldsJson = customFieldsJson
             )
         }
-        saveCacheToDisk()
+        
+        // Use chunked insert for large libraries
+        audioFileDao.insertAllChunked(entities)
+        
+        Log.d(TAG, "Cached ${entities.size} audio files")
     }
-
-    suspend fun getFilesNeedingRescan(currentFiles: List<Pair<String, Long>>): List<String> = withContext(Dispatchers.IO) {
-        val currentPaths = currentFiles.map { it.first }
-        val deletedPaths = cachedFiles.keys.filter { it !in currentPaths }
-        deletedPaths.forEach { cachedFiles.remove(it) }
-        currentFiles.filter { (path, lastModified) ->
-            val cached = cachedFiles[path]
-            cached == null || cached.fileLastModifiedAt != lastModified
-        }.map { it.first }
+    
+    /**
+     * Syncs a single file to cache (e.g., after metadata edit).
+     */
+    suspend fun syncFileToCache(audioFile: AudioFile) = withContext(Dispatchers.IO) {
+        val file = File(audioFile.path)
+        val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
+            gson.toJson(audioFile.metadata.customFields)
+        } else null
+        
+        val entity = CachedAudioFileEntity.fromAudioFile(
+            audioFile = audioFile,
+            fileLastModified = file.lastModified(),
+            customFieldsJson = customFieldsJson
+        )
+        
+        audioFileDao.insert(entity)
     }
-
+    
+    /**
+     * Removes a file from cache.
+     */
+    suspend fun removeFromCache(filePath: String) = withContext(Dispatchers.IO) {
+        audioFileDao.deleteByPath(filePath)
+    }
+    
+    /**
+     * Clears the entire cache.
+     */
+    suspend fun clearCache() = withContext(Dispatchers.IO) {
+        audioFileDao.deleteAll()
+        albumThumbnailDao.deleteAll()
+        Log.d(TAG, "Cache cleared")
+    }
+    
+    // ==================== Incremental Scan Support ====================
+    
+    /**
+     * Gets files that need rescanning based on modification times.
+     */
+    suspend fun getFilesNeedingRescan(currentFiles: List<Pair<String, Long>>): List<String> = 
+        withContext(Dispatchers.IO) {
+            val cachedFiles = audioFileDao.getFilePathsWithModificationTimes()
+            val cachedMap = cachedFiles.associate { it.path to it.fileLastModifiedAt }
+            
+            currentFiles.filter { (path, lastModified) ->
+                val cached = cachedMap[path]
+                cached == null || cached != lastModified
+            }.map { it.first }
+        }
+    
+    /**
+     * Checks if a specific file needs rescanning.
+     */
     suspend fun needsRescan(filePath: String): Boolean = withContext(Dispatchers.IO) {
         val file = File(filePath)
-        if (!file.exists()) { cachedFiles.remove(filePath); return@withContext true }
-        val lastModified = file.lastModified()
-        val cached = cachedFiles[filePath]
-        cached == null || cached.fileLastModifiedAt != lastModified
+        if (!file.exists()) {
+            audioFileDao.deleteByPath(filePath)
+            return@withContext true
+        }
+        
+        val cached = audioFileDao.getAudioFileByPath(filePath)
+        cached == null || cached.fileLastModifiedAt != file.lastModified()
     }
-
-    suspend fun getCachedFile(filePath: String): AudioFile? = withContext(Dispatchers.IO) {
-        cachedFiles[filePath]?.toAudioFile()
-    }
-
-    suspend fun syncFileToCache(audioFile: AudioFile): Unit = withContext(Dispatchers.IO) {
-        val file = File(audioFile.path)
-        val currentTime = System.currentTimeMillis()
-        cachedFiles[audioFile.path] = CachedAudioFile(
-            path = audioFile.path, name = audioFile.name, size = audioFile.size,
-            duration = audioFile.duration, format = audioFile.format, bitrate = audioFile.bitrate,
-            sampleRate = audioFile.sampleRate, channels = audioFile.channels,
-            mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
-            metadata = CachedMetadata(
-                audioFile.metadata.title, audioFile.metadata.artist, audioFile.metadata.album,
-                audioFile.metadata.albumArtist, audioFile.metadata.year, audioFile.metadata.genre,
-                audioFile.metadata.trackNumber, audioFile.metadata.totalTracks,
-                audioFile.metadata.discNumber, audioFile.metadata.totalDiscs,
-                audioFile.metadata.composer, audioFile.metadata.lyricist,
-                audioFile.metadata.conductor, audioFile.metadata.originalArtist,
-                audioFile.metadata.comment, audioFile.metadata.lyrics,
-                audioFile.metadata.customFields
-            ),
-            replayGainInfo = audioFile.replayGainInfo?.let {
-                CachedReplayGainInfo(it.trackGain, it.trackPeak, it.albumGain, it.albumPeak)
-            },
-            lastScannedAt = currentTime, fileLastModifiedAt = file.lastModified()
-        )
-        saveCacheToDisk()
-    }
-
+    
+    /**
+     * Cleans up deleted files from cache.
+     */
     suspend fun cleanupDeletedFiles(currentPaths: List<String>): Int = withContext(Dispatchers.IO) {
-        val deletedPaths = cachedFiles.keys.filter { it !in currentPaths }
-        deletedPaths.forEach { cachedFiles.remove(it) }
-        if (deletedPaths.isNotEmpty()) saveCacheToDisk()
-        deletedPaths.size
+        audioFileDao.deleteNotInPaths(currentPaths)
     }
-
-    private fun loadCacheFromDisk() {
-        try {
-            if (cacheFile.exists()) {
-                val json = cacheFile.readText()
-                val type = object : TypeToken<MutableMap<String, CachedAudioFile>>() {}.type
-                val loaded: MutableMap<String, CachedAudioFile> = gson.fromJson(json, type)
-                cachedFiles = loaded
-            }
-        } catch (e: Exception) {
-            cachedFiles = mutableMapOf()
+    
+    // ==================== Album Thumbnail Cache Operations ====================
+    
+    /**
+     * Gets cached album thumbnail bytes.
+     */
+    suspend fun getAlbumThumbnail(albumId: Long): ByteArray? = withContext(Dispatchers.IO) {
+        albumThumbnailDao.getThumbnailByAlbumId(albumId)?.thumbnailBytes
+    }
+    
+    /**
+     * Gets multiple cached album thumbnails.
+     */
+    suspend fun getAlbumThumbnails(albumIds: List<Long>): Map<Long, ByteArray> = 
+        withContext(Dispatchers.IO) {
+            albumThumbnailDao.getThumbnailsByAlbumIds(albumIds)
+                .associate { it.albumId to it.thumbnailBytes }
         }
+    
+    /**
+     * Checks if album has cached thumbnail.
+     */
+    suspend fun hasAlbumThumbnail(albumId: Long): Boolean = withContext(Dispatchers.IO) {
+        albumThumbnailDao.hasThumbnail(albumId)
     }
-
-    private fun saveCacheToDisk() {
-        try {
-            val json = gson.toJson(cachedFiles)
-            cacheFile.writeText(json)
-        } catch (e: Exception) {
-            Log.e(TAG, "Failed to save cache", e)
-        }
-    }
-
-    private fun CachedAudioFile.toAudioFile(): AudioFile {
-        return AudioFile(
-            id = path.hashCode().toString(), path = path, name = name, size = size,
-            duration = duration, format = format, bitrate = bitrate,
-            sampleRate = sampleRate, channels = channels, mediaStoreAlbumId = mediaStoreAlbumId,
-            metadata = AudioMetadata(
-                metadata.title, metadata.artist, metadata.album, metadata.albumArtist,
-                metadata.year, metadata.genre, metadata.trackNumber, metadata.totalTracks,
-                metadata.discNumber, metadata.totalDiscs, metadata.composer, metadata.lyricist,
-                metadata.conductor, metadata.originalArtist, metadata.comment, metadata.lyrics,
-                null, metadata.customFields
-            ),
-            replayGainInfo = replayGainInfo?.let {
-                ReplayGainInfo(it.trackGain, it.trackPeak, it.albumGain, it.albumPeak)
-            }
+    
+    /**
+     * Caches album thumbnail from bitmap.
+     */
+    suspend fun cacheAlbumThumbnail(
+        albumId: Long,
+        bitmap: Bitmap,
+        sourceUri: String? = null
+    ) = withContext(Dispatchers.IO) {
+        val outputStream = ByteArrayOutputStream()
+        bitmap.compress(Bitmap.CompressFormat.JPEG, THUMBNAIL_QUALITY, outputStream)
+        val bytes = outputStream.toByteArray()
+        
+        val entity = AlbumThumbnailEntity(
+            albumId = albumId,
+            thumbnailBytes = bytes,
+            width = bitmap.width,
+            height = bitmap.height,
+            sourceUri = sourceUri
         )
+        
+        albumThumbnailDao.insert(entity)
+        Log.d(TAG, "Cached thumbnail for album $albumId (${bytes.size} bytes)")
+    }
+    
+    /**
+     * Caches album thumbnail from bytes (e.g., from MediaStore or embedded).
+     */
+    suspend fun cacheAlbumThumbnailFromBytes(
+        albumId: Long,
+        bytes: ByteArray,
+        sourceUri: String? = null
+    ) = withContext(Dispatchers.IO) {
+        try {
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@withContext
+            
+            val scaledBitmap = if (bitmap.width > THUMBNAIL_SIZE || bitmap.height > THUMBNAIL_SIZE) {
+                val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
+                val (width, height) = if (ratio > 1) {
+                    THUMBNAIL_SIZE to (THUMBNAIL_SIZE / ratio).toInt()
+                } else {
+                    (THUMBNAIL_SIZE * ratio).toInt() to THUMBNAIL_SIZE
+                }
+                Bitmap.createScaledBitmap(bitmap, width, height, true).also {
+                    if (it != bitmap) bitmap.recycle()
+                }
+            } else bitmap
+            
+            cacheAlbumThumbnail(albumId, scaledBitmap, sourceUri)
+            
+            if (scaledBitmap != bitmap) scaledBitmap.recycle()
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to cache thumbnail for album $albumId", e)
+        }
+    }
+    
+    /**
+     * Removes cached thumbnail for an album.
+     */
+    suspend fun removeAlbumThumbnail(albumId: Long) = withContext(Dispatchers.IO) {
+        albumThumbnailDao.deleteByAlbumId(albumId)
+    }
+    
+    /**
+     * Gets the album art URI for a given album ID.
+     */
+    fun getAlbumArtUri(albumId: Long): Uri {
+        return Uri.withAppendedPath(ALBUM_ART_URI, albumId.toString())
     }
 }

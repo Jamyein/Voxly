@@ -43,11 +43,11 @@ jobs:
         run: |
           echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > app/voxly-release.keystore
 
-      - name: Build Slim Debug APK (dist)
+      - name: Build Debug APK
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
-        run: ./gradlew assembleDist
+        run: ./gradlew assembleDebug
 
       - name: Clean up keystore
         if: always()
@@ -57,9 +57,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK_PATH="$(find app/build -type f -path "*/apk/dist/*.apk" | head -n 1)"
+          APK_PATH="$(find app/build -type f -path "*/apk/debug/*.apk" | head -n 1)"
           if [ -z "${APK_PATH}" ]; then
-            echo "No dist APK found"
+            echo "No debug APK found"
             exit 1
           fi
           TS="$(date +%Y%m%d%H%M%S)"

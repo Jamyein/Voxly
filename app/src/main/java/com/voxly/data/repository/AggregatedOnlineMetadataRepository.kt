@@ -166,16 +166,26 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         }
 
-        // Sort by source priority first, then by relevance.
+        // Sort by relevance first: title match > artist match > source priority
         val sortedResults = mergedResults.sortedWith(
-            compareBy<OnlineRelease> { sourcePriorityIndex(it.source, settings.metadataPriority) }
-                .thenByDescending { release ->
-                    var score = 0
-                    if (release.coverArtUrl != null) score += 2
-                    if (release.year != null) score += 1
-                    if (release.trackCount != null) score += 1
-                    score
+            compareByDescending<OnlineRelease> { release ->
+                // Priority 1: Title match score (exact=3, contains=2, none=1)
+                when {
+                    release.title.equals(album, ignoreCase = true) -> 3
+                    album.isNotEmpty() && release.title.contains(album, ignoreCase = true) -> 2
+                    else -> 1
                 }
+            }.thenByDescending { release ->
+                // Priority 2: Artist match score (exact=3, contains=2, none=1)
+                when {
+                    release.artist.equals(artist, ignoreCase = true) -> 3
+                    artist.isNotEmpty() && release.artist.contains(artist, ignoreCase = true) -> 2
+                    else -> 1
+                }
+            }.thenBy { release ->
+                // Priority 3: Source priority (only tie-breaker when as relevance scores are equal)
+                sourcePriorityIndex(release.source, settings.metadataPriority)
+            }
         )
 
         Result.success(applyLimit(sortedResults, settings.searchLimit))
@@ -331,7 +341,24 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                     neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
                     qqMusicDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
 
-                    val sorted = results.sortedBy { sourcePriorityIndex(it.source, settings.metadataPriority) }
+                    // Sort by relevance: title match > artist match > source priority
+                    val sorted = results.sortedWith(
+                        compareByDescending<OnlineRecording> { recording ->
+                            when {
+                                recording.title.equals(title, ignoreCase = true) -> 3
+                                title.isNotEmpty() && recording.title.contains(title, ignoreCase = true) -> 2
+                                else -> 1
+                            }
+                        }.thenByDescending { recording ->
+                            when {
+                                recording.artist.equals(artist, ignoreCase = true) -> 3
+                                !artist.isNullOrEmpty() && recording.artist.contains(artist, ignoreCase = true) -> 2
+                                else -> 1
+                            }
+                        }.thenBy { recording ->
+                            sourcePriorityIndex(recording.source, settings.metadataPriority)
+                        }
+                    )
                     Result.success(applyLimit(sorted, settings.searchLimit))
                 }
             }
@@ -371,7 +398,24 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
         qqDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
 
-        val sorted = results.sortedBy { sourcePriorityIndex(it.source, settings.coverPriority) }
+        // Sort by relevance: title match > artist match > source priority
+        val sorted = results.sortedWith(
+            compareByDescending<OnlineRecording> { recording ->
+                when {
+                    recording.title.equals(title, ignoreCase = true) -> 3
+                    title.isNotEmpty() && recording.title.contains(title, ignoreCase = true) -> 2
+                    else -> 1
+                }
+            }.thenByDescending { recording ->
+                when {
+                    recording.artist.equals(artist, ignoreCase = true) -> 3
+                    !artist.isNullOrEmpty() && recording.artist.contains(artist, ignoreCase = true) -> 2
+                    else -> 1
+                }
+            }.thenBy { recording ->
+                sourcePriorityIndex(recording.source, settings.coverPriority)
+            }
+        )
         Result.success(applyLimit(sorted, settings.searchLimit))
     }
 

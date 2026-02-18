@@ -12,6 +12,7 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -62,7 +63,9 @@ fun SettingsScreen(
     val coverSourcePriority by viewModel.coverSourcePriority.collectAsState()
     val loggingEnabled by viewModel.loggingEnabled.collectAsState()
     val fileLoggingEnabled by viewModel.fileLoggingEnabled.collectAsState()
+    val consoleLoggingEnabled by viewModel.consoleLoggingEnabled.collectAsState()
     val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
+    val replayGainTargetLoudness by viewModel.replayGainTargetLoudness.collectAsState()
     
     var languageExpanded by remember { mutableStateOf(false) }
     val languageOptions = remember {
@@ -298,6 +301,17 @@ fun SettingsScreen(
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
                 SettingsSwitch(
+                    title = stringResource(R.string.settings_logging_console),
+                    subtitle = stringResource(R.string.settings_logging_console_subtitle),
+                    checked = consoleLoggingEnabled,
+                    onCheckedChange = {
+                        LogManager.isConsoleLoggingEnabled = it
+                        viewModel.setConsoleLoggingEnabled(it)
+                    }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                SettingsSwitch(
                     title = stringResource(R.string.settings_logging_crash),
                     subtitle = stringResource(R.string.settings_logging_crash_subtitle),
                     checked = crashReportingEnabled,
@@ -343,7 +357,6 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ReplayGain Section
-            var replayGainTargetLoudness by remember { mutableFloatStateOf(-18f) }
             var replayGainExpanded by remember { mutableStateOf(false) }
             
             SettingsSection(title = stringResource(R.string.replay_gain_settings)) {
@@ -353,19 +366,30 @@ fun SettingsScreen(
                         Text(stringResource(R.string.replay_gain_default_loudness))
                     },
                     trailingContent = {
-                        Text(
-                            text = String.format("%.1f LUFS", replayGainTargetLoudness),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.primary
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = String.format("%.1f LUFS", replayGainTargetLoudness),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Icon(
+                                imageVector = if (replayGainExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
+                                contentDescription = if (replayGainExpanded) "Collapse" else "Expand",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    modifier = Modifier.clickable { replayGainExpanded = !replayGainExpanded }
                 )
                 
                 if (replayGainExpanded) {
                     Slider(
                         value = replayGainTargetLoudness,
-                        onValueChange = { replayGainTargetLoudness = it },
+                        onValueChange = { viewModel.setReplayGainTargetLoudness(it) },
                         valueRange = -24f..-14f,
                         steps = 10,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
@@ -621,7 +645,13 @@ private fun SourcePriorityDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 Text(
                     text = stringResource(R.string.settings_source_priority_hint),
                     style = MaterialTheme.typography.bodySmall,

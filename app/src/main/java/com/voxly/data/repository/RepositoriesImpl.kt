@@ -77,7 +77,7 @@ class AudioRepositoryImpl @Inject constructor(
     /**
      * Clear scan cache.
      */
-    suspend fun clearScanCache(): Unit = audioFileScanner.clearCache()
+    suspend fun clearScanCache(): Int = audioFileScanner.clearCache()
 
     override suspend fun getAudioFile(filePath: String): Result<AudioFile> =
         withContext(Dispatchers.IO) {

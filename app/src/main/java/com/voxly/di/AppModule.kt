@@ -3,6 +3,7 @@ package com.voxly.di
 import android.content.Context
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.data.remote.itunes.ITunesApi
@@ -57,8 +58,30 @@ object AppModule {
             level = HttpLoggingInterceptor.Level.BASIC
         }
 
+        // User-Agent interceptor for all requests
+        val userAgentInterceptor = okhttp3.Interceptor { chain ->
+            val originalRequest = chain.request()
+            val requestWithUserAgent = originalRequest.newBuilder()
+                .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .build()
+            chain.proceed(requestWithUserAgent)
+        }
+
         return OkHttpClient.Builder()
+            .addInterceptor(userAgentInterceptor)
             .addInterceptor(loggingInterceptor)
+            // Enable retry on connection failure
+            .retryOnConnectionFailure(true)
+            // Follow redirects
+            .followRedirects(true)
+            .followSslRedirects(true)
+            // Connection pool for connection reuse
+            .connectionPool(okhttp3.ConnectionPool(10, 5, TimeUnit.MINUTES))
+            // DNS cache
+            .dns(okhttp3.Dns.SYSTEM)
+            // Protocols
+            .protocols(listOf(okhttp3.Protocol.HTTP_2, okhttp3.Protocol.HTTP_1_1))
+            // Timeouts
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)
@@ -226,6 +249,14 @@ object AppModule {
             wangyRepository = wangyRepository,
             tengxRepository = tengxRepository
         )
+    }
+
+    @Provides
+    @Singleton
+    fun provideMusicCacheDatabaseProvider(
+        @ApplicationContext context: Context
+    ): MusicCacheDatabaseProvider {
+        return MusicCacheDatabaseProvider(context)
     }
 }
 

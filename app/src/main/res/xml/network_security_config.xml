@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Allow cleartext traffic for specific domains if needed -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </base-config>
+
+    <!-- Domain-specific configurations -->
+    <domain-config>
+        <!-- MusicBrainz API -->
+        <domain includeSubdomains="true">musicbrainz.org</domain>
+        <!-- iTunes/Apple Music API -->
+        <domain includeSubdomains="true">itunes.apple.com</domain>
+        <!-- LRCLIB API -->
+        <domain includeSubdomains="true">lrclib.net</domain>
+        <!-- QQ Music API -->
+        <domain includeSubdomains="true">c.y.qq.com</domain>
+        <domain includeSubdomains="true">y.qq.com</domain>
+        <!-- QQ Music Images -->
+        <domain includeSubdomains="true">y.gtimg.cn</domain>
+        <!-- NetEase Cloud Music API -->
+        <domain includeSubdomains="true">music.163.com</domain>
+        <!-- Cover Art Archive -->
+        <domain includeSubdomains="true">coverartarchive.org</domain>
+        
+        <trust-anchors>
+            <certificates src="system"/>
+        </trust-anchors>
+    </domain-config>
+</network-security-config>

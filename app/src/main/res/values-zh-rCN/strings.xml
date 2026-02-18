@@ -155,6 +155,7 @@
     <string name="rename_file_failed">重命名失败</string>
     <string name="delete_file_failed">删除失败</string>
     <string name="file_item_actions">文件操作</string>
+    <string name="fix_metadata">修正元数据</string>
     <string name="batch_fix_metadata">修正元数据</string>
     <string name="batch_fix_metadata_title">修正元数据</string>
     <string name="fix_auto_title_case">自动标题大小写</string>
@@ -337,6 +338,8 @@
     <string name="settings_logging_enabled_subtitle">记录应用使用期间的调试信息</string>
     <string name="settings_logging_file">文件日志</string>
     <string name="settings_logging_file_subtitle">将日志保存到本地文件以供后续查看</string>
+    <string name="settings_logging_console">控制台日志</string>
+    <string name="settings_logging_console_subtitle">输出日志到系统日志（仅调试版本）</string>
     <string name="settings_logging_crash">崩溃报告</string>
     <string name="settings_logging_crash_subtitle">自动记录未捕获的异常</string>
     <string name="settings_logging_size">日志存储占用</string>

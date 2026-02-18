@@ -23,6 +23,7 @@
         android:theme="@style/Theme.MP3TagAndroid"
         android:localeConfig="@xml/locales_config"
         android:requestLegacyExternalStorage="true"
+        android:networkSecurityConfig="@xml/network_security_config"
         tools:targetApi="34">
 
         <service

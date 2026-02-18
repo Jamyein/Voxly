@@ -163,6 +163,7 @@
     <string name="rename_file_failed">Rename failed</string>
     <string name="delete_file_failed">Delete failed</string>
     <string name="file_item_actions">File actions</string>
+    <string name="fix_metadata">Fix Metadata</string>
     <string name="batch_fix_metadata">Fix Metadata</string>
     <string name="batch_fix_metadata_title">Fix Metadata</string>
     <string name="fix_auto_title_case">Auto title case</string>
@@ -345,6 +346,8 @@
     <string name="settings_logging_enabled_subtitle">Record debug information during app usage</string>
     <string name="settings_logging_file">File Logging</string>
     <string name="settings_logging_file_subtitle">Save logs to local files for later review</string>
+    <string name="settings_logging_console">Console Logging</string>
+    <string name="settings_logging_console_subtitle">Output logs to system logcat (requires debug build)</string>
     <string name="settings_logging_crash">Crash Reporting</string>
     <string name="settings_logging_crash_subtitle">Automatically record uncaught exceptions</string>
     <string name="settings_logging_size">Log Storage Used</string>

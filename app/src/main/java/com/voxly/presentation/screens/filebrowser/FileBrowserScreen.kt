@@ -116,6 +116,7 @@ fun FileBrowserScreen(
     var showBatchProgress by remember { mutableStateOf(false) }
     var renameTargetFile by remember { mutableStateOf<AudioFile?>(null) }
     var deleteTargetFile by remember { mutableStateOf<AudioFile?>(null) }
+    var selectedFilesForBatch by remember { mutableStateOf<Set<String>>(emptySet()) }
     
     val visibleFiles = remember(visibleFilesRaw, searchQuery, sortOption) {
         applySearchAndSort(
@@ -438,6 +439,14 @@ fun FileBrowserScreen(
                                     },
                                     onDeleteFile = { audioFile ->
                                         deleteTargetFile = audioFile
+                                    },
+                                    onFetchOnlineMetadata = { audioFile ->
+                                        selectedFilesForBatch = setOf(audioFile.path)
+                                        showOnlineMetadataDialog = true
+                                    },
+                                    onFixMetadata = { audioFile ->
+                                        selectedFilesForBatch = setOf(audioFile.path)
+                                        showFixMetadataDialog = true
                                     }
                                 )
                             }
@@ -476,16 +485,24 @@ fun FileBrowserScreen(
     // Online Metadata Dialog
     if (showOnlineMetadataDialog) {
         BatchOnlineMetadataDialog(
-            targetFilesCount = if (selectedFiles.isEmpty()) visibleFiles.size else selectedFiles.size,
-            onDismiss = { showOnlineMetadataDialog = false },
+            targetFilesCount = when {
+                selectedFilesForBatch.isNotEmpty() -> selectedFilesForBatch.size
+                selectedFiles.isNotEmpty() -> selectedFiles.size
+                else -> visibleFiles.size
+            },
+            onDismiss = { 
+                showOnlineMetadataDialog = false
+                selectedFilesForBatch = emptySet()
+            },
             onConfirm = { options ->
-                val targetFiles = if (selectedFiles.isEmpty()) {
-                    visibleFiles.map { it.path }
-                } else {
-                    selectedFiles.toList()
+                val targetFiles = when {
+                    selectedFilesForBatch.isNotEmpty() -> selectedFilesForBatch.toList()
+                    selectedFiles.isNotEmpty() -> selectedFiles.toList()
+                    else -> visibleFiles.map { it.path }
                 }
                 viewModel.batchFetchOnlineMetadata(targetFiles, options)
                 showOnlineMetadataDialog = false
+                selectedFilesForBatch = emptySet()
             }
         )
     }
@@ -510,16 +527,24 @@ fun FileBrowserScreen(
     // Fix Metadata Dialog
     if (showFixMetadataDialog) {
         BatchFixMetadataDialog(
-            targetFilesCount = if (selectedFiles.isEmpty()) visibleFiles.size else selectedFiles.size,
-            onDismiss = { showFixMetadataDialog = false },
+            targetFilesCount = when {
+                selectedFilesForBatch.isNotEmpty() -> selectedFilesForBatch.size
+                selectedFiles.isNotEmpty() -> selectedFiles.size
+                else -> visibleFiles.size
+            },
+            onDismiss = { 
+                showFixMetadataDialog = false
+                selectedFilesForBatch = emptySet()
+            },
             onConfirm = { options ->
-                val targetFiles = if (selectedFiles.isEmpty()) {
-                    visibleFiles.map { it.path }
-                } else {
-                    selectedFiles.toList()
+                val targetFiles = when {
+                    selectedFilesForBatch.isNotEmpty() -> selectedFilesForBatch.toList()
+                    selectedFiles.isNotEmpty() -> selectedFiles.toList()
+                    else -> visibleFiles.map { it.path }
                 }
                 viewModel.batchFixMetadata(targetFiles, options)
                 showFixMetadataDialog = false
+                selectedFilesForBatch = emptySet()
             }
         )
     }
@@ -1541,7 +1566,9 @@ private fun AudioFileList(
     onFileLongClick: (AudioFile) -> Unit,
     onEditFileMetadata: (AudioFile) -> Unit,
     onRenameFile: (AudioFile) -> Unit,
-    onDeleteFile: (AudioFile) -> Unit
+    onDeleteFile: (AudioFile) -> Unit,
+    onFetchOnlineMetadata: (AudioFile) -> Unit,
+    onFixMetadata: (AudioFile) -> Unit
 ) {
     val isSelectionMode = selectedFiles.isNotEmpty()
     LazyColumn(
@@ -1557,7 +1584,9 @@ private fun AudioFileList(
                 showActions = !isSelectionMode,
                 onEditMetadata = { onEditFileMetadata(audioFile) },
                 onRename = { onRenameFile(audioFile) },
-                onDelete = { onDeleteFile(audioFile) }
+                onDelete = { onDeleteFile(audioFile) },
+                onFetchOnlineMetadata = { onFetchOnlineMetadata(audioFile) },
+                onFixMetadata = { onFixMetadata(audioFile) }
             )
         }
     }
@@ -1574,6 +1603,8 @@ private fun AudioFileItem(
     onEditMetadata: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    onFetchOnlineMetadata: () -> Unit,
+    onFixMetadata: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -1668,7 +1699,9 @@ private fun AudioFileItem(
                 FileActionsMenu(
                     onEditMetadata = onEditMetadata,
                     onRename = onRename,
-                    onDelete = onDelete
+                    onDelete = onDelete,
+                    onFetchOnlineMetadata = onFetchOnlineMetadata,
+                    onFixMetadata = onFixMetadata
                 )
             }
         }
@@ -1679,7 +1712,9 @@ private fun AudioFileItem(
 private fun FileActionsMenu(
     onEditMetadata: () -> Unit,
     onRename: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onFetchOnlineMetadata: () -> Unit,
+    onFixMetadata: () -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
@@ -1707,6 +1742,33 @@ private fun FileActionsMenu(
                 }
             )
             DropdownMenuItem(
+                text = { Text(stringResource(R.string.fetch_online_metadata)) },
+                leadingIcon = {
+                    Icon(
+                        painter = appIconPainter(AppIcon.CloudDownload),
+                        contentDescription = null
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onFetchOnlineMetadata()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(R.string.fix_metadata)) },
+                leadingIcon = {
+                    Icon(
+                        painter = appIconPainter(AppIcon.AutoFix),
+                        contentDescription = null
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onFixMetadata()
+                }
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            DropdownMenuItem(
                 text = { Text(stringResource(R.string.rename_file)) },
                 leadingIcon = {
                     Icon(
@@ -1721,6 +1783,13 @@ private fun FileActionsMenu(
             )
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.log_viewer_delete)) },
+                leadingIcon = {
+                    Icon(
+                        painter = appIconPainter(AppIcon.Close),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                },
                 onClick = {
                     expanded = false
                     onDelete()
