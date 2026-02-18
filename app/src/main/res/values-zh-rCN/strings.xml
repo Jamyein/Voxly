@@ -291,7 +291,7 @@
     <string name="settings_language_chinese_simplified">简体中文</string>
     <string name="settings_version_label">版本</string>
     <string name="settings_developer_label">开发者</string>
-    <string name="settings_developer_value">MP3 Tag 团队</string>
+    <string name="settings_developer_value">Citrusea</string>
     <string name="settings_metadata_source">元数据来源</string>
     <string name="settings_metadata_source_subtitle">选择获取元数据的来源</string>
     <string name="settings_metadata_source_musicbrainz">MusicBrainz</string>

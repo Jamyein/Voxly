@@ -15,8 +15,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 28
         targetSdk = 36
-        versionCode = 3
-        versionName = "0.3.1"
+        versionCode = 4
+        versionName = "0.3.2"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -76,7 +76,8 @@ android {
         }
 
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
