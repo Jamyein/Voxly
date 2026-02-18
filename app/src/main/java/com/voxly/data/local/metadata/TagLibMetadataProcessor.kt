@@ -1,9 +1,11 @@
 package com.voxly.data.local.metadata
 
 import android.content.Context
+import android.content.ContentUris
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
+import android.provider.MediaStore
 import android.util.Log
 import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
@@ -102,6 +104,8 @@ class TagLibMetadataProcessor @Inject constructor(
             val file = File(normalizedPath)
             
             if (!file.exists()) {
+                readMetadataFromMediaStore(filePath, includeAlbumArt)?.let { return@withContext it }
+
                 // Try alternative path resolution strategies
                 val resolvedPath = resolveFilePath(filePath, file.name)
                 if (resolvedPath != null) {
@@ -277,6 +281,57 @@ class TagLibMetadataProcessor @Inject constructor(
         )
     }
 
+    private fun readMetadataFromMediaStore(filePath: String, includeAlbumArt: Boolean): AudioMetadata? {
+        val mediaUri = queryMediaStoreUriByPath(filePath) ?: return null
+        return runCatching {
+            val pfd = context.contentResolver.openFileDescriptor(mediaUri, "r") ?: return@runCatching null
+            val fdForTagLib = pfd.dup().detachFd()
+            val metadata = try {
+                TagLib.getMetadata(fdForTagLib, readPictures = includeAlbumArt)
+            } finally {
+                pfd.close()
+            } ?: return@runCatching null
+
+            val propertyMap = metadata.propertyMap
+            val customFields = mutableMapOf<String, String>()
+            propertyMap[CUSTOM_RECORD_LABEL]?.firstOrNull()?.let { customFields[CUSTOM_RECORD_LABEL] = it }
+            propertyMap[CUSTOM_ENCODER]?.firstOrNull()?.let { customFields[CUSTOM_ENCODER] = it }
+            propertyMap[CUSTOM_ISRC]?.firstOrNull()?.let { customFields[CUSTOM_ISRC] = it }
+            propertyMap[CUSTOM_COPYRIGHT]?.firstOrNull()?.let { customFields[CUSTOM_COPYRIGHT] = it }
+            propertyMap[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN] = it }
+            propertyMap[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK] = it }
+            propertyMap[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = it }
+            propertyMap[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
+
+            AudioMetadata(
+                title = propertyMap["TITLE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                artist = propertyMap["ARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                album = propertyMap["ALBUM"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                albumArtist = propertyMap["ALBUMARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                year = propertyMap["DATE"]?.firstOrNull()?.takeIf { it.isNotBlank() }
+                    ?: propertyMap["YEAR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                genre = propertyMap["GENRE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                trackNumber = propertyMap["TRACK"]?.firstOrNull()?.toIntOrNull(),
+                totalTracks = propertyMap["TRACKTOTAL"]?.firstOrNull()?.toIntOrNull()
+                    ?: propertyMap["TOTALTRACKS"]?.firstOrNull()?.toIntOrNull(),
+                discNumber = propertyMap["DISCNUMBER"]?.firstOrNull()?.toIntOrNull(),
+                totalDiscs = propertyMap["DISCTOTAL"]?.firstOrNull()?.toIntOrNull()
+                    ?: propertyMap["TOTALDISCS"]?.firstOrNull()?.toIntOrNull(),
+                composer = propertyMap["COMPOSER"]?.firstOrNull()?.takeIf { it.isNotBlank() }
+                    ?: propertyMap["AUTHOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                lyricist = propertyMap["LYRICIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                conductor = propertyMap["CONDUCTOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                originalArtist = propertyMap["ORIGINALARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                comment = propertyMap["COMMENT"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                lyrics = propertyMap["LYRICS"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                albumArt = if (includeAlbumArt) metadata.pictures.firstOrNull()?.data else null,
+                customFields = customFields
+            )
+        }.onFailure {
+            Log.w(TAG, "Failed to read metadata from MediaStore URI for: $filePath", it)
+        }.getOrNull()
+    }
+
     /**
      * Updates metadata for an audio file.
      * Uses SAF (Storage Access Framework) for external storage, direct access for internal storage.
@@ -319,13 +374,22 @@ class TagLibMetadataProcessor @Inject constructor(
             var file = File(normalizedPath)
             
             if (!file.exists()) {
+                val mediaStoreUpdate = updateMetadataViaMediaStoreUri(filePath, metadata)
+                if (mediaStoreUpdate.isSuccess) {
+                    return mediaStoreUpdate
+                }
+
                 // Try alternative path resolution
                 val resolvedPath = resolveFilePath(filePath, file.name)
                 if (resolvedPath != null) {
                     file = File(resolvedPath)
                 }
                 if (!file.exists()) {
-                    return Result.failure(IllegalStateException("File does not exist: $filePath"))
+                    return Result.failure(
+                        IllegalStateException(
+                            "Cannot access file path directly. Grant directory write access via SAF and retry: $filePath"
+                        )
+                    )
                 }
             }
 
@@ -365,6 +429,44 @@ class TagLibMetadataProcessor @Inject constructor(
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update metadata directly: $filePath", e)
+            Result.failure(e)
+        }
+    }
+
+    private fun updateMetadataViaMediaStoreUri(filePath: String, metadata: AudioMetadata): Result<Unit> {
+        return runCatching {
+            val mediaUri = queryMediaStoreUriByPath(filePath)
+                ?: return Result.failure(IllegalStateException("No MediaStore URI for: $filePath"))
+            val pfd = context.contentResolver.openFileDescriptor(mediaUri, "rw")
+                ?: return Result.failure(IllegalStateException("Cannot open MediaStore file descriptor"))
+            val fdForTagLib = pfd.dup().detachFd()
+
+            val properties = java.util.HashMap<String, Array<String>>()
+            metadata.title?.let { properties["TITLE"] = arrayOf(it) }
+            metadata.artist?.let { properties["ARTIST"] = arrayOf(it) }
+            metadata.album?.let { properties["ALBUM"] = arrayOf(it) }
+            metadata.year?.let { properties["DATE"] = arrayOf(it) }
+            metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
+            metadata.trackNumber?.let { properties["TRACK"] = arrayOf(it.toString()) }
+            metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
+            metadata.albumArtist?.let { properties["ALBUMARTIST"] = arrayOf(it) }
+            metadata.discNumber?.let { properties["DISCNUMBER"] = arrayOf(it.toString()) }
+            metadata.composer?.let { properties["COMPOSER"] = arrayOf(it) }
+            metadata.customFields[CUSTOM_RECORD_LABEL]?.let { properties[CUSTOM_RECORD_LABEL] = arrayOf(it) }
+            metadata.customFields[CUSTOM_ENCODER]?.let { properties[CUSTOM_ENCODER] = arrayOf(it) }
+            metadata.customFields[CUSTOM_ISRC]?.let { properties[CUSTOM_ISRC] = arrayOf(it) }
+            metadata.customFields[CUSTOM_COPYRIGHT]?.let { properties[CUSTOM_COPYRIGHT] = arrayOf(it) }
+
+            val success = try {
+                TagLib.savePropertyMap(fdForTagLib, properties)
+            } finally {
+                pfd.close()
+            }
+            if (!success) {
+                return Result.failure(IllegalStateException("TagLib.savePropertyMap() returned false"))
+            }
+            Result.success(Unit)
+        }.getOrElse { e ->
             Result.failure(e)
         }
     }
@@ -539,6 +641,20 @@ class TagLibMetadataProcessor @Inject constructor(
             var file = File(normalizedPath)
             
             if (!file.exists()) {
+                val mediaUri = queryMediaStoreUriByPath(filePath)
+                if (mediaUri != null) {
+                    val pfd = context.contentResolver.openFileDescriptor(mediaUri, "r")
+                    if (pfd != null) {
+                        val fdForTagLib = pfd.dup().detachFd()
+                        val pictures = try {
+                            TagLib.getPictures(fdForTagLib)
+                        } finally {
+                            pfd.close()
+                        }
+                        return@withContext pictures.firstOrNull()?.data
+                    }
+                }
+
                 // Try alternative path resolution
                 val resolvedPath = resolveFilePath(filePath, file.name)
                 if (resolvedPath != null) {
@@ -571,6 +687,27 @@ class TagLibMetadataProcessor @Inject constructor(
             var file = File(normalizedPath)
             
             if (!file.exists()) {
+                val mediaUri = queryMediaStoreUriByPath(filePath)
+                if (mediaUri != null) {
+                    val pfd = context.contentResolver.openFileDescriptor(mediaUri, "r")
+                    if (pfd != null) {
+                        val fdForTagLib = pfd.dup().detachFd()
+                        val audioProperties = try {
+                            TagLib.getAudioProperties(fdForTagLib)
+                        } finally {
+                            pfd.close()
+                        }
+                        if (audioProperties != null) {
+                            return@withContext AudioInfo(
+                                bitrate = audioProperties.bitrate,
+                                sampleRate = audioProperties.sampleRate,
+                                channels = audioProperties.channels,
+                                durationMs = audioProperties.length.toLong() * 1000
+                            )
+                        }
+                    }
+                }
+
                 // Try alternative path resolution
                 val resolvedPath = resolveFilePath(filePath, file.name)
                 if (resolvedPath != null) {
@@ -670,8 +807,31 @@ class TagLibMetadataProcessor @Inject constructor(
                 val root = "/storage/emulated/0"
                 if (relative.isEmpty()) root else "$root/$relative"
             }
+            volume.equals("home", ignoreCase = true) -> {
+                val root = "/storage/emulated/0/Documents"
+                if (relative.isEmpty()) root else "$root/$relative"
+            }
             else -> if (relative.isEmpty()) "/storage/$volume" else "/storage/$volume/$relative"
         }
+    }
+
+    private fun queryMediaStoreUriByPath(filePath: String): Uri? {
+        return runCatching {
+            val cursor = context.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Audio.Media._ID),
+                "${MediaStore.Audio.Media.DATA} = ?",
+                arrayOf(filePath),
+                null
+            )
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID))
+                    return@runCatching ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+                }
+            }
+            null
+        }.getOrNull()
     }
 
     /**

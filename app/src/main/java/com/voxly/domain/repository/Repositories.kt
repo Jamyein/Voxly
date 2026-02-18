@@ -15,7 +15,10 @@ interface AudioRepository {
      * @param directoryPath The path to scan, or null for all storage
      * @return Flow emitting list of audio files
      */
-    fun scanAudioFiles(directoryPath: String? = null): Flow<List<AudioFile>>
+    fun scanAudioFiles(
+        directoryPath: String? = null,
+        forceRefresh: Boolean = false
+    ): Flow<List<AudioFile>>
 
     /**
      * Checks if cached audio files exist.

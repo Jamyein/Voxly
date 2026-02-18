@@ -158,13 +158,100 @@ class AudioFileScanner @Inject constructor(
      */
     fun scanDirectory(directoryPath: String): Flow<List<AudioFile>> = flow {
         val audioFiles = mutableListOf<AudioFile>()
-        val directory = File(directoryPath)
+        val normalizedDirectory = directoryPath.trimEnd('/', '\\')
 
-        if (directory.exists() && directory.isDirectory) {
-            scanDirectoryRecursive(directory, audioFiles)
+        // Fast path: query MediaStore by directory prefix
+        val selection = buildString {
+            append("${MediaStore.Audio.Media.IS_MUSIC} != 0")
+            append(" AND (")
+            append("${MediaStore.Audio.Media.DATA} = ?")
+            append(" OR ${MediaStore.Audio.Media.DATA} LIKE ?")
+            append(" OR ${MediaStore.Audio.Media.DATA} LIKE ?")
+            append(")")
+        }
+        val selectionArgs = arrayOf(
+            normalizedDirectory,
+            "$normalizedDirectory/%",
+            "$normalizedDirectory\\%"
+        )
+
+        val cursor: Cursor? = contentResolver.query(
+            AUDIO_URI,
+            FAST_PROJECTION,
+            selection,
+            selectionArgs,
+            "${MediaStore.Audio.Media.TITLE} ASC"
+        )
+
+        cursor?.use {
+            val idColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
+            val nameColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val dataColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+            val titleColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
+            val artistColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+            val albumColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
+            val albumIdColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+            val yearColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
+            val durationColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+            val sizeColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+            val bitrateColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
+            val trackColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+
+            while (it.moveToNext()) {
+                val filePath = it.getString(dataColumn) ?: continue
+                val extension = filePath.substringAfterLast('.', "")
+
+                if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
+                    val albumId = it.getLong(albumIdColumn).takeIf { value -> value > 0L }
+                    val metadata = com.voxly.domain.model.AudioMetadata(
+                        title = it.getString(titleColumn)?.takeIf { value -> value.isNotBlank() },
+                        artist = it.getString(artistColumn)?.takeIf { value -> value.isNotBlank() },
+                        album = it.getString(albumColumn)?.takeIf { value -> value.isNotBlank() },
+                        year = it.getString(yearColumn)?.takeIf { value -> value.isNotBlank() },
+                        trackNumber = it.getInt(trackColumn).takeIf { value -> value > 0 },
+                        albumArt = null,
+                        albumArtist = null,
+                        genre = null,
+                        totalTracks = null,
+                        discNumber = null,
+                        totalDiscs = null,
+                        composer = null,
+                        lyricist = null,
+                        conductor = null,
+                        originalArtist = null,
+                        comment = null,
+                        lyrics = null,
+                        customFields = emptyMap()
+                    )
+
+                    audioFiles.add(
+                        AudioFile(
+                            id = it.getLong(idColumn).toString(),
+                            path = filePath,
+                            name = it.getString(nameColumn) ?: filePath.substringAfterLast('/'),
+                            size = it.getLong(sizeColumn),
+                            duration = it.getLong(durationColumn),
+                            format = extension.uppercase(),
+                            bitrate = it.getInt(bitrateColumn),
+                            sampleRate = 0,
+                            channels = 0,
+                            mediaStoreAlbumId = albumId,
+                            metadata = metadata
+                        )
+                    )
+                }
+            }
         }
 
-        emit(audioFiles)
+        // Fallback for files not yet indexed by MediaStore
+        if (audioFiles.isEmpty()) {
+            val directory = File(directoryPath)
+            if (directory.exists() && directory.isDirectory) {
+                scanDirectoryRecursive(directory, audioFiles)
+            }
+        }
+
+        emit(audioFiles.sortedBy { it.metadata.getDisplayTitle(it.name) })
     }.flowOn(Dispatchers.IO)
 
     /**

@@ -34,10 +34,13 @@ class AudioRepositoryImpl @Inject constructor(
         private const val TAG = "AudioRepositoryImpl"
     }
 
-    override fun scanAudioFiles(directoryPath: String?): Flow<List<AudioFile>> {
+    override fun scanAudioFiles(
+        directoryPath: String?,
+        forceRefresh: Boolean
+    ): Flow<List<AudioFile>> {
         return if (directoryPath == null) {
             // Use optimized scanning with cache
-            audioFileScanner.scanAudioFilesOptimized(forceRefresh = false)
+            audioFileScanner.scanAudioFilesOptimized(forceRefresh = forceRefresh)
         } else {
             audioFileScanner.scanDirectory(directoryPath)
         }.flowOn(Dispatchers.IO)

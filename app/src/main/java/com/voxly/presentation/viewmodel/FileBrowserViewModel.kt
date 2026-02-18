@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -97,17 +98,16 @@ class FileBrowserViewModel @Inject constructor(
                 // Check cache BEFORE setting Loading state to avoid flash
                 // Check database cache first (persisted, survives app restart)
                 if (!forceRefresh && audioRepository.hasCachedData()) {
-                    audioRepository.getCachedAudioFiles().collect { cachedFiles ->
-                        if (cachedFiles.isNotEmpty()) {
-                            cachedGlobalFiles = cachedFiles
-                            _directoryFiles.value = emptyMap()
-                            _uiState.value = FileBrowserUiState.Success(
-                                files = cachedFiles,
-                                selectedCount = _selectedFiles.value.size
-                            )
-                            Log.d(TAG, "Loaded ${cachedFiles.size} files from cache")
-                            return@collect
-                        }
+                    val cachedFiles = audioRepository.getCachedAudioFiles().first()
+                    if (cachedFiles.isNotEmpty()) {
+                        cachedGlobalFiles = cachedFiles
+                        _directoryFiles.value = emptyMap()
+                        _uiState.value = FileBrowserUiState.Success(
+                            files = cachedFiles,
+                            selectedCount = _selectedFiles.value.size
+                        )
+                        Log.d(TAG, "Loaded ${cachedFiles.size} files from cache")
+                        return@launch
                     }
                 }
 
@@ -127,11 +127,15 @@ class FileBrowserViewModel @Inject constructor(
                     }
                 }
 
-                // Only set Loading state when we actually need to scan
-                _uiState.value = FileBrowserUiState.Loading
+                // Keep current list during non-forced refresh to avoid UI flicker on resume.
+                if (forceRefresh || _uiState.value !is FileBrowserUiState.Success) {
+                    _uiState.value = FileBrowserUiState.Loading
+                }
                 
                 // No cache available - perform full scan
-                runCatching { audioRepository.scanAudioFiles().first() }
+                runCatching {
+                    audioRepository.scanAudioFiles(forceRefresh = forceRefresh).last()
+                }
                     .onSuccess { files ->
                         cachedGlobalFiles = files
                         _directoryFiles.value = emptyMap()
@@ -1009,7 +1013,9 @@ class FileBrowserViewModel @Inject constructor(
         directories: List<SelectedDirectory>,
         forceRefresh: Boolean = false
     ) {
-        _uiState.value = FileBrowserUiState.Loading
+        if (forceRefresh || _uiState.value !is FileBrowserUiState.Success) {
+            _uiState.value = FileBrowserUiState.Loading
+        }
         runCatching {
             val previousDirectoryFiles = _directoryFiles.value
             val cachedFiles = if (!forceRefresh && audioRepository.hasCachedData()) {
@@ -1031,7 +1037,10 @@ class FileBrowserViewModel @Inject constructor(
                                 }
                             }
                             else -> {
-                                audioRepository.scanAudioFiles(directory.path).first()
+                                audioRepository.scanAudioFiles(
+                                    directoryPath = directory.path,
+                                    forceRefresh = forceRefresh
+                                ).last()
                             }
                         }.distinctBy { it.path }
                         directory.uri to filesForDirectory
