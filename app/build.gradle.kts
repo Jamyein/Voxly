@@ -1,3 +1,5 @@
+import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import org.gradle.api.GradleException
 import java.util.Properties
 
 plugins {
@@ -29,24 +31,28 @@ android {
 
     // Load signing configuration from local.properties or environment variables
     val localProperties = rootProject.file("local.properties")
-    val signingEnabled = if (localProperties.exists()) {
+    val props = if (localProperties.exists()) {
         Properties().apply { load(localProperties.inputStream()) }
-            .getProperty("RELEASE_STORE_PASSWORD") != null
     } else {
-        System.getenv("SIGNING_STORE_PASSWORD") != null
+        Properties()
     }
+
+    val signingStorePassword = props.getProperty("RELEASE_STORE_PASSWORD")
+        ?: System.getenv("SIGNING_STORE_PASSWORD")
+    val signingKeyPassword = props.getProperty("RELEASE_KEY_PASSWORD")
+        ?: System.getenv("SIGNING_KEY_PASSWORD")
+        ?: signingStorePassword
+    val signingKeyAlias = props.getProperty("RELEASE_KEY_ALIAS")
+        ?: System.getenv("SIGNING_KEY_ALIAS")
+        ?: "voxly"
+    val signingEnabled = !signingStorePassword.isNullOrBlank() && !signingKeyPassword.isNullOrBlank()
 
     signingConfigs {
         create("release") {
-            val storePass = if (localProperties.exists()) {
-                Properties().apply { load(localProperties.inputStream()) }
-                    .getProperty("RELEASE_STORE_PASSWORD")
-            } else null
-
             storeFile = file("voxly-release.keystore")
-            storePassword = storePass ?: System.getenv("SIGNING_STORE_PASSWORD") ?: ""
-            keyAlias = "voxly"
-            keyPassword = storePass ?: System.getenv("SIGNING_KEY_PASSWORD") ?: ""
+            storePassword = signingStorePassword ?: ""
+            keyAlias = signingKeyAlias
+            keyPassword = signingKeyPassword ?: ""
         }
     }
 
@@ -122,6 +128,20 @@ android {
         warningsAsErrors = false
         abortOnError = false
         checkDependencies = true
+    }
+}
+
+// Fail fast: never produce unsigned dist/release APKs by mistake.
+extensions.configure<ApplicationAndroidComponentsExtension>("androidComponents") {
+    beforeVariants(selector().all()) { variantBuilder ->
+        val buildTypeName = variantBuilder.buildType
+        if ((buildTypeName == "release" || buildTypeName == "dist") && !signingEnabled) {
+            throw GradleException(
+                "Signing is required for $buildTypeName builds. " +
+                    "Set RELEASE_STORE_PASSWORD/RELEASE_KEY_PASSWORD in local.properties " +
+                    "or SIGNING_STORE_PASSWORD/SIGNING_KEY_PASSWORD in environment."
+            )
+        }
     }
 }
 

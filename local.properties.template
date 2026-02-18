@@ -5,6 +5,12 @@
 # Uncomment and fill in the following lines to enable release signing for local builds
 # RELEASE_STORE_PASSWORD=your_keystore_password
 # RELEASE_KEY_PASSWORD=your_key_password
+# RELEASE_KEY_ALIAS=voxly
+
+# CI environment variable equivalents:
+# SIGNING_STORE_PASSWORD
+# SIGNING_KEY_PASSWORD
+# SIGNING_KEY_ALIAS (optional, default: voxly)
 
 # Note: The keystore file (voxly-release.keystore) should be placed in the app/ directory
 # or in the project root directory

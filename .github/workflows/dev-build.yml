@@ -40,13 +40,41 @@ jobs:
             ${{ runner.os }}-gradle-
 
       - name: Decode signing keystore
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 || vars.SIGNING_KEYSTORE_BASE64 }}
         run: |
-          echo "${{ secrets.SIGNING_KEYSTORE_BASE64 }}" | base64 -d > app/voxly-release.keystore
+          if [ -z "${SIGNING_KEYSTORE_BASE64}" ]; then
+            echo "Missing SIGNING_KEYSTORE_BASE64 (configure in Secrets or Variables)"
+            exit 1
+          fi
+          echo "${SIGNING_KEYSTORE_BASE64}" | base64 -d > app/voxly-release.keystore
+          if [ ! -s app/voxly-release.keystore ]; then
+            echo "Decoded keystore is empty"
+            exit 1
+          fi
+
+      - name: Validate signing inputs
+        shell: bash
+        env:
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || vars.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || vars.SIGNING_KEY_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || vars.SIGNING_KEY_ALIAS }}
+        run: |
+          if [ -z "${SIGNING_STORE_PASSWORD}" ]; then
+            echo "Missing SIGNING_STORE_PASSWORD (Secrets or Variables)"
+            exit 1
+          fi
+          if [ -z "${SIGNING_KEY_PASSWORD}" ]; then
+            echo "Missing SIGNING_KEY_PASSWORD (Secrets or Variables)"
+            exit 1
+          fi
+          echo "SIGNING_KEY_ALIAS=${SIGNING_KEY_ALIAS:-voxly}" >> "$GITHUB_ENV"
 
       - name: Build Debug APK
         env:
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || vars.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || vars.SIGNING_KEY_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ env.SIGNING_KEY_ALIAS }}
         run: ./gradlew assembleDebug
 
       - name: Clean up keystore
