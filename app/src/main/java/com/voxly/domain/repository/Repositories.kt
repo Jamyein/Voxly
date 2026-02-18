@@ -18,6 +18,19 @@ interface AudioRepository {
     fun scanAudioFiles(directoryPath: String? = null): Flow<List<AudioFile>>
 
     /**
+     * Checks if cached audio files exist.
+     * Use this to avoid unnecessary scans.
+     * @return true if cache has data
+     */
+    suspend fun hasCachedData(): Boolean
+
+    /**
+     * Gets cached audio files if available.
+     * @return Flow emitting cached audio files, or empty if no cache
+     */
+    fun getCachedAudioFiles(): Flow<List<AudioFile>>
+
+    /**
      * Gets a single audio file by its path.
      * @param filePath The path to the audio file
      * @return Result containing the audio file or an error

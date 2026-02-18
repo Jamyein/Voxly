@@ -275,8 +275,8 @@ class ITunesRepository @Inject constructor(
     private suspend fun getSearchSettings(): SearchSettings {
         val countryCode = settingsDataStore.appleCountryCode.first()
             .trim()
-            .lowercase()
-            .ifBlank { "us" }
+            .uppercase()
+            .ifBlank { "US" }
         val rawLimit = settingsDataStore.onlineSearchLimit.first()
         val limit = if (rawLimit <= 0) MAX_LIMIT else rawLimit.coerceIn(1, MAX_LIMIT)
         return SearchSettings(countryCode, limit)

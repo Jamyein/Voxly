@@ -94,7 +94,24 @@ class FileBrowserViewModel @Inject constructor(
                     return@launch
                 }
 
-                _uiState.value = FileBrowserUiState.Loading
+                // Check cache BEFORE setting Loading state to avoid flash
+                // Check database cache first (persisted, survives app restart)
+                if (!forceRefresh && audioRepository.hasCachedData()) {
+                    audioRepository.getCachedAudioFiles().collect { cachedFiles ->
+                        if (cachedFiles.isNotEmpty()) {
+                            cachedGlobalFiles = cachedFiles
+                            _directoryFiles.value = emptyMap()
+                            _uiState.value = FileBrowserUiState.Success(
+                                files = cachedFiles,
+                                selectedCount = _selectedFiles.value.size
+                            )
+                            Log.d(TAG, "Loaded ${cachedFiles.size} files from cache")
+                            return@collect
+                        }
+                    }
+                }
+
+                // Check in-memory cache
                 if (!forceRefresh) {
                     cachedGlobalFiles?.let { files ->
                         _directoryFiles.value = emptyMap()
@@ -110,6 +127,10 @@ class FileBrowserViewModel @Inject constructor(
                     }
                 }
 
+                // Only set Loading state when we actually need to scan
+                _uiState.value = FileBrowserUiState.Loading
+                
+                // No cache available - perform full scan
                 runCatching { audioRepository.scanAudioFiles().first() }
                     .onSuccess { files ->
                         cachedGlobalFiles = files
@@ -991,6 +1012,11 @@ class FileBrowserViewModel @Inject constructor(
         _uiState.value = FileBrowserUiState.Loading
         runCatching {
             val previousDirectoryFiles = _directoryFiles.value
+            val cachedFiles = if (!forceRefresh && audioRepository.hasCachedData()) {
+                audioRepository.getCachedAudioFiles().first()
+            } else {
+                emptyList()
+            }
             coroutineScope {
                 directories.map { directory ->
                     async {
@@ -998,6 +1024,11 @@ class FileBrowserViewModel @Inject constructor(
                             directory.path.isBlank() -> emptyList()
                             !forceRefresh && previousDirectoryFiles.containsKey(directory.uri) -> {
                                 previousDirectoryFiles[directory.uri].orEmpty()
+                            }
+                            !forceRefresh && cachedFiles.isNotEmpty() -> {
+                                cachedFiles.filter { file ->
+                                    isFileInDirectory(file.path, directory.path)
+                                }
                             }
                             else -> {
                                 audioRepository.scanAudioFiles(directory.path).first()
@@ -1030,6 +1061,14 @@ class FileBrowserViewModel @Inject constructor(
             Log.e(TAG, "Directory scan failed for ${directories.joinToString { it.path }}", error)
             _uiState.value = FileBrowserUiState.Error(error.message ?: "Unknown error")
         }
+    }
+
+    private fun isFileInDirectory(filePath: String, directoryPath: String): Boolean {
+        val normalizedFile = filePath.trimEnd('/', '\\')
+        val normalizedDirectory = directoryPath.trimEnd('/', '\\')
+        return normalizedFile == normalizedDirectory ||
+            normalizedFile.startsWith("$normalizedDirectory/") ||
+            normalizedFile.startsWith("$normalizedDirectory\\")
     }
 
     fun saveScrollPosition(listKey: String, index: Int, offset: Int) {

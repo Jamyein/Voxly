@@ -1,5 +1,7 @@
 package com.voxly.domain.usecase
 
+import android.os.SystemClock
+import com.voxly.core.util.Logger
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.ReplayGainRepository
@@ -27,9 +29,13 @@ class BatchEditMetadataUseCase @Inject constructor(
         fieldsToUpdate: Set<MetadataField> = MetadataField.ALL
     ): Flow<BatchProgress> = flow {
         val totalFiles = filePaths.size
-        var processedFiles = 0
         var successCount = 0
         var failureCount = 0
+        val startedAt = SystemClock.elapsedRealtime()
+        Logger.i(
+            "Batch metadata edit started. files=$totalFiles fields=${fieldsToUpdate.joinToString(",")}",
+            "BatchEdit"
+        )
 
         filePaths.forEachIndexed { index, filePath ->
             emit(
@@ -63,17 +69,29 @@ class BatchEditMetadataUseCase @Inject constructor(
 
                     if (updateResult.isSuccess) {
                         successCount++
+                        Logger.v("Batch metadata edit success file=$filePath", "BatchEdit")
                     } else {
                         failureCount++
+                        Logger.w(
+                            "Batch metadata edit failed file=$filePath reason=${updateResult.exceptionOrNull()?.message ?: "unknown"}",
+                            "BatchEdit"
+                        )
                     }
                 } else {
                     failureCount++
+                    Logger.w(
+                        "Batch metadata read failed file=$filePath reason=${existingMetadataResult.exceptionOrNull()?.message ?: "unknown"}",
+                        "BatchEdit"
+                    )
                 }
             } catch (e: Exception) {
                 failureCount++
+                Logger.e(
+                    "Batch metadata edit exception file=$filePath reason=${e.message ?: "unknown"}",
+                    e,
+                    "BatchEdit"
+                )
             }
-
-            processedFiles++
         }
 
         emit(
@@ -86,6 +104,10 @@ class BatchEditMetadataUseCase @Inject constructor(
                 successCount = successCount,
                 failureCount = failureCount
             )
+        )
+        Logger.i(
+            "Batch metadata edit finished. files=$totalFiles success=$successCount failed=$failureCount elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+            "BatchEdit"
         )
     }
 
@@ -150,6 +172,8 @@ class BatchAlbumArtUseCase @Inject constructor(
         val totalFiles = filePaths.size
         var successCount = 0
         var failureCount = 0
+        val startedAt = SystemClock.elapsedRealtime()
+        Logger.i("Batch album art set started. files=$totalFiles", "BatchAlbumArt")
 
         filePaths.forEachIndexed { index, filePath ->
             emit(
@@ -170,6 +194,10 @@ class BatchAlbumArtUseCase @Inject constructor(
                 successCount++
             } else {
                 failureCount++
+                Logger.w(
+                    "Batch album art set failed file=$filePath reason=${result.exceptionOrNull()?.message ?: "unknown"}",
+                    "BatchAlbumArt"
+                )
             }
         }
 
@@ -184,6 +212,10 @@ class BatchAlbumArtUseCase @Inject constructor(
                 failureCount = failureCount
             )
         )
+        Logger.i(
+            "Batch album art set finished. files=$totalFiles success=$successCount failed=$failureCount elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+            "BatchAlbumArt"
+        )
     }
 
     /**
@@ -195,6 +227,8 @@ class BatchAlbumArtUseCase @Inject constructor(
         val totalFiles = filePaths.size
         var successCount = 0
         var failureCount = 0
+        val startedAt = SystemClock.elapsedRealtime()
+        Logger.i("Batch album art remove started. files=$totalFiles", "BatchAlbumArt")
 
         filePaths.forEachIndexed { index, filePath ->
             emit(
@@ -215,6 +249,10 @@ class BatchAlbumArtUseCase @Inject constructor(
                 successCount++
             } else {
                 failureCount++
+                Logger.w(
+                    "Batch album art remove failed file=$filePath reason=${result.exceptionOrNull()?.message ?: "unknown"}",
+                    "BatchAlbumArt"
+                )
             }
         }
 
@@ -228,6 +266,10 @@ class BatchAlbumArtUseCase @Inject constructor(
                 successCount = successCount,
                 failureCount = failureCount
             )
+        )
+        Logger.i(
+            "Batch album art remove finished. files=$totalFiles success=$successCount failed=$failureCount elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+            "BatchAlbumArt"
         )
     }
 }

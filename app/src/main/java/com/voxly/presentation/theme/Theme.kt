@@ -16,7 +16,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
 import androidx.core.view.WindowCompat
 
-// Material Design 3 Color Schemes
+// Import MD3 Expressive color schemes
+import com.voxly.presentation.theme.ExpressiveLightColorScheme
+import com.voxly.presentation.theme.ExpressiveDarkColorScheme
+
+// Material Design 3 Color Schemes (Fallback for older Android)
 private val LightColorScheme = lightColorScheme(
     primary = Color(0xFF6750A4),
     onPrimary = Color.White,
@@ -78,8 +82,9 @@ private val DarkColorScheme = darkColorScheme(
 )
 
 /**
- * MP3 Tag Editor theme with Material Design 3 support.
- * Supports dynamic colors on Android 12+ and automatic dark theme.
+ * MP3 Tag Editor theme with Material Design 3 Expressive support.
+ * Supports dynamic colors on Android 12+, Expressive color schemes, and automatic dark theme.
+ * Uses MD3 Expressive surface container colors and shapes for a more playful appearance.
  */
 @Composable
 fun MP3TagTheme(
@@ -88,11 +93,17 @@ fun MP3TagTheme(
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
+        // Android 12+ with dynamic color enabled
         dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context)
             else dynamicLightColorScheme(context)
         }
+        // Android 12+ without dynamic color - use MD3 Expressive static colors
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
+            if (darkTheme) ExpressiveDarkColorScheme else ExpressiveLightColorScheme
+        }
+        // Android 11 and below - use fallback color schemes (no surface containers)
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
     }
@@ -109,6 +120,7 @@ fun MP3TagTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = Shapes,  // Use MD3 Expressive shapes
         content = content
     )
 }

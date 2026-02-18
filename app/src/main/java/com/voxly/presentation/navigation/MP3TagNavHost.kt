@@ -1,17 +1,15 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -20,13 +18,17 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -74,35 +76,54 @@ fun MP3TagNavHost(
 
     // Scroll state for controlling bottom bar visibility
     var isBottomBarVisible by remember { mutableStateOf(true) }
+    val bottomBarVisibilityProgress by animateFloatAsState(
+        targetValue = if (isBottomBarVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 160),
+        label = "bottomBarVisibility"
+    )
+
+    LaunchedEffect(currentDestination?.route) {
+        if (currentDestination?.route != Screen.FileBrowser.route) {
+            isBottomBarVisible = true
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            // Simple conditional - no animation overhead for better scroll performance
-            if (showBottomBar && isBottomBarVisible) {
-                NavigationBar {
-                    bottomNavItems.forEach { item ->
-                        val selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
-                        val label = stringResource(item.labelResId)
-                        NavigationBarItem(
-                            icon = {
-                                Icon(
-                                    painter = appIconPainter(if (selected) item.selectedIcon else item.unselectedIcon),
-                                    contentDescription = label
-                                )
-                            },
-                            label = { Text(label) },
-                            selected = selected,
-                            onClick = {
-                                navController.navigate(item.screen.route) {
-                                    popUpTo(navController.graph.findStartDestination().id) {
-                                        saveState = true
+            if (showBottomBar) {
+                val density = LocalDensity.current
+                val bottomBarHideOffsetPx = with(density) { 96.dp.toPx() }
+                Box(
+                    modifier = Modifier.graphicsLayer {
+                        translationY = (1f - bottomBarVisibilityProgress) * bottomBarHideOffsetPx
+                        alpha = bottomBarVisibilityProgress
+                    }
+                ) {
+                    NavigationBar {
+                        bottomNavItems.forEach { item ->
+                            val selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
+                            val label = stringResource(item.labelResId)
+                            NavigationBarItem(
+                                icon = {
+                                    Icon(
+                                        painter = appIconPainter(if (selected) item.selectedIcon else item.unselectedIcon),
+                                        contentDescription = label
+                                    )
+                                },
+                                label = { Text(label) },
+                                selected = selected,
+                                onClick = {
+                                    navController.navigate(item.screen.route) {
+                                        popUpTo(navController.graph.findStartDestination().id) {
+                                            saveState = true
+                                        }
+                                        launchSingleTop = true
+                                        restoreState = true
                                     }
-                                    launchSingleTop = true
-                                    restoreState = true
                                 }
-                            }
-                        )
+                            )
+                        }
                     }
                 }
             }

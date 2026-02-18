@@ -15,10 +15,15 @@ import com.voxly.domain.repository.OnlineLyricsResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -39,6 +44,17 @@ class LyricsRepositoryImpl @Inject constructor(
     private val tengxRepository: TengxRepository
 ) : LyricsRepository {
 
+    sealed class LyricsSourceResult {
+        data class Result(
+            val lyrics: OnlineLyricsResult,
+            val source: String
+        ) : LyricsSourceResult()
+
+        data class SourceCompleted(val source: String) : LyricsSourceResult()
+
+        data class Error(val source: String, val message: String) : LyricsSourceResult()
+    }
+
     // Simple in-memory cache (in production, use Room database)
     private val lyricsCache = mutableMapOf<String, Lyrics>()
 
@@ -55,13 +71,25 @@ class LyricsRepositoryImpl @Inject constructor(
     override suspend fun readLyrics(filePath: String): Result<Lyrics?> =
         withContext(Dispatchers.IO) {
             try {
-                val file = File(filePath)
+                // Normalize path before checking - handle common path issues
+                val normalizedPath = filePath
+                    .replace(Regex("//+"), "/")
+                    .trimEnd('/')
+                
+                val file = File(normalizedPath)
                 if (!file.exists()) {
-                    return@withContext Result.failure(LyricsException("File not found: $filePath"))
+                    // Try the original path as well - metadata processor will try path resolution
+                    val originalFile = File(filePath)
+                    if (!originalFile.exists()) {
+                        return@withContext Result.failure(
+                            LyricsException("File not found: $filePath. The file may have been moved or deleted.")
+                        )
+                    }
                 }
 
-                // Use TagLibMetadataProcessor to read lyrics
-                val metadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
+                // Use TagLibMetadataProcessor to read lyrics - it handles path resolution internally
+                val metadata = metadataProcessor.readMetadata(normalizedPath, includeAlbumArt = false)
+                    ?: metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
 
                 // Try to read lyrics from LYRICS field
                 val lyricsText = metadata?.lyrics
@@ -92,9 +120,20 @@ class LyricsRepositoryImpl @Inject constructor(
     override suspend fun saveLyrics(filePath: String, lyrics: Lyrics): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
-                val file = File(filePath)
-                if (!file.exists() || !file.canWrite()) {
-                    return@withContext Result.failure(LyricsException("File not accessible: $filePath"))
+                // Normalize path before checking - handle common path issues
+                val normalizedPath = filePath
+                    .replace(Regex("//+"), "/")
+                    .trimEnd('/')
+                
+                val file = File(normalizedPath)
+                if (!file.exists()) {
+                    // Try the original path - metadata processor will try path resolution
+                    val originalFile = File(filePath)
+                    if (!originalFile.exists()) {
+                        return@withContext Result.failure(
+                            LyricsException("File not accessible: $filePath. The file may have been moved or deleted.")
+                        )
+                    }
                 }
 
                 // Save lyrics as USLT (Unsynchronized Lyrics)
@@ -106,7 +145,8 @@ class LyricsRepositoryImpl @Inject constructor(
                 }
 
                 // Read existing metadata and update with lyrics
-                val existingMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
+                val existingMetadata = metadataProcessor.readMetadata(normalizedPath, includeAlbumArt = false)
+                    ?: metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
                 val updatedMetadata = existingMetadata?.copy(lyrics = lyricsText)
                     ?: com.voxly.domain.model.AudioMetadata(
                         title = null,
@@ -115,7 +155,8 @@ class LyricsRepositoryImpl @Inject constructor(
                         lyrics = lyricsText
                     )
 
-                val result = metadataProcessor.updateMetadata(filePath, updatedMetadata)
+                val result = metadataProcessor.updateMetadata(normalizedPath, updatedMetadata)
+                    ?: metadataProcessor.updateMetadata(filePath, updatedMetadata)
                 if (result.isFailure) {
                     return@withContext Result.failure(LyricsException("Failed to save lyrics"))
                 }
@@ -129,17 +170,30 @@ class LyricsRepositoryImpl @Inject constructor(
     override suspend fun removeLyrics(filePath: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
-                val file = File(filePath)
-                if (!file.exists() || !file.canWrite()) {
-                    return@withContext Result.failure(LyricsException("File not accessible: $filePath"))
+                // Normalize path before checking - handle common path issues
+                val normalizedPath = filePath
+                    .replace(Regex("//+"), "/")
+                    .trimEnd('/')
+                
+                val file = File(normalizedPath)
+                if (!file.exists()) {
+                    // Try the original path - metadata processor will try path resolution
+                    val originalFile = File(filePath)
+                    if (!originalFile.exists()) {
+                        return@withContext Result.failure(
+                            LyricsException("File not accessible: $filePath. The file may have been moved or deleted.")
+                        )
+                    }
                 }
 
                 // Use metadataProcessor to remove lyrics field by setting it to empty
-                val existingMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
+                val existingMetadata = metadataProcessor.readMetadata(normalizedPath, includeAlbumArt = false)
+                    ?: metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
                 val updatedMetadata = existingMetadata?.copy(lyrics = "")
                     ?: return@withContext Result.failure(LyricsException("Cannot read file metadata"))
 
-                val result = metadataProcessor.updateMetadata(filePath, updatedMetadata)
+                val result = metadataProcessor.updateMetadata(normalizedPath, updatedMetadata)
+                    ?: metadataProcessor.updateMetadata(filePath, updatedMetadata)
                 if (result.isFailure) {
                     return@withContext Result.failure(LyricsException("Failed to remove lyrics"))
                 }
@@ -203,6 +257,121 @@ class LyricsRepositoryImpl @Inject constructor(
         } catch (e: Exception) {
             Result.failure(LyricsException("Network error during search", e))
         }
+    }
+
+    fun searchOnlineLyricsFlow(
+        trackName: String,
+        artistName: String?,
+        albumName: String?
+    ): Flow<LyricsSourceResult> = callbackFlow {
+        val normalizedTrackName = trackName.trim()
+        val normalizedArtistName = artistName?.trim()?.takeIf { it.isNotEmpty() }
+        val normalizedAlbumName = albumName?.trim()?.takeIf { it.isNotEmpty() }
+
+        if (normalizedTrackName.isBlank()) {
+            trySend(LyricsSourceResult.Error("INPUT", "Track name is required"))
+            close()
+            return@callbackFlow
+        }
+
+        val settings = try {
+            getLyricsSourceSettings()
+        } catch (e: Exception) {
+            trySend(LyricsSourceResult.Error("SETTINGS", e.message ?: "Failed to load settings"))
+            close()
+            return@callbackFlow
+        }
+
+        if (!settings.hasAnyEnabledSource) {
+            trySend(LyricsSourceResult.Error("SETTINGS", "No lyrics sources enabled"))
+            close()
+            return@callbackFlow
+        }
+
+        val enabledSourceCount = listOf(
+            settings.enableLrclib,
+            settings.enableNetease,
+            settings.enableQQMusic
+        ).count { it }
+        val completedSources = AtomicInteger(0)
+
+        fun markSourceCompleted(source: String) {
+            trySend(LyricsSourceResult.SourceCompleted(source))
+            if (completedSources.incrementAndGet() >= enabledSourceCount) {
+                close()
+            }
+        }
+
+        if (settings.enableLrclib) {
+            launch {
+                try {
+                    val result = searchFromLRCLIB(normalizedTrackName, normalizedArtistName, normalizedAlbumName)
+                    applyLimit(result.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
+                        trySend(LyricsSourceResult.Result(lyrics, "LRCLIB"))
+                    }
+                    if (result.isFailure) {
+                        trySend(
+                            LyricsSourceResult.Error(
+                                "LRCLIB",
+                                result.exceptionOrNull()?.message ?: "Failed"
+                            )
+                        )
+                    }
+                } catch (e: Exception) {
+                    trySend(LyricsSourceResult.Error("LRCLIB", e.message ?: "Failed"))
+                } finally {
+                    markSourceCompleted("LRCLIB")
+                }
+            }
+        }
+
+        if (settings.enableNetease) {
+            launch {
+                try {
+                    val result = searchFromNetEase(normalizedTrackName, normalizedArtistName)
+                    applyLimit(result.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
+                        trySend(LyricsSourceResult.Result(lyrics, "NetEase"))
+                    }
+                    if (result.isFailure) {
+                        trySend(
+                            LyricsSourceResult.Error(
+                                "NetEase",
+                                result.exceptionOrNull()?.message ?: "Failed"
+                            )
+                        )
+                    }
+                } catch (e: Exception) {
+                    trySend(LyricsSourceResult.Error("NetEase", e.message ?: "Failed"))
+                } finally {
+                    markSourceCompleted("NetEase")
+                }
+            }
+        }
+
+        if (settings.enableQQMusic) {
+            launch {
+                try {
+                    val result = searchFromQQMusic(normalizedTrackName, normalizedArtistName)
+                    applyLimit(result.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
+                        trySend(LyricsSourceResult.Result(lyrics, "QQ Music"))
+                    }
+                    if (result.isFailure) {
+                        trySend(
+                            LyricsSourceResult.Error(
+                                "QQ Music",
+                                result.exceptionOrNull()?.message ?: "Failed"
+                            )
+                        )
+                    }
+                } catch (e: Exception) {
+                    trySend(LyricsSourceResult.Error("QQ Music", e.message ?: "Failed"))
+                } finally {
+                    markSourceCompleted("QQ Music")
+                }
+            }
+        }
+
+        awaitClose { }
     }
 
     /**

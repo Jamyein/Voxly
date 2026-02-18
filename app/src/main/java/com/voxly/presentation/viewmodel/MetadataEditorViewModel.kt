@@ -1,9 +1,14 @@
 package com.voxly.presentation.viewmodel
 
+import android.os.SystemClock
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.core.util.Logger
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
+import com.voxly.data.repository.LyricsRepositoryImpl
+import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
+import com.voxly.data.repository.OnlineSourceResult
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
@@ -16,6 +21,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URLDecoder
@@ -57,6 +63,9 @@ class MetadataEditorViewModel @Inject constructor(
     private val _onlineLyricsError = MutableStateFlow<String?>(null)
     val onlineLyricsError: StateFlow<String?> = _onlineLyricsError.asStateFlow()
 
+    private val _lyricsSearchState = MutableStateFlow(LyricsSearchState())
+    val lyricsSearchState: StateFlow<LyricsSearchState> = _lyricsSearchState.asStateFlow()
+
     private val _coverFetchMessage = MutableStateFlow<String?>(null)
     val coverFetchMessage: StateFlow<String?> = _coverFetchMessage.asStateFlow()
 
@@ -68,6 +77,9 @@ class MetadataEditorViewModel @Inject constructor(
 
     private val _onlineCoverError = MutableStateFlow<String?>(null)
     val onlineCoverError: StateFlow<String?> = _onlineCoverError.asStateFlow()
+
+    private val _coverSearchState = MutableStateFlow(CoverSearchState())
+    val coverSearchState: StateFlow<CoverSearchState> = _coverSearchState.asStateFlow()
 
     // ReplayGain state
     private val _pendingReplayGainInfo = MutableStateFlow<ReplayGainInfo?>(null)
@@ -120,6 +132,10 @@ class MetadataEditorViewModel @Inject constructor(
      */
     fun updateMetadataField(field: MetadataField, value: String) {
         val currentMetadata = _editedMetadata.value ?: return
+        Logger.d(
+            "Metadata field update file=$filePath field=$field valueLength=${value.length}",
+            "MetadataEditor"
+        )
         val updatedMetadata = when (field) {
             MetadataField.TITLE -> currentMetadata.copy(title = value.takeIf { it.isNotBlank() })
             MetadataField.ARTIST -> currentMetadata.copy(artist = value.takeIf { it.isNotBlank() })
@@ -268,6 +284,11 @@ class MetadataEditorViewModel @Inject constructor(
         val replayGainToSave = _pendingReplayGainInfo.value
 
         viewModelScope.launch {
+            val startedAt = SystemClock.elapsedRealtime()
+            Logger.i(
+                "Save metadata started file=$filePath hasReplayGain=${replayGainToSave != null}",
+                "MetadataEditor"
+            )
             _uiState.value = MetadataEditorUiState.Saving
 
             // First save the metadata
@@ -285,6 +306,11 @@ class MetadataEditorViewModel @Inject constructor(
                         replayGainSuccess = replayGainResult.isSuccess
                         if (replayGainSuccess) {
                             _pendingReplayGainInfo.value = null // Clear after successful save
+                        } else {
+                            Logger.w(
+                                "Save replaygain failed file=$filePath reason=${replayGainResult.exceptionOrNull()?.message ?: "unknown"}",
+                                "MetadataEditor"
+                            )
                         }
                     }
                     
@@ -313,8 +339,17 @@ class MetadataEditorViewModel @Inject constructor(
                         ),
                         editedMetadata = metadataToSave
                     )
+                    Logger.i(
+                        "Save metadata success file=$filePath replayGainSuccess=$replayGainSuccess elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+                        "MetadataEditor"
+                    )
                 },
                 onFailure = { error ->
+                    Logger.e(
+                        "Save metadata failed file=$filePath reason=${error.message ?: "unknown"} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+                        error,
+                        "MetadataEditor"
+                    )
                     _saveResult.value = SaveResult.Error(error.message ?: "Failed to save")
                     val currentState = _uiState.value
                     if (currentState is MetadataEditorUiState.Saving) {
@@ -357,19 +392,51 @@ class MetadataEditorViewModel @Inject constructor(
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
 
         viewModelScope.launch {
+            _coverSearchState.value = CoverSearchState(isSearching = true)
             _isOnlineCoverLoading.value = true
             _onlineCoverError.value = null
-            val recordingsResult = aggregatedOnlineMetadataRepository.searchByTrackForCover(title, artist)
-            recordingsResult.fold(
-                onSuccess = { items ->
-                    _onlineCoverResults.value = items.filter { !it.releaseId.isNullOrBlank() }
-                },
-                onFailure = {
-                    _onlineCoverResults.value = emptyList()
-                    _onlineCoverError.value = it.message ?: "Cover search failed"
+
+            _onlineCoverResults.value = emptyList()
+            try {
+                aggregatedOnlineMetadataRepository.searchByTrackFlow(title, artist).collect { result ->
+                    when (result) {
+                        is OnlineSourceResult.RecordingResult -> {
+                            if (result.recording.releaseId != null) {
+                                val newResults = _coverSearchState.value.results + result.recording
+                                _coverSearchState.update { it.copy(results = newResults) }
+                                _onlineCoverResults.value =
+                                    newResults.filter { !it.releaseId.isNullOrBlank() }
+                            }
+                        }
+
+                        is OnlineSourceResult.SourceCompleted -> {
+                            _coverSearchState.update { state ->
+                                state.copy(completedSources = state.completedSources + result.source)
+                            }
+                        }
+
+                        is OnlineSourceResult.Error -> {
+                            _coverSearchState.update { state ->
+                                state.copy(
+                                    errorSources = state.errorSources + (result.source to result.message)
+                                )
+                            }
+                            _onlineCoverError.value = result.message
+                        }
+
+                        else -> Unit
+                    }
                 }
-            )
-            _isOnlineCoverLoading.value = false
+            } catch (e: Exception) {
+                val message = e.message ?: "Cover search failed"
+                _coverSearchState.update { state ->
+                    state.copy(errorSources = state.errorSources + ("System" to message))
+                }
+                _onlineCoverError.value = message
+            } finally {
+                _coverSearchState.update { it.copy(isSearching = false) }
+                _isOnlineCoverLoading.value = false
+            }
         }
     }
 
@@ -416,6 +483,7 @@ class MetadataEditorViewModel @Inject constructor(
     fun clearOnlineCoverResults() {
         _onlineCoverResults.value = emptyList()
         _onlineCoverError.value = null
+        _coverSearchState.value = CoverSearchState()
     }
 
     fun searchOnlineLyrics() {
@@ -423,19 +491,49 @@ class MetadataEditorViewModel @Inject constructor(
         val track = metadata.title?.takeIf { it.isNotBlank() } ?: File(filePath).nameWithoutExtension
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
         val album = metadata.album?.takeIf { it.isNotBlank() }
+        val flowLyricsRepository = lyricsRepository as? LyricsRepositoryImpl ?: return
 
         viewModelScope.launch {
+            _lyricsSearchState.value = LyricsSearchState(isSearching = true)
             _isOnlineLyricsLoading.value = true
             _onlineLyricsError.value = null
-            val result = lyricsRepository.searchOnlineLyrics(track, artist, album)
-            result.fold(
-                onSuccess = { _onlineLyricsResults.value = it },
-                onFailure = {
-                    _onlineLyricsResults.value = emptyList()
-                    _onlineLyricsError.value = it.message ?: "Lyrics search failed"
+
+            _onlineLyricsResults.value = emptyList()
+            try {
+                flowLyricsRepository.searchOnlineLyricsFlow(track, artist, album).collect { result ->
+                    when (result) {
+                        is LyricsSourceResult.Result -> {
+                            val newResults = _lyricsSearchState.value.results + result.lyrics
+                            _lyricsSearchState.update { it.copy(results = newResults) }
+                            _onlineLyricsResults.value = newResults
+                        }
+
+                        is LyricsSourceResult.SourceCompleted -> {
+                            _lyricsSearchState.update { state ->
+                                state.copy(completedSources = state.completedSources + result.source)
+                            }
+                        }
+
+                        is LyricsSourceResult.Error -> {
+                            _lyricsSearchState.update { state ->
+                                state.copy(
+                                    errorSources = state.errorSources + (result.source to result.message)
+                                )
+                            }
+                            _onlineLyricsError.value = result.message
+                        }
+                    }
                 }
-            )
-            _isOnlineLyricsLoading.value = false
+            } catch (e: Exception) {
+                val message = e.message ?: "Lyrics search failed"
+                _onlineLyricsError.value = message
+                _lyricsSearchState.update { state ->
+                    state.copy(errorSources = state.errorSources + ("System" to message))
+                }
+            } finally {
+                _lyricsSearchState.update { it.copy(isSearching = false) }
+                _isOnlineLyricsLoading.value = false
+            }
         }
     }
 
@@ -450,6 +548,7 @@ class MetadataEditorViewModel @Inject constructor(
     fun clearOnlineLyricsResults() {
         _onlineLyricsResults.value = emptyList()
         _onlineLyricsError.value = null
+        _lyricsSearchState.value = LyricsSearchState()
     }
 
     private fun metadataToStorageState(metadata: AudioMetadata): AudioMetadata {
@@ -516,3 +615,17 @@ sealed class SaveResult {
     data object Success : SaveResult()
     data class Error(val message: String) : SaveResult()
 }
+
+data class LyricsSearchState(
+    val results: List<OnlineLyricsResult> = emptyList(),
+    val completedSources: Set<String> = emptySet(),
+    val errorSources: Map<String, String> = emptyMap(),
+    val isSearching: Boolean = false
+)
+
+data class CoverSearchState(
+    val results: List<OnlineRecording> = emptyList(),
+    val completedSources: Set<String> = emptySet(),
+    val errorSources: Map<String, String> = emptyMap(),
+    val isSearching: Boolean = false
+)

@@ -1,6 +1,7 @@
 package com.voxly.data.repository
 
 import android.content.Context
+import android.provider.MediaStore
 import android.util.Log
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
@@ -42,6 +43,10 @@ class AudioRepositoryImpl @Inject constructor(
         }.flowOn(Dispatchers.IO)
     }
 
+    override suspend fun hasCachedData(): Boolean = audioFileScanner.hasCachedData()
+
+    override fun getCachedAudioFiles(): Flow<List<AudioFile>> = audioFileScanner.getCachedAudioFiles()
+
     /**
      * Perform incremental scan - only scan new/modified files.
      * Much faster for large libraries.
@@ -56,18 +61,6 @@ class AudioRepositoryImpl @Inject constructor(
     fun scanAudioFilesForceRefresh(): Flow<List<AudioFile>> {
         return audioFileScanner.scanAudioFilesOptimized(forceRefresh = true)
     }
-
-    /**
-     * Get cached files immediately (for fast initial display).
-     */
-    fun getCachedAudioFiles(): Flow<List<AudioFile>> {
-        return audioFileScanner.getCachedAudioFiles()
-    }
-
-    /**
-     * Check if cached data exists.
-     */
-    suspend fun hasCachedData(): Boolean = audioFileScanner.hasCachedData()
 
     /**
      * Get cached file count.
@@ -86,29 +79,69 @@ class AudioRepositoryImpl @Inject constructor(
                 val javaFile = java.io.File(filePath)
                 val extension = filePath.substringAfterLast('.').lowercase()
 
+                // Try to get duration and bitrate from MediaStore first
+                var duration = 0L
+                var bitrate = 0
+                try {
+                    val selection = "${MediaStore.Audio.Media.DATA} = ?"
+                    val selectionArgs = arrayOf(filePath)
+                    val cursor = context.contentResolver.query(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        arrayOf(MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.BITRATE),
+                        selection,
+                        selectionArgs,
+                        null
+                    )
+                    cursor?.use {
+                        if (it.moveToFirst()) {
+                            val durationCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                            val bitrateCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
+                            duration = it.getLong(durationCol)
+                            // MediaStore returns bitrate in bps, convert to kbps
+                            bitrate = it.getInt(bitrateCol) / 1000
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.w(TAG, "Failed to query MediaStore for: $filePath", e)
+                }
+
+                // Fallback: if MediaStore has no data, use TagLib to read audio properties
+                var sampleRate = 0
+                var channels = 0
+                if (duration == 0L) {
+                    val audioInfo = metadataProcessor.readAudioInfo(filePath)
+                    duration = audioInfo?.durationMs ?: 0L
+                    if (bitrate == 0) {
+                        // TagLib returns bitrate in bps, convert to kbps
+                        bitrate = (audioInfo?.bitrate ?: 0) / 1000
+                    }
+                    sampleRate = audioInfo?.sampleRate ?: 0
+                    channels = audioInfo?.channels ?: 0
+                } else {
+                    // MediaStore doesn't provide sampleRate and channels, always need to read from file
+                    val audioInfo = metadataProcessor.readAudioInfo(filePath)
+                    sampleRate = audioInfo?.sampleRate ?: 0
+                    channels = audioInfo?.channels ?: 0
+                }
+
                 val audioFile = AudioFile(
                     id = filePath.hashCode().toString(),
                     path = filePath,
                     name = javaFile.name,
                     size = javaFile.length(),
-                    duration = 0L,
+                    duration = duration,
                     format = extension.uppercase(),
-                    bitrate = 0,
-                    sampleRate = 0,
-                    channels = 0,
+                    bitrate = bitrate,
+                    sampleRate = sampleRate,
+                    channels = channels,
                     metadata = AudioMetadata()
                 )
 
                 // Read detailed metadata
                 val detailedMetadata = metadataProcessor.readMetadata(filePath)
-                val audioInfo = metadataProcessor.readAudioInfo(filePath)
 
                 val enhancedAudioFile = audioFile.copy(
-                    metadata = detailedMetadata ?: AudioMetadata(),
-                    duration = audioInfo?.durationMs ?: 0L,
-                    bitrate = audioInfo?.bitrate ?: 0,
-                    sampleRate = audioInfo?.sampleRate ?: 0,
-                    channels = audioInfo?.channels ?: 0
+                    metadata = detailedMetadata ?: AudioMetadata()
                 )
 
                 Result.success(enhancedAudioFile)

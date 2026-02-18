@@ -251,16 +251,61 @@ class AudioFileScanner @Inject constructor(
         val fullMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
             ?: com.voxly.domain.model.AudioMetadata()
 
+        // Try to get duration from MediaStore first, fallback to TagLib if not found
+        var duration = 0L
+        var bitrate = 0
+        try {
+            val selection = "${MediaStore.Audio.Media.DATA} = ?"
+            val selectionArgs = arrayOf(filePath)
+            val cursor = contentResolver.query(
+                AUDIO_URI,
+                arrayOf(MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.BITRATE),
+                selection,
+                selectionArgs,
+                null
+            )
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val durationCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                    val bitrateCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
+                    duration = it.getLong(durationCol)
+                    // MediaStore returns bitrate in bps, convert to kbps
+                    bitrate = it.getInt(bitrateCol) / 1000
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Failed to query MediaStore for: $filePath", e)
+        }
+
+        // Fallback: if MediaStore has no data, use TagLib to read audio properties
+        var sampleRate = 0
+        var channels = 0
+        if (duration == 0L) {
+            val audioInfo = metadataProcessor.readAudioInfo(filePath)
+            duration = audioInfo?.durationMs ?: 0L
+            if (bitrate == 0) {
+                // TagLib returns bitrate in bps, convert to kbps
+                bitrate = (audioInfo?.bitrate ?: 0) / 1000
+            }
+            sampleRate = audioInfo?.sampleRate ?: 0
+            channels = audioInfo?.channels ?: 0
+        } else {
+            // MediaStore doesn't provide sampleRate and channels, always need to read from file
+            val audioInfo = metadataProcessor.readAudioInfo(filePath)
+            sampleRate = audioInfo?.sampleRate ?: 0
+            channels = audioInfo?.channels ?: 0
+        }
+
         return AudioFile(
             id = filePath.hashCode().toString(),
             path = filePath,
             name = file.name,
             size = file.length(),
-            duration = 0L,
+            duration = duration,
             format = extension.uppercase(),
-            bitrate = 0,
-            sampleRate = 0,
-            channels = 0,
+            bitrate = bitrate,
+            sampleRate = sampleRate,
+            channels = channels,
             metadata = fullMetadata
         )
     }
@@ -324,26 +369,45 @@ class AudioFileScanner @Inject constructor(
      * @return Flow emitting scan results
      */
     fun scanAudioFilesOptimized(forceRefresh: Boolean = false): Flow<List<AudioFile>> = flow {
-        // If not forcing refresh and cache exists, return cached data only
-        if (!forceRefresh && libraryCache.hasCache()) {
-            val cachedFiles = mutableListOf<AudioFile>()
-            libraryCache.getCachedAudioFiles().collect { cached ->
-                cachedFiles.addAll(cached)
-            }
-            if (cachedFiles.isNotEmpty()) {
-                emit(cachedFiles.sortedBy { it.metadata.getDisplayTitle(it.name) })
-                return@flow  // Return cache only - no full scan needed
+        // Quick check: if not forcing refresh, try to use cache first
+        if (!forceRefresh) {
+            // Fast check: get count first to avoid loading all data if cache is empty
+            val cachedCount = libraryCache.getCachedFileCount()
+            if (cachedCount > 0) {
+                Log.d(TAG, "Using cache: $cachedCount files")
+                val cachedFiles = mutableListOf<AudioFile>()
+                libraryCache.getCachedAudioFiles().collect { cached ->
+                    cachedFiles.addAll(cached)
+                }
+                if (cachedFiles.isNotEmpty()) {
+                    // Cache is already sorted by title in DAO query
+                    emit(cachedFiles)
+                    return@flow  // Return cache only - no full scan needed
+                }
+            } else {
+                Log.d(TAG, "No cache found, performing full scan")
             }
         }
 
         // No cache or force refresh: perform full scan and cache results
+        // Emit empty list first to show loading state
+        emit(emptyList())
+
         val allFiles = mutableListOf<AudioFile>()
-        scanAllFilesForCache(allFiles)
+        scanAllFilesForCacheWithProgress(allFiles) { current, _ ->
+            // Yield periodically to prevent blocking the main thread
+            // Note: yield is handled by flowOn(Dispatchers.IO) below
+        }
+        
+        Log.d(TAG, "Full scan complete: ${allFiles.size} files found")
         
         // Update cache with all scanned files
         libraryCache.updateCache(allFiles)
         
-        emit(allFiles.sortedBy { it.metadata.getDisplayTitle(it.name) })
+        // MediaStore query already returns sorted data by title, 
+        // but we re-sort to ensure correct order after building the list
+        allFiles.sortBy { it.metadata.getDisplayTitle(it.name) }
+        emit(allFiles)
     }.flowOn(Dispatchers.IO)
 
     /**
@@ -459,15 +523,43 @@ class AudioFileScanner @Inject constructor(
      * Detailed metadata (lyrics, ReplayGain, etc.) is loaded on-demand.
      */
     private suspend fun scanAllFilesForCache(output: MutableList<AudioFile>) {
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
+        scanAllFilesForCacheWithProgress(output) { _, _ -> }
+    }
 
+    /**
+     * Scan all audio files with progress callback.
+     * OPTIMIZED: Uses MediaStore only - no file-level metadata reading.
+     * Includes periodic yielding to prevent blocking.
+     * 
+     * @param output List to collect scanned files
+     * @param onProgress Progress callback (current, total)
+     */
+    private suspend fun scanAllFilesForCacheWithProgress(
+        output: MutableList<AudioFile>,
+        onProgress: (current: Int, total: Int) -> Unit
+    ) {
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+        
+        // First, get the count for progress reporting
+        val countCursor = contentResolver.query(
+            AUDIO_URI,
+            arrayOf(MediaStore.Audio.Media._ID),
+            selection,
+            null,
+            null
+        )
+        val totalCount = countCursor?.count ?: 0
+        countCursor?.close()
+        
+        Log.d(TAG, "Starting full scan of $totalCount audio files")
+
+        // Now scan with actual data
         val cursor: Cursor? = contentResolver.query(
             AUDIO_URI,
             FAST_PROJECTION,
             selection,
             null,
-            sortOrder
+            "${MediaStore.Audio.Media.TITLE} ASC"
         )
 
         cursor?.use {
@@ -484,7 +576,15 @@ class AudioFileScanner @Inject constructor(
             val bitrateColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
             val trackColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
 
+            var currentIndex = 0
             while (it.moveToNext()) {
+                currentIndex++
+                
+                // Report progress periodically
+                if (currentIndex % 50 == 0 || currentIndex == totalCount) {
+                    onProgress(currentIndex, totalCount)
+                }
+
                 val filePath = it.getString(dataColumn)
                 val extension = filePath.substringAfterLast('.', "")
 
@@ -515,7 +615,7 @@ class AudioFileScanner @Inject constructor(
                         customFields = emptyMap()
                     )
 
-                    val audioFile = AudioFile(
+                    val audioFile = com.voxly.domain.model.AudioFile(
                         id = it.getLong(idColumn).toString(),
                         path = filePath,
                         name = it.getString(nameColumn) ?: filePath.substringAfterLast('/'),
@@ -532,6 +632,8 @@ class AudioFileScanner @Inject constructor(
                 }
             }
         }
+        
+        Log.d(TAG, "Full scan complete: ${output.size} files found")
     }
 
     /**

@@ -4,10 +4,13 @@ import com.voxly.data.remote.tengx.model.TengxAlbumDetail
 import com.voxly.data.remote.tengx.model.TengxLyricsResponse
 import com.voxly.data.remote.tengx.model.TengxSearchResponse
 import com.voxly.data.remote.tengx.model.TengxSongDetail
+import com.google.gson.JsonObject
 import retrofit2.Response
+import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.Headers
+import retrofit2.http.POST
 import retrofit2.http.Query
 import retrofit2.http.Url
 
@@ -61,6 +64,24 @@ interface TengxApi {
         @Query("format") format: String = "json",
         @Header("Referer") referer: String = "https://y.qq.com/"
     ): Response<TengxSearchResponse>
+
+    /**
+     * QQ Music search API v2 (musicu endpoint).
+     * Endpoint: https://u.y.qq.com/cgi-bin/musicu.fcg
+     */
+    @POST
+    @Headers(
+        "User-Agent: $USER_AGENT",
+        "Referer: https://y.qq.com/",
+        "Origin: https://y.qq.com",
+        "Content-Type: application/json",
+        "Accept: application/json",
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
+    )
+    suspend fun searchV2(
+        @Url url: String = "https://u.y.qq.com/cgi-bin/musicu.fcg",
+        @Body body: Map<String, @JvmSuppressWildcards Any>
+    ): Response<JsonObject>
 
     /**
      * Gets lyrics for a song using GET request with query parameters.

@@ -40,7 +40,7 @@ import com.voxly.domain.repository.OnlineRelease
 import com.voxly.presentation.ui.loadImageBitmapFromUrl
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
 import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
-import com.voxly.presentation.ui.loadImageBitmapFromUrl
+import com.voxly.presentation.viewmodel.SearchProgressState
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -51,6 +51,7 @@ fun OnlineMetadataScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val searchResults by viewModel.searchResults.collectAsState()
+    val searchState by viewModel.searchState.collectAsState()
     val selectedRelease by viewModel.selectedRelease.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val query by viewModel.searchQuery.collectAsState()
@@ -96,6 +97,14 @@ fun OnlineMetadataScreen(
 
             when (val state = uiState) {
                 is OnlineMetadataUiState.Searching -> LoadingBox()
+                is OnlineMetadataUiState.PartialResults -> {
+                    SearchProgressIndicator(searchState = searchState)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OnlineReleaseList(
+                        releases = state.releases,
+                        onSelect = { viewModel.selectRelease(it) }
+                    )
+                }
                 is OnlineMetadataUiState.NoResults -> {
                     Text(
                         text = "No results found.",
@@ -106,6 +115,12 @@ fun OnlineMetadataScreen(
                     Text(
                         text = state.message,
                         color = MaterialTheme.colorScheme.error
+                    )
+                }
+                is OnlineMetadataUiState.Results -> {
+                    OnlineReleaseList(
+                        releases = state.releases,
+                        onSelect = { viewModel.selectRelease(it) }
                     )
                 }
                 else -> {
@@ -234,6 +249,101 @@ private fun LoadingBox() {
     ) {
         CircularProgressIndicator()
     }
+}
+
+@Composable
+fun SearchProgressIndicator(
+    searchState: SearchProgressState,
+    modifier: Modifier = Modifier
+) {
+    val allSources = listOf("iTunes", "QQ Music", "NetEase", "MusicBrainz")
+    val completedSources = searchState.completedSources
+    val errorSources = searchState.errorSources
+    val isSearching = searchState.isSearching
+    val isLyricsSearching = searchState.isLyricsSearching
+    val resultCount = searchState.results.size
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            // Status line with source indicators
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                allSources.forEach { source ->
+                    val isCompleted = source in completedSources
+                    val hasError = source in errorSources
+
+                    SourceStatusChip(
+                        name = source,
+                        isCompleted = isCompleted,
+                        hasError = hasError
+                    )
+
+                    if (source != allSources.last()) {
+                        Text(
+                            text = " ",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // Progress text
+            val statusText = buildString {
+                append("已找到 $resultCount 个结果")
+                if (isSearching) {
+                    append("，正在搜索更多...")
+                } else if (isLyricsSearching) {
+                    append("，正在加载歌词...")
+                }
+            }
+
+            Text(
+                text = statusText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            // Show errors if any
+            if (errorSources.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                errorSources.forEach { (source, error) ->
+                    Text(
+                        text = "$source: $error",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceStatusChip(
+    name: String,
+    isCompleted: Boolean,
+    hasError: Boolean
+) {
+    val color = when {
+        hasError -> MaterialTheme.colorScheme.error
+        isCompleted -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.outline
+    }
+
+    Text(
+        text = if (hasError) "$name ✗" else if (isCompleted) "$name ✓" else "$name...",
+        style = MaterialTheme.typography.labelSmall,
+        color = color
+    )
 }
 
 @Composable

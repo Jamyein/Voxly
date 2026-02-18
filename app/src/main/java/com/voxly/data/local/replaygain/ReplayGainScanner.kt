@@ -3,7 +3,9 @@ package com.voxly.data.local.replaygain
 import android.content.Context
 import android.media.MediaExtractor
 import android.media.MediaFormat
+import android.os.SystemClock
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
+import com.voxly.core.util.Logger
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.domain.repository.ScanProgress
@@ -54,9 +56,18 @@ class ReplayGainScanner @Inject constructor(
     ): Flow<ScanProgress> = flow {
         val totalFiles = filePaths.size
         var processedFiles = 0
+        val scanStartedAt = SystemClock.elapsedRealtime()
+        Logger.i(
+            "ReplayGain scan started. files=$totalFiles quality=$scanQuality",
+            "ReplayGainScanner"
+        )
 
         filePaths.forEachIndexed { index, filePath ->
             if (!kotlin.coroutines.coroutineContext.isActive) {
+                Logger.w(
+                    "ReplayGain scan cancelled at index=$index processed=$processedFiles total=$totalFiles",
+                    "ReplayGainScanner"
+                )
                 emit(
                     ScanProgress(
                         currentFile = index,
@@ -80,11 +91,32 @@ class ReplayGainScanner @Inject constructor(
             )
 
             try {
+                val fileStartedAt = SystemClock.elapsedRealtime()
+                Logger.v(
+                    "Analyzing ReplayGain file=${File(filePath).name} path=$filePath",
+                    "ReplayGainScanner"
+                )
                 val replayGainInfo = analyzeAudioFile(filePath, scanQuality)
 
                 if (replayGainInfo != null) {
                     // Save ReplayGain info to file metadata
-                    saveReplayGainToFile(filePath, replayGainInfo)
+                    val saved = saveReplayGainToFile(filePath, replayGainInfo)
+                    if (saved) {
+                        Logger.i(
+                            "ReplayGain success file=${File(filePath).name} gain=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}",
+                            "ReplayGainScanner"
+                        )
+                    } else {
+                        Logger.w(
+                            "ReplayGain analysis done but save failed file=${File(filePath).name} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}",
+                            "ReplayGainScanner"
+                        )
+                    }
+                } else {
+                    Logger.w(
+                        "ReplayGain failed file=${File(filePath).name} reason=analyze_returned_null",
+                        "ReplayGainScanner"
+                    )
                 }
 
                 processedFiles++
@@ -99,6 +131,11 @@ class ReplayGainScanner @Inject constructor(
                     )
                 )
             } catch (e: Exception) {
+                Logger.e(
+                    "ReplayGain failed file=${File(filePath).name} reason=${e.message ?: "unknown"}",
+                    e,
+                    "ReplayGainScanner"
+                )
                 emit(
                     ScanProgress(
                         currentFile = index + 1,
@@ -122,6 +159,10 @@ class ReplayGainScanner @Inject constructor(
                 currentFilePath = "",
                 status = ScanStatus.COMPLETED
             )
+        )
+        Logger.i(
+            "ReplayGain scan finished. files=$totalFiles processed=$processedFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
+            "ReplayGainScanner"
         )
     }
 

@@ -1,5 +1,7 @@
 package com.voxly.data.repository
 
+import android.os.SystemClock
+import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.remote.itunes.ITunesRepository
 import com.voxly.data.remote.musicbrainz.MusicBrainzRepository
@@ -10,13 +12,39 @@ import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
 import com.voxly.domain.repository.OnlineRecording
 import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "AggregatedMetadata"
+private const val BROWSER_USER_AGENT =
+    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
+
+/**
+ * Streaming search result with payload and source marker.
+ */
+sealed class OnlineSourceResult {
+    data class ReleaseResult(
+        val release: OnlineRelease,
+        val source: String
+    ) : OnlineSourceResult()
+
+    data class RecordingResult(
+        val recording: OnlineRecording,
+        val source: String
+    ) : OnlineSourceResult()
+
+    data class SourceCompleted(val source: String) : OnlineSourceResult()
+
+    data class Error(val source: String, val message: String) : OnlineSourceResult()
+}
 
 /**
  * Aggregated repository that combines multiple online metadata sources.
@@ -54,11 +82,17 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String,
         album: String
     ): Result<List<OnlineRelease>> {
+        val requestStartedAt = SystemClock.elapsedRealtime()
+        Logger.i(
+            "Online query start type=artist_album artist=$artist album=$album source=$preferredSource",
+            TAG
+        )
         val settings = getOnlineSourceSettings()
         if (!settings.hasAnyEnabledSource) {
+            Logger.w("Online query rejected: no metadata source enabled", TAG)
             return Result.failure(Exception("No metadata sources enabled"))
         }
-        return when (preferredSource) {
+        val result = when (preferredSource) {
             DataSource.MUSICBRAINZ -> {
                 if (settings.enableMusicBrainz) {
                     musicBrainzRepository.searchByArtistAlbum(artist, album)
@@ -90,6 +124,125 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 }
             }
             DataSource.BOTH -> searchAllSources(artist, album, settings)
+        }
+        Logger.i(
+            "Online query end type=artist_album elapsedMs=${SystemClock.elapsedRealtime() - requestStartedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
+            TAG
+        )
+        return result
+    }
+
+    fun searchByArtistAlbumFlow(
+        artist: String,
+        album: String
+    ): Flow<OnlineSourceResult> = callbackFlow {
+        val settings = getOnlineSourceSettings()
+        val sourceJobs = mutableListOf<kotlinx.coroutines.Job>()
+
+        val useITunes = settings.enableITunes && (preferredSource == DataSource.ITUNES || preferredSource == DataSource.BOTH)
+        val useQQMusic = settings.enableQQMusic && (preferredSource == DataSource.QQ_MUSIC || preferredSource == DataSource.BOTH)
+        val useNetease = settings.enableNetease && (preferredSource == DataSource.NETEASE || preferredSource == DataSource.BOTH)
+        val useMusicBrainz = settings.enableMusicBrainz && (preferredSource == DataSource.MUSICBRAINZ || preferredSource == DataSource.BOTH)
+
+        if (!useITunes && !useQQMusic && !useNetease && !useMusicBrainz) {
+            trySend(OnlineSourceResult.Error("System", "No metadata sources enabled"))
+            channel.close()
+        }
+
+        if (useITunes) {
+            sourceJobs += launch {
+                try {
+                    val result = iTunesRepository.searchByArtistAlbum(artist, album)
+                    result
+                        .map { applyLimit(it, settings.searchLimit) }
+                        .onSuccess { releases ->
+                            releases.forEach { release ->
+                                trySend(OnlineSourceResult.ReleaseResult(release, "iTunes"))
+                            }
+                        }
+                        .onFailure { error ->
+                            trySend(OnlineSourceResult.Error("iTunes", error.message ?: "Failed"))
+                        }
+                } catch (e: Exception) {
+                    trySend(OnlineSourceResult.Error("iTunes", e.message ?: "Failed"))
+                } finally {
+                    trySend(OnlineSourceResult.SourceCompleted("iTunes"))
+                }
+            }
+        }
+
+        if (useQQMusic) {
+            sourceJobs += launch {
+                try {
+                    val result = searchQQMusicByArtistAlbum(artist, album, settings.requestLimit)
+                    result
+                        .onSuccess { releases ->
+                            releases.forEach { release ->
+                                trySend(OnlineSourceResult.ReleaseResult(release, "QQ Music"))
+                            }
+                        }
+                        .onFailure { error ->
+                            trySend(OnlineSourceResult.Error("QQ Music", error.message ?: "Failed"))
+                        }
+                } catch (e: Exception) {
+                    trySend(OnlineSourceResult.Error("QQ Music", e.message ?: "Failed"))
+                } finally {
+                    trySend(OnlineSourceResult.SourceCompleted("QQ Music"))
+                }
+            }
+        }
+
+        if (useNetease) {
+            sourceJobs += launch {
+                try {
+                    val result = searchNeteaseByArtistAlbum(artist, album, settings.requestLimit)
+                    result
+                        .onSuccess { releases ->
+                            releases.forEach { release ->
+                                trySend(OnlineSourceResult.ReleaseResult(release, "NetEase"))
+                            }
+                        }
+                        .onFailure { error ->
+                            trySend(OnlineSourceResult.Error("NetEase", error.message ?: "Failed"))
+                        }
+                } catch (e: Exception) {
+                    trySend(OnlineSourceResult.Error("NetEase", e.message ?: "Failed"))
+                } finally {
+                    trySend(OnlineSourceResult.SourceCompleted("NetEase"))
+                }
+            }
+        }
+
+        if (useMusicBrainz) {
+            sourceJobs += launch {
+                try {
+                    val result = musicBrainzRepository.searchByArtistAlbum(artist, album)
+                    result
+                        .map { applyLimit(it, settings.searchLimit) }
+                        .onSuccess { releases ->
+                            releases.forEach { release ->
+                                trySend(OnlineSourceResult.ReleaseResult(release, "MusicBrainz"))
+                            }
+                        }
+                        .onFailure { error ->
+                            trySend(OnlineSourceResult.Error("MusicBrainz", error.message ?: "Failed"))
+                        }
+                } catch (e: Exception) {
+                    trySend(OnlineSourceResult.Error("MusicBrainz", e.message ?: "Failed"))
+                } finally {
+                    trySend(OnlineSourceResult.SourceCompleted("MusicBrainz"))
+                }
+            }
+        }
+
+        val completionJob = launch {
+            sourceJobs.joinAll()
+            channel.close()
+        }
+
+        awaitClose {
+            completionJob.cancel()
+            sourceJobs.forEach { it.cancel() }
         }
     }
 
@@ -199,6 +352,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         album: String,
         limit: Int
     ): Result<List<OnlineRelease>> {
+        val startedAt = SystemClock.elapsedRealtime()
         return try {
             val searchResult = wangyRepository.searchSongs(
                 keywords = "$artist $album",
@@ -221,7 +375,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         year = null, // NetEase API doesn't provide year in search
                         format = "Digital",
                         trackCount = albumSongs.size,
-                        coverArtUrl = firstSong.album?.picUrl,
+                        coverArtUrl = normalizeCoverUrl(firstSong.album?.picUrl),
                         source = "NetEase",
                         albumTitle = firstSong.album?.name
                     )
@@ -232,6 +386,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         } catch (e: Exception) {
             Result.success(emptyList())
+        }.also { result ->
+            Logger.i(
+                "Online query source=NetEase type=artist_album elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
+                TAG
+            )
         }
     }
 
@@ -243,6 +402,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         album: String,
         limit: Int
     ): Result<List<OnlineRelease>> {
+        val startedAt = SystemClock.elapsedRealtime()
         return try {
             val searchResult = tengxRepository.searchSongs(
                 keywords = "$artist $album",
@@ -265,7 +425,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             year = null,
                             format = "Digital",
                             trackCount = albumSongs.size,
-                            coverArtUrl = "https://y.gtimg.cn/music/photo_new/T002R500x500M000${id}.jpg",
+                            coverArtUrl = buildQQCoverUrl(
+                                albumMid = firstSong.album?.mid,
+                                rawCoverUrl = firstSong.album?.pic,
+                                fallbackId = id.toString()
+                            ),
                             source = "QQ Music",
                             albumTitle = firstSong.album?.name
                         )
@@ -277,6 +441,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         } catch (e: Exception) {
             Result.success(emptyList())
+        }.also { result ->
+            Logger.i(
+                "Online query source=QQ_Music type=artist_album elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
+                TAG
+            )
         }
     }
 
@@ -284,11 +453,17 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         title: String,
         artist: String?
     ): Result<List<OnlineRecording>> {
+        val requestStartedAt = SystemClock.elapsedRealtime()
+        Logger.i(
+            "Online query start type=track title=$title artist=${artist ?: ""} source=$preferredSource",
+            TAG
+        )
         val settings = getOnlineSourceSettings()
         if (!settings.hasAnyEnabledSource) {
+            Logger.w("Online query rejected: no metadata source enabled", TAG)
             return Result.failure(Exception("No metadata sources enabled"))
         }
-        return when (preferredSource) {
+        val result = when (preferredSource) {
             DataSource.MUSICBRAINZ -> {
                 if (settings.enableMusicBrainz) {
                     musicBrainzRepository.searchByTrack(title, artist)
@@ -363,6 +538,125 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 }
             }
         }
+        Logger.i(
+            "Online query end type=track elapsedMs=${SystemClock.elapsedRealtime() - requestStartedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
+            TAG
+        )
+        return result
+    }
+
+    fun searchByTrackFlow(
+        title: String,
+        artist: String?
+    ): Flow<OnlineSourceResult> = callbackFlow {
+        val settings = getOnlineSourceSettings()
+        val sourceJobs = mutableListOf<kotlinx.coroutines.Job>()
+
+        val useITunes = settings.enableITunes && (preferredSource == DataSource.ITUNES || preferredSource == DataSource.BOTH)
+        val useQQMusic = settings.enableQQMusic && (preferredSource == DataSource.QQ_MUSIC || preferredSource == DataSource.BOTH)
+        val useNetease = settings.enableNetease && (preferredSource == DataSource.NETEASE || preferredSource == DataSource.BOTH)
+        val useMusicBrainz = settings.enableMusicBrainz && (preferredSource == DataSource.MUSICBRAINZ || preferredSource == DataSource.BOTH)
+
+        if (!useITunes && !useQQMusic && !useNetease && !useMusicBrainz) {
+            trySend(OnlineSourceResult.Error("System", "No metadata sources enabled"))
+            channel.close()
+        }
+
+        if (useITunes) {
+            sourceJobs += launch {
+                try {
+                    val result = iTunesRepository.searchByTrack(title, artist)
+                    result
+                        .map { applyLimit(it, settings.searchLimit) }
+                        .onSuccess { recordings ->
+                            recordings.forEach { recording ->
+                                trySend(OnlineSourceResult.RecordingResult(recording, "iTunes"))
+                            }
+                        }
+                        .onFailure { error ->
+                            trySend(OnlineSourceResult.Error("iTunes", error.message ?: "Failed"))
+                        }
+                } catch (e: Exception) {
+                    trySend(OnlineSourceResult.Error("iTunes", e.message ?: "Failed"))
+                } finally {
+                    trySend(OnlineSourceResult.SourceCompleted("iTunes"))
+                }
+            }
+        }
+
+        if (useQQMusic) {
+            sourceJobs += launch {
+                try {
+                    val result = searchQQMusicByTrack(title, artist, settings.requestLimit)
+                    result
+                        .onSuccess { recordings ->
+                            recordings.forEach { recording ->
+                                trySend(OnlineSourceResult.RecordingResult(recording, "QQ Music"))
+                            }
+                        }
+                        .onFailure { error ->
+                            trySend(OnlineSourceResult.Error("QQ Music", error.message ?: "Failed"))
+                        }
+                } catch (e: Exception) {
+                    trySend(OnlineSourceResult.Error("QQ Music", e.message ?: "Failed"))
+                } finally {
+                    trySend(OnlineSourceResult.SourceCompleted("QQ Music"))
+                }
+            }
+        }
+
+        if (useNetease) {
+            sourceJobs += launch {
+                try {
+                    val result = searchNeteaseByTrack(title, artist, settings.requestLimit)
+                    result
+                        .onSuccess { recordings ->
+                            recordings.forEach { recording ->
+                                trySend(OnlineSourceResult.RecordingResult(recording, "NetEase"))
+                            }
+                        }
+                        .onFailure { error ->
+                            trySend(OnlineSourceResult.Error("NetEase", error.message ?: "Failed"))
+                        }
+                } catch (e: Exception) {
+                    trySend(OnlineSourceResult.Error("NetEase", e.message ?: "Failed"))
+                } finally {
+                    trySend(OnlineSourceResult.SourceCompleted("NetEase"))
+                }
+            }
+        }
+
+        if (useMusicBrainz) {
+            sourceJobs += launch {
+                try {
+                    val result = musicBrainzRepository.searchByTrack(title, artist)
+                    result
+                        .map { applyLimit(it, settings.searchLimit) }
+                        .onSuccess { recordings ->
+                            recordings.forEach { recording ->
+                                trySend(OnlineSourceResult.RecordingResult(recording, "MusicBrainz"))
+                            }
+                        }
+                        .onFailure { error ->
+                            trySend(OnlineSourceResult.Error("MusicBrainz", error.message ?: "Failed"))
+                        }
+                } catch (e: Exception) {
+                    trySend(OnlineSourceResult.Error("MusicBrainz", e.message ?: "Failed"))
+                } finally {
+                    trySend(OnlineSourceResult.SourceCompleted("MusicBrainz"))
+                }
+            }
+        }
+
+        val completionJob = launch {
+            sourceJobs.joinAll()
+            channel.close()
+        }
+
+        awaitClose {
+            completionJob.cancel()
+            sourceJobs.forEach { it.cancel() }
+        }
     }
 
     /**
@@ -427,6 +721,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String?,
         limit: Int
     ): Result<List<OnlineRecording>> {
+        val startedAt = SystemClock.elapsedRealtime()
         return try {
             val searchResult = wangyRepository.searchSongs(
                 keywords = if (artist != null) "$artist $title" else title,
@@ -446,7 +741,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             duration = (song.duration / 1000).toInt(),
                             releaseId = song.album?.id?.toString(),
                             source = "NetEase",
-                            coverArtUrl = song.album?.picUrl
+                            coverArtUrl = normalizeCoverUrl(song.album?.picUrl)
                         )
                 }
                 Result.success(recordings)
@@ -455,6 +750,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         } catch (e: Exception) {
             Result.success(emptyList())
+        }.also { result ->
+            Logger.i(
+                "Online query source=NetEase type=track elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
+                TAG
+            )
         }
     }
 
@@ -466,6 +766,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String?,
         limit: Int
     ): Result<List<OnlineRecording>> {
+        val startedAt = SystemClock.elapsedRealtime()
         return try {
             val searchResult = tengxRepository.searchSongs(
                 keywords = title,
@@ -483,9 +784,13 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         title = song.name,
                         artist = song.singer.joinToString(", ") { it.name },
                         duration = song.interval,
-                        releaseId = song.album?.id?.toString(),
+                        releaseId = song.album?.mid?.takeIf { it.isNotBlank() } ?: song.album?.id?.toString(),
                         source = "QQ Music",
-                        coverArtUrl = song.album?.pic
+                        coverArtUrl = buildQQCoverUrl(
+                            albumMid = song.album?.mid,
+                            rawCoverUrl = song.album?.pic,
+                            fallbackId = song.album?.id?.toString()
+                        )
                     )
                 }
                 Result.success(recordings)
@@ -494,6 +799,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         } catch (e: Exception) {
             Result.success(emptyList())
+        }.also { result ->
+            Logger.i(
+                "Online query source=QQ_Music type=track elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
+                TAG
+            )
         }
     }
 
@@ -559,6 +869,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                     trackCount = album?.songs?.size ?: 0,
                     tracks = emptyList(),
                     coverArtUrl = album?.album?.picUrl
+                        ?.let(::normalizeCoverUrl)
                 ))
             } else {
                 Result.failure(Exception("Failed to get NetEase album details"))
@@ -586,7 +897,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                     trackCount = album?.data?.list?.size ?: 0,
                     tracks = emptyList(),
                     coverArtUrl = if (albumId.isNotEmpty()) {
-                        "https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumId}.jpg"
+                        buildQQCoverUrl(
+                            albumMid = album?.data?.album?.mid,
+                            rawCoverUrl = album?.data?.album?.pic,
+                            fallbackId = albumId
+                        )
                     } else null
                 ))
             } else {
@@ -658,12 +973,12 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             val result = wangyRepository.getAlbumDetail(albumId.toLong())
             if (result.isSuccess) {
                 val album = result.getOrNull()
-                val coverUrl = album?.album?.picUrl
+                val coverUrl = normalizeCoverUrl(album?.album?.picUrl)
                 if (coverUrl != null) {
                     // Download cover art
                     val url = java.net.URL(coverUrl)
                     val connection = url.openConnection()
-                    connection.setRequestProperty("User-Agent", "Mozilla/5.0")
+                    connection.setRequestProperty("User-Agent", BROWSER_USER_AGENT)
                     val bytes = connection.getInputStream().use { it.readBytes() }
                     Result.success(bytes)
                 } else {
@@ -683,10 +998,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
      */
     private suspend fun getQQMusicCoverArt(albumId: String): Result<ByteArray?> {
         return try {
-            val coverUrl = "https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumId}.jpg"
+            val coverUrl = buildQQCoverUrl(
+                albumMid = albumId.takeUnless { it.all(Char::isDigit) } ?: "",
+                rawCoverUrl = null,
+                fallbackId = albumId.takeIf { it.all(Char::isDigit) }
+            ) ?: return Result.success(null)
             val url = java.net.URL(coverUrl)
             val connection = url.openConnection()
-            connection.setRequestProperty("User-Agent", "Mozilla/5.0")
+            connection.setRequestProperty("User-Agent", BROWSER_USER_AGENT)
             connection.setRequestProperty("Referer", "https://y.qq.com")
             val bytes = connection.getInputStream().use { it.readBytes() }
             Result.success(bytes)
@@ -817,5 +1136,34 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         }
         val index = priority.indexOf(key)
         return if (index >= 0) index else Int.MAX_VALUE
+    }
+
+    private fun normalizeCoverUrl(url: String?): String? {
+        val trimmed = url?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
+        return if (trimmed.startsWith("http://", ignoreCase = true)) {
+            "https://${trimmed.removePrefix("http://")}"
+        } else {
+            trimmed
+        }
+    }
+
+    private fun buildQQCoverUrl(
+        albumMid: String?,
+        rawCoverUrl: String?,
+        fallbackId: String?
+    ): String? {
+        val normalizedRaw = normalizeCoverUrl(rawCoverUrl)
+        if (!normalizedRaw.isNullOrBlank()) return normalizedRaw
+
+        val mid = albumMid?.trim().orEmpty()
+        if (mid.isNotBlank()) {
+            return "https://y.gtimg.cn/music/photo_new/T002R500x500M000${mid}.jpg"
+        }
+
+        val id = fallbackId?.trim().orEmpty()
+        if (id.isNotBlank()) {
+            return "https://y.gtimg.cn/music/photo_new/T002R500x500M000${id}.jpg"
+        }
+        return null
     }
 }

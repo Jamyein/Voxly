@@ -4,19 +4,27 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
+import com.voxly.data.repository.OnlineSourceResult
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.Lyrics
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
+import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
 import java.net.URLDecoder
@@ -38,6 +46,9 @@ class OnlineMetadataViewModel @Inject constructor(
     private val _searchResults = MutableStateFlow<List<OnlineRelease>>(emptyList())
     val searchResults: StateFlow<List<OnlineRelease>> = _searchResults.asStateFlow()
 
+    private val _searchState = MutableStateFlow(SearchProgressState())
+    val searchState: StateFlow<SearchProgressState> = _searchState.asStateFlow()
+
     private val _selectedRelease = MutableStateFlow<OnlineReleaseDetails?>(null)
     val selectedRelease: StateFlow<OnlineReleaseDetails?> = _selectedRelease.asStateFlow()
 
@@ -49,6 +60,9 @@ class OnlineMetadataViewModel @Inject constructor(
 
     private val _syncedLyricsByReleaseId = MutableStateFlow<Map<String, Lyrics>>(emptyMap())
     private var selectedSyncedLyrics: Lyrics? = null
+    private var activeSearchJob: Job? = null
+    private var activeLyricsJob: Job? = null
+    private var activeSearchId: Long = 0L
 
     init {
         prepareAutoSearch()
@@ -79,102 +93,105 @@ class OnlineMetadataViewModel @Inject constructor(
     }
 
     fun autoSearch() {
-        searchInternal(_searchQuery.value) { query -> searchReleases(query) }
+        val query = _searchQuery.value
+        searchInternal(query, autoSearchFlow(query))
     }
 
     fun searchByArtistAlbum(artist: String, album: String) {
         val updated = _searchQuery.value.copy(artist = artist, album = album)
         _searchQuery.value = updated
-        searchInternal(updated) {
-            onlineMetadataRepository.searchByArtistAlbum(artist, album).getOrElse { emptyList() }
-        }
+        searchInternal(updated, searchByArtistAlbumFlow(artist, album))
     }
 
     fun searchByTrack(title: String, artist: String? = null) {
         val updated = _searchQuery.value.copy(title = title, artist = artist)
         _searchQuery.value = updated
-        searchInternal(updated) {
-            onlineMetadataRepository.searchByTrack(title, artist)
-                .getOrElse { emptyList() }
-                .mapNotNull { recording ->
-                    recording.releaseId?.let { releaseId ->
-                        OnlineRelease(
-                            id = releaseId,
-                            title = recording.title,
-                            artist = recording.artist,
-                            year = null,
-                            format = null,
-                            trackCount = null,
-                            coverArtUrl = null,
-                            source = recording.source,
-                            songTitle = recording.title
-                        )
-                    }
-                }
-        }
+        searchInternal(updated, searchByTrackFlow(title, artist))
     }
 
     private fun searchInternal(
         query: OnlineSearchQuery,
-        searcher: suspend (OnlineSearchQuery) -> List<OnlineRelease>
+        searcher: Flow<OnlineSourceResult>
     ) {
-        viewModelScope.launch {
+        activeSearchJob?.cancel()
+        activeLyricsJob?.cancel()
+        val searchId = nextSearchId()
+
+        activeSearchJob = viewModelScope.launch {
             try {
-                _isLoading.value = true
-                _uiState.value = OnlineMetadataUiState.Searching
+                _syncedLyricsByReleaseId.value = emptyMap()
+                _searchState.value = SearchProgressState(isSearching = true)
+                publishLegacySearchState()
 
-                val releases = searcher(query)
-                val withLyrics = enrichReleasesWithSyncedLyrics(releases)
+                searcher.collect { result ->
+                    when (result) {
+                        is OnlineSourceResult.ReleaseResult -> {
+                            val normalized = result.release.copy(
+                                albumTitle = result.release.albumTitle ?: result.release.title,
+                                source = if (result.release.source == "Unknown") result.source else result.release.source
+                            )
+                            _searchState.update { state ->
+                                val merged = mergeRelease(state.results, normalized)
+                                val sorted = sortReleases(merged, query)
+                                state.copy(results = sorted, hasAnyResults = sorted.isNotEmpty())
+                            }
+                            publishLegacySearchState()
+                        }
 
-                _searchResults.value = withLyrics
-                _uiState.value = if (withLyrics.isEmpty()) {
-                    OnlineMetadataUiState.NoResults
-                } else {
-                    OnlineMetadataUiState.Results(withLyrics)
+                        is OnlineSourceResult.RecordingResult -> {
+                            val release = result.recording.toOnlineRelease() ?: return@collect
+                            _searchState.update { state ->
+                                val merged = mergeRelease(state.results, release)
+                                val sorted = sortReleases(merged, query)
+                                state.copy(results = sorted, hasAnyResults = sorted.isNotEmpty())
+                            }
+                            publishLegacySearchState()
+                        }
+
+                        is OnlineSourceResult.SourceCompleted -> {
+                            _searchState.update { state ->
+                                state.copy(completedSources = state.completedSources + result.source)
+                            }
+                            publishLegacySearchState()
+                        }
+
+                        is OnlineSourceResult.Error -> {
+                            _searchState.update { state ->
+                                state.copy(
+                                    errorSources = state.errorSources + (result.source to result.message)
+                                )
+                            }
+                            publishLegacySearchState()
+                        }
+                    }
                 }
+
+                if (isSearchOutdated(searchId)) return@launch
+
+                _searchState.update { it.copy(isSearching = false, isLyricsSearching = true) }
+                publishLegacySearchState()
+                enrichReleasesWithSyncedLyricsIncremental(query, searchId)
             } catch (e: Exception) {
-                _uiState.value = OnlineMetadataUiState.Error(e.message ?: "Search failed")
-            } finally {
-                _isLoading.value = false
+                if (e is CancellationException) throw e
+                _searchState.update { state ->
+                    state.copy(
+                        isSearching = false,
+                        isLyricsSearching = false,
+                        errorSources = state.errorSources + ("System" to (e.message ?: "Search failed"))
+                    )
+                }
+                publishLegacySearchState()
             }
         }
     }
 
-    private suspend fun searchReleases(query: OnlineSearchQuery): List<OnlineRelease> {
-        val merged = LinkedHashMap<String, OnlineRelease>()
-
+    private fun autoSearchFlow(query: OnlineSearchQuery): Flow<OnlineSourceResult> = flow {
         if (query.title.isNotBlank()) {
-            onlineMetadataRepository.searchByTrack(query.title, query.artist)
-                .onSuccess { recordings ->
-                    recordings.forEach { recording ->
-                        val releaseId = recording.releaseId ?: return@forEach
-                        val incoming = OnlineRelease(
-                            id = releaseId,
-                            title = recording.title,
-                            artist = recording.artist,
-                            year = null,
-                            format = null,
-                            trackCount = null,
-                            coverArtUrl = null,
-                            source = recording.source,
-                            songTitle = recording.title
-                        )
-                        merged[releaseId] = mergeRelease(merged[releaseId], incoming)
-                    }
-                }
+            emitAll(searchByTrackFlow(query.title, query.artist))
         }
-
         if (!query.artist.isNullOrBlank() && !query.album.isNullOrBlank()) {
-            onlineMetadataRepository.searchByArtistAlbum(query.artist, query.album)
-                .onSuccess { releases ->
-                    releases.forEach { release ->
-                        val normalized = release.copy(albumTitle = release.albumTitle ?: release.title)
-                        merged[release.id] = mergeRelease(merged[release.id], normalized)
-                    }
-                }
+            emitAll(searchByArtistAlbumFlow(query.artist, query.album))
         }
-
-        return merged.values.toList()
     }
 
     private fun mergeRelease(old: OnlineRelease?, incoming: OnlineRelease): OnlineRelease {
@@ -192,42 +209,208 @@ class OnlineMetadataViewModel @Inject constructor(
         )
     }
 
-    private suspend fun enrichReleasesWithSyncedLyrics(releases: List<OnlineRelease>): List<OnlineRelease> =
-        coroutineScope {
-            val limited = releases.take(30)
-            val deferred = limited.map { release ->
-                async {
-                    val track = release.songTitle ?: release.title
-                    val artist = release.artist
-                    val album = release.albumTitle ?: release.title
-                    val match = lyricsRepository.searchOnlineLyrics(
-                        trackName = track,
-                        artistName = artist,
-                        albumName = album
-                    ).getOrElse { emptyList() }
-                        .firstOrNull { it.hasSyncedLyrics }
-                    if (match != null) {
-                        val lyrics = lyricsRepository.getOnlineLyrics(match).getOrNull()
-                        if (lyrics?.isSynced == true) {
-                            release.id to lyrics
-                        } else {
-                            release.id to null
+    private fun mergeRelease(results: List<OnlineRelease>, incoming: OnlineRelease): List<OnlineRelease> {
+        val existingIndex = results.indexOfFirst { it.id == incoming.id }
+        if (existingIndex < 0) return results + incoming
+
+        val merged = mergeRelease(results[existingIndex], incoming)
+        return results.toMutableList().also { it[existingIndex] = merged }
+    }
+
+    private fun sortReleases(releases: List<OnlineRelease>, query: OnlineSearchQuery): List<OnlineRelease> {
+        val titleNeedle = when {
+            query.title.isNotBlank() -> query.title
+            !query.album.isNullOrBlank() -> query.album
+            else -> ""
+        }
+
+        return releases.sortedWith(
+            compareByDescending<OnlineRelease> { release ->
+                val candidateTitle = (release.songTitle ?: release.albumTitle ?: release.title).trim()
+                when {
+                    titleNeedle.isBlank() -> 1
+                    candidateTitle.equals(titleNeedle, ignoreCase = true) -> 3
+                    candidateTitle.contains(titleNeedle, ignoreCase = true) -> 2
+                    else -> 1
+                }
+            }.thenByDescending { release ->
+                val artistNeedle = query.artist.orEmpty()
+                when {
+                    artistNeedle.isBlank() -> 1
+                    release.artist.equals(artistNeedle, ignoreCase = true) -> 3
+                    release.artist.contains(artistNeedle, ignoreCase = true) -> 2
+                    else -> 1
+                }
+            }.thenBy { release ->
+                sourcePriorityIndex(release.source)
+            }
+        )
+    }
+
+    private fun sourcePriorityIndex(source: String): Int {
+        return when (source.lowercase()) {
+            "itunes" -> 0
+            "musicbrainz" -> 1
+            "netease" -> 2
+            "qq music", "qq_music" -> 3
+            else -> Int.MAX_VALUE
+        }
+    }
+
+    private fun publishLegacySearchState() {
+        val state = _searchState.value
+        _searchResults.value = state.results
+        _isLoading.value = state.isSearching || state.isLyricsSearching
+
+        _uiState.value = when {
+            state.isSearching && state.results.isEmpty() -> OnlineMetadataUiState.Searching
+            (state.isSearching || state.isLyricsSearching) && state.results.isNotEmpty() -> {
+                OnlineMetadataUiState.PartialResults(state.results)
+            }
+            state.results.isNotEmpty() -> OnlineMetadataUiState.Results(state.results)
+            state.errorSources.isNotEmpty() -> {
+                OnlineMetadataUiState.Error(
+                    state.errorSources.values.firstOrNull() ?: "Search failed"
+                )
+            }
+            !state.isSearching && !state.isLyricsSearching -> OnlineMetadataUiState.NoResults
+            else -> OnlineMetadataUiState.Searching
+        }
+    }
+
+    private fun enrichReleasesWithSyncedLyricsIncremental(
+        query: OnlineSearchQuery,
+        searchId: Long
+    ) {
+        activeLyricsJob?.cancel()
+        activeLyricsJob = viewModelScope.launch {
+            try {
+                val limited = _searchState.value.results.take(30)
+                if (limited.isEmpty()) {
+                    if (!isSearchOutdated(searchId)) {
+                        _searchState.update { it.copy(isLyricsSearching = false) }
+                        publishLegacySearchState()
+                    }
+                    return@launch
+                }
+
+                _syncedLyricsByReleaseId.value = emptyMap()
+
+                coroutineScope {
+                    val deferred = limited.map { release ->
+                        async {
+                            release.id to fetchSyncedLyrics(release)
                         }
-                    } else {
-                        release.id to null
+                    }
+
+                    deferred.forEach { task ->
+                        val (releaseId, lyrics) = task.await()
+                        if (isSearchOutdated(searchId)) return@forEach
+
+                        if (lyrics != null) {
+                            _syncedLyricsByReleaseId.update { current ->
+                                current + (releaseId to lyrics)
+                            }
+                        }
+
+                        _searchState.update { state ->
+                            val updatedResults = state.results.map { release ->
+                                if (release.id == releaseId) {
+                                    release.copy(hasSyncedLyrics = lyrics != null)
+                                } else {
+                                    release
+                                }
+                            }
+                            state.copy(
+                                results = sortReleases(updatedResults, query),
+                                hasAnyResults = updatedResults.isNotEmpty()
+                            )
+                        }
+                        publishLegacySearchState()
                     }
                 }
-            }
-
-            val lyricsMap = deferred.map { it.await() }
-                .mapNotNull { (id, lyrics) -> lyrics?.let { id to it } }
-                .toMap()
-            _syncedLyricsByReleaseId.value = lyricsMap
-
-            releases.map { release ->
-                release.copy(hasSyncedLyrics = lyricsMap[release.id] != null)
+            } finally {
+                if (!isSearchOutdated(searchId)) {
+                    _searchState.update { it.copy(isLyricsSearching = false) }
+                    publishLegacySearchState()
+                }
             }
         }
+    }
+
+    private suspend fun fetchSyncedLyrics(release: OnlineRelease): Lyrics? {
+        val track = release.songTitle ?: release.title
+        val artist = release.artist
+        val album = release.albumTitle ?: release.title
+        val match = lyricsRepository.searchOnlineLyrics(
+            trackName = track,
+            artistName = artist,
+            albumName = album
+        ).getOrElse { emptyList() }
+            .firstOrNull { it.hasSyncedLyrics }
+
+        if (match == null) return null
+        val lyrics = lyricsRepository.getOnlineLyrics(match).getOrNull() ?: return null
+        return lyrics.takeIf { it.isSynced }
+    }
+
+    private fun searchByArtistAlbumFlow(artist: String, album: String): Flow<OnlineSourceResult> {
+        val aggregatedRepo = onlineMetadataRepository as? AggregatedOnlineMetadataRepository
+        if (aggregatedRepo != null) {
+            return aggregatedRepo.searchByArtistAlbumFlow(artist, album)
+        }
+        return flow {
+            onlineMetadataRepository.searchByArtistAlbum(artist, album)
+                .onSuccess { releases ->
+                    releases.forEach { emit(OnlineSourceResult.ReleaseResult(it, it.source)) }
+                    emit(OnlineSourceResult.SourceCompleted("Unknown"))
+                }
+                .onFailure { error ->
+                    emit(OnlineSourceResult.Error("Unknown", error.message ?: "Failed"))
+                    emit(OnlineSourceResult.SourceCompleted("Unknown"))
+                }
+        }
+    }
+
+    private fun searchByTrackFlow(title: String, artist: String?): Flow<OnlineSourceResult> {
+        val aggregatedRepo = onlineMetadataRepository as? AggregatedOnlineMetadataRepository
+        if (aggregatedRepo != null) {
+            return aggregatedRepo.searchByTrackFlow(title, artist)
+        }
+        return flow {
+            onlineMetadataRepository.searchByTrack(title, artist)
+                .onSuccess { recordings ->
+                    recordings.forEach { emit(OnlineSourceResult.RecordingResult(it, it.source)) }
+                    emit(OnlineSourceResult.SourceCompleted("Unknown"))
+                }
+                .onFailure { error ->
+                    emit(OnlineSourceResult.Error("Unknown", error.message ?: "Failed"))
+                    emit(OnlineSourceResult.SourceCompleted("Unknown"))
+                }
+        }
+    }
+
+    private fun OnlineRecording.toOnlineRelease(): OnlineRelease? {
+        val releaseId = releaseId ?: return null
+        return OnlineRelease(
+            id = releaseId,
+            title = title,
+            artist = artist,
+            year = null,
+            format = null,
+            trackCount = null,
+            coverArtUrl = null,
+            source = source,
+            songTitle = title
+        )
+    }
+
+    private fun nextSearchId(): Long {
+        activeSearchId += 1
+        return activeSearchId
+    }
+
+    private fun isSearchOutdated(searchId: Long): Boolean = searchId != activeSearchId
 
     fun selectRelease(release: OnlineRelease) {
         selectedSyncedLyrics = _syncedLyricsByReleaseId.value[release.id]
@@ -315,9 +498,19 @@ private data class ParsedFileName(
     val album: String?
 )
 
+data class SearchProgressState(
+    val results: List<OnlineRelease> = emptyList(),
+    val completedSources: Set<String> = emptySet(),
+    val errorSources: Map<String, String> = emptyMap(),
+    val isSearching: Boolean = false,
+    val isLyricsSearching: Boolean = false,
+    val hasAnyResults: Boolean = false
+)
+
 sealed class OnlineMetadataUiState {
     data object Idle : OnlineMetadataUiState()
     data object Searching : OnlineMetadataUiState()
+    data class PartialResults(val releases: List<OnlineRelease>) : OnlineMetadataUiState()
     data object NoResults : OnlineMetadataUiState()
     data class Results(val releases: List<OnlineRelease>) : OnlineMetadataUiState()
     data class Error(val message: String) : OnlineMetadataUiState()

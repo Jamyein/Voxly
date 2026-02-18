@@ -19,8 +19,6 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -41,8 +39,10 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -133,42 +133,95 @@ fun FileBrowserScreen(
         initialFirstVisibleItemIndex = initialScrollPosition.index,
         initialFirstVisibleItemScrollOffset = initialScrollPosition.offset
     )
+    val canScrollToTop by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
+        }
+    }
     val coroutineScope = rememberCoroutineScope()
 
-    // Scroll detection threshold - increased to reduce frequent state changes
-    val ScrollHideThreshold = 30
+    // Scroll detection threshold - use accumulated delta to avoid flickering on item boundary jumps.
+    val scrollHideThreshold = 56
 
-    // Scroll detection for hiding/showing top bar and bottom bar
+    // Scroll detection for hiding/showing top bar and bottom bar.
     var isTopBarVisible by remember { mutableStateOf(true) }
-    var previousScrollOffset by remember { mutableIntStateOf(0) }
-    val canScrollToTop = listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
-
-    // Reset previousScrollOffset when switching directories
-    LaunchedEffect(currentListKey) {
-        previousScrollOffset = listState.firstVisibleItemScrollOffset
-        isTopBarVisible = true
-        onBottomBarVisibilityChange(true)
+    val topBarVisibilityProgress by animateFloatAsState(
+        targetValue = if (isTopBarVisible) 1f else 0f,
+        animationSpec = tween(durationMillis = 160),
+        label = "topBarVisibility"
+    )
+    var lastScrollIndex by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.index) }
+    var lastScrollOffset by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.offset) }
+    var accumulatedScrollDelta by remember(currentListKey) { mutableIntStateOf(0) }
+    val updateBarsVisibility: (Boolean) -> Unit = { visible ->
+        if (isTopBarVisible != visible) {
+            isTopBarVisible = visible
+            onBottomBarVisibilityChange(visible)
+        }
     }
-
+    
+    // Track scroll direction with hysteresis so top/bottom bars do not toggle rapidly.
     LaunchedEffect(listState) {
-        snapshotFlow { listState.firstVisibleItemScrollOffset }
-            .collect { currentOffset ->
-                if (visibleFiles.isEmpty()) return@collect
-                
-                val scrollDelta = currentOffset - previousScrollOffset
-                if (scrollDelta > ScrollHideThreshold) {
-                    isTopBarVisible = false
-                    onBottomBarVisibilityChange(false)
-                } else if (scrollDelta < -ScrollHideThreshold) {
-                    isTopBarVisible = true
-                    onBottomBarVisibilityChange(true)
+        snapshotFlow {
+            Triple(
+                listState.isScrollInProgress,
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset
+            )
+        }.distinctUntilChanged().collect { (isScrolling, index, offset) ->
+            if (!isScrolling) {
+                lastScrollIndex = index
+                lastScrollOffset = offset
+                accumulatedScrollDelta = 0
+                if (index == 0 && offset == 0) {
+                    updateBarsVisibility(true)
                 }
-                if (listState.firstVisibleItemIndex == 0 && currentOffset == 0) {
-                    isTopBarVisible = true
-                    onBottomBarVisibilityChange(true)
-                }
-                previousScrollOffset = currentOffset
+                return@collect
             }
+
+            val scrollDelta = when {
+                index > lastScrollIndex -> scrollHideThreshold + 1
+                index < lastScrollIndex -> -(scrollHideThreshold + 1)
+                else -> offset - lastScrollOffset
+            }
+
+            if (scrollDelta != 0) {
+                accumulatedScrollDelta = if (
+                    (accumulatedScrollDelta >= 0 && scrollDelta > 0) ||
+                    (accumulatedScrollDelta <= 0 && scrollDelta < 0)
+                ) {
+                    accumulatedScrollDelta + scrollDelta
+                } else {
+                    scrollDelta
+                }
+            }
+
+            when {
+                index == 0 && offset == 0 -> {
+                    updateBarsVisibility(true)
+                    accumulatedScrollDelta = 0
+                }
+                accumulatedScrollDelta > scrollHideThreshold -> {
+                    updateBarsVisibility(false)
+                    accumulatedScrollDelta = 0
+                }
+                accumulatedScrollDelta < -scrollHideThreshold -> {
+                    updateBarsVisibility(true)
+                    accumulatedScrollDelta = 0
+                }
+            }
+
+            lastScrollIndex = index
+            lastScrollOffset = offset
+        }
+    }
+    
+    // Reset visibility state when switching directories
+    LaunchedEffect(currentListKey) {
+        lastScrollIndex = initialScrollPosition.index
+        lastScrollOffset = initialScrollPosition.offset
+        accumulatedScrollDelta = 0
+        updateBarsVisibility(true)
     }
     
     // Show progress dialog when batch processing starts
@@ -246,10 +299,13 @@ fun FileBrowserScreen(
                     }
                 )
             } else {
-                AnimatedVisibility(
-                    visible = isTopBarVisible,
-                    enter = slideInVertically(initialOffsetY = { -it }),
-                    exit = slideOutVertically(targetOffsetY = { -it })
+                val density = LocalDensity.current
+                val topBarHideOffsetPx = with(density) { 120.dp.toPx() }
+                Box(
+                    modifier = Modifier.graphicsLayer {
+                        translationY = -(1f - topBarVisibilityProgress) * topBarHideOffsetPx
+                        alpha = topBarVisibilityProgress
+                    }
                 ) {
                     if (openedDirectory != null) {
                         TopAppBar(

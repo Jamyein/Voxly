@@ -357,18 +357,6 @@ fun MetadataEditorScreen(
                         viewModel.searchOnlineCoverCandidates()
                     }
                 )
-
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.search_online_lyrics)) },
-                    leadingContent = {
-                        Icon(Icons.Default.Search, contentDescription = null)
-                    },
-                    modifier = Modifier.clickable {
-                        showAlbumArtOptions = false
-                        showOnlineLyricsDialog = true
-                        viewModel.searchOnlineLyrics()
-                    }
-                )
             }
         }
     }

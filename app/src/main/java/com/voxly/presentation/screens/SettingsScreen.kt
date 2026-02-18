@@ -25,6 +25,276 @@ import com.voxly.R
 import com.voxly.core.util.LogManager
 import com.voxly.presentation.viewmodel.SettingsViewModel
 
+// ==================== Data Classes ====================
+
+data class LanguageOption(
+    @StringRes val labelResId: Int,
+    val languageTag: String?
+)
+
+data class ScanQualityOption(
+    val value: String,
+    @StringRes val labelResId: Int
+)
+
+data class ThemeModeOption(
+    val value: String,
+    @StringRes val labelResId: Int
+)
+
+data class AppleCountryOption(
+    val value: String,
+    @StringRes val labelResId: Int
+)
+
+data class SearchLimitOption(
+    val value: Int,
+    @StringRes val labelResId: Int? = null
+)
+
+// ==================== Helper Functions ====================
+
+fun resolveCurrentLanguageTag(): String? {
+    val locales = AppCompatDelegate.getApplicationLocales()
+    if (locales.isEmpty) {
+        return null
+    }
+    val firstTag = locales.toLanguageTags()
+        .split(",")
+        .firstOrNull()
+        ?.trim()
+        ?.ifBlank { null }
+        ?: return null
+    return when {
+        firstTag.startsWith("zh", ignoreCase = true) -> "zh-CN"
+        firstTag.startsWith("en", ignoreCase = true) -> "en"
+        else -> firstTag
+    }
+}
+
+fun normalizeLanguageTag(tag: String?): String? = tag?.lowercase()
+
+fun sourceToDisplayName(source: String): String = when (source) {
+    "itunes" -> "iTunes"
+    "musicbrainz" -> "MusicBrainz"
+    "netease" -> "NetEase"
+    "qq_music" -> "QQ Music"
+    else -> source
+}
+
+// ==================== Composable Helpers ====================
+
+@Composable
+fun SettingsSection(
+    title: String,
+    content: @Composable ColumnScope.() -> Unit
+) {
+    Column {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.padding(bottom = 8.dp)
+        )
+
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            )
+        ) {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                content = content
+            )
+        }
+    }
+}
+
+@Composable
+fun SettingsSwitch(
+    title: String,
+    subtitle: String,
+    checked: Boolean,
+    onCheckedChange: (Boolean) -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(text = title) },
+        supportingContent = { Text(text = subtitle) },
+        trailingContent = {
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange
+            )
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onCheckedChange(!checked) },
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    )
+}
+
+@Composable
+fun SettingsInfoRow(title: String, value: String) {
+    ListItem(
+        headlineContent = {
+            Text(
+                text = title,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        },
+        trailingContent = { Text(text = value) },
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    )
+}
+
+@Composable
+fun SettingsSubmenuRow(
+    title: String,
+    subtitle: String,
+    onClick: () -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(text = title) },
+        supportingContent = { Text(text = subtitle) },
+        trailingContent = {
+            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick),
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsDropdownRow(
+    title: String,
+    subtitle: String,
+    selectedLabel: String,
+    expanded: Boolean,
+    onExpandedChange: (Boolean) -> Unit,
+    menuContent: @Composable ColumnScope.() -> Unit
+) {
+    ListItem(
+        headlineContent = { Text(text = title) },
+        supportingContent = {
+            Text(
+                text = subtitle,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        trailingContent = {
+            ExposedDropdownMenuBox(
+                expanded = expanded,
+                onExpandedChange = onExpandedChange
+            ) {
+                OutlinedTextField(
+                    value = selectedLabel,
+                    onValueChange = {},
+                    readOnly = true,
+                    singleLine = true,
+                    textStyle = MaterialTheme.typography.bodyMedium,
+                    trailingIcon = {
+                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
+                    },
+                    modifier = Modifier
+                        .width(156.dp)
+                        .menuAnchor()
+                )
+
+                ExposedDropdownMenu(
+                    expanded = expanded,
+                    onDismissRequest = { onExpandedChange(false) },
+                    content = menuContent
+                )
+            }
+        },
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    )
+}
+
+@Composable
+fun SourcePriorityDialog(
+    title: String,
+    priority: List<String>,
+    onDismiss: () -> Unit,
+    onPriorityChange: (List<String>) -> Unit,
+    extraContent: @Composable ColumnScope.() -> Unit = {}
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(title) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_source_priority_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                priority.forEachIndexed { index, source ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(text = sourceToDisplayName(source))
+                        Row {
+                            IconButton(
+                                onClick = {
+                                    if (index > 0) {
+                                        val next = priority.toMutableList()
+                                        val temp = next[index - 1]
+                                        next[index - 1] = next[index]
+                                        next[index] = temp
+                                        onPriorityChange(next)
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Up")
+                            }
+                            IconButton(
+                                onClick = {
+                                    if (index < priority.lastIndex) {
+                                        val next = priority.toMutableList()
+                                        val temp = next[index + 1]
+                                        next[index + 1] = next[index]
+                                        next[index] = temp
+                                        onPriorityChange(next)
+                                    }
+                                }
+                            ) {
+                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Down")
+                            }
+                        }
+                    }
+                }
+                extraContent()
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_ok))
+            }
+        }
+    )
+}
+
+@Composable
+fun SearchLimitOption.displayLabel(): String {
+    return labelResId?.let { stringResource(it) } ?: value.toString()
+}
+
+// ==================== Main Settings Screen ====================
+
 /**
  * Settings screen for application preferences.
  */
@@ -357,7 +627,15 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             // ReplayGain Section
+            // ReplayGain target loudness preset values
+            val replayGainOptions = listOf(
+                -23f to "EBU R128 (-23 LUFS)",
+                -18f to "Streaming (-18 LUFS)",
+                -16f to "CD Standard (-16 LUFS)",
+                -14f to "Loud (-14 LUFS)"
+            )
             var replayGainExpanded by remember { mutableStateOf(false) }
+            var showReplayGainDialog by remember { mutableStateOf(false) }
             
             SettingsSection(title = stringResource(R.string.replay_gain_settings)) {
                 ListItem(
@@ -371,7 +649,7 @@ fun SettingsScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = String.format("%.1f LUFS", replayGainTargetLoudness),
+                                text = String.format("%.0f LUFS", replayGainTargetLoudness),
                                 style = MaterialTheme.typography.bodyLarge,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -383,27 +661,47 @@ fun SettingsScreen(
                         }
                     },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                    modifier = Modifier.clickable { replayGainExpanded = !replayGainExpanded }
+                    modifier = Modifier.clickable { showReplayGainDialog = true }
                 )
                 
-                if (replayGainExpanded) {
-                    Slider(
-                        value = replayGainTargetLoudness,
-                        onValueChange = { viewModel.setReplayGainTargetLoudness(it) },
-                        valueRange = -24f..-14f,
-                        steps = 10,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                // ReplayGain target loudness selection dialog
+                if (showReplayGainDialog) {
+                    AlertDialog(
+                        onDismissRequest = { showReplayGainDialog = false },
+                        title = { Text(stringResource(R.string.replay_gain_target_loudness)) },
+                        text = {
+                            Column {
+                                replayGainOptions.forEach { (value, label) ->
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .clickable {
+                                                viewModel.setReplayGainTargetLoudness(value)
+                                                showReplayGainDialog = false
+                                            }
+                                            .padding(vertical = 12.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        RadioButton(
+                                            selected = replayGainTargetLoudness == value,
+                                            onClick = {
+                                                viewModel.setReplayGainTargetLoudness(value)
+                                                showReplayGainDialog = false
+                                            }
+                                        )
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(label)
+                                    }
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(onClick = { showReplayGainDialog = false }) {
+                                Text(stringResource(R.string.dialog_cancel))
+                            }
+                        }
                     )
                 }
-                
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.replay_gain_scanner_title)) },
-                    supportingContent = { Text("View scan history and results") },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                    modifier = Modifier.clickable { /* Navigate to scan history */ }
-                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -549,265 +847,3 @@ fun SettingsScreen(
         )
     }
 }
-
-@Composable
-private fun SettingsSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                content = content
-            )
-        }
-    }
-}
-
-@Composable
-private fun SettingsSwitch(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    ListItem(
-        headlineContent = { Text(text = title) },
-        supportingContent = { Text(text = subtitle) },
-        trailingContent = {
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
-            )
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    )
-}
-
-@Composable
-private fun SettingsInfoRow(title: String, value: String) {
-    ListItem(
-        headlineContent = {
-            Text(
-                text = title,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        },
-        trailingContent = { Text(text = value) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    )
-}
-
-@Composable
-private fun SettingsSubmenuRow(
-    title: String,
-    subtitle: String,
-    onClick: () -> Unit
-) {
-    ListItem(
-        headlineContent = { Text(text = title) },
-        supportingContent = { Text(text = subtitle) },
-        trailingContent = {
-            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    )
-}
-
-@Composable
-private fun SourcePriorityDialog(
-    title: String,
-    priority: List<String>,
-    onDismiss: () -> Unit,
-    onPriorityChange: (List<String>) -> Unit,
-    extraContent: @Composable ColumnScope.() -> Unit = {}
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(max = 400.dp)
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Text(
-                    text = stringResource(R.string.settings_source_priority_hint),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                priority.forEachIndexed { index, source ->
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
-                    ) {
-                        Text(text = sourceToDisplayName(source))
-                        Row {
-                            IconButton(
-                                onClick = {
-                                    if (index > 0) {
-                                        val next = priority.toMutableList()
-                                        val temp = next[index - 1]
-                                        next[index - 1] = next[index]
-                                        next[index] = temp
-                                        onPriorityChange(next)
-                                    }
-                                }
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Up")
-                            }
-                            IconButton(
-                                onClick = {
-                                    if (index < priority.lastIndex) {
-                                        val next = priority.toMutableList()
-                                        val temp = next[index + 1]
-                                        next[index + 1] = next[index]
-                                        next[index] = temp
-                                        onPriorityChange(next)
-                                    }
-                                }
-                            ) {
-                                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Down")
-                            }
-                        }
-                    }
-                }
-                extraContent()
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.dialog_ok))
-            }
-        }
-    )
-}
-
-private fun sourceToDisplayName(source: String): String = when (source) {
-    "itunes" -> "iTunes"
-    "musicbrainz" -> "MusicBrainz"
-    "netease" -> "NetEase"
-    "qq_music" -> "QQ Music"
-    else -> source
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SettingsDropdownRow(
-    title: String,
-    subtitle: String,
-    selectedLabel: String,
-    expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
-    menuContent: @Composable ColumnScope.() -> Unit
-) {
-    ListItem(
-        headlineContent = { Text(text = title) },
-        supportingContent = {
-            Text(
-                text = subtitle,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis
-            )
-        },
-        trailingContent = {
-            ExposedDropdownMenuBox(
-                expanded = expanded,
-                onExpandedChange = onExpandedChange
-            ) {
-                OutlinedTextField(
-                    value = selectedLabel,
-                    onValueChange = {},
-                    readOnly = true,
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyMedium,
-                    trailingIcon = {
-                        ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded)
-                    },
-                    modifier = Modifier
-                        .width(156.dp)
-                        .menuAnchor()
-                )
-
-                ExposedDropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { onExpandedChange(false) },
-                    content = menuContent
-                )
-            }
-        },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-    )
-}
-
-private data class LanguageOption(
-    @StringRes val labelResId: Int,
-    val languageTag: String?
-)
-
-private data class ScanQualityOption(
-    val value: String,
-    @StringRes val labelResId: Int
-)
-
-private data class ThemeModeOption(
-    val value: String,
-    @StringRes val labelResId: Int
-)
-
-private data class AppleCountryOption(
-    val value: String,
-    @StringRes val labelResId: Int
-)
-
-private data class SearchLimitOption(
-    val value: Int,
-    @StringRes val labelResId: Int? = null
-)
-
-@Composable
-private fun SearchLimitOption.displayLabel(): String {
-    return labelResId?.let { stringResource(it) } ?: value.toString()
-}
-
-private fun resolveCurrentLanguageTag(): String? {
-    val locales = AppCompatDelegate.getApplicationLocales()
-    if (locales.isEmpty) {
-        return null
-    }
-    val firstTag = locales.toLanguageTags()
-        .split(",")
-        .firstOrNull()
-        ?.trim()
-        ?.ifBlank { null }
-        ?: return null
-    return when {
-        firstTag.startsWith("zh", ignoreCase = true) -> "zh-CN"
-        firstTag.startsWith("en", ignoreCase = true) -> "en"
-        else -> firstTag
-    }
-}
-
-private fun normalizeLanguageTag(tag: String?): String? = tag?.lowercase()

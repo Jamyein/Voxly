@@ -3,26 +3,35 @@
 package com.voxly.core.util
 
 import android.util.Log
+import com.voxly.BuildConfig
+import timber.log.Timber
 
 object Logger {
 
-    private var isInitialized = false
-    private var fileLoggingTree: FileLoggingTree? = null
-
-    fun init() {
-        if (isInitialized) return
-        isInitialized = true
-
-        fileLoggingTree = FileLoggingTree()
-    }
+    fun init() = Unit
 
     fun d(message: String, tag: String? = null) {
         if (!LogManager.isLoggingEnabled) return
+        if (!BuildConfig.DEBUG) return
         val resolvedTag = tag ?: "Voxly"
         if (LogManager.isConsoleLoggingEnabled) {
             Log.d(resolvedTag, message)
         }
-        fileLoggingTree?.log(Log.DEBUG, resolvedTag, message, null)
+        if (LogManager.isFileLoggingEnabled) {
+            Timber.tag(resolvedTag).d(message)
+        }
+    }
+
+    fun v(message: String, tag: String? = null) {
+        if (!LogManager.isLoggingEnabled) return
+        if (!BuildConfig.DEBUG) return
+        val resolvedTag = tag ?: "Voxly"
+        if (LogManager.isConsoleLoggingEnabled) {
+            Log.v(resolvedTag, message)
+        }
+        if (LogManager.isFileLoggingEnabled) {
+            Timber.tag(resolvedTag).v(message)
+        }
     }
 
     fun i(message: String, tag: String? = null) {
@@ -31,7 +40,9 @@ object Logger {
         if (LogManager.isConsoleLoggingEnabled) {
             Log.i(resolvedTag, message)
         }
-        fileLoggingTree?.log(Log.INFO, resolvedTag, message, null)
+        if (LogManager.isFileLoggingEnabled) {
+            Timber.tag(resolvedTag).i(message)
+        }
     }
 
     fun w(message: String, tag: String? = null) {
@@ -40,7 +51,9 @@ object Logger {
         if (LogManager.isConsoleLoggingEnabled) {
             Log.w(resolvedTag, message)
         }
-        fileLoggingTree?.log(Log.WARN, resolvedTag, message, null)
+        if (LogManager.isFileLoggingEnabled) {
+            Timber.tag(resolvedTag).w(message)
+        }
     }
 
     fun e(message: String, throwable: Throwable? = null, tag: String? = null) {
@@ -53,7 +66,13 @@ object Logger {
                 Log.e(resolvedTag, message)
             }
         }
-        fileLoggingTree?.log(Log.ERROR, resolvedTag, message, throwable)
+        if (LogManager.isFileLoggingEnabled) {
+            if (throwable != null) {
+                Timber.tag(resolvedTag).e(throwable, message)
+            } else {
+                Timber.tag(resolvedTag).e(message)
+            }
+        }
     }
 
     fun wtf(message: String, throwable: Throwable? = null) {
@@ -65,6 +84,12 @@ object Logger {
                 Log.wtf("Voxly", message)
             }
         }
-        fileLoggingTree?.log(Log.ASSERT, "Voxly", message, throwable)
+        if (LogManager.isFileLoggingEnabled) {
+            if (throwable != null) {
+                Timber.tag("Voxly").wtf(throwable, message)
+            } else {
+                Timber.tag("Voxly").wtf(message)
+            }
+        }
     }
 }

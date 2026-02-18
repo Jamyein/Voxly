@@ -22,6 +22,8 @@
         <domain includeSubdomains="true">y.gtimg.cn</domain>
         <!-- NetEase Cloud Music API -->
         <domain includeSubdomains="true">music.163.com</domain>
+        <!-- NetEase Cloud Music Images -->
+        <domain includeSubdomains="true">music.126.net</domain>
         <!-- Cover Art Archive -->
         <domain includeSubdomains="true">coverartarchive.org</domain>
         

@@ -75,6 +75,8 @@ data class TengxAlbumResult(
 data class TengxAlbum(
     /** Album ID */
     val id: Long,
+    /** Album MID (used by cover URL) */
+    val mid: String = "",
     /** Album name */
     val name: String,
     /** Album title */

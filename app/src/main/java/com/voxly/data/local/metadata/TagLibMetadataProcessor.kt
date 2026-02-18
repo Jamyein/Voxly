@@ -60,6 +60,33 @@ class TagLibMetadataProcessor @Inject constructor(
     )
 
     /**
+     * Normalizes a file path to handle common path issues.
+     * - Removes duplicate slashes
+     * - Removes trailing slashes
+     * - Resolves canonical path when possible
+     */
+    private fun normalizeFilePath(filePath: String): String {
+        return try {
+            // First, clean up obvious issues
+            var normalized = filePath
+                .replace(Regex("//+"), "/")  // Remove duplicate slashes
+                .trimEnd('/')                // Remove trailing slash
+            
+            // Try to get canonical path for proper path resolution
+            val file = File(normalized)
+            if (file.exists()) {
+                file.canonicalPath
+            } else {
+                // Try without canonical resolution - might be a path that needs SAF
+                normalized
+            }
+        } catch (e: Exception) {
+            // If anything fails, return cleaned original path
+            filePath.replace(Regex("//+"), "/").trimEnd('/')
+        }
+    }
+
+    /**
      * Reads metadata from an audio file.
      * @param filePath Path to the audio file
      * @param includeAlbumArt Whether to include album art bytes
@@ -70,85 +97,184 @@ class TagLibMetadataProcessor @Inject constructor(
         includeAlbumArt: Boolean = true
     ): AudioMetadata? = withContext(Dispatchers.IO) {
         try {
-            val file = File(filePath)
+            // Normalize the file path first
+            val normalizedPath = normalizeFilePath(filePath)
+            val file = File(normalizedPath)
+            
             if (!file.exists()) {
-                Log.w(TAG, "File does not exist: $filePath")
-                return@withContext null
-            }
-
-            // Get file descriptor - use dup.detachFd to give TagLib its own copy
-            // TagLib will close its copy, we close our ParcelFileDescriptor
-            val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-            val fdForTagLib = pfd.dup().detachFd()
-            
-            // Read metadata using TagLib - TagLib takes ownership and closes its copy
-            val metadata = try {
-                TagLib.getMetadata(fdForTagLib, readPictures = includeAlbumArt)
-            } catch (e: Exception) {
-                Log.w(TAG, "TagLib.getMetadata failed", e)
-                null
-            }
-
-            pfd.close()
-
-            if (metadata == null) {
-                Log.w(TAG, "Failed to read metadata: $filePath")
-                return@withContext null
-            }
-
-            val propertyMap = metadata.propertyMap
-
-            // Read custom fields
-            val customFields = mutableMapOf<String, String>()
-            propertyMap[CUSTOM_RECORD_LABEL]?.firstOrNull()?.let { customFields[CUSTOM_RECORD_LABEL] = it }
-            propertyMap[CUSTOM_ENCODER]?.firstOrNull()?.let { customFields[CUSTOM_ENCODER] = it }
-            propertyMap[CUSTOM_ISRC]?.firstOrNull()?.let { customFields[CUSTOM_ISRC] = it }
-            propertyMap[CUSTOM_COPYRIGHT]?.firstOrNull()?.let { customFields[CUSTOM_COPYRIGHT] = it }
-            
-            // Read ReplayGain fields
-            propertyMap[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN] = it }
-            propertyMap[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK] = it }
-            propertyMap[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = it }
-            propertyMap[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
-
-            // Get album art from pictures
-            val albumArt = if (includeAlbumArt) {
-                try {
-                    metadata.pictures.firstOrNull()?.data
-                } catch (e: Exception) {
-                    Log.w(TAG, "Failed to get album art: $filePath", e)
-                    null
+                // Try alternative path resolution strategies
+                val resolvedPath = resolveFilePath(filePath, file.name)
+                if (resolvedPath != null) {
+                    val resolvedFile = File(resolvedPath)
+                    if (resolvedFile.exists()) {
+                        return@withContext readMetadataFromFile(resolvedFile, includeAlbumArt)
+                    }
                 }
-            } else null
+                Log.w(TAG, "File does not exist: $filePath (normalized: $normalizedPath)")
+                return@withContext null
+            }
 
-            AudioMetadata(
-                title = propertyMap["TITLE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                artist = propertyMap["ARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                album = propertyMap["ALBUM"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                albumArtist = propertyMap["ALBUMARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                year = propertyMap["DATE"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
-                    ?: propertyMap["YEAR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                genre = propertyMap["GENRE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                trackNumber = propertyMap["TRACK"]?.firstOrNull()?.toIntOrNull(),
-                totalTracks = propertyMap["TRACKTOTAL"]?.firstOrNull()?.toIntOrNull() 
-                    ?: propertyMap["TOTALTRACKS"]?.firstOrNull()?.toIntOrNull(),
-                discNumber = propertyMap["DISCNUMBER"]?.firstOrNull()?.toIntOrNull(),
-                totalDiscs = propertyMap["DISCTOTAL"]?.firstOrNull()?.toIntOrNull() 
-                    ?: propertyMap["TOTALDISCS"]?.firstOrNull()?.toIntOrNull(),
-                composer = propertyMap["COMPOSER"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
-                    ?: propertyMap["AUTHOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                lyricist = propertyMap["LYRICIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                conductor = propertyMap["CONDUCTOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                originalArtist = propertyMap["ORIGINALARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                comment = propertyMap["COMMENT"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                lyrics = propertyMap["LYRICS"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                albumArt = albumArt,
-                customFields = customFields
-            )
+            readMetadataFromFile(file, includeAlbumArt)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to read metadata: $filePath", e)
             null
         }
+    }
+
+    /**
+     * Attempts to resolve a file path by searching in likely locations.
+     * This handles cases where MediaStore paths become stale.
+     */
+    private fun resolveFilePath(originalPath: String, fileName: String): String? {
+        try {
+            // Strategy 1: Try removing double slashes
+            val cleanedPath = originalPath.replace(Regex("//+"), "/")
+            if (File(cleanedPath).exists()) return cleanedPath
+
+            // Strategy 2: Try common base directories
+            val baseDirs = listOf(
+                "/storage/emulated/0",
+                "/storage/emulated/0/",
+                "/sdcard",
+                "/sdcard/"
+            )
+            
+            // Extract relative path components
+            val pathParts = originalPath
+                .replace(Regex("//+"), "/")
+                .trimStart('/')
+                .split('/')
+                .filter { it.isNotBlank() }
+            
+            for (baseDir in baseDirs) {
+                val candidatePath = "$baseDir/${pathParts.joinToString("/")}"
+                if (File(candidatePath).exists()) {
+                    return candidatePath
+                }
+            }
+
+            // Strategy 3: Search in common directories for the file
+            val searchDirs = listOf(
+                "/storage/emulated/0/Music",
+                "/storage/emulated/0/Download",
+                "/storage/emulated/0/Downloads",
+                "/storage/emulated/0/Ringtones",
+                "/storage/emulated/0/Podcasts",
+                "/storage/emulated/0/Audiobooks",
+                "/storage/emulated/0",
+                "/sdcard/Music",
+                "/sdcard/Download",
+                "/sdcard"
+            )
+            
+            for (searchDir in searchDirs) {
+                val dir = File(searchDir)
+                if (dir.exists() && dir.isDirectory) {
+                    // Recursively search for the file (limited depth)
+                    val found = searchForFile(dir, fileName, currentDepth = 0, maxDepth = 3)
+                    if (found != null) return found.absolutePath
+                }
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "Path resolution failed for: $originalPath", e)
+        }
+        return null
+    }
+
+    /**
+     * Recursively searches for a file by name in a directory.
+     */
+    private fun searchForFile(directory: File, targetName: String, currentDepth: Int, maxDepth: Int): File? {
+        if (currentDepth > maxDepth) return null
+        
+        try {
+            directory.listFiles()?.forEach { file ->
+                if (file.isDirectory && !file.isHidden) {
+                    val result = searchForFile(file, targetName, currentDepth + 1, maxDepth)
+                    if (result != null) return result
+                } else if (file.isFile && file.name == targetName) {
+                    return file
+                }
+            }
+        } catch (e: SecurityException) {
+            // Skip directories we can't access
+        }
+        return null
+    }
+
+    /**
+     * Reads metadata from a File object.
+     */
+    private fun readMetadataFromFile(file: File, includeAlbumArt: Boolean): AudioMetadata? {
+        // Get file descriptor - use dup.detachFd to give TagLib its own copy
+        // TagLib will close its copy, we close our ParcelFileDescriptor
+        val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        val fdForTagLib = pfd.dup().detachFd()
+        
+        // Read metadata using TagLib - TagLib takes ownership and closes its copy
+        val metadata = try {
+            TagLib.getMetadata(fdForTagLib, readPictures = includeAlbumArt)
+        } catch (e: Exception) {
+            Log.w(TAG, "TagLib.getMetadata failed", e)
+            null
+        }
+
+        pfd.close()
+
+        if (metadata == null) {
+            Log.w(TAG, "Failed to read metadata: ${file.absolutePath}")
+            return null
+        }
+
+        val propertyMap = metadata.propertyMap
+
+        // Read custom fields
+        val customFields = mutableMapOf<String, String>()
+        propertyMap[CUSTOM_RECORD_LABEL]?.firstOrNull()?.let { customFields[CUSTOM_RECORD_LABEL] = it }
+        propertyMap[CUSTOM_ENCODER]?.firstOrNull()?.let { customFields[CUSTOM_ENCODER] = it }
+        propertyMap[CUSTOM_ISRC]?.firstOrNull()?.let { customFields[CUSTOM_ISRC] = it }
+        propertyMap[CUSTOM_COPYRIGHT]?.firstOrNull()?.let { customFields[CUSTOM_COPYRIGHT] = it }
+        
+        // Read ReplayGain fields
+        propertyMap[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN] = it }
+        propertyMap[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK] = it }
+        propertyMap[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = it }
+        propertyMap[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
+
+        // Get album art from pictures
+        val albumArt = if (includeAlbumArt) {
+            try {
+                metadata.pictures.firstOrNull()?.data
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to get album art: ${file.absolutePath}", e)
+                null
+            }
+        } else null
+
+        return AudioMetadata(
+            title = propertyMap["TITLE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            artist = propertyMap["ARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            album = propertyMap["ALBUM"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            albumArtist = propertyMap["ALBUMARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            year = propertyMap["DATE"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
+                ?: propertyMap["YEAR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            genre = propertyMap["GENRE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            trackNumber = propertyMap["TRACK"]?.firstOrNull()?.toIntOrNull(),
+            totalTracks = propertyMap["TRACKTOTAL"]?.firstOrNull()?.toIntOrNull() 
+                ?: propertyMap["TOTALTRACKS"]?.firstOrNull()?.toIntOrNull(),
+            discNumber = propertyMap["DISCNUMBER"]?.firstOrNull()?.toIntOrNull(),
+            totalDiscs = propertyMap["DISCTOTAL"]?.firstOrNull()?.toIntOrNull() 
+                ?: propertyMap["TOTALDISCS"]?.firstOrNull()?.toIntOrNull(),
+            composer = propertyMap["COMPOSER"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
+                ?: propertyMap["AUTHOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            lyricist = propertyMap["LYRICIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            conductor = propertyMap["CONDUCTOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            originalArtist = propertyMap["ORIGINALARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            comment = propertyMap["COMMENT"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            lyrics = propertyMap["LYRICS"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            albumArt = albumArt,
+            customFields = customFields
+        )
     }
 
     /**
@@ -188,9 +314,19 @@ class TagLibMetadataProcessor @Inject constructor(
      */
     private fun updateMetadataDirect(filePath: String, metadata: AudioMetadata): Result<Unit> {
         return try {
-            val file = File(filePath)
+            // Normalize the file path first
+            val normalizedPath = normalizeFilePath(filePath)
+            var file = File(normalizedPath)
+            
             if (!file.exists()) {
-                return Result.failure(IllegalStateException("File does not exist: $filePath"))
+                // Try alternative path resolution
+                val resolvedPath = resolveFilePath(filePath, file.name)
+                if (resolvedPath != null) {
+                    file = File(resolvedPath)
+                }
+                if (!file.exists()) {
+                    return Result.failure(IllegalStateException("File does not exist: $filePath"))
+                }
             }
 
             // Get file descriptor for writing - use MODE_READ_WRITE as TagLib needs to read while modifying
@@ -398,8 +534,18 @@ class TagLibMetadataProcessor @Inject constructor(
      */
     suspend fun extractAlbumArt(filePath: String): ByteArray? = withContext(Dispatchers.IO) {
         try {
-            val file = File(filePath)
-            if (!file.exists()) return@withContext null
+            // Normalize the file path first
+            val normalizedPath = normalizeFilePath(filePath)
+            var file = File(normalizedPath)
+            
+            if (!file.exists()) {
+                // Try alternative path resolution
+                val resolvedPath = resolveFilePath(filePath, file.name)
+                if (resolvedPath != null) {
+                    file = File(resolvedPath)
+                }
+                if (!file.exists()) return@withContext null
+            }
 
             val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             val fdForTagLib = pfd.dup().detachFd()
@@ -420,8 +566,18 @@ class TagLibMetadataProcessor @Inject constructor(
      */
     suspend fun readAudioInfo(filePath: String): AudioInfo? = withContext(Dispatchers.IO) {
         try {
-            val file = File(filePath)
-            if (!file.exists()) return@withContext null
+            // Normalize the file path first
+            val normalizedPath = normalizeFilePath(filePath)
+            var file = File(normalizedPath)
+            
+            if (!file.exists()) {
+                // Try alternative path resolution
+                val resolvedPath = resolveFilePath(filePath, file.name)
+                if (resolvedPath != null) {
+                    file = File(resolvedPath)
+                }
+                if (!file.exists()) return@withContext null
+            }
 
             val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
             val fdForTagLib = pfd.dup().detachFd()

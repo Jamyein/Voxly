@@ -1,6 +1,7 @@
 package com.voxly.core.util
 
 import android.util.Log
+import com.voxly.BuildConfig
 import timber.log.Timber
 import java.io.File
 import java.io.FileInputStream
@@ -43,6 +44,7 @@ class FileLoggingTree : Timber.Tree() {
 
     override fun log(priority: Int, tag: String?, message: String, t: Throwable?) {
         if (!LogManager.isFileLoggingEnabled) return
+        if (!BuildConfig.DEBUG && (priority == Log.VERBOSE || priority == Log.DEBUG)) return
 
         val entry = LogEntry(
             timestamp = System.currentTimeMillis(),

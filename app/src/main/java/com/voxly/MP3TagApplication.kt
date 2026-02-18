@@ -4,6 +4,7 @@ import android.app.Application
 import com.voxly.core.util.CrashHandler
 import com.voxly.core.util.FileLoggingTree
 import com.voxly.core.util.LogManager
+import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.flow.first
@@ -29,6 +30,7 @@ class MP3TagApplication : Application() {
         // Initialize LogManager first
         LogManager.init(this)
         applyLoggingSettings()
+        Logger.init()
 
         // Always plant file logging tree - it checks isFileLoggingEnabled internally
         fileLoggingTree = FileLoggingTree()
