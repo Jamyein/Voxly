@@ -14,6 +14,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.Normalizer
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -348,7 +349,11 @@ class TagLibMetadataProcessor @Inject constructor(
                     Log.d(TAG, "SAF write successful: $filePath")
                     return@withContext safResult
                 }
-                Log.w(TAG, "SAF write failed, trying direct access: $filePath", safResult.exceptionOrNull())
+                Log.w(
+                    TAG,
+                    "SAF write failed, trying direct access: $filePath, reason=${safResult.exceptionOrNull()?.message}",
+                    safResult.exceptionOrNull()
+                )
             }
 
             // Direct file access for internal storage
@@ -817,20 +822,47 @@ class TagLibMetadataProcessor @Inject constructor(
 
     private fun queryMediaStoreUriByPath(filePath: String): Uri? {
         return runCatching {
-            val cursor = context.contentResolver.query(
-                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                arrayOf(MediaStore.Audio.Media._ID),
-                "${MediaStore.Audio.Media.DATA} = ?",
-                arrayOf(filePath),
-                null
-            )
-            cursor?.use {
-                if (it.moveToFirst()) {
-                    val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID))
-                    return@runCatching ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+            fun queryBySelection(selection: String, selectionArgs: Array<String>): Uri? {
+                val cursor = context.contentResolver.query(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.Audio.Media._ID),
+                    selection,
+                    selectionArgs,
+                    null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID))
+                        return ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
+                    }
                 }
+                return null
             }
-            null
+
+            // Legacy fast path
+            queryBySelection(
+                "${MediaStore.Audio.Media.DATA} = ?",
+                arrayOf(filePath)
+            )?.let { return@runCatching it }
+
+            // Scoped-storage friendly fallback
+            val file = File(filePath)
+            val fileName = file.name
+            val relativePath = file.parentFile?.absolutePath
+                ?.removePrefix("/storage/emulated/0/")
+                ?.trim('/')
+                ?.let { if (it.isBlank()) "" else "$it/" }
+                ?: ""
+
+            queryBySelection(
+                "${MediaStore.Audio.Media.DISPLAY_NAME} = ? AND ${MediaStore.Audio.Media.RELATIVE_PATH} = ?",
+                arrayOf(fileName, relativePath)
+            )?.let { return@runCatching it }
+
+            queryBySelection(
+                "${MediaStore.Audio.Media.DISPLAY_NAME} = ?",
+                arrayOf(fileName)
+            )
         }.getOrNull()
     }
 
@@ -838,15 +870,29 @@ class TagLibMetadataProcessor @Inject constructor(
      * Finds document URI in tree
      */
     private fun findDocumentUriInTree(treeUri: Uri, relativePath: String): Uri? {
-        var currentDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
+        val rootDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
         if (relativePath.isBlank()) {
-            return DocumentsContract.buildDocumentUriUsingTree(treeUri, currentDocId)
+            return DocumentsContract.buildDocumentUriUsingTree(treeUri, rootDocId)
+        }
+
+        // Try direct document-id composition first (faster and more robust for special chars).
+        val normalizedRelative = relativePath.trim('/').replace('\\', '/')
+        val directDocId = "$rootDocId/$normalizedRelative"
+        val directUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, directDocId)
+        val directReadable = runCatching {
+            context.contentResolver.openFileDescriptor(directUri, "r")?.use { }
+            true
+        }.getOrDefault(false)
+        if (directReadable) {
+            return directUri
         }
         
+        var currentDocId = rootDocId
         val segments = relativePath.split('/').filter { it.isNotBlank() }
         for (segment in segments) {
             val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, currentDocId)
             var nextDocId: String? = null
+            val normalizedSegment = Normalizer.normalize(segment, Normalizer.Form.NFC)
             
             context.contentResolver.query(
                 childrenUri,
@@ -859,7 +905,9 @@ class TagLibMetadataProcessor @Inject constructor(
                 val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
                 val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
                 while (cursor.moveToNext()) {
-                    if (cursor.getString(nameIndex) == segment) {
+                    val displayName = cursor.getString(nameIndex)
+                    val normalizedName = Normalizer.normalize(displayName ?: "", Normalizer.Form.NFC)
+                    if (normalizedName == normalizedSegment) {
                         nextDocId = cursor.getString(idIndex)
                         break
                     }

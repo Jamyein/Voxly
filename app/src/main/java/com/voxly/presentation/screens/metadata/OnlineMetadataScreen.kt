@@ -57,6 +57,7 @@ fun OnlineMetadataScreen(
     val searchResults by viewModel.searchResults.collectAsState()
     val searchState by viewModel.searchState.collectAsState()
     val selectedRelease by viewModel.selectedRelease.collectAsState()
+    val selectedReleaseCandidate by viewModel.selectedReleaseCandidate.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val query by viewModel.searchQuery.collectAsState()
 
@@ -135,20 +136,26 @@ fun OnlineMetadataScreen(
                 }
             }
 
-            if (selectedRelease != null) {
+            if (selectedRelease != null || selectedReleaseCandidate != null) {
+                val selectedTitle = selectedRelease?.title
+                    ?: selectedReleaseCandidate?.albumTitle
+                    ?: selectedReleaseCandidate?.title
+                    .orEmpty()
+                val selectedArtist = selectedRelease?.artist ?: selectedReleaseCandidate?.artist.orEmpty()
+                val selectedTrackCount = selectedRelease?.trackCount ?: selectedReleaseCandidate?.trackCount ?: 0
                 Spacer(modifier = Modifier.height(12.dp))
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            text = "Album: ${selectedRelease?.title.orEmpty()}",
+                            text = "Album: $selectedTitle",
                             style = MaterialTheme.typography.titleMedium
                         )
                         Text(
-                            text = selectedRelease?.artist.orEmpty(),
+                            text = selectedArtist,
                             style = MaterialTheme.typography.bodyMedium
                         )
                         Text(
-                            text = "Tracks: ${selectedRelease?.trackCount ?: 0}  File: ${filePath.substringAfterLast('/')}",
+                            text = "Tracks: $selectedTrackCount  File: ${filePath.substringAfterLast('/')}",
                             style = MaterialTheme.typography.bodySmall
                         )
                         Spacer(modifier = Modifier.height(12.dp))

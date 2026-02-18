@@ -52,6 +52,9 @@ class OnlineMetadataViewModel @Inject constructor(
     private val _selectedRelease = MutableStateFlow<OnlineReleaseDetails?>(null)
     val selectedRelease: StateFlow<OnlineReleaseDetails?> = _selectedRelease.asStateFlow()
 
+    private val _selectedReleaseCandidate = MutableStateFlow<OnlineRelease?>(null)
+    val selectedReleaseCandidate: StateFlow<OnlineRelease?> = _selectedReleaseCandidate.asStateFlow()
+
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
@@ -413,6 +416,8 @@ class OnlineMetadataViewModel @Inject constructor(
     private fun isSearchOutdated(searchId: Long): Boolean = searchId != activeSearchId
 
     fun selectRelease(release: OnlineRelease) {
+        _selectedReleaseCandidate.value = release
+        _selectedRelease.value = null
         selectedSyncedLyrics = _syncedLyricsByReleaseId.value[release.id]
         viewModelScope.launch {
             _isLoading.value = true
@@ -424,9 +429,8 @@ class OnlineMetadataViewModel @Inject constructor(
                         _selectedRelease.value = details
                     },
                     onFailure = { error ->
-                        _uiState.value = OnlineMetadataUiState.Error(
-                            error.message ?: "Failed to get release details"
-                        )
+                        // Keep selected candidate so user can still apply basic metadata.
+                        _selectedRelease.value = null
                     }
                 )
             } finally {
@@ -448,23 +452,39 @@ class OnlineMetadataViewModel @Inject constructor(
     }
 
     fun applyMetadata(): AudioMetadata? {
-        val details = _selectedRelease.value ?: return null
+        val details = _selectedRelease.value
+        val fallback = _selectedReleaseCandidate.value
         val lyrics = selectedSyncedLyrics
+
+        if (details == null && fallback == null) return null
+
+        val title = details?.tracks?.find { it.number == 1 }?.title
+            ?: fallback?.songTitle
+            ?: details?.title
+            ?: fallback?.title
+
+        val artist = details?.artist ?: fallback?.artist
+        val album = details?.title ?: fallback?.albumTitle ?: fallback?.title
+        val year = details?.year?.toString() ?: fallback?.year?.toString()
+        val trackNumber = details?.tracks?.firstOrNull()?.number ?: 1
+        val totalTracks = details?.trackCount ?: fallback?.trackCount
+
         return AudioMetadata(
-            title = details.tracks.find { it.number == 1 }?.title ?: details.title,
-            artist = details.artist,
-            album = details.title,
-            albumArtist = details.artist,
-            year = details.year?.toString(),
-            genre = details.genre,
-            trackNumber = 1,
-            totalTracks = details.trackCount,
+            title = title,
+            artist = artist,
+            album = album,
+            albumArtist = artist,
+            year = year,
+            genre = details?.genre,
+            trackNumber = trackNumber,
+            totalTracks = totalTracks,
             lyrics = lyrics?.toLrcFormat()
         )
     }
 
     fun clearSelection() {
         _selectedRelease.value = null
+        _selectedReleaseCandidate.value = null
         selectedSyncedLyrics = null
     }
 

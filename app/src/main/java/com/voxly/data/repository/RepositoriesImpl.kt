@@ -140,11 +140,44 @@ class AudioRepositoryImpl @Inject constructor(
                     metadata = AudioMetadata()
                 )
 
+                val mediaStoreFallbackMetadata = runCatching {
+                    val selection = "${MediaStore.Audio.Media.DATA} = ?"
+                    val cursor = context.contentResolver.query(
+                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                        arrayOf(
+                            MediaStore.Audio.Media.TITLE,
+                            MediaStore.Audio.Media.ARTIST,
+                            MediaStore.Audio.Media.ALBUM,
+                            MediaStore.Audio.Media.YEAR,
+                            MediaStore.Audio.Media.TRACK
+                        ),
+                        selection,
+                        arrayOf(filePath),
+                        null
+                    )
+                    cursor?.use {
+                        if (it.moveToFirst()) {
+                            AudioMetadata(
+                                title = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE))
+                                    ?.takeIf { value -> value.isNotBlank() },
+                                artist = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST))
+                                    ?.takeIf { value -> value.isNotBlank() },
+                                album = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM))
+                                    ?.takeIf { value -> value.isNotBlank() },
+                                year = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR))
+                                    ?.takeIf { value -> value.isNotBlank() },
+                                trackNumber = it.getInt(it.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK))
+                                    .takeIf { value -> value > 0 }
+                            )
+                        } else null
+                    }
+                }.getOrNull()
+
                 // Read detailed metadata
                 val detailedMetadata = metadataProcessor.readMetadata(filePath)
 
                 val enhancedAudioFile = audioFile.copy(
-                    metadata = detailedMetadata ?: AudioMetadata()
+                    metadata = detailedMetadata ?: mediaStoreFallbackMetadata ?: AudioMetadata()
                 )
 
                 Result.success(enhancedAudioFile)
