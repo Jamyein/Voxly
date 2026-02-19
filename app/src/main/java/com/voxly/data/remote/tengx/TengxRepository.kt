@@ -31,7 +31,7 @@ interface TengxRepository {
      * Searches for songs by keywords.
      *
      * @param keywords Search keywords
-     * @param pageNum Page number (0-indexed)
+     * @param pageNum Page number (1-indexed)
      * @param pageSize Results per page (default: 20)
      * @param type Search type: 0=song, 2=album, 3=singer
      * @return Search response or error
@@ -100,25 +100,64 @@ class TengxRepositoryImpl(
         pageSize: Int,
         type: Int
     ): Result<TengxSearchResponse> {
-        return try {
-            val v2Response = api.searchV2(body = buildV2RequestBody(keywords, pageNum, pageSize, type))
-            if (v2Response.isSuccessful && v2Response.body() != null) {
-                parseV2SearchResponse(v2Response.body()!!)?.let { return Result.success(it) }
-            }
+        val normalizedPage = if (pageNum <= 0) 1 else pageNum
+        val normalizedSize = pageSize.coerceIn(1, 50)
+        val failures = mutableListOf<String>()
+        var emptySuccess: TengxSearchResponse? = null
 
+        // Try both known web-search methods. QQ occasionally deprecates one side.
+        val v2Methods = listOf("DoSearchForQQMusicDesktop", "DoSearchForQQMusicMobile")
+        for (method in v2Methods) {
+            try {
+                val v2Response = api.searchV2(
+                    body = buildV2RequestBody(
+                        keywords = keywords,
+                        pageNum = normalizedPage,
+                        pageSize = normalizedSize,
+                        type = type,
+                        method = method
+                    )
+                )
+                val body = v2Response.body()
+                if (v2Response.isSuccessful && body != null) {
+                    parseV2SearchResponse(body)?.let { parsed ->
+                        if (!parsed.data?.song?.list.isNullOrEmpty()) {
+                            return Result.success(parsed)
+                        }
+                        if (emptySuccess == null) {
+                            emptySuccess = parsed
+                        }
+                    }
+                }
+                failures.add("v2:$method http=${v2Response.code()}")
+            } catch (e: Exception) {
+                failures.add("v2:$method ex=${e.message ?: "unknown"}")
+            }
+        }
+
+        return try {
             // Fallback to legacy endpoint if v2 response cannot be parsed.
             val legacyResponse = api.search(
                 keyword = keywords,
-                page = pageNum + 1,
-                perPage = pageSize
+                page = normalizedPage,
+                perPage = normalizedSize
             )
             if (legacyResponse.isSuccessful && legacyResponse.body() != null) {
-                Result.success(legacyResponse.body()!!)
+                val body = legacyResponse.body()!!
+                if (!body.data?.song?.list.isNullOrEmpty()) {
+                    Result.success(body)
+                } else {
+                    emptySuccess?.let { Result.success(it) } ?: Result.success(body)
+                }
             } else {
-                Result.failure(Exception("QQ Music search failed: v2=${v2Response.code()}, legacy=${legacyResponse.code()}"))
+                failures.add("legacy http=${legacyResponse.code()}")
+                emptySuccess?.let { Result.success(it) }
+                    ?: Result.failure(Exception("QQ Music search failed: ${failures.joinToString(" | ")}"))
             }
         } catch (e: Exception) {
-            Result.failure(e)
+            failures.add("legacy ex=${e.message ?: "unknown"}")
+            emptySuccess?.let { Result.success(it) }
+                ?: Result.failure(Exception("QQ Music search failed: ${failures.joinToString(" | ")}"))
         }
     }
 
@@ -206,7 +245,8 @@ class TengxRepositoryImpl(
         keywords: String,
         pageNum: Int,
         pageSize: Int,
-        type: Int
+        type: Int,
+        method: String
     ): Map<String, Any> {
         return mapOf(
             "comm" to mapOf(
@@ -216,7 +256,7 @@ class TengxRepositoryImpl(
             ),
             "req_1" to mapOf(
                 "module" to "music.search.SearchCgiService",
-                "method" to "DoSearchForQQMusicDesktop",
+                "method" to method,
                 "param" to mapOf(
                     "query" to keywords,
                     "search_type" to type,
@@ -228,13 +268,19 @@ class TengxRepositoryImpl(
     }
 
     private fun parseV2SearchResponse(root: JsonObject): TengxSearchResponse? {
-        val req = root.optObject("req_1") ?: root
+        val req = root.optObject("req_1")
+            ?: root.optObject("req")
+            ?: root.firstNestedObject()
+            ?: root
         val reqCode = req.optInt("code") ?: root.optInt("code") ?: 0
         if (reqCode != 0) return null
 
-        val data = req.optObject("data") ?: return null
+        val data = req.optObject("data") ?: req
         val body = data.optObject("body") ?: data
-        val songNode = body.optObject("song") ?: return null
+        val songNode = body.optObject("song")
+            ?: data.optObject("song")
+            ?: req.optObject("song")
+            ?: return null
         val songList = songNode.optArray("list") ?: JsonArray()
 
         val songs = songList.mapNotNull { it.asJsonObjectOrNull() }.mapNotNull { item ->
@@ -319,6 +365,13 @@ class TengxRepositoryImpl(
     private fun JsonObject.optObject(name: String): JsonObject? {
         val element = get(name) ?: return null
         return if (element.isJsonObject) element.asJsonObject else null
+    }
+
+    private fun JsonObject.firstNestedObject(): JsonObject? {
+        for ((_, value) in entrySet()) {
+            if (value.isJsonObject) return value.asJsonObject
+        }
+        return null
     }
 
     private fun JsonObject.optArray(name: String): JsonArray? {

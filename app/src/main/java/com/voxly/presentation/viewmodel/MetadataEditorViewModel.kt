@@ -592,7 +592,7 @@ class MetadataEditorViewModel @Inject constructor(
 
     private fun decodeNavArg(value: String?): String {
         val raw = value ?: return ""
-        if (!raw.contains("%")) return raw
+        if (!raw.contains('%') && !raw.contains('+')) return raw
         return runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
     }
 }

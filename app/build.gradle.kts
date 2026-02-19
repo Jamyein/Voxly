@@ -18,6 +18,8 @@ private val signingKeyAlias: String = signingProps.getProperty("RELEASE_KEY_ALIA
     ?: "voxly"
 private val signingEnabled: Boolean =
     !signingStorePassword.isNullOrBlank() && !signingKeyPassword.isNullOrBlank()
+private val isCiBuild: Boolean = System.getenv("CI").equals("true", ignoreCase = true)
+private val debugUseReleaseSigning: Boolean = isCiBuild && signingEnabled
 
 plugins {
     id("com.android.application")
@@ -34,8 +36,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 28
         targetSdk = 36
-        versionCode = 6
-        versionName = "0.3.4"
+        versionCode = 7
+        versionName = "0.3.5"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -48,7 +50,8 @@ android {
 
     signingConfigs {
         create("release") {
-            storeFile = file("voxly-release.keystore")
+            storeFile = rootProject.file("voxly-release.keystore").takeIf { it.exists() }
+                ?: file("voxly-release.keystore")
             storePassword = signingStorePassword ?: ""
             keyAlias = signingKeyAlias
             keyPassword = signingKeyPassword ?: ""
@@ -59,6 +62,9 @@ android {
         debug {
             isMinifyEnabled = false
             isShrinkResources = false
+            if (debugUseReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
 
         create("dist") {
@@ -139,6 +145,12 @@ extensions.configure<ApplicationAndroidComponentsExtension>("androidComponents")
                 "Signing is required for $buildTypeName builds. " +
                     "Set RELEASE_STORE_PASSWORD/RELEASE_KEY_PASSWORD in local.properties " +
                     "or SIGNING_STORE_PASSWORD/SIGNING_KEY_PASSWORD in environment."
+            )
+        }
+        if (buildTypeName == "debug" && isCiBuild && !signingEnabled) {
+            throw GradleException(
+                "CI debug build requires release signing. " +
+                    "Set SIGNING_STORE_PASSWORD/SIGNING_KEY_PASSWORD in environment."
             )
         }
     }

@@ -39,10 +39,8 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,8 +63,10 @@ import com.voxly.presentation.viewmodel.FileBrowserUiState
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 
 /**
  * File browser screen for browsing and selecting audio files.
@@ -129,6 +129,7 @@ fun FileBrowserScreen(
     val initialScrollPosition = remember(currentListKey) {
         viewModel.getScrollPosition(currentListKey)
     }
+    val albumArtCache = remember { mutableMapOf<String, android.graphics.Bitmap?>() }
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = initialScrollPosition.index,
         initialFirstVisibleItemScrollOffset = initialScrollPosition.offset
@@ -145,11 +146,6 @@ fun FileBrowserScreen(
 
     // Scroll detection for hiding/showing top bar and bottom bar.
     var isTopBarVisible by remember { mutableStateOf(true) }
-    val topBarVisibilityProgress by animateFloatAsState(
-        targetValue = if (isTopBarVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 160),
-        label = "topBarVisibility"
-    )
     var lastScrollIndex by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.index) }
     var lastScrollOffset by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.offset) }
     var accumulatedScrollDelta by remember(currentListKey) { mutableIntStateOf(0) }
@@ -272,12 +268,24 @@ fun FileBrowserScreen(
         }
     }
     LaunchedEffect(currentListKey, listState) {
-        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
-            .map { (index, offset) -> Triple(currentListKey, index, offset) }
-            .distinctUntilChanged()
-            .collect { (key, index, offset) ->
-                viewModel.saveScrollPosition(key, index, offset)
+        var lastSavedIndex = initialScrollPosition.index
+        var lastSavedOffset = initialScrollPosition.offset
+        snapshotFlow {
+            Triple(
+                listState.isScrollInProgress,
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset
+            )
+        }.distinctUntilChanged().collect { (isScrolling, index, offset) ->
+            val shouldSave = !isScrolling ||
+                index != lastSavedIndex ||
+                abs(offset - lastSavedOffset) >= 48
+            if (shouldSave) {
+                viewModel.saveScrollPosition(currentListKey, index, offset)
+                lastSavedIndex = index
+                lastSavedOffset = offset
             }
+        }
     }
     BackHandler(enabled = openedDirectory != null && selectedFiles.isEmpty()) {
         viewModel.closeOpenedDirectory()
@@ -299,13 +307,10 @@ fun FileBrowserScreen(
                     }
                 )
             } else {
-                val density = LocalDensity.current
-                val topBarHideOffsetPx = with(density) { 120.dp.toPx() }
-                Box(
-                    modifier = Modifier.graphicsLayer {
-                        translationY = -(1f - topBarVisibilityProgress) * topBarHideOffsetPx
-                        alpha = topBarVisibilityProgress
-                    }
+                AnimatedVisibility(
+                    visible = isTopBarVisible,
+                    enter = fadeIn(animationSpec = tween(160)) + expandVertically(),
+                    exit = fadeOut(animationSpec = tween(130)) + shrinkVertically()
                 ) {
                     if (openedDirectory != null) {
                         TopAppBar(
@@ -476,6 +481,7 @@ fun FileBrowserScreen(
                                 AudioFileList(
                                     files = filesToShow,
                                     listState = listState,
+                                    albumArtCache = albumArtCache,
                                     selectedFiles = selectedFiles,
                                     onFileClick = { audioFile ->
                                         if (selectedFiles.isNotEmpty()) {
@@ -1617,6 +1623,7 @@ private fun ErrorContent(message: String) {
 private fun AudioFileList(
     files: List<AudioFile>,
     listState: androidx.compose.foundation.lazy.LazyListState,
+    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     selectedFiles: Set<String>,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
@@ -1634,6 +1641,7 @@ private fun AudioFileList(
         items(files, key = { it.path }) { audioFile ->
             AudioFileItem(
                 audioFile = audioFile,
+                albumArtCache = albumArtCache,
                 isSelected = audioFile.path in selectedFiles,
                 onClick = { onFileClick(audioFile) },
                 onLongClick = { onFileLongClick(audioFile) },
@@ -1652,6 +1660,7 @@ private fun AudioFileList(
 @OptIn(ExperimentalFoundationApi::class)
 private fun AudioFileItem(
     audioFile: AudioFile,
+    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     isSelected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -1693,14 +1702,27 @@ private fun AudioFileItem(
                     .clip(RoundedCornerShape(8.dp)),
                 contentAlignment = Alignment.Center
             ) {
-                // Load album art on-demand
-                val albumArtBitmap = remember(audioFile.path) {
-                    loadAlbumArt(context, audioFile)
+                val albumArtBitmap by produceState<android.graphics.Bitmap?>(
+                    initialValue = albumArtCache[audioFile.path],
+                    key1 = audioFile.path,
+                    key2 = audioFile.mediaStoreAlbumId
+                ) {
+                    val cacheKey = audioFile.path
+                    if (albumArtCache.containsKey(cacheKey)) {
+                        value = albumArtCache[cacheKey]
+                        return@produceState
+                    }
+                    val bitmap = withContext(Dispatchers.IO) {
+                        loadAlbumArt(context, audioFile)
+                    }
+                    albumArtCache[cacheKey] = bitmap
+                    value = bitmap
                 }
                 
-                if (albumArtBitmap != null) {
+                val bitmap = albumArtBitmap
+                if (bitmap != null) {
                     Image(
-                        bitmap = albumArtBitmap.asImageBitmap(),
+                        bitmap = bitmap.asImageBitmap(),
                         contentDescription = stringResource(R.string.cd_album_art),
                         modifier = Modifier.fillMaxSize()
                     )

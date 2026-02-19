@@ -28,6 +28,8 @@ suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
                 url.contains("y.gtimg.cn") -> "https://y.qq.com"
                 url.contains("music.126.net") -> "https://music.163.com"
                 url.contains("music.163.com") -> "https://music.163.com"
+                url.contains("mzstatic.com") -> "https://music.apple.com"
+                url.contains("appleusercontent.com") -> "https://music.apple.com"
                 url.contains("itunes.apple.com") -> "https://www.apple.com"
                 url.contains("coverartarchive.org") -> "https://musicbrainz.org"
                 else -> "https://y.qq.com"

@@ -64,7 +64,7 @@ class ITunesRepository @Inject constructor(
                             year = result.getReleaseYear(),
                             format = "iTunes Album",
                             trackCount = result.trackCount,
-                            coverArtUrl = result.getBestArtworkUrl()?.replace("100x100", "600x600"),
+                            coverArtUrl = getHighResArtworkUrl(result.getBestArtworkUrl(), 600),
                             source = "iTunes",
                             albumTitle = result.collectionName
                         )
@@ -179,7 +179,7 @@ class ITunesRepository @Inject constructor(
                 genre = albumResult.primaryGenreName,
                 trackCount = albumResult.trackCount ?: tracks.size,
                 tracks = tracks,
-                coverArtUrl = albumResult.getBestArtworkUrl()?.replace("100x100", "1200x1200")
+                coverArtUrl = getHighResArtworkUrl(albumResult.getBestArtworkUrl(), 1200)
             )
 
             Result.success(details)
@@ -204,7 +204,7 @@ class ITunesRepository @Inject constructor(
 
                 val artworkUrl = lookupResponse.body()?.results?.firstOrNull()
                     ?.getBestArtworkUrl()
-                    ?.replace("100x100", "600x600") // Get higher resolution
+                    ?.let { getHighResArtworkUrl(it, 600) } // Get higher resolution
 
                 if (artworkUrl.isNullOrBlank()) {
                     return@withContext Result.success(null)
@@ -269,7 +269,9 @@ class ITunesRepository @Inject constructor(
      * @return High-resolution artwork URL
      */
     fun getHighResArtworkUrl(artworkUrl: String?, size: Int = 600): String? {
-        return artworkUrl?.replace(Regex("\\d+x\\d+"), "${size}x${size}")
+        return artworkUrl
+            ?.replace(Regex("\\d+x\\d+"), "${size}x${size}")
+            ?.replace("http://", "https://")
     }
 
     private suspend fun getSearchSettings(): SearchSettings {

@@ -68,6 +68,12 @@ data class ITunesResult(
     @SerializedName("artworkUrl100")
     val artworkUrl100: String? = null,
 
+    @SerializedName("artworkUrl512")
+    val artworkUrl512: String? = null,
+
+    @SerializedName("artworkUrl600")
+    val artworkUrl600: String? = null,
+
     @SerializedName("collectionPrice")
     val collectionPrice: Double? = null,
 
@@ -130,7 +136,7 @@ data class ITunesResult(
      * Gets the highest resolution artwork URL available.
      */
     fun getBestArtworkUrl(): String? {
-        return artworkUrl100 ?: artworkUrl60 ?: artworkUrl30
+        return artworkUrl600 ?: artworkUrl512 ?: artworkUrl100 ?: artworkUrl60 ?: artworkUrl30
     }
 
     /**

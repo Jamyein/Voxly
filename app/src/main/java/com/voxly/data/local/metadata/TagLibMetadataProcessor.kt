@@ -573,47 +573,62 @@ class TagLibMetadataProcessor @Inject constructor(
                 return@withContext Result.failure(IllegalStateException("TagLib.savePropertyMap() returned false"))
             }
 
-            // Delete original and create new (required for some SAF providers)
-            try {
-                DocumentsContract.deleteDocument(context.contentResolver, targetDocUri)
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed to delete document, trying overwrite", e)
+            // Prefer in-place overwrite for better compatibility with special filenames.
+            val overwriteResult = runCatching {
+                val stream = openWritableOutputStream(targetDocUri)
+                    ?: throw IllegalStateException("Unable to open output stream for target document")
+                stream.use { output ->
+                    tempFile.inputStream().use { input ->
+                        val buffer = ByteArray(8192)
+                        var bytesRead: Int
+                        while (input.read(buffer).also { bytesRead = it } != -1) {
+                            output.write(buffer, 0, bytesRead)
+                        }
+                        output.flush()
+                    }
+                }
+            }
+            if (overwriteResult.isSuccess) {
+                return@withContext Result.success(Unit)
+            }
+            Log.w(
+                TAG,
+                "In-place SAF overwrite failed for: $filePath, fallback to recreate",
+                overwriteResult.exceptionOrNull()
+            )
+
+            // Fallback: delete and recreate in the same parent directory.
+            val targetDocId = runCatching { DocumentsContract.getDocumentId(targetDocUri) }.getOrNull()
+                ?: return@withContext Result.failure(
+                    IllegalStateException("Cannot resolve target document id for: $filePath")
+                )
+            val parentDocId = targetDocId.substringBeforeLast('/', missingDelimiterValue = "")
+            val parentUri = if (parentDocId.isNotBlank()) {
+                DocumentsContract.buildDocumentUriUsingTree(validPermission.uri, parentDocId)
+            } else {
+                DocumentsContract.buildDocumentUriUsingTree(
+                    validPermission.uri,
+                    DocumentsContract.getTreeDocumentId(validPermission.uri)
+                )
             }
 
-            // Write modified content to new document
+            runCatching { DocumentsContract.deleteDocument(context.contentResolver, targetDocUri) }
+                .onFailure { Log.w(TAG, "Failed to delete target document for fallback recreate: $filePath", it) }
+
             val mimeType = getMimeType(fileExtension)
-            val parentUri = DocumentsContract.buildDocumentUriUsingTree(
-                validPermission.uri,
-                DocumentsContract.getTreeDocumentId(validPermission.uri)
-            )
-            
             val newDocUri = DocumentsContract.createDocument(
                 context.contentResolver,
                 parentUri,
                 mimeType,
                 File(filePath).name
+            ) ?: return@withContext Result.failure(
+                IllegalStateException("Failed to recreate document for: $filePath")
             )
 
-            val targetUri = newDocUri ?: targetDocUri
-            
-            // Write to output stream
-            val outputStream = try {
-                context.contentResolver.openOutputStream(targetUri, "wt")
-            } catch (e: Exception) {
-                Log.w(TAG, "Failed with 'wt', trying 'w'", e)
-                try {
-                    context.contentResolver.openOutputStream(targetUri, "w")
-                } catch (e2: Exception) {
-                    Log.w(TAG, "Failed with 'w', trying default", e2)
-                    context.contentResolver.openOutputStream(targetUri)
-                }
-            }
-
-            if (outputStream == null) {
-                return@withContext Result.failure(
-                    IllegalStateException("Unable to open output stream for SAF write")
+            val outputStream = openWritableOutputStream(newDocUri)
+                ?: return@withContext Result.failure(
+                    IllegalStateException("Unable to open output stream for recreated document")
                 )
-            }
 
             outputStream.use { output ->
                 tempFile.inputStream().use { input ->
@@ -634,6 +649,15 @@ class TagLibMetadataProcessor @Inject constructor(
             Log.e(TAG, "SAF write operation failed: $filePath", e)
             Result.failure(e)
         }
+    }
+
+    private fun openWritableOutputStream(uri: Uri) = try {
+        context.contentResolver.openOutputStream(uri, "rwt")
+            ?: context.contentResolver.openOutputStream(uri, "wt")
+            ?: context.contentResolver.openOutputStream(uri, "w")
+            ?: context.contentResolver.openOutputStream(uri)
+    } catch (e: Exception) {
+        null
     }
 
     /**

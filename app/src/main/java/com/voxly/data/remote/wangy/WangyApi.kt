@@ -4,9 +4,12 @@ import com.voxly.data.remote.wangy.model.WangyAlbumDetail
 import com.voxly.data.remote.wangy.model.WangyLyricsResponse
 import com.voxly.data.remote.wangy.model.WangySearchResponse
 import com.voxly.data.remote.wangy.model.WangySongDetail
+import retrofit2.http.Field
+import retrofit2.http.FormUrlEncoded
 import retrofit2.Response
 import retrofit2.http.GET
 import retrofit2.http.Headers
+import retrofit2.http.POST
 import retrofit2.http.Query
 
 /**
@@ -40,12 +43,37 @@ interface WangyApi {
         "Accept: application/json",
         "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
     )
-    suspend fun searchSongs(
+    suspend fun searchSongsLegacy(
         @Query("s") keyword: String,
         @Query("type") type: Int = 1,
         @Query("offset") offset: Int = 0,
         @Query("limit") limit: Int = 30,
         @Query("total") total: Boolean = true
+    ): Response<WangySearchResponse>
+
+    /**
+     * Searches for songs using cloud search endpoint.
+     * Endpoint: /api/cloudsearch/pc
+     *
+     * This endpoint is also used by NetEase web search and is more stable than legacy /api/search/get.
+     */
+    @FormUrlEncoded
+    @POST("api/cloudsearch/pc")
+    @Headers(
+        "User-Agent: $USER_AGENT",
+        "Referer: $REFERER",
+        "Origin: https://music.163.com",
+        "X-Requested-With: XMLHttpRequest",
+        "Content-Type: application/x-www-form-urlencoded",
+        "Accept: application/json",
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
+    )
+    suspend fun searchSongsCloud(
+        @Field("s") keyword: String,
+        @Field("type") type: Int = 1,
+        @Field("offset") offset: Int = 0,
+        @Field("limit") limit: Int = 30,
+        @Field("total") total: Boolean = true
     ): Response<WangySearchResponse>
 
     /**

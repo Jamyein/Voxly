@@ -74,3 +74,6 @@ APPLE_MUSIC_ADDITION.md
 /app/dist
 /app/release
 /.sisyphus
+local.properties
+local.properties
+*.properties

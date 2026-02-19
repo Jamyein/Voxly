@@ -1,15 +1,16 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
@@ -25,11 +26,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -78,12 +76,6 @@ fun MP3TagNavHost(
 
     // Scroll state for controlling bottom bar visibility
     var isBottomBarVisible by remember { mutableStateOf(true) }
-    val bottomBarVisibilityProgress by animateFloatAsState(
-        targetValue = if (isBottomBarVisible) 1f else 0f,
-        animationSpec = tween(durationMillis = 160),
-        label = "bottomBarVisibility"
-    )
-
     LaunchedEffect(currentDestination?.route) {
         if (currentDestination?.route != Screen.FileBrowser.route) {
             isBottomBarVisible = true
@@ -94,13 +86,10 @@ fun MP3TagNavHost(
         contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             if (showBottomBar) {
-                val density = LocalDensity.current
-                val bottomBarHideOffsetPx = with(density) { 96.dp.toPx() }
-                Box(
-                    modifier = Modifier.graphicsLayer {
-                        translationY = (1f - bottomBarVisibilityProgress) * bottomBarHideOffsetPx
-                        alpha = bottomBarVisibilityProgress
-                    }
+                AnimatedVisibility(
+                    visible = isBottomBarVisible,
+                    enter = fadeIn(animationSpec = tween(160)) + expandVertically(),
+                    exit = fadeOut(animationSpec = tween(130)) + shrinkVertically()
                 ) {
                     NavigationBar {
                         bottomNavItems.forEach { item ->

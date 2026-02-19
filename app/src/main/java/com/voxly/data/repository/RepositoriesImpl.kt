@@ -140,44 +140,14 @@ class AudioRepositoryImpl @Inject constructor(
                     metadata = AudioMetadata()
                 )
 
-                val mediaStoreFallbackMetadata = runCatching {
-                    val selection = "${MediaStore.Audio.Media.DATA} = ?"
-                    val cursor = context.contentResolver.query(
-                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        arrayOf(
-                            MediaStore.Audio.Media.TITLE,
-                            MediaStore.Audio.Media.ARTIST,
-                            MediaStore.Audio.Media.ALBUM,
-                            MediaStore.Audio.Media.YEAR,
-                            MediaStore.Audio.Media.TRACK
-                        ),
-                        selection,
-                        arrayOf(filePath),
-                        null
-                    )
-                    cursor?.use {
-                        if (it.moveToFirst()) {
-                            AudioMetadata(
-                                title = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE))
-                                    ?.takeIf { value -> value.isNotBlank() },
-                                artist = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST))
-                                    ?.takeIf { value -> value.isNotBlank() },
-                                album = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM))
-                                    ?.takeIf { value -> value.isNotBlank() },
-                                year = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR))
-                                    ?.takeIf { value -> value.isNotBlank() },
-                                trackNumber = it.getInt(it.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK))
-                                    .takeIf { value -> value > 0 }
-                            )
-                        } else null
-                    }
-                }.getOrNull()
+                val mediaStoreFallbackMetadata = readMediaStoreBasicMetadata(filePath)
 
                 // Read detailed metadata
                 val detailedMetadata = metadataProcessor.readMetadata(filePath)
+                val mergedMetadata = mergeWithFallback(detailedMetadata, mediaStoreFallbackMetadata)
 
                 val enhancedAudioFile = audioFile.copy(
-                    metadata = detailedMetadata ?: mediaStoreFallbackMetadata ?: AudioMetadata()
+                    metadata = mergedMetadata ?: AudioMetadata()
                 )
 
                 Result.success(enhancedAudioFile)
@@ -191,7 +161,10 @@ class AudioRepositoryImpl @Inject constructor(
     override suspend fun readMetadata(filePath: String): Result<AudioMetadata> =
         withContext(Dispatchers.IO) {
             try {
-                val metadata = metadataProcessor.readMetadata(filePath)
+                val metadata = mergeWithFallback(
+                    metadataProcessor.readMetadata(filePath),
+                    readMediaStoreBasicMetadata(filePath)
+                )
                 if (metadata != null) {
                     Result.success(metadata)
                 } else {
@@ -201,6 +174,58 @@ class AudioRepositoryImpl @Inject constructor(
                 Result.failure(e)
             }
         }
+
+    private fun readMediaStoreBasicMetadata(filePath: String): AudioMetadata? {
+        return runCatching {
+            val selection = "${MediaStore.Audio.Media.DATA} = ?"
+            val cursor = context.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                arrayOf(
+                    MediaStore.Audio.Media.TITLE,
+                    MediaStore.Audio.Media.ARTIST,
+                    MediaStore.Audio.Media.ALBUM,
+                    MediaStore.Audio.Media.YEAR,
+                    MediaStore.Audio.Media.TRACK
+                ),
+                selection,
+                arrayOf(filePath),
+                null
+            )
+            cursor?.use {
+                if (!it.moveToFirst()) {
+                    return@use null
+                }
+                AudioMetadata(
+                    title = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE))
+                        ?.takeIf { value -> value.isNotBlank() },
+                    artist = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST))
+                        ?.takeIf { value -> value.isNotBlank() },
+                    album = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM))
+                        ?.takeIf { value -> value.isNotBlank() },
+                    year = it.getString(it.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR))
+                        ?.takeIf { value -> value.isNotBlank() },
+                    trackNumber = it.getInt(it.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK))
+                        .takeIf { value -> value > 0 }
+                )
+            }
+        }.getOrNull()
+    }
+
+    private fun mergeWithFallback(
+        primary: AudioMetadata?,
+        fallback: AudioMetadata?
+    ): AudioMetadata? {
+        if (primary == null) return fallback
+        if (fallback == null) return primary
+
+        return primary.copy(
+            title = primary.title.takeIf { !it.isNullOrBlank() } ?: fallback.title,
+            artist = primary.artist.takeIf { !it.isNullOrBlank() } ?: fallback.artist,
+            album = primary.album.takeIf { !it.isNullOrBlank() } ?: fallback.album,
+            year = primary.year.takeIf { !it.isNullOrBlank() } ?: fallback.year,
+            trackNumber = primary.trackNumber ?: fallback.trackNumber
+        )
+    }
 
     override suspend fun updateMetadata(filePath: String, metadata: AudioMetadata): Result<Unit> =
         withContext(Dispatchers.IO) {

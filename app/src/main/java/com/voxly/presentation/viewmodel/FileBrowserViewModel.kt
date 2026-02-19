@@ -1,5 +1,6 @@
 package com.voxly.presentation.viewmodel
 
+import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
@@ -13,6 +14,7 @@ import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
 import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
+import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +39,7 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class FileBrowserViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val audioRepository: AudioRepository,
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val settingsDataStore: SettingsDataStore
@@ -314,9 +317,6 @@ class FileBrowserViewModel @Inject constructor(
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val file = File(filePath)
-                    if (!file.exists()) {
-                        return@runCatching false to "File not found"
-                    }
 
                     val sanitizedName = targetName.trim()
                         .replace(Regex("[\\\\/:*?\"<>|]"), "_")
@@ -334,6 +334,10 @@ class FileBrowserViewModel @Inject constructor(
                         sanitizedName
                     }
 
+                    if (file.name.equals(finalName, ignoreCase = true)) {
+                        return@runCatching true to null
+                    }
+
                     val targetFile = File(file.parentFile, finalName)
                     if (targetFile.absolutePath.equals(file.absolutePath, ignoreCase = true)) {
                         return@runCatching true to null
@@ -342,18 +346,22 @@ class FileBrowserViewModel @Inject constructor(
                         return@runCatching false to "Target file already exists"
                     }
 
-                    if (file.renameTo(targetFile)) {
-                        true to null
-                    } else {
-                        false to "Failed to rename file"
+                    if (file.exists() && file.renameTo(targetFile)) {
+                        return@runCatching true to null
                     }
+
+                    val safResult = renameFileViaSaf(filePath, finalName)
+                    safResult.fold(
+                        onSuccess = { true to null },
+                        onFailure = { false to (it.message ?: "Failed to rename file") }
+                    )
                 }.getOrElse { false to (it.message ?: "Failed to rename file") }
             }
 
             onComplete(result.first, result.second)
             if (result.first) {
                 _selectedFiles.value = _selectedFiles.value - filePath
-                loadAudioFiles(forceRefresh = false)
+                loadAudioFiles(forceRefresh = true)
             }
         }
     }
@@ -366,22 +374,64 @@ class FileBrowserViewModel @Inject constructor(
             val result = withContext(Dispatchers.IO) {
                 runCatching {
                     val file = File(filePath)
-                    if (!file.exists()) {
-                        return@runCatching false to "File not found"
+
+                    if (file.exists() && file.delete()) {
+                        return@runCatching true to null
                     }
-                    if (file.delete()) {
-                        true to null
-                    } else {
-                        false to "Failed to delete file"
-                    }
+
+                    val safResult = deleteFileViaSaf(filePath)
+                    safResult.fold(
+                        onSuccess = { true to null },
+                        onFailure = { false to (it.message ?: "Failed to delete file") }
+                    )
                 }.getOrElse { false to (it.message ?: "Failed to delete file") }
             }
 
             onComplete(result.first, result.second)
             if (result.first) {
                 _selectedFiles.value = _selectedFiles.value - filePath
-                loadAudioFiles(forceRefresh = false)
+                loadAudioFiles(forceRefresh = true)
             }
+        }
+    }
+
+    private fun renameFileViaSaf(filePath: String, targetDisplayName: String): Result<Unit> {
+        val treeUri = resolveWritableTreeUri(filePath)
+            ?: return Result.failure(IllegalStateException("No SAF write permission for this file"))
+        val treePath = mapTreeUriToPath(treeUri)
+            ?: return Result.failure(IllegalStateException("Failed to resolve SAF tree path"))
+        val relativePath = getRelativePath(filePath, treePath)
+        val targetDocUri = findDocumentUriInTree(treeUri, relativePath)
+            ?: return Result.failure(IllegalStateException("Cannot locate file via SAF"))
+
+        return runCatching {
+            val renamed = DocumentsContract.renameDocument(
+                context.contentResolver,
+                targetDocUri,
+                targetDisplayName
+            )
+            if (renamed == null) {
+                throw IllegalStateException("Failed to rename file")
+            }
+            Unit
+        }
+    }
+
+    private fun deleteFileViaSaf(filePath: String): Result<Unit> {
+        val treeUri = resolveWritableTreeUri(filePath)
+            ?: return Result.failure(IllegalStateException("No SAF write permission for this file"))
+        val treePath = mapTreeUriToPath(treeUri)
+            ?: return Result.failure(IllegalStateException("Failed to resolve SAF tree path"))
+        val relativePath = getRelativePath(filePath, treePath)
+        val targetDocUri = findDocumentUriInTree(treeUri, relativePath)
+            ?: return Result.failure(IllegalStateException("Cannot locate file via SAF"))
+
+        return runCatching {
+            val deleted = DocumentsContract.deleteDocument(context.contentResolver, targetDocUri)
+            if (!deleted) {
+                throw IllegalStateException("Failed to delete file")
+            }
+            Unit
         }
     }
 
@@ -1078,6 +1128,113 @@ class FileBrowserViewModel @Inject constructor(
         return normalizedFile == normalizedDirectory ||
             normalizedFile.startsWith("$normalizedDirectory/") ||
             normalizedFile.startsWith("$normalizedDirectory\\")
+    }
+
+    private fun resolveWritableTreeUri(filePath: String): Uri? {
+        val normalizedPath = normalizePath(filePath)
+        val permissions = context.contentResolver.persistedUriPermissions
+            .filter { it.isReadPermission && it.isWritePermission }
+
+        var bestUri: Uri? = null
+        var bestMatchLength = -1
+        permissions.forEach { permission ->
+            val treePath = mapTreeUriToPath(permission.uri)?.let(::normalizePath) ?: return@forEach
+            val matches = normalizedPath == treePath || normalizedPath.startsWith("$treePath/")
+            if (matches && treePath.length > bestMatchLength) {
+                bestUri = permission.uri
+                bestMatchLength = treePath.length
+            }
+        }
+        return bestUri
+    }
+
+    private fun mapTreeUriToPath(treeUri: Uri): String? {
+        val documentId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
+        if (documentId.startsWith("raw:")) return documentId.removePrefix("raw:")
+
+        val parts = documentId.split(":", limit = 2)
+        val volume = parts.firstOrNull().orEmpty()
+        val relative = parts.getOrNull(1)?.trim('/').orEmpty()
+
+        return when {
+            volume.equals("primary", ignoreCase = true) -> {
+                val root = "/storage/emulated/0"
+                if (relative.isEmpty()) root else "$root/$relative"
+            }
+            volume.equals("home", ignoreCase = true) -> {
+                val root = "/storage/emulated/0/Documents"
+                if (relative.isEmpty()) root else "$root/$relative"
+            }
+            volume.isNotEmpty() -> {
+                if (relative.isEmpty()) "/storage/$volume" else "/storage/$volume/$relative"
+            }
+            else -> null
+        }
+    }
+
+    private fun getRelativePath(filePath: String, treePath: String): String {
+        val normalizedFile = normalizePath(filePath)
+        val normalizedTree = normalizePath(treePath)
+        return when {
+            normalizedFile == normalizedTree -> ""
+            normalizedFile.startsWith("$normalizedTree/") -> {
+                normalizedFile.removePrefix("$normalizedTree/")
+            }
+            else -> File(filePath).name
+        }
+    }
+
+    private fun findDocumentUriInTree(treeUri: Uri, relativePath: String): Uri? {
+        val rootDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
+        if (relativePath.isBlank()) {
+            return DocumentsContract.buildDocumentUriUsingTree(treeUri, rootDocId)
+        }
+
+        val normalizedRelative = relativePath.trim('/').replace('\\', '/')
+        val directDocId = "$rootDocId/$normalizedRelative"
+        val directUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, directDocId)
+        val directReadable = runCatching {
+            context.contentResolver.openFileDescriptor(directUri, "r")?.use { }
+            true
+        }.getOrDefault(false)
+        if (directReadable) {
+            return directUri
+        }
+
+        var currentDocId = rootDocId
+        normalizedRelative.split('/').filter { it.isNotBlank() }.forEach { segment ->
+            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, currentDocId)
+            var nextDocId: String? = null
+
+            context.contentResolver.query(
+                childrenUri,
+                arrayOf(
+                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
+                ),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
+                val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                while (cursor.moveToNext()) {
+                    val displayName = cursor.getString(nameIndex)
+                    if (displayName == segment) {
+                        nextDocId = cursor.getString(idIndex)
+                        break
+                    }
+                }
+            }
+
+            currentDocId = nextDocId ?: return null
+        }
+
+        return DocumentsContract.buildDocumentUriUsingTree(treeUri, currentDocId)
+    }
+
+    private fun normalizePath(path: String): String {
+        return path.replace('\\', '/').trimEnd('/')
     }
 
     fun saveScrollPosition(listKey: String, index: Int, offset: Int) {

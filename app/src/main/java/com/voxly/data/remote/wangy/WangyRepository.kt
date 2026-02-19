@@ -69,24 +69,52 @@ class WangyRepositoryImpl @Inject constructor(
         page: Int,
         limit: Int
     ): Result<WangySearchResponse> = withContext(Dispatchers.IO) {
-        try {
-            val offset = (page - 1) * limit
+        val normalizedPage = if (page <= 0) 1 else page
+        val normalizedLimit = limit.coerceIn(1, 100)
+        val offset = (normalizedPage - 1) * normalizedLimit
 
-            // Make API call directly with parameters (no encryption needed)
-            val response = api.searchSongs(
-                keyword = keywords,
-                offset = offset,
-                limit = limit
-            )
+        val failures = mutableListOf<String>()
+        var emptySuccess: WangySearchResponse? = null
 
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
-            } else {
-                Result.failure(Exception("Search failed: ${response.code()}"))
+        val requests: List<suspend () -> retrofit2.Response<WangySearchResponse>> = listOf(
+            {
+                api.searchSongsCloud(
+                    keyword = keywords,
+                    offset = offset,
+                    limit = normalizedLimit
+                )
+            },
+            {
+                api.searchSongsLegacy(
+                    keyword = keywords,
+                    offset = offset,
+                    limit = normalizedLimit
+                )
             }
-        } catch (e: Exception) {
-            Result.failure(e)
+        )
+
+        for (request in requests) {
+            try {
+                val response = request()
+                val body = response.body()
+                if (response.isSuccessful && body != null && body.code == 200) {
+                    if (!body.result?.songs.isNullOrEmpty()) {
+                        return@withContext Result.success(body)
+                    }
+                    if (emptySuccess == null) {
+                        emptySuccess = body
+                    }
+                    failures.add("ok_empty")
+                    continue
+                }
+                failures.add("http=${response.code()} bodyCode=${body?.code ?: -1}")
+            } catch (e: Exception) {
+                failures.add(e.message ?: "unknown")
+            }
         }
+
+        emptySuccess?.let { return@withContext Result.success(it) }
+        Result.failure(Exception("NetEase search failed: ${failures.joinToString(" | ")}"))
     }
 
     override suspend fun getSongDetail(songId: Long): Result<WangySongDetail> = withContext(Dispatchers.IO) {

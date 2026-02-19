@@ -96,7 +96,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.MUSICBRAINZ -> {
                 if (settings.enableMusicBrainz) {
                     musicBrainzRepository.searchByArtistAlbum(artist, album)
-                        .map { applyLimit(it, settings.searchLimit) }
+                        .map {
+                            finalizeReleaseResults(
+                                releases = it,
+                                artist = artist,
+                                album = album,
+                                settings = settings
+                            )
+                        }
                 } else {
                     Result.success(emptyList())
                 }
@@ -104,7 +111,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.ITUNES -> {
                 if (settings.enableITunes) {
                     iTunesRepository.searchByArtistAlbum(artist, album)
-                        .map { applyLimit(it, settings.searchLimit) }
+                        .map {
+                            finalizeReleaseResults(
+                                releases = it,
+                                artist = artist,
+                                album = album,
+                                settings = settings
+                            )
+                        }
                 } else {
                     Result.success(emptyList())
                 }
@@ -112,6 +126,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.NETEASE -> {
                 if (settings.enableNetease) {
                     searchNeteaseByArtistAlbum(artist, album, settings.requestLimit)
+                        .map {
+                            finalizeReleaseResults(
+                                releases = it,
+                                artist = artist,
+                                album = album,
+                                settings = settings
+                            )
+                        }
                 } else {
                     Result.success(emptyList())
                 }
@@ -119,6 +141,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.QQ_MUSIC -> {
                 if (settings.enableQQMusic) {
                     searchQQMusicByArtistAlbum(artist, album, settings.requestLimit)
+                        .map {
+                            finalizeReleaseResults(
+                                releases = it,
+                                artist = artist,
+                                album = album,
+                                settings = settings
+                            )
+                        }
                 } else {
                     Result.success(emptyList())
                 }
@@ -154,7 +184,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = iTunesRepository.searchByArtistAlbum(artist, album)
                     result
-                        .map { applyLimit(it, settings.searchLimit) }
+                        .map {
+                            finalizeReleaseResults(
+                                releases = it,
+                                artist = artist,
+                                album = album,
+                                settings = settings
+                            )
+                        }
                         .onSuccess { releases ->
                             releases.forEach { release ->
                                 trySend(OnlineSourceResult.ReleaseResult(release, "iTunes"))
@@ -176,6 +213,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = searchQQMusicByArtistAlbum(artist, album, settings.requestLimit)
                     result
+                        .map {
+                            finalizeReleaseResults(
+                                releases = it,
+                                artist = artist,
+                                album = album,
+                                settings = settings
+                            )
+                        }
                         .onSuccess { releases ->
                             releases.forEach { release ->
                                 trySend(OnlineSourceResult.ReleaseResult(release, "QQ Music"))
@@ -197,6 +242,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = searchNeteaseByArtistAlbum(artist, album, settings.requestLimit)
                     result
+                        .map {
+                            finalizeReleaseResults(
+                                releases = it,
+                                artist = artist,
+                                album = album,
+                                settings = settings
+                            )
+                        }
                         .onSuccess { releases ->
                             releases.forEach { release ->
                                 trySend(OnlineSourceResult.ReleaseResult(release, "NetEase"))
@@ -218,7 +271,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = musicBrainzRepository.searchByArtistAlbum(artist, album)
                     result
-                        .map { applyLimit(it, settings.searchLimit) }
+                        .map {
+                            finalizeReleaseResults(
+                                releases = it,
+                                artist = artist,
+                                album = album,
+                                settings = settings
+                            )
+                        }
                         .onSuccess { releases ->
                             releases.forEach { release ->
                                 trySend(OnlineSourceResult.ReleaseResult(release, "MusicBrainz"))
@@ -319,29 +379,13 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         }
 
-        // Sort by relevance first: title match > artist match > source priority
-        val sortedResults = mergedResults.sortedWith(
-            compareByDescending<OnlineRelease> { release ->
-                // Priority 1: Title match score (exact=3, contains=2, none=1)
-                when {
-                    release.title.equals(album, ignoreCase = true) -> 3
-                    album.isNotEmpty() && release.title.contains(album, ignoreCase = true) -> 2
-                    else -> 1
-                }
-            }.thenByDescending { release ->
-                // Priority 2: Artist match score (exact=3, contains=2, none=1)
-                when {
-                    release.artist.equals(artist, ignoreCase = true) -> 3
-                    artist.isNotEmpty() && release.artist.contains(artist, ignoreCase = true) -> 2
-                    else -> 1
-                }
-            }.thenBy { release ->
-                // Priority 3: Source priority (only tie-breaker when as relevance scores are equal)
-                sourcePriorityIndex(release.source, settings.metadataPriority)
-            }
+        val sortedResults = finalizeReleaseResults(
+            releases = mergedResults,
+            artist = artist,
+            album = album,
+            settings = settings
         )
-
-        Result.success(applyLimit(sortedResults, settings.searchLimit))
+        Result.success(sortedResults)
     }
 
     /**
@@ -467,7 +511,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.MUSICBRAINZ -> {
                 if (settings.enableMusicBrainz) {
                     musicBrainzRepository.searchByTrack(title, artist)
-                        .map { applyLimit(it, settings.searchLimit) }
+                        .map {
+                            finalizeRecordingResults(
+                                recordings = it,
+                                title = title,
+                                artist = artist,
+                                priority = settings.metadataPriority,
+                                limit = settings.searchLimit
+                            )
+                        }
                 } else {
                     Result.success(emptyList())
                 }
@@ -475,7 +527,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.ITUNES -> {
                 if (settings.enableITunes) {
                     iTunesRepository.searchByTrack(title, artist)
-                        .map { applyLimit(it, settings.searchLimit) }
+                        .map {
+                            finalizeRecordingResults(
+                                recordings = it,
+                                title = title,
+                                artist = artist,
+                                priority = settings.metadataPriority,
+                                limit = settings.searchLimit
+                            )
+                        }
                 } else {
                     Result.success(emptyList())
                 }
@@ -483,6 +543,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.NETEASE -> {
                 if (settings.enableNetease) {
                     searchNeteaseByTrack(title, artist, settings.requestLimit)
+                        .map {
+                            finalizeRecordingResults(
+                                recordings = it,
+                                title = title,
+                                artist = artist,
+                                priority = settings.metadataPriority,
+                                limit = settings.searchLimit
+                            )
+                        }
                 } else {
                     Result.success(emptyList())
                 }
@@ -490,6 +559,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.QQ_MUSIC -> {
                 if (settings.enableQQMusic) {
                     searchQQMusicByTrack(title, artist, settings.requestLimit)
+                        .map {
+                            finalizeRecordingResults(
+                                recordings = it,
+                                title = title,
+                                artist = artist,
+                                priority = settings.metadataPriority,
+                                limit = settings.searchLimit
+                            )
+                        }
                 } else {
                     Result.success(emptyList())
                 }
@@ -516,25 +594,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                     neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
                     qqMusicDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
 
-                    // Sort by relevance: title match > artist match > source priority
-                    val sorted = results.sortedWith(
-                        compareByDescending<OnlineRecording> { recording ->
-                            when {
-                                recording.title.equals(title, ignoreCase = true) -> 3
-                                title.isNotEmpty() && recording.title.contains(title, ignoreCase = true) -> 2
-                                else -> 1
-                            }
-                        }.thenByDescending { recording ->
-                            when {
-                                recording.artist.equals(artist, ignoreCase = true) -> 3
-                                !artist.isNullOrEmpty() && recording.artist.contains(artist, ignoreCase = true) -> 2
-                                else -> 1
-                            }
-                        }.thenBy { recording ->
-                            sourcePriorityIndex(recording.source, settings.metadataPriority)
-                        }
+                    val sorted = finalizeRecordingResults(
+                        recordings = results,
+                        title = title,
+                        artist = artist,
+                        priority = settings.metadataPriority,
+                        limit = settings.searchLimit
                     )
-                    Result.success(applyLimit(sorted, settings.searchLimit))
+                    Result.success(sorted)
                 }
             }
         }
@@ -567,7 +634,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = iTunesRepository.searchByTrack(title, artist)
                     result
-                        .map { applyLimit(it, settings.searchLimit) }
+                        .map {
+                            finalizeRecordingResults(
+                                recordings = it,
+                                title = title,
+                                artist = artist,
+                                priority = settings.metadataPriority,
+                                limit = settings.searchLimit
+                            )
+                        }
                         .onSuccess { recordings ->
                             recordings.forEach { recording ->
                                 trySend(OnlineSourceResult.RecordingResult(recording, "iTunes"))
@@ -589,6 +664,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = searchQQMusicByTrack(title, artist, settings.requestLimit)
                     result
+                        .map {
+                            finalizeRecordingResults(
+                                recordings = it,
+                                title = title,
+                                artist = artist,
+                                priority = settings.metadataPriority,
+                                limit = settings.searchLimit
+                            )
+                        }
                         .onSuccess { recordings ->
                             recordings.forEach { recording ->
                                 trySend(OnlineSourceResult.RecordingResult(recording, "QQ Music"))
@@ -610,6 +694,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = searchNeteaseByTrack(title, artist, settings.requestLimit)
                     result
+                        .map {
+                            finalizeRecordingResults(
+                                recordings = it,
+                                title = title,
+                                artist = artist,
+                                priority = settings.metadataPriority,
+                                limit = settings.searchLimit
+                            )
+                        }
                         .onSuccess { recordings ->
                             recordings.forEach { recording ->
                                 trySend(OnlineSourceResult.RecordingResult(recording, "NetEase"))
@@ -631,7 +724,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = musicBrainzRepository.searchByTrack(title, artist)
                     result
-                        .map { applyLimit(it, settings.searchLimit) }
+                        .map {
+                            finalizeRecordingResults(
+                                recordings = it,
+                                title = title,
+                                artist = artist,
+                                priority = settings.metadataPriority,
+                                limit = settings.searchLimit
+                            )
+                        }
                         .onSuccess { recordings ->
                             recordings.forEach { recording ->
                                 trySend(OnlineSourceResult.RecordingResult(recording, "MusicBrainz"))
@@ -692,25 +793,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
         qqDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
 
-        // Sort by relevance: title match > artist match > source priority
-        val sorted = results.sortedWith(
-            compareByDescending<OnlineRecording> { recording ->
-                when {
-                    recording.title.equals(title, ignoreCase = true) -> 3
-                    title.isNotEmpty() && recording.title.contains(title, ignoreCase = true) -> 2
-                    else -> 1
-                }
-            }.thenByDescending { recording ->
-                when {
-                    recording.artist.equals(artist, ignoreCase = true) -> 3
-                    !artist.isNullOrEmpty() && recording.artist.contains(artist, ignoreCase = true) -> 2
-                    else -> 1
-                }
-            }.thenBy { recording ->
-                sourcePriorityIndex(recording.source, settings.coverPriority)
-            }
+        val sorted = finalizeRecordingResults(
+            recordings = results,
+            title = title,
+            artist = artist,
+            priority = settings.coverPriority,
+            limit = settings.searchLimit
         )
-        Result.success(applyLimit(sorted, settings.searchLimit))
+        Result.success(sorted)
     }
 
     /**
@@ -1077,6 +1167,132 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val artist2 = release2.artist.lowercase().trim()
         
         return artist1 == artist2 && (title1.contains(title2) || title2.contains(title1))
+    }
+
+    private fun finalizeReleaseResults(
+        releases: List<OnlineRelease>,
+        artist: String,
+        album: String,
+        settings: OnlineSourceSettings
+    ): List<OnlineRelease> {
+        val filtered = filterReleasesByQuery(
+            releases = releases,
+            artist = artist,
+            album = album,
+            limit = settings.searchLimit
+        )
+        val sorted = filtered.sortedWith(
+            compareBy<OnlineRelease> { release ->
+                sourcePriorityIndex(release.source, settings.metadataPriority)
+            }.thenByDescending { release ->
+                fuzzyMatchLevel(album, release.songTitle ?: release.title)
+            }.thenByDescending { release ->
+                fuzzyMatchLevel(album, release.albumTitle ?: release.title)
+            }.thenByDescending { release ->
+                fuzzyMatchLevel(artist, release.artist)
+            }
+        )
+        return applyLimit(sorted, settings.searchLimit)
+    }
+
+    private fun finalizeRecordingResults(
+        recordings: List<OnlineRecording>,
+        title: String,
+        artist: String?,
+        priority: List<String>,
+        limit: Int
+    ): List<OnlineRecording> {
+        val filtered = filterRecordingsByQuery(
+            recordings = recordings,
+            title = title,
+            artist = artist,
+            limit = limit
+        )
+        val sorted = filtered.sortedWith(
+            compareBy<OnlineRecording> { recording ->
+                sourcePriorityIndex(recording.source, priority)
+            }.thenByDescending { recording ->
+                fuzzyMatchLevel(title, recording.title)
+            }.thenByDescending { recording ->
+                fuzzyMatchLevel(artist.orEmpty(), recording.artist)
+            }
+        )
+        return applyLimit(sorted, limit)
+    }
+
+    private fun filterReleasesByQuery(
+        releases: List<OnlineRelease>,
+        artist: String,
+        album: String,
+        limit: Int
+    ): List<OnlineRelease> {
+        if (album.isBlank()) return applyLimit(releases, limit)
+        return releases.filter { release ->
+            val candidate = release.songTitle?.takeIf { it.isNotBlank() } ?: release.title
+            fuzzyTitleMatch(album, candidate)
+        }
+    }
+
+    private fun filterRecordingsByQuery(
+        recordings: List<OnlineRecording>,
+        title: String,
+        artist: String?,
+        limit: Int
+    ): List<OnlineRecording> {
+        if (title.isBlank()) return applyLimit(recordings, limit)
+        return recordings.filter { recording ->
+            fuzzyTitleMatch(title, recording.title)
+        }
+    }
+
+    /**
+     * Title-only fuzzy matcher:
+     * - exact/contains first
+     * - then token hit ratio for latin-like titles
+     */
+    private fun fuzzyTitleMatch(query: String, candidate: String?): Boolean {
+        return fuzzyMatchLevel(query, candidate) > 0
+    }
+
+    private fun fuzzyMatchLevel(query: String, candidate: String?): Int {
+        val normalizedQuery = normalizeMatchText(query)
+        val normalizedCandidate = normalizeMatchText(candidate)
+        if (normalizedQuery.isBlank() || normalizedCandidate.isBlank()) return 0
+        if (normalizedCandidate == normalizedQuery) return 3
+        if (normalizedCandidate.contains(normalizedQuery) || normalizedQuery.contains(normalizedCandidate)) {
+            return 2
+        }
+
+        val queryTokens = tokenizeMatchText(normalizedQuery)
+        if (queryTokens.isEmpty()) return 0
+
+        val candidateTokens = tokenizeMatchText(normalizedCandidate)
+        val matched = queryTokens.count { token ->
+            normalizedCandidate.contains(token) || candidateTokens.contains(token)
+        }
+        val required = when {
+            queryTokens.size <= 2 -> 1
+            queryTokens.size <= 4 -> 2
+            else -> (queryTokens.size * 6 + 9) / 10
+        }
+        return if (matched >= required) 1 else 0
+    }
+
+    private fun normalizeMatchText(text: String?): String {
+        if (text.isNullOrBlank()) return ""
+        return text
+            .lowercase()
+            .replace(Regex("\\([^)]*\\)|\\[[^\\]]*\\]|\\{[^}]*\\}"), " ")
+            .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+            .trim()
+    }
+
+    private fun tokenizeMatchText(text: String): List<String> {
+        return text
+            .split(Regex("\\s+"))
+            .map { it.trim() }
+            .filter { it.length >= 2 }
+            .distinct()
     }
 
     private suspend fun getOnlineSourceSettings(): OnlineSourceSettings {
