@@ -2,6 +2,23 @@ import com.android.build.api.variant.ApplicationAndroidComponentsExtension
 import org.gradle.api.GradleException
 import java.util.Properties
 
+private val localPropertiesFile = rootProject.file("local.properties")
+private val signingProps = Properties().apply {
+    if (localPropertiesFile.exists()) {
+        load(localPropertiesFile.inputStream())
+    }
+}
+private val signingStorePassword: String? = signingProps.getProperty("RELEASE_STORE_PASSWORD")
+    ?: System.getenv("SIGNING_STORE_PASSWORD")
+private val signingKeyPassword: String? = signingProps.getProperty("RELEASE_KEY_PASSWORD")
+    ?: System.getenv("SIGNING_KEY_PASSWORD")
+    ?: signingStorePassword
+private val signingKeyAlias: String = signingProps.getProperty("RELEASE_KEY_ALIAS")
+    ?: System.getenv("SIGNING_KEY_ALIAS")
+    ?: "voxly"
+private val signingEnabled: Boolean =
+    !signingStorePassword.isNullOrBlank() && !signingKeyPassword.isNullOrBlank()
+
 plugins {
     id("com.android.application")
     id("com.google.devtools.ksp")
@@ -28,24 +45,6 @@ android {
             useSupportLibrary = true
         }
     }
-
-    // Load signing configuration from local.properties or environment variables
-    val localProperties = rootProject.file("local.properties")
-    val props = if (localProperties.exists()) {
-        Properties().apply { load(localProperties.inputStream()) }
-    } else {
-        Properties()
-    }
-
-    val signingStorePassword = props.getProperty("RELEASE_STORE_PASSWORD")
-        ?: System.getenv("SIGNING_STORE_PASSWORD")
-    val signingKeyPassword = props.getProperty("RELEASE_KEY_PASSWORD")
-        ?: System.getenv("SIGNING_KEY_PASSWORD")
-        ?: signingStorePassword
-    val signingKeyAlias = props.getProperty("RELEASE_KEY_ALIAS")
-        ?: System.getenv("SIGNING_KEY_ALIAS")
-        ?: "voxly"
-    val signingEnabled = !signingStorePassword.isNullOrBlank() && !signingKeyPassword.isNullOrBlank()
 
     signingConfigs {
         create("release") {
