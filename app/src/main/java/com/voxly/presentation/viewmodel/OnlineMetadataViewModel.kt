@@ -77,11 +77,15 @@ class OnlineMetadataViewModel @Inject constructor(
             val fileName = File(filePath).nameWithoutExtension
             val parsed = parseFromFileName(fileName)
 
-            val title = metadata?.title?.takeIf { it.isNotBlank() }
+            val rawTitle = metadata?.title?.takeIf { it.isNotBlank() }
                 ?: parsed.title
                 ?: fileName.takeIf { it.isNotBlank() }
-            val artist = metadata?.artist?.takeIf { it.isNotBlank() } ?: parsed.artist
-            val album = metadata?.album?.takeIf { it.isNotBlank() } ?: parsed.album
+            val rawArtist = metadata?.artist?.takeIf { it.isNotBlank() } ?: parsed.artist
+            val rawAlbum = metadata?.album?.takeIf { it.isNotBlank() } ?: parsed.album
+
+            val title = sanitizeSearchSeed(rawTitle) ?: rawTitle
+            val artist = sanitizeSearchSeed(rawArtist) ?: rawArtist
+            val album = sanitizeSearchSeed(rawAlbum) ?: rawAlbum
 
             _searchQuery.value = OnlineSearchQuery(
                 title = title.orEmpty(),
@@ -495,13 +499,28 @@ class OnlineMetadataViewModel @Inject constructor(
     }
 
     private fun parseFromFileName(name: String): ParsedFileName {
-        val cleaned = name.replace('_', ' ').trim()
-        val split = cleaned.split(" - ", limit = 3).map { it.trim() }.filter { it.isNotEmpty() }
+        val cleaned = sanitizeSearchSeed(name).orEmpty()
+        val split = cleaned
+            .split(Regex("\\s*[-\u2013\u2014]\\s*"), limit = 3)
+            .map { it.trim() }
+            .filter { it.isNotEmpty() }
         return when (split.size) {
             2 -> ParsedFileName(artist = split[0], title = split[1], album = null)
             3 -> ParsedFileName(artist = split[0], album = split[1], title = split[2])
             else -> ParsedFileName(artist = null, title = cleaned.takeIf { it.isNotBlank() }, album = null)
         }
+    }
+
+    private fun sanitizeSearchSeed(value: String?): String? {
+        if (value.isNullOrBlank()) return null
+        val cleaned = value
+            .replace('_', ' ')
+            .replace('.', ' ')
+            .replace(Regex("^\\s*\\d{1,3}[\\s._-]+"), "")
+            .replace(Regex("\\([^)]*\\)|\\[[^\\]]*\\]|\\{[^}]*\\}"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return cleaned.takeIf { it.length >= 2 }
     }
 }
 
