@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Static colors matching base values for c001apk effect -->
-    <color name="ic_launcher_background">#FFFFFFFF</color>
-    <color name="ic_launcher_note">#FFEAF2FF</color>
+    <!-- Android 12+ dynamic color: follow wallpaper Monet palette -->
+    <color name="ic_launcher_background">@android:color/system_accent1_600</color>
+    <color name="ic_launcher_note">@android:color/system_accent1_0</color>
 </resources>
