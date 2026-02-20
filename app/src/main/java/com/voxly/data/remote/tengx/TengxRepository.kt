@@ -13,6 +13,9 @@ import com.voxly.data.remote.tengx.model.TengxSinger
 import com.voxly.data.remote.tengx.model.TengxSong
 import com.voxly.data.remote.tengx.model.TengxSongResult
 import com.voxly.data.remote.tengx.model.TengxSongDetail
+import timber.log.Timber
+
+private const val TAG = "TengxRepository"
 
 /**
  * Repository for TengX Music API operations.
@@ -105,6 +108,35 @@ class TengxRepositoryImpl(
         val failures = mutableListOf<String>()
         var emptySuccess: TengxSearchResponse? = null
 
+        Timber.d(TAG, "Searching QQ Music for: '$keywords' page=$normalizedPage limit=$normalizedSize")
+
+        // Try mobile web search first - more reliable as it simulates browser search
+        try {
+            Timber.d(TAG, "Trying QQ Music mobile web search for '$keywords'")
+            val mobileResponse = api.searchMobile(
+                keyword = keywords,
+                page = normalizedPage,
+                perPage = normalizedSize
+            )
+            
+            if (mobileResponse.isSuccessful) {
+                val body = mobileResponse.body()?.string()
+                if (!body.isNullOrBlank()) {
+                    Timber.d(TAG, "QQ Music mobile response: ${body.take(200)}")
+                    parseMobileSearchResponse(body)?.let { parsed ->
+                        if (!parsed.data?.song?.list.isNullOrEmpty()) {
+                            val songCount = parsed.data.song.list.size
+                            Timber.d(TAG, "QQ Music mobile found $songCount songs for '$keywords'")
+                            return Result.success(parsed)
+                        }
+                    }
+                }
+            }
+            Timber.w(TAG, "QQ Music mobile search failed: http=${mobileResponse.code()}")
+        } catch (e: Exception) {
+            Timber.e(TAG, "QQ Music mobile search exception: ${e.message}", e)
+        }
+
         // Try both known web-search methods. QQ occasionally deprecates one side.
         val v2Methods = listOf("DoSearchForQQMusicDesktop", "DoSearchForQQMusicMobile")
         for (method in v2Methods) {
@@ -119,24 +151,34 @@ class TengxRepositoryImpl(
                     )
                 )
                 val body = v2Response.body()
+                Timber.d(TAG, "QQ Music v2($method) response: httpCode=${v2Response.code()}")
+                
                 if (v2Response.isSuccessful && body != null) {
                     parseV2SearchResponse(body)?.let { parsed ->
+                        val songCount = parsed.data?.song?.list?.size ?: 0
+                        Timber.d(TAG, "QQ Music v2($method) parsed songs: $songCount")
+                        
                         if (!parsed.data?.song?.list.isNullOrEmpty()) {
+                            Timber.d(TAG, "QQ Music found $songCount songs for '$keywords' using method $method")
                             return Result.success(parsed)
                         }
                         if (emptySuccess == null) {
                             emptySuccess = parsed
                         }
+                        Timber.w(TAG, "QQ Music v2($method) returned empty results")
                     }
                 }
                 failures.add("v2:$method http=${v2Response.code()}")
+                Timber.w(TAG, "QQ Music v2($method) failed: http=${v2Response.code()}")
             } catch (e: Exception) {
                 failures.add("v2:$method ex=${e.message ?: "unknown"}")
+                Timber.e(TAG, "QQ Music v2($method) exception: ${e.message}", e)
             }
         }
 
         return try {
             // Fallback to legacy endpoint if v2 response cannot be parsed.
+            Timber.d(TAG, "Trying QQ Music legacy endpoint for '$keywords'")
             val legacyResponse = api.search(
                 keyword = keywords,
                 page = normalizedPage,
@@ -144,18 +186,25 @@ class TengxRepositoryImpl(
             )
             if (legacyResponse.isSuccessful && legacyResponse.body() != null) {
                 val body = legacyResponse.body()!!
+                val songCount = body.data?.song?.list?.size ?: 0
+                Timber.d(TAG, "QQ Music legacy response: httpCode=${legacyResponse.code()} songs=$songCount")
+                
                 if (!body.data?.song?.list.isNullOrEmpty()) {
+                    Timber.d(TAG, "QQ Music legacy found $songCount songs for '$keywords'")
                     Result.success(body)
                 } else {
+                    Timber.w(TAG, "QQ Music legacy returned empty for '$keywords'")
                     emptySuccess?.let { Result.success(it) } ?: Result.success(body)
                 }
             } else {
                 failures.add("legacy http=${legacyResponse.code()}")
+                Timber.w(TAG, "QQ Music legacy failed: http=${legacyResponse.code()}")
                 emptySuccess?.let { Result.success(it) }
                     ?: Result.failure(Exception("QQ Music search failed: ${failures.joinToString(" | ")}"))
             }
         } catch (e: Exception) {
             failures.add("legacy ex=${e.message ?: "unknown"}")
+            Timber.e(TAG, "QQ Music legacy exception: ${e.message}", e)
             emptySuccess?.let { Result.success(it) }
                 ?: Result.failure(Exception("QQ Music search failed: ${failures.joinToString(" | ")}"))
         }
@@ -360,6 +409,102 @@ class TengxRepositoryImpl(
             ),
             message = req.optString("message")
         )
+    }
+
+    /**
+     * Parses mobile web search response.
+     * The mobile endpoint returns raw JSON without callback wrapper.
+     */
+    private fun parseMobileSearchResponse(response: String): TengxSearchResponse? {
+        return try {
+            val json = com.google.gson.JsonParser.parseString(response).asJsonObject
+            val code = json.optInt("code") ?: -1
+            if (code != 0) {
+                Timber.w(TAG, "Mobile search returned error code: $code")
+                return null
+            }
+
+            val songJson = json.optObject("data")?.optObject("song")
+            val songList = songJson?.optArray("list")
+            val totalnum = songJson?.optInt("totalnum") ?: 0
+
+            val songs: List<TengxSong> = songList?.mapNotNull<JsonElement, TengxSong> { element ->
+                val item = element.asJsonObjectOrNull() ?: return@mapNotNull null
+                
+                val id = item.optLong("id") ?: item.optLong("songid") ?: return@mapNotNull null
+                val name = item.optString("songName") 
+                    ?: item.optString("name") 
+                    ?: item.optString("title") 
+                    ?: return@mapNotNull null
+                val title = item.optString("subtitle") ?: name
+                val interval = item.optInt("interval") ?: 0
+                val mid = item.optString("songmid") ?: item.optString("mid") ?: ""
+                
+                // Parse singer
+                val singerArray = item.optArray("singer")
+                val singers: List<TengxSinger> = singerArray?.mapNotNull<JsonElement, TengxSinger> { singerElem ->
+                    val singerObj = singerElem.asJsonObjectOrNull() ?: return@mapNotNull null
+                    val singerId = singerObj.optLong("id") ?: return@mapNotNull null
+                    val singerName = singerObj.optString("name") ?: return@mapNotNull null
+                    TengxSinger(
+                        id = singerId,
+                        name = singerName,
+                        title = singerObj.optString("title") ?: "",
+                        type = singerObj.optInt("type") ?: 0,
+                        gender = singerObj.optInt("gender") ?: 0,
+                        pic = singerObj.optString("pic") ?: ""
+                    )
+                } ?: emptyList()
+
+                // Parse album
+                val albumJson = item.optObject("album")
+                val album = if (albumJson != null) {
+                    val albumId = albumJson.optLong("id") ?: 0L
+                    val albumName = albumJson.optString("name") ?: "Unknown Album"
+                    val albumMid = albumJson.optString("mid") ?: ""
+                    val albumPic = albumJson.optString("picUrl") 
+                        ?: albumJson.optString("pic")
+                        ?: if (albumMid.isNotBlank()) "https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumMid}.jpg" 
+                        else ""
+                    
+                    TengxAlbum(
+                        id = albumId,
+                        mid = albumMid,
+                        name = albumName,
+                        title = albumJson.optString("title") ?: "",
+                        singer = null,
+                        publicTime = albumJson.optString("publicTime") ?: "",
+                        pic = albumPic
+                    )
+                } else null
+
+                TengxSong(
+                    id = id,
+                    mid = mid,
+                    name = name,
+                    title = title,
+                    subtitle = "",
+                    singer = singers,
+                    album = album,
+                    interval = interval,
+                    version = 0
+                )
+            } ?: emptyList()
+
+            TengxSearchResponse(
+                code = code,
+                data = TengxSearchData(
+                    song = TengxSongResult(
+                        list = songs,
+                        totalnum = totalnum
+                    )
+                ),
+                message = json.optString("message")
+            )
+        } catch (e: Exception) {
+            Timber.e(TAG, "Failed to parse mobile search response: ${e.message}", e)
+            null
+        }
     }
 
     private fun JsonObject.optObject(name: String): JsonObject? {

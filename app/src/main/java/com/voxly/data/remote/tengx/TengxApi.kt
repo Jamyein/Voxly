@@ -5,6 +5,7 @@ import com.voxly.data.remote.tengx.model.TengxLyricsResponse
 import com.voxly.data.remote.tengx.model.TengxSearchResponse
 import com.voxly.data.remote.tengx.model.TengxSongDetail
 import com.google.gson.JsonObject
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
 import retrofit2.http.GET
@@ -31,10 +32,14 @@ interface TengxApi {
         const val SEARCH_BASE_URL = "https://c.y.qq.com/"
         /** Lyrics API base URL */
         const val LYRIC_BASE_URL = "https://c.y.qq.com/"
+        /** Mobile web search URL */
+        const val MOBILE_SEARCH_URL = "https://c.y.qq.com/musichall/fcgi-bin/fcg_get_musicinfo"
         /** Default g_tk parameter for QQ Music API */
         const val G_TK = 5381
         /** User Agent for QQ Music API */
         const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+        /** Mobile User Agent */
+        const val MOBILE_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
     }
 
     /**
@@ -82,6 +87,36 @@ interface TengxApi {
         @Url url: String = "https://u.y.qq.com/cgi-bin/musicu.fcg",
         @Body body: Map<String, @JvmSuppressWildcards Any>
     ): Response<JsonObject>
+
+    /**
+     * QQ Music mobile web search - simulates browser search.
+     * Uses the mobile search endpoint that returns JSONP-like response.
+     */
+    @GET
+    @Headers(
+        "User-Agent: $MOBILE_USER_AGENT",
+        "Referer: https://y.qq.com/",
+        "Accept: */*",
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
+    )
+    suspend fun searchMobile(
+        @Url url: String = "https://c.y.qq.com/soso/fcgi-bin/client_music_search_get",
+        @Query("w") keyword: String,
+        @Query("p") page: Int = 1,
+        @Query("n") perPage: Int = 20,
+        @Query("catZhidao") catZhidao: Int = 1,
+        @Query("zhidaqu") zhidaqu: Int = 1,
+        @Query("t") t: Int = 0,
+        @Query("aggr") aggr: Int = 2,
+        @Query("cr") cr: Int = 1,
+        @Query("lossless") lossless: Int = 0,
+        @Query("flag_qc") flagQc: Int = 0,
+        @Query("p") p: Int = page,
+        @Query("n") n: Int = perPage,
+        @Query("g_tk") g_tk: Int = G_TK,
+        @Query("json") json: Int = 1,
+        @Query("format") format: String = "json"
+    ): Response<ResponseBody>
 
     /**
      * Gets lyrics for a song using GET request with query parameters.

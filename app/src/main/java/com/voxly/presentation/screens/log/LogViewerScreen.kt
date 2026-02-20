@@ -1,5 +1,8 @@
 package com.voxly.presentation.screens.log
 
+import android.content.ClipData
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.compose.foundation.background
@@ -12,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -66,6 +70,18 @@ fun LogViewerScreen(
                 },
                 actions = {
                     if (uiState.selectedLogFile != null) {
+                        IconButton(onClick = {
+                            val content = viewModel.getCopyableContent()
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("Voxly Log", content)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, R.string.log_viewer_copied, Toast.LENGTH_SHORT).show()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = stringResource(R.string.log_viewer_copy)
+                            )
+                        }
                         IconButton(onClick = {
                             viewModel.shareLog(context, viewModel.getFilteredLogs().joinToString("\n"))
                         }) {
@@ -134,6 +150,7 @@ fun LogViewerScreen(
     if (showDeleteDialog) {
         AlertDialog(
             onDismissRequest = { showDeleteDialog = false },
+            shape = MaterialTheme.shapes.medium,
             title = { Text(stringResource(R.string.log_viewer_delete)) },
             text = { Text(stringResource(R.string.log_viewer_delete_confirm)) },
             confirmButton = {
@@ -196,7 +213,8 @@ private fun LogFileCard(
 ) {
     Card(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium
     ) {
         Row(
             modifier = Modifier

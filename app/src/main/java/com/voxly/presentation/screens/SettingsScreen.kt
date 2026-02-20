@@ -32,11 +32,6 @@ data class LanguageOption(
     val languageTag: String?
 )
 
-data class ScanQualityOption(
-    val value: String,
-    @StringRes val labelResId: Int
-)
-
 data class ThemeModeOption(
     val value: String,
     @StringRes val labelResId: Int
@@ -50,6 +45,11 @@ data class AppleCountryOption(
 data class SearchLimitOption(
     val value: Int,
     @StringRes val labelResId: Int? = null
+)
+
+data class ScanModeOption(
+    val value: String,
+    @StringRes val labelResId: Int
 )
 
 // ==================== Helper Functions ====================
@@ -99,6 +99,7 @@ fun SettingsSection(
 
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             )
@@ -226,6 +227,7 @@ fun SourcePriorityDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         title = { Text(title) },
         text = {
             Column(
@@ -311,7 +313,6 @@ fun SettingsScreen(
     val activity = context as? Activity
     
     val dynamicColors by viewModel.dynamicColors.collectAsState()
-    val scanQuality by viewModel.scanQuality.collectAsState()
     val savedLanguageTag by viewModel.languageTag.collectAsState()
     val themeMode by viewModel.themeMode.collectAsState()
     val appleCountryCode by viewModel.appleCountryCode.collectAsState()
@@ -336,6 +337,7 @@ fun SettingsScreen(
     val consoleLoggingEnabled by viewModel.consoleLoggingEnabled.collectAsState()
     val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
     val replayGainTargetLoudness by viewModel.replayGainTargetLoudness.collectAsState()
+    val scanMode by viewModel.scanMode.collectAsState()
     
     var languageExpanded by remember { mutableStateOf(false) }
     val languageOptions = remember {
@@ -352,16 +354,6 @@ fun SettingsScreen(
         normalizeLanguageTag(it.languageTag) == normalizeLanguageTag(effectiveLanguageTag)
     } ?: languageOptions.first()
 
-    var scanQualityExpanded by remember { mutableStateOf(false) }
-    val scanQualityOptions = remember {
-        listOf(
-            ScanQualityOption("Fast", R.string.settings_scan_quality_fast),
-            ScanQualityOption("Normal", R.string.settings_scan_quality_normal),
-            ScanQualityOption("Accurate", R.string.settings_scan_quality_accurate)
-        )
-    }
-    val currentScanQuality = scanQualityOptions.firstOrNull { it.value == scanQuality }
-        ?: scanQualityOptions[1]
     var themeExpanded by remember { mutableStateOf(false) }
     val themeOptions = remember {
         listOf(
@@ -403,6 +395,17 @@ fun SettingsScreen(
     }
     val currentSearchLimit = searchLimitOptions.firstOrNull { it.value == onlineSearchLimit }
         ?: searchLimitOptions[1]
+
+    var scanModeExpanded by remember { mutableStateOf(false) }
+    val scanModeOptions = remember {
+        listOf(
+            ScanModeOption("TRACK_ONLY", R.string.settings_scan_mode_track_only),
+            ScanModeOption("SINGLE_ALBUM", R.string.settings_scan_mode_album_only),
+            ScanModeOption("ALBUMS", R.string.settings_scan_mode_track_and_album)
+        )
+    }
+    val currentScanMode = scanModeOptions.firstOrNull { it.value == scanMode }
+        ?: scanModeOptions[0]
 
     Scaffold(
         topBar = {
@@ -478,18 +481,18 @@ fun SettingsScreen(
             // Scanning Section
             SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
                 SettingsDropdownRow(
-                    title = stringResource(R.string.settings_scan_quality),
-                    subtitle = stringResource(R.string.settings_scan_quality_subtitle),
-                    selectedLabel = stringResource(currentScanQuality.labelResId),
-                    expanded = scanQualityExpanded,
-                    onExpandedChange = { scanQualityExpanded = it }
+                    title = stringResource(R.string.settings_scan_mode),
+                    subtitle = stringResource(R.string.settings_scan_mode_subtitle),
+                    selectedLabel = stringResource(currentScanMode.labelResId),
+                    expanded = scanModeExpanded,
+                    onExpandedChange = { scanModeExpanded = it }
                 ) {
-                    scanQualityOptions.forEach { option ->
+                    scanModeOptions.forEach { option ->
                         DropdownMenuItem(
                             text = { Text(stringResource(option.labelResId)) },
                             onClick = {
-                                viewModel.setScanQuality(option.value)
-                                scanQualityExpanded = false
+                                viewModel.setScanMode(option.value)
+                                scanModeExpanded = false
                             }
                         )
                     }
@@ -668,6 +671,7 @@ fun SettingsScreen(
                 if (showReplayGainDialog) {
                     AlertDialog(
                         onDismissRequest = { showReplayGainDialog = false },
+                        shape = MaterialTheme.shapes.large,
                         title = { Text(stringResource(R.string.replay_gain_target_loudness)) },
                         text = {
                             Column {

@@ -20,8 +20,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.net.UnknownHostException
 import javax.inject.Inject
 import javax.inject.Singleton
+import javax.net.ssl.SSLException
 
 private const val TAG = "AggregatedMetadata"
 private const val BROWSER_USER_AGENT =
@@ -404,32 +406,48 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 limit = limit
             )
 
-            if (searchResult.isSuccess) {
-                val response = searchResult.getOrNull()
-                val songs = response?.result?.songs ?: emptyList()
-                
-                // Group by album
-                val albums = songs.groupBy { it.album?.id ?: -1L }.mapNotNull { (albumId, albumSongs) ->
-                    if (albumId <= 0L) return@mapNotNull null
-                    val firstSong = albumSongs.first()
-                    OnlineRelease(
-                        id = albumId.toString(),
-                        title = firstSong.album?.name ?: "Unknown Album",
-                        artist = firstSong.artists.joinToString(", ") { it.name },
-                        year = null, // NetEase API doesn't provide year in search
-                        format = "Digital",
-                        trackCount = albumSongs.size,
-                        coverArtUrl = normalizeCoverUrl(firstSong.album?.picUrl),
-                        source = "NetEase",
-                        albumTitle = firstSong.album?.name
-                    )
+            searchResult.fold(
+                onSuccess = { response ->
+                    val songs = response?.result?.songs ?: emptyList()
+                    
+                    if (songs.isEmpty()) {
+                        // API returned success but no data - log warning
+                        Timber.w(TAG, "NetEase search returned empty results for '$artist $album'")
+                        Result.success(emptyList())
+                    } else {
+                        // Group by album
+                        val albums = songs.groupBy { it.album?.id ?: -1L }.mapNotNull { (albumId, albumSongs) ->
+                            if (albumId <= 0L) return@mapNotNull null
+                            val firstSong = albumSongs.first()
+                            // 尝试从搜索结果获取封面，如果为空则从专辑详情获取
+                            var coverUrl = normalizeCoverUrl(firstSong.album?.picUrl)
+                            if (coverUrl == null) {
+                                coverUrl = getNeteaseAlbumCoverUrl(albumId)
+                            }
+                            OnlineRelease(
+                                id = albumId.toString(),
+                                title = firstSong.album?.name ?: "Unknown Album",
+                                artist = firstSong.artists?.joinToString(", ") { it.name } ?: "",
+                                year = null, // NetEase API doesn't provide year in search
+                                format = "Digital",
+                                trackCount = albumSongs.size,
+                                coverArtUrl = coverUrl,
+                                source = "NetEase",
+                                albumTitle = firstSong.album?.name
+                            )
+                        }
+                        Result.success(albums)
+                    }
+                },
+                onFailure = { error ->
+                    // Log the actual error instead of returning empty success
+                    Timber.e(TAG, "NetEase search failed: ${error.message}", error)
+                    Result.failure(error)
                 }
-                Result.success(albums)
-            } else {
-                Result.success(emptyList())
-            }
+            )
         } catch (e: Exception) {
-            Result.success(emptyList())
+            Timber.e(TAG, "NetEase search exception: ${e.message}", e)
+            Result.failure(e)
         }.also { result ->
             Logger.i(
                 "Online query source=NetEase type=artist_album elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
@@ -454,37 +472,46 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 pageSize = limit
             )
 
-            if (searchResult.isSuccess) {
-                val response = searchResult.getOrNull()
-                val songs = response?.data?.song?.list ?: emptyList()
-                
-                // Group by album
-                val albums = songs.groupBy { it.album?.id }.mapNotNull { (albumId, albumSongs) ->
-                    albumId?.let { id ->
-                        val firstSong = albumSongs.first()
-                        OnlineRelease(
-                            id = id.toString(),
-                            title = firstSong.album?.name ?: "Unknown Album",
-                            artist = firstSong.singer.joinToString(", ") { singer -> singer.name },
-                            year = null,
-                            format = "Digital",
-                            trackCount = albumSongs.size,
-                            coverArtUrl = buildQQCoverUrl(
-                                albumMid = firstSong.album?.mid,
-                                rawCoverUrl = firstSong.album?.pic,
-                                fallbackId = id.toString()
-                            ),
-                            source = "QQ Music",
-                            albumTitle = firstSong.album?.name
-                        )
+            searchResult.fold(
+                onSuccess = { response ->
+                    val songs = response?.data?.song?.list ?: emptyList()
+                    
+                    if (songs.isEmpty()) {
+                        Timber.w(TAG, "QQ Music search returned empty results for '$artist $album'")
+                        Result.success(emptyList())
+                    } else {
+                        // Group by album
+                        val albums = songs.groupBy { it.album?.id }.mapNotNull { (albumId, albumSongs) ->
+                            albumId?.let { id ->
+                                val firstSong = albumSongs.first()
+                                OnlineRelease(
+                                    id = id.toString(),
+                                    title = firstSong.album?.name ?: "Unknown Album",
+                                    artist = firstSong.singer?.joinToString(", ") { singer -> singer.name } ?: "",
+                                    year = null,
+                                    format = "Digital",
+                                    trackCount = albumSongs.size,
+                                    coverArtUrl = buildQQCoverUrl(
+                                        albumMid = firstSong.album?.mid,
+                                        rawCoverUrl = firstSong.album?.pic,
+                                        fallbackId = id.toString()
+                                    ),
+                                    source = "QQ Music",
+                                    albumTitle = firstSong.album?.name
+                                )
+                            }
+                        }
+                        Result.success(albums)
                     }
+                },
+                onFailure = { error ->
+                    Timber.e(TAG, "QQ Music search failed: ${error.message}", error)
+                    Result.failure(error)
                 }
-                Result.success(albums)
-            } else {
-                Result.success(emptyList())
-            }
+            )
         } catch (e: Exception) {
-            Result.success(emptyList())
+            Timber.e(TAG, "QQ Music search exception: ${e.message}", e)
+            Result.failure(e)
         }.also { result ->
             Logger.i(
                 "Online query source=QQ_Music type=artist_album elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
@@ -649,10 +676,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("iTunes", error.message ?: "Failed"))
+                            trySend(OnlineSourceResult.Error("iTunes", error.toUserFriendlyError()))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("iTunes", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error("iTunes", e.toUserFriendlyError()))
                 } finally {
                     trySend(OnlineSourceResult.SourceCompleted("iTunes"))
                 }
@@ -679,10 +706,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("QQ Music", error.message ?: "Failed"))
+                            trySend(OnlineSourceResult.Error("QQ Music", error.toUserFriendlyError()))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("QQ Music", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error("QQ Music", e.toUserFriendlyError()))
                 } finally {
                     trySend(OnlineSourceResult.SourceCompleted("QQ Music"))
                 }
@@ -709,10 +736,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("NetEase", error.message ?: "Failed"))
+                            trySend(OnlineSourceResult.Error("NetEase", error.toUserFriendlyError()))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("NetEase", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error("NetEase", e.toUserFriendlyError()))
                 } finally {
                     trySend(OnlineSourceResult.SourceCompleted("NetEase"))
                 }
@@ -739,10 +766,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("MusicBrainz", error.message ?: "Failed"))
+                            trySend(OnlineSourceResult.Error("MusicBrainz", error.toUserFriendlyError()))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("MusicBrainz", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error("MusicBrainz", e.toUserFriendlyError()))
                 } finally {
                     trySend(OnlineSourceResult.SourceCompleted("MusicBrainz"))
                 }
@@ -819,32 +846,59 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 limit = limit
             )
 
-            if (searchResult.isSuccess) {
-                val response = searchResult.getOrNull()
-                val songs = response?.result?.songs ?: emptyList()
-                
-                    val recordings = songs.map { song ->
-                        OnlineRecording(
-                            id = song.id.toString(),
-                            title = song.name,
-                            artist = song.artists.joinToString(", ") { it.name },
-                            duration = (song.duration / 1000).toInt(),
-                            releaseId = song.album?.id?.toString(),
-                            source = "NetEase",
-                            coverArtUrl = normalizeCoverUrl(song.album?.picUrl)
-                        )
+            searchResult.fold(
+                onSuccess = { response ->
+                    val songs = response?.result?.songs ?: emptyList()
+                    
+                    if (songs.isEmpty()) {
+                        Timber.w(TAG, "NetEase track search returned empty results for '$title' artist='$artist'")
+                        Result.success(emptyList())
+                    } else {
+                        val recordings = songs.map { song ->
+                            // 尝试从搜索结果获取封面，如果为空则从专辑详情获取
+                            var coverUrl = normalizeCoverUrl(song.album?.picUrl)
+                            if (coverUrl == null && song.album?.id != null) {
+                                coverUrl = getNeteaseAlbumCoverUrl(song.album.id)
+                            }
+                            OnlineRecording(
+                                id = song.id.toString(),
+                                title = song.name,
+                                artist = song.artists?.joinToString(", ") { it.name } ?: "",
+                                duration = (song.duration / 1000).toInt(),
+                                releaseId = song.album?.id?.toString(),
+                                source = "NetEase",
+                                coverArtUrl = coverUrl
+                            )
+                        }
+                        Result.success(recordings)
+                    }
+                },
+                onFailure = { error ->
+                    Timber.e(TAG, "NetEase track search failed: ${error.message}", error)
+                    Result.failure(error)
                 }
-                Result.success(recordings)
-            } else {
-                Result.success(emptyList())
-            }
+            )
         } catch (e: Exception) {
-            Result.success(emptyList())
+            Timber.e(TAG, "NetEase track search exception: ${e.message}", e)
+            Result.failure(e)
         }.also { result ->
             Logger.i(
                 "Online query source=NetEase type=track elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
                 TAG
             )
+        }
+    }
+
+    /**
+     * 获取网易云专辑封面 URL
+     */
+    private suspend fun getNeteaseAlbumCoverUrl(albumId: Long): String? {
+        return try {
+            val albumDetail = wangyRepository.getAlbumDetail(albumId)
+            albumDetail.getOrNull()?.album?.picUrl?.let { normalizeCoverUrl(it) }
+        } catch (e: Exception) {
+            Timber.w(TAG, "Failed to get NetEase album cover for albumId=$albumId: ${e.message}")
+            null
         }
     }
 
@@ -858,37 +912,55 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     ): Result<List<OnlineRecording>> {
         val startedAt = SystemClock.elapsedRealtime()
         return try {
+            // 统一查询格式：艺术家 标题（空格分隔）
+            val keywords = buildString {
+                if (!artist.isNullOrBlank()) {
+                    append(artist)
+                    append(" ")
+                }
+                append(title)
+            }
+            
             val searchResult = tengxRepository.searchSongs(
-                keywords = title,
+                keywords = keywords,
                 pageNum = 1,
                 pageSize = limit
             )
 
-            if (searchResult.isSuccess) {
-                val response = searchResult.getOrNull()
-                val songs = response?.data?.song?.list ?: emptyList()
-                
-                val recordings = songs.map { song ->
-                    OnlineRecording(
-                        id = song.id.toString(),
-                        title = song.name,
-                        artist = song.singer.joinToString(", ") { it.name },
-                        duration = song.interval,
-                        releaseId = song.album?.mid?.takeIf { it.isNotBlank() } ?: song.album?.id?.toString(),
-                        source = "QQ Music",
-                        coverArtUrl = buildQQCoverUrl(
-                            albumMid = song.album?.mid,
-                            rawCoverUrl = song.album?.pic,
-                            fallbackId = song.album?.id?.toString()
-                        )
-                    )
+            searchResult.fold(
+                onSuccess = { response ->
+                    val songs = response?.data?.song?.list ?: emptyList()
+                    
+                    if (songs.isEmpty()) {
+                        Timber.w(TAG, "QQ Music track search returned empty results for '$title' artist='$artist'")
+                        Result.success(emptyList())
+                    } else {
+                        val recordings = songs.map { song ->
+                            OnlineRecording(
+                                id = song.id.toString(),
+                                title = song.name,
+                                artist = song.singer?.joinToString(", ") { it.name } ?: "",
+                                duration = song.interval,
+                                releaseId = song.album?.mid?.takeIf { it.isNotBlank() } ?: song.album?.id?.toString(),
+                                source = "QQ Music",
+                                coverArtUrl = buildQQCoverUrl(
+                                    albumMid = song.album?.mid,
+                                    rawCoverUrl = song.album?.pic,
+                                    fallbackId = song.album?.id?.toString()
+                                )
+                            )
+                        }
+                        Result.success(recordings)
+                    }
+                },
+                onFailure = { error ->
+                    Timber.e(TAG, "QQ Music track search failed: ${error.message}", error)
+                    Result.failure(error)
                 }
-                Result.success(recordings)
-            } else {
-                Result.success(emptyList())
-            }
+            )
         } catch (e: Exception) {
-            Result.success(emptyList())
+            Timber.e(TAG, "QQ Music track search exception: ${e.message}", e)
+            Result.failure(e)
         }.also { result ->
             Logger.i(
                 "Online query source=QQ_Music type=track elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
@@ -1381,5 +1453,39 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             return "https://y.gtimg.cn/music/photo_new/T002R500x500M000${id}.jpg"
         }
         return null
+    }
+
+    /**
+     * Converts technical SSL/network errors to user-friendly messages.
+     */
+    private fun Throwable.toUserFriendlyError(): String {
+        val message = this.message ?: "Unknown error"
+        
+        // SSL certificate chain validation failed
+        if (this is SSLException || 
+            message.contains("chain validation failed", ignoreCase = true) ||
+            message.contains("SSL", ignoreCase = true) &&
+            (message.contains("validation", ignoreCase = true) || 
+             message.contains("certificate", ignoreCase = true))
+        ) {
+            return "网络连接失败：SSL 证书验证错误。请检查设备日期/时间设置，或联系网络管理员。"
+        }
+        
+        // Unknown host / DNS error
+        if (this is UnknownHostException || message.contains("Unable to resolve host", ignoreCase = true)) {
+            return "网络连接失败：无法解析服务器地址。请检查网络连接。"
+        }
+        
+        // Connection timeout
+        if (message.contains("timeout", ignoreCase = true)) {
+            return "网络连接超时：请检查网络连接后重试。"
+        }
+        
+        // Connection refused
+        if (message.contains("Connection refused", ignoreCase = true)) {
+            return "网络连接被拒绝：请稍后重试。"
+        }
+        
+        return message
     }
 }

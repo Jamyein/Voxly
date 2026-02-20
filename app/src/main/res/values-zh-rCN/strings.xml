@@ -284,6 +284,11 @@
     <string name="settings_dark_theme_subtitle">使用深色配色方案</string>
     <string name="settings_dynamic_color_subtitle">使用来自壁纸的颜色（Android 12+）</string>
     <string name="settings_scan_quality_subtitle">质量越高，扫描越慢</string>
+    <string name="settings_scan_mode">扫描模式</string>
+    <string name="settings_scan_mode_subtitle">兼容 foobar2000：单轨、单专辑、多专辑</string>
+    <string name="settings_scan_mode_track_only">单轨增益</string>
+    <string name="settings_scan_mode_album_only">单专辑扫描</string>
+    <string name="settings_scan_mode_track_and_album">多专辑扫描</string>
     <string name="settings_language">应用语言</string>
     <string name="settings_language_subtitle">切换应用显示语言</string>
     <string name="settings_language_system">跟随系统</string>
@@ -321,8 +326,8 @@
     <string name="settings_apple_country_fr">法国 (FR)</string>
     <string name="settings_apple_country_ca">加拿大 (CA)</string>
     <string name="settings_apple_country_au">澳大利亚 (AU)</string>
-    <string name="settings_online_search_limit">搜索结果条数限制</string>
-    <string name="settings_online_search_limit_subtitle">每次在线搜索返回的最大结果数</string>
+    <string name="settings_online_search_limit">搜索结果条数限制（单源）</string>
+    <string name="settings_online_search_limit_subtitle">每个在线数据源返回的最大结果数</string>
     <string name="settings_online_search_limit_unlimited">无限制</string>
     <string name="settings_source_group_metadata">组合数据源</string>
     <string name="settings_source_group_metadata_subtitle">设置元数据搜索来源的开关和优先级</string>
@@ -348,9 +353,9 @@
     <string name="settings_logging_export">导出日志</string>
     <string name="settings_logging_export_subtitle">将所有日志分享为压缩文件</string>
     <string name="settings_logging_cleanup">清理日志</string>
-    <string name="settings_logging_cleanup_subtitle">删除 7 天前的旧日志</string>
+    <string name="settings_logging_cleanup_subtitle">删除所有日志文件</string>
     <string name="settings_logging_exported">日志导出成功</string>
-    <string name="settings_logging_cleanup_complete">已删除 %d 个旧日志文件</string>
+    <string name="settings_logging_cleanup_complete">已删除 %d 个日志文件</string>
     <string name="settings_logging_no_logs">没有可导出的日志</string>
 
     <!-- Album Art -->
@@ -365,6 +370,8 @@
     <string name="log_viewer_filter_info">信息</string>
     <string name="log_viewer_filter_debug">调试</string>
     <string name="log_viewer_share">分享</string>
+    <string name="log_viewer_copy">复制</string>
+    <string name="log_viewer_copied">已复制到剪贴板</string>
     <string name="log_viewer_export">导出</string>
     <string name="log_viewer_delete">删除</string>
     <string name="log_viewer_delete_confirm">确定要删除此日志文件吗？</string>

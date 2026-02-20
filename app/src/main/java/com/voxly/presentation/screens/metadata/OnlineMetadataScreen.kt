@@ -144,7 +144,10 @@ fun OnlineMetadataScreen(
                 val selectedArtist = selectedRelease?.artist ?: selectedReleaseCandidate?.artist.orEmpty()
                 val selectedTrackCount = selectedRelease?.trackCount ?: selectedReleaseCandidate?.trackCount ?: 0
                 Spacer(modifier = Modifier.height(12.dp))
-                Card(modifier = Modifier.fillMaxWidth()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium
+                ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
                             text = "Album: $selectedTitle",
@@ -182,7 +185,10 @@ private fun QuerySummaryCard(
     album: String?,
     fromTags: Boolean
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 text = if (fromTags) "Auto query source: tags (priority)" else "Auto query source: file name fallback",
@@ -217,7 +223,8 @@ private fun OnlineReleaseList(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 4.dp)
-                    .clickable { onSelect(release) }
+                    .clickable { onSelect(release) },
+                shape = MaterialTheme.shapes.medium
             ) {
                 Row(modifier = Modifier.padding(12.dp)) {
                     ReleaseCover(
@@ -286,6 +293,7 @@ fun SearchProgressIndicator(
 
     Card(
         modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
         colors = androidx.compose.material3.CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )

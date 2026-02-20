@@ -433,7 +433,7 @@ class LyricsRepositoryImpl @Inject constructor(
                 OnlineLyricsResult(
                     id = song.id.toLong(),
                     trackName = song.name,
-                    artistName = song.artists.joinToString(", ") { it.name },
+                    artistName = song.artists?.joinToString(", ") { it.name } ?: "",
                     albumName = song.album?.name,
                     duration = song.duration / 1000.0,
                     hasSyncedLyrics = true, // NetEase usually has synced lyrics
@@ -471,7 +471,7 @@ class LyricsRepositoryImpl @Inject constructor(
                 OnlineLyricsResult(
                     id = song.id.toLong(),
                     trackName = song.name,
-                    artistName = song.singer.joinToString(", ") { it.name },
+                    artistName = song.singer?.joinToString(", ") { it.name } ?: "",
                     albumName = song.album?.name,
                     duration = song.interval.toDouble(),
                     hasSyncedLyrics = true,
@@ -507,9 +507,9 @@ class LyricsRepositoryImpl @Inject constructor(
             async { runCatching { searchFromQQMusic(trackName, artistName).getOrNull() } }
         } else null
 
-        val lrclibResults = lrclibDeferred?.await()?.getOrNull() ?: emptyList()
-        val neteaseResults = neteaseDeferred?.await()?.getOrNull() ?: emptyList()
-        val qqMusicResults = qqMusicDeferred?.await()?.getOrNull() ?: emptyList()
+        val lrclibResults = applyLimit(lrclibDeferred?.await()?.getOrNull() ?: emptyList(), settings.searchLimit)
+        val neteaseResults = applyLimit(neteaseDeferred?.await()?.getOrNull() ?: emptyList(), settings.searchLimit)
+        val qqMusicResults = applyLimit(qqMusicDeferred?.await()?.getOrNull() ?: emptyList(), settings.searchLimit)
 
         // Merge all results
         val allResults = mutableListOf<OnlineLyricsResult>()
@@ -529,7 +529,7 @@ class LyricsRepositoryImpl @Inject constructor(
             ) 1 else 0
         })
 
-        Result.success(applyLimit(sortedResults, settings.searchLimit))
+        Result.success(sortedResults)
     }
 
     override suspend fun getOnlineLyrics(result: OnlineLyricsResult): Result<Lyrics> =

@@ -127,6 +127,7 @@ fun BatchOperationsScreen(
 private fun FileCountCard(fileCount: Int) {
     Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = if (fileCount > 0) {
                 MaterialTheme.colorScheme.primaryContainer
@@ -338,6 +339,7 @@ private fun CompletionContent(
 @Composable
 private fun StatCard(title: String, value: String, color: androidx.compose.ui.graphics.Color) {
     Card(
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = color.copy(alpha = 0.1f)
         )
@@ -416,6 +418,7 @@ private fun OperationCard(
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = if (isDestructive) {
                 MaterialTheme.colorScheme.errorContainer
@@ -477,6 +480,7 @@ private fun OperationCard(
 @Composable
 private fun ErrorCard(error: String, onDismiss: () -> Unit) {
     Card(
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.errorContainer
         )
@@ -520,6 +524,7 @@ private fun BatchEditDialog(
     // TODO: Implement batch edit dialog with field selection
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         title = { Text(stringResource(R.string.batch_edit_metadata_title)) },
         text = { Text(stringResource(R.string.batch_edit_metadata_placeholder)) },
         confirmButton = {
@@ -538,6 +543,7 @@ private fun AlbumArtPickerDialog(
     // TODO: Implement album art picker dialog
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         title = { Text(stringResource(R.string.album_art_picker_title)) },
         text = { Text(stringResource(R.string.album_art_picker_placeholder)) },
         confirmButton = {

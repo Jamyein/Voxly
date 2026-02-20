@@ -19,15 +19,17 @@ import java.util.zip.ZipOutputStream
 /**
  * Timber Tree that writes logs to files asynchronously.
  * Extends Timber.Tree to integrate with Timber's logging system.
+ * Creates a new log file each time the app is started.
  */
 class FileLoggingTree : Timber.Tree() {
 
     companion object {
         private const val MAX_FILE_SIZE = 5 * 1024 * 1024L // 5MB
-        private const val MAX_FILES = 5
+        private const val MAX_FILES = 10
         private const val MAX_TOTAL_SIZE = 50 * 1024 * 1024L // 50MB
 
         private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+        private val fileNameDateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
     }
 
     private val executor = Executors.newSingleThreadExecutor { r ->
@@ -37,7 +39,6 @@ class FileLoggingTree : Timber.Tree() {
     private val isDraining = AtomicBoolean(false)
 
     private var currentLogFile: File? = null
-    private var currentFileIndex: Int = 0
     private var currentFileSize: Long = 0
 
     private val lock = Any()
@@ -119,37 +120,39 @@ class FileLoggingTree : Timber.Tree() {
     }
 
     private fun getOrCreateLogFile(): File? {
-        // Get existing log files and sort by index
-        val existingFiles = getLogFilesWithIndex()
-        
-        // Find current file or create new one
-        if (currentLogFile == null || !currentLogFile!!.exists()) {
-            // Find the latest file with content
-            currentFileIndex = existingFiles.maxOfOrNull { it.first } ?: 0
-            currentLogFile = getLogFile(currentFileIndex)
-            currentFileSize = currentLogFile?.length() ?: 0
+        // If we already have a current log file, use it
+        if (currentLogFile != null && currentLogFile!!.exists()) {
+            // Check if file size exceeds limit
+            if (currentFileSize >= MAX_FILE_SIZE) {
+                // Create new file with timestamp when size limit reached
+                currentLogFile = createNewLogFile()
+                currentFileSize = 0
+            }
+            return currentLogFile
         }
 
-        // Check if we need to rotate
-        if (currentFileSize >= MAX_FILE_SIZE) {
-            currentFileIndex++
-            if (currentFileIndex >= MAX_FILES) {
-                // Rotate: delete oldest (index 0), shift others
-                rotateFiles()
-                currentFileIndex = MAX_FILES - 1
-            }
-            currentLogFile = getLogFile(currentFileIndex)
-            currentFileSize = 0
-            
-            try {
-                currentLogFile?.createNewFile()
-            } catch (e: IOException) {
-                Log.e("FileLoggingTree", "Failed to create new log file: ${e.message}")
-                return null
-            }
-        }
-
+        // Create a new log file for this app session
+        currentLogFile = createNewLogFile()
+        currentFileSize = 0
         return currentLogFile
+    }
+
+    private fun createNewLogFile(): File {
+        val logDir = LogManager.getLogDirectory()
+        val timestamp = fileNameDateFormat.format(Date())
+        val fileName = "voxly_$timestamp.log"
+        val file = File(logDir, fileName)
+        try {
+            file.createNewFile()
+            // Write header to new file
+            val header = LogManager.createLogHeader()
+            FileOutputStream(file, true).use { fos ->
+                fos.write(header.toByteArray())
+            }
+        } catch (e: IOException) {
+            Log.e("FileLoggingTree", "Failed to create new log file: ${e.message}")
+        }
+        return file
     }
 
     private fun getLogFilesWithIndex(): List<Pair<Int, File>> {
@@ -160,32 +163,19 @@ class FileLoggingTree : Timber.Tree() {
         return logDir.listFiles { file ->
             file.isFile &&
             file.name.startsWith(prefix) &&
-            file.name.endsWith(suffix) &&
-            file.name.removePrefix(prefix).removeSuffix(suffix).toIntOrNull() != null
-        }?.mapNotNull { file ->
-            val index = file.name.removePrefix(prefix).removeSuffix(suffix).toIntOrNull()
-            index?.let { Pair(it, file) }
+            file.name.endsWith(suffix)
+        }?.sortedByDescending { it.lastModified() }?.mapIndexed { index, file ->
+            Pair(index, file)
         } ?: emptyList()
     }
 
-    private fun getLogFile(index: Int): File {
-        val logDir = LogManager.getLogDirectory()
-        return File(logDir, "voxly_${String.format(Locale.US, "%03d", index)}.log")
-    }
-
     private fun rotateFiles() {
-        // Delete the oldest file (index 0)
-        val oldestFile = getLogFile(0)
-        if (oldestFile.exists()) {
-            oldestFile.delete()
-        }
-
-        // Shift all files: voxly_1 -> voxly_0, voxly_2 -> voxly_1, etc.
-        for (i in 0 until MAX_FILES - 1) {
-            val currentFile = getLogFile(i)
-            val nextFile = getLogFile(i + 1)
-            if (nextFile.exists()) {
-                nextFile.renameTo(currentFile)
+        // Delete oldest files until we're under MAX_FILES
+        val files = getLogFilesWithIndex().sortedBy { it.first }
+        for ((index, file) in files) {
+            if (getLogFilesWithIndex().size <= MAX_FILES) break
+            if (file.exists()) {
+                file.delete()
             }
         }
     }
@@ -209,15 +199,23 @@ class FileLoggingTree : Timber.Tree() {
     fun cleanupExcessLogs() {
         synchronized(lock) {
             val logDir = LogManager.getLogDirectory()
-            val files = getLogFilesWithIndex().sortedBy { it.first }
+            val files = getLogFilesWithIndex().sortedByDescending { it.second.lastModified() }
             
             var totalSize = files.sumOf { it.second.length() }
             
             // Delete oldest files until we're under the limit
-            for ((index, file) in files) {
+            for ((_, file) in files) {
                 if (totalSize <= MAX_TOTAL_SIZE) break
                 if (file.exists() && file.delete()) {
                     totalSize -= file.length()
+                }
+            }
+
+            // Also enforce max file count
+            val sortedByTime = files.sortedByDescending { it.second.lastModified() }
+            for ((_, file) in sortedByTime.drop(MAX_FILES)) {
+                if (file.exists()) {
+                    file.delete()
                 }
             }
         }
@@ -235,7 +233,7 @@ class FileLoggingTree : Timber.Tree() {
 
             try {
                 ZipOutputStream(FileOutputStream(zipFile)).use { zos ->
-                    getLogFilesWithIndex().sortedBy { it.first }.forEach { (_, file) ->
+                    getLogFilesWithIndex().sortedByDescending { it.second.lastModified() }.forEach { (_, file) ->
                         if (file.exists()) {
                             zos.putNextEntry(ZipEntry(file.name))
                             FileInputStream(file).use { fis ->

@@ -233,6 +233,12 @@ class TagLibMetadataProcessor @Inject constructor(
 
         val propertyMap = metadata.propertyMap
 
+        // Helper function to find property key case-insensitively (for FLAC/Vorbis Comments compatibility)
+        fun findKeyIgnoreCase(map: Map<String, Array<String>>, targetKey: String): String? {
+            val lowerTarget = targetKey.lowercase()
+            return map.keys.find { it.lowercase() == lowerTarget }
+        }
+
         // Read custom fields
         val customFields = mutableMapOf<String, String>()
         propertyMap[CUSTOM_RECORD_LABEL]?.firstOrNull()?.let { customFields[CUSTOM_RECORD_LABEL] = it }
@@ -240,11 +246,19 @@ class TagLibMetadataProcessor @Inject constructor(
         propertyMap[CUSTOM_ISRC]?.firstOrNull()?.let { customFields[CUSTOM_ISRC] = it }
         propertyMap[CUSTOM_COPYRIGHT]?.firstOrNull()?.let { customFields[CUSTOM_COPYRIGHT] = it }
         
-        // Read ReplayGain fields
-        propertyMap[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN] = it }
-        propertyMap[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK] = it }
-        propertyMap[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = it }
-        propertyMap[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
+        // Read ReplayGain fields (case-insensitive for FLAC/Vorbis Comments compatibility)
+        findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_TRACK_GAIN)?.let { actualKey ->
+            propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN] = it }
+        }
+        findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_TRACK_PEAK)?.let { actualKey ->
+            propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK] = it }
+        }
+        findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_ALBUM_GAIN)?.let { actualKey ->
+            propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = it }
+        }
+        findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_ALBUM_PEAK)?.let { actualKey ->
+            propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
+        }
 
         // Get album art from pictures
         val albumArt = if (includeAlbumArt) {
@@ -294,15 +308,32 @@ class TagLibMetadataProcessor @Inject constructor(
             } ?: return@runCatching null
 
             val propertyMap = metadata.propertyMap
+            
+            // Helper function to find property key case-insensitively (for FLAC/Vorbis Comments compatibility)
+            fun findKeyIgnoreCase(map: Map<String, Array<String>>, targetKey: String): String? {
+                val lowerTarget = targetKey.lowercase()
+                return map.keys.find { it.lowercase() == lowerTarget }
+            }
+            
             val customFields = mutableMapOf<String, String>()
             propertyMap[CUSTOM_RECORD_LABEL]?.firstOrNull()?.let { customFields[CUSTOM_RECORD_LABEL] = it }
             propertyMap[CUSTOM_ENCODER]?.firstOrNull()?.let { customFields[CUSTOM_ENCODER] = it }
             propertyMap[CUSTOM_ISRC]?.firstOrNull()?.let { customFields[CUSTOM_ISRC] = it }
             propertyMap[CUSTOM_COPYRIGHT]?.firstOrNull()?.let { customFields[CUSTOM_COPYRIGHT] = it }
-            propertyMap[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN] = it }
-            propertyMap[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK] = it }
-            propertyMap[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = it }
-            propertyMap[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
+            
+            // Read ReplayGain fields (case-insensitive for FLAC/Vorbis Comments compatibility)
+            findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_TRACK_GAIN)?.let { actualKey ->
+                propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN] = it }
+            }
+            findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_TRACK_PEAK)?.let { actualKey ->
+                propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK] = it }
+            }
+            findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_ALBUM_GAIN)?.let { actualKey ->
+                propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = it }
+            }
+            findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_ALBUM_PEAK)?.let { actualKey ->
+                propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
+            }
 
             AudioMetadata(
                 title = propertyMap["TITLE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
@@ -421,6 +452,18 @@ class TagLibMetadataProcessor @Inject constructor(
             metadata.customFields[CUSTOM_ENCODER]?.let { properties[CUSTOM_ENCODER] = arrayOf(it) }
             metadata.customFields[CUSTOM_ISRC]?.let { properties[CUSTOM_ISRC] = arrayOf(it) }
             metadata.customFields[CUSTOM_COPYRIGHT]?.let { properties[CUSTOM_COPYRIGHT] = arrayOf(it) }
+            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.let {
+                properties[CUSTOM_REPLAYGAIN_TRACK_GAIN] = arrayOf(it)
+            }
+            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.let {
+                properties[CUSTOM_REPLAYGAIN_TRACK_PEAK] = arrayOf(it)
+            }
+            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.let {
+                properties[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = arrayOf(it)
+            }
+            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.let {
+                properties[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = arrayOf(it)
+            }
 
             // Write metadata using TagLib - TagLib takes ownership and closes its copy
             val success = TagLib.savePropertyMap(fdForTagLib, properties)
@@ -461,6 +504,18 @@ class TagLibMetadataProcessor @Inject constructor(
             metadata.customFields[CUSTOM_ENCODER]?.let { properties[CUSTOM_ENCODER] = arrayOf(it) }
             metadata.customFields[CUSTOM_ISRC]?.let { properties[CUSTOM_ISRC] = arrayOf(it) }
             metadata.customFields[CUSTOM_COPYRIGHT]?.let { properties[CUSTOM_COPYRIGHT] = arrayOf(it) }
+            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.let {
+                properties[CUSTOM_REPLAYGAIN_TRACK_GAIN] = arrayOf(it)
+            }
+            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.let {
+                properties[CUSTOM_REPLAYGAIN_TRACK_PEAK] = arrayOf(it)
+            }
+            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.let {
+                properties[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = arrayOf(it)
+            }
+            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.let {
+                properties[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = arrayOf(it)
+            }
 
             val success = try {
                 TagLib.savePropertyMap(fdForTagLib, properties)
@@ -564,6 +619,18 @@ class TagLibMetadataProcessor @Inject constructor(
             metadata.customFields[CUSTOM_ENCODER]?.let { properties[CUSTOM_ENCODER] = arrayOf(it) }
             metadata.customFields[CUSTOM_ISRC]?.let { properties[CUSTOM_ISRC] = arrayOf(it) }
             metadata.customFields[CUSTOM_COPYRIGHT]?.let { properties[CUSTOM_COPYRIGHT] = arrayOf(it) }
+            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.let {
+                properties[CUSTOM_REPLAYGAIN_TRACK_GAIN] = arrayOf(it)
+            }
+            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.let {
+                properties[CUSTOM_REPLAYGAIN_TRACK_PEAK] = arrayOf(it)
+            }
+            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.let {
+                properties[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = arrayOf(it)
+            }
+            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.let {
+                properties[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = arrayOf(it)
+            }
 
             // TagLib takes ownership and closes its copy
             val success = TagLib.savePropertyMap(fdForTagLib, properties)

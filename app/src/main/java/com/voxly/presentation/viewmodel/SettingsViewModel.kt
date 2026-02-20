@@ -42,16 +42,6 @@ class SettingsViewModel @Inject constructor(
         )
 
     /**
-     * Scan quality state
-     */
-    val scanQuality: StateFlow<String> = settingsDataStore.scanQuality
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = "Normal"
-        )
-
-    /**
      * Language tag state (null means system default)
      */
     val languageTag: StateFlow<String?> = settingsDataStore.languageTag
@@ -197,6 +187,16 @@ class SettingsViewModel @Inject constructor(
         )
 
     /**
+     * Scan mode state (TRACK_ONLY, ALBUM_ONLY, TRACK_AND_ALBUM)
+     */
+    val scanMode: StateFlow<String> = settingsDataStore.scanMode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = "TRACK_ONLY"
+        )
+
+    /**
      * Set dark theme preference
      */
     fun setDarkTheme(enabled: Boolean) {
@@ -211,15 +211,6 @@ class SettingsViewModel @Inject constructor(
     fun setDynamicColors(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.setDynamicColors(enabled)
-        }
-    }
-
-    /**
-     * Set scan quality preference
-     */
-    fun setScanQuality(quality: String) {
-        viewModelScope.launch {
-            settingsDataStore.setScanQuality(quality)
         }
     }
 
@@ -381,6 +372,15 @@ class SettingsViewModel @Inject constructor(
     fun setReplayGainTargetLoudness(loudness: Float) {
         viewModelScope.launch {
             settingsDataStore.setReplayGainTargetLoudness(loudness)
+        }
+    }
+
+    /**
+     * Set scan mode preference
+     */
+    fun setScanMode(mode: String) {
+        viewModelScope.launch {
+            settingsDataStore.setScanMode(mode)
         }
     }
 }

@@ -292,6 +292,11 @@
     <string name="settings_dark_theme_subtitle">Use dark color scheme</string>
     <string name="settings_dynamic_color_subtitle">Use colors from your wallpaper (Android 12+)</string>
     <string name="settings_scan_quality_subtitle">Higher quality = slower scanning</string>
+    <string name="settings_scan_mode">Scan Mode</string>
+    <string name="settings_scan_mode_subtitle">Compatible with foobar2000: Track Only, Single Album, or Albums</string>
+    <string name="settings_scan_mode_track_only">Track Only</string>
+    <string name="settings_scan_mode_album_only">Single Album</string>
+    <string name="settings_scan_mode_track_and_album">Albums</string>
     <string name="settings_language">App Language</string>
     <string name="settings_language_subtitle">Change the app language</string>
     <string name="settings_language_system">System Default</string>
@@ -329,8 +334,8 @@
     <string name="settings_apple_country_fr">France (FR)</string>
     <string name="settings_apple_country_ca">Canada (CA)</string>
     <string name="settings_apple_country_au">Australia (AU)</string>
-    <string name="settings_online_search_limit">Search Result Limit</string>
-    <string name="settings_online_search_limit_subtitle">Maximum results returned per online search</string>
+    <string name="settings_online_search_limit">Search Result Limit (Per Source)</string>
+    <string name="settings_online_search_limit_subtitle">Maximum results returned from each online source</string>
     <string name="settings_online_search_limit_unlimited">Unlimited</string>
     <string name="settings_source_group_metadata">Metadata Sources</string>
     <string name="settings_source_group_metadata_subtitle">Enable and prioritize sources for metadata results</string>
@@ -356,9 +361,9 @@
     <string name="settings_logging_export">Export Logs</string>
     <string name="settings_logging_export_subtitle">Share all logs as a compressed file</string>
     <string name="settings_logging_cleanup">Clean Up Logs</string>
-    <string name="settings_logging_cleanup_subtitle">Delete logs older than 7 days</string>
+    <string name="settings_logging_cleanup_subtitle">Delete all log files</string>
     <string name="settings_logging_exported">Logs exported successfully</string>
-    <string name="settings_logging_cleanup_complete">%d old log files deleted</string>
+    <string name="settings_logging_cleanup_complete">%d log files deleted</string>
     <string name="settings_logging_no_logs">No logs to export</string>
 
     <!-- Album Art -->
@@ -373,6 +378,8 @@
     <string name="log_viewer_filter_info">Info</string>
     <string name="log_viewer_filter_debug">Debug</string>
     <string name="log_viewer_share">Share</string>
+    <string name="log_viewer_copy">Copy</string>
+    <string name="log_viewer_copied">Copied to clipboard</string>
     <string name="log_viewer_export">Export</string>
     <string name="log_viewer_delete">Delete</string>
     <string name="log_viewer_delete_confirm">Delete this log file?</string>

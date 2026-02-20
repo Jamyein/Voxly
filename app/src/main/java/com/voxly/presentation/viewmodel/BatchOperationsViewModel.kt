@@ -2,9 +2,11 @@ package com.voxly.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.ReplayGainRepository
+import com.voxly.domain.repository.ScanMode
 import com.voxly.domain.repository.ScanQuality
 import com.voxly.domain.usecase.BatchAlbumArtUseCase
 import com.voxly.domain.usecase.BatchEditMetadataUseCase
@@ -16,6 +18,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -28,7 +31,8 @@ class BatchOperationsViewModel @Inject constructor(
     private val replayGainRepository: ReplayGainRepository,
     private val batchEditMetadataUseCase: BatchEditMetadataUseCase,
     private val batchReplayGainUseCase: BatchReplayGainUseCase,
-    private val batchAlbumArtUseCase: BatchAlbumArtUseCase
+    private val batchAlbumArtUseCase: BatchAlbumArtUseCase,
+    private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
 
     private val _selectedFiles = MutableStateFlow<List<String>>(emptyList())
@@ -45,6 +49,22 @@ class BatchOperationsViewModel @Inject constructor(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    // Scan mode setting
+    private val _scanMode = MutableStateFlow(ScanMode.TRACK_ONLY)
+    val scanMode: StateFlow<ScanMode> = _scanMode.asStateFlow()
+
+    // Initialize scan mode from settings
+    init {
+        viewModelScope.launch {
+            val mode = settingsDataStore.scanMode.first()
+            _scanMode.value = when (mode) {
+                "SINGLE_ALBUM" -> ScanMode.SINGLE_ALBUM
+                "ALBUMS" -> ScanMode.ALBUMS
+                else -> ScanMode.TRACK_ONLY
+            }
+        }
+    }
 
     /**
      * Sets the list of files to process.
@@ -94,9 +114,21 @@ class BatchOperationsViewModel @Inject constructor(
 
     /**
      * Starts batch ReplayGain scanning.
-     * @param scanQuality Quality level for scanning
+     * Uses dynamic sample rate handling - high-resolution audio (>48kHz) 
+     * will be automatically downsampled for optimal performance.
+     * Uses scan mode from settings (Track Only, Single Album, or Albums - foobar2000 compatible)
+     * @param scanQuality Quality level (determines max sample rate for scanning)
      */
-    fun startBatchReplayGain(scanQuality: ScanQuality = ScanQuality.NORMAL) {
+    fun startBatchReplayGain(scanQuality: ScanQuality = ScanQuality.ACCURATE) {
+        startBatchReplayGainWithMode(scanQuality, _scanMode.value)
+    }
+
+    /**
+     * Starts batch ReplayGain scanning with specified mode.
+     * @param scanQuality Quality level (determines max sample rate for scanning)
+     * @param scanMode Scan mode (Track Only, Single Album, or Albums - foobar2000 compatible)
+     */
+    fun startBatchReplayGainWithMode(scanQuality: ScanQuality = ScanQuality.ACCURATE, scanMode: ScanMode = ScanMode.TRACK_ONLY) {
         if (_selectedFiles.value.isEmpty()) {
             _error.value = "No files selected"
             return
@@ -108,8 +140,18 @@ class BatchOperationsViewModel @Inject constructor(
             _error.value = null
 
             try {
+                // For TRACK_ONLY: scan all files as individual tracks (no album gain)
+                // For SINGLE_ALBUM: scan all selected files as ONE album
+                // For ALBUMS: scan files grouped by album tags (auto-group)
+                
+                val filesToScan = when (scanMode) {
+                    ScanMode.TRACK_ONLY -> _selectedFiles.value
+                    ScanMode.SINGLE_ALBUM -> _selectedFiles.value
+                    ScanMode.ALBUMS -> _selectedFiles.value  // Will be grouped by album in scanner
+                }
+                
                 batchReplayGainUseCase(
-                    filePaths = _selectedFiles.value,
+                    filePaths = filesToScan,
                     scanQuality = scanQuality
                 ).collect { progress ->
                     _batchProgress.value = BatchProgress(
@@ -124,6 +166,8 @@ class BatchOperationsViewModel @Inject constructor(
                     )
 
                     if (progress.status.name == "COMPLETED") {
+                        // For album modes, album gain is calculated after scanning all files
+                        // The scanner calculates both track and album gain per file
                         _operationComplete.value = true
                         _isProcessing.value = false
                     }

@@ -700,9 +700,10 @@ fun FileBrowserScreen(
     }
 
     if (deleteTargetFile != null) {
-        AlertDialog(
-            onDismissRequest = { deleteTargetFile = null },
-            title = { Text(stringResource(R.string.dialog_confirm_delete)) },
+    AlertDialog(
+        onDismissRequest = { deleteTargetFile = null },
+        shape = MaterialTheme.shapes.large,
+        title = { Text(stringResource(R.string.dialog_confirm_delete)) },
             text = {
                 Text(
                     text = stringResource(
@@ -1024,6 +1025,7 @@ private fun BatchOnlineMetadataDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         icon = { Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = null) },
         title = { Text(stringResource(R.string.batch_online_metadata_title)) },
         text = {
@@ -1136,6 +1138,7 @@ private fun BatchRenameDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         icon = { Icon(painter = appIconPainter(AppIcon.Rename), contentDescription = null) },
         title = { Text(stringResource(R.string.batch_rename_title)) },
         text = {
@@ -1229,6 +1232,7 @@ private fun BatchFixMetadataDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         icon = { Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = null) },
         title = { Text(stringResource(R.string.batch_fix_metadata_title)) },
         text = {
@@ -1681,6 +1685,7 @@ private fun AudioFileItem(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = if (isSelected) {
                 MaterialTheme.colorScheme.primaryContainer
@@ -1888,6 +1893,7 @@ private fun SingleFileRenameDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         title = { Text(stringResource(R.string.rename_file)) },
         text = {
             Column {
@@ -2004,6 +2010,7 @@ private fun DirectoryItem(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
@@ -2061,6 +2068,7 @@ private fun BatchOperationsMenuDialog(
 ) {
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         icon = { Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = null) },
         title = { Text(stringResource(R.string.batch_operations)) },
         text = {
@@ -2169,6 +2177,7 @@ private fun UnifiedFieldDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         icon = { Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = null) },
         title = { Text(stringResource(R.string.batch_unified_field_title)) },
         text = {
@@ -2261,6 +2270,7 @@ private fun ReplaceTextDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         icon = { Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = null) },
         title = { Text(stringResource(R.string.batch_replace_text_title)) },
         text = {
@@ -2378,6 +2388,7 @@ private fun AutoNumberDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
         icon = { Icon(painter = appIconPainter(AppIcon.Schedule), contentDescription = null) },
         title = { Text(stringResource(R.string.batch_auto_number_title)) },
         text = {

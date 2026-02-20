@@ -111,6 +111,26 @@ object LogManager {
         return deletedCount
     }
 
+    /**
+     * Clears all log files (not just old ones).
+     * Used by the settings cleanup option.
+     */
+    fun clearAllLogs(): Int {
+        var deletedCount = 0
+
+        // Delete all log files
+        getLogFiles().forEach { file ->
+            if (file.delete()) deletedCount++
+        }
+
+        // Delete all crash files
+        getCrashFiles().forEach { file ->
+            if (file.delete()) deletedCount++
+        }
+
+        return deletedCount
+    }
+
     fun getLogDirectorySize(): Long {
         var size = 0L
         getLogFiles().forEach { size += it.length() }

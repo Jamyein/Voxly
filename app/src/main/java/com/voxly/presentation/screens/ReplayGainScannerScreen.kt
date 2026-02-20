@@ -111,7 +111,8 @@ fun ReplayGainScannerScreen(
             if (showSettingsSheet) {
                 ModalBottomSheet(
                     onDismissRequest = { showSettingsSheet = false },
-                    sheetState = rememberModalBottomSheetState()
+                    sheetState = rememberModalBottomSheetState(),
+                    shape = MaterialTheme.shapes.medium
                 ) {
                     ScanSettingsSheet(
                         scanType = scanType,
@@ -242,6 +243,7 @@ private fun ConfigurationContent(
         // Scan Type Card
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             )
@@ -278,6 +280,7 @@ private fun ConfigurationContent(
         // Target Loudness Card
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             )
@@ -317,6 +320,7 @@ private fun ConfigurationContent(
         // Scan Quality Card
         Card(
             modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.medium,
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
             )

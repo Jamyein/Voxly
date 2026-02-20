@@ -291,6 +291,7 @@ fun MetadataEditorScreen(
     if (showDiscardDialog) {
         AlertDialog(
             onDismissRequest = { showDiscardDialog = false },
+            shape = MaterialTheme.shapes.large,
             title = { Text(stringResource(R.string.dialog_unsaved_changes)) },
             text = { Text(stringResource(R.string.dialog_discard_changes_message)) },
             confirmButton = {
@@ -317,6 +318,7 @@ fun MetadataEditorScreen(
     if (showAlbumArtOptions) {
         ModalBottomSheet(
             onDismissRequest = { showAlbumArtOptions = false },
+            shape = MaterialTheme.shapes.large,
             sheetState = rememberModalBottomSheetState()
         ) {
             Column(
@@ -374,6 +376,7 @@ fun MetadataEditorScreen(
         if (previewBytes != null) {
             AlertDialog(
                 onDismissRequest = { showAlbumArtPreview = false },
+                shape = MaterialTheme.shapes.large,
                 title = { Text(stringResource(R.string.metadata_album_art)) },
                 text = {
                     val preview = remember(previewBytes) { decodeAlbumArtPreview(previewBytes, 2048) }
@@ -402,6 +405,7 @@ fun MetadataEditorScreen(
                 showOnlineLyricsDialog = false
                 viewModel.clearOnlineLyricsResults()
             },
+            shape = MaterialTheme.shapes.large,
             title = { Text(stringResource(R.string.search_online_lyrics)) },
             text = {
                 when {
@@ -475,6 +479,7 @@ fun MetadataEditorScreen(
                 showOnlineCoverDialog = false
                 viewModel.clearOnlineCoverResults()
             },
+            shape = MaterialTheme.shapes.large,
             title = { Text(stringResource(R.string.fetch_online_cover_art)) },
             text = {
                 when {
@@ -860,6 +865,7 @@ private fun ReplayGainSection(
     
     Card(
         modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )

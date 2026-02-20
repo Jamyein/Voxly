@@ -1,6 +1,7 @@
 package com.voxly.data.local.replaygain
 
 import android.content.Context
+import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.SystemClock
@@ -42,6 +43,8 @@ class ReplayGainScanner @Inject constructor(
 
         // Number of samples to process per chunk (for progress updates)
         const val SAMPLES_PER_CHUNK = 4096
+
+        private const val DECODE_TIMEOUT_US = 10_000L
     }
 
     /**
@@ -205,39 +208,26 @@ class ReplayGainScanner @Inject constructor(
             val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
-            // Calculate sample rate based on scan quality
-            val targetSampleRate = when (scanQuality) {
-                ScanQuality.FAST -> minOf(sampleRate, 22050)
-                ScanQuality.NORMAL -> sampleRate
-                ScanQuality.ACCURATE -> sampleRate
+            // Calculate target sample rate based on scan quality
+            // Dynamic sample rate handling:
+            // - If file sample rate <= maxSampleRate: use original sample rate
+            // - If file sample rate > maxSampleRate: downsample to maxSampleRate
+            val targetSampleRate = minOf(sampleRate, scanQuality.maxSampleRate)
+
+            val stats = decodeAndAccumulateStats(
+                extractor = extractor,
+                format = format,
+                targetSampleRate = targetSampleRate,
+                channelCount = channelCount
+            )
+
+            if (stats.sampleCount <= 0L) {
+                extractor.release()
+                return@withContext null
             }
 
-            // Read audio samples and calculate loudness
-            val samples = mutableListOf<Float>()
-            val buffer = ByteBuffer.allocate(1024 * 1024)
-
-            while (true) {
-                val sampleSize = extractor.readSampleData(buffer, 0)
-                if (sampleSize < 0) break
-
-                // Convert bytes to float samples (16-bit PCM)
-                val shortBuffer = buffer.asShortBuffer()
-                while (shortBuffer.hasRemaining()) {
-                    val sample = shortBuffer.get() / 32768.0f
-                    samples.add(sample)
-                }
-
-                buffer.clear()
-                extractor.advance()
-            }
-
-            extractor.release()
-
-            if (samples.isEmpty()) return@withContext null
-
-            // Calculate RMS and peak
-            val rms = calculateRMS(samples)
-            val peak = calculatePeak(samples)
+            val rms = calculateRMSFromStats(stats.sumSquares, stats.sampleCount)
+            val peak = stats.peak
 
             // Calculate gain adjustment needed to reach reference level
             val currentDb = 20 * kotlin.math.log10(rms.coerceAtLeast(RMS_REFERENCE.toFloat()))
@@ -258,30 +248,141 @@ class ReplayGainScanner @Inject constructor(
     /**
      * Calculates RMS (Root Mean Square) of audio samples.
      */
-    private fun calculateRMS(samples: List<Float>): Float {
-        if (samples.isEmpty()) return 0f
-
-        var sum = 0.0
-        for (sample in samples) {
-            sum += sample.toDouble().pow(2.0)
-        }
-
-        return sqrt(sum / samples.size).toFloat()
+    private fun calculateRMSFromStats(sumSquares: Double, sampleCount: Long): Float {
+        if (sampleCount <= 0L) return 0f
+        return sqrt(sumSquares / sampleCount).toFloat()
     }
 
-    /**
-     * Calculates peak level of audio samples.
-     */
-    private fun calculatePeak(samples: List<Float>): Float {
-        if (samples.isEmpty()) return 0f
+    private data class SampleStats(
+        val sampleCount: Long,
+        val sumSquares: Double,
+        val peak: Float
+    )
 
-        var peak = 0f
-        for (sample in samples) {
-            val absSample = kotlin.math.abs(sample)
-            if (absSample > peak) peak = absSample
+    private fun decodeAndAccumulateStats(
+        extractor: MediaExtractor,
+        format: MediaFormat,
+        targetSampleRate: Int,
+        channelCount: Int
+    ): SampleStats {
+        val mime = format.getString(MediaFormat.KEY_MIME) ?: return SampleStats(0L, 0.0, 0f)
+        val codec = MediaCodec.createDecoderByType(mime)
+
+        try {
+            codec.configure(format, null, null, 0)
+            codec.start()
+
+            var inputDone = false
+            var outputDone = false
+
+            var sampleCount = 0L
+            var sumSquares = 0.0
+            var peak = 0f
+
+            val bufferInfo = MediaCodec.BufferInfo()
+            var lastSeenTimestampUs = Long.MIN_VALUE
+            var acceptSample = true
+
+            while (!outputDone) {
+                if (!inputDone) {
+                    val inputIndex = codec.dequeueInputBuffer(DECODE_TIMEOUT_US)
+                    if (inputIndex >= 0) {
+                        val inputBuffer = codec.getInputBuffer(inputIndex)
+                        if (inputBuffer != null) {
+                            val sampleSize = extractor.readSampleData(inputBuffer, 0)
+                            if (sampleSize < 0) {
+                                codec.queueInputBuffer(
+                                    inputIndex,
+                                    0,
+                                    0,
+                                    0L,
+                                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                                )
+                                inputDone = true
+                            } else {
+                                val presentationTimeUs = extractor.sampleTime
+                                codec.queueInputBuffer(
+                                    inputIndex,
+                                    0,
+                                    sampleSize,
+                                    presentationTimeUs,
+                                    0
+                                )
+                                extractor.advance()
+                            }
+                        }
+                    }
+                }
+
+                val outputIndex = codec.dequeueOutputBuffer(bufferInfo, DECODE_TIMEOUT_US)
+                when {
+                    outputIndex >= 0 -> {
+                        val outputBuffer = codec.getOutputBuffer(outputIndex)
+                        if (outputBuffer != null && bufferInfo.size > 0) {
+                            outputBuffer.position(bufferInfo.offset)
+                            outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
+
+                            if (bufferInfo.presentationTimeUs != lastSeenTimestampUs) {
+                                lastSeenTimestampUs = bufferInfo.presentationTimeUs
+                                acceptSample = shouldAcceptSample(
+                                    timestampUs = bufferInfo.presentationTimeUs,
+                                    targetSampleRate = targetSampleRate
+                                )
+                            }
+
+                            if (acceptSample) {
+                                val shortBuffer = outputBuffer.asShortBuffer()
+                                while (shortBuffer.hasRemaining()) {
+                                    val sample = shortBuffer.get().toInt().toFloat() / 32768.0f
+                                    val absSample = kotlin.math.abs(sample)
+                                    if (absSample > peak) peak = absSample
+                                    sumSquares += sample.toDouble().pow(2.0)
+                                    sampleCount++
+                                }
+                            }
+                        }
+
+                        codec.releaseOutputBuffer(outputIndex, false)
+                        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                            outputDone = true
+                        }
+                    }
+
+                    outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        val newFormat = codec.outputFormat
+                        val newChannelCount =
+                            newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
+                        if (newChannelCount != channelCount) {
+                            Logger.w(
+                                "ReplayGain channelCount changed $channelCount -> $newChannelCount",
+                                "ReplayGainScanner"
+                            )
+                        }
+                    }
+                }
+            }
+
+            return SampleStats(sampleCount, sumSquares, peak)
+        } finally {
+            try {
+                codec.stop()
+            } catch (_: Exception) {
+            }
+            try {
+                codec.release()
+            } catch (_: Exception) {
+            }
+            try {
+                extractor.release()
+            } catch (_: Exception) {
+            }
         }
+    }
 
-        return peak
+    private fun shouldAcceptSample(timestampUs: Long, targetSampleRate: Int): Boolean {
+        if (targetSampleRate <= 0) return true
+        val stepUs = (1_000_000L / targetSampleRate).coerceAtLeast(1L)
+        return timestampUs % stepUs == 0L
     }
 
     /**

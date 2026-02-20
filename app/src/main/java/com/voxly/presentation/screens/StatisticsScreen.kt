@@ -212,6 +212,7 @@ private fun StatCard(
 ) {
     Card(
         modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
@@ -246,6 +247,7 @@ private fun FormatDistributionCard(
     totalFiles: Int
 ) {
     Card(
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
@@ -283,6 +285,7 @@ private fun FormatDistributionCard(
 @Composable
 private fun TopArtistsCard(artists: List<Pair<String, Int>>) {
     Card(
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
@@ -311,6 +314,7 @@ private fun TopArtistsCard(artists: List<Pair<String, Int>>) {
 @Composable
 private fun TopAlbumsCard(albums: List<Pair<String, Int>>) {
     Card(
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )
@@ -339,6 +343,7 @@ private fun TopAlbumsCard(albums: List<Pair<String, Int>>) {
 @Composable
 private fun RecentActivityCard(todayEdits: Int, weekEdits: Int, monthEdits: Int) {
     Card(
+        shape = MaterialTheme.shapes.medium,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         )

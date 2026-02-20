@@ -141,13 +141,15 @@ class BatchReplayGainUseCase @Inject constructor(
 ) {
     /**
      * Scans multiple files for ReplayGain.
+     * Uses dynamic sample rate handling - high-resolution audio (>48kHz)
+     * will be automatically downsampled for optimal performance.
      * @param filePaths List of file paths to scan
-     * @param scanQuality Quality level for scanning
+     * @param scanQuality Quality level (determines max sample rate for scanning)
      * @return Flow emitting scan progress
      */
     operator fun invoke(
         filePaths: List<String>,
-        scanQuality: ScanQuality = ScanQuality.NORMAL
+        scanQuality: ScanQuality = ScanQuality.ACCURATE
     ): Flow<com.voxly.domain.repository.ScanProgress> {
         return replayGainRepository.scanReplayGain(filePaths, scanQuality)
     }

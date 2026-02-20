@@ -88,14 +88,18 @@ class MusicBrainzRepository @Inject constructor(
         artist: String?
     ): Result<List<OnlineRecording>> = withContext(Dispatchers.IO) {
         try {
+            // 统一查询格式：艺术家 标题（空格分隔）
+            // MusicBrainz 支持简单的文本搜索，会自动匹配相关记录
             val query = buildString {
-                append("recording:\"").append(title).append("\"")
-                artist?.let {
-                    append(" AND artist:\"").append(it).append("\"")
+                if (!artist.isNullOrBlank()) {
+                    append(artist)
+                    append(" ")
                 }
+                append(title)
             }
 
             val response = rateLimitedCall {
+                // 使用 recording 端点进行搜索
                 musicBrainzApi.searchRecordings(query = query)
             }
 

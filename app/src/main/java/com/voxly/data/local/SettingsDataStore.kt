@@ -28,7 +28,6 @@ class SettingsDataStore @Inject constructor(
     companion object {
         val DARK_THEME = booleanPreferencesKey("dark_theme")
         val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
-        val SCAN_QUALITY = stringPreferencesKey("scan_quality")
         val LANGUAGE_TAG = stringPreferencesKey("language_tag")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val SELECTED_DIRECTORY_URIS = stringPreferencesKey("selected_directory_uris")
@@ -58,6 +57,7 @@ class SettingsDataStore @Inject constructor(
         val CONSOLE_LOGGING_ENABLED = booleanPreferencesKey("console_logging_enabled")
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
         val REPLAY_GAIN_TARGET_LOUDNESS = floatPreferencesKey("replay_gain_target_loudness")
+        val SCAN_MODE = stringPreferencesKey("scan_mode")
     }
 
     /**
@@ -74,14 +74,6 @@ class SettingsDataStore @Inject constructor(
     val dynamicColors: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[DYNAMIC_COLORS] ?: true
-        }
-
-    /**
-     * Scan quality preference flow
-     */
-    val scanQuality: Flow<String> = context.settingsDataStore.data
-        .map { preferences ->
-            preferences[SCAN_QUALITY] ?: "Normal"
         }
 
     /**
@@ -276,6 +268,14 @@ class SettingsDataStore @Inject constructor(
         }
 
     /**
+     * ReplayGain scan mode preference flow (Track Only, Album Only, Track & Album)
+     */
+    val scanMode: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[SCAN_MODE] ?: "TRACK_ONLY"
+        }
+
+    /**
      * Save dark theme preference
      */
     suspend fun setDarkTheme(enabled: Boolean) {
@@ -290,15 +290,6 @@ class SettingsDataStore @Inject constructor(
     suspend fun setDynamicColors(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[DYNAMIC_COLORS] = enabled
-        }
-    }
-
-    /**
-     * Save scan quality preference
-     */
-    suspend fun setScanQuality(quality: String) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[SCAN_QUALITY] = quality
         }
     }
 
@@ -497,6 +488,15 @@ class SettingsDataStore @Inject constructor(
     suspend fun setReplayGainTargetLoudness(loudness: Float) {
         context.settingsDataStore.edit { preferences ->
             preferences[REPLAY_GAIN_TARGET_LOUDNESS] = loudness.coerceIn(-24f, -14f)
+        }
+    }
+
+    /**
+     * Save scan mode preference
+     */
+    suspend fun setScanMode(mode: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[SCAN_MODE] = mode
         }
     }
 

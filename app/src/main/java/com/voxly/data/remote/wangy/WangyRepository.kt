@@ -6,8 +6,11 @@ import com.voxly.data.remote.wangy.model.WangySearchResponse
 import com.voxly.data.remote.wangy.model.WangySongDetail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
+
+private const val TAG = "WangyRepository"
 
 /**
  * Repository for WangY Music API operations.
@@ -73,6 +76,8 @@ class WangyRepositoryImpl @Inject constructor(
         val normalizedLimit = limit.coerceIn(1, 100)
         val offset = (normalizedPage - 1) * normalizedLimit
 
+        Timber.d(TAG, "Searching NetEase for: '$keywords' page=$normalizedPage limit=$normalizedLimit")
+
         val failures = mutableListOf<String>()
         var emptySuccess: WangySearchResponse? = null
 
@@ -97,23 +102,33 @@ class WangyRepositoryImpl @Inject constructor(
             try {
                 val response = request()
                 val body = response.body()
+                Timber.d(TAG, "NetEase API response: httpCode=${response.code()} bodyCode=${body?.code ?: -1} songsCount=${body?.result?.songs?.size ?: 0}")
+                
                 if (response.isSuccessful && body != null && body.code == 200) {
                     if (!body.result?.songs.isNullOrEmpty()) {
+                        Timber.d(TAG, "NetEase found ${body.result?.songs?.size} songs for '$keywords'")
                         return@withContext Result.success(body)
                     }
                     if (emptySuccess == null) {
                         emptySuccess = body
                     }
                     failures.add("ok_empty")
+                    Timber.w(TAG, "NetEase API returned empty result for '$keywords'")
                     continue
                 }
                 failures.add("http=${response.code()} bodyCode=${body?.code ?: -1}")
+                Timber.w(TAG, "NetEase API failed: http=${response.code()} bodyCode=${body?.code ?: -1}")
             } catch (e: Exception) {
                 failures.add(e.message ?: "unknown")
+                Timber.e(TAG, "NetEase API exception: ${e.message}", e)
             }
         }
 
-        emptySuccess?.let { return@withContext Result.success(it) }
+        emptySuccess?.let { 
+            Timber.w(TAG, "NetEase returning empty success for '$keywords'")
+            return@withContext Result.success(it) 
+        }
+        Timber.e(TAG, "NetEase search failed completely for '$keywords': ${failures.joinToString(" | ")}")
         Result.failure(Exception("NetEase search failed: ${failures.joinToString(" | ")}"))
     }
 

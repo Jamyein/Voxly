@@ -1,10 +1,13 @@
 package com.voxly.presentation.viewmodel
 
+import android.content.ContentResolver
 import android.os.SystemClock
+import android.provider.MediaStore
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.core.util.Logger
+import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.data.repository.LyricsRepositoryImpl
 import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
@@ -17,12 +20,17 @@ import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.ReplayGainRepository
+import com.voxly.domain.repository.ScanMode
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLDecoder
 import javax.inject.Inject
@@ -33,14 +41,32 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class MetadataEditorViewModel @Inject constructor(
+    @ApplicationContext private val context: android.content.Context,
     private val audioRepository: AudioRepository,
     private val replayGainRepository: ReplayGainRepository,
     private val lyricsRepository: LyricsRepository,
     private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository,
+    private val settingsDataStore: SettingsDataStore,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
     private val filePath: String = decodeNavArg(savedStateHandle.get<String>("filePath"))
+
+    // Scan mode setting
+    private val _scanMode = MutableStateFlow(ScanMode.TRACK_ONLY)
+    val scanMode: StateFlow<ScanMode> = _scanMode.asStateFlow()
+
+    // Initialize scan mode from settings
+    init {
+        viewModelScope.launch {
+            val mode = settingsDataStore.scanMode.first()
+            _scanMode.value = when (mode) {
+                "SINGLE_ALBUM" -> ScanMode.SINGLE_ALBUM
+                "ALBUMS" -> ScanMode.ALBUMS
+                else -> ScanMode.TRACK_ONLY
+            }
+        }
+    }
 
     private val _uiState = MutableStateFlow<MetadataEditorUiState>(MetadataEditorUiState.Loading)
     val uiState: StateFlow<MetadataEditorUiState> = _uiState.asStateFlow()
@@ -243,37 +269,155 @@ class MetadataEditorViewModel @Inject constructor(
 
     /**
      * Scans the current file for ReplayGain.
+     * Uses dynamic sample rate handling - high-resolution audio (>48kHz) 
+     * will be automatically downsampled for optimal performance.
+     * 
+     * When scan mode is ALBUM_ONLY or TRACK_AND_ALBUM, this will:
+     * 1. Find other files in the same album from MediaStore
+     * 2. Scan all album files
+     * 3. Calculate album gain from all tracks
      */
     fun scanReplayGain() {
         viewModelScope.launch {
             _isScanningReplayGain.value = true
             
-            // Scan the file for ReplayGain
+            // Using ACCURATE mode for best results - dynamic sampling handles high-res files
+            val scanQuality = com.voxly.domain.repository.ScanQuality.ACCURATE
+            
             try {
+                val currentScanMode = _scanMode.value
+                val filesToScan: List<String>
+                
+                // Determine which files to scan based on scan mode (foobar2000 compatible)
+                if (currentScanMode == ScanMode.TRACK_ONLY) {
+                    // Track Only: scan single file only, no album gain
+                    filesToScan = listOf(filePath)
+                } else {
+                    // Single Album or Albums mode: find same album files from MediaStore
+                    // - SINGLE_ALBUM: treat all files as one album
+                    // - ALBUMS: will group by album tags (in batch mode), same as SINGLE_ALBUM for single file
+                    val albumFiles = findAlbumFiles()
+                    // Always scan all found album files (even if only one - foobar2000 behavior)
+                    filesToScan = albumFiles.ifEmpty { listOf(filePath) }
+                }
+                
+                Logger.i("ReplayGain scan started. mode=${currentScanMode.name} files=${filesToScan.size}", "MetadataEditor")
+                
+                // Scan all files
                 replayGainRepository.scanReplayGain(
-                    listOf(filePath),
-                    com.voxly.domain.repository.ScanQuality.NORMAL
+                    filesToScan,
+                    scanQuality
                 ).collect { progress ->
                     when (progress.status) {
                         com.voxly.domain.repository.ScanStatus.COMPLETED -> {
-                            // Read the scanned ReplayGain info
+                            // Read the scanned ReplayGain info for current file
                             val result = replayGainRepository.readReplayGain(filePath)
                             result.getOrNull()?.let { info ->
-                                _pendingReplayGainInfo.value = info
+                                // For album modes (SINGLE_ALBUM, ALBUMS), always calculate album gain
+                                val finalInfo = if (currentScanMode != ScanMode.TRACK_ONLY) {
+                                    calculateAlbumGainFromScannedFiles(filesToScan)
+                                } else {
+                                    info
+                                }
+                                
+                                _pendingReplayGainInfo.value = finalInfo
                                 _hasUnsavedChanges.value = true
                             }
                             _isScanningReplayGain.value = false
+                            Logger.i("ReplayGain scan completed. mode=${currentScanMode.name}", "MetadataEditor")
                         }
                         com.voxly.domain.repository.ScanStatus.FAILED -> {
                             _isScanningReplayGain.value = false
+                            Logger.e("ReplayGain scan failed.", null, "MetadataEditor")
                         }
                         else -> { /* scanning in progress */ }
                     }
                 }
             } catch (e: Exception) {
+                Logger.e("ReplayGain scan exception: ${e.message}", e, "MetadataEditor")
                 _isScanningReplayGain.value = false
             }
         }
+    }
+    
+    /**
+     * Finds files in the same album using MediaStore.
+     */
+    private suspend fun findAlbumFiles(): List<String> = withContext(Dispatchers.IO) {
+        val metadata = _editedMetadata.value ?: return@withContext emptyList()
+        
+        val album = metadata.album ?: return@withContext emptyList()
+        val artist = metadata.artist
+        
+        if (album.isBlank()) return@withContext emptyList()
+        
+        val files = mutableListOf<String>()
+        
+        try {
+            val selection = if (artist.isNullOrBlank()) {
+                "${MediaStore.Audio.Media.ALBUM} = ?"
+            } else {
+                "${MediaStore.Audio.Media.ALBUM} = ? AND ${MediaStore.Audio.Media.ARTIST} = ?"
+            }
+            
+            val selectionArgs = if (artist.isNullOrBlank()) {
+                arrayOf(album)
+            } else {
+                arrayOf(album, artist)
+            }
+            
+            context.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                arrayOf(MediaStore.Audio.Media.DATA),
+                selection,
+                selectionArgs,
+                null
+            )?.use { cursor ->
+                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                while (cursor.moveToNext()) {
+                    val path = cursor.getString(dataColumn)
+                    if (path != null && File(path).exists()) {
+                        files.add(path)
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Logger.e("Failed to find album files: ${e.message}", e, "MetadataEditor")
+        }
+        
+        files
+    }
+    
+    /**
+     * Calculates album gain from multiple scanned files.
+     */
+    private suspend fun calculateAlbumGainFromScannedFiles(filePaths: List<String>): ReplayGainInfo? {
+        if (filePaths.isEmpty()) return null
+        
+        val trackGains = mutableListOf<ReplayGainInfo>()
+        
+        for (path in filePaths) {
+            val result = replayGainRepository.readReplayGain(path)
+            result.getOrNull()?.let { trackGains.add(it) }
+        }
+        
+        if (trackGains.isEmpty()) return null
+        
+        // Calculate album gain from track gains
+        val avgGain = trackGains.map { it.trackGain }.average().toFloat()
+        val maxPeak = trackGains.maxOfOrNull { it.trackPeak } ?: 0f
+        
+        // Get current file's track gain, or use average if not found
+        val currentFileResult = replayGainRepository.readReplayGain(filePath)
+        val currentTrackGain = currentFileResult.getOrNull()?.trackGain ?: avgGain
+        val currentTrackPeak = currentFileResult.getOrNull()?.trackPeak ?: maxPeak
+        
+        return ReplayGainInfo(
+            trackGain = currentTrackGain,
+            trackPeak = currentTrackPeak,
+            albumGain = avgGain,
+            albumPeak = maxPeak
+        )
     }
 
     /**
@@ -401,12 +545,11 @@ class MetadataEditorViewModel @Inject constructor(
                 aggregatedOnlineMetadataRepository.searchByTrackFlow(title, artist).collect { result ->
                     when (result) {
                         is OnlineSourceResult.RecordingResult -> {
-                            if (result.recording.releaseId != null) {
-                                val newResults = _coverSearchState.value.results + result.recording
-                                _coverSearchState.update { it.copy(results = newResults) }
-                                _onlineCoverResults.value =
-                                    newResults.filter { !it.releaseId.isNullOrBlank() }
-                            }
+                            // Show all results, even without releaseId
+                            // Users can still select results to fetch metadata
+                            val newResults = _coverSearchState.value.results + result.recording
+                            _coverSearchState.update { it.copy(results = newResults) }
+                            _onlineCoverResults.value = newResults
                         }
 
                         is OnlineSourceResult.SourceCompleted -> {
@@ -441,7 +584,13 @@ class MetadataEditorViewModel @Inject constructor(
     }
 
     fun applyOnlineCover(recording: OnlineRecording) {
-        val releaseId = recording.releaseId ?: return
+        val releaseId = recording.releaseId
+        
+        // If no releaseId, show a message and return
+        if (releaseId.isNullOrBlank()) {
+            _coverFetchMessage.value = "无法获取封面：该结果没有关联的专辑信息"
+            return
+        }
 
         viewModelScope.launch {
             _coverFetchMessage.value = null

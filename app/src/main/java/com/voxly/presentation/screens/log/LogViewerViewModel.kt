@@ -62,14 +62,16 @@ class LogViewerViewModel @Inject constructor() : ViewModel() {
                 LogManager.getLogFiles() + LogManager.getCrashFiles()
             }
 
-            val logFileItems = files.map { file ->
-                LogFileItem(
-                    name = file.name,
-                    file = file,
-                    size = LogManager.formatLogSize(file.length()),
-                    lastModified = dateFormat.format(Date(file.lastModified()))
-                )
-            }
+            val logFileItems = files
+                .sortedByDescending { it.lastModified() }  // Sort by date, newest first
+                .map { file ->
+                    LogFileItem(
+                        name = file.name,
+                        file = file,
+                        size = LogManager.formatLogSize(file.length()),
+                        lastModified = dateFormat.format(Date(file.lastModified()))
+                    )
+                }
 
             _uiState.value = _uiState.value.copy(
                 logFiles = logFileItems,
@@ -168,6 +170,10 @@ class LogViewerViewModel @Inject constructor() : ViewModel() {
             putExtra(Intent.EXTRA_TEXT, content)
         }
         context.startActivity(Intent.createChooser(intent, "Share Log"))
+    }
+
+    fun getCopyableContent(): String {
+        return getFilteredLogs().joinToString("\n")
     }
 
     fun getFilteredLogs(): List<String> {

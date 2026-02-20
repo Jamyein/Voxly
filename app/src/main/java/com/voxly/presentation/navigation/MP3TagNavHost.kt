@@ -4,6 +4,8 @@ import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -127,36 +129,36 @@ fun MP3TagNavHost(
             enterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { fullWidth -> (fullWidth * 0.12f).toInt() },
-                    animationSpec = tween(
-                        durationMillis = FORWARD_DURATION_MS,
-                        easing = FastOutSlowInEasing
+                    animationSpec = spring(
+                        dampingRatio = 0.6f,
+                        stiffness = Spring.StiffnessMedium
                     )
                 ) + fadeIn(animationSpec = tween(durationMillis = FORWARD_DURATION_MS - 20))
             },
             exitTransition = {
                 slideOutHorizontally(
                     targetOffsetX = { fullWidth -> -(fullWidth * 0.06f).toInt() },
-                    animationSpec = tween(
-                        durationMillis = FORWARD_DURATION_MS - 20,
-                        easing = FastOutLinearInEasing
+                    animationSpec = spring(
+                        dampingRatio = 0.6f,
+                        stiffness = Spring.StiffnessMedium
                     )
                 ) + fadeOut(animationSpec = tween(durationMillis = FORWARD_DURATION_MS - 40))
             },
             popEnterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { fullWidth -> -(fullWidth * 0.1f).toInt() },
-                    animationSpec = tween(
-                        durationMillis = BACK_DURATION_MS,
-                        easing = FastOutSlowInEasing
+                    animationSpec = spring(
+                        dampingRatio = 0.6f,
+                        stiffness = Spring.StiffnessMedium
                     )
                 ) + fadeIn(animationSpec = tween(durationMillis = BACK_DURATION_MS - 10))
             },
             popExitTransition = {
                 slideOutHorizontally(
                     targetOffsetX = { fullWidth -> (fullWidth * 0.1f).toInt() },
-                    animationSpec = tween(
-                        durationMillis = BACK_DURATION_MS - 10,
-                        easing = FastOutLinearInEasing
+                    animationSpec = spring(
+                        dampingRatio = 0.6f,
+                        stiffness = Spring.StiffnessMedium
                     )
                 ) + fadeOut(animationSpec = tween(durationMillis = BACK_DURATION_MS - 30))
             }
@@ -216,7 +218,7 @@ fun MP3TagNavHost(
                         }
                     },
                     onCleanupLogs = {
-                        val deletedCount = LogManager.cleanupOldLogs()
+                        val deletedCount = LogManager.clearAllLogs()
                         Toast.makeText(
                             context,
                             context.getString(R.string.settings_logging_cleanup_complete, deletedCount),

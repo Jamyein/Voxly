@@ -3,6 +3,7 @@ package com.voxly.presentation.viewmodel
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.data.repository.OnlineSourceResult
 import com.voxly.domain.model.AudioMetadata
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,6 +37,7 @@ class OnlineMetadataViewModel @Inject constructor(
     private val audioRepository: AudioRepository,
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val lyricsRepository: LyricsRepository,
+    private val settingsDataStore: SettingsDataStore,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -66,8 +69,15 @@ class OnlineMetadataViewModel @Inject constructor(
     private var activeSearchJob: Job? = null
     private var activeLyricsJob: Job? = null
     private var activeSearchId: Long = 0L
+    
+    // 从设置中获取的元数据源优先级
+    private var metadataSourcePriority: List<String> = emptyList()
 
     init {
+        viewModelScope.launch {
+            // 初始化时获取元数据源优先级设置
+            metadataSourcePriority = settingsDataStore.metadataSourcePriority.first()
+        }
         prepareAutoSearch()
     }
 
@@ -249,19 +259,27 @@ class OnlineMetadataViewModel @Inject constructor(
                     else -> 1
                 }
             }.thenBy { release ->
-                sourcePriorityIndex(release.source)
+                sourcePriorityIndex(release.source, metadataSourcePriority)
             }
         )
     }
 
-    private fun sourcePriorityIndex(source: String): Int {
-        return when (source.lowercase()) {
-            "itunes" -> 0
-            "musicbrainz" -> 1
-            "netease" -> 2
-            "qq music", "qq_music" -> 3
-            else -> Int.MAX_VALUE
+    /**
+     * 根据设置中的元数据源优先级计算排序索引
+     */
+    private fun sourcePriorityIndex(source: String, priority: List<String>): Int {
+        // 标准化 source 名称
+        val normalizedSource = when (source.lowercase()) {
+            "itunes" -> "itunes"
+            "musicbrainz" -> "musicbrainz"
+            "netease" -> "netease"
+            "qq music", "qq_music" -> "qq_music"
+            else -> source.lowercase()
         }
+        
+        // 在优先级列表中查找索引
+        val index = priority.indexOfFirst { it.equals(normalizedSource, ignoreCase = true) }
+        return if (index >= 0) index else Int.MAX_VALUE
     }
 
     private fun publishLegacySearchState() {
@@ -398,9 +416,25 @@ class OnlineMetadataViewModel @Inject constructor(
     }
 
     private fun OnlineRecording.toOnlineRelease(): OnlineRelease? {
-        val releaseId = releaseId ?: return null
+        // Use releaseId if available, otherwise use recording id as fallback
+        val effectiveReleaseId = releaseId ?: id.takeIf { it.isNotBlank() }
+        if (effectiveReleaseId.isNullOrBlank()) {
+            // If no releaseId and no recording id, we can't create a meaningful OnlineRelease
+            // Return a minimal release for display purposes
+            return OnlineRelease(
+                id = "unknown-${System.nanoTime()}",
+                title = title,
+                artist = artist,
+                year = null,
+                format = null,
+                trackCount = null,
+                coverArtUrl = coverArtUrl,
+                source = source,
+                songTitle = title
+            )
+        }
         return OnlineRelease(
-            id = releaseId,
+            id = effectiveReleaseId,
             title = title,
             artist = artist,
             year = null,
@@ -457,33 +491,37 @@ class OnlineMetadataViewModel @Inject constructor(
 
     fun applyMetadata(): AudioMetadata? {
         val details = _selectedRelease.value
-        val fallback = _selectedReleaseCandidate.value
+        val candidate = _selectedReleaseCandidate.value
         val lyrics = selectedSyncedLyrics
 
-        if (details == null && fallback == null) return null
-
-        val title = details?.tracks?.find { it.number == 1 }?.title
-            ?: fallback?.songTitle
-            ?: details?.title
-            ?: fallback?.title
-
-        val artist = details?.artist ?: fallback?.artist
-        val album = details?.title ?: fallback?.albumTitle ?: fallback?.title
-        val year = details?.year?.toString() ?: fallback?.year?.toString()
-        val trackNumber = details?.tracks?.firstOrNull()?.number ?: 1
-        val totalTracks = details?.trackCount ?: fallback?.trackCount
-
-        return AudioMetadata(
-            title = title,
-            artist = artist,
-            album = album,
-            albumArtist = artist,
-            year = year,
-            genre = details?.genre,
-            trackNumber = trackNumber,
-            totalTracks = totalTracks,
-            lyrics = lyrics?.toLrcFormat()
-        )
+        // 详情存在时使用详情，详情不存在时使用候选，二选一不混合
+        return if (details != null) {
+            AudioMetadata(
+                title = details.tracks.find { it.number == 1 }?.title ?: details.title,
+                artist = details.artist,
+                album = details.title,
+                albumArtist = details.artist,
+                year = details.year?.toString(),
+                genre = details.genre,
+                trackNumber = details.tracks.firstOrNull()?.number ?: 1,
+                totalTracks = details.trackCount,
+                lyrics = lyrics?.toLrcFormat()
+            )
+        } else if (candidate != null) {
+            AudioMetadata(
+                title = candidate.songTitle ?: candidate.title,
+                artist = candidate.artist,
+                album = candidate.albumTitle ?: candidate.title,
+                albumArtist = candidate.artist,
+                year = candidate.year?.toString(),
+                genre = null,
+                trackNumber = 1,
+                totalTracks = candidate.trackCount,
+                lyrics = lyrics?.toLrcFormat()
+            )
+        } else {
+            null
+        }
     }
 
     fun clearSelection() {

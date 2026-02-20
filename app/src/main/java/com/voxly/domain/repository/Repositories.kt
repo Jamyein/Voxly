@@ -85,7 +85,7 @@ interface ReplayGainRepository {
     /**
      * Scans audio files and calculates ReplayGain values.
      * @param filePaths List of file paths to scan
-     * @param scanQuality The quality level for scanning
+     * @param scanQuality The quality level for scanning (determines max sample rate)
      * @return Flow emitting scan progress (0.0 to 1.0)
      */
     fun scanReplayGain(
@@ -191,11 +191,37 @@ interface RecentEditsRepository {
 
 /**
  * Enum representing ReplayGain scan quality levels.
+ * 
+ * The actual sample rate used for scanning is determined dynamically:
+ * - If file sample rate <= maxSampleRate: use original sample rate
+ * - If file sample rate > maxSampleRate: downsample to maxSampleRate
+ * 
+ * This ensures optimal performance for high-resolution audio files while
+ * preserving quality for standard audio files.
  */
-enum class ScanQuality(val sampleRate: Int, val channels: Int) {
-    FAST(22050, 1),
-    NORMAL(44100, 2),
-    ACCURATE(48000, 2)
+enum class ScanQuality(val maxSampleRate: Int) {
+    /** Fast mode: limited to 22.05kHz for quick preview scanning */
+    FAST(22050),
+    /** Normal mode: limited to 48kHz, suitable for most audio files */
+    NORMAL(48000),
+    /** Accurate mode: supports up to 192kHz for high-resolution audio */
+    ACCURATE(192000)
+}
+
+/**
+ * Enum representing ReplayGain scan mode.
+ * Compatible with foobar2000 scan modes:
+ * 1. Track Only: Calculate track gain only, no album gain
+ * 2. Single Album: Calculate both track and album gain, treating selection as one album
+ * 3. Albums: Calculate track and album gain, grouped by album tags
+ */
+enum class ScanMode(val displayName: String) {
+    /** Track gain only - calculate gain for each track independently (no album gain) */
+    TRACK_ONLY("Track Only"),
+    /** Single album - treat selection as one album, calculate both track and album gain */
+    SINGLE_ALBUM("Single Album"),
+    /** Albums - auto-group by album tags, calculate track and album gain per album */
+    ALBUMS("Albums")
 }
 
 /**
