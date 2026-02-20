@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Android 12+ dynamic color: background follows wallpaper, foreground stays white for contrast -->
+    <!-- Android 12+ dynamic color: both background and foreground follow wallpaper palette -->
     <color name="ic_launcher_background">@android:color/system_accent1_600</color>
-    <color name="ic_launcher_note">#FFFFFF</color>
+    <color name="ic_launcher_note">@android:color/system_accent1_0</color>
 </resources>
