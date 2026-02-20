@@ -33,6 +33,10 @@ class SettingsDataStore @Inject constructor(
         val SELECTED_DIRECTORY_URIS = stringPreferencesKey("selected_directory_uris")
         val APPLE_COUNTRY_CODE = stringPreferencesKey("apple_country_code")
         val ONLINE_SEARCH_LIMIT = intPreferencesKey("online_search_limit")
+        val ONLINE_SEARCH_LIMIT_MUSICBRAINZ = intPreferencesKey("online_search_limit_musicbrainz")
+        val ONLINE_SEARCH_LIMIT_ITUNES = intPreferencesKey("online_search_limit_itunes")
+        val ONLINE_SEARCH_LIMIT_NETEASE = intPreferencesKey("online_search_limit_netease")
+        val ONLINE_SEARCH_LIMIT_QQ_MUSIC = intPreferencesKey("online_search_limit_qq_music")
         val SOURCE_ENABLED_MUSICBRAINZ = booleanPreferencesKey("source_enabled_musicbrainz")
         val SOURCE_ENABLED_ITUNES = booleanPreferencesKey("source_enabled_itunes")
         val SOURCE_ENABLED_NETEASE = booleanPreferencesKey("source_enabled_netease")
@@ -118,6 +122,29 @@ class SettingsDataStore @Inject constructor(
     val onlineSearchLimit: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
             normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT] ?: 25)
+        }
+
+    /**
+     * Per-source online search result limit preference flows.
+     */
+    val onlineSearchLimitMusicBrainz: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT_MUSICBRAINZ] ?: 0)
+        }
+
+    val onlineSearchLimitITunes: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT_ITUNES] ?: 0)
+        }
+
+    val onlineSearchLimitNetease: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT_NETEASE] ?: 0)
+        }
+
+    val onlineSearchLimitQQMusic: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT_QQ_MUSIC] ?: 0)
         }
 
     val sourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
@@ -251,7 +278,7 @@ class SettingsDataStore @Inject constructor(
 
     val consoleLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[CONSOLE_LOGGING_ENABLED] ?: false
+            preferences[CONSOLE_LOGGING_ENABLED] ?: true
         }
 
     val crashReportingEnabled: Flow<Boolean> = context.settingsDataStore.data
@@ -337,6 +364,30 @@ class SettingsDataStore @Inject constructor(
     suspend fun setOnlineSearchLimit(limit: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[ONLINE_SEARCH_LIMIT] = normalizeOnlineSearchLimit(limit)
+        }
+    }
+
+    suspend fun setOnlineSearchLimitMusicBrainz(limit: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ONLINE_SEARCH_LIMIT_MUSICBRAINZ] = normalizeOnlineSearchLimit(limit)
+        }
+    }
+
+    suspend fun setOnlineSearchLimitITunes(limit: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ONLINE_SEARCH_LIMIT_ITUNES] = normalizeOnlineSearchLimit(limit)
+        }
+    }
+
+    suspend fun setOnlineSearchLimitNetease(limit: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ONLINE_SEARCH_LIMIT_NETEASE] = normalizeOnlineSearchLimit(limit)
+        }
+    }
+
+    suspend fun setOnlineSearchLimitQQMusic(limit: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ONLINE_SEARCH_LIMIT_QQ_MUSIC] = normalizeOnlineSearchLimit(limit)
         }
     }
 

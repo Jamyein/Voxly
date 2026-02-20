@@ -29,8 +29,8 @@ object LogManager {
     var isConsoleLoggingEnabled: Boolean = BuildConfig.DEBUG
     var isCrashReportingEnabled: Boolean = true
 
-    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.US)
-    private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
+    private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+    private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
 
     fun init(context: Context) {
         val externalDir = context.getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS)

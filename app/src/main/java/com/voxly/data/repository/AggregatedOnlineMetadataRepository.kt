@@ -6,6 +6,11 @@ import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.remote.itunes.ITunesRepository
 import com.voxly.data.remote.musicbrainz.MusicBrainzRepository
 import com.voxly.data.remote.tengx.TengxRepository
+import com.voxly.data.remote.tengx.model.TengxAlbumDetail
+import com.voxly.data.remote.tengx.model.TengxAlbumDetailData
+import com.voxly.data.remote.tengx.model.TengxAlbumDetailInfo
+import com.voxly.data.remote.tengx.model.TengxSong
+import com.voxly.data.remote.tengx.model.TengxSinger
 import com.voxly.data.remote.wangy.WangyRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
 import com.voxly.domain.repository.OnlineRelease
@@ -616,10 +621,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
                     val results = mutableListOf<OnlineRecording>()
                     
-                    musicBrainzDeferred?.await()?.getOrNull()?.let { results.addAll(applyLimit(it, settings.searchLimit)) }
-                    iTunesDeferred?.await()?.getOrNull()?.let { results.addAll(applyLimit(it, settings.searchLimit)) }
-                    neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
-                    qqMusicDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
+                    musicBrainzDeferred?.await()?.getOrNull()?.let { results.addAll(applyLimit(it, settings.getSourceLimit("MusicBrainz"))) }
+                    iTunesDeferred?.await()?.getOrNull()?.let { results.addAll(applyLimit(it, settings.getSourceLimit("iTunes"))) }
+                    neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(applyLimit(it, settings.getSourceLimit("NetEase"))) }
+                    qqMusicDeferred?.await()?.getOrNull()?.let { results.addAll(applyLimit(it, settings.getSourceLimit("QQ Music"))) }
 
                     val sorted = finalizeRecordingResults(
                         recordings = results,
@@ -667,7 +672,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                 title = title,
                                 artist = artist,
                                 priority = settings.metadataPriority,
-                                limit = settings.searchLimit
+                                limit = settings.getSourceLimit("iTunes")
                             )
                         }
                         .onSuccess { recordings ->
@@ -697,7 +702,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                 title = title,
                                 artist = artist,
                                 priority = settings.metadataPriority,
-                                limit = settings.searchLimit
+                                limit = settings.getSourceLimit("QQ Music")
                             )
                         }
                         .onSuccess { recordings ->
@@ -727,7 +732,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                 title = title,
                                 artist = artist,
                                 priority = settings.metadataPriority,
-                                limit = settings.searchLimit
+                                limit = settings.getSourceLimit("NetEase")
                             )
                         }
                         .onSuccess { recordings ->
@@ -757,7 +762,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                 title = title,
                                 artist = artist,
                                 priority = settings.metadataPriority,
-                                limit = settings.searchLimit
+                                limit = settings.getSourceLimit("MusicBrainz")
                             )
                         }
                         .onSuccess { recordings ->
@@ -970,7 +975,9 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     }
 
     override suspend fun getReleaseDetails(releaseId: String): Result<OnlineReleaseDetails> {
+        Timber.d("AggregatedRepository.getReleaseDetails: releaseId=$releaseId, preferredSource=$preferredSource")
         val settings = getOnlineSourceSettings()
+        Timber.d("AggregatedRepository: settings - MB=${settings.enableMusicBrainz}, iTunes=${settings.enableITunes}, NetEase=${settings.enableNetease}, QQ=${settings.enableQQMusic}")
         return when (preferredSource) {
             DataSource.MUSICBRAINZ -> if (settings.enableMusicBrainz) {
                 musicBrainzRepository.getReleaseDetails(releaseId)
@@ -994,13 +1001,18 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
             DataSource.BOTH -> {
                 if (!settings.hasAnyEnabledSource) {
+                    Timber.w("AggregatedRepository.getReleaseDetails: No metadata sources enabled")
                     return Result.failure(Exception("No metadata sources enabled"))
                 }
 
                 if (settings.enableITunes) {
+                    Timber.d("AggregatedRepository: Trying iTunes for releaseId=$releaseId")
                     val iTunesResult = iTunesRepository.getReleaseDetails(releaseId)
                     if (iTunesResult.isSuccess) {
+                        Timber.d("AggregatedRepository: iTunes succeeded for releaseId=$releaseId")
                         return iTunesResult
+                    } else {
+                        Timber.w("AggregatedRepository: iTunes failed for releaseId=$releaseId, trying MusicBrainz")
                     }
                 }
                 if (settings.enableMusicBrainz) {
@@ -1044,10 +1056,24 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
     /**
      * Gets QQ Music album details.
+     * Note: QQ Music albums can have either numeric IDs or alphanumeric "mid" identifiers.
+     * Only numeric IDs are supported via API. For mid identifiers, we try to get song info as fallback.
      */
     private suspend fun getQQMusicAlbumDetails(albumId: String): Result<OnlineReleaseDetails> {
         return try {
-            val result = tengxRepository.getAlbumDetail(albumId.toLong())
+            // QQ Music uses both numeric IDs and alphanumeric "mid" identifiers
+            val numericAlbumId = albumId.toLongOrNull()
+            
+            val result = if (numericAlbumId != null && numericAlbumId > 0) {
+                // Use numeric album ID API
+                tengxRepository.getAlbumDetail(numericAlbumId)
+            } else {
+                // For mid-based album IDs (or invalid numeric IDs), try song search fallback
+                // This handles cases where the "albumId" is actually a song's mid
+                Timber.d(TAG, "QQ Music album ID '$albumId' is mid format or invalid, trying song search fallback")
+                searchQQMusicSongByMid(albumId)
+            }
+            
             if (result.isSuccess) {
                 val album = result.getOrNull()
                 Result.success(OnlineReleaseDetails(
@@ -1073,6 +1099,76 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             Timber.e(TAG, "QQ Music album details failed: ${e.message}", e)
             Result.failure(e)
         }
+    }
+
+    /**
+     * Searches for QQ Music song by song mid as fallback.
+     * Uses song search API to find song info when album info is unavailable.
+     */
+    private suspend fun searchQQMusicSongByMid(songMid: String): Result<TengxAlbumDetail> {
+        return try {
+            // Search for the song using the mid as keyword
+            // We'll search for songs and use the first match to get album info
+            val searchResult = tengxRepository.searchSongs(
+                keywords = songMid,
+                pageNum = 1,
+                pageSize = 1,
+                type = 0 // type 0 = song search
+            )
+            
+            searchResult.fold(
+                onSuccess = { response ->
+                    val song = response?.data?.song?.list?.firstOrNull()
+                    if (song != null) {
+                        // Try to get album details if we have album info
+                        val albumId = song.album?.id
+                        if (albumId != null && albumId > 0) {
+                            tengxRepository.getAlbumDetail(albumId)
+                        } else if (!song.album?.mid.isNullOrBlank()) {
+                            // Album has mid but no numeric ID - need different approach
+                            // For now, construct a basic album detail response
+                            Result.success(createBasicAlbumDetail(song))
+                        } else {
+                            Result.failure(Exception("No album info available for song: ${song.name}"))
+                        }
+                    } else {
+                        Result.failure(Exception("Song not found by mid: $songMid"))
+                    }
+                },
+                onFailure = { error ->
+                    Result.failure(error)
+                }
+            )
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Creates a basic album detail from song info when album API is unavailable.
+     */
+    private fun createBasicAlbumDetail(song: TengxSong): TengxAlbumDetail {
+        return TengxAlbumDetail(
+            code = 0,
+            data = TengxAlbumDetailData(
+                album = TengxAlbumDetailInfo(
+                    id = song.album?.id ?: 0,
+                    mid = song.album?.mid ?: "",
+                    name = song.album?.name ?: "Unknown Album",
+                    singer = TengxSinger(
+                        id = song.singer.firstOrNull()?.id ?: 0,
+                        name = song.singer.firstOrNull()?.name ?: "Unknown Artist",
+                        title = "",
+                        type = 0,
+                        gender = 0,
+                        pic = ""
+                    ),
+                    pic = song.album?.pic ?: "",
+                    publicTime = ""
+                ),
+                list = emptyList()
+            )
+        )
     }
 
     override suspend fun getCoverArt(releaseId: String): Result<ByteArray?> {
@@ -1254,7 +1350,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             limit = settings.searchLimit
         )
         val sorted = filtered.sortedWith(
-            compareBy<OnlineRelease> { release ->
+            compareByDescending<OnlineRelease> { release ->
                 sourcePriorityIndex(release.source, settings.metadataPriority)
             }.thenByDescending { release ->
                 fuzzyMatchLevel(album, release.songTitle ?: release.title)
@@ -1281,7 +1377,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             limit = limit
         )
         val sorted = filtered.sortedWith(
-            compareBy<OnlineRecording> { recording ->
+            compareByDescending<OnlineRecording> { recording ->
                 sourcePriorityIndex(recording.source, priority)
             }.thenByDescending { recording ->
                 fuzzyMatchLevel(title, recording.title)
@@ -1378,6 +1474,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             coverEnableNetease = settingsDataStore.coverSourceEnabledNetease.first(),
             coverEnableQQMusic = settingsDataStore.coverSourceEnabledQQMusic.first(),
             searchLimit = normalizeSearchLimit(settingsDataStore.onlineSearchLimit.first()),
+            searchLimitMusicBrainz = settingsDataStore.onlineSearchLimitMusicBrainz.first(),
+            searchLimitITunes = settingsDataStore.onlineSearchLimitITunes.first(),
+            searchLimitNetease = settingsDataStore.onlineSearchLimitNetease.first(),
+            searchLimitQQMusic = settingsDataStore.onlineSearchLimitQQMusic.first(),
             metadataPriority = settingsDataStore.metadataSourcePriority.first(),
             coverPriority = settingsDataStore.coverSourcePriority.first()
         )
@@ -1401,11 +1501,30 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val coverEnableNetease: Boolean,
         val coverEnableQQMusic: Boolean,
         val searchLimit: Int,
+        val searchLimitMusicBrainz: Int,
+        val searchLimitITunes: Int,
+        val searchLimitNetease: Int,
+        val searchLimitQQMusic: Int,
         val metadataPriority: List<String>,
         val coverPriority: List<String>
     ) {
         val requestLimit: Int
             get() = if (searchLimit <= 0) 200 else searchLimit
+
+        /**
+         * Get the effective search limit for a specific source.
+         * Per-source limit takes precedence if set (> 0), otherwise falls back to global limit.
+         */
+        fun getSourceLimit(source: String): Int {
+            val perSourceLimit = when (source) {
+                "MusicBrainz" -> searchLimitMusicBrainz
+                "iTunes" -> searchLimitITunes
+                "NetEase" -> searchLimitNetease
+                "QQ Music" -> searchLimitQQMusic
+                else -> 0
+            }
+            return if (perSourceLimit > 0) perSourceLimit else requestLimit
+        }
 
         val hasAnyEnabledSource: Boolean
             get() = enableMusicBrainz || enableITunes || enableNetease || enableQQMusic

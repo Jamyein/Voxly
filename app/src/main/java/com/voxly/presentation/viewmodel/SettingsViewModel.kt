@@ -75,6 +75,34 @@ class SettingsViewModel @Inject constructor(
             initialValue = 25
         )
 
+    val onlineSearchLimitMusicBrainz: StateFlow<Int> = settingsDataStore.onlineSearchLimitMusicBrainz
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
+    val onlineSearchLimitITunes: StateFlow<Int> = settingsDataStore.onlineSearchLimitITunes
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
+    val onlineSearchLimitNetease: StateFlow<Int> = settingsDataStore.onlineSearchLimitNetease
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
+    val onlineSearchLimitQQMusic: StateFlow<Int> = settingsDataStore.onlineSearchLimitQQMusic
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = 0
+        )
+
     val sourceEnabledMusicBrainz: StateFlow<Boolean> = settingsDataStore.sourceEnabledMusicBrainz
         .stateIn(
             scope = viewModelScope,
@@ -252,6 +280,30 @@ class SettingsViewModel @Inject constructor(
     fun setOnlineSearchLimit(limit: Int) {
         viewModelScope.launch {
             settingsDataStore.setOnlineSearchLimit(limit)
+        }
+    }
+
+    fun setOnlineSearchLimitMusicBrainz(limit: Int) {
+        viewModelScope.launch {
+            settingsDataStore.setOnlineSearchLimitMusicBrainz(limit)
+        }
+    }
+
+    fun setOnlineSearchLimitITunes(limit: Int) {
+        viewModelScope.launch {
+            settingsDataStore.setOnlineSearchLimitITunes(limit)
+        }
+    }
+
+    fun setOnlineSearchLimitNetease(limit: Int) {
+        viewModelScope.launch {
+            settingsDataStore.setOnlineSearchLimitNetease(limit)
+        }
+    }
+
+    fun setOnlineSearchLimitQQMusic(limit: Int) {
+        viewModelScope.launch {
+            settingsDataStore.setOnlineSearchLimitQQMusic(limit)
         }
     }
 

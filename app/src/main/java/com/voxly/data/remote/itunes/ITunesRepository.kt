@@ -5,6 +5,7 @@ import com.voxly.domain.repository.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -131,12 +132,17 @@ class ITunesRepository @Inject constructor(
         releaseId: String
     ): Result<OnlineReleaseDetails> = withContext(Dispatchers.IO) {
         try {
+            Timber.d("ITunesRepository.getReleaseDetails: releaseId=$releaseId")
             val searchSettings = getSearchSettings()
+            Timber.d("ITunesRepository: countryCode=${searchSettings.countryCode}, limit=${searchSettings.limit}")
+            
             // First lookup the album
             val lookupResponse = iTunesApi.lookup(
                 id = releaseId.toLong(),
                 country = searchSettings.countryCode
             )
+            
+            Timber.d("ITunesRepository.lookup: isSuccessful=${lookupResponse.isSuccessful}, resultCount=${lookupResponse.body()?.resultCount}")
             
             if (!lookupResponse.isSuccessful) {
                 return@withContext Result.failure(
@@ -145,7 +151,7 @@ class ITunesRepository @Inject constructor(
             }
 
             val albumResult = lookupResponse.body()?.results?.firstOrNull()
-                ?: return@withContext Result.failure(Exception("Release not found"))
+                ?: return@withContext Result.failure(Exception("Release not found in iTunes: results is empty"))
 
             // Then search for tracks in this album
             val tracksResponse = iTunesApi.search(

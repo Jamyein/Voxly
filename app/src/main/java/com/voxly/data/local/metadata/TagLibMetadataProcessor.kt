@@ -270,6 +270,41 @@ class TagLibMetadataProcessor @Inject constructor(
             }
         } else null
 
+        // Normalize track number: some sources incorrectly add 1000 offset
+        // e.g., "1001" should be "1", "1012" should be "12"
+        fun normalizeTrackNumber(track: Int): Int {
+            return if (track > 1000 && track < 10000) {
+                // Likely a corrupted value: 1001-9999 likely means track + 1000 offset
+                // Check if removing 1000 gives a valid track number
+                val normalized = track - 1000
+                if (normalized in 1..999) normalized else track
+            } else {
+                track
+            }
+        }
+
+        // Helper function to parse track field - handles both "1" and "1/10" formats
+        // Also handles corrupted track values like "1001" which should be "1"
+        fun parseTrackField(value: String?): Pair<Int?, Int?> {
+            if (value.isNullOrBlank()) return Pair(null, null)
+            
+            // Handle ID3v2 format: "1/10" where 10 is total tracks
+            return if (value.contains('/')) {
+                val parts = value.split('/')
+                val track = parts.getOrNull(0)?.toIntOrNull()?.let { normalizeTrackNumber(it) }
+                val total = parts.getOrNull(1)?.toIntOrNull()
+                Pair(track?.takeIf { it > 0 }, total?.takeIf { it > 0 })
+            } else {
+                val track = value.toIntOrNull()?.let { normalizeTrackNumber(it) }
+                Pair(track?.takeIf { it > 0 && it <= 9999 }, null)
+            }
+        }
+
+        // Read TRACK field (case-insensitive for FLAC/Vorbis Comments compatibility)
+        val trackKey = findKeyIgnoreCase(propertyMap, "TRACK")
+        val trackValue = trackKey?.let { propertyMap[it]?.firstOrNull() }
+        val (parsedTrack, parsedTotalFromTrack) = parseTrackField(trackValue)
+
         return AudioMetadata(
             title = propertyMap["TITLE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             artist = propertyMap["ARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
@@ -278,12 +313,13 @@ class TagLibMetadataProcessor @Inject constructor(
             year = propertyMap["DATE"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
                 ?: propertyMap["YEAR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             genre = propertyMap["GENRE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-            trackNumber = propertyMap["TRACK"]?.firstOrNull()?.toIntOrNull(),
-            totalTracks = propertyMap["TRACKTOTAL"]?.firstOrNull()?.toIntOrNull() 
-                ?: propertyMap["TOTALTRACKS"]?.firstOrNull()?.toIntOrNull(),
-            discNumber = propertyMap["DISCNUMBER"]?.firstOrNull()?.toIntOrNull(),
-            totalDiscs = propertyMap["DISCTOTAL"]?.firstOrNull()?.toIntOrNull() 
-                ?: propertyMap["TOTALDISCS"]?.firstOrNull()?.toIntOrNull(),
+            trackNumber = parsedTrack,
+            totalTracks = parsedTotalFromTrack
+                ?: findKeyIgnoreCase(propertyMap, "TRACKTOTAL")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } }
+                ?: findKeyIgnoreCase(propertyMap, "TOTALTRACKS")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } },
+            discNumber = findKeyIgnoreCase(propertyMap, "DISCNUMBER")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { d -> d > 0 } },
+            totalDiscs = findKeyIgnoreCase(propertyMap, "DISCTOTAL")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } }
+                ?: findKeyIgnoreCase(propertyMap, "TOTALDISCS")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } },
             composer = propertyMap["COMPOSER"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
                 ?: propertyMap["AUTHOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             lyricist = propertyMap["LYRICIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
@@ -335,6 +371,26 @@ class TagLibMetadataProcessor @Inject constructor(
                 propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
             }
 
+            // Helper function to parse track field - handles both "1" and "1/10" formats
+            fun parseTrackField(value: String?): Pair<Int?, Int?> {
+                if (value.isNullOrBlank()) return Pair(null, null)
+                // Handle ID3v2 format: "1/10" where 10 is total tracks
+                return if (value.contains('/')) {
+                    val parts = value.split('/')
+                    val track = parts.getOrNull(0)?.toIntOrNull()
+                    val total = parts.getOrNull(1)?.toIntOrNull()
+                    Pair(track?.takeIf { it > 0 }, total?.takeIf { it > 0 })
+                } else {
+                    val track = value.toIntOrNull()
+                    Pair(track?.takeIf { it > 0 && it <= 9999 }, null)
+                }
+            }
+
+            // Read TRACK field (case-insensitive for FLAC/Vorbis Comments compatibility)
+            val trackKey = findKeyIgnoreCase(propertyMap, "TRACK")
+            val trackValue = trackKey?.let { propertyMap[it]?.firstOrNull() }
+            val (parsedTrack, parsedTotalFromTrack) = parseTrackField(trackValue)
+
             AudioMetadata(
                 title = propertyMap["TITLE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
                 artist = propertyMap["ARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
@@ -343,12 +399,13 @@ class TagLibMetadataProcessor @Inject constructor(
                 year = propertyMap["DATE"]?.firstOrNull()?.takeIf { it.isNotBlank() }
                     ?: propertyMap["YEAR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
                 genre = propertyMap["GENRE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                trackNumber = propertyMap["TRACK"]?.firstOrNull()?.toIntOrNull(),
-                totalTracks = propertyMap["TRACKTOTAL"]?.firstOrNull()?.toIntOrNull()
-                    ?: propertyMap["TOTALTRACKS"]?.firstOrNull()?.toIntOrNull(),
-                discNumber = propertyMap["DISCNUMBER"]?.firstOrNull()?.toIntOrNull(),
-                totalDiscs = propertyMap["DISCTOTAL"]?.firstOrNull()?.toIntOrNull()
-                    ?: propertyMap["TOTALDISCS"]?.firstOrNull()?.toIntOrNull(),
+                trackNumber = parsedTrack,
+                totalTracks = parsedTotalFromTrack
+                    ?: findKeyIgnoreCase(propertyMap, "TRACKTOTAL")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } }
+                    ?: findKeyIgnoreCase(propertyMap, "TOTALTRACKS")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } },
+                discNumber = findKeyIgnoreCase(propertyMap, "DISCNUMBER")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { d -> d > 0 } },
+                totalDiscs = findKeyIgnoreCase(propertyMap, "DISCTOTAL")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } }
+                    ?: findKeyIgnoreCase(propertyMap, "TOTALDISCS")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } },
                 composer = propertyMap["COMPOSER"]?.firstOrNull()?.takeIf { it.isNotBlank() }
                     ?: propertyMap["AUTHOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
                 lyricist = propertyMap["LYRICIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },

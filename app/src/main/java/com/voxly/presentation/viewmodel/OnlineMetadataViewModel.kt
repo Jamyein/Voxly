@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.io.File
 import java.net.URLDecoder
 import javax.inject.Inject
@@ -64,6 +65,9 @@ class OnlineMetadataViewModel @Inject constructor(
     private val _searchQuery = MutableStateFlow(OnlineSearchQuery())
     val searchQuery: StateFlow<OnlineSearchQuery> = _searchQuery.asStateFlow()
 
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+
     private val _syncedLyricsByReleaseId = MutableStateFlow<Map<String, Lyrics>>(emptyMap())
     private var selectedSyncedLyrics: Lyrics? = null
     private var activeSearchJob: Job? = null
@@ -75,10 +79,17 @@ class OnlineMetadataViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            // 监听元数据源优先级设置变化，实时更新
+            settingsDataStore.metadataSourcePriority.collect { priority ->
+                metadataSourcePriority = priority
+            }
+        }
+        viewModelScope.launch {
             // 初始化时获取元数据源优先级设置
             metadataSourcePriority = settingsDataStore.metadataSourcePriority.first()
+            // 获取后再执行自动搜索，确保优先级设置已加载
+            prepareAutoSearch()
         }
-        prepareAutoSearch()
     }
 
     private fun prepareAutoSearch() {
@@ -243,6 +254,8 @@ class OnlineMetadataViewModel @Inject constructor(
 
         return releases.sortedWith(
             compareByDescending<OnlineRelease> { release ->
+                sourcePriorityIndex(release.source, metadataSourcePriority)
+            }.thenByDescending { release ->
                 val candidateTitle = (release.songTitle ?: release.albumTitle ?: release.title).trim()
                 when {
                     titleNeedle.isBlank() -> 1
@@ -258,8 +271,6 @@ class OnlineMetadataViewModel @Inject constructor(
                     release.artist.contains(artistNeedle, ignoreCase = true) -> 2
                     else -> 1
                 }
-            }.thenBy { release ->
-                sourcePriorityIndex(release.source, metadataSourcePriority)
             }
         )
     }
@@ -454,26 +465,36 @@ class OnlineMetadataViewModel @Inject constructor(
     private fun isSearchOutdated(searchId: Long): Boolean = searchId != activeSearchId
 
     fun selectRelease(release: OnlineRelease) {
+        Timber.d("selectRelease called: id=${release.id}, title=${release.title}, source=${release.source}")
         _selectedReleaseCandidate.value = release
         _selectedRelease.value = null
         selectedSyncedLyrics = _syncedLyricsByReleaseId.value[release.id]
+        Timber.d("selectRelease: candidate set, launching coroutine for details")
         viewModelScope.launch {
             _isLoading.value = true
             try {
                 setRepositoryPreferredSource(release.source)
+                Timber.d("selectRelease: calling getReleaseDetails for ${release.id}")
                 val result = onlineMetadataRepository.getReleaseDetails(release.id)
                 result.fold(
                     onSuccess = { details ->
+                        Timber.d("selectRelease: got details, title=${details.title}, tracks=${details.tracks.size}")
                         _selectedRelease.value = details
                     },
                     onFailure = { error ->
-                        // Keep selected candidate so user can still apply basic metadata.
+                        Timber.e(error, "Failed to get release details for ${release.id} from ${release.source}")
+                        _errorMessage.value = "无法获取专辑详情，将应用基本信息 (来源: ${release.source})"
                         _selectedRelease.value = null
                     }
                 )
+            } catch (e: Exception) {
+                Timber.e(e, "Exception while getting release details for ${release.id}")
+                _errorMessage.value = "获取专辑详情失败，将应用基本信息 (来源: ${release.source})"
+                _selectedRelease.value = null
             } finally {
                 setRepositoryPreferredSource("Unknown")
                 _isLoading.value = false
+                Timber.d("selectRelease: coroutine finished, isLoading=false")
             }
         }
     }
@@ -528,6 +549,11 @@ class OnlineMetadataViewModel @Inject constructor(
         _selectedRelease.value = null
         _selectedReleaseCandidate.value = null
         selectedSyncedLyrics = null
+        _errorMessage.value = null
+    }
+
+    fun clearErrorMessage() {
+        _errorMessage.value = null
     }
 
     private fun decodeNavArg(value: String?): String {

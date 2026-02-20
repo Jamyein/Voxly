@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
+import timber.log.Timber
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -419,6 +420,8 @@ class LyricsRepositoryImpl @Inject constructor(
         trackName: String,
         artistName: String?
     ): Result<List<OnlineLyricsResult>> {
+        Timber.d("NetEase lyrics search starting: trackName=$trackName, artistName=$artistName")
+
         val searchResult = wangyRepository.searchSongs(
             keywords = if (artistName != null) "$artistName $trackName" else trackName,
             page = 1,
@@ -428,7 +431,8 @@ class LyricsRepositoryImpl @Inject constructor(
         return if (searchResult.isSuccess) {
             val response = searchResult.getOrNull()
             val songs = response?.result?.songs ?: emptyList()
-            
+            Timber.d("NetEase lyrics search success: found ${songs.size} songs for '$trackName'")
+
             val results = songs.map { song ->
                 OnlineLyricsResult(
                     id = song.id.toLong(),
@@ -446,7 +450,9 @@ class LyricsRepositoryImpl @Inject constructor(
             }
             Result.success(results)
         } else {
-            Result.failure(LyricsException("NetEase search failed"))
+            val errorMsg = searchResult.exceptionOrNull()?.message ?: "Unknown error"
+            Timber.e("NetEase lyrics search failed: $errorMsg")
+            Result.failure(LyricsException("NetEase search failed: $errorMsg"))
         }
     }
 
@@ -518,7 +524,7 @@ class LyricsRepositoryImpl @Inject constructor(
         allResults.addAll(qqMusicResults)
 
         // Sort by relevance: prioritize results with synced lyrics and matching artist
-        val sortedResults = allResults.sortedWith(compareBy<OnlineLyricsResult> {
+        val sortedResults = allResults.sortedWith(compareByDescending<OnlineLyricsResult> {
             sourcePriorityIndex(it.source, settings.priority)
         }.thenByDescending {
             if (it.hasSyncedLyrics) 2 else 0

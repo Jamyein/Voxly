@@ -329,6 +329,11 @@
     <string name="settings_online_search_limit">搜索结果条数限制（单源）</string>
     <string name="settings_online_search_limit_subtitle">每个在线数据源返回的最大结果数</string>
     <string name="settings_online_search_limit_unlimited">无限制</string>
+    <string name="settings_online_search_limit_musicbrainz">MusicBrainz 限制</string>
+    <string name="settings_online_search_limit_itunes">Apple Music 限制</string>
+    <string name="settings_online_search_limit_netease">网易云音乐 限制</string>
+    <string name="settings_online_search_limit_qq_music">QQ音乐 限制</string>
+    <string name="settings_online_search_limit_per_source_subtitle">留空则使用全局限制</string>
     <string name="settings_source_group_metadata">组合数据源</string>
     <string name="settings_source_group_metadata_subtitle">设置元数据搜索来源的开关和优先级</string>
     <string name="settings_source_group_lyrics">歌词数据源</string>

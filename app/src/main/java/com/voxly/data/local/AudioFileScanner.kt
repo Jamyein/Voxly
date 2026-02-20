@@ -45,6 +45,28 @@ class AudioFileScanner @Inject constructor(
         private val AUDIO_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         private val ALBUM_ART_URI = Uri.parse("content://media/external/audio/albumart")
 
+        // Helper function to parse MediaStore TRACK field correctly
+        // MediaStore stores: trackNumber | (totalTracks << 16)
+        // Bits 0-15: track number, Bits 16-31: total tracks
+        // Also handles corrupted track values like 1001 which should be 1
+        fun parseTrackField(value: Int): Pair<Int?, Int?> {
+            if (value <= 0) return Pair(null, null)
+            var trackNumber = value and 0xFFFF
+            val totalTracks = (value shr 16) and 0xFFFF
+            
+            // Normalize corrupted track numbers (some sources add 1000 offset incorrectly)
+            // e.g., 1001 should be 1, 1012 should be 12
+            if (trackNumber > 1000 && trackNumber < 10000) {
+                val normalized = trackNumber - 1000
+                if (normalized in 1..999) trackNumber = normalized
+            }
+            
+            return Pair(
+                if (trackNumber > 0) trackNumber else null,
+                if (totalTracks > 0) totalTracks else null
+            )
+        }
+
         // Fast projection - only MediaStore columns, no file parsing needed
         private val FAST_PROJECTION = arrayOf(
             MediaStore.Audio.Media._ID,
@@ -103,9 +125,12 @@ class AudioFileScanner @Inject constructor(
                 val filePath = it.getString(dataColumn)
                 val extension = filePath.substringAfterLast('.', "")
 
-                // Only process supported audio formats
+                    // Only process supported audio formats
                 if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
                     val albumId = it.getLong(albumIdColumn).takeIf { albumId -> albumId > 0L }
+                    
+                    // Parse MediaStore TRACK field: trackNumber | (totalTracks << 16)
+                    val (parsedTrack, parsedTotal) = parseTrackField(it.getInt(trackColumn))
                     
                     // FAST: Use MediaStore data directly - no file parsing
                     val metadata = com.voxly.domain.model.AudioMetadata(
@@ -113,12 +138,12 @@ class AudioFileScanner @Inject constructor(
                         artist = it.getString(artistColumn)?.takeIf { s -> s.isNotBlank() },
                         album = it.getString(albumColumn)?.takeIf { s -> s.isNotBlank() },
                         year = it.getString(yearColumn)?.takeIf { s -> s.isNotBlank() },
-                        trackNumber = it.getInt(trackColumn).takeIf { n -> n > 0 },
+                        trackNumber = parsedTrack,
+                        totalTracks = parsedTotal,
                         albumArt = null,
                         // Detailed fields loaded on-demand via loadDetailedMetadata()
                         albumArtist = null,
                         genre = null,
-                        totalTracks = null,
                         discNumber = null,
                         totalDiscs = null,
                         composer = null,
@@ -203,16 +228,18 @@ class AudioFileScanner @Inject constructor(
 
                 if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
                     val albumId = it.getLong(albumIdColumn).takeIf { value -> value > 0L }
+                    // Parse MediaStore TRACK field: trackNumber | (totalTracks << 16)
+                    val (parsedTrack, parsedTotal) = parseTrackField(it.getInt(trackColumn))
                     val metadata = com.voxly.domain.model.AudioMetadata(
                         title = it.getString(titleColumn)?.takeIf { value -> value.isNotBlank() },
                         artist = it.getString(artistColumn)?.takeIf { value -> value.isNotBlank() },
                         album = it.getString(albumColumn)?.takeIf { value -> value.isNotBlank() },
                         year = it.getString(yearColumn)?.takeIf { value -> value.isNotBlank() },
-                        trackNumber = it.getInt(trackColumn).takeIf { value -> value > 0 },
+                        trackNumber = parsedTrack,
+                        totalTracks = parsedTotal,
                         albumArt = null,
                         albumArtist = null,
                         genre = null,
-                        totalTracks = null,
                         discNumber = null,
                         totalDiscs = null,
                         composer = null,
@@ -351,7 +378,8 @@ class AudioFileScanner @Inject constructor(
                 selectionArgs,
                 null
             )
-            cursor?.use {
+
+        cursor?.use {
                 if (it.moveToFirst()) {
                     val durationCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                     val bitrateCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
@@ -678,19 +706,22 @@ class AudioFileScanner @Inject constructor(
                 if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
                     val albumId = it.getLong(albumIdColumn).takeIf { albumId -> albumId > 0L }
                     
+                    // Parse MediaStore TRACK field: trackNumber | (totalTracks << 16)
+                    val (parsedTrack, parsedTotal) = parseTrackField(it.getInt(trackColumn))
+                    
                     // FAST: Use MediaStore data directly - no file parsing
                     val metadata = com.voxly.domain.model.AudioMetadata(
                         title = it.getString(titleColumn)?.takeIf { s -> s.isNotBlank() },
                         artist = it.getString(artistColumn)?.takeIf { s -> s.isNotBlank() },
                         album = it.getString(albumColumn)?.takeIf { s -> s.isNotBlank() },
                         year = it.getString(yearColumn)?.takeIf { s -> s.isNotBlank() },
-                        trackNumber = it.getInt(trackColumn).takeIf { n -> n > 0 },
+                        trackNumber = parsedTrack,
+                        totalTracks = parsedTotal,
                         // Album art URI is built from albumId - no bytes loaded
                         albumArt = null,
                         // Detailed fields (lyrics, ReplayGain, composer, etc.) loaded on-demand
                         albumArtist = null,
                         genre = null,
-                        totalTracks = null,
                         discNumber = null,
                         totalDiscs = null,
                         composer = null,

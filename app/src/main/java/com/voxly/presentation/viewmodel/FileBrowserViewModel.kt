@@ -1068,25 +1068,20 @@ class FileBrowserViewModel @Inject constructor(
         }
         runCatching {
             val previousDirectoryFiles = _directoryFiles.value
-            val cachedFiles = if (!forceRefresh && audioRepository.hasCachedData()) {
-                audioRepository.getCachedAudioFiles().first()
-            } else {
-                emptyList()
-            }
             coroutineScope {
                 directories.map { directory ->
                     async {
                         val filesForDirectory = when {
                             directory.path.isBlank() -> emptyList()
                             !forceRefresh && previousDirectoryFiles.containsKey(directory.uri) -> {
+                                // Use previously scanned files for this directory if available
                                 previousDirectoryFiles[directory.uri].orEmpty()
                             }
-                            !forceRefresh && cachedFiles.isNotEmpty() -> {
-                                cachedFiles.filter { file ->
-                                    isFileInDirectory(file.path, directory.path)
-                                }
-                            }
                             else -> {
+                                // Always scan the directory to ensure we get all files,
+                                // including files from newly added directories that aren't in cache yet.
+                                // This fixes the issue where duplicate-filename files across
+                                // directories wouldn't show up without manual refresh.
                                 audioRepository.scanAudioFiles(
                                     directoryPath = directory.path,
                                     forceRefresh = forceRefresh

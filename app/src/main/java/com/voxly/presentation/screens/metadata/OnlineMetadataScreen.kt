@@ -8,15 +8,19 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -28,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -44,6 +49,7 @@ import com.voxly.presentation.ui.loadImageBitmapFromUrl
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
 import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
 import com.voxly.presentation.viewmodel.SearchProgressState
+import timber.log.Timber
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -60,6 +66,7 @@ fun OnlineMetadataScreen(
     val selectedReleaseCandidate by viewModel.selectedReleaseCandidate.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val query by viewModel.searchQuery.collectAsState()
+    val errorMessage by viewModel.errorMessage.collectAsState()
 
     Scaffold(
         topBar = {
@@ -107,7 +114,15 @@ fun OnlineMetadataScreen(
                     Spacer(modifier = Modifier.height(8.dp))
                     OnlineReleaseList(
                         releases = state.releases,
-                        onSelect = { viewModel.selectRelease(it) }
+                        onSelect = { release ->
+                            viewModel.selectRelease(release)
+                            // 直接应用元数据
+                            viewModel.applyMetadata()?.let { metadata ->
+                                Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}")
+                                onApplyMetadata(metadata)
+                            }
+                        },
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
                 is OnlineMetadataUiState.NoResults -> {
@@ -125,55 +140,34 @@ fun OnlineMetadataScreen(
                 is OnlineMetadataUiState.Results -> {
                     OnlineReleaseList(
                         releases = state.releases,
-                        onSelect = { viewModel.selectRelease(it) }
+                        onSelect = { release ->
+                            viewModel.selectRelease(release)
+                            // 直接应用元数据
+                            viewModel.applyMetadata()?.let { metadata ->
+                                Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}")
+                                onApplyMetadata(metadata)
+                            }
+                        },
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
                 else -> {
                     OnlineReleaseList(
                         releases = searchResults,
-                        onSelect = { viewModel.selectRelease(it) }
+                        onSelect = { release ->
+                            viewModel.selectRelease(release)
+                            // 直接应用元数据
+                            viewModel.applyMetadata()?.let { metadata ->
+                                Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}")
+                                onApplyMetadata(metadata)
+                            }
+                        },
+                        modifier = Modifier.weight(1f, fill = false)
                     )
                 }
             }
 
-            if (selectedRelease != null || selectedReleaseCandidate != null) {
-                val selectedTitle = selectedRelease?.title
-                    ?: selectedReleaseCandidate?.albumTitle
-                    ?: selectedReleaseCandidate?.title
-                    .orEmpty()
-                val selectedArtist = selectedRelease?.artist ?: selectedReleaseCandidate?.artist.orEmpty()
-                val selectedTrackCount = selectedRelease?.trackCount ?: selectedReleaseCandidate?.trackCount ?: 0
-                Spacer(modifier = Modifier.height(12.dp))
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "Album: $selectedTitle",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Text(
-                            text = selectedArtist,
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                        Text(
-                            text = "Tracks: $selectedTrackCount  File: ${filePath.substringAfterLast('/')}",
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Button(
-                            onClick = {
-                                viewModel.applyMetadata()?.let(onApplyMetadata)
-                            },
-                            enabled = !isLoading,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(text = androidx.compose.ui.res.stringResource(R.string.apply_to_selected))
-                        }
-                    }
-                }
-            }
+            // 移除选择卡片UI - 点击直接应用
         }
     }
 }
@@ -215,9 +209,10 @@ private fun QuerySummaryCard(
 @Composable
 private fun OnlineReleaseList(
     releases: List<OnlineRelease>,
-    onSelect: (OnlineRelease) -> Unit
+    onSelect: (OnlineRelease) -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    LazyColumn(modifier = Modifier.fillMaxWidth()) {
+    LazyColumn(modifier = modifier.fillMaxWidth()) {
         items(releases) { release ->
             Card(
                 modifier = Modifier

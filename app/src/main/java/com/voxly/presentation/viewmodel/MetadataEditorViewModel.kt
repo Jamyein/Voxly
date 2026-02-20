@@ -542,42 +542,33 @@ class MetadataEditorViewModel @Inject constructor(
 
             _onlineCoverResults.value = emptyList()
             try {
-                aggregatedOnlineMetadataRepository.searchByTrackFlow(title, artist).collect { result ->
-                    when (result) {
-                        is OnlineSourceResult.RecordingResult -> {
-                            // Show all results, even without releaseId
-                            // Users can still select results to fetch metadata
-                            val newResults = _coverSearchState.value.results + result.recording
+                val result = aggregatedOnlineMetadataRepository.searchByTrackForCover(title, artist)
+                result.fold(
+                    onSuccess = { recordings ->
+                        recordings.forEach { recording ->
+                            val newResults = _coverSearchState.value.results + recording
                             _coverSearchState.update { it.copy(results = newResults) }
                             _onlineCoverResults.value = newResults
                         }
-
-                        is OnlineSourceResult.SourceCompleted -> {
-                            _coverSearchState.update { state ->
-                                state.copy(completedSources = state.completedSources + result.source)
-                            }
+                        _coverSearchState.update { it.copy(isSearching = false) }
+                    },
+                    onFailure = { error ->
+                        val message = error.message ?: "Cover search failed"
+                        _coverSearchState.update { state ->
+                            state.copy(errorSources = state.errorSources + ("System" to message))
                         }
-
-                        is OnlineSourceResult.Error -> {
-                            _coverSearchState.update { state ->
-                                state.copy(
-                                    errorSources = state.errorSources + (result.source to result.message)
-                                )
-                            }
-                            _onlineCoverError.value = result.message
-                        }
-
-                        else -> Unit
+                        _onlineCoverError.value = message
+                        _coverSearchState.update { it.copy(isSearching = false) }
                     }
-                }
+                )
             } catch (e: Exception) {
                 val message = e.message ?: "Cover search failed"
                 _coverSearchState.update { state ->
                     state.copy(errorSources = state.errorSources + ("System" to message))
                 }
                 _onlineCoverError.value = message
-            } finally {
                 _coverSearchState.update { it.copy(isSearching = false) }
+            } finally {
                 _isOnlineCoverLoading.value = false
             }
         }

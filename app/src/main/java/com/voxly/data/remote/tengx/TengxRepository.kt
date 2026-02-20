@@ -297,33 +297,59 @@ class TengxRepositoryImpl(
         type: Int,
         method: String
     ): Map<String, Any> {
+        // 使用 music-tag-web 的请求格式，更稳定
+        val searchId = java.util.UUID.randomUUID().toString()
         return mapOf(
             "comm" to mapOf(
-                "ct" to 24,
-                "cv" to 0,
-                "uin" to 0
+                "wid" to "",
+                "tmeAppID" to "qqmusic",
+                "authst" to "",
+                "uid" to "",
+                "gray" to "0",
+                "OpenUDID" to "2d484d3157d4ed482e406e6c5fdcf8c3d3275deb",
+                "ct" to "6",
+                "patch" to "2",
+                "psrf_qqopenid" to "",
+                "sid" to "",
+                "psrf_access_token_expiresAt" to "",
+                "cv" to "80600",
+                "gzip" to "0",
+                "qq" to "",
+                "nettype" to "2",
+                "psrf_qqunionid" to "",
+                "psrf_qqaccess_token" to "",
+                "tmeLoginType" to "2"
             ),
-            "req_1" to mapOf(
+            "music.search.SearchCgiService.DoSearchForQQMusicDesktop" to mapOf(
                 "module" to "music.search.SearchCgiService",
                 "method" to method,
                 "param" to mapOf(
-                    "query" to keywords,
-                    "search_type" to type,
+                    "num_per_page" to pageSize,
                     "page_num" to pageNum,
-                    "num_per_page" to pageSize
+                    "remoteplace" to "txt.mac.search",
+                    "search_type" to type,
+                    "query" to keywords,
+                    "grp" to 1,
+                    "searchid" to searchId,
+                    "nqc_flag" to 0
                 )
             )
         )
     }
 
     private fun parseV2SearchResponse(root: JsonObject): TengxSearchResponse? {
-        val req = root.optObject("req_1")
+        // 适配 music-tag-web 的响应格式: music.search.SearchCgiService.DoSearchForQQMusicDesktop
+        val serviceKey = "music.search.SearchCgiService.DoSearchForQQMusicDesktop"
+        val req = root.optObject(serviceKey)
+            ?: root.optObject("req_1")
             ?: root.optObject("req")
             ?: root.firstNestedObject()
             ?: root
+        
         val reqCode = req.optInt("code") ?: root.optInt("code") ?: 0
         if (reqCode != 0) return null
 
+        // 新的响应结构: data -> body -> song -> list
         val data = req.optObject("data") ?: req
         val body = data.optObject("body") ?: data
         val songNode = body.optObject("song")

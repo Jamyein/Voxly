@@ -3,6 +3,17 @@ package com.voxly.data.remote.wangy.model
 import com.google.gson.annotations.SerializedName
 
 /**
+ * WangY Music error response model.
+ * Used when API returns error responses (301, 302, 400, 403, 404, etc.)
+ */
+data class WangyErrorResponse(
+    /** Error code */
+    val code: Int = -1,
+    /** Error message */
+    val message: String? = null
+)
+
+/**
  * WangY Music search response model.
  * Response structure from WangY Cloud Music search API.
  */
@@ -100,4 +111,61 @@ data class WangyArtist(
     val albumSize: Int = 0,
     /** Number of fans */
     val fans: Long = 0
+)
+
+// ============== New EAPI Search Response Models ==============
+
+/**
+ * WangY Music search response model for eapi endpoint.
+ * Response structure from new eapi search endpoint `/api/search/song/list/page`.
+ */
+data class WangySearchResponseEapi(
+    /** Request result code: 200 indicates success */
+    val code: Int = 0,
+    /** Search result data */
+    val data: WangySearchDataEapi? = null
+)
+
+/**
+ * WangY Music search data container for eapi response.
+ */
+data class WangySearchDataEapi(
+    /** Total number of results */
+    val totalCount: Int = 0,
+    /** List of search resources */
+    val resources: List<WangySearchResource> = emptyList()
+)
+
+/**
+ * WangY Music search resource item in eapi response.
+ */
+data class WangySearchResource(
+    /** Resource type (0 = song) */
+    val resourceType: Int = 0,
+    /** Base information containing song data */
+    val baseInfo: WangyBaseInfo? = null
+)
+
+/**
+ * WangY Music base info containing simple song data.
+ */
+data class WangyBaseInfo(
+    /** Simplified song data */
+    val simpleSongData: WangySimpleSong? = null
+)
+
+/**
+ * WangY Music simplified song data in eapi search response.
+ */
+data class WangySimpleSong(
+    /** Song ID */
+    val id: Long = 0,
+    /** Song name */
+    val name: String = "",
+    /** Artist information (JSON field: ar) */
+    val ar: List<WangyArtist> = emptyList(),
+    /** Album information (JSON field: al) */
+    val al: WangyAlbum? = null,
+    /** Duration in milliseconds (JSON field: dt) */
+    val dt: Long = 0
 )

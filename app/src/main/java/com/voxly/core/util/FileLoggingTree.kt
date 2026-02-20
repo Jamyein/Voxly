@@ -28,8 +28,8 @@ class FileLoggingTree : Timber.Tree() {
         private const val MAX_FILES = 10
         private const val MAX_TOTAL_SIZE = 50 * 1024 * 1024L // 50MB
 
-        private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.US)
-        private val fileNameDateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
+        private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS", Locale.getDefault())
+        private val fileNameDateFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault())
     }
 
     private val executor = Executors.newSingleThreadExecutor { r ->
@@ -228,7 +228,7 @@ class FileLoggingTree : Timber.Tree() {
     fun exportToZip(): File? {
         synchronized(lock) {
             val logDir = LogManager.getLogDirectory()
-            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            val timestamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
             val zipFile = File(logDir.parentFile, "logs_$timestamp.zip")
 
             try {

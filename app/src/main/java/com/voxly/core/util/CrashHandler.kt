@@ -12,7 +12,7 @@ import java.util.Locale
 
 class CrashHandler : Thread.UncaughtExceptionHandler {
 
-    private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
+    private val dateTimeFormat = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.getDefault())
     private val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {

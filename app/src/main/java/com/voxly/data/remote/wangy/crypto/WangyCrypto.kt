@@ -31,6 +31,9 @@ object WangyCrypto {
     private const val WEAPI_AES_IV = "0102030405060708"
     private const val WEAPI_RSA_PUBLIC_KEY = """MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7clFSs6sXqHauqKWqdtLkF2KexO40H1YTX8z2lSgBBOAxLsvaklV8k4cBFK9snQXE9/DDaFt6Rr7iVZMldczhC0JNgTz+SHXT6CBHuX3e9SdB1Ua44oncaTWz7OBGLbCiK45wIDAQAB"""
 
+    // LinuxAPI constants (simulates Linux client)
+    private const val LINUX_API_KEY = "rFgB&h#%2?^eDg:Q"
+
     // Common constants
     private const val AES_BLOCK_SIZE = 16
     private const val RSA_KEY_SIZE = 2048
@@ -78,6 +81,45 @@ object WangyCrypto {
             mapOf("params" to hex)
         } catch (e: Exception) {
             throw CryptoException("EAPI encryption failed", e)
+        }
+    }
+
+    // ============================================
+    // LinuxAPI Encryption (Simple AES)
+    // ============================================
+
+    /**
+     * LinuxAPI encryption - simpler than WeAPI.
+     * Used by Linux desktop client.
+     *
+     * Process (参考 music-tag-web applications/utils/encrypt.py):
+     * 1. Convert data to JSON string
+     * 2. Add "method": "POST" to the data
+     * 3. AES-128-ECB encrypt the JSON string with fixed key
+     * 4. Return as "eparams"
+     *
+     * @param url The API endpoint URL (without domain)
+     * @param data Request parameters as map
+     * @return Encrypted parameters as map with "eparams" key
+     */
+    fun linuxEncrypt(url: String, data: Map<String, Any>): Map<String, String> {
+        return try {
+            // Add method to data
+            val dataWithMethod = data.toMutableMap()
+            dataWithMethod["method"] = "POST"
+
+            // Convert to JSON string
+            val text = buildJsonString(dataWithMethod)
+
+            // AES-128-ECB encrypt (no IV, no padding issues)
+            val encrypted = aesEncryptEcb(text.toByteArray(Charsets.UTF_8), LINUX_API_KEY.toByteArray())
+
+            // Convert to hex string (uppercase) - matching Python reference implementation
+            val eparams = bytesToHex(encrypted).uppercase()
+
+            mapOf("eparams" to eparams)
+        } catch (e: Exception) {
+            throw CryptoException("LinuxAPI encryption failed", e)
         }
     }
 
@@ -145,8 +187,10 @@ object WangyCrypto {
     // ============================================
 
     /**
-     * AES-128-ECB encryption (NoPadding).
+     * AES-128-ECB encryption with PKCS5/PKCS7 padding.
      * Used in EAPI encryption.
+     *
+     * Note: PKCS5 and PKCS7 are the same for 16-byte block size.
      *
      * @param data Data to encrypt
      * @param key 16-byte AES key
@@ -155,7 +199,8 @@ object WangyCrypto {
     fun aesEncryptEcb(data: ByteArray, key: ByteArray): ByteArray {
         return try {
             val keySpec = SecretKeySpec(key, "AES")
-            val cipher = Cipher.getInstance("AES/ECB/NoPadding")
+            // Use PKCS5Padding (same as PKCS7 for 16-byte blocks) to handle variable-length data
+            val cipher = Cipher.getInstance("AES/ECB/PKCS5Padding")
             cipher.init(Cipher.ENCRYPT_MODE, keySpec)
             cipher.doFinal(data)
         } catch (e: Exception) {
