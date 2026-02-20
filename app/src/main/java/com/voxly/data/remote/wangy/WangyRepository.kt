@@ -100,11 +100,19 @@ class WangyRepositoryImpl @Inject constructor(
         val failures = mutableListOf<String>()
         var emptySuccess: WangySearchResponse? = null
 
-        // 搜索优先级: Web > EAPI > LinuxAPI
-        // Web搜索无需加密，可能是最简单的方案
+        // 搜索优先级: Simple > Web > EAPI > LinuxAPI
+        // Simple搜索无需加密，优先尝试最简单的方案
         val requests: List<suspend () -> retrofit2.Response<WangySearchResponse>> = listOf(
             {
                 // 简单网页搜索 (无需加密) - 优先尝试
+                api.searchSongsSimple(
+                    keyword = keywords,
+                    offset = offset,
+                    limit = normalizedLimit
+                )
+            },
+            {
+                // 简单网页搜索 (无需加密) - Web接口
                 api.searchSongsWeb(
                     keyword = keywords,
                     offset = offset,

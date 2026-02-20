@@ -112,6 +112,38 @@ interface WangyApi {
     ): Response<WangySearchResponse>
 
     /**
+     * Searches for songs using simple web search (no encryption).
+     * Endpoint: /api/search/get
+     *
+     * This is the simplest endpoint that doesn't require encryption.
+     * Uses the old API format with @Query("s") parameter.
+     *
+     * @param keyword Search keywords
+     * @param type Search type: 1=song, 100=artist, 10=album, 1000=playlist
+     * @param offset Result offset for pagination
+     * @param limit Max results per page
+     * @param total Whether to return total count
+     * @return Search response
+     */
+    @GET("api/search/get")
+    @Headers(
+        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Referer: https://music.163.com/",
+        "Origin: https://music.163.com",
+        "X-Requested-With: XMLHttpRequest",
+        "Accept: */*",
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8",
+        "Accept-Encoding: gzip, deflate, br"
+    )
+    suspend fun searchSongsSimple(
+        @Query("s") keyword: String,
+        @Query("type") type: Int = 1,
+        @Query("offset") offset: Int = 0,
+        @Query("limit") limit: Int = 30,
+        @Query("total") total: Boolean = true
+    ): Response<WangySearchResponse>
+
+    /**
      * Gets lyrics for a song using simple GET request.
      * Endpoint: /api/song/lyric
      *
