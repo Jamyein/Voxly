@@ -17,6 +17,7 @@
 
 # Keep data classes for Gson
 -keep class com.mp3tag.android.data.remote.musicbrainz.model.** { *; }
+-keep class com.voxly.data.remote.wangy.model.** { *; }
 
 # Keep Kotlin metadata
 -keep class kotlin.Metadata { *; }

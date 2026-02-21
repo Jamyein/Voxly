@@ -1,5 +1,7 @@
 package com.voxly.di
 
+import com.voxly.data.remote.NetworkConstants
+
 import android.content.Context
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
@@ -39,6 +41,7 @@ import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
+import com.google.gson.GsonBuilder
 import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
@@ -62,7 +65,7 @@ object AppModule {
         val userAgentInterceptor = okhttp3.Interceptor { chain ->
             val originalRequest = chain.request()
             val requestWithUserAgent = originalRequest.newBuilder()
-                .header("User-Agent", "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36")
+                .header("User-Agent", NetworkConstants.DEFAULT_USER_AGENT)
                 .build()
             chain.proceed(requestWithUserAgent)
         }
@@ -82,9 +85,9 @@ object AppModule {
             // Protocols
             .protocols(listOf(okhttp3.Protocol.HTTP_2, okhttp3.Protocol.HTTP_1_1))
             // Timeouts
-            .connectTimeout(30, TimeUnit.SECONDS)
-            .readTimeout(30, TimeUnit.SECONDS)
-            .writeTimeout(30, TimeUnit.SECONDS)
+            .connectTimeout(NetworkConstants.CONNECT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .readTimeout(NetworkConstants.READ_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            .writeTimeout(NetworkConstants.WRITE_TIMEOUT_SECONDS, TimeUnit.SECONDS)
             .build()
     }
 
@@ -165,7 +168,14 @@ object AppModule {
         return Retrofit.Builder()
             .baseUrl(WangyApi.BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(
+                GsonConverterFactory.create(
+                    GsonBuilder()
+                        .serializeNulls()
+                        .setLenient()
+                        .create()
+                )
+            )
             .build()
     }
 

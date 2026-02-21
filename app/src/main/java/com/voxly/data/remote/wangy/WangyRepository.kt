@@ -187,6 +187,7 @@ class WangyRepositoryImpl @Inject constructor(
                 when {
                     errorMsg.contains("converter", ignoreCase = true) -> {
                         Timber.e(TAG, "NetEase converter error (response format mismatch): $errorMsg")
+                        Timber.e(TAG, "Converter error details: This usually means API returned HTML instead of JSON. Check if NetEase is blocking/rate-limiting the request.")
                     }
                     errorMsg.contains("encryption", ignoreCase = true) -> {
                         Timber.e(TAG, "NetEase encryption error: $errorMsg")
