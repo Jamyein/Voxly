@@ -417,9 +417,75 @@ class NeRepositoryImpl @Inject constructor(
 
     override suspend fun getAlbumDetail(albumId: Long): Result<WangyAlbumDetail> = withContext(Dispatchers.IO) {
         try {
-            // Reuse existing implementation or add new one
-            Result.failure(Exception("Not implemented"))
+            val path = "/eapi/v1/album/detail"
+            val params = mapOf(
+                "id" to albumId.toString()
+            )
+
+            val rawJson = doRequest(path, params)
+            Timber.d(TAG, "Album detail response: ${rawJson.take(500)}")
+
+            if (rawJson.isBlank()) {
+                return@withContext Result.failure(Exception("Empty response"))
+            }
+
+            val response = gson.fromJson(rawJson, NeAlbumDetailResponse::class.java)
+
+            if (response.code != 200) {
+                return@withContext Result.failure(Exception("Album detail failed with code: ${response.code}"))
+            }
+
+            // Convert to WangyAlbumDetail format
+            val albumDetail = WangyAlbumDetail(
+                code = response.code,
+                album = response.data?.let { album ->
+                    com.voxly.data.remote.wangy.model.WangyAlbumDetailInfo(
+                        id = album.id,
+                        name = album.name,
+                        artist = album.artist?.let { artist ->
+                            com.voxly.data.remote.wangy.model.WangyArtistBasic(
+                                id = artist.id,
+                                name = artist.name,
+                                picUrl = artist.picUrl ?: ""
+                            )
+                        },
+                        company = album.company ?: "",
+                        picUrl = album.picUrl ?: "",
+                        publishTime = album.publishTime ?: 0,
+                        description = album.description ?: "",
+                        tags = album.tags ?: "",
+                        size = album.size ?: 0
+                    )
+                },
+                songs = response.data?.songs?.map { song ->
+                    com.voxly.data.remote.wangy.model.WangyAlbumSong(
+                        id = song.id,
+                        name = song.name,
+                        ar = song.ar?.map { ar ->
+                            com.voxly.data.remote.wangy.model.WangyArtistBasic(
+                                id = ar.id,
+                                name = ar.name,
+                                picUrl = ar.picUrl ?: ""
+                            )
+                        } ?: emptyList(),
+                        al = song.al?.let { al ->
+                            com.voxly.data.remote.wangy.model.WangyAlbumBasic(
+                                id = al.id,
+                                name = al.name,
+                                picUrl = al.picUrl ?: ""
+                            )
+                        },
+                        dt = song.duration ?: 0,
+                        trackNo = song.trackNo ?: 0,
+                        cd = song.cd ?: ""
+                    )
+                } ?: emptyList(),
+                privileges = emptyList()
+            )
+
+            Result.success(albumDetail)
         } catch (e: Exception) {
+            Timber.e(TAG, "Get album detail exception: ${e.message}", e)
             Result.failure(e)
         }
     }

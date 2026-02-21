@@ -126,7 +126,9 @@ data class NeArtist(
     @SerializedName("id")
     val id: Long = 0,
     @SerializedName("name")
-    val name: String = ""
+    val name: String = "",
+    @SerializedName("picUrl")
+    val picUrl: String? = null
 )
 
 /**
@@ -139,4 +141,62 @@ data class NeAlbum(
     val name: String = "",
     @SerializedName("picUrl")
     val picUrl: String = ""
+)
+
+// ============== Album Detail Response ==============
+
+/**
+ * Netease album detail response from EAPI endpoint.
+ */
+data class NeAlbumDetailResponse(
+    @SerializedName("code")
+    val code: Int = 0,
+    @SerializedName("data")
+    val data: NeAlbumDetailData? = null
+)
+
+/**
+ * Album detail data container.
+ */
+data class NeAlbumDetailData(
+    @SerializedName("id")
+    val id: Long = 0,
+    @SerializedName("name")
+    val name: String = "",
+    @SerializedName("artist")
+    val artist: NeArtist? = null,
+    @SerializedName("company")
+    val company: String? = null,
+    @SerializedName("picUrl")
+    val picUrl: String? = null,
+    @SerializedName("publishTime")
+    val publishTime: Long? = null,
+    @SerializedName("description")
+    val description: String? = null,
+    @SerializedName("tags")
+    val tags: String? = null,
+    @SerializedName("size")
+    val size: Int? = null,
+    @SerializedName("songs")
+    val songs: List<NeAlbumSong> = emptyList()
+)
+
+/**
+ * Song in album detail.
+ */
+data class NeAlbumSong(
+    @SerializedName("id")
+    val id: Long = 0,
+    @SerializedName("name")
+    val name: String = "",
+    @SerializedName("ar")
+    val ar: List<NeArtist>? = null,
+    @SerializedName("al")
+    val al: NeAlbum? = null,
+    @SerializedName("dt")
+    val duration: Long? = null,
+    @SerializedName("trackNo")
+    val trackNo: Int? = null,
+    @SerializedName("cd")
+    val cd: String? = null
 )

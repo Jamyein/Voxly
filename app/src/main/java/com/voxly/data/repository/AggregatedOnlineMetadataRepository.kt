@@ -427,8 +427,9 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             .mapNotNull { (albumName, albumSongs) ->
                                 if (albumName.isBlank()) return@mapNotNull null
                                 val firstSong = albumSongs.first()
+                                val songId = firstSong.sourceKey ?: return@mapNotNull null
                                 OnlineRelease(
-                                    id = firstSong.sourceKey,
+                                    id = songId,
                                     title = albumName,
                                     artist = firstSong.artistName ?: "",
                                     year = null,
@@ -856,9 +857,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         Timber.w(TAG, "NetEase track search returned empty results for '$title' artist='$artist'")
                         Result.success(emptyList())
                     } else {
-                        val recordings = songs.map { song ->
+                        val recordings = songs.mapNotNull { song ->
+                            val songId = song.sourceKey ?: return@mapNotNull null
                             OnlineRecording(
-                                id = song.sourceKey,
+                                id = songId,
                                 title = song.trackName,
                                 artist = song.artistName ?: "",
                                 duration = song.duration?.toInt(),
@@ -884,6 +886,19 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 "Online query source=NetEase type=track elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
                 TAG
             )
+        }
+    }
+
+    /**
+     * Gets NetEase album cover URL.
+     */
+    private suspend fun getNeteaseAlbumCoverUrl(albumId: Long): String? {
+        return try {
+            val albumDetail = neRepository.getAlbumDetail(albumId)
+            albumDetail.getOrNull()?.album?.picUrl?.let { normalizeCoverUrl(it) }
+        } catch (e: Exception) {
+            Timber.w(TAG, "Failed to get NetEase album cover for albumId=$albumId: ${e.message}")
+            null
         }
     }
 
@@ -1009,7 +1024,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
      */
     private suspend fun getNeteaseAlbumDetails(albumId: String): Result<OnlineReleaseDetails> {
         return try {
-            val result = wangyRepository.getAlbumDetail(albumId.toLong())
+            val result = neRepository.getAlbumDetail(albumId.toLong())
             if (result.isSuccess) {
                 val album = result.getOrNull()
                 // Convert to OnlineReleaseDetails
@@ -1208,7 +1223,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
      */
     private suspend fun getNeteaseCoverArt(albumId: String): Result<ByteArray?> {
         return try {
-            val result = wangyRepository.getAlbumDetail(albumId.toLong())
+            val result = neRepository.getAlbumDetail(albumId.toLong())
             if (result.isSuccess) {
                 val album = result.getOrNull()
                 val coverUrl = normalizeCoverUrl(album?.album?.picUrl)
