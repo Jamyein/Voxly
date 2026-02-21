@@ -315,8 +315,8 @@
     <string name="settings_metadata_source_description_both">Both: Combines results from all sources for best coverage</string>
     <string name="settings_data_sources_label">Data Sources</string>
     <string name="settings_data_sources_value">MusicBrainz + iTunes</string>
-    <string name="settings_source_musicbrainz">Enable MusicBrainz</string>
-    <string name="settings_source_musicbrainz_subtitle">Use MusicBrainz for online metadata search</string>
+    <string name="settings_source_musicbrainz">Enable LRCLIB</string>
+    <string name="settings_source_musicbrainz_subtitle">Free open source lyrics database</string>
     <string name="settings_source_apple_music">Enable iTunes</string>
     <string name="settings_source_apple_music_subtitle">Use iTunes for metadata and cover art</string>
     <string name="settings_source_netease">Enable NetEase</string>

@@ -415,6 +415,7 @@ class LyricsRepositoryImpl @Inject constructor(
 
     /**
      * Searches lyrics from NetEase Cloud Music.
+     * Uses Simple API (WangyRepository) - no encryption required.
      */
     private suspend fun searchFromNetEase(
         trackName: String,
@@ -422,6 +423,7 @@ class LyricsRepositoryImpl @Inject constructor(
     ): Result<List<OnlineLyricsResult>> {
         Timber.d("NetEase lyrics search starting: trackName=$trackName, artistName=$artistName")
 
+        // Use wangyRepository (Simple API)
         val searchResult = wangyRepository.searchSongs(
             keywords = if (artistName != null) "$artistName $trackName" else trackName,
             page = 1,
@@ -435,16 +437,16 @@ class LyricsRepositoryImpl @Inject constructor(
 
             val results = songs.map { song ->
                 OnlineLyricsResult(
-                    id = song.id.toLong(),
+                    id = song.id,
                     trackName = song.name,
-                    artistName = song.artists?.joinToString(", ") { it.name } ?: "",
+                    artistName = song.artists.joinToString(", ") { it.name },
                     albumName = song.album?.name,
-                    duration = song.duration / 1000.0,
-                    hasSyncedLyrics = true, // NetEase usually has synced lyrics
+                    duration = song.duration.toDouble() / 1000.0,
+                    hasSyncedLyrics = true,
                     hasPlainLyrics = true,
                     isInstrumental = false,
                     source = "NetEase",
-                    sourceKey = null,
+                    sourceKey = song.id.toString(),
                     preview = null
                 )
             }
@@ -524,7 +526,7 @@ class LyricsRepositoryImpl @Inject constructor(
         allResults.addAll(qqMusicResults)
 
         // Sort by relevance: prioritize results with synced lyrics and matching artist
-        val sortedResults = allResults.sortedWith(compareByDescending<OnlineLyricsResult> {
+        val sortedResults = allResults.sortedWith(compareBy<OnlineLyricsResult> {
             sourcePriorityIndex(it.source, settings.priority)
         }.thenByDescending {
             if (it.hasSyncedLyrics) 2 else 0
@@ -573,18 +575,20 @@ class LyricsRepositoryImpl @Inject constructor(
 
     /**
      * Gets lyrics from NetEase by song ID.
+     * Uses Simple API (WangyRepository).
      */
     suspend fun getNetEaseLyrics(songId: Long): Result<Lyrics> =
         withContext(Dispatchers.IO) {
             try {
+                // Use wangyRepository (Simple API)
                 val response = wangyRepository.getLyrics(songId)
 
                 if (response.isSuccess) {
-                    val lyricsData = response.getOrNull()
-                    val lrc = lyricsData?.lrc?.lyric ?: ""
-                    val tLrc = lyricsData?.tlyric?.lyric
+                    val lyricsResponse = response.getOrNull()
+                    val lrc = lyricsResponse?.lrc?.lyric
+                    val tLrc = lyricsResponse?.tlyric?.lyric
 
-                    if (lrc.isNotBlank()) {
+                    if (!lrc.isNullOrBlank()) {
                         val lyrics = if (lrc.contains("[")) {
                             Lyrics.parseLrc(lrc)
                         } else {
@@ -595,7 +599,8 @@ class LyricsRepositoryImpl @Inject constructor(
                         Result.failure(LyricsException("No lyrics found"))
                     }
                 } else {
-                    Result.failure(LyricsException("NetEase get lyrics failed"))
+                    val errorMsg = response.exceptionOrNull()?.message ?: "Unknown error"
+                    Result.failure(LyricsException("NetEase get lyrics failed: $errorMsg"))
                 }
             } catch (e: Exception) {
                 Result.failure(LyricsException("Network error", e))
@@ -693,10 +698,9 @@ class LyricsRepositoryImpl @Inject constructor(
     }
 
     private suspend fun getLyricsSourceSettings(): LyricsSourceSettings {
-        val enableMusicBrainz = settingsDataStore.lyricsSourceEnabledMusicBrainz.first()
-        val enableITunes = settingsDataStore.lyricsSourceEnabledITunes.first()
+        val enableLrclib = settingsDataStore.lyricsSourceEnabledMusicBrainz.first()
         return LyricsSourceSettings(
-            enableLrclib = enableMusicBrainz || enableITunes,
+            enableLrclib = enableLrclib,
             enableNetease = settingsDataStore.lyricsSourceEnabledNetease.first(),
             enableQQMusic = settingsDataStore.lyricsSourceEnabledQQMusic.first(),
             searchLimit = normalizeSearchLimit(settingsDataStore.onlineSearchLimit.first()),
@@ -725,7 +729,7 @@ class LyricsRepositoryImpl @Inject constructor(
 
     private fun sourcePriorityIndex(source: String, priority: List<String>): Int {
         val key = when (source) {
-            "LRCLIB" -> "musicbrainz"
+            "LRCLIB" -> "lrclib"
             "NetEase" -> "netease"
             "QQ Music" -> "qq_music"
             else -> "unknown"

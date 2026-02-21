@@ -1,10 +1,7 @@
 package com.voxly.data.remote.wangy
 
-import com.google.gson.Gson
-import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import com.voxly.data.remote.wangy.crypto.WangyCrypto
 import com.voxly.data.remote.wangy.model.WangyAlbum
 import com.voxly.data.remote.wangy.model.WangyAlbumDetail
 import com.voxly.data.remote.wangy.model.WangyArtist
@@ -15,8 +12,6 @@ import com.voxly.data.remote.wangy.model.WangySong
 import com.voxly.data.remote.wangy.model.WangySongDetail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.RequestBody.Companion.toRequestBody
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -94,8 +89,6 @@ class WangyRepositoryImpl @Inject constructor(
     private val api: WangyApi
 ) : WangyRepository {
 
-    private val gson = Gson()
-
     override suspend fun searchSongs(
         keywords: String,
         page: Int,
@@ -107,208 +100,98 @@ class WangyRepositoryImpl @Inject constructor(
 
         Timber.d(TAG, "Searching NetEase for: '$keywords' page=$normalizedPage limit=$normalizedLimit")
 
-        val failures = mutableListOf<String>()
-        var emptySuccess: WangySearchResponse? = null
+        try {
+            // Simple web search (no encryption required)
+            val response = api.searchSongsSimple(
+                keyword = keywords,
+                type = 1,
+                offset = offset,
+                limit = normalizedLimit,
+                total = true
+            )
 
-        // 搜索优先级: WeAPI > EAPI > LinuxAPI
-        // Web 和 Simple 接口已禁用（保留接口定义）
-        val requests: List<suspend () -> retrofit2.Response<okhttp3.ResponseBody>> = listOf(
-            {
-                // WeAPI 加密搜索 (AES-CBC + RSA)
-                // 端点: /weapi/search/get
-                val searchData = mapOf(
-                    "s" to keywords,
-                    "type" to 1,
-                    "offset" to offset,
-                    "limit" to normalizedLimit,
-                    "total" to true
-                )
-                val encrypted = WangyCrypto.weapiEncrypt(searchData)
-                val bodyString = "params=${encrypted["params"]}&encSecKey=${encrypted["encSecKey"]}"
-                val requestBody = bodyString.toRequestBody("application/x-www-form-urlencoded".toMediaType())
-                api.searchSongsWeapi(requestBody)
-            },
-            {
-                // EAPI 加密搜索
-                // 端点: /api/search/get，参考 music-tag-web
-                val searchData = mapOf(
-                    "s" to keywords,
-                    "type" to 1,
-                    "offset" to offset,
-                    "limit" to normalizedLimit,
-                    "total" to true
-                )
-                val encrypted = WangyCrypto.eapiEncrypt("/api/search/get", searchData)
-                val bodyString = "params=${encrypted["params"]}"
-                val requestBody = bodyString.toRequestBody("application/x-www-form-urlencoded".toMediaType())
-                api.searchSongsEapi(requestBody)
-            },
-            {
-                // LinuxAPI 加密搜索
-                // 参考: music-tag-web applications/utils/encrypt.py
-                val searchData = mapOf(
-                    "s" to keywords,
-                    "type" to 1,
-                    "offset" to offset,
-                    "limit" to normalizedLimit,
-                    "total" to true
-                )
-                val encrypted = WangyCrypto.linuxEncrypt("/api/search/get", searchData)
-                val bodyString = "eparams=${encrypted["eparams"]}"
-                val requestBody = bodyString.toRequestBody("application/x-www-form-urlencoded".toMediaType())
-                api.searchSongsLinuxApi(requestBody)
+            Timber.d(TAG, "[Simple] NetEase API response: httpCode=${response.code()}")
+
+            if (!response.isSuccessful) {
+                val errorBody = response.errorBody()?.string()
+                Timber.w(TAG, "NetEase API failed with code ${response.code()}, error body: ${errorBody?.take(500)}")
+                return@withContext Result.failure(Exception("NetEase API failed: ${response.code()}"))
             }
-            // Web 和 Simple 接口已禁用
-            // {
-            //     // 简单网页搜索 (无需加密) - Web接口
-            //     api.searchSongsWeb(...),
-            // },
-            // {
-            //     // 简单网页搜索 (无需加密) - Simple接口
-            //     api.searchSongsSimple(...)
-            // }
-        )
 
-        for ((index, request) in requests.withIndex()) {
-            val apiName = when (index) {
-                0 -> "WeAPI"
-                1 -> "EAPI"
-                2 -> "LinuxAPI"
-                else -> "Unknown"
+            val body = response.body()
+            if (body == null) {
+                Timber.w(TAG, "NetEase API returned null body")
+                return@withContext Result.failure(Exception("NetEase API returned null body"))
             }
-            try {
-                val response = request()
 
-                Timber.d(TAG, "[$apiName] NetEase API response: httpCode=${response.code()}")
-                Timber.d(TAG, "[$apiName] Response headers: ${response.headers()}")
-
-                if (!response.isSuccessful) {
-                    // Try to read error body for debugging
-                    val errorBody = response.errorBody()?.string()
-                    Timber.w(TAG, "NetEase API failed with code ${response.code()}, error body: ${errorBody?.take(500)}")
-                    failures.add("error_${response.code()}")
-                    continue
-                }
-
-                val body = response.body()
-                if (body == null) {
-                    Timber.w(TAG, "NetEase API returned null body")
-                    failures.add("null_body")
-                    continue
-                }
-
-                Timber.d(TAG, "[$apiName] Response body size: ${body.contentLength()}")
-
-                // Read response as string and parse manually
-                val responseString = try {
-                    body.string()
-                } catch (e: Exception) {
-                    Timber.e(TAG, "[$apiName] Failed to read response body: ${e.message}")
-                    failures.add("read_error")
-                    continue
-                }
-                Timber.d(TAG, "[$apiName] Response body (first 1000 chars): $responseString")
-
-                if (responseString.isBlank()) {
-                    Timber.w(TAG, "NetEase API returned empty response")
-                    failures.add("empty_response")
-                    continue
-                }
-
-                // Parse response string to JsonElement
-                val jsonElement = try {
-                    JsonParser.parseString(responseString)
-                } catch (e: Exception) {
-                    Timber.w(TAG, "NetEase API returned invalid JSON: $responseString")
-                    failures.add("invalid_json")
-                    continue
-                }
-
-                // Check if response is actually a JsonObject (not JsonPrimitive like "ok")
-                if (!jsonElement.isJsonObject) {
-                    Timber.w(TAG, "NetEase API returned non-object JSON: $responseString")
-                    failures.add("not_json_object")
-                    continue
-                }
-
-                // Parse JsonObject to WangySearchResponse
-                val jsonObject = jsonElement.asJsonObject
-                val parsedResponse = parseSearchResponse(jsonObject)
-                val code = parsedResponse.code
-
-                // Debug: Log first song details
-                parsedResponse.result?.songs?.firstOrNull()?.let { firstSong ->
-                    Timber.d(TAG, "[$apiName] First song: id=${firstSong.id}, name=${firstSong.name}, " +
-                        "artists=${firstSong.artists.map { it.name }}, album=${firstSong.album?.name}, " +
-                        "albumPicUrl=${firstSong.album?.picUrl}")
-                }
-
-                // Debug: Log raw JSON first song
-                parsedResponse.raw?.get("result")?.asJsonObject?.get("songs")?.asJsonArray?.firstOrNull()?.let { firstSongElem ->
-                    Timber.d(TAG, "[$apiName] Raw song JSON: ${firstSongElem}")
-                }
-
-                if (code == 200 && !parsedResponse.result?.songs.isNullOrEmpty()) {
-                    Timber.d(TAG, "NetEase found ${parsedResponse.result.songs.size} songs for '$keywords'")
-                    return@withContext Result.success(parsedResponse)
-                }
-                if (emptySuccess == null && code == 200) {
-                    emptySuccess = parsedResponse
-                }
-                failures.add("ok_empty")
-                Timber.w(TAG, "NetEase API returned empty result for '$keywords'")
-                continue
+            // Read response as string and parse
+            val responseString = try {
+                body.string()
             } catch (e: Exception) {
-                Timber.e(TAG, "Exception during API call: ${e.message}", e)
-                failures.add("exception_${e.message}")
+                Timber.e(TAG, "[Simple] Failed to read response body: ${e.message}")
+                return@withContext Result.failure(Exception("Failed to read response body: ${e.message}"))
             }
-        }
 
-        emptySuccess?.let { 
-            Timber.w(TAG, "NetEase returning empty success for '$keywords'")
-            return@withContext Result.success(it) 
+            if (responseString.isBlank()) {
+                Timber.w(TAG, "NetEase API returned empty response")
+                return@withContext Result.failure(Exception("NetEase API returned empty response"))
+            }
+
+            // Parse response string to JsonElement
+            val jsonElement = try {
+                JsonParser.parseString(responseString)
+            } catch (e: Exception) {
+                Timber.w(TAG, "NetEase API returned invalid JSON: $responseString")
+                return@withContext Result.failure(Exception("Invalid JSON response"))
+            }
+
+            // Check if response is actually a JsonObject
+            if (!jsonElement.isJsonObject) {
+                Timber.w(TAG, "NetEase API returned non-object JSON: $responseString")
+                return@withContext Result.failure(Exception("Invalid response format"))
+            }
+
+            // Parse JsonObject to WangySearchResponse
+            val jsonObject = jsonElement.asJsonObject
+            val parsedResponse = parseSearchResponse(jsonObject)
+            val code = parsedResponse.code
+
+            if (code == 200 && !parsedResponse.result?.songs.isNullOrEmpty()) {
+                Timber.d(TAG, "NetEase found ${parsedResponse.result.songs.size} songs for '$keywords'")
+                return@withContext Result.success(parsedResponse)
+            }
+
+            Timber.w(TAG, "NetEase API returned empty result for '$keywords'")
+            Result.success(parsedResponse)
+        } catch (e: Exception) {
+            Timber.e(TAG, "Exception during API call: ${e.message}", e)
+            Result.failure(e)
         }
-        Timber.e(TAG, "NetEase search failed completely for '$keywords': ${failures.joinToString(" | ")}")
-        Result.failure(Exception("NetEase search failed: ${failures.joinToString(" | ")}"))
     }
 
     /**
      * Parse JsonObject response to WangySearchResponse.
-     * Handles multiple API response formats.
+     * Handles simple web API response format.
      */
     private fun parseSearchResponse(jsonObject: JsonObject): WangySearchResponse {
         val code = jsonObject.get("code")?.asInt ?: -1
 
-        // Debug: log response structure
-        Timber.d(TAG, "parseSearchResponse: has result=${jsonObject.has("result")}, has data=${jsonObject.has("data")}")
-
-        // Try to parse result (web API format)
+        // Parse result (simple web API format)
         val result = jsonObject.get("result")?.asJsonObject?.let { resultJson ->
             Timber.d(TAG, "parseSearchResponse: parsing Web API format, result keys=${resultJson.keySet()}")
             parseSearchResult(resultJson)
         }
 
-        // Try to parse data (EAPI format)
-        val data = jsonObject.get("data")?.asJsonObject
-
-        // If we have EAPI format data, convert it to WangySearchResult
-        val finalResult = if (result == null && data != null) {
-            Timber.d(TAG, "parseSearchResponse: parsing EAPI format, data keys=${data.keySet()}")
-            parseEapiSearchResult(data)
-        } else {
-            result
-        }
-
         // Debug: log parsed result
-        finalResult?.songs?.firstOrNull()?.let { firstSong ->
+        result?.songs?.firstOrNull()?.let { firstSong ->
             Timber.d(TAG, "parseSearchResponse: firstSong parsed - id=${firstSong.id}, name=${firstSong.name}, " +
                 "artists=${firstSong.artists.map { it.name }}, album=${firstSong.album?.name}, albumPic=${firstSong.album?.picUrl}")
         }
 
         return WangySearchResponse(
             code = code,
-            result = finalResult,
-            data = data,
+            result = result,
+            data = null,
             raw = jsonObject
         )
     }
@@ -348,38 +231,6 @@ class WangyRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Parse search result from EAPI format.
-     */
-    private fun parseEapiSearchResult(dataJson: JsonObject): WangySearchResult? {
-        val totalCount = dataJson.get("totalCount")?.asInt ?: 0
-        val resources = dataJson.get("resources")?.asJsonArray ?: return null
-        
-        val songs = resources.mapNotNull { resourceElement ->
-            val resource = resourceElement.asJsonObject
-            val resourceType = resource.get("resourceType")?.asInt ?: return@mapNotNull null
-            
-            // Resource type 0 = song
-            if (resourceType != 0) return@mapNotNull null
-            
-            val baseInfo = resource.get("baseInfo")?.asJsonObject ?: return@mapNotNull null
-            val simpleSongData = baseInfo.get("simpleSongData")?.asJsonObject ?: return@mapNotNull null
-            
-            parseEapiSong(simpleSongData)
-        }
-        
-        return WangySearchResult(
-            hasMore = false,
-            queryCorrected = emptyList(),
-            songs = songs,
-            albums = emptyList(),
-            artists = emptyList(),
-            songCount = totalCount,
-            albumCount = 0,
-            artistCount = 0
-        )
-    }
-
-    /**
      * Parse song from web API format.
      */
     private fun parseSong(songJson: JsonObject): WangySong {
@@ -401,31 +252,6 @@ class WangyRepositoryImpl @Inject constructor(
             fee = songJson.get("fee")?.asInt ?: 0,
             trackNumber = songJson.get("no")?.asInt ?: 0,
             version = songJson.get("version")?.asInt ?: 0
-        )
-    }
-
-    /**
-     * Parse song from EAPI format.
-     */
-    private fun parseEapiSong(songJson: JsonObject): WangySong {
-        val artists = songJson.get("ar")?.asJsonArray?.let { arArray ->
-            arArray.mapNotNull { artistElement ->
-                parseArtist(artistElement.asJsonObject)
-            }
-        } ?: emptyList()
-        
-        val album = songJson.get("al")?.asJsonObject?.let { parseAlbum(it) }
-        
-        return WangySong(
-            id = songJson.get("id")?.asLong ?: 0L,
-            name = songJson.get("name")?.asString ?: "",
-            artists = artists,
-            album = album,
-            duration = songJson.get("dt")?.asLong ?: 0L,
-            copyrightId = 0L,
-            fee = 0,
-            trackNumber = 0,
-            version = 0
         )
     }
 
@@ -510,15 +336,10 @@ class WangyRepositoryImpl @Inject constructor(
 
     override suspend fun getCoverArt(songId: Long): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val detailData = mapOf(
-                "ids" to "[$songId]",
-                "c" to "[{\"id\":$songId}]"
+            val response = api.getSongDetail(
+                songIds = "[$songId]"
             )
-            val encrypted = WangyCrypto.weapiEncrypt(detailData)
-            val bodyString = "params=${encrypted["params"]}&encSecKey=${encrypted["encSecKey"]}"
-            val requestBody = bodyString.toRequestBody("application/x-www-form-urlencoded".toMediaType())
-            val response = api.getSongDetailWeapi(requestBody)
-            
+
             if (response.isSuccessful && response.body() != null) {
                 val song = response.body()!!.songs.firstOrNull()
                 val coverUrl = song?.al?.picUrl
@@ -536,23 +357,15 @@ class WangyRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getEnhancedLyrics(songId: Long): Result<WangyLyricsResponse> = withContext(Dispatchers.IO) {
+        // 使用简单API获取歌词（不再支持EAPI增强歌词）
         try {
-            val lyricData = mapOf(
-                "id" to songId,
-                "cp" to false,
-                "tv" to 0,
-                "lv" to 0,
-                "rv" to 0,
-                "kv" to 0,
-                "yv" to 0,
-                "ytv" to 0,
-                "yrv" to 0
+            val response = api.getLyrics(
+                songId = songId,
+                os = "pc",
+                lv = -1,
+                tv = -1
             )
-            val encrypted = WangyCrypto.eapiEncrypt("/api/song/lyric/v1", lyricData)
-            val bodyString = "params=${encrypted["params"]}"
-            val requestBody = bodyString.toRequestBody("application/x-www-form-urlencoded".toMediaType())
-            val response = api.getLyricsEapi(requestBody)
-            
+
             if (response.isSuccessful && response.body() != null) {
                 Result.success(response.body()!!)
             } else {

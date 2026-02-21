@@ -393,7 +393,6 @@ fun SettingsScreen(
     val metadataSourceEnabledNetease by viewModel.metadataSourceEnabledNetease.collectAsState()
     val metadataSourceEnabledQQMusic by viewModel.metadataSourceEnabledQQMusic.collectAsState()
     val lyricsSourceEnabledMusicBrainz by viewModel.lyricsSourceEnabledMusicBrainz.collectAsState()
-    val lyricsSourceEnabledITunes by viewModel.lyricsSourceEnabledITunes.collectAsState()
     val lyricsSourceEnabledNetease by viewModel.lyricsSourceEnabledNetease.collectAsState()
     val lyricsSourceEnabledQQMusic by viewModel.lyricsSourceEnabledQQMusic.collectAsState()
     val coverSourceEnabledMusicBrainz by viewModel.coverSourceEnabledMusicBrainz.collectAsState()
@@ -890,13 +889,6 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_source_musicbrainz_subtitle),
                     checked = lyricsSourceEnabledMusicBrainz,
                     onCheckedChange = { viewModel.setLyricsSourceEnabledMusicBrainz(it) }
-                )
-                HorizontalDivider()
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_apple_music),
-                    subtitle = stringResource(R.string.settings_source_apple_music_subtitle),
-                    checked = lyricsSourceEnabledITunes,
-                    onCheckedChange = { viewModel.setLyricsSourceEnabledITunes(it) }
                 )
                 HorizontalDivider()
                 SettingsSwitch(

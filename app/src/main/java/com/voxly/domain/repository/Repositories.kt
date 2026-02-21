@@ -275,6 +275,7 @@ data class OnlineRecording(
     val releaseId: String?,
     val source: String = "Unknown",
     val coverArtUrl: String? = null,
+    val coverArtBytes: ByteArray? = null,  // 二进制封面数据 (如 MusicBrainz)
     val discNumber: Int? = null,
     val discCount: Int? = null
 )

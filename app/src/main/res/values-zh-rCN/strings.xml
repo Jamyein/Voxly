@@ -307,8 +307,8 @@
     <string name="settings_metadata_source_description_both">全部来源：合并各来源结果以获得最佳覆盖</string>
     <string name="settings_data_sources_label">数据来源</string>
     <string name="settings_data_sources_value">MusicBrainz + iTunes</string>
-    <string name="settings_source_musicbrainz">启用 MusicBrainz</string>
-    <string name="settings_source_musicbrainz_subtitle">在线元数据搜索中使用 MusicBrainz</string>
+    <string name="settings_source_musicbrainz">启用 LRCLIB</string>
+    <string name="settings_source_musicbrainz_subtitle">免费开源歌词数据库</string>
     <string name="settings_source_apple_music">启用 iTunes</string>
     <string name="settings_source_apple_music_subtitle">使用 iTunes 获取元数据和封面</string>
     <string name="settings_source_netease">启用网易云音乐</string>

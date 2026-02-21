@@ -67,6 +67,8 @@ class MetadataEditorViewModel @Inject constructor(
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
+    private val TAG = "MetadataEditorVM"
+
     private val filePath: String = decodeNavArg(savedStateHandle.get<String>("filePath"))
 
     // Scan mode setting
@@ -905,6 +907,8 @@ class MetadataEditorViewModel @Inject constructor(
     fun applyOnlineCover(recording: OnlineRecording) {
         val releaseId = recording.releaseId
         
+        Logger.d("applyOnlineCover: releaseId=$releaseId, source=${recording.source}", TAG)
+        
         // If no releaseId, show a message and return
         if (releaseId.isNullOrBlank()) {
             _coverFetchMessage.value = "无法获取封面：该结果没有关联的专辑信息"
@@ -916,15 +920,18 @@ class MetadataEditorViewModel @Inject constructor(
 
             val oldPreferred = aggregatedOnlineMetadataRepository.preferredSource
             try {
-                aggregatedOnlineMetadataRepository.preferredSource = when (recording.source) {
+                val targetSource = when (recording.source) {
                     "MusicBrainz" -> AggregatedOnlineMetadataRepository.DataSource.MUSICBRAINZ
                     "iTunes" -> AggregatedOnlineMetadataRepository.DataSource.ITUNES
                     "NetEase" -> AggregatedOnlineMetadataRepository.DataSource.NETEASE
                     "QQ Music" -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
                     else -> AggregatedOnlineMetadataRepository.DataSource.BOTH
                 }
+                Logger.d("applyOnlineCover: setting preferredSource=$targetSource", TAG)
+                aggregatedOnlineMetadataRepository.preferredSource = targetSource
 
                 val coverResult = aggregatedOnlineMetadataRepository.getCoverArt(releaseId)
+                Logger.d("applyOnlineCover: coverResult isSuccess=${coverResult.isSuccess}, isFailure=${coverResult.isFailure}", TAG)
                 coverResult.fold(
                     onSuccess = { cover ->
                         if (cover != null) {
@@ -935,6 +942,7 @@ class MetadataEditorViewModel @Inject constructor(
                         }
                     },
                     onFailure = {
+                        Logger.e("applyOnlineCover failed: ${it.message}", it, TAG)
                         _coverFetchMessage.value = it.message ?: "Cover fetch failed"
                     }
                 )

@@ -1,9 +1,13 @@
 package com.voxly.data.remote.musicbrainz
 
+import com.voxly.data.helper.SearchQueryBuilder
+import com.voxly.data.mapper.OnlineRecordingMapper
 import com.voxly.data.remote.musicbrainz.model.*
 import com.voxly.domain.repository.*
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -88,15 +92,9 @@ class MusicBrainzRepository @Inject constructor(
         artist: String?
     ): Result<List<OnlineRecording>> = withContext(Dispatchers.IO) {
         try {
-            // 统一查询格式：艺术家 标题（空格分隔）
+            // 统一查询格式：title artist (title在前，空格分隔)
             // MusicBrainz 支持简单的文本搜索，会自动匹配相关记录
-            val query = buildString {
-                if (!artist.isNullOrBlank()) {
-                    append(artist)
-                    append(" ")
-                }
-                append(title)
-            }
+            val query = SearchQueryBuilder.build(title, artist)
 
             val response = rateLimitedCall {
                 // 使用 recording 端点进行搜索
@@ -105,15 +103,24 @@ class MusicBrainzRepository @Inject constructor(
 
             if (response.isSuccessful) {
                 val searchResult = response.body()
+                
+                // 并发获取封面
                 val recordings = searchResult?.recordings?.map { recording ->
-                    OnlineRecording(
-                        id = recording.id,
-                        title = recording.title,
-                        artist = recording.getArtistName() ?: artist ?: "Unknown",
-                        duration = recording.getDurationMs()?.toInt(),
-                        releaseId = recording.releases?.firstOrNull()?.id,
-                        source = "MusicBrainz"
-                    )
+                    coroutineScope {
+                        val releaseId = recording.releases?.firstOrNull()?.id
+                        val coverJob = async {
+                            releaseId?.let { getCoverArt(it).getOrNull() }
+                        }
+                        
+                        OnlineRecordingMapper.fromMusicBrainz(
+                            id = recording.id,
+                            title = recording.title,
+                            artistName = recording.getArtistName(),
+                            durationMs = recording.getDurationMs(),
+                            releaseId = releaseId,
+                            coverArtBytes = coverJob.await()
+                        )
+                    }
                 } ?: emptyList()
 
                 Result.success(recordings)

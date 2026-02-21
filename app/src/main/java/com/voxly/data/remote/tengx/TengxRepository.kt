@@ -283,7 +283,7 @@ class TengxRepositoryImpl(
                 ""
             } else {
                 val decodedBytes = Base64.decode(encoded, Base64.DEFAULT)
-                String(decodedBytes, Charsets.UTF_8)
+                String(decodedBytes, Charsets.UTF_16LE)
             }
         } catch (e: Exception) {
             ""
@@ -388,22 +388,22 @@ class TengxRepositoryImpl(
                 val albumName = albumJson.optString("name")
                     ?: albumJson.optString("title")
                     ?: "Unknown Album"
-                val albumMid = albumJson.optString("mid") ?: ""
-                val albumPicRaw = albumJson.optString("pic")
+                val albumMid = albumJson.optString("mid")?.takeIf { it.isNotBlank() }
+                val albumPicRaw = albumJson.optString("pic")?.takeIf { it.isNotBlank() }
                 val albumPic = when {
-                    !albumPicRaw.isNullOrBlank() -> albumPicRaw
-                    albumMid.isNotBlank() -> "https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumMid}.jpg"
-                    else -> ""
+                    albumPicRaw != null -> albumPicRaw
+                    albumMid != null -> "https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumMid}.jpg"
+                    else -> null
                 }
 
                 TengxAlbum(
                     id = albumId,
-                    mid = albumMid,
+                    mid = albumMid ?: "",
                     name = albumName,
                     title = albumJson.optString("title") ?: "",
                     singer = null,
                     publicTime = albumJson.optString("publicTime") ?: "",
-                    pic = albumPic
+                    pic = albumPic ?: ""
                 )
             }
 
@@ -487,20 +487,19 @@ class TengxRepositoryImpl(
                 val album = if (albumJson != null) {
                     val albumId = albumJson.optLong("id") ?: 0L
                     val albumName = albumJson.optString("name") ?: "Unknown Album"
-                    val albumMid = albumJson.optString("mid") ?: ""
-                    val albumPic = albumJson.optString("picUrl") 
-                        ?: albumJson.optString("pic")
-                        ?: if (albumMid.isNotBlank()) "https://y.gtimg.cn/music/photo_new/T002R500x500M000${albumMid}.jpg" 
-                        else ""
+                    val albumMid = albumJson.optString("mid")?.takeIf { it.isNotBlank() }
+                    val albumPic = albumJson.optString("picUrl")?.takeIf { it.isNotBlank() } 
+                        ?: albumJson.optString("pic")?.takeIf { it.isNotBlank() }
+                        ?: albumMid?.let { "https://y.gtimg.cn/music/photo_new/T002R500x500M000${it}.jpg" }
                     
                     TengxAlbum(
                         id = albumId,
-                        mid = albumMid,
+                        mid = albumMid ?: "",
                         name = albumName,
                         title = albumJson.optString("title") ?: "",
                         singer = null,
                         publicTime = albumJson.optString("publicTime") ?: "",
-                        pic = albumPic
+                        pic = albumPic ?: ""
                     )
                 } else null
 

@@ -2,7 +2,13 @@ package com.voxly.data.repository
 
 import android.os.SystemClock
 import com.voxly.core.util.Logger
+import com.voxly.data.helper.SearchQueryBuilder
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.mapper.OnlineRecordingMapper
+import com.voxly.data.mapper.OnlineRecordingMapper.AlbumData
+import com.voxly.data.mapper.OnlineRecordingMapper.AlbumInfo
+import com.voxly.data.mapper.OnlineRecordingMapper.ArtistData
+import com.voxly.data.mapper.OnlineRecordingMapper.SingerData
 import com.voxly.data.remote.NetworkConstants
 import com.voxly.data.remote.itunes.ITunesRepository
 import com.voxly.data.remote.musicbrainz.MusicBrainzRepository
@@ -13,7 +19,6 @@ import com.voxly.data.remote.tengx.model.TengxAlbumDetailInfo
 import com.voxly.data.remote.tengx.model.TengxSong
 import com.voxly.data.remote.tengx.model.TengxSinger
 import com.voxly.data.remote.wangy.WangyRepository
-import com.voxly.data.remote.wangy.ne.NeRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
@@ -22,10 +27,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.net.UnknownHostException
 import javax.inject.Inject
@@ -66,7 +73,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     private val musicBrainzRepository: MusicBrainzRepository,
     private val iTunesRepository: ITunesRepository,
     private val wangyRepository: WangyRepository,
-    private val neRepository: NeRepository,
     private val tengxRepository: TengxRepository
 ) : OnlineMetadataRepository {
 
@@ -387,17 +393,24 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         }
 
-        val sortedResults = finalizeReleaseResults(
-            releases = mergedResults,
+        // Sort by user-defined priority (list order: first = highest priority)
+        val sortedResults = mergedResults.sortedWith(compareBy<OnlineRelease> { release ->
+            val priorityIndex = settings.metadataPriority.indexOf(release.source.lowercase())
+            if (priorityIndex >= 0) priorityIndex else Int.MAX_VALUE
+        })
+
+        val finalizedResults = finalizeReleaseResults(
+            releases = sortedResults,
             artist = artist,
             album = album,
             settings = settings
         )
-        Result.success(sortedResults)
+        Result.success(finalizedResults)
     }
 
     /**
      * Searches NetEase Cloud Music by artist and album.
+     * Uses Simple API (WangyRepository).
      */
     private suspend fun searchNeteaseByArtistAlbum(
         artist: String,
@@ -406,36 +419,42 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     ): Result<List<OnlineRelease>> {
         val startedAt = SystemClock.elapsedRealtime()
         return try {
-            val searchResult = neRepository.searchSongs(
+            val searchResult = wangyRepository.searchSongs(
                 keywords = "$artist $album",
                 page = 1,
                 limit = limit
             )
 
             searchResult.fold(
-                onSuccess = { songs ->
+                onSuccess = { response ->
+                    val songs = response.result?.songs ?: emptyList()
                     if (songs.isEmpty()) {
                         // API returned success but no data - log warning
                         Timber.w(TAG, "NetEase search returned empty results for '$artist $album'")
                         Result.success(emptyList())
                     } else {
-                        // Group by album - NeRepository returns OnlineLyricsResult
-                        // We need to search album details separately or use available info
+                        // Group by album - try to get cover from search result first
                         val albums = songs
-                            .filter { it.albumName != null }
-                            .groupBy { it.albumName ?: "" }
+                            .filter { it.album?.name != null }
+                            .groupBy { it.album?.name ?: "" }
                             .mapNotNull { (albumName, albumSongs) ->
                                 if (albumName.isBlank()) return@mapNotNull null
                                 val firstSong = albumSongs.first()
-                                val songId = firstSong.sourceKey ?: return@mapNotNull null
+                                val songId = firstSong.id.toString()
+                                val albumId = firstSong.album?.id
+                                // Try to get cover from search result first, fallback to album detail API
+                                val coverUrl = firstSong.album?.picUrl?.let { normalizeCoverUrl(it) }
+                                    ?: if (albumId != null && albumId > 0) {
+                                        getNeteaseAlbumCoverUrl(albumId)
+                                    } else null
                                 OnlineRelease(
                                     id = songId,
                                     title = albumName,
-                                    artist = firstSong.artistName ?: "",
+                                    artist = firstSong.artists.joinToString(", ") { it.name },
                                     year = null,
                                     format = "Digital",
                                     trackCount = albumSongs.size,
-                                    coverArtUrl = null, // Will be fetched from album detail later
+                                    coverArtUrl = coverUrl,
                                     source = "NetEase",
                                     albumTitle = albumName
                                 )
@@ -836,6 +855,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
     /**
      * Searches NetEase by track title.
+     * Uses Simple API (WangyRepository).
      */
     private suspend fun searchNeteaseByTrack(
         title: String,
@@ -844,30 +864,38 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     ): Result<List<OnlineRecording>> {
         val startedAt = SystemClock.elapsedRealtime()
         return try {
-            val searchResult = neRepository.searchSongs(
-                keywords = if (artist != null) "$artist $title" else title,
+            // 统一查询格式：title artist (title在前，空格分隔)
+            val keywords = SearchQueryBuilder.build(title, artist)
+            val searchResult = wangyRepository.searchSongs(
+                keywords = keywords,
                 page = 1,
                 limit = limit
             )
 
             searchResult.fold(
-                onSuccess = { songs ->
+                onSuccess = { response ->
+                    val songs = response.result?.songs ?: emptyList()
                     Timber.d(TAG, "NetEase search returned ${songs.size} songs")
                     if (songs.isEmpty()) {
                         Timber.w(TAG, "NetEase track search returned empty results for '$title' artist='$artist'")
                         Result.success(emptyList())
                     } else {
+                        // 并发获取封面
                         val recordings = songs.mapNotNull { song ->
-                            val songId = song.sourceKey ?: return@mapNotNull null
-                            OnlineRecording(
-                                id = songId,
-                                title = song.trackName,
-                                artist = song.artistName ?: "",
-                                duration = song.duration?.toInt(),
-                                releaseId = null, // Will be fetched from album detail later
-                                source = "NetEase",
-                                coverArtUrl = null // Will be fetched from album detail later
-                            )
+                            coroutineScope {
+                                val coverJob = async { wangyRepository.getCoverArt(song.id) }
+                                val coverUrl = coverJob.await().getOrNull()
+                                
+                                OnlineRecording(
+                                    id = song.id.toString(),
+                                    title = song.name,
+                                    artist = song.artists.joinToString(", ") { it.name },
+                                    duration = (song.duration / 1000).toInt(),
+                                    releaseId = song.id.toString(),
+                                    source = "NetEase",
+                                    coverArtUrl = coverUrl
+                                )
+                            }
                         }
                         Timber.d(TAG, "NetEase recordings: ${recordings.take(3)}")
                         Result.success(recordings)
@@ -891,10 +919,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
     /**
      * Gets NetEase album cover URL.
+     * Uses Simple API (WangyRepository).
      */
     private suspend fun getNeteaseAlbumCoverUrl(albumId: Long): String? {
         return try {
-            val albumDetail = neRepository.getAlbumDetail(albumId)
+            val albumDetail = wangyRepository.getAlbumDetail(albumId)
             albumDetail.getOrNull()?.album?.picUrl?.let { normalizeCoverUrl(it) }
         } catch (e: Exception) {
             Timber.w(TAG, "Failed to get NetEase album cover for albumId=$albumId: ${e.message}")
@@ -912,14 +941,8 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     ): Result<List<OnlineRecording>> {
         val startedAt = SystemClock.elapsedRealtime()
         return try {
-            // 统一查询格式：艺术家 标题（空格分隔）
-            val keywords = buildString {
-                if (!artist.isNullOrBlank()) {
-                    append(artist)
-                    append(" ")
-                }
-                append(title)
-            }
+            // 统一查询格式：title artist (title在前，空格分隔)
+            val keywords = SearchQueryBuilder.build(title, artist)
             
             val searchResult = tengxRepository.searchSongs(
                 keywords = keywords,
@@ -936,18 +959,19 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         Result.success(emptyList())
                     } else {
                         val recordings = songs.map { song ->
-                            OnlineRecording(
-                                id = song.id.toString(),
-                                title = song.name,
-                                artist = song.singer?.joinToString(", ") { it.name } ?: "",
-                                duration = song.interval,
-                                releaseId = song.album?.mid?.takeIf { it.isNotBlank() } ?: song.album?.id?.toString(),
-                                source = "QQ Music",
-                                coverArtUrl = buildQQCoverUrl(
-                                    albumMid = song.album?.mid,
-                                    rawCoverUrl = song.album?.pic,
-                                    fallbackId = song.album?.id?.toString()
-                                )
+                            OnlineRecordingMapper.fromQQMusic(
+                                id = song.id.toInt(),
+                                name = song.name,
+                                singers = song.singer?.map { SingerData(it.name) },
+                                interval = song.interval,
+                                album = song.album?.let {
+                                    AlbumInfo(
+                                        id = it.id,
+                                        mid = it.mid,
+                                        name = it.name,
+                                        pic = it.pic
+                                    )
+                                }
                             )
                         }
                         Result.success(recordings)
@@ -1021,10 +1045,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
     /**
      * Gets NetEase album details.
+     * Uses Simple API (WangyRepository).
      */
     private suspend fun getNeteaseAlbumDetails(albumId: String): Result<OnlineReleaseDetails> {
         return try {
-            val result = neRepository.getAlbumDetail(albumId.toLong())
+            val result = wangyRepository.getAlbumDetail(albumId.toLong())
             if (result.isSuccess) {
                 val album = result.getOrNull()
                 // Convert to OnlineReleaseDetails
@@ -1167,7 +1192,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     }
 
     override suspend fun getCoverArt(releaseId: String): Result<ByteArray?> {
+        Logger.d("getCoverArt: releaseId=$releaseId, preferredSource=$preferredSource", TAG)
         val settings = getOnlineSourceSettings()
+        Logger.d("getCoverArt: coverEnableMB=${settings.coverEnableMusicBrainz}, coverEnableITunes=${settings.coverEnableITunes}, coverEnableNetease=${settings.coverEnableNetease}, coverEnableQQ=${settings.coverEnableQQMusic}", TAG)
+        
         return when (preferredSource) {
             DataSource.MUSICBRAINZ -> if (settings.coverEnableMusicBrainz) {
                 musicBrainzRepository.getCoverArt(releaseId)
@@ -1220,29 +1248,32 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
     /**
      * Gets NetEase album cover art.
+     * Uses Simple API (WangyRepository).
      */
     private suspend fun getNeteaseCoverArt(albumId: String): Result<ByteArray?> {
-        return try {
-            val result = neRepository.getAlbumDetail(albumId.toLong())
-            if (result.isSuccess) {
-                val album = result.getOrNull()
-                val coverUrl = normalizeCoverUrl(album?.album?.picUrl)
-                if (coverUrl != null) {
-                    // Download cover art
-                    val url = java.net.URL(coverUrl)
-                    val connection = url.openConnection()
-                    connection.setRequestProperty("User-Agent", NetworkConstants.USER_AGENT_ANDROID)
-                    val bytes = connection.getInputStream().use { it.readBytes() }
-                    Result.success(bytes)
+        return withContext(Dispatchers.IO) {
+            try {
+                val result = wangyRepository.getAlbumDetail(albumId.toLong())
+                if (result.isSuccess) {
+                    val album = result.getOrNull()
+                    val coverUrl = normalizeCoverUrl(album?.album?.picUrl)
+                    if (coverUrl != null) {
+                        // Download cover art
+                        val url = java.net.URL(coverUrl)
+                        val connection = url.openConnection()
+                        connection.setRequestProperty("User-Agent", NetworkConstants.USER_AGENT_ANDROID)
+                        val bytes = connection.getInputStream().use { it.readBytes() }
+                        Result.success(bytes)
+                    } else {
+                        Result.success(null)
+                    }
                 } else {
                     Result.success(null)
                 }
-            } else {
-                Result.success(null)
+            } catch (e: Exception) {
+                Timber.e(TAG, "NetEase cover art failed: ${e.message}", e)
+                Result.failure(e)
             }
-        } catch (e: Exception) {
-            Timber.e(TAG, "NetEase cover art failed: ${e.message}", e)
-            Result.failure(e)
         }
     }
 
@@ -1250,21 +1281,23 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
      * Gets QQ Music album cover art.
      */
     private suspend fun getQQMusicCoverArt(albumId: String): Result<ByteArray?> {
-        return try {
-            val coverUrl = buildQQCoverUrl(
-                albumMid = albumId.takeUnless { it.all(Char::isDigit) } ?: "",
-                rawCoverUrl = null,
-                fallbackId = albumId.takeIf { it.all(Char::isDigit) }
-            ) ?: return Result.success(null)
-            val url = java.net.URL(coverUrl)
-            val connection = url.openConnection()
-            connection.setRequestProperty("User-Agent", NetworkConstants.USER_AGENT_ANDROID)
-            connection.setRequestProperty("Referer", "https://y.qq.com")
-            val bytes = connection.getInputStream().use { it.readBytes() }
-            Result.success(bytes)
-        } catch (e: Exception) {
-            Timber.e(TAG, "QQ Music cover art failed: ${e.message}", e)
-            Result.failure(e)
+        return withContext(Dispatchers.IO) {
+            try {
+                val coverUrl = buildQQCoverUrl(
+                    albumMid = albumId.takeUnless { it.all(Char::isDigit) } ?: "",
+                    rawCoverUrl = null,
+                    fallbackId = albumId.takeIf { it.all(Char::isDigit) }
+                ) ?: return@withContext Result.success(null)
+                val url = java.net.URL(coverUrl)
+                val connection = url.openConnection()
+                connection.setRequestProperty("User-Agent", NetworkConstants.USER_AGENT_ANDROID)
+                connection.setRequestProperty("Referer", "https://y.qq.com")
+                val bytes = connection.getInputStream().use { it.readBytes() }
+                Result.success(bytes)
+            } catch (e: Exception) {
+                Timber.e(TAG, "QQ Music cover art failed: ${e.message}", e)
+                Result.failure(e)
+            }
         }
     }
 
@@ -1345,7 +1378,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             limit = settings.searchLimit
         )
         val sorted = filtered.sortedWith(
-            compareByDescending<OnlineRelease> { release ->
+            compareBy<OnlineRelease> { release ->
                 sourcePriorityIndex(release.source, settings.metadataPriority)
             }.thenByDescending { release ->
                 fuzzyMatchLevel(album, release.songTitle ?: release.title)
@@ -1372,7 +1405,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             limit = limit
         )
         val sorted = filtered.sortedWith(
-            compareByDescending<OnlineRecording> { recording ->
+            compareBy<OnlineRecording> { recording ->
                 sourcePriorityIndex(recording.source, priority)
             }.thenByDescending { recording ->
                 fuzzyMatchLevel(title, recording.title)
@@ -1554,7 +1587,9 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         rawCoverUrl: String?,
         fallbackId: String?
     ): String? {
-        val normalizedRaw = normalizeCoverUrl(rawCoverUrl)
+        // Handle null or blank values
+        val raw = rawCoverUrl?.takeIf { it.isNotBlank() }
+        val normalizedRaw = normalizeCoverUrl(raw)
         if (!normalizedRaw.isNullOrBlank()) return normalizedRaw
 
         val mid = albumMid?.trim().orEmpty()

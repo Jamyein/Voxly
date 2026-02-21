@@ -17,9 +17,6 @@ import com.voxly.data.remote.tengx.TengxRepositoryImpl
 import com.voxly.data.remote.wangy.WangyApi
 import com.voxly.data.remote.wangy.WangyRepository
 import com.voxly.data.remote.wangy.WangyRepositoryImpl
-import com.voxly.data.remote.wangy.ne.NeApi
-import com.voxly.data.remote.wangy.ne.NeRepository
-import com.voxly.data.remote.wangy.ne.NeRepositoryImpl
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.data.remote.musicbrainz.MusicBrainzApi
 import com.voxly.data.remote.musicbrainz.MusicBrainzRepository
@@ -194,39 +191,6 @@ object AppModule {
         wangyApi: WangyApi
     ): WangyRepository {
         return WangyRepositoryImpl(wangyApi)
-    }
-
-    @Provides
-    @Singleton
-    @Named("ne")
-    fun provideNeRetrofit(okHttpClient: OkHttpClient): Retrofit {
-        return Retrofit.Builder()
-            .baseUrl(NeApi.BASE_URL)
-            .client(okHttpClient)
-            .addConverterFactory(
-                GsonConverterFactory.create(
-                    GsonBuilder()
-                        .serializeNulls()
-                        .setLenient()
-                        .create()
-                )
-            )
-            .build()
-    }
-
-    @Provides
-    @Singleton
-    fun provideNeApi(@Named("ne") retrofit: Retrofit): NeApi {
-        return retrofit.create(NeApi::class.java)
-    }
-
-    @Provides
-    @Singleton
-    fun provideNeRepository(
-        @ApplicationContext context: Context,
-        neApi: NeApi
-    ): NeRepository {
-        return NeRepositoryImpl(context, neApi)
     }
 
     @Provides

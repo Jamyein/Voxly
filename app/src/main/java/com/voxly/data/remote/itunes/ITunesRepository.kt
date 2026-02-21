@@ -1,5 +1,7 @@
 package com.voxly.data.remote.itunes
 
+import com.voxly.data.helper.SearchQueryBuilder
+import com.voxly.data.mapper.OnlineRecordingMapper
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.repository.*
 import kotlinx.coroutines.Dispatchers
@@ -86,13 +88,8 @@ class ITunesRepository @Inject constructor(
         artist: String?
     ): Result<List<OnlineRecording>> = withContext(Dispatchers.IO) {
         try {
-            val searchTerm = buildString {
-                if (!artist.isNullOrBlank()) {
-                    append(artist)
-                    append(" ")
-                }
-                append(title)
-            }
+            // 统一查询格式：title artist (title在前，空格分隔)
+            val searchTerm = SearchQueryBuilder.build(title, artist)
             val searchSettings = getSearchSettings()
 
             val response = iTunesApi.searchSongs(
@@ -105,18 +102,15 @@ class ITunesRepository @Inject constructor(
                 val results = response.body()?.results ?: emptyList()
                 
                 val recordings = results
-                    .filter { it.wrapperType == "track" || it.trackId != null }
+                    .filter { it.wrapperType == "track" }
                     .map { result ->
-                        OnlineRecording(
-                            id = result.trackId?.toString() ?: "",
-                            title = result.trackName ?: "Unknown Track",
-                            artist = result.artistName ?: "Unknown Artist",
-                            duration = result.getDurationSeconds(),
-                            releaseId = result.collectionId?.toString(),
-                            source = "iTunes",
-                            coverArtUrl = getHighResArtworkUrl(result.getBestArtworkUrl()),
-                            discNumber = result.discNumber,
-                            discCount = result.discCount
+                        OnlineRecordingMapper.fromITunes(
+                            trackId = result.trackId,
+                            trackName = result.trackName,
+                            artistName = result.artistName,
+                            durationMs = result.trackTimeMillis,
+                            collectionId = result.collectionId,
+                            artworkUrl100 = result.artworkUrl100
                         )
                     }
                     .filter { it.id.isNotBlank() }
