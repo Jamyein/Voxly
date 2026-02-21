@@ -19,7 +19,7 @@ data class WangyErrorResponse(
  */
 data class WangySearchResponse(
     /** Request result code: 200 indicates success */
-    val code: Int,
+    val code: Int = -1,
     /** Search result data */
     val result: WangySearchResult? = null
 )
