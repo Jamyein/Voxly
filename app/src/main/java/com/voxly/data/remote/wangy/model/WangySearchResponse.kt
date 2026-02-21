@@ -1,5 +1,6 @@
 package com.voxly.data.remote.wangy.model
 
+import com.google.gson.JsonObject
 import com.google.gson.annotations.SerializedName
 
 /**
@@ -14,17 +15,34 @@ data class WangyErrorResponse(
 )
 
 /**
- * WangY Music search response model.
- * Response structure from WangY Cloud Music search API.
+ * Flexible search response model that can handle multiple API formats.
+ * Uses JsonObject for flexible parsing of different response structures.
  */
 data class WangySearchResponse(
     /** Request result code: 200 indicates success */
     @SerializedName("code")
     val code: Int = -1,
-    /** Search result data */
+    /** Search result data (for web APIs) */
     @SerializedName("result")
-    val result: WangySearchResult? = null
-)
+    val result: WangySearchResult? = null,
+    /** Search data (for EAPI) */
+    @SerializedName("data")
+    val data: JsonObject? = null,
+    /** Raw JSON for flexible parsing */
+    @SerializedName("raw")
+    val raw: JsonObject? = null
+) {
+    companion object {
+        fun fromJsonObject(jsonObject: JsonObject): WangySearchResponse {
+            return WangySearchResponse(
+                code = jsonObject.get("code")?.asInt ?: -1,
+                result = null,
+                data = jsonObject.get("data")?.asJsonObject,
+                raw = jsonObject
+            )
+        }
+    }
+}
 
 /**
  * WangY Music search result container.

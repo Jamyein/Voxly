@@ -1,5 +1,7 @@
 package com.voxly.data.remote.wangy
 
+import com.google.gson.JsonElement
+import com.google.gson.JsonParser
 import com.voxly.data.remote.NetworkConstants
 import com.voxly.data.remote.wangy.model.WangyAlbumDetail
 import com.voxly.data.remote.wangy.model.WangyLyricsResponse
@@ -8,6 +10,7 @@ import com.voxly.data.remote.wangy.model.WangySongDetail
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.RequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.Field
 import retrofit2.http.FormUrlEncoded
@@ -31,6 +34,8 @@ interface WangyApi {
         const val WEAPI_BASE_URL = "https://music.163.com/weapi/"
         const val LINUX_API_URL = "https://music.163.com/api/linux/forward"
         const val EAPI_BASE_URL = "https://music.163.com/eapi/"
+        // Reference: any-listen-extension uses http://interface.music.163.com/eapi/batch
+        const val EAPI_INTERFACE_URL = "http://interface.music.163.com/eapi/"
         const val REFERER = "https://music.163.com/"
     }
 
@@ -54,7 +59,7 @@ interface WangyApi {
     )
     suspend fun searchSongsLinuxApi(
         @Body body: RequestBody
-    ): Response<WangySearchResponse>
+    ): Response<ResponseBody>
 
     /**
      * Searches for songs using EAPI encryption.
@@ -66,9 +71,10 @@ interface WangyApi {
      * @param body Encrypted request body with params key (from WangyCrypto.eapiEncrypt)
      * @return Search response
      */
-    @POST("api/search/song/list/page")
+    @POST("eapi/batch")
     @Headers(
-        "User-Agent: ${NetworkConstants.USER_AGENT_PC}",
+        // Reference: any-listen-extension uses Linux Chrome User-Agent
+        "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36",
         "Referer: $REFERER",
         "Origin: https://music.163.com",
         "Content-Type: application/x-www-form-urlencoded",
@@ -76,7 +82,7 @@ interface WangyApi {
     )
     suspend fun searchSongsEapi(
         @Body body: RequestBody
-    ): Response<WangySearchResponse>
+    ): Response<ResponseBody>
 
     /**
      * Searches for songs using simple web search (no encryption).
@@ -98,8 +104,7 @@ interface WangyApi {
         "Origin: https://music.163.com",
         "X-Requested-With: XMLHttpRequest",
         "Accept: */*",
-        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8",
-        "Accept-Encoding: gzip, deflate, br"
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
     )
     suspend fun searchSongsWeb(
         @Query("s") keyword: String,
@@ -107,7 +112,7 @@ interface WangyApi {
         @Query("offset") offset: Int = 0,
         @Query("limit") limit: Int = 30,
         @Query("total") total: Boolean = true
-    ): Response<WangySearchResponse>
+    ): Response<ResponseBody>
 
     /**
      * Searches for songs using simple web search (no encryption).
@@ -130,8 +135,7 @@ interface WangyApi {
         "Origin: https://music.163.com",
         "X-Requested-With: XMLHttpRequest",
         "Accept: */*",
-        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8",
-        "Accept-Encoding: gzip, deflate, br"
+        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
     )
     suspend fun searchSongsSimple(
         @Query("s") keyword: String,
@@ -139,7 +143,7 @@ interface WangyApi {
         @Query("offset") offset: Int = 0,
         @Query("limit") limit: Int = 30,
         @Query("total") total: Boolean = true
-    ): Response<WangySearchResponse>
+    ): Response<ResponseBody>
 
     /**
      * Gets lyrics for a song using simple GET request.

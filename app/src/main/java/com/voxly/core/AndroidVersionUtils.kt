@@ -18,15 +18,6 @@ object AndroidVersionUtils {
     }
 
     /**
-     * Checks if the device is running Android 11 (API 30) or higher.
-     *
-     * @return true if SDK >= 30 (Android 11/R), false otherwise
-     */
-    fun isAtLeastR(): Boolean {
-        return Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
-    }
-
-    /**
      * Checks if dynamic color (Material You) is available on the device.
      * Dynamic color requires Android 12+ (API 31).
      *

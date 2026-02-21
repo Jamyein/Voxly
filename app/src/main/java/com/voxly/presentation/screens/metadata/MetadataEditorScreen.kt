@@ -35,6 +35,7 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
+import com.voxly.presentation.viewmodel.ConvertibleField
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -64,6 +65,9 @@ fun MetadataEditorScreen(
     var showAlbumArtPreview by remember { mutableStateOf(false) }
     var showOnlineLyricsDialog by remember { mutableStateOf(false) }
     var showOnlineCoverDialog by remember { mutableStateOf(false) }
+    var showConversionMenu by remember { mutableStateOf(false) }
+    var showConversionDialog by remember { mutableStateOf(false) }
+    var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     val scope = rememberCoroutineScope()
     
     // ReplayGain state from ViewModel
@@ -136,6 +140,39 @@ fun MetadataEditorScreen(
                     }
                 },
                 actions = {
+                    // Chinese conversion dropdown menu
+                    Box {
+                        IconButton(onClick = { showConversionMenu = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
+                        }
+                        DropdownMenu(
+                            expanded = showConversionMenu,
+                            onDismissRequest = { showConversionMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.convert_to_simplified)) },
+                                onClick = {
+                                    showConversionMenu = false
+                                    conversionType = ConversionType.TO_SIMPLIFIED
+                                    showConversionDialog = true
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Translate, contentDescription = null)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.convert_to_traditional)) },
+                                onClick = {
+                                    showConversionMenu = false
+                                    conversionType = ConversionType.TO_TRADITIONAL
+                                    showConversionDialog = true
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Translate, contentDescription = null)
+                                }
+                            )
+                        }
+                    }
                     IconButton(
                         onClick = { viewModel.saveMetadata() },
                         enabled = hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving
@@ -542,6 +579,22 @@ fun MetadataEditorScreen(
                 ) {
                     Text(stringResource(R.string.dialog_cancel))
                 }
+            }
+        )
+    }
+
+    // Chinese conversion dialog
+    if (showConversionDialog) {
+        ConversionDialog(
+            conversionType = conversionType,
+            onDismiss = { showConversionDialog = false },
+            onConfirm = { selectedFields ->
+                if (conversionType == ConversionType.TO_SIMPLIFIED) {
+                    viewModel.convertToSimplified(selectedFields)
+                } else {
+                    viewModel.convertToTraditional(selectedFields)
+                }
+                showConversionDialog = false
             }
         )
     }
@@ -1163,4 +1216,131 @@ private fun rotateJpegBytes(bytes: ByteArray, degrees: Float): ByteArray? {
         val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
         bitmapToJpegBytes(rotated) ?: throw IllegalStateException("Failed to encode rotated image")
     }.getOrNull()
+}
+
+/**
+ * Conversion type for Chinese character conversion.
+ */
+private enum class ConversionType {
+    TO_SIMPLIFIED,
+    TO_TRADITIONAL
+}
+
+/**
+ * Dialog for selecting metadata fields to convert.
+ */
+@Composable
+private fun ConversionDialog(
+    conversionType: ConversionType,
+    onDismiss: () -> Unit,
+    onConfirm: (Set<ConvertibleField>) -> Unit
+) {
+    var selectedFields by remember { 
+        mutableStateOf(
+            setOf(
+                ConvertibleField.TITLE,
+                ConvertibleField.ARTIST,
+                ConvertibleField.ALBUM,
+                ConvertibleField.ALBUM_ARTIST,
+                ConvertibleField.GENRE,
+                ConvertibleField.COMPOSER,
+                ConvertibleField.LYRICIST,
+                ConvertibleField.COMMENT,
+                ConvertibleField.RECORD_LABEL,
+                ConvertibleField.COPYRIGHT,
+                ConvertibleField.LYRICS
+            )
+        )
+    }
+
+    val title = if (conversionType == ConversionType.TO_SIMPLIFIED) {
+        stringResource(R.string.convert_to_simplified)
+    } else {
+        stringResource(R.string.convert_to_traditional)
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
+        title = { Text(title) },
+        text = {
+            Column {
+                Text(
+                    text = stringResource(R.string.select_fields_to_convert),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                
+                // Select All / Deselect All
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(
+                        onClick = {
+                            selectedFields = ConvertibleField.entries.toSet()
+                        }
+                    ) {
+                        Text(stringResource(R.string.select_all))
+                    }
+                    TextButton(
+                        onClick = {
+                            selectedFields = emptySet()
+                        }
+                    ) {
+                        Text(stringResource(R.string.deselect_all))
+                    }
+                }
+                
+                HorizontalDivider()
+                
+                LazyColumn(
+                    modifier = Modifier.heightIn(max = 320.dp)
+                ) {
+                    items(ConvertibleField.entries.toList()) { field ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    selectedFields = if (field in selectedFields) {
+                                        selectedFields - field
+                                    } else {
+                                        selectedFields + field
+                                    }
+                                }
+                                .padding(vertical = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Checkbox(
+                                checked = field in selectedFields,
+                                onCheckedChange = { checked ->
+                                    selectedFields = if (checked) {
+                                        selectedFields + field
+                                    } else {
+                                        selectedFields - field
+                                    }
+                                }
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(field.displayName)
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onConfirm(selectedFields) },
+                enabled = selectedFields.isNotEmpty()
+            ) {
+                Text(stringResource(R.string.dialog_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
 }

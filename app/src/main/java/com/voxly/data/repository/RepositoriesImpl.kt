@@ -50,30 +50,6 @@ class AudioRepositoryImpl @Inject constructor(
 
     override fun getCachedAudioFiles(): Flow<List<AudioFile>> = audioFileScanner.getCachedAudioFiles()
 
-    /**
-     * Perform incremental scan - only scan new/modified files.
-     * Much faster for large libraries.
-     */
-    fun scanAudioFilesIncremental(): Flow<List<AudioFile>> {
-        return audioFileScanner.scanIncremental()
-    }
-
-    /**
-     * Force full refresh of scan cache.
-     */
-    fun scanAudioFilesForceRefresh(): Flow<List<AudioFile>> {
-        return audioFileScanner.scanAudioFilesOptimized(forceRefresh = true)
-    }
-
-    /**
-     * Get cached file count.
-     */
-    suspend fun getCachedFileCount(): Int = audioFileScanner.getCachedFileCount()
-
-    /**
-     * Clear scan cache.
-     */
-    suspend fun clearScanCache(): Int = audioFileScanner.clearCache()
 
     override suspend fun getAudioFile(filePath: String): Result<AudioFile> =
         withContext(Dispatchers.IO) {

@@ -89,94 +89,6 @@ class AudioFileScanner @Inject constructor(
     }
 
     /**
-     * Scans all audio files from external storage.
-     * OPTIMIZED: Uses MediaStore only - no file parsing for fast display.
-     * @return Flow emitting lists of audio files as they're discovered
-     */
-    fun scanAllAudioFiles(): Flow<List<AudioFile>> = flow {
-        val audioFiles = mutableListOf<AudioFile>()
-
-        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        val sortOrder = "${MediaStore.Audio.Media.TITLE} ASC"
-
-        val cursor: Cursor? = contentResolver.query(
-            AUDIO_URI,
-            FAST_PROJECTION,
-            selection,
-            null,
-            sortOrder
-        )
-
-        cursor?.use {
-            val idColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
-            val nameColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
-            val dataColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
-            val titleColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
-            val artistColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
-            val albumColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
-            val albumIdColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
-            val yearColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
-            val durationColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-            val sizeColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
-            val bitrateColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
-            val trackColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
-
-            while (it.moveToNext()) {
-                val filePath = it.getString(dataColumn)
-                val extension = filePath.substringAfterLast('.', "")
-
-                    // Only process supported audio formats
-                if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
-                    val albumId = it.getLong(albumIdColumn).takeIf { albumId -> albumId > 0L }
-                    
-                    // Parse MediaStore TRACK field: trackNumber | (totalTracks << 16)
-                    val (parsedTrack, parsedTotal) = parseTrackField(it.getInt(trackColumn))
-                    
-                    // FAST: Use MediaStore data directly - no file parsing
-                    val metadata = com.voxly.domain.model.AudioMetadata(
-                        title = it.getString(titleColumn)?.takeIf { s -> s.isNotBlank() },
-                        artist = it.getString(artistColumn)?.takeIf { s -> s.isNotBlank() },
-                        album = it.getString(albumColumn)?.takeIf { s -> s.isNotBlank() },
-                        year = it.getString(yearColumn)?.takeIf { s -> s.isNotBlank() },
-                        trackNumber = parsedTrack,
-                        totalTracks = parsedTotal,
-                        albumArt = null,
-                        // Detailed fields loaded on-demand via loadDetailedMetadata()
-                        albumArtist = null,
-                        genre = null,
-                        discNumber = null,
-                        totalDiscs = null,
-                        composer = null,
-                        lyricist = null,
-                        conductor = null,
-                        originalArtist = null,
-                        comment = null,
-                        lyrics = null,
-                        customFields = emptyMap()
-                    )
-
-                    val audioFile = AudioFile(
-                        id = it.getLong(idColumn).toString(),
-                        path = filePath,
-                        name = it.getString(nameColumn) ?: filePath.substringAfterLast('/'),
-                        size = it.getLong(sizeColumn),
-                        duration = it.getLong(durationColumn),
-                        format = extension.uppercase(),
-                        bitrate = it.getInt(bitrateColumn),
-                        sampleRate = 0,
-                        channels = 0,
-                        mediaStoreAlbumId = albumId,
-                        metadata = metadata
-                    )
-                    audioFiles.add(audioFile)
-                }
-            }
-        }
-
-        emit(audioFiles)
-    }.flowOn(Dispatchers.IO)
-
-    /**
      * Scans audio files within a specific directory.
      * @param directoryPath The directory path to scan
      * @return Flow emitting lists of audio files found
@@ -280,20 +192,6 @@ class AudioFileScanner @Inject constructor(
 
         emit(audioFiles.sortedBy { it.metadata.getDisplayTitle(it.name) })
     }.flowOn(Dispatchers.IO)
-
-    /**
-     * Gets lyrics for a specific audio file.
-     * @param filePath Path to the audio file
-     * @return Lyrics string or null if not found
-     */
-    suspend fun getLyrics(filePath: String): String? = withContext(Dispatchers.IO) {
-        try {
-            metadataProcessor.readMetadata(filePath, includeAlbumArt = false)?.lyrics
-        } catch (e: Exception) {
-            Log.w(TAG, "Failed to read lyrics from: $filePath", e)
-            null
-        }
-    }
 
     /**
      * Loads detailed metadata on-demand (lazy loading).

@@ -3,6 +3,7 @@ package com.voxly.data.repository
 import android.os.SystemClock
 import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.remote.NetworkConstants
 import com.voxly.data.remote.itunes.ITunesRepository
 import com.voxly.data.remote.musicbrainz.MusicBrainzRepository
 import com.voxly.data.remote.tengx.TengxRepository
@@ -31,8 +32,6 @@ import javax.inject.Singleton
 import javax.net.ssl.SSLException
 
 private const val TAG = "AggregatedMetadata"
-private const val BROWSER_USER_AGENT =
-    "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Mobile Safari/537.36"
 
 /**
  * Streaming search result with payload and source marker.
@@ -854,7 +853,14 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             searchResult.fold(
                 onSuccess = { response ->
                     val songs = response?.result?.songs ?: emptyList()
-                    
+
+                    Timber.d(TAG, "NetEase search returned ${songs.size} songs")
+                    if (songs.isNotEmpty()) {
+                        Timber.d(TAG, "First song from NetEase: id=${songs[0].id}, name=${songs[0].name}, " +
+                            "artists=${songs[0].artists?.map { it.name }}, album=${songs[0].album?.name}, " +
+                            "albumPicUrl=${songs[0].album?.picUrl}")
+                    }
+
                     if (songs.isEmpty()) {
                         Timber.w(TAG, "NetEase track search returned empty results for '$title' artist='$artist'")
                         Result.success(emptyList())
@@ -875,6 +881,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                 coverArtUrl = coverUrl
                             )
                         }
+                        Timber.d(TAG, "NetEase recordings: ${recordings.take(3)}")
                         Result.success(recordings)
                     }
                 },
@@ -1236,7 +1243,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                     // Download cover art
                     val url = java.net.URL(coverUrl)
                     val connection = url.openConnection()
-                    connection.setRequestProperty("User-Agent", BROWSER_USER_AGENT)
+                    connection.setRequestProperty("User-Agent", NetworkConstants.USER_AGENT_ANDROID)
                     val bytes = connection.getInputStream().use { it.readBytes() }
                     Result.success(bytes)
                 } else {
@@ -1263,7 +1270,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             ) ?: return Result.success(null)
             val url = java.net.URL(coverUrl)
             val connection = url.openConnection()
-            connection.setRequestProperty("User-Agent", BROWSER_USER_AGENT)
+            connection.setRequestProperty("User-Agent", NetworkConstants.USER_AGENT_ANDROID)
             connection.setRequestProperty("Referer", "https://y.qq.com")
             val bytes = connection.getInputStream().use { it.readBytes() }
             Result.success(bytes)

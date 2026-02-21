@@ -417,4 +417,10 @@
     <string name="replay_gain_quality_accurate">Accurate</string>
     <string name="expand">Expand</string>
     <string name="collapse">Collapse</string>
+
+    <!-- Chinese Conversion -->
+    <string name="convert_to_simplified">繁体转简体</string>
+    <string name="convert_to_traditional">简体转繁体</string>
+    <string name="select_fields_to_convert">选择要转换的字段：</string>
+    <string name="deselect_all">取消全选</string>
 </resources>

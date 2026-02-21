@@ -1,5 +1,6 @@
 package com.voxly.data.remote.tengx
 
+import com.voxly.data.remote.NetworkConstants
 import com.voxly.data.remote.tengx.model.TengxAlbumDetail
 import com.voxly.data.remote.tengx.model.TengxLyricsResponse
 import com.voxly.data.remote.tengx.model.TengxSearchResponse
@@ -33,13 +34,9 @@ interface TengxApi {
         /** Lyrics API base URL */
         const val LYRIC_BASE_URL = "https://c.y.qq.com/"
         /** Mobile web search URL */
-        const val MOBILE_SEARCH_URL = "https://c.y.qq.com/musichall/fcgi-bin/fcg_get_musicinfo"
+        const val MOBILE_SEARCH_URL = "https://c.y.qq.com/musichall/fcg_get_musicinfo"
         /** Default g_tk parameter for QQ Music API */
         const val G_TK = 5381
-        /** User Agent for QQ Music API */
-        const val USER_AGENT = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
-        /** Mobile User Agent */
-        const val MOBILE_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
     }
 
     /**
@@ -53,7 +50,7 @@ interface TengxApi {
      */
     @GET("soso/fcgi-bin/client_search_cp")
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.DEFAULT_USER_AGENT}",
         "Accept: application/json",
         "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
     )
@@ -76,7 +73,7 @@ interface TengxApi {
      */
     @POST
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.DEFAULT_USER_AGENT}",
         "Referer: https://y.qq.com/",
         "Origin: https://y.qq.com",
         "Content-Type: application/json",
@@ -94,7 +91,7 @@ interface TengxApi {
      */
     @GET
     @Headers(
-        "User-Agent: $MOBILE_USER_AGENT",
+        "User-Agent: ${NetworkConstants.USER_AGENT_IPHONE}",
         "Referer: https://y.qq.com/",
         "Accept: */*",
         "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8"
@@ -135,7 +132,7 @@ interface TengxApi {
      */
     @GET
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.DEFAULT_USER_AGENT}",
         "Accept: application/json"
     )
     suspend fun getLyrics(
@@ -160,7 +157,7 @@ interface TengxApi {
      */
     @GET("cgi-bin/musicu.fcg")
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.DEFAULT_USER_AGENT}",
         "Referer: https://y.qq.com/",
         "Accept: application/json"
     )
@@ -178,7 +175,7 @@ interface TengxApi {
      */
     @GET("cgi-bin/musicu.fcg")
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.DEFAULT_USER_AGENT}",
         "Referer: https://y.qq.com/",
         "Accept: application/json"
     )

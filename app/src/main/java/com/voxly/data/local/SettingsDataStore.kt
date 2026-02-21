@@ -169,86 +169,62 @@ class SettingsDataStore @Inject constructor(
 
     val metadataSourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_MUSICBRAINZ]
-                ?: preferences[SOURCE_ENABLED_MUSICBRAINZ]
-                ?: true
+            preferences[METADATA_SOURCE_ENABLED_MUSICBRAINZ] ?: true
         }
 
     val metadataSourceEnabledITunes: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_ITUNES]
-                ?: preferences[SOURCE_ENABLED_ITUNES]
-                ?: true
+            preferences[METADATA_SOURCE_ENABLED_ITUNES] ?: true
         }
 
     val metadataSourceEnabledNetease: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_NETEASE]
-                ?: preferences[SOURCE_ENABLED_NETEASE]
-                ?: true
+            preferences[METADATA_SOURCE_ENABLED_NETEASE] ?: true
         }
 
     val metadataSourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_QQ_MUSIC]
-                ?: preferences[SOURCE_ENABLED_QQ_MUSIC]
-                ?: true
+            preferences[METADATA_SOURCE_ENABLED_QQ_MUSIC] ?: true
         }
 
     val lyricsSourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_MUSICBRAINZ]
-                ?: preferences[SOURCE_ENABLED_MUSICBRAINZ]
-                ?: true
+            preferences[LYRICS_SOURCE_ENABLED_MUSICBRAINZ] ?: true
         }
 
     val lyricsSourceEnabledITunes: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_ITUNES]
-                ?: preferences[SOURCE_ENABLED_ITUNES]
-                ?: true
+            preferences[LYRICS_SOURCE_ENABLED_ITUNES] ?: true
         }
 
     val lyricsSourceEnabledNetease: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_NETEASE]
-                ?: preferences[SOURCE_ENABLED_NETEASE]
-                ?: true
+            preferences[LYRICS_SOURCE_ENABLED_NETEASE] ?: true
         }
 
     val lyricsSourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_QQ_MUSIC]
-                ?: preferences[SOURCE_ENABLED_QQ_MUSIC]
-                ?: true
+            preferences[LYRICS_SOURCE_ENABLED_QQ_MUSIC] ?: true
         }
 
     val coverSourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[COVER_SOURCE_ENABLED_MUSICBRAINZ]
-                ?: preferences[SOURCE_ENABLED_MUSICBRAINZ]
-                ?: true
+            preferences[COVER_SOURCE_ENABLED_MUSICBRAINZ] ?: true
         }
 
     val coverSourceEnabledITunes: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[COVER_SOURCE_ENABLED_ITUNES]
-                ?: preferences[SOURCE_ENABLED_ITUNES]
-                ?: true
+            preferences[COVER_SOURCE_ENABLED_ITUNES] ?: true
         }
 
     val coverSourceEnabledNetease: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[COVER_SOURCE_ENABLED_NETEASE]
-                ?: preferences[SOURCE_ENABLED_NETEASE]
-                ?: true
+            preferences[COVER_SOURCE_ENABLED_NETEASE] ?: true
         }
 
     val coverSourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[COVER_SOURCE_ENABLED_QQ_MUSIC]
-                ?: preferences[SOURCE_ENABLED_QQ_MUSIC]
-                ?: true
+            preferences[COVER_SOURCE_ENABLED_QQ_MUSIC] ?: true
         }
 
     val metadataSourcePriority: Flow<List<String>> = context.settingsDataStore.data

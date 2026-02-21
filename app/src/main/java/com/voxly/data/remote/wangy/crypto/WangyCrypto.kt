@@ -71,8 +71,11 @@ object WangyCrypto {
             // Create the data string: "{url}-36cd479b6b5-{text}-36cd479b6b5-{digest}"
             val dataStr = "${url}-${EAPI_DIGEST}-${text}-${EAPI_DIGEST}-${digest}"
 
-            // AES-ECB encrypt
-            val encrypted = aesEncryptEcb(dataStr.toByteArray(), EAPI_AES_KEY.toByteArray())
+            // Pad to 16-byte boundary for NoPadding encryption
+            val paddedData = pkcs7Padding(dataStr.toByteArray(Charsets.UTF_8))
+
+            // AES-ECB encrypt (NoPadding - data is pre-padded)
+            val encrypted = aesEncryptEcb(paddedData, EAPI_AES_KEY.toByteArray())
 
             // Convert to base64, then hex, then uppercase
             val base64 = Base64.encodeToString(encrypted, Base64.NO_WRAP)
@@ -111,10 +114,31 @@ object WangyCrypto {
             // Convert to JSON string
             val text = buildJsonString(dataWithMethod)
 
-            // AES-128-ECB encrypt (no IV, no padding issues)
-            val encrypted = aesEncryptEcb(text.toByteArray(Charsets.UTF_8), LINUX_API_KEY.toByteArray())
+            // AES-128-ECB encrypt with PKCS5 padding (LinuxAPI uses padding)
+            val encrypted = aesEncryptEcbWithPadding(text.toByteArray(Charsets.UTF_8), LINUX_API_KEY.toByteArray())
 
             // Convert to hex string (uppercase) - matching Python reference implementation
+            val eparams = bytesToHex(encrypted).uppercase()
+
+            mapOf("eparams" to eparams)
+        } catch (e: Exception) {
+            throw CryptoException("LinuxAPI encryption failed", e)
+        }
+    }
+
+    /**
+     * Simplified LinuxAPI encryption - only encrypts the JSON string.
+     * Reference: music-tag-web applications/utils/encrypt.py
+     *
+     * @param jsonString The JSON string to encrypt
+     * @return Encrypted parameters as map with "eparams" key
+     */
+    fun linuxEncryptSimple(jsonString: String): Map<String, String> {
+        return try {
+            // AES-128-ECB encrypt with PKCS5 padding
+            val encrypted = aesEncryptEcbWithPadding(jsonString.toByteArray(Charsets.UTF_8), LINUX_API_KEY.toByteArray())
+
+            // Convert to hex string (uppercase)
             val eparams = bytesToHex(encrypted).uppercase()
 
             mapOf("eparams" to eparams)
@@ -187,8 +211,28 @@ object WangyCrypto {
     // ============================================
 
     /**
+     * AES-128-ECB encryption with NoPadding.
+     * Used in EAPI encryption (matches reference implementation).
+     *
+     * @param data Data to encrypt (should be pre-padded to 16-byte multiple)
+     * @param key 16-byte AES key
+     * @return Encrypted data
+     */
+    fun aesEncryptEcb(data: ByteArray, key: ByteArray): ByteArray {
+        return try {
+            val keySpec = SecretKeySpec(key, "AES")
+            // Use NoPadding - data must already be padded to 16-byte boundary
+            val cipher = Cipher.getInstance("AES/ECB/NoPadding")
+            cipher.init(Cipher.ENCRYPT_MODE, keySpec)
+            cipher.doFinal(data)
+        } catch (e: Exception) {
+            throw CryptoException("AES-ECB encryption failed", e)
+        }
+    }
+
+    /**
      * AES-128-ECB encryption with PKCS5/PKCS7 padding.
-     * Used in EAPI encryption.
+     * Used in LinuxAPI encryption.
      *
      * Note: PKCS5 and PKCS7 are the same for 16-byte block size.
      *
@@ -196,10 +240,9 @@ object WangyCrypto {
      * @param key 16-byte AES key
      * @return Encrypted data
      */
-    fun aesEncryptEcb(data: ByteArray, key: ByteArray): ByteArray {
+    fun aesEncryptEcbWithPadding(data: ByteArray, key: ByteArray): ByteArray {
         return try {
             val keySpec = SecretKeySpec(key, "AES")
-            // Use PKCS5Padding (same as PKCS7 for 16-byte blocks) to handle variable-length data
             val cipher = Cipher.getInstance("AES/ECB/PKCS5Padding")
             cipher.init(Cipher.ENCRYPT_MODE, keySpec)
             cipher.doFinal(data)

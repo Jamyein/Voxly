@@ -77,3 +77,5 @@ APPLE_MUSIC_ADDITION.md
 local.properties
 local.properties
 *.properties
+/.claude
+/.kotlin
