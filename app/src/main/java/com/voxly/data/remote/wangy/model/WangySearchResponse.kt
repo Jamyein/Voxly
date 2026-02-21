@@ -19,8 +19,10 @@ data class WangyErrorResponse(
  */
 data class WangySearchResponse(
     /** Request result code: 200 indicates success */
+    @SerializedName("code")
     val code: Int = -1,
     /** Search result data */
+    @SerializedName("result")
     val result: WangySearchResult? = null
 )
 
@@ -29,20 +31,28 @@ data class WangySearchResponse(
  */
 data class WangySearchResult(
     /** Whether there are more results */
+    @SerializedName("hasMore")
     val hasMore: Boolean = false,
     /** Search query */
+    @SerializedName("queryCorrected")
     val queryCorrected: List<String> = emptyList(),
     /** Song search results */
+    @SerializedName("songs")
     val songs: List<WangySong> = emptyList(),
     /** Album search results */
+    @SerializedName("albums")
     val albums: List<WangyAlbum> = emptyList(),
     /** Artist search results */
+    @SerializedName("artists")
     val artists: List<WangyArtist> = emptyList(),
     /** Total number of songs */
+    @SerializedName("songCount")
     val songCount: Int = 0,
     /** Total number of albums */
+    @SerializedName("albumCount")
     val albumCount: Int = 0,
     /** Total number of artists */
+    @SerializedName("artistCount")
     val artistCount: Int = 0
 )
 

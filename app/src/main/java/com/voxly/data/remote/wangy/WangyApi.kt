@@ -1,5 +1,6 @@
 package com.voxly.data.remote.wangy
 
+import com.voxly.data.remote.NetworkConstants
 import com.voxly.data.remote.wangy.model.WangyAlbumDetail
 import com.voxly.data.remote.wangy.model.WangyLyricsResponse
 import com.voxly.data.remote.wangy.model.WangySearchResponse
@@ -30,9 +31,6 @@ interface WangyApi {
         const val WEAPI_BASE_URL = "https://music.163.com/weapi/"
         const val LINUX_API_URL = "https://music.163.com/api/linux/forward"
         const val EAPI_BASE_URL = "https://music.163.com/eapi/"
-        // 使用桌面浏览器User-Agent，更容易通过验证
-        const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-        const val LINUX_USER_AGENT = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36"
         const val REFERER = "https://music.163.com/"
     }
 
@@ -49,7 +47,7 @@ interface WangyApi {
      */
     @POST("api/linux/forward")
     @Headers(
-        "User-Agent: $LINUX_USER_AGENT",
+        "User-Agent: ${NetworkConstants.USER_AGENT_LINUX}",
         "Referer: $REFERER",
         "Content-Type: application/x-www-form-urlencoded",
         "Accept: application/json"
@@ -70,7 +68,7 @@ interface WangyApi {
      */
     @POST("api/search/song/list/page")
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.USER_AGENT_PC}",
         "Referer: $REFERER",
         "Origin: https://music.163.com",
         "Content-Type: application/x-www-form-urlencoded",
@@ -155,7 +153,7 @@ interface WangyApi {
      */
     @GET("api/song/lyric")
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.USER_AGENT_PC}",
         "Referer: $REFERER",
         "Accept: application/json"
     )
@@ -186,7 +184,7 @@ interface WangyApi {
      */
     @POST("eapi/song/lyric/v1")
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.USER_AGENT_PC}",
         "Referer: $REFERER",
         "Content-Type: application/x-www-form-urlencoded",
         "Accept: application/json"
@@ -204,7 +202,7 @@ interface WangyApi {
      */
     @GET("api/song/detail")
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.USER_AGENT_PC}",
         "Referer: $REFERER",
         "Accept: application/json"
     )
@@ -221,7 +219,7 @@ interface WangyApi {
      */
     @GET("api/album/detail")
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.USER_AGENT_PC}",
         "Referer: $REFERER",
         "Accept: application/json"
     )
@@ -241,7 +239,7 @@ interface WangyApi {
      */
     @POST("weapi/v3/song/detail")
     @Headers(
-        "User-Agent: $USER_AGENT",
+        "User-Agent: ${NetworkConstants.USER_AGENT_PC}",
         "Referer: $REFERER",
         "Origin: https://music.163.com",
         "Content-Type: application/x-www-form-urlencoded",
