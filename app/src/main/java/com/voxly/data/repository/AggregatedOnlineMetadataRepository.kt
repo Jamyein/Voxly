@@ -13,6 +13,7 @@ import com.voxly.data.remote.tengx.model.TengxAlbumDetailInfo
 import com.voxly.data.remote.tengx.model.TengxSong
 import com.voxly.data.remote.tengx.model.TengxSinger
 import com.voxly.data.remote.wangy.WangyRepository
+import com.voxly.data.remote.wangy.ne.NeRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
@@ -65,6 +66,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     private val musicBrainzRepository: MusicBrainzRepository,
     private val iTunesRepository: ITunesRepository,
     private val wangyRepository: WangyRepository,
+    private val neRepository: NeRepository,
     private val tengxRepository: TengxRepository
 ) : OnlineMetadataRepository {
 
@@ -404,42 +406,39 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     ): Result<List<OnlineRelease>> {
         val startedAt = SystemClock.elapsedRealtime()
         return try {
-            val searchResult = wangyRepository.searchSongs(
+            val searchResult = neRepository.searchSongs(
                 keywords = "$artist $album",
                 page = 1,
                 limit = limit
             )
 
             searchResult.fold(
-                onSuccess = { response ->
-                    val songs = response?.result?.songs ?: emptyList()
-                    
+                onSuccess = { songs ->
                     if (songs.isEmpty()) {
                         // API returned success but no data - log warning
                         Timber.w(TAG, "NetEase search returned empty results for '$artist $album'")
                         Result.success(emptyList())
                     } else {
-                        // Group by album
-                        val albums = songs.groupBy { it.album?.id ?: -1L }.mapNotNull { (albumId, albumSongs) ->
-                            if (albumId <= 0L) return@mapNotNull null
-                            val firstSong = albumSongs.first()
-                            // 尝试从搜索结果获取封面，如果为空则从专辑详情获取
-                            var coverUrl = normalizeCoverUrl(firstSong.album?.picUrl)
-                            if (coverUrl == null) {
-                                coverUrl = getNeteaseAlbumCoverUrl(albumId)
+                        // Group by album - NeRepository returns OnlineLyricsResult
+                        // We need to search album details separately or use available info
+                        val albums = songs
+                            .filter { it.albumName != null }
+                            .groupBy { it.albumName ?: "" }
+                            .mapNotNull { (albumName, albumSongs) ->
+                                if (albumName.isBlank()) return@mapNotNull null
+                                val firstSong = albumSongs.first()
+                                OnlineRelease(
+                                    id = firstSong.sourceKey,
+                                    title = albumName,
+                                    artist = firstSong.artistName ?: "",
+                                    year = null,
+                                    format = "Digital",
+                                    trackCount = albumSongs.size,
+                                    coverArtUrl = null, // Will be fetched from album detail later
+                                    source = "NetEase",
+                                    albumTitle = albumName
+                                )
                             }
-                            OnlineRelease(
-                                id = albumId.toString(),
-                                title = firstSong.album?.name ?: "Unknown Album",
-                                artist = firstSong.artists?.joinToString(", ") { it.name } ?: "",
-                                year = null, // NetEase API doesn't provide year in search
-                                format = "Digital",
-                                trackCount = albumSongs.size,
-                                coverArtUrl = coverUrl,
-                                source = "NetEase",
-                                albumTitle = firstSong.album?.name
-                            )
-                        }
                         Result.success(albums)
                     }
                 },
@@ -844,41 +843,28 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     ): Result<List<OnlineRecording>> {
         val startedAt = SystemClock.elapsedRealtime()
         return try {
-            val searchResult = wangyRepository.searchSongs(
+            val searchResult = neRepository.searchSongs(
                 keywords = if (artist != null) "$artist $title" else title,
                 page = 1,
                 limit = limit
             )
 
             searchResult.fold(
-                onSuccess = { response ->
-                    val songs = response?.result?.songs ?: emptyList()
-
+                onSuccess = { songs ->
                     Timber.d(TAG, "NetEase search returned ${songs.size} songs")
-                    if (songs.isNotEmpty()) {
-                        Timber.d(TAG, "First song from NetEase: id=${songs[0].id}, name=${songs[0].name}, " +
-                            "artists=${songs[0].artists?.map { it.name }}, album=${songs[0].album?.name}, " +
-                            "albumPicUrl=${songs[0].album?.picUrl}")
-                    }
-
                     if (songs.isEmpty()) {
                         Timber.w(TAG, "NetEase track search returned empty results for '$title' artist='$artist'")
                         Result.success(emptyList())
                     } else {
                         val recordings = songs.map { song ->
-                            // 尝试从搜索结果获取封面，如果为空则从专辑详情获取
-                            var coverUrl = normalizeCoverUrl(song.album?.picUrl)
-                            if (coverUrl == null && song.album?.id != null) {
-                                coverUrl = getNeteaseAlbumCoverUrl(song.album.id)
-                            }
                             OnlineRecording(
-                                id = song.id.toString(),
-                                title = song.name,
-                                artist = song.artists?.joinToString(", ") { it.name } ?: "",
-                                duration = (song.duration / 1000).toInt(),
-                                releaseId = song.album?.id?.toString(),
+                                id = song.sourceKey,
+                                title = song.trackName,
+                                artist = song.artistName ?: "",
+                                duration = song.duration?.toInt(),
+                                releaseId = null, // Will be fetched from album detail later
                                 source = "NetEase",
-                                coverArtUrl = coverUrl
+                                coverArtUrl = null // Will be fetched from album detail later
                             )
                         }
                         Timber.d(TAG, "NetEase recordings: ${recordings.take(3)}")
@@ -898,19 +884,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 "Online query source=NetEase type=track elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
                 TAG
             )
-        }
-    }
-
-    /**
-     * 获取网易云专辑封面 URL
-     */
-    private suspend fun getNeteaseAlbumCoverUrl(albumId: Long): String? {
-        return try {
-            val albumDetail = wangyRepository.getAlbumDetail(albumId)
-            albumDetail.getOrNull()?.album?.picUrl?.let { normalizeCoverUrl(it) }
-        } catch (e: Exception) {
-            Timber.w(TAG, "Failed to get NetEase album cover for albumId=$albumId: ${e.message}")
-            null
         }
     }
 
