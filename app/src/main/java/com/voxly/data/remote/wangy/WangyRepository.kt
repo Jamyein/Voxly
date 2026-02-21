@@ -110,28 +110,41 @@ class WangyRepositoryImpl @Inject constructor(
         val failures = mutableListOf<String>()
         var emptySuccess: WangySearchResponse? = null
 
-        // 搜索优先级: EAPI > LinuxAPI > Web > Simple
-        // EAPI 加密搜索最稳定，优先尝试
+        // 搜索优先级: WeAPI > EAPI > LinuxAPI
+        // Web 和 Simple 接口已禁用（保留接口定义）
         val requests: List<suspend () -> retrofit2.Response<okhttp3.ResponseBody>> = listOf(
             {
-                // EAPI 加密搜索 - 参考 any-listen-extension
-                // 端点: /api/search/song/list/page，发送到 /eapi/batch
+                // WeAPI 加密搜索 (AES-CBC + RSA)
+                // 端点: /weapi/search/get
                 val searchData = mapOf(
-                    "keyword" to keywords,
-                    "needCorrect" to "1",
-                    "channel" to "typing",
+                    "s" to keywords,
+                    "type" to 1,
                     "offset" to offset,
-                    "scene" to "normal",
-                    "total" to (normalizedPage == 1),
-                    "limit" to normalizedLimit
+                    "limit" to normalizedLimit,
+                    "total" to true
                 )
-                val encrypted = WangyCrypto.eapiEncrypt("/api/search/song/list/page", searchData)
+                val encrypted = WangyCrypto.weapiEncrypt(searchData)
+                val bodyString = "params=${encrypted["params"]}&encSecKey=${encrypted["encSecKey"]}"
+                val requestBody = bodyString.toRequestBody("application/x-www-form-urlencoded".toMediaType())
+                api.searchSongsWeapi(requestBody)
+            },
+            {
+                // EAPI 加密搜索
+                // 端点: /api/search/get，参考 music-tag-web
+                val searchData = mapOf(
+                    "s" to keywords,
+                    "type" to 1,
+                    "offset" to offset,
+                    "limit" to normalizedLimit,
+                    "total" to true
+                )
+                val encrypted = WangyCrypto.eapiEncrypt("/api/search/get", searchData)
                 val bodyString = "params=${encrypted["params"]}"
                 val requestBody = bodyString.toRequestBody("application/x-www-form-urlencoded".toMediaType())
                 api.searchSongsEapi(requestBody)
             },
             {
-                // LinuxAPI 加密搜索 (仅需 AES 加密，最简单稳定)
+                // LinuxAPI 加密搜索
                 // 参考: music-tag-web applications/utils/encrypt.py
                 val searchData = mapOf(
                     "s" to keywords,
@@ -140,36 +153,27 @@ class WangyRepositoryImpl @Inject constructor(
                     "limit" to normalizedLimit,
                     "total" to true
                 )
-                // LinuxAPI 加密只加密数据，不包含 URL
-                val encrypted = WangyCrypto.linuxEncryptSimple(Gson().toJson(searchData))
+                val encrypted = WangyCrypto.linuxEncrypt("/api/search/get", searchData)
                 val bodyString = "eparams=${encrypted["eparams"]}"
                 val requestBody = bodyString.toRequestBody("application/x-www-form-urlencoded".toMediaType())
                 api.searchSongsLinuxApi(requestBody)
-            },
-            {
-                // 简单网页搜索 (无需加密) - Web接口
-                api.searchSongsWeb(
-                    keyword = keywords,
-                    offset = offset,
-                    limit = normalizedLimit
-                )
-            },
-            {
-                // 简单网页搜索 (无需加密) - Simple接口
-                api.searchSongsSimple(
-                    keyword = keywords,
-                    offset = offset,
-                    limit = normalizedLimit
-                )
             }
+            // Web 和 Simple 接口已禁用
+            // {
+            //     // 简单网页搜索 (无需加密) - Web接口
+            //     api.searchSongsWeb(...),
+            // },
+            // {
+            //     // 简单网页搜索 (无需加密) - Simple接口
+            //     api.searchSongsSimple(...)
+            // }
         )
 
         for ((index, request) in requests.withIndex()) {
             val apiName = when (index) {
-                0 -> "EAPI"
-                1 -> "LinuxAPI"
-                2 -> "Web"
-                3 -> "Simple"
+                0 -> "WeAPI"
+                1 -> "EAPI"
+                2 -> "LinuxAPI"
                 else -> "Unknown"
             }
             try {

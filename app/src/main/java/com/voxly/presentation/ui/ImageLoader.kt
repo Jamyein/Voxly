@@ -9,15 +9,27 @@ import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
 
+/**
+ * Loads an image from URL and returns as ImageBitmap.
+ */
 suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
+    if (url.isNullOrBlank()) return null
+    val bytes = loadImageBytesFromUrl(url) ?: return null
+    return decodeBitmapFromBytes(bytes)?.asImageBitmap()
+}
+
+/**
+ * Loads an image from URL and returns as ByteArray.
+ * Used for downloading album art to save to audio files.
+ */
+suspend fun loadImageBytesFromUrl(url: String?): ByteArray? {
     if (url.isNullOrBlank()) return null
     return withContext(Dispatchers.IO) {
         runCatching {
             if (url.startsWith("data:image", ignoreCase = true)) {
                 val base64 = url.substringAfter("base64,", "")
                 if (base64.isNotBlank()) {
-                    val bytes = Base64.getDecoder().decode(base64)
-                    return@runCatching decodeBitmapFromBytes(bytes)?.asImageBitmap()
+                    return@runCatching Base64.getDecoder().decode(base64)
                 }
             }
 
@@ -42,8 +54,7 @@ suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
                 setRequestProperty("Referer", referer)
             }
             connection.inputStream.use { stream ->
-                val bytes = stream.readBytes()
-                decodeBitmapFromBytes(bytes)?.asImageBitmap()
+                stream.readBytes()
             }
         }.getOrNull()
     }

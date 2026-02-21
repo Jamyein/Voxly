@@ -45,15 +45,15 @@ object WangyCrypto {
     /**
      * EAPI encryption for search and lyrics endpoints.
      *
-     * Process (matching TypeScript reference):
+     * Process (参考 music-tag-web applications/utils/encrypt.py):
      * 1. Convert data to JSON string
      * 2. Create message: "nobody{url}use{text}md5forencrypt"
      * 3. Compute MD5 hash of the message
      * 4. Create data string: "{url}-36cd479b6b5-{text}-36cd479b6b5-{digest}"
-     * 5. AES-128-ECB encrypt the data string
-     * 6. Convert to base64, then hex, then uppercase
+     * 5. AES-128-ECB encrypt the data string (with PKCS7 padding)
+     * 6. Convert to hex string (uppercase)
      *
-     * @param url The API endpoint URL
+     * @param url The API endpoint URL (e.g., "/api/search/get")
      * @param data Request parameters as map
      * @return Encrypted parameters as map with "params" key
      */
@@ -71,15 +71,11 @@ object WangyCrypto {
             // Create the data string: "{url}-36cd479b6b5-{text}-36cd479b6b5-{digest}"
             val dataStr = "${url}-${EAPI_DIGEST}-${text}-${EAPI_DIGEST}-${digest}"
 
-            // Pad to 16-byte boundary for NoPadding encryption
-            val paddedData = pkcs7Padding(dataStr.toByteArray(Charsets.UTF_8))
+            // AES-128-ECB encrypt with PKCS7 padding (直接 hex，不需要 base64)
+            val encrypted = aesEncryptEcbWithPadding(dataStr.toByteArray(Charsets.UTF_8), EAPI_AES_KEY.toByteArray())
 
-            // AES-ECB encrypt (NoPadding - data is pre-padded)
-            val encrypted = aesEncryptEcb(paddedData, EAPI_AES_KEY.toByteArray())
-
-            // Convert to base64, then hex, then uppercase
-            val base64 = Base64.encodeToString(encrypted, Base64.NO_WRAP)
-            val hex = bytesToHex(base64.toByteArray()).uppercase()
+            // Convert to hex string (uppercase) - matching Python reference
+            val hex = bytesToHex(encrypted).uppercase()
 
             mapOf("params" to hex)
         } catch (e: Exception) {

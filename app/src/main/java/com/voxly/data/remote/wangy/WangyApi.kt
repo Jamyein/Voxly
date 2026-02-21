@@ -52,8 +52,9 @@ interface WangyApi {
      */
     @POST("api/linux/forward")
     @Headers(
-        "User-Agent: ${NetworkConstants.USER_AGENT_LINUX}",
+        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer: $REFERER",
+        "Origin: https://music.163.com",
         "Content-Type: application/x-www-form-urlencoded",
         "Accept: application/json"
     )
@@ -63,18 +64,16 @@ interface WangyApi {
 
     /**
      * Searches for songs using EAPI encryption.
-     * Endpoint: /api/search/song/list/page
+     * Endpoint: /eapi/search/song/list/page
      *
      * Uses EAPI encryption (AES-ECB with MD5 signature).
-     * Reference: any-listen-extension implementation
      *
      * @param body Encrypted request body with params key (from WangyCrypto.eapiEncrypt)
      * @return Search response
      */
-    @POST("eapi/batch")
+    @POST("eapi")
     @Headers(
-        // Reference: any-listen-extension uses Linux Chrome User-Agent
-        "User-Agent: Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36",
+        "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer: $REFERER",
         "Origin: https://music.163.com",
         "Content-Type: application/x-www-form-urlencoded",
@@ -252,4 +251,26 @@ interface WangyApi {
     suspend fun getSongDetailWeapi(
         @Body body: RequestBody
     ): Response<WangySongDetail>
+
+    /**
+     * Searches for songs using WeAPI encryption.
+     * Endpoint: /weapi/search/get
+     *
+     * Uses WeAPI encryption (AES-CBC + RSA).
+     * Reference: Binaryify/NeteaseCloudMusicApi
+     *
+     * @param body Encrypted request body with params and encSecKey (from WangyCrypto.weapiEncrypt)
+     * @return Search response
+     */
+    @POST("weapi/search/get")
+    @Headers(
+        "User-Agent: ${NetworkConstants.USER_AGENT_PC}",
+        "Referer: $REFERER",
+        "Origin: https://music.163.com",
+        "Content-Type: application/x-www-form-urlencoded",
+        "Accept: application/json"
+    )
+    suspend fun searchSongsWeapi(
+        @Body body: RequestBody
+    ): Response<ResponseBody>
 }

@@ -259,7 +259,9 @@ data class OnlineRelease(
     val source: String = "Unknown",
     val songTitle: String? = null,
     val albumTitle: String? = null,
-    val hasSyncedLyrics: Boolean = false
+    val hasSyncedLyrics: Boolean = false,
+    val discNumber: Int? = null,
+    val discCount: Int? = null
 )
 
 /**
@@ -272,7 +274,9 @@ data class OnlineRecording(
     val duration: Int?,
     val releaseId: String?,
     val source: String = "Unknown",
-    val coverArtUrl: String? = null
+    val coverArtUrl: String? = null,
+    val discNumber: Int? = null,
+    val discCount: Int? = null
 )
 
 /**
@@ -286,7 +290,9 @@ data class OnlineReleaseDetails(
     val genre: String?,
     val trackCount: Int?,
     val tracks: List<OnlineTrack>,
-    val coverArtUrl: String?
+    val coverArtUrl: String?,
+    val discNumber: Int? = null,
+    val discCount: Int? = null
 )
 
 /**
@@ -296,7 +302,8 @@ data class OnlineTrack(
     val number: Int,
     val title: String,
     val duration: Int?,
-    val artist: String?
+    val artist: String?,
+    val discNumber: Int? = null
 )
 
 /**

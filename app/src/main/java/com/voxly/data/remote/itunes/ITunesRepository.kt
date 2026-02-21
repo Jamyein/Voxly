@@ -114,7 +114,9 @@ class ITunesRepository @Inject constructor(
                             duration = result.getDurationSeconds(),
                             releaseId = result.collectionId?.toString(),
                             source = "iTunes",
-                            coverArtUrl = getHighResArtworkUrl(result.getBestArtworkUrl())
+                            coverArtUrl = getHighResArtworkUrl(result.getBestArtworkUrl()),
+                            discNumber = result.discNumber,
+                            discCount = result.discCount
                         )
                     }
                     .filter { it.id.isNotBlank() }
@@ -170,7 +172,8 @@ class ITunesRepository @Inject constructor(
                             number = track.trackNumber ?: 0,
                             title = track.trackName ?: "Unknown Track",
                             duration = track.getDurationSeconds(),
-                            artist = track.artistName
+                            artist = track.artistName,
+                            discNumber = track.discNumber
                         )
                     } ?: emptyList()
             } else {
@@ -185,7 +188,8 @@ class ITunesRepository @Inject constructor(
                 genre = albumResult.primaryGenreName,
                 trackCount = albumResult.trackCount ?: tracks.size,
                 tracks = tracks,
-                coverArtUrl = getHighResArtworkUrl(albumResult.getBestArtworkUrl(), 1200)
+                coverArtUrl = getHighResArtworkUrl(albumResult.getBestArtworkUrl(), 1200),
+                discCount = albumResult.discCount
             )
 
             Result.success(details)

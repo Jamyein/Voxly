@@ -14,6 +14,7 @@ import com.voxly.domain.repository.OnlineMetadataRepository
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
+import com.voxly.presentation.ui.loadImageBytesFromUrl
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -76,6 +77,9 @@ class OnlineMetadataViewModel @Inject constructor(
     
     // 从设置中获取的元数据源优先级
     private var metadataSourcePriority: List<String> = emptyList()
+    
+    // 预下载的封面图
+    private var downloadedAlbumArt: ByteArray? = null
 
     init {
         viewModelScope.launch {
@@ -233,7 +237,9 @@ class OnlineMetadataViewModel @Inject constructor(
             coverArtUrl = old.coverArtUrl ?: incoming.coverArtUrl,
             source = if (old.source == "Unknown") incoming.source else old.source,
             songTitle = old.songTitle ?: incoming.songTitle,
-            albumTitle = old.albumTitle ?: incoming.albumTitle
+            albumTitle = old.albumTitle ?: incoming.albumTitle,
+            discNumber = old.discNumber ?: incoming.discNumber,
+            discCount = old.discCount ?: incoming.discCount
         )
     }
 
@@ -469,6 +475,8 @@ class OnlineMetadataViewModel @Inject constructor(
         _selectedReleaseCandidate.value = release
         _selectedRelease.value = null
         selectedSyncedLyrics = _syncedLyricsByReleaseId.value[release.id]
+        // 清除之前的封面图
+        downloadedAlbumArt = null
         Timber.d("selectRelease: candidate set, launching coroutine for details")
         viewModelScope.launch {
             _isLoading.value = true
@@ -480,11 +488,21 @@ class OnlineMetadataViewModel @Inject constructor(
                     onSuccess = { details ->
                         Timber.d("selectRelease: got details, title=${details.title}, tracks=${details.tracks.size}")
                         _selectedRelease.value = details
+                        // 预下载封面图
+                        val coverUrl = details.coverArtUrl ?: release.coverArtUrl
+                        if (!coverUrl.isNullOrBlank()) {
+                            downloadedAlbumArt = loadImageBytesFromUrl(coverUrl)
+                            Timber.d("selectRelease: cover art downloaded, size=${downloadedAlbumArt?.size}")
+                        }
                     },
                     onFailure = { error ->
                         Timber.e(error, "Failed to get release details for ${release.id} from ${release.source}")
                         _errorMessage.value = "无法获取专辑详情，将应用基本信息 (来源: ${release.source})"
                         _selectedRelease.value = null
+                        // 即使获取详情失败，也尝试下载候选的封面图
+                        if (!release.coverArtUrl.isNullOrBlank()) {
+                            downloadedAlbumArt = loadImageBytesFromUrl(release.coverArtUrl)
+                        }
                     }
                 )
             } catch (e: Exception) {
@@ -514,6 +532,7 @@ class OnlineMetadataViewModel @Inject constructor(
         val details = _selectedRelease.value
         val candidate = _selectedReleaseCandidate.value
         val lyrics = selectedSyncedLyrics
+        val albumArt = downloadedAlbumArt
 
         // 详情存在时使用详情，详情不存在时使用候选，二选一不混合
         return if (details != null) {
@@ -526,7 +545,10 @@ class OnlineMetadataViewModel @Inject constructor(
                 genre = details.genre,
                 trackNumber = details.tracks.firstOrNull()?.number ?: 1,
                 totalTracks = details.trackCount,
-                lyrics = lyrics?.toLrcFormat()
+                discNumber = details.tracks.firstOrNull()?.discNumber ?: details.discNumber,
+                totalDiscs = details.discCount,
+                lyrics = lyrics?.toLrcFormat(),
+                albumArt = albumArt
             )
         } else if (candidate != null) {
             AudioMetadata(
@@ -538,7 +560,10 @@ class OnlineMetadataViewModel @Inject constructor(
                 genre = null,
                 trackNumber = 1,
                 totalTracks = candidate.trackCount,
-                lyrics = lyrics?.toLrcFormat()
+                discNumber = candidate.discNumber,
+                totalDiscs = candidate.discCount,
+                lyrics = lyrics?.toLrcFormat(),
+                albumArt = albumArt
             )
         } else {
             null
@@ -549,6 +574,7 @@ class OnlineMetadataViewModel @Inject constructor(
         _selectedRelease.value = null
         _selectedReleaseCandidate.value = null
         selectedSyncedLyrics = null
+        downloadedAlbumArt = null
         _errorMessage.value = null
     }
 
