@@ -297,6 +297,10 @@
     <string name="settings_scan_mode_track_only">Track Only</string>
     <string name="settings_scan_mode_album_only">Single Album</string>
     <string name="settings_scan_mode_track_and_album">Albums</string>
+    <string name="settings_min_duration_filter">Minimum Duration Filter</string>
+    <string name="settings_min_duration_filter_subtitle">Filter out audio files shorter than the threshold</string>
+    <string name="settings_min_duration_threshold">Minimum Duration</string>
+    <string name="settings_min_duration_threshold_subtitle">Set the minimum audio file duration</string>
     <string name="settings_language">App Language</string>
     <string name="settings_language_subtitle">Change the app language</string>
     <string name="settings_language_system">System Default</string>
@@ -317,6 +321,10 @@
     <string name="settings_data_sources_value">MusicBrainz + iTunes</string>
     <string name="settings_source_musicbrainz">Enable LRCLIB</string>
     <string name="settings_source_musicbrainz_subtitle">Free open source lyrics database</string>
+    <string name="settings_source_musicbrainz_metadata">Enable MusicBrainz</string>
+    <string name="settings_source_musicbrainz_metadata_subtitle">Free open source music database for metadata</string>
+    <string name="settings_source_musicbrainz_cover">Enable MusicBrainz</string>
+    <string name="settings_source_musicbrainz_cover_subtitle">Free open source music database for cover art</string>
     <string name="settings_source_apple_music">Enable iTunes</string>
     <string name="settings_source_apple_music_subtitle">Use iTunes for metadata and cover art</string>
     <string name="settings_source_netease">Enable NetEase</string>

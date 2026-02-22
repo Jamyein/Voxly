@@ -11,6 +11,7 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioFormat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -36,7 +37,8 @@ import javax.inject.Singleton
 class AudioFileScanner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val metadataProcessor: TagLibMetadataProcessor,
-    private val libraryCache: MusicLibraryCache
+    private val libraryCache: MusicLibraryCache,
+    private val settingsDataStore: SettingsDataStore
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
 
@@ -96,6 +98,11 @@ class AudioFileScanner @Inject constructor(
     fun scanDirectory(directoryPath: String): Flow<List<AudioFile>> = flow {
         val audioFiles = mutableListOf<AudioFile>()
         val normalizedDirectory = directoryPath.trimEnd('/', '\\')
+
+        // Get duration filter settings
+        val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled.first()
+        val minDurationFilterThresholdMs = settingsDataStore.minDurationFilterThresholdMs.first()
+
 
         // Fast path: query MediaStore by directory prefix
         val selection = buildString {
@@ -163,21 +170,25 @@ class AudioFileScanner @Inject constructor(
                         customFields = emptyMap()
                     )
 
-                    audioFiles.add(
-                        AudioFile(
-                            id = it.getLong(idColumn).toString(),
-                            path = filePath,
-                            name = it.getString(nameColumn) ?: filePath.substringAfterLast('/'),
-                            size = it.getLong(sizeColumn),
-                            duration = it.getLong(durationColumn),
-                            format = extension.uppercase(),
-                            bitrate = it.getInt(bitrateColumn),
-                            sampleRate = 0,
-                            channels = 0,
-                            mediaStoreAlbumId = albumId,
-                            metadata = metadata
+                    // Apply minimum duration filter
+                    val duration = it.getLong(durationColumn)
+                    if (duration != 0L && (!minDurationFilterEnabled || duration >= minDurationFilterThresholdMs)) {
+                        audioFiles.add(
+                            AudioFile(
+                                id = it.getLong(idColumn).toString(),
+                                path = filePath,
+                                name = it.getString(nameColumn) ?: filePath.substringAfterLast('/'),
+                                size = it.getLong(sizeColumn),
+                                duration = it.getLong(durationColumn),
+                                format = extension.uppercase(),
+                                bitrate = it.getInt(bitrateColumn),
+                                sampleRate = 0,
+                                channels = 0,
+                                mediaStoreAlbumId = albumId,
+                                metadata = metadata
+                            )
                         )
-                    )
+                    }
                 }
             }
         }
@@ -551,6 +562,10 @@ class AudioFileScanner @Inject constructor(
         output: MutableList<AudioFile>,
         onProgress: (current: Int, total: Int) -> Unit
     ) {
+
+        // Get duration filter settings
+        val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled.first()
+        val minDurationFilterThresholdMs = settingsDataStore.minDurationFilterThresholdMs.first()
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         
         // First, get the count for progress reporting
@@ -644,7 +659,16 @@ class AudioFileScanner @Inject constructor(
                         mediaStoreAlbumId = albumId,
                         metadata = metadata
                     )
-                    output.add(audioFile)
+
+
+                    // Apply minimum duration filter
+                    val duration = it.getLong(durationColumn)
+                    if (duration == 0L || (minDurationFilterEnabled && duration < minDurationFilterThresholdMs)) {
+                        // Skip files that are too short or have no duration
+                    } else {
+                        output.add(audioFile)
+                    }
+
                 }
             }
         }

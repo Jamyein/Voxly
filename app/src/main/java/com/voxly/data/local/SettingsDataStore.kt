@@ -62,6 +62,8 @@ class SettingsDataStore @Inject constructor(
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
         val REPLAY_GAIN_TARGET_LOUDNESS = floatPreferencesKey("replay_gain_target_loudness")
         val SCAN_MODE = stringPreferencesKey("scan_mode")
+        val MIN_DURATION_FILTER_ENABLED = booleanPreferencesKey("min_duration_filter_enabled")
+        val MIN_DURATION_FILTER_THRESHOLD_MS = intPreferencesKey("min_duration_filter_threshold_ms")
     }
 
     /**
@@ -276,6 +278,22 @@ class SettingsDataStore @Inject constructor(
     val scanMode: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
             preferences[SCAN_MODE] ?: "TRACK_ONLY"
+        }
+
+    /**
+     * Minimum duration filter enabled preference flow
+     */
+    val minDurationFilterEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MIN_DURATION_FILTER_ENABLED] ?: false
+        }
+
+    /**
+     * Minimum duration filter threshold (in milliseconds) preference flow
+     */
+    val minDurationFilterThresholdMs: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[MIN_DURATION_FILTER_THRESHOLD_MS] ?: 60000
         }
 
     /**
@@ -527,6 +545,25 @@ class SettingsDataStore @Inject constructor(
         }
     }
 
+
+    /**
+     * Save minimum duration filter enabled preference
+     */
+    suspend fun setMinDurationFilterEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MIN_DURATION_FILTER_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Save minimum duration filter threshold preference (in milliseconds)
+     */
+    suspend fun setMinDurationFilterThresholdMs(thresholdMs: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[MIN_DURATION_FILTER_THRESHOLD_MS] = thresholdMs.coerceAtLeast(0)
+        }
+    }
+
     private fun parsePriority(raw: String?, fallback: List<String>): List<String> {
         if (raw.isNullOrBlank()) return fallback
         return normalizePriority(
@@ -542,5 +579,9 @@ class SettingsDataStore @Inject constructor(
 
     private fun defaultSourcePriority(): List<String> {
         return listOf("itunes", "musicbrainz", "netease", "qq_music")
+    }
+
+    private fun lyricsDefaultSourcePriority(): List<String> {
+        return listOf("lrclib", "netease", "qq_music")
     }
 }

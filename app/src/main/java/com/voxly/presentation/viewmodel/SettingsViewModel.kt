@@ -225,6 +225,26 @@ class SettingsViewModel @Inject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
             initialValue = "TRACK_ONLY"
+    )
+
+    /**
+     * Minimum duration filter enabled state
+     */
+    val minDurationFilterEnabled: StateFlow<Boolean> = settingsDataStore.minDurationFilterEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = false
+        )
+
+    /**
+     * Minimum duration filter threshold in milliseconds
+     */
+    val minDurationFilterThresholdMs: StateFlow<Int> = settingsDataStore.minDurationFilterThresholdMs
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = 60000
         )
 
     /**
@@ -436,6 +456,24 @@ class SettingsViewModel @Inject constructor(
     fun setScanMode(mode: String) {
         viewModelScope.launch {
             settingsDataStore.setScanMode(mode)
+        }
+    }
+
+    /**
+     * Set minimum duration filter enabled preference
+     */
+    fun setMinDurationFilterEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setMinDurationFilterEnabled(enabled)
+        }
+    }
+
+    /**
+     * Set minimum duration filter threshold in milliseconds
+     */
+    fun setMinDurationFilterThresholdMs(thresholdMs: Int) {
+        viewModelScope.launch {
+            settingsDataStore.setMinDurationFilterThresholdMs(thresholdMs)
         }
     }
 }

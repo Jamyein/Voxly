@@ -4,8 +4,9 @@ import android.app.Activity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.KeyboardArrowDown
@@ -74,6 +75,13 @@ fun resolveCurrentLanguageTag(): String? {
 
 fun normalizeLanguageTag(tag: String?): String? = tag?.lowercase()
 
+fun formatDuration(milliseconds: Int): String {
+    val totalSeconds = milliseconds / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "${minutes}分${seconds}秒"
+}
+
 fun sourceToDisplayName(source: String): String = when (source) {
     "itunes" -> "iTunes"
     "musicbrainz" -> "MusicBrainz"
@@ -133,6 +141,49 @@ fun SettingsSwitch(
             .clickable { onCheckedChange(!checked) },
         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     )
+}
+
+@Composable
+fun SettingsSlider(
+    title: String,
+    subtitle: String,
+    value: Float,
+    valueRange: ClosedFloatingPointRange<Float>,
+    steps: Int,
+    onValueChange: (Float) -> Unit,
+    enabled: Boolean = true,
+    valueLabel: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(
+                if (enabled) Modifier else Modifier.alpha(0.38f)
+            )
+    ) {
+        ListItem(
+            headlineContent = { Text(text = title) },
+            supportingContent = { Text(text = subtitle) },
+            trailingContent = {
+                Text(
+                    text = valueLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            },
+            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        )
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            steps = steps,
+            enabled = enabled,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+        )
+    }
 }
 
 @Composable
@@ -408,6 +459,8 @@ fun SettingsScreen(
     val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
     val replayGainTargetLoudness by viewModel.replayGainTargetLoudness.collectAsState()
     val scanMode by viewModel.scanMode.collectAsState()
+    val minDurationFilterEnabled by viewModel.minDurationFilterEnabled.collectAsState()
+    val minDurationFilterThresholdMs by viewModel.minDurationFilterThresholdMs.collectAsState()
     
     var languageExpanded by remember { mutableStateOf(false) }
     val languageOptions = remember {
@@ -567,6 +620,24 @@ fun SettingsScreen(
                         )
                     }
                 }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsSwitch(
+                    title = stringResource(R.string.settings_min_duration_filter),
+                    subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
+                    checked = minDurationFilterEnabled,
+                    onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) }
+                )
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                SettingsSlider(
+                    title = stringResource(R.string.settings_min_duration_threshold),
+                    subtitle = stringResource(R.string.settings_min_duration_threshold_subtitle),
+                    value = minDurationFilterThresholdMs.toFloat(),
+                    valueRange = 10000f..600000f,
+                    steps = 118,
+                    onValueChange = { viewModel.setMinDurationFilterThresholdMs(it.toInt()) },
+                    enabled = minDurationFilterEnabled,
+                    valueLabel = formatDuration(minDurationFilterThresholdMs)
+                )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_directory_management)) },
@@ -829,8 +900,8 @@ fun SettingsScreen(
             onPriorityChange = viewModel::setMetadataSourcePriority,
             extraContent = {
                 SettingsSwitch(
-                    title = stringResource(R.string.settings_source_musicbrainz),
-                    subtitle = stringResource(R.string.settings_source_musicbrainz_subtitle),
+                    title = stringResource(R.string.settings_source_musicbrainz_metadata),
+                    subtitle = stringResource(R.string.settings_source_musicbrainz_metadata_subtitle),
                     checked = metadataSourceEnabledMusicBrainz,
                     onCheckedChange = { viewModel.setMetadataSourceEnabledMusicBrainz(it) }
                 )
@@ -916,8 +987,8 @@ fun SettingsScreen(
             onPriorityChange = viewModel::setCoverSourcePriority,
             extraContent = {
                 SettingsSwitch(
-                    title = stringResource(R.string.settings_source_musicbrainz),
-                    subtitle = stringResource(R.string.settings_source_musicbrainz_subtitle),
+                    title = stringResource(R.string.settings_source_musicbrainz_cover),
+                    subtitle = stringResource(R.string.settings_source_musicbrainz_cover_subtitle),
                     checked = coverSourceEnabledMusicBrainz,
                     onCheckedChange = { viewModel.setCoverSourceEnabledMusicBrainz(it) }
                 )
