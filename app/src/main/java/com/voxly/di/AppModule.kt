@@ -10,7 +10,7 @@ import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.data.remote.itunes.ITunesApi
 import com.voxly.data.remote.itunes.ITunesRepository
-import com.voxly.data.remote.lrclib.LRCLibApi
+
 import com.voxly.data.remote.tengx.TengxApi
 import com.voxly.data.remote.tengx.TengxRepository
 import com.voxly.data.remote.tengx.TengxRepositoryImpl
@@ -125,16 +125,7 @@ object AppModule {
         return retrofit.create(ITunesApi::class.java)
     }
 
-    @Provides
-    @Singleton
-    @Named("lrclib")
-    fun provideLRCLibRetrofit(okHttpClient: OkHttpClient): Retrofit {
-        return Retrofit.Builder()
-            .baseUrl(LRCLibApi.BASE_URL)
-            .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
-            .build()
-    }
+
 
     @Provides
     @Singleton
@@ -193,11 +184,7 @@ object AppModule {
         return WangyRepositoryImpl(wangyApi)
     }
 
-    @Provides
-    @Singleton
-    fun provideLRCLibApi(@Named("lrclib") retrofit: Retrofit): LRCLibApi {
-        return retrofit.create(LRCLibApi::class.java)
-    }
+
 
     @Provides
     @Singleton
@@ -247,7 +234,6 @@ object AppModule {
         @ApplicationContext context: Context,
         metadataProcessor: TagLibMetadataProcessor,
         settingsDataStore: SettingsDataStore,
-        lrclibApi: LRCLibApi,
         wangyRepository: WangyRepository,
         tengxRepository: TengxRepository
     ): LyricsRepository {
@@ -255,7 +241,6 @@ object AppModule {
             context = context,
             metadataProcessor = metadataProcessor,
             settingsDataStore = settingsDataStore,
-            lrclibApi = lrclibApi,
             wangyRepository = wangyRepository,
             tengxRepository = tengxRepository
         )

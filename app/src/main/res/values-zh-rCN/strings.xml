@@ -342,6 +342,8 @@
     <string name="settings_online_search_limit_netease">网易云音乐 限制</string>
     <string name="settings_online_search_limit_qq_music">QQ音乐 限制</string>
     <string name="settings_online_search_limit_per_source_subtitle">留空则使用全局限制</string>
+    <string name="settings_online_search_limits_submenu">搜索限制</string>
+    <string name="settings_online_search_limits_submenu_subtitle">配置各来源的搜索结果限制</string>
     <string name="settings_source_group_metadata">组合数据源</string>
     <string name="settings_source_group_metadata_subtitle">设置元数据搜索来源的开关和优先级</string>
     <string name="settings_source_group_lyrics">歌词数据源</string>

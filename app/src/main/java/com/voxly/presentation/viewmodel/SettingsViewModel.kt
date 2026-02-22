@@ -172,7 +172,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = listOf("lrclib", "netease", "qq_music")
+            initialValue = listOf("netease", "qq_music")
         )
 
     val coverSourcePriority: StateFlow<List<String>> = settingsDataStore.coverSourcePriority

@@ -905,6 +905,28 @@ class MetadataEditorViewModel @Inject constructor(
     }
 
     fun applyOnlineCover(recording: OnlineRecording) {
+        // If coverArtUrl already exists in the recording, use it directly
+        val existingCoverUrl = recording.coverArtUrl
+        if (!existingCoverUrl.isNullOrBlank()) {
+            viewModelScope.launch {
+                try {
+                    val url = java.net.URL(existingCoverUrl)
+                    val connection = url.openConnection()
+                    connection.setRequestProperty("User-Agent", "Mozilla/5.0")
+                    val bytes = connection.getInputStream().use { it.readBytes() }
+                    if (bytes.isNotEmpty()) {
+                        updateAlbumArt(bytes)
+                        _coverFetchMessage.value = "Cover fetched successfully"
+                    } else {
+                        _coverFetchMessage.value = "Cover URL is invalid"
+                    }
+                } catch (e: Exception) {
+                    _coverFetchMessage.value = "Failed to load cover: ${e.message}"
+                }
+            }
+            return
+        }
+
         val releaseId = recording.releaseId
         
         Logger.d("applyOnlineCover: releaseId=$releaseId, source=${recording.source}", TAG)
@@ -1038,7 +1060,8 @@ class MetadataEditorViewModel @Inject constructor(
             genre = metadata.genre ?: currentMetadata.genre,
             trackNumber = metadata.trackNumber ?: currentMetadata.trackNumber,
             totalTracks = metadata.totalTracks ?: currentMetadata.totalTracks,
-            lyrics = metadata.lyrics ?: currentMetadata.lyrics
+            lyrics = metadata.lyrics ?: currentMetadata.lyrics,
+            albumArt = metadata.albumArt ?: currentMetadata.albumArt
         )
 
         _editedMetadata.value = updatedMetadata

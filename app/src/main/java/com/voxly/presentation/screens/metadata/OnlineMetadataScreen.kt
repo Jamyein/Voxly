@@ -35,7 +35,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -45,6 +48,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineRelease
+import com.voxly.presentation.ui.clearSearchResultImageCache
 import com.voxly.presentation.ui.loadImageBitmapFromUrl
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
 import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
@@ -67,6 +71,25 @@ fun OnlineMetadataScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val query by viewModel.searchQuery.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
+    val downloadedAlbumArt by viewModel.downloadedAlbumArt.collectAsState()
+
+    // Track if we've already triggered apply for the current selection
+    var hasAppliedForCurrentSelection by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+
+    // Auto-apply metadata when album art is downloaded
+    LaunchedEffect(downloadedAlbumArt, selectedRelease, selectedReleaseCandidate) {
+        val albumArt = downloadedAlbumArt
+        val release = selectedRelease
+        val candidate = selectedReleaseCandidate
+        // Only apply when we have release details OR candidate with album art ready
+        if ((release != null || candidate != null) && albumArt != null && !hasAppliedForCurrentSelection) {
+            hasAppliedForCurrentSelection = true
+            viewModel.applyMetadata()?.let { metadata ->
+                Timber.d("OnlineMetadataScreen: auto applying metadata with cover for ${metadata.title}")
+                onApplyMetadata(metadata)
+            }
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -115,12 +138,9 @@ fun OnlineMetadataScreen(
                     OnlineReleaseList(
                         releases = state.releases,
                         onSelect = { release ->
+                            hasAppliedForCurrentSelection = false
                             viewModel.selectRelease(release)
-                            // 直接应用元数据
-                            viewModel.applyMetadata()?.let { metadata ->
-                                Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}")
-                                onApplyMetadata(metadata)
-                            }
+                            clearSearchResultImageCache()
                         },
                         modifier = Modifier.weight(1f, fill = false)
                     )
@@ -141,12 +161,9 @@ fun OnlineMetadataScreen(
                     OnlineReleaseList(
                         releases = state.releases,
                         onSelect = { release ->
+                            hasAppliedForCurrentSelection = false
                             viewModel.selectRelease(release)
-                            // 直接应用元数据
-                            viewModel.applyMetadata()?.let { metadata ->
-                                Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}")
-                                onApplyMetadata(metadata)
-                            }
+                            clearSearchResultImageCache()
                         },
                         modifier = Modifier.weight(1f, fill = false)
                     )
@@ -155,12 +172,9 @@ fun OnlineMetadataScreen(
                     OnlineReleaseList(
                         releases = searchResults,
                         onSelect = { release ->
+                            hasAppliedForCurrentSelection = false
                             viewModel.selectRelease(release)
-                            // 直接应用元数据
-                            viewModel.applyMetadata()?.let { metadata ->
-                                Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}")
-                                onApplyMetadata(metadata)
-                            }
+                            clearSearchResultImageCache()
                         },
                         modifier = Modifier.weight(1f, fill = false)
                     )

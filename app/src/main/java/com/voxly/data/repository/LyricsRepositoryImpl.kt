@@ -3,8 +3,7 @@ package com.voxly.data.repository
 import android.content.Context
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
-import com.voxly.data.remote.lrclib.LRCLibApi
-import com.voxly.data.remote.lrclib.LRCLibLyrics
+
 import com.voxly.data.remote.tengx.TengxRepository
 import com.voxly.data.remote.wangy.WangyRepository
 import com.voxly.domain.model.AudioMetadata
@@ -31,7 +30,6 @@ import javax.inject.Singleton
 /**
  * Implementation of LyricsRepository.
  * Handles local lyrics operations and online lyrics fetching from multiple sources:
- * - LRCLIB (primary source for synced lyrics)
  * - NetEase Cloud Music (Chinese music)
  * - QQ Music (Chinese music)
  */
@@ -40,7 +38,7 @@ class LyricsRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val metadataProcessor: TagLibMetadataProcessor,
     private val settingsDataStore: SettingsDataStore,
-    private val lrclibApi: LRCLibApi,
+
     private val wangyRepository: WangyRepository,
     private val tengxRepository: TengxRepository
 ) : LyricsRepository {
@@ -61,7 +59,6 @@ class LyricsRepositoryImpl @Inject constructor(
 
     // Data source preference
     enum class LyricsSource {
-        LRCLIB,
         NETEASE,
         QQ_MUSIC,
         ALL
@@ -224,17 +221,6 @@ class LyricsRepositoryImpl @Inject constructor(
             }
 
             when (preferredSource) {
-                LyricsSource.LRCLIB -> {
-                    if (settings.enableLrclib) {
-                        searchFromLRCLIB(normalizedTrackName, normalizedArtistName, normalizedAlbumName)
-                            .map { applyLimit(it, settings.searchLimit) }
-                            // 失败时返回空列表而不是错误，让其他源有机会显示结果
-                            .getOrElse { emptyList() }
-                            .let { Result.success(it) }
-                    } else {
-                        Result.success(emptyList())
-                    }
-                }
                 LyricsSource.NETEASE -> {
                     if (settings.enableNetease) {
                         searchFromNetEase(normalizedTrackName, normalizedArtistName)
@@ -299,7 +285,6 @@ class LyricsRepositoryImpl @Inject constructor(
         }
 
         val enabledSourceCount = listOf(
-            settings.enableLrclib,
             settings.enableNetease,
             settings.enableQQMusic
         ).count { it }
@@ -309,29 +294,6 @@ class LyricsRepositoryImpl @Inject constructor(
             trySend(LyricsSourceResult.SourceCompleted(source))
             if (completedSources.incrementAndGet() >= enabledSourceCount) {
                 close()
-            }
-        }
-
-        if (settings.enableLrclib) {
-            launch {
-                try {
-                    val result = searchFromLRCLIB(normalizedTrackName, normalizedArtistName, normalizedAlbumName)
-                    applyLimit(result.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
-                        trySend(LyricsSourceResult.Result(lyrics, "LRCLIB"))
-                    }
-                    if (result.isFailure) {
-                        trySend(
-                            LyricsSourceResult.Error(
-                                "LRCLIB",
-                                result.exceptionOrNull()?.message ?: "Failed"
-                            )
-                        )
-                    }
-                } catch (e: Exception) {
-                    trySend(LyricsSourceResult.Error("LRCLIB", e.message ?: "Failed"))
-                } finally {
-                    markSourceCompleted("LRCLIB")
-                }
             }
         }
 
@@ -382,44 +344,6 @@ class LyricsRepositoryImpl @Inject constructor(
         }
 
         awaitClose { }
-    }
-
-    /**
-     * Searches lyrics from LRCLIB.
-     */
-    private suspend fun searchFromLRCLIB(
-        trackName: String,
-        artistName: String?,
-        albumName: String?
-    ): Result<List<OnlineLyricsResult>> {
-        val response = lrclibApi.searchLyrics(
-            trackName = trackName,
-            artistName = artistName,
-            albumName = albumName
-        )
-
-        return if (response.isSuccessful) {
-            val lrclibResults = response.body().orEmpty()
-            val results = lrclibResults.map { entry ->
-                OnlineLyricsResult(
-                    id = entry.id,
-                    trackName = entry.trackName,
-                    artistName = entry.artistName,
-                    albumName = entry.albumName,
-                    duration = entry.duration,
-                    hasSyncedLyrics = !entry.syncedLyrics.isNullOrBlank(),
-                    hasPlainLyrics = !entry.plainLyrics.isNullOrBlank(),
-                    isInstrumental = entry.instrumental,
-                    source = "LRCLIB",
-                    sourceKey = null,
-                    preview = entry.plainLyrics?.lines()?.take(3)?.joinToString("\n")
-                        ?: entry.syncedLyrics?.lines()?.take(3)?.joinToString("\n")
-                )
-            }
-            Result.success(results)
-        } else {
-            Result.failure(LyricsException("LRCLIB search failed: ${response.errorBody()?.string()}"))
-        }
     }
 
     /**
@@ -551,9 +475,6 @@ class LyricsRepositoryImpl @Inject constructor(
         albumName: String?,
         settings: LyricsSourceSettings
     ): Result<List<OnlineLyricsResult>> = coroutineScope {
-        val lrclibDeferred = if (settings.enableLrclib) {
-            async { runCatching { searchFromLRCLIB(trackName, artistName, albumName).getOrNull() } }
-        } else null
         val neteaseDeferred = if (settings.enableNetease) {
             async { runCatching { searchFromNetEase(trackName, artistName).getOrNull() } }
         } else null
@@ -561,13 +482,11 @@ class LyricsRepositoryImpl @Inject constructor(
             async { runCatching { searchFromQQMusic(trackName, artistName).getOrNull() } }
         } else null
 
-        val lrclibResults = applyLimit(lrclibDeferred?.await()?.getOrNull() ?: emptyList(), settings.searchLimit)
         val neteaseResults = applyLimit(neteaseDeferred?.await()?.getOrNull() ?: emptyList(), settings.searchLimit)
         val qqMusicResults = applyLimit(qqMusicDeferred?.await()?.getOrNull() ?: emptyList(), settings.searchLimit)
 
         // Merge all results
         val allResults = mutableListOf<OnlineLyricsResult>()
-        allResults.addAll(lrclibResults)
         allResults.addAll(neteaseResults)
         allResults.addAll(qqMusicResults)
 
@@ -590,7 +509,6 @@ class LyricsRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             try {
                 when (result.source) {
-                    "LRCLIB" -> getLRCLibLyricsById(result.id)
                     "NetEase" -> getNetEaseLyrics(result.id)
                     "QQ Music" -> {
                         val songMid = result.sourceKey?.trim().takeUnless { it.isNullOrEmpty() }
@@ -607,17 +525,6 @@ class LyricsRepositoryImpl @Inject constructor(
                 Result.failure(LyricsException("Network error", e))
             }
         }
-
-    private suspend fun getLRCLibLyricsById(id: Long): Result<Lyrics> {
-        val response = lrclibApi.getLyricsById(id)
-        return if (response.isSuccessful) {
-            val lrclibLyrics = response.body()
-                ?: return Result.failure(LyricsException("Empty response"))
-            Result.success(convertLRCLIBToLyrics(lrclibLyrics))
-        } else {
-            Result.failure(LyricsException("Failed to get lyrics: ${response.errorBody()?.string()}"))
-        }
-    }
 
     /**
      * Gets lyrics from NetEase by song ID.
@@ -717,26 +624,6 @@ class LyricsRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Converts LRCLIB response to domain Lyrics model.
-     */
-    private fun convertLRCLIBToLyrics(lrclibLyrics: LRCLibLyrics): Lyrics {
-        return when {
-            // Prefer synced lyrics
-            !lrclibLyrics.syncedLyrics.isNullOrBlank() -> {
-                Lyrics.parseLrc(lrclibLyrics.syncedLyrics)
-            }
-            // Fall back to plain lyrics
-            !lrclibLyrics.plainLyrics.isNullOrBlank() -> {
-                Lyrics.createUnsynced(lrclibLyrics.plainLyrics)
-            }
-            // Instrumental or no lyrics
-            else -> {
-                Lyrics.createUnsynced("[Instrumental]")
-            }
-        }
-    }
-
-    /**
      * Generates a cache key for lyrics.
      */
     private fun generateCacheKey(trackName: String, artistName: String): String {
@@ -744,9 +631,7 @@ class LyricsRepositoryImpl @Inject constructor(
     }
 
     private suspend fun getLyricsSourceSettings(): LyricsSourceSettings {
-        val enableLrclib = settingsDataStore.lyricsSourceEnabledMusicBrainz.first()
         return LyricsSourceSettings(
-            enableLrclib = enableLrclib,
             enableNetease = settingsDataStore.lyricsSourceEnabledNetease.first(),
             enableQQMusic = settingsDataStore.lyricsSourceEnabledQQMusic.first(),
             searchLimit = normalizeSearchLimit(settingsDataStore.onlineSearchLimit.first()),
@@ -763,19 +648,17 @@ class LyricsRepositoryImpl @Inject constructor(
     }
 
     private data class LyricsSourceSettings(
-        val enableLrclib: Boolean,
         val enableNetease: Boolean,
         val enableQQMusic: Boolean,
         val searchLimit: Int,
         val priority: List<String>
     ) {
         val hasAnyEnabledSource: Boolean
-            get() = enableLrclib || enableNetease || enableQQMusic
+            get() = enableNetease || enableQQMusic
     }
 
     private fun sourcePriorityIndex(source: String, priority: List<String>): Int {
         val key = when (source) {
-            "LRCLIB" -> "lrclib"
             "NetEase" -> "netease"
             "QQ Music" -> "qq_music"
             else -> "unknown"

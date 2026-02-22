@@ -290,7 +290,8 @@ data class OnlineRecording(
     val recordLabel: String? = null,   // 唱片公司 (album.company)
     val comment: String? = null,        // 注释/别名 (song.alias)
     val genre: String? = null,          // 流派 (primaryGenreName)
-    val albumArtist: String? = null     // 专辑艺术家 (collectionArtistName)
+    val albumArtist: String? = null,    // 专辑艺术家 (collectionArtistName)
+    val lyrics: String? = null          // 歌词 (from NetEase lyrics API)
 )
 
 

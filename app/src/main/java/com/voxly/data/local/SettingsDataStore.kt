@@ -582,6 +582,6 @@ class SettingsDataStore @Inject constructor(
     }
 
     private fun lyricsDefaultSourcePriority(): List<String> {
-        return listOf("lrclib", "netease", "qq_music")
+        return listOf("netease", "qq_music")
     }
 }

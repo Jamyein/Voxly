@@ -409,6 +409,196 @@ fun SourcePriorityDialog(
 }
 
 @Composable
+fun SearchLimitDialog(
+    globalLimit: Int,
+    musicBrainzLimit: Int,
+    itunesLimit: Int,
+    neteaseLimit: Int,
+    qqMusicLimit: Int,
+    searchLimitOptions: List<SearchLimitOption>,
+    onDismiss: () -> Unit,
+    onGlobalLimitChange: (Int) -> Unit,
+    onMusicBrainzLimitChange: (Int) -> Unit,
+    onItunesLimitChange: (Int) -> Unit,
+    onNeteaseLimitChange: (Int) -> Unit,
+    onQQMusicLimitChange: (Int) -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
+        title = { Text(stringResource(R.string.settings_online_search_limits_submenu)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 400.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Global limit
+                Text(
+                    text = stringResource(R.string.settings_online_search_limit),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                SearchLimitDropdown(
+                    currentLimit = globalLimit,
+                    searchLimitOptions = searchLimitOptions,
+                    onLimitChange = onGlobalLimitChange
+                )
+
+                HorizontalDivider()
+
+                // Per-source limits
+                Text(
+                    text = stringResource(R.string.settings_online_search_limit_subtitle),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+
+                // MusicBrainz
+                SearchLimitRow(
+                    title = stringResource(R.string.settings_online_search_limit_musicbrainz),
+                    currentLimit = musicBrainzLimit,
+                    searchLimitOptions = searchLimitOptions,
+                    onLimitChange = onMusicBrainzLimitChange
+                )
+
+                // iTunes
+                SearchLimitRow(
+                    title = stringResource(R.string.settings_online_search_limit_itunes),
+                    currentLimit = itunesLimit,
+                    searchLimitOptions = searchLimitOptions,
+                    onLimitChange = onItunesLimitChange
+                )
+
+                // NetEase
+                SearchLimitRow(
+                    title = stringResource(R.string.settings_online_search_limit_netease),
+                    currentLimit = neteaseLimit,
+                    searchLimitOptions = searchLimitOptions,
+                    onLimitChange = onNeteaseLimitChange
+                )
+
+                // QQ Music
+                SearchLimitRow(
+                    title = stringResource(R.string.settings_online_search_limit_qq_music),
+                    currentLimit = qqMusicLimit,
+                    searchLimitOptions = searchLimitOptions,
+                    onLimitChange = onQQMusicLimitChange
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_ok))
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchLimitDropdown(
+    currentLimit: Int,
+    searchLimitOptions: List<SearchLimitOption>,
+    onLimitChange: (Int) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val currentOption = searchLimitOptions.firstOrNull { it.value == currentLimit }
+        ?: searchLimitOptions.firstOrNull { it.value == 0 }
+        ?: searchLimitOptions[0]
+
+    ExposedDropdownMenuBox(
+        expanded = expanded,
+        onExpandedChange = { expanded = it }
+    ) {
+        OutlinedTextField(
+            value = currentOption.displayLabel(),
+            onValueChange = {},
+            readOnly = true,
+            singleLine = true,
+            textStyle = MaterialTheme.typography.bodyMedium,
+            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor()
+        )
+        ExposedDropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            searchLimitOptions.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(option.displayLabel()) },
+                    onClick = {
+                        onLimitChange(option.value)
+                        expanded = false
+                    }
+                )
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SearchLimitRow(
+    title: String,
+    currentLimit: Int,
+    searchLimitOptions: List<SearchLimitOption>,
+    onLimitChange: (Int) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val currentOption = searchLimitOptions.firstOrNull { it.value == currentLimit }
+        ?: searchLimitOptions.firstOrNull { it.value == 0 }
+        ?: searchLimitOptions[0]
+
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
+        )
+        ExposedDropdownMenuBox(
+            expanded = expanded,
+            onExpandedChange = { expanded = it },
+            modifier = Modifier.weight(1f)
+        ) {
+            OutlinedTextField(
+                value = if (currentLimit <= 0) stringResource(R.string.settings_online_search_limit_unlimited) else currentLimit.toString(),
+                onValueChange = {},
+                readOnly = true,
+                singleLine = true,
+                textStyle = MaterialTheme.typography.bodyMedium,
+                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                modifier = Modifier
+                    .width(120.dp)
+                    .menuAnchor()
+            )
+            ExposedDropdownMenu(
+                expanded = expanded,
+                onDismissRequest = { expanded = false }
+            ) {
+                searchLimitOptions.forEach { option ->
+                    DropdownMenuItem(
+                        text = { Text(option.displayLabel()) },
+                        onClick = {
+                            onLimitChange(option.value)
+                            expanded = false
+                        }
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun SearchLimitOption.displayLabel(): String {
     return labelResId?.let { stringResource(it) } ?: value.toString()
 }
@@ -508,6 +698,7 @@ fun SettingsScreen(
     var showMetadataSourceDialog by remember { mutableStateOf(false) }
     var showLyricsSourceDialog by remember { mutableStateOf(false) }
     var showCoverSourceDialog by remember { mutableStateOf(false) }
+    var showSearchLimitsDialog by remember { mutableStateOf(false) }
     val searchLimitOptions = remember {
         listOf(
             SearchLimitOption(0, R.string.settings_online_search_limit_unlimited),
@@ -668,55 +859,10 @@ fun SettingsScreen(
                     onClick = { showCoverSourceDialog = true }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                SettingsDropdownRow(
-                    title = stringResource(R.string.settings_online_search_limit),
-                    subtitle = stringResource(R.string.settings_online_search_limit_subtitle),
-                    selectedLabel = currentSearchLimit.displayLabel(),
-                    expanded = searchLimitExpanded,
-                    onExpandedChange = { searchLimitExpanded = it }
-                ) {
-                    searchLimitOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(option.displayLabel()) },
-                            onClick = {
-                                viewModel.setOnlineSearchLimit(option.value)
-                                searchLimitExpanded = false
-                            }
-                        )
-                    }
-                }
-
-                // Per-source search limits (expandable)
-                PerSourceSearchLimitRow(
-                    title = stringResource(R.string.settings_online_search_limit_musicbrainz),
-                    currentLimit = onlineSearchLimitMusicBrainz,
-                    searchLimitOptions = searchLimitOptions,
-                    onLimitChange = { viewModel.setOnlineSearchLimitMusicBrainz(it) }
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                PerSourceSearchLimitRow(
-                    title = stringResource(R.string.settings_online_search_limit_itunes),
-                    currentLimit = onlineSearchLimitITunes,
-                    searchLimitOptions = searchLimitOptions,
-                    onLimitChange = { viewModel.setOnlineSearchLimitITunes(it) }
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                PerSourceSearchLimitRow(
-                    title = stringResource(R.string.settings_online_search_limit_netease),
-                    currentLimit = onlineSearchLimitNetease,
-                    searchLimitOptions = searchLimitOptions,
-                    onLimitChange = { viewModel.setOnlineSearchLimitNetease(it) }
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                PerSourceSearchLimitRow(
-                    title = stringResource(R.string.settings_online_search_limit_qq_music),
-                    currentLimit = onlineSearchLimitQQMusic,
-                    searchLimitOptions = searchLimitOptions,
-                    onLimitChange = { viewModel.setOnlineSearchLimitQQMusic(it) }
+                SettingsSubmenuRow(
+                    title = stringResource(R.string.settings_online_search_limits_submenu),
+                    subtitle = stringResource(R.string.settings_online_search_limits_submenu_subtitle),
+                    onClick = { showSearchLimitsDialog = true }
                 )
             }
 
@@ -1016,4 +1162,22 @@ fun SettingsScreen(
             }
         )
     }
+
+    if (showSearchLimitsDialog) {
+        SearchLimitDialog(
+            globalLimit = onlineSearchLimit,
+            musicBrainzLimit = onlineSearchLimitMusicBrainz,
+            itunesLimit = onlineSearchLimitITunes,
+            neteaseLimit = onlineSearchLimitNetease,
+            qqMusicLimit = onlineSearchLimitQQMusic,
+            searchLimitOptions = searchLimitOptions,
+            onDismiss = { showSearchLimitsDialog = false },
+            onGlobalLimitChange = { viewModel.setOnlineSearchLimit(it) },
+            onMusicBrainzLimitChange = { viewModel.setOnlineSearchLimitMusicBrainz(it) },
+            onItunesLimitChange = { viewModel.setOnlineSearchLimitITunes(it) },
+            onNeteaseLimitChange = { viewModel.setOnlineSearchLimitNetease(it) },
+            onQQMusicLimitChange = { viewModel.setOnlineSearchLimitQQMusic(it) }
+        )
+    }
+
 }

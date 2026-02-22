@@ -1,4 +1,59 @@
-# AGENTS.md - AI 代理编码指南
+# PROJECT KNOWLEDGE BASE
+
+**Generated:** 2026-02-22
+**Commit:** 69bea87
+**Branch:** main
+
+## OVERVIEW
+Android MP3 Tag Editor with Kotlin, Jetpack Compose, Material Design 3. Clean Architecture + MVVM.
+
+## STRUCTURE
+```
+app/src/main/java/com/voxly/
+├── core/          # Utils: logging, crash handling
+├── data/          # Data layer
+│   ├── local/     # AudioFileScanner, Settings, cache
+│   └── remote/    # APIs: wangy, tengx, musicbrainz, itunes, lrclib
+├── di/            # Hilt modules
+├── domain/        # Models, repository interfaces
+└── presentation/  # UI: screens, viewmodels, theme
+```
+
+## WHERE TO LOOK
+| Task | Location |
+|------|----------|
+| Metadata editing | `data/local/metadata/`, `presentation/screens/metadata/` |
+| Online metadata | `data/remote/` (multiple APIs) |
+| Audio scanning | `data/local/AudioFileScanner.kt` |
+| ReplayGain | `data/local/replaygain/` |
+| UI screens | `presentation/screens/` |
+| ViewModels | `presentation/viewmodel/` |
+
+## CONVENTIONS (THIS PROJECT)
+- Package: `com.voxly` (NOT com.mp3tag.android)
+- DI: Hilt with `@HiltViewModel`
+- Navigation: Jetpack Navigation Compose
+- State: ViewModel + StateFlow
+- Tests: JUnit 4 + MockK + Turbine
+
+## ANTI-PATTERNS (THIS PROJECT)
+- NEVER produce unsigned APKs (`build.gradle.kts`)
+- NEVER use MediaStore for sampleRate/channels (always read from file)
+- NEVER toggle UI state rapidly (debounce required)
+
+## UNIQUE STYLES
+- Multi-source metadata: 5 APIs (Wangy, Tengx, MusicBrainz, iTunes, LRCLib)
+- Custom crypto for Wangy API (`data/remote/wangy/crypto/`)
+- Room database for music library caching
+
+## COMMANDS
+```bash
+./gradlew build           # Debug build
+./gradlew assembleDist    # Distribution build
+./gradlew test            # Run unit tests
+```
+
+---
 
 ## 重要规则（必须遵守）
 > 不允许私自进行更改

@@ -13,8 +13,6 @@
         <domain includeSubdomains="true">musicbrainz.org</domain>
         <!-- iTunes/Apple Music API -->
         <domain includeSubdomains="true">itunes.apple.com</domain>
-        <!-- LRCLIB API -->
-        <domain includeSubdomains="true">lrclib.net</domain>
         <!-- QQ Music API -->
         <domain includeSubdomains="true">c.y.qq.com</domain>
         <domain includeSubdomains="true">y.qq.com</domain>

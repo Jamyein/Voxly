@@ -8,14 +8,47 @@ import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
+import java.util.concurrent.locks.ReentrantLock
+
+// Session-scoped LRU cache for search result album covers
+private val searchResultCache = mutableMapOf<String, ImageBitmap>()
+private val cacheLock = ReentrantLock()
 
 /**
  * Loads an image from URL and returns as ImageBitmap.
+ * Uses session-scoped cache for search results - cleared after selection.
  */
 suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
     if (url.isNullOrBlank()) return null
+    
+    // Check session cache first
+    cacheLock.lock()
+    val cached = searchResultCache[url]
+    cacheLock.unlock()
+    if (cached != null) {
+        return cached
+    }
+    
+    // Load from network
     val bytes = loadImageBytesFromUrl(url) ?: return null
-    return decodeBitmapFromBytes(bytes)?.asImageBitmap()
+    val bitmap = decodeBitmapFromBytes(bytes)?.asImageBitmap() ?: return null
+    
+    // Store in session cache
+    cacheLock.lock()
+    searchResultCache[url] = bitmap
+    cacheLock.unlock()
+    
+    return bitmap
+}
+
+/**
+ * Clears the search result image cache.
+ * Call this when user selects a result.
+ */
+fun clearSearchResultImageCache() {
+    cacheLock.lock()
+    searchResultCache.clear()
+    cacheLock.unlock()
 }
 
 /**

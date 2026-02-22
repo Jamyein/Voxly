@@ -90,7 +90,7 @@ data class OnlineLyricsResult(
     val hasSyncedLyrics: Boolean,
     val hasPlainLyrics: Boolean,
     val isInstrumental: Boolean,
-    val source: String, // Source: "LRCLIB", "NetEase", "QQ Music"
+    val source: String, // Source: "NetEase", "QQ Music"
     val sourceKey: String? = null, // Source-specific key (e.g. QQ Music songMid)
     val preview: String? // First few lines for preview
 )

@@ -408,7 +408,7 @@ fun FileBrowserScreen(
         },
         floatingActionButton = {
             // Show batch operation FAB only when in directory view
-            if (openedDirectory != null && selectedFiles.isEmpty() && !isBatchProcessing) {
+            if (selectedFiles.isEmpty() && !isBatchProcessing) {
                 BatchOperationsFAB(
                     expanded = showBatchMenu,
                     onExpandChange = { showBatchMenu = it },

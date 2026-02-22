@@ -36,8 +36,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 28
         targetSdk = 36
-        versionCode = 10
-        versionName = "0.4.0"
+        versionCode = 12
+        versionName = "0.4.5"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -161,6 +161,9 @@ dependencies {
     implementation("androidx.core:core-ktx:1.17.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.activity:activity-compose:1.12.4")
+
+    // Chinese conversion (ICU4J)
+    implementation("com.ibm.icu:icu4j:75.1")
 
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2026.02.00"))

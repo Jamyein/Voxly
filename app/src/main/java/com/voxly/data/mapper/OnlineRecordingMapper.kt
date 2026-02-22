@@ -130,18 +130,36 @@ object OnlineRecordingMapper {
     
     /**
      * 构建 QQ Music 封面 URL
+     * 正确格式: https://y.gtimg.cn/music/photo_new/T002R500x500M000{albumMid}.jpg
      */
     private fun buildQQCoverUrl(
         albumMid: String?,
         rawCoverUrl: String?,
         fallbackId: String?
     ): String? {
-        return when {
-            !albumMid.isNullOrBlank() -> "https://y.qq.com/music/photo_new/T002R$albumMid.jpg"
-            !rawCoverUrl.isNullOrBlank() -> rawCoverUrl
-            !fallbackId.isNullOrBlank() -> "https://y.qq.com/music/photo_new/T002R$fallbackId.jpg"
-            else -> null
+        // 先尝试使用原始URL，转换为https
+        val raw = rawCoverUrl?.takeIf { it.isNotBlank() }
+        if (!raw.isNullOrBlank()) {
+            return if (raw.startsWith("http://", ignoreCase = true)) {
+                "https://${raw.removePrefix("http://")}"
+            } else {
+                raw
+            }
         }
+        
+        // 使用albumMid构建URL (格式: T002R500x500M000 + mid)
+        val mid = albumMid?.trim().orEmpty()
+        if (mid.isNotBlank()) {
+            return "https://y.gtimg.cn/music/photo_new/T002R500x500M000${mid}.jpg"
+        }
+        
+        // 使用fallbackId构建URL
+        val id = fallbackId?.trim().orEmpty()
+        if (id.isNotBlank()) {
+            return "https://y.gtimg.cn/music/photo_new/T002R500x500M000${id}.jpg"
+        }
+        
+        return null
     }
     
     // ========== 数据类 ==========

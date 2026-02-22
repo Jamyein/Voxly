@@ -79,7 +79,8 @@ class OnlineMetadataViewModel @Inject constructor(
     private var metadataSourcePriority: List<String> = emptyList()
     
     // 预下载的封面图
-    private var downloadedAlbumArt: ByteArray? = null
+    private val _downloadedAlbumArt = MutableStateFlow<ByteArray?>(null)
+    val downloadedAlbumArt: StateFlow<ByteArray?> = _downloadedAlbumArt.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -254,29 +255,47 @@ class OnlineMetadataViewModel @Inject constructor(
             !query.album.isNullOrBlank() -> query.album
             else -> ""
         }
+        val artistNeedle = query.artist.orEmpty()
 
-        return releases.sortedWith(
-            compareByDescending<OnlineRelease> { release ->
-                sourcePriorityIndex(release.source, metadataSourcePriority)
-            }.thenByDescending { release ->
-                val candidateTitle = (release.songTitle ?: release.albumTitle ?: release.title).trim()
-                when {
-                    titleNeedle.isBlank() -> 1
-                    candidateTitle.equals(titleNeedle, ignoreCase = true) -> 3
-                    candidateTitle.contains(titleNeedle, ignoreCase = true) -> 2
-                    else -> 1
-                }
-            }.thenByDescending { release ->
-                val artistNeedle = query.artist.orEmpty()
-                when {
-                    artistNeedle.isBlank() -> 1
-                    release.artist.equals(artistNeedle, ignoreCase = true) -> 3
-                    release.artist.contains(artistNeedle, ignoreCase = true) -> 2
-                    else -> 1
-                }
+        // 计算每个结果的相关性分数
+        // 相关性分数 = 歌曲名匹配分数(1-3) + 歌手名匹配分数(1-3)，范围 2-6
+        val scored = releases.map { release ->
+            val candidateTitle = (release.songTitle ?: release.albumTitle ?: release.title).trim()
+            val titleScore = when {
+                titleNeedle.isBlank() -> 1
+                candidateTitle.equals(titleNeedle, ignoreCase = true) -> 3
+                candidateTitle.contains(titleNeedle, ignoreCase = true) -> 2
+                else -> 1
             }
+            val artistScore = when {
+                artistNeedle.isBlank() -> 1
+                release.artist.equals(artistNeedle, ignoreCase = true) -> 3
+                release.artist.contains(artistNeedle, ignoreCase = true) -> 2
+                else -> 1
+            }
+            val relevanceScore = titleScore + artistScore  // 2-6 分
+            val sourcePriority = sourcePriorityIndex(release.source, metadataSourcePriority)
+            // Pair: first=相关性分数, second=源优先级
+            ReleaseSortKey(release, relevanceScore, sourcePriority)
+        }
+
+        // 全部结果按相关性分数降序 + 源优先级升序(索引小的优先)排列
+        val sorted = scored.sortedWith(
+            compareByDescending<ReleaseSortKey> { it.relevanceScore }
+                .thenBy { it.sourcePriority }
         )
+
+        return sorted.map { it.release }
     }
+
+    /**
+     * 排序键：包含原始 release、相关性分数、源优先级
+     */
+    private data class ReleaseSortKey(
+        val release: OnlineRelease,
+        val relevanceScore: Int,
+        val sourcePriority: Int
+    )
 
     /**
      * 根据设置中的元数据源优先级计算排序索引
@@ -485,8 +504,22 @@ class OnlineMetadataViewModel @Inject constructor(
         _selectedRelease.value = null
         selectedSyncedLyrics = _syncedLyricsByReleaseId.value[release.id]
         // 清除之前的封面图
-        downloadedAlbumArt = null
-        Timber.d("selectRelease: candidate set, launching coroutine for details")
+        _downloadedAlbumArt.value = null
+
+        Timber.d("selectRelease: candidate set, launching coroutines for details and cover")
+
+        // 并行启动两个协程：一个下载封面，一个获取详情
+        viewModelScope.launch {
+            // 协程1：下载搜索结果中的封面图（使用候选的coverArtUrl）
+            if (!release.coverArtUrl.isNullOrBlank()) {
+                val cover = loadImageBytesFromUrl(release.coverArtUrl)
+                if (cover != null) {
+                    _downloadedAlbumArt.value = cover
+                    Timber.d("selectRelease: cover art downloaded from candidate, size=${cover.size}")
+                }
+            }
+        }
+
         viewModelScope.launch {
             _isLoading.value = true
             try {
@@ -500,8 +533,8 @@ class OnlineMetadataViewModel @Inject constructor(
                         // 预下载封面图
                         val coverUrl = details.coverArtUrl ?: release.coverArtUrl
                         if (!coverUrl.isNullOrBlank()) {
-                            downloadedAlbumArt = loadImageBytesFromUrl(coverUrl)
-                            Timber.d("selectRelease: cover art downloaded, size=${downloadedAlbumArt?.size}")
+                            _downloadedAlbumArt.value = loadImageBytesFromUrl(coverUrl)
+                            Timber.d("selectRelease: cover art downloaded, size=${_downloadedAlbumArt.value?.size}")
                         }
                     },
                     onFailure = { error ->
@@ -510,7 +543,7 @@ class OnlineMetadataViewModel @Inject constructor(
                         _selectedRelease.value = null
                         // 即使获取详情失败，也尝试下载候选的封面图
                         if (!release.coverArtUrl.isNullOrBlank()) {
-                            downloadedAlbumArt = loadImageBytesFromUrl(release.coverArtUrl)
+                            _downloadedAlbumArt.value = loadImageBytesFromUrl(release.coverArtUrl)
                         }
                     }
                 )
@@ -541,7 +574,7 @@ class OnlineMetadataViewModel @Inject constructor(
         val details = _selectedRelease.value
         val candidate = _selectedReleaseCandidate.value
         val lyrics = selectedSyncedLyrics
-        val albumArt = downloadedAlbumArt
+        val albumArt = _downloadedAlbumArt.value
 
         // 详情存在时使用详情，详情不存在时使用候选，二选一不混合
         return if (details != null) {
@@ -590,7 +623,7 @@ class OnlineMetadataViewModel @Inject constructor(
         _selectedRelease.value = null
         _selectedReleaseCandidate.value = null
         selectedSyncedLyrics = null
-        downloadedAlbumArt = null
+        _downloadedAlbumArt.value = null
         _errorMessage.value = null
     }
 

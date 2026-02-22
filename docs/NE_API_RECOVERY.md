@@ -192,7 +192,6 @@ fun provideLyricsRepository(
     @ApplicationContext context: Context,
     metadataProcessor: TagLibMetadataProcessor,
     settingsDataStore: SettingsDataStore,
-    lrclibApi: LRCLibApi,
     wangyRepository: WangyRepository,
     neRepository: NeRepository,  // 添加此行
     tengxRepository: TengxRepository
@@ -201,7 +200,6 @@ fun provideLyricsRepository(
         context = context,
         metadataProcessor = metadataProcessor,
         settingsDataStore = settingsDataStore,
-        lrclibApi = lrclibApi,
         wangyRepository = wangyRepository,
         neRepository = neRepository,  // 添加此行
         tengxRepository = tengxRepository

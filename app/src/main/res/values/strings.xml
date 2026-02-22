@@ -350,6 +350,8 @@
     <string name="settings_online_search_limit_netease">NetEase Limit</string>
     <string name="settings_online_search_limit_qq_music">QQ Music Limit</string>
     <string name="settings_online_search_limit_per_source_subtitle">Leave empty to use global limit</string>
+    <string name="settings_online_search_limits_submenu">Search Limits</string>
+    <string name="settings_online_search_limits_submenu_subtitle">Configure search result limits for each source</string>
     <string name="settings_source_group_metadata">Metadata Sources</string>
     <string name="settings_source_group_metadata_subtitle">Enable and prioritize sources for metadata results</string>
     <string name="settings_source_group_lyrics">Lyrics Sources</string>

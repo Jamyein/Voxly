@@ -36,7 +36,9 @@ data class WangyAlbumDetailInfo(
     /** Album tags */
     val tags: String = "",
     /** Number of songs */
-    val size: Int = 0
+    val size: Int = 0,
+    /** Artists list (for albums with multiple artists) */
+    val artists: List<WangyArtistBasic> = emptyList()
 )
 
 /**
@@ -65,6 +67,8 @@ data class WangyAlbumSong(
     val al: WangyAlbumBasic? = null,
     /** Duration in milliseconds */
     val dt: Long = 0,
+    /** Track position in album */
+    val position: Int? = null,
     /** Track number */
     val trackNo: Int = 0,
     /** Disc number */

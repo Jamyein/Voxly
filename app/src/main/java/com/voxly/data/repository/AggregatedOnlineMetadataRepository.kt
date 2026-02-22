@@ -1,6 +1,9 @@
 package com.voxly.data.repository
 
+import com.ibm.icu.text.Transliterator
+
 import android.os.SystemClock
+
 import com.voxly.core.util.Logger
 import com.voxly.data.helper.SearchQueryBuilder
 import com.voxly.data.local.SettingsDataStore
@@ -442,11 +445,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                 val firstSong = albumSongs.first()
                                 val songId = firstSong.id.toString()
                                 val albumId = firstSong.album?.id
-                                // Try to get cover from search result first, fallback to album detail API
-                                val coverUrl = firstSong.album?.picUrl?.let { normalizeCoverUrl(it) }
-                                    ?: if (albumId != null && albumId > 0) {
-                                        getNeteaseAlbumCoverUrl(albumId)
-                                    } else null
+                                // Use song detail API which returns album.picUrl directly
+                                val coverUrl = if (albumId != null && albumId > 0) {
+                                    getNeteaseAlbumCoverUrl(albumId, firstSong.id)
+                                } else null
                                 OnlineRelease(
                                     id = songId,
                                     title = albumName,
@@ -667,6 +669,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String?
     ): Flow<OnlineSourceResult> = callbackFlow {
         val settings = getOnlineSourceSettings()
+        Timber.d("searchByTrackFlow: title='$title', artist='$artist'")
         val sourceJobs = mutableListOf<kotlinx.coroutines.Job>()
 
         val useITunes = settings.enableITunes && (preferredSource == DataSource.ITUNES || preferredSource == DataSource.BOTH)
@@ -683,6 +686,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             sourceJobs += launch {
                 try {
                     val result = iTunesRepository.searchByTrack(title, artist)
+                    Timber.d("iTunes raw results count: ${result.getOrNull()?.size ?: 0}")
                     result
                         .map {
                             finalizeRecordingResults(
@@ -855,7 +859,8 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
     /**
      * Searches NetEase by track title.
-     * Uses Simple API (WangyRepository).
+     * Uses search API to get song list, then detail API to get complete info including cover.
+     * Flow: searchSongs -> getSongDetail (parallel for each song) -> return results
      */
     private suspend fun searchNeteaseByTrack(
         title: String,
@@ -874,44 +879,70 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
             searchResult.fold(
                 onSuccess = { response ->
-                    val songs = response.result?.songs ?: emptyList()
-                    Timber.d(TAG, "NetEase search returned ${songs.size} songs")
-                    if (songs.isEmpty()) {
+                    val searchSongs = response.result?.songs ?: emptyList()
+                    Timber.d(TAG, "NetEase search returned ${searchSongs.size} songs")
+                    if (searchSongs.isEmpty()) {
                         Timber.w(TAG, "NetEase track search returned empty results for '$title' artist='$artist'")
                         Result.success(emptyList())
                     } else {
-                        // 直接使用搜索结果中的数据，无需额外API调用
-                        val recordings = songs.mapNotNull { song ->
-                            // 使用搜索结果中已有的数据
-                            val artistName = song.artists.firstOrNull()?.name ?: ""
-                            val albumName = song.album?.name ?: ""
-                            val albumId = song.album?.id
-                            // 封面直接使用搜索结果中的picUrl
-                            val rawCoverUrl = song.album?.picUrl
-                            val coverUrl = if (!rawCoverUrl.isNullOrBlank()) rawCoverUrl else null
-                            
-                            // 解析碟号 (song.disc = "01" -> 1)
-                            val discNumber = song.disc?.toIntOrNull()
-                            // 解析曲目号 (song.no)
-                            val trackNumber = song.trackNumber?.takeIf { it > 0 }
-                            // 唱片公司
-                            val recordLabel = song.album?.company?.takeIf { it.isNotBlank() }
+                        // 并行获取每首歌的详情（包含封面URL）和歌词
+                        val detailJobs = searchSongs.map { song ->
+                            coroutineScope {
+                                async {
+                                    // 并行获取详情和歌词
+                                    val detailDeferred = async { wangyRepository.getSongDetail(song.id) }
+                                    val lyricsDeferred = async { wangyRepository.getLyrics(song.id) }
+                                    
+                                    val detail = detailDeferred.await().getOrNull()
+                                    val lyrics = lyricsDeferred.await().getOrNull()
+                                    
+                                    Triple(song, detail, lyrics)
+                                }
+                            }
+                        }
+
+                        val recordings = detailJobs.mapNotNull { job ->
+                            val (searchSong, detail, lyricsResponse) = job.await()
+                            // 优先使用详情API的数据（包含封面），fallback到搜索结果
+                            val detailSong = detail?.songs?.firstOrNull()
+                            val detailAlbum = detailSong?.album ?: detailSong?.al
+
+                            val artistName = detailSong?.artists?.firstOrNull()?.name
+                                ?: detailSong?.ar?.firstOrNull()?.name
+                                ?: searchSong.artists.firstOrNull()?.name
+                                ?: ""
+                            val albumName = detailAlbum?.name
+                                ?: searchSong.album?.name
+                                ?: ""
+                            val albumId = detailAlbum?.id
+                                ?: searchSong.album?.id
+                            // 详情API返回的封面URL
+                            val coverUrl = detailAlbum?.picUrl?.takeIf { it.isNotBlank() }
+                                ?.let { normalizeCoverUrl(it) }
+
+                            // 获取歌词文本
+                            val lyricsText = lyricsResponse?.lrc?.lyric?.takeIf { it.isNotBlank() }
+
+                            // 解析碟号
+                            val discNumber = searchSong.disc?.toIntOrNull()
+                            // 解析曲目号
+                            val trackNumber = searchSong.trackNumber?.takeIf { it > 0 }
                             // 别名/注释
-                            val alias = song.alias?.takeIf { it.isNotEmpty() }?.joinToString("; ")
-                            
+                            val alias = searchSong.alias?.takeIf { it.isNotEmpty() }?.joinToString("; ")
+
                             OnlineRecording(
-                                id = song.id.toString(),
-                                title = song.name,
+                                id = searchSong.id.toString(),
+                                title = searchSong.name,
                                 artist = artistName,
-                                album = albumName,  // Album name from NetEase
-                                duration = (song.duration / 1000).toInt(),
-                                releaseId = albumId?.toString() ?: song.id.toString(),
+                                album = albumName,
+                                duration = (searchSong.duration / 1000).toInt(),
+                                releaseId = albumId?.toString() ?: searchSong.id.toString(),
                                 source = "NetEase",
                                 coverArtUrl = coverUrl,
                                 discNumber = discNumber,
                                 trackNumber = trackNumber,
-                                recordLabel = recordLabel,
-                                comment = alias
+                                comment = alias,
+                                lyrics = lyricsText
                             )
                         }
                         Timber.d(TAG, "NetEase recordings: ${recordings.take(3)}")
@@ -935,15 +966,17 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     }
 
     /**
-     * Gets NetEase album cover URL.
-     * Uses Simple API (WangyRepository).
+     * Gets NetEase album cover URL using song detail API.
+     * Uses /api/song/detail which returns album.picUrl directly.
      */
-    private suspend fun getNeteaseAlbumCoverUrl(albumId: Long): String? {
+    private suspend fun getNeteaseAlbumCoverUrl(albumId: Long, songId: Long? = null): String? {
         return try {
-            val albumDetail = wangyRepository.getAlbumDetail(albumId)
-            albumDetail.getOrNull()?.album?.picUrl?.let { normalizeCoverUrl(it) }
+            // Prefer using songId if available, otherwise use albumId
+            val searchId = songId ?: albumId
+            val songDetail = wangyRepository.getSongDetail(searchId)
+            songDetail.getOrNull()?.songs?.firstOrNull()?.album?.picUrl?.let { normalizeCoverUrl(it) }
         } catch (e: Exception) {
-            Timber.w(TAG, "Failed to get NetEase album cover for albumId=$albumId: ${e.message}")
+            Timber.w(TAG, "Failed to get NetEase album cover for id=$albumId: ${e.message}")
             null
         }
     }
@@ -1074,11 +1107,34 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 Result.success(OnlineReleaseDetails(
                     id = albumId,
                     title = album?.album?.name ?: "Unknown",
-                    artist = album?.album?.artist?.name ?: "Unknown",
-                    year = null,
-                    genre = null,
+                    // Fix: Use artists list first, fallback to artist, then Unknown
+                    artist = album?.album?.artists?.firstOrNull()?.name
+                        ?: album?.album?.artist?.name
+                        ?: "Unknown",
+                    // Parse year from publishTime timestamp
+                    year = album?.album?.publishTime?.let { timestamp ->
+                        if (timestamp > 0) {
+                            try {
+                                java.text.SimpleDateFormat("yyyy", java.util.Locale.getDefault())
+                                    .format(java.util.Date(timestamp))
+                                    .toIntOrNull()
+                            } catch (e: Exception) {
+                                null
+                            }
+                        } else null
+                    },
+                    // Use tags as genre (comma-separated)
+                    genre = album?.album?.tags?.takeIf { it.isNotBlank() },
                     trackCount = album?.songs?.size ?: 0,
-                    tracks = emptyList(),
+                    // Convert songs to tracks list
+                    tracks = album?.songs?.map { song ->
+                        com.voxly.domain.repository.OnlineTrack(
+                            number = song.position ?: song.trackNo,
+                            title = song.name,
+                            artist = song.ar.firstOrNull()?.name ?: "",
+                            duration = if (song.dt > 0) (song.dt / 1000).toInt() else null
+                        )
+                    } ?: emptyList(),
                     coverArtUrl = album?.album?.picUrl
                         ?.let(::normalizeCoverUrl)
                 ))
@@ -1388,21 +1444,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         album: String,
         settings: OnlineSourceSettings
     ): List<OnlineRelease> {
-        val filtered = filterReleasesByQuery(
-            releases = releases,
-            artist = artist,
-            album = album,
-            limit = settings.searchLimit
-        )
-        val sorted = filtered.sortedWith(
+        // Skip fuzzy filtering - API already returns relevant results
+        val sorted = releases.sortedWith(
             compareBy<OnlineRelease> { release ->
                 sourcePriorityIndex(release.source, settings.metadataPriority)
-            }.thenByDescending { release ->
-                fuzzyMatchLevel(album, release.songTitle ?: release.title)
-            }.thenByDescending { release ->
-                fuzzyMatchLevel(album, release.albumTitle ?: release.title)
-            }.thenByDescending { release ->
-                fuzzyMatchLevel(artist, release.artist)
             }
         )
         return applyLimit(sorted, settings.searchLimit)
@@ -1415,98 +1460,99 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         priority: List<String>,
         limit: Int
     ): List<OnlineRecording> {
-        val filtered = filterRecordingsByQuery(
-            recordings = recordings,
-            title = title,
-            artist = artist,
-            limit = limit
-        )
+        Timber.d("finalizeRecordingResults: input=${recordings.size} recordings, title='$title', artist='$artist'")
+        // 宽松匹配过滤 + 括号处理 + 包含匹配
+        // - 歌曲名匹配：移除括号后检查是否包含
+        // - 歌手名匹配：宽松匹配（包含匹配，不区分大小写）
+        val filtered = recordings.filter { recording ->
+            val titleMatch = matchesTitle(title, recording.title)
+            Timber.d("Filter check: queryTitle='$title', resultTitle='${recording.title}', match=$titleMatch")
+            val artistMatch = if (artist.isNullOrBlank()) {
+                true // 如果查询没有歌手名，只检查歌曲名
+            } else {
+                val match = matchesArtist(artist, recording.artist)
+                Timber.d("Artist check: queryArtist='$artist', resultArtist='${recording.artist}', match=$match")
+                match
+            }
+            titleMatch && artistMatch
+        }
+        Timber.d("finalizeRecordingResults: filtered=${filtered.size} recordings")
+        
+        // 按优先级排序
         val sorted = filtered.sortedWith(
             compareBy<OnlineRecording> { recording ->
                 sourcePriorityIndex(recording.source, priority)
-            }.thenByDescending { recording ->
-                fuzzyMatchLevel(title, recording.title)
-            }.thenByDescending { recording ->
-                fuzzyMatchLevel(artist.orEmpty(), recording.artist)
             }
         )
         return applyLimit(sorted, limit)
     }
 
-    private fun filterReleasesByQuery(
-        releases: List<OnlineRelease>,
-        artist: String,
-        album: String,
-        limit: Int
-    ): List<OnlineRelease> {
-        if (album.isBlank()) return applyLimit(releases, limit)
-        return releases.filter { release ->
-            val candidate = release.songTitle?.takeIf { it.isNotBlank() } ?: release.title
-            fuzzyTitleMatch(album, candidate)
+    /**
+     * 歌曲名匹配：移除括号后检查是否包含，简繁体兼容
+     * 例如：查询 "你好（live）" 可以匹配 "你好"、"你好 (Live)"、"你好 live"
+     * 例如：查询 "你好" 可以匹配 "你好（live）"、"你好"、"Hello 你好"
+     */
+    private fun matchesTitle(queryTitle: String, resultTitle: String): Boolean {
+        // 移除括号及其内容进行比较
+        val normalizedQuery = queryTitle.removeBracketContent()
+        val normalizedResult = resultTitle.removeBracketContent()
+        
+        // 检查是否包含（不区分大小写）
+        if (normalizedResult.contains(normalizedQuery, ignoreCase = true) ||
+            normalizedQuery.contains(normalizedResult, ignoreCase = true)) {
+            return true
         }
-    }
-
-    private fun filterRecordingsByQuery(
-        recordings: List<OnlineRecording>,
-        title: String,
-        artist: String?,
-        limit: Int
-    ): List<OnlineRecording> {
-        if (title.isBlank()) return applyLimit(recordings, limit)
-        return recordings.filter { recording ->
-            fuzzyTitleMatch(title, recording.title)
-        }
+        
+        // 简繁体中文兼容
+        val simplifiedQuery = normalizedQuery.toSimplifiedChinese()
+        val simplifiedResult = normalizedResult.toSimplifiedChinese()
+        
+        return simplifiedResult.contains(simplifiedQuery) || simplifiedQuery.contains(simplifiedResult)
     }
 
     /**
-     * Title-only fuzzy matcher:
-     * - exact/contains first
-     * - then token hit ratio for latin-like titles
+     * 移除字符串中的括号及其内容
+     * 例如："你好（live）" -> "你好"
+     * 例如："Hello (Remastered)" -> "Hello"
      */
-    private fun fuzzyTitleMatch(query: String, candidate: String?): Boolean {
-        return fuzzyMatchLevel(query, candidate) > 0
-    }
-
-    private fun fuzzyMatchLevel(query: String, candidate: String?): Int {
-        val normalizedQuery = normalizeMatchText(query)
-        val normalizedCandidate = normalizeMatchText(candidate)
-        if (normalizedQuery.isBlank() || normalizedCandidate.isBlank()) return 0
-        if (normalizedCandidate == normalizedQuery) return 3
-        if (normalizedCandidate.contains(normalizedQuery) || normalizedQuery.contains(normalizedCandidate)) {
-            return 2
-        }
-
-        val queryTokens = tokenizeMatchText(normalizedQuery)
-        if (queryTokens.isEmpty()) return 0
-
-        val candidateTokens = tokenizeMatchText(normalizedCandidate)
-        val matched = queryTokens.count { token ->
-            normalizedCandidate.contains(token) || candidateTokens.contains(token)
-        }
-        val required = when {
-            queryTokens.size <= 2 -> 1
-            queryTokens.size <= 4 -> 2
-            else -> (queryTokens.size * 6 + 9) / 10
-        }
-        return if (matched >= required) 1 else 0
-    }
-
-    private fun normalizeMatchText(text: String?): String {
-        if (text.isNullOrBlank()) return ""
-        return text
-            .lowercase()
-            .replace(Regex("\\([^)]*\\)|\\[[^\\]]*\\]|\\{[^}]*\\}"), " ")
-            .replace(Regex("[^\\p{L}\\p{N}]+"), " ")
+    private fun String.removeBracketContent(): String {
+        return this
+            .replace(Regex("\\([^)]*\\)"), "")  // 移除 ()
+            .replace(Regex("\\[[^]]*\\]"), "")  // 移除 []
+            .replace(Regex("\\{[^}]*\\}"), "") // 移除 {}
+            .replace(Regex("（[^）]*）"), "")      // 移除中文括号（）
             .trim()
     }
 
-    private fun tokenizeMatchText(text: String): List<String> {
-        return text
-            .split(Regex("\\s+"))
-            .map { it.trim() }
-            .filter { it.length >= 2 }
-            .distinct()
+
+    /**
+     * 歌手名匹配：宽松匹配（包含匹配，不区分大小写，简繁体兼容）
+     */
+    private fun matchesArtist(queryArtist: String, resultArtist: String): Boolean {
+        val normalizedQuery = queryArtist.lowercase().trim()
+        val normalizedResult = resultArtist.lowercase().trim()
+        
+        if (normalizedResult.contains(normalizedQuery) || normalizedQuery.contains(normalizedResult)) {
+            return true
+        }
+        
+        val simplifiedQuery = normalizedQuery.toSimplifiedChinese()
+        val simplifiedResult = normalizedResult.toSimplifiedChinese()
+        
+        return simplifiedResult.contains(simplifiedQuery) || simplifiedQuery.contains(simplifiedResult)
     }
+
+    private fun String.toSimplifiedChinese(): String {
+        return try {
+            val transliterator = Transliterator.getInstance("Traditional-Simplified")
+            transliterator.transliterate(this)
+        } catch (e: Exception) {
+            // Fallback: return original if ICU4J fails
+            Timber.w(TAG, "ICU4J conversion failed: ${e.message}")
+            this
+        }
+    }
+
 
     private suspend fun getOnlineSourceSettings(): OnlineSourceSettings {
         return OnlineSourceSettings(
