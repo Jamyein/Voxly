@@ -229,7 +229,7 @@ private fun OnlineReleaseList(
                     Spacer(modifier = Modifier.size(12.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Song: ${(release.songTitle ?: release.title).ifBlank { "-" }}",
+                            text = "Song: ${release.songTitle?.ifBlank { release.title?.ifBlank { "-" } } ?: release.title?.ifBlank { "-" } ?: "-"}",
                             style = MaterialTheme.typography.titleSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -242,7 +242,7 @@ private fun OnlineReleaseList(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Album: ${(release.albumTitle ?: release.title).ifBlank { "-" }}",
+                            text = "Album: ${release.albumTitle?.ifBlank { "-" } ?: release.title?.ifBlank { "-" } ?: "-"}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,

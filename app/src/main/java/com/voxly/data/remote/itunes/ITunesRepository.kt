@@ -121,7 +121,8 @@ class ITunesRepository @Inject constructor(
                             discNumber = result.discNumber,
                             discCount = result.discCount,
                             trackNumber = result.trackNumber,
-                            trackCount = result.trackCount
+                            trackCount = result.trackCount,
+                            collectionName = result.collectionName  // 传递专辑名
                         )
                     }
                     .filter { it.id.isNotBlank() }

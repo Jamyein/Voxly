@@ -221,9 +221,6 @@ class OnlineMetadataViewModel @Inject constructor(
         if (query.title.isNotBlank()) {
             emitAll(searchByTrackFlow(query.title, query.artist))
         }
-        if (!query.artist.isNullOrBlank() && !query.album.isNullOrBlank()) {
-            emitAll(searchByArtistAlbumFlow(query.artist, query.album))
-        }
     }
 
     private fun mergeRelease(old: OnlineRelease?, incoming: OnlineRelease): OnlineRelease {

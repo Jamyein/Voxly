@@ -107,7 +107,9 @@ class MusicBrainzRepository @Inject constructor(
                 // 并发获取封面
                 val recordings = searchResult?.recordings?.map { recording ->
                     coroutineScope {
-                        val releaseId = recording.releases?.firstOrNull()?.id
+                        val firstRelease = recording.releases?.firstOrNull()
+                        val releaseId = firstRelease?.id
+                        val releaseTitle = firstRelease?.title  // 专辑名
                         val coverJob = async {
                             releaseId?.let { getCoverArt(it).getOrNull() }
                         }
@@ -118,7 +120,8 @@ class MusicBrainzRepository @Inject constructor(
                             artistName = recording.getArtistName(),
                             durationMs = recording.getDurationMs(),
                             releaseId = releaseId,
-                            coverArtBytes = coverJob.await()
+                            coverArtBytes = coverJob.await(),
+                            album = releaseTitle  // 传递专辑名
                         )
                     }
                 } ?: emptyList()

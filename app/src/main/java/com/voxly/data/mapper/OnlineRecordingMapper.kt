@@ -23,12 +23,14 @@ object OnlineRecordingMapper {
         discNumber: Int? = null,
         discCount: Int? = null,
         trackNumber: Int? = null,
-        trackCount: Int? = null
+        trackCount: Int? = null,
+        collectionName: String? = null  // 专辑名
     ): OnlineRecording {
         return OnlineRecording(
             id = trackId?.toString() ?: "",
             title = trackName ?: "Unknown Track",
             artist = artistName ?: "Unknown Artist",
+            album = collectionName,  // 填充专辑名
             duration = durationMs?.toInt(), // Convert Long to Int
             releaseId = collectionId?.toString(),
             source = "iTunes",
@@ -51,12 +53,14 @@ object OnlineRecordingMapper {
         artistName: String?,
         durationMs: Long?,
         releaseId: String?,
-        coverArtBytes: ByteArray? = null
+        coverArtBytes: ByteArray? = null,
+        album: String? = null  // 专辑名
     ): OnlineRecording {
         return OnlineRecording(
             id = id,
             title = title,
             artist = artistName ?: "Unknown Artist",
+            album = album,  // 填充专辑名
             duration = durationMs?.toInt(),
             releaseId = releaseId,
             source = "MusicBrainz",
@@ -77,10 +81,12 @@ object OnlineRecordingMapper {
         duration: Long?
     ): OnlineRecording? {
         if (id <= 0) return null
+        val albumName = album?.name  // 专辑名
         return OnlineRecording(
             id = id.toString(),
             title = name,
             artist = artists?.joinToString(", ") { it.name } ?: "",
+            album = albumName,  // 填充专辑名
             duration = duration?.toInt(),
             releaseId = album?.id?.toString(),
             source = "NetEase",
@@ -100,10 +106,12 @@ object OnlineRecordingMapper {
     ): OnlineRecording {
         val albumId = album?.id?.toString()
         val albumMid = album?.mid
+        val albumName = album?.name  // 专辑名
         return OnlineRecording(
             id = id.toString(),
             title = name,
             artist = singers?.joinToString(", ") { it.name } ?: "",
+            album = albumName,  // 填充专辑名
             duration = interval,
             releaseId = albumMid ?: albumId,
             source = "QQ Music",
