@@ -17,7 +17,13 @@ object OnlineRecordingMapper {
         artistName: String?,
         durationMs: Long?,  // Changed from Int? to Long?
         collectionId: Long?,
-        artworkUrl100: String?
+        artworkUrl100: String?,
+        primaryGenreName: String? = null,
+        collectionArtistName: String? = null,
+        discNumber: Int? = null,
+        discCount: Int? = null,
+        trackNumber: Int? = null,
+        trackCount: Int? = null
     ): OnlineRecording {
         return OnlineRecording(
             id = trackId?.toString() ?: "",
@@ -26,7 +32,13 @@ object OnlineRecordingMapper {
             duration = durationMs?.toInt(), // Convert Long to Int
             releaseId = collectionId?.toString(),
             source = "iTunes",
-            coverArtUrl = artworkUrl100?.let { getHighResArtworkUrl(it) }
+            coverArtUrl = artworkUrl100?.let { getHighResArtworkUrl(it, 3000) },
+            genre = primaryGenreName,
+            albumArtist = collectionArtistName,
+            discNumber = discNumber,
+            discCount = discCount,
+            trackNumber = trackNumber,
+            trackCount = trackCount
         )
     }
     
@@ -102,7 +114,7 @@ object OnlineRecordingMapper {
     /**
      * 获取高分辨率封面 URL
      */
-    private fun getHighResArtworkUrl(artworkUrl: String?, size: Int = 600): String? {
+    private fun getHighResArtworkUrl(artworkUrl: String?, size: Int = 3000): String? {
         return artworkUrl
             ?.replace(Regex("\\d+x\\d+"), "${size}x${size}")
             ?.replace("http://", "https://")

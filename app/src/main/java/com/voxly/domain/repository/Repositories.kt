@@ -261,8 +261,14 @@ data class OnlineRelease(
     val albumTitle: String? = null,
     val hasSyncedLyrics: Boolean = false,
     val discNumber: Int? = null,
-    val discCount: Int? = null
+    val discCount: Int? = null,
+    val trackNumber: Int? = null,
+    val recordLabel: String? = null,
+    val comment: String? = null,
+    val genre: String? = null,
+    val albumArtist: String? = null
 )
+
 
 /**
  * Data class representing an online recording.
@@ -271,14 +277,22 @@ data class OnlineRecording(
     val id: String,
     val title: String,
     val artist: String,
+    val album: String? = null,  // Album name for track search results
     val duration: Int?,
     val releaseId: String?,
     val source: String = "Unknown",
     val coverArtUrl: String? = null,
     val coverArtBytes: ByteArray? = null,  // 二进制封面数据 (如 MusicBrainz)
-    val discNumber: Int? = null,
-    val discCount: Int? = null
+    val discNumber: Int? = null,      // 碟号 (song.disc)
+    val discCount: Int? = null,       // 总碟数
+    val trackNumber: Int? = null,      // 曲目号 (song.no)
+    val trackCount: Int? = null,       // 总曲目数
+    val recordLabel: String? = null,   // 唱片公司 (album.company)
+    val comment: String? = null,        // 注释/别名 (song.alias)
+    val genre: String? = null,          // 流派 (primaryGenreName)
+    val albumArtist: String? = null     // 专辑艺术家 (collectionArtistName)
 )
+
 
 /**
  * Data class representing detailed online release information.
@@ -293,8 +307,13 @@ data class OnlineReleaseDetails(
     val tracks: List<OnlineTrack>,
     val coverArtUrl: String?,
     val discNumber: Int? = null,
-    val discCount: Int? = null
+    val discCount: Int? = null,
+    val trackNumber: Int? = null,
+    val recordLabel: String? = null,
+    val comment: String? = null,
+    val albumArtist: String? = null
 )
+
 
 /**
  * Data class representing an online track.

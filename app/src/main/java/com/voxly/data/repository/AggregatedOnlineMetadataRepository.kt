@@ -880,22 +880,39 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         Timber.w(TAG, "NetEase track search returned empty results for '$title' artist='$artist'")
                         Result.success(emptyList())
                     } else {
-                        // 并发获取封面
+                        // 直接使用搜索结果中的数据，无需额外API调用
                         val recordings = songs.mapNotNull { song ->
-                            coroutineScope {
-                                val coverJob = async { wangyRepository.getCoverArt(song.id) }
-                                val coverUrl = coverJob.await().getOrNull()
-                                
-                                OnlineRecording(
-                                    id = song.id.toString(),
-                                    title = song.name,
-                                    artist = song.artists.joinToString(", ") { it.name },
-                                    duration = (song.duration / 1000).toInt(),
-                                    releaseId = song.id.toString(),
-                                    source = "NetEase",
-                                    coverArtUrl = coverUrl
-                                )
-                            }
+                            // 使用搜索结果中已有的数据
+                            val artistName = song.artists.firstOrNull()?.name ?: ""
+                            val albumName = song.album?.name ?: ""
+                            val albumId = song.album?.id
+                            // 封面直接使用搜索结果中的picUrl
+                            val rawCoverUrl = song.album?.picUrl
+                            val coverUrl = if (!rawCoverUrl.isNullOrBlank()) rawCoverUrl else null
+                            
+                            // 解析碟号 (song.disc = "01" -> 1)
+                            val discNumber = song.disc?.toIntOrNull()
+                            // 解析曲目号 (song.no)
+                            val trackNumber = song.trackNumber?.takeIf { it > 0 }
+                            // 唱片公司
+                            val recordLabel = song.album?.company?.takeIf { it.isNotBlank() }
+                            // 别名/注释
+                            val alias = song.alias?.takeIf { it.isNotEmpty() }?.joinToString("; ")
+                            
+                            OnlineRecording(
+                                id = song.id.toString(),
+                                title = song.name,
+                                artist = artistName,
+                                album = albumName,  // Album name from NetEase
+                                duration = (song.duration / 1000).toInt(),
+                                releaseId = albumId?.toString() ?: song.id.toString(),
+                                source = "NetEase",
+                                coverArtUrl = coverUrl,
+                                discNumber = discNumber,
+                                trackNumber = trackNumber,
+                                recordLabel = recordLabel,
+                                comment = alias
+                            )
                         }
                         Timber.d(TAG, "NetEase recordings: ${recordings.take(3)}")
                         Result.success(recordings)

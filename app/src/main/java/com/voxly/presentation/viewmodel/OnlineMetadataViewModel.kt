@@ -447,7 +447,13 @@ class OnlineMetadataViewModel @Inject constructor(
                 trackCount = null,
                 coverArtUrl = coverArtUrl,
                 source = source,
-                songTitle = title
+                songTitle = title,
+                albumTitle = album,
+                discNumber = discNumber,
+                discCount = discCount,
+                trackNumber = trackNumber,
+                recordLabel = recordLabel,
+                comment = comment
             )
         }
         return OnlineRelease(
@@ -459,7 +465,13 @@ class OnlineMetadataViewModel @Inject constructor(
             trackCount = null,
             coverArtUrl = coverArtUrl,
             source = source,
-            songTitle = title
+            songTitle = title,
+            albumTitle = album,
+            discNumber = discNumber,
+            discCount = discCount,
+            trackNumber = trackNumber,
+            recordLabel = recordLabel,
+            comment = comment
         )
     }
 
@@ -551,6 +563,11 @@ class OnlineMetadataViewModel @Inject constructor(
                 albumArt = albumArt
             )
         } else if (candidate != null) {
+            // 构建自定义字段
+            val customFields = mutableMapOf<String, String>()
+            candidate.recordLabel?.let { customFields["record_label"] = it }
+            candidate.comment?.let { customFields["comment"] = it }
+            
             AudioMetadata(
                 title = candidate.songTitle ?: candidate.title,
                 artist = candidate.artist,
@@ -558,12 +575,14 @@ class OnlineMetadataViewModel @Inject constructor(
                 albumArtist = candidate.artist,
                 year = candidate.year?.toString(),
                 genre = null,
-                trackNumber = 1,
+                trackNumber = candidate.trackNumber ?: 1,
                 totalTracks = candidate.trackCount,
                 discNumber = candidate.discNumber,
                 totalDiscs = candidate.discCount,
+                comment = candidate.comment,
                 lyrics = lyrics?.toLrcFormat(),
-                albumArt = albumArt
+                albumArt = albumArt,
+                customFields = customFields
             )
         } else {
             null

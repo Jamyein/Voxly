@@ -99,7 +99,11 @@ data class WangySong(
     @SerializedName("no")
     val trackNumber: Int = 0,
     /** Song version */
-    val version: Int = 0
+    val version: Int = 0,
+    /** 歌曲别名/注释 (JSON field: alias) */
+    val alias: List<String> = emptyList(),
+    /** 碟片编号 (JSON field: disc) */
+    val disc: String = ""
 )
 
 /**
@@ -122,7 +126,9 @@ data class WangyAlbum(
     val songsCount: Int = 0,
     /** Album cover image URL (JSON field: picUrl) */
     @SerializedName("picUrl")
-    val picUrl: String = ""
+    val picUrl: String = "",
+    /** 唱片公司 (JSON field: company) */
+    val company: String = ""
 )
 
 /**

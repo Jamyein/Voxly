@@ -234,13 +234,18 @@ class WangyRepositoryImpl @Inject constructor(
      * Parse song from web API format.
      */
     private fun parseSong(songJson: JsonObject): WangySong {
-        val artists = songJson.get("ar")?.asJsonArray?.let { arArray ->
+        // First try "artists", fallback to "ar" for compatibility
+        val artists = songJson.get("artists")?.asJsonArray?.let { arArray ->
+            arArray.mapNotNull { artistElement ->
+                parseArtist(artistElement.asJsonObject)
+            }
+        } ?: songJson.get("ar")?.asJsonArray?.let { arArray ->
             arArray.mapNotNull { artistElement ->
                 parseArtist(artistElement.asJsonObject)
             }
         } ?: emptyList()
         
-        val album = songJson.get("al")?.asJsonObject?.let { parseAlbum(it) }
+        val album = songJson.get("album")?.asJsonObject?.let { parseAlbum(it) } ?: songJson.get("al")?.asJsonObject?.let { parseAlbum(it) }
         
         return WangySong(
             id = songJson.get("id")?.asLong ?: 0L,
@@ -342,7 +347,7 @@ class WangyRepositoryImpl @Inject constructor(
 
             if (response.isSuccessful && response.body() != null) {
                 val song = response.body()!!.songs.firstOrNull()
-                val coverUrl = song?.al?.picUrl
+                val coverUrl = song?.album?.picUrl ?: song?.al?.picUrl
                 if (coverUrl != null) {
                     Result.success("$coverUrl?param=500y500")
                 } else {

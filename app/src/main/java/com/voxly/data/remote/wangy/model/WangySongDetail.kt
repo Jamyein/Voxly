@@ -28,10 +28,14 @@ data class WangySongDetailItem(
     /** Song name */
     @SerializedName("name")
     val name: String,
-    /** Artist information */
+    /** Artist information (also "ar") */
+    @SerializedName("artists")
+    val artists: List<WangyArtistInfo> = emptyList(),
     @SerializedName("ar")
     val ar: List<WangyArtistInfo> = emptyList(),
-    /** Album information */
+    /** Album information (also "al") */
+    @SerializedName("album")
+    val album: WangyAlbumInfo? = null,
     @SerializedName("al")
     val al: WangyAlbumInfo? = null,
     /** Duration in milliseconds */

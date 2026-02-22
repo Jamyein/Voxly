@@ -228,6 +228,9 @@ class LyricsRepositoryImpl @Inject constructor(
                     if (settings.enableLrclib) {
                         searchFromLRCLIB(normalizedTrackName, normalizedArtistName, normalizedAlbumName)
                             .map { applyLimit(it, settings.searchLimit) }
+                            // 失败时返回空列表而不是错误，让其他源有机会显示结果
+                            .getOrElse { emptyList() }
+                            .let { Result.success(it) }
                     } else {
                         Result.success(emptyList())
                     }
@@ -236,6 +239,9 @@ class LyricsRepositoryImpl @Inject constructor(
                     if (settings.enableNetease) {
                         searchFromNetEase(normalizedTrackName, normalizedArtistName)
                             .map { applyLimit(it, settings.searchLimit) }
+                            // 失败时返回空列表而不是错误
+                            .getOrElse { emptyList() }
+                            .let { Result.success(it) }
                     } else {
                         Result.success(emptyList())
                     }
@@ -244,6 +250,9 @@ class LyricsRepositoryImpl @Inject constructor(
                     if (settings.enableQQMusic) {
                         searchFromQQMusic(normalizedTrackName, normalizedArtistName)
                             .map { applyLimit(it, settings.searchLimit) }
+                            // 失败时返回空列表而不是错误
+                            .getOrElse { emptyList() }
+                            .let { Result.success(it) }
                     } else {
                         Result.success(emptyList())
                     }
@@ -435,20 +444,37 @@ class LyricsRepositoryImpl @Inject constructor(
             val songs = response?.result?.songs ?: emptyList()
             Timber.d("NetEase lyrics search success: found ${songs.size} songs for '$trackName'")
 
+            // 并发获取每首歌的详情（包括完整歌手和专辑信息）
             val results = songs.map { song ->
-                OnlineLyricsResult(
-                    id = song.id,
-                    trackName = song.name,
-                    artistName = song.artists.joinToString(", ") { it.name },
-                    albumName = song.album?.name,
-                    duration = song.duration.toDouble() / 1000.0,
-                    hasSyncedLyrics = true,
-                    hasPlainLyrics = true,
-                    isInstrumental = false,
-                    source = "NetEase",
-                    sourceKey = song.id.toString(),
-                    preview = null
-                )
+                coroutineScope {
+                    // 并发获取歌曲详情
+                    val detailJob = async { wangyRepository.getSongDetail(song.id) }
+                    val detailResult = detailJob.await()
+                    
+                    // 从详情中获取完整的歌手和专辑信息，如果详情失败则使用搜索结果
+                    val songDetail = detailResult.getOrNull()
+                    val detailArtists = songDetail?.songs?.firstOrNull()?.ar
+                    val detailAlbum = songDetail?.songs?.firstOrNull()?.al
+                    val artistName = detailArtists?.firstOrNull()?.name
+                        ?: song.artists.firstOrNull()?.name
+                        ?: ""
+                    val albumName = detailAlbum?.name
+                        ?: song.album?.name
+                    
+                    OnlineLyricsResult(
+                        id = song.id,
+                        trackName = song.name,
+                        artistName = artistName,
+                        albumName = albumName,
+                        duration = song.duration.toDouble() / 1000.0,
+                        hasSyncedLyrics = true,
+                        hasPlainLyrics = true,
+                        isInstrumental = false,
+                        source = "NetEase",
+                        sourceKey = song.id.toString(),
+                        preview = null
+                    )
+                }
             }
             Result.success(results)
         } else {
@@ -465,34 +491,54 @@ class LyricsRepositoryImpl @Inject constructor(
         trackName: String,
         artistName: String?
     ): Result<List<OnlineLyricsResult>> {
+        val keywords = if (artistName.isNullOrBlank()) trackName else "$artistName $trackName"
+        Timber.d("QQ Music lyrics search starting: keywords='$keywords'")
+        
         val searchResult = tengxRepository.searchSongs(
-            keywords = if (artistName.isNullOrBlank()) trackName else "$artistName $trackName",
+            keywords = keywords,
             pageNum = 1,
             pageSize = 5
         )
 
         return if (searchResult.isSuccess) {
             val response = searchResult.getOrNull()
-            val songs = response?.data?.song?.list ?: emptyList()
+            Timber.d("QQ Music search response: code=${response?.code}, data=${response?.data != null}, song=${response?.data?.song != null}")
             
-            val results = songs.map { song ->
+            val songs = response?.data?.song?.list ?: emptyList()
+            Timber.d("QQ Music lyrics search found ${songs.size} songs for '$keywords'")
+            
+            if (songs.isEmpty()) {
+                Timber.w("QQ Music lyrics search returned empty results for '$keywords'")
+            }
+            
+            val results = songs.mapNotNull { song ->
+                // Validate required fields
+                if (song.id <= 0 || song.name.isBlank()) {
+                    Timber.w("QQ Music song invalid: id=${song.id}, name=${song.name}")
+                    return@mapNotNull null
+                }
+                
                 OnlineLyricsResult(
-                    id = song.id.toLong(),
+                    id = song.id,
                     trackName = song.name,
-                    artistName = song.singer?.joinToString(", ") { it.name } ?: "",
+                    artistName = song.singer.joinToString(", ") { it.name }.ifBlank { "" },
                     albumName = song.album?.name,
                     duration = song.interval.toDouble(),
                     hasSyncedLyrics = true,
                     hasPlainLyrics = true,
                     isInstrumental = false,
                     source = "QQ Music",
-                    sourceKey = song.mid.takeIf { it.isNotBlank() },
+                    sourceKey = song.mid.takeIf { it.isNotBlank() } ?: song.id.toString(),
                     preview = null
                 )
             }
+            
+            Timber.d("QQ Music mapped ${results.size} valid results")
             Result.success(results)
         } else {
-            Result.failure(LyricsException("QQ Music search failed"))
+            val errorMsg = searchResult.exceptionOrNull()?.message ?: "Unknown error"
+            Timber.e("QQ Music lyrics search failed: $errorMsg")
+            Result.failure(LyricsException("QQ Music search failed: $errorMsg"))
         }
     }
 

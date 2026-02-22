@@ -67,9 +67,14 @@ class ITunesRepository @Inject constructor(
                             year = result.getReleaseYear(),
                             format = "iTunes Album",
                             trackCount = result.trackCount,
-                            coverArtUrl = getHighResArtworkUrl(result.getBestArtworkUrl(), 600),
+                            coverArtUrl = getHighResArtworkUrl(result.getBestArtworkUrl(), 3000),
                             source = "iTunes",
-                            albumTitle = result.collectionName
+                            albumTitle = result.collectionName,
+                            genre = result.primaryGenreName,
+                            albumArtist = result.collectionArtistName ?: result.artistName,
+                            discNumber = result.discNumber,
+                            discCount = result.discCount,
+                            trackNumber = result.trackNumber
                         )
                     }
                     .distinctBy { it.id } // Remove duplicates
@@ -110,7 +115,13 @@ class ITunesRepository @Inject constructor(
                             artistName = result.artistName,
                             durationMs = result.trackTimeMillis,
                             collectionId = result.collectionId,
-                            artworkUrl100 = result.artworkUrl100
+                            artworkUrl100 = result.artworkUrl100,
+                            primaryGenreName = result.primaryGenreName,
+                            collectionArtistName = result.collectionArtistName,
+                            discNumber = result.discNumber,
+                            discCount = result.discCount,
+                            trackNumber = result.trackNumber,
+                            trackCount = result.trackCount
                         )
                     }
                     .filter { it.id.isNotBlank() }
@@ -182,8 +193,9 @@ class ITunesRepository @Inject constructor(
                 genre = albumResult.primaryGenreName,
                 trackCount = albumResult.trackCount ?: tracks.size,
                 tracks = tracks,
-                coverArtUrl = getHighResArtworkUrl(albumResult.getBestArtworkUrl(), 1200),
-                discCount = albumResult.discCount
+                coverArtUrl = getHighResArtworkUrl(albumResult.getBestArtworkUrl(), 3000),
+                discCount = albumResult.discCount,
+                albumArtist = albumResult.collectionArtistName ?: albumResult.artistName
             )
 
             Result.success(details)
@@ -208,7 +220,7 @@ class ITunesRepository @Inject constructor(
 
                 val artworkUrl = lookupResponse.body()?.results?.firstOrNull()
                     ?.getBestArtworkUrl()
-                    ?.let { getHighResArtworkUrl(it, 600) } // Get higher resolution
+                    ?.let { getHighResArtworkUrl(it, 3000) } // Get higher resolution
 
                 if (artworkUrl.isNullOrBlank()) {
                     return@withContext Result.success(null)
@@ -272,7 +284,7 @@ class ITunesRepository @Inject constructor(
      * @param size Desired size (e.g., 600, 1200, 1400)
      * @return High-resolution artwork URL
      */
-    fun getHighResArtworkUrl(artworkUrl: String?, size: Int = 600): String? {
+    fun getHighResArtworkUrl(artworkUrl: String?, size: Int = 3000): String? {
         return artworkUrl
             ?.replace(Regex("\\d+x\\d+"), "${size}x${size}")
             ?.replace("http://", "https://")
