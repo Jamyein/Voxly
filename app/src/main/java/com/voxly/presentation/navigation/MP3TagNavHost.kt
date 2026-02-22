@@ -85,7 +85,7 @@ fun MP3TagNavHost(
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+
         bottomBar = {
             if (showBottomBar) {
                 AnimatedVisibility(
