@@ -14,12 +14,13 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.foundation.layout.WindowInsets
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -85,6 +86,7 @@ fun MP3TagNavHost(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
 
         bottomBar = {
             if (showBottomBar) {
@@ -121,11 +123,10 @@ fun MP3TagNavHost(
                 }
             }
         }
-    ) { innerPadding ->
+    ) { _ ->
         NavHost(
             navController = navController,
             startDestination = Screen.FileBrowser.route,
-            modifier = Modifier.padding(innerPadding),
             enterTransition = {
                 slideInHorizontally(
                     initialOffsetX = { fullWidth -> (fullWidth * 0.12f).toInt() },
