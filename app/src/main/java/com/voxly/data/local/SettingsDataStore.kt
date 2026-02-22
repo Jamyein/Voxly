@@ -12,6 +12,11 @@ import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import com.google.gson.Gson
+import com.voxly.domain.model.DataSourceConfig
+import com.voxly.domain.model.DataSourceType
+import com.voxly.domain.model.SourceConfigurations
+import com.voxly.domain.model.SourceTypeConfig
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -64,6 +69,10 @@ class SettingsDataStore @Inject constructor(
         val SCAN_MODE = stringPreferencesKey("scan_mode")
         val MIN_DURATION_FILTER_ENABLED = booleanPreferencesKey("min_duration_filter_enabled")
         val MIN_DURATION_FILTER_THRESHOLD_MS = intPreferencesKey("min_duration_filter_threshold_ms")
+        val SOURCE_CONFIGURATIONS = stringPreferencesKey("source_configurations")
+        val WHITELIST_ENABLED = booleanPreferencesKey("whitelist_enabled")
+        val BLACKLIST_ENABLED = booleanPreferencesKey("blacklist_enabled")
+        val BLACKLIST_DIRECTORY_URIS = stringPreferencesKey("blacklist_directory_uris")
     }
 
     /**
@@ -295,6 +304,153 @@ class SettingsDataStore @Inject constructor(
         .map { preferences ->
             preferences[MIN_DURATION_FILTER_THRESHOLD_MS] ?: 60000
         }
+
+    /**
+     * Whitelist mode enabled preference flow
+     */
+    val whitelistEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[WHITELIST_ENABLED] ?: false
+        }
+
+    /**
+     * Blacklist mode enabled preference flow
+     */
+    val blacklistEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[BLACKLIST_ENABLED] ?: false
+        }
+
+    /**
+     * Blacklist directory URI list flow
+     */
+    val blacklistDirectoryUris: Flow<List<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[BLACKLIST_DIRECTORY_URIS]
+                ?.split('\n')
+                ?.map { it.trim() }
+                ?.filter { it.isNotEmpty() }
+                ?: emptyList()
+        }
+
+    // Gson instance for serialization
+    private val gson = Gson()
+
+    /**
+     * Unified source configurations flow (new approach - stores enabled, priority, and extra options together)
+     */
+    val sourceConfigurations: Flow<SourceConfigurations> = context.settingsDataStore.data
+        .map { preferences ->
+            val json = preferences[SOURCE_CONFIGURATIONS]
+            if (json.isNullOrBlank()) {
+                // Return default configurations with migration from old settings
+                migrateToNewFormat(preferences)
+            } else {
+                try {
+                    gson.fromJson(json, SourceConfigurations::class.java)
+                } catch (e: Exception) {
+                    migrateToNewFormat(preferences)
+                }
+            }
+        }
+
+    /**
+     * Migrate from old format to new unified format
+     */
+    private fun migrateToNewFormat(preferences: Preferences): SourceConfigurations {
+        val metadataPriority = parsePriority(preferences[PRIORITY_METADATA_SOURCES], defaultSourcePriority())
+        val lyricsPriority = parsePriority(preferences[PRIORITY_LYRICS_SOURCES], lyricsDefaultSourcePriority())
+        val coverPriority = parsePriority(preferences[PRIORITY_COVER_SOURCES], defaultSourcePriority())
+
+        val appleCountryCode = preferences[APPLE_COUNTRY_CODE] ?: "us"
+
+        // Build metadata sources
+        val metadataSources = metadataPriority.mapIndexed { index, sourceId ->
+            val enabled = when (sourceId) {
+                "musicbrainz" -> preferences[METADATA_SOURCE_ENABLED_MUSICBRAINZ] ?: true
+                "itunes" -> preferences[METADATA_SOURCE_ENABLED_ITUNES] ?: true
+                "netease" -> preferences[METADATA_SOURCE_ENABLED_NETEASE] ?: true
+                "qq_music" -> preferences[METADATA_SOURCE_ENABLED_QQ_MUSIC] ?: true
+                else -> true
+            }
+            val extraOptions = if (sourceId == "itunes") {
+                listOf("countryCode" to appleCountryCode)
+            } else {
+                emptyList()
+            }
+            DataSourceConfig(sourceId = sourceId, enabled = enabled, order = index, extraOptions = extraOptions)
+        }
+
+        // Build lyrics sources
+        val lyricsSources = lyricsPriority.mapIndexed { index, sourceId ->
+            val enabled = when (sourceId) {
+                "musicbrainz" -> preferences[LYRICS_SOURCE_ENABLED_MUSICBRAINZ] ?: true
+                "itunes" -> preferences[LYRICS_SOURCE_ENABLED_ITUNES] ?: true
+                "netease" -> preferences[LYRICS_SOURCE_ENABLED_NETEASE] ?: true
+                "qq_music" -> preferences[LYRICS_SOURCE_ENABLED_QQ_MUSIC] ?: true
+                else -> true
+            }
+            DataSourceConfig(sourceId = sourceId, enabled = enabled, order = index)
+        }
+
+        // Build cover sources
+        val coverSources = coverPriority.mapIndexed { index, sourceId ->
+            val enabled = when (sourceId) {
+                "musicbrainz" -> preferences[COVER_SOURCE_ENABLED_MUSICBRAINZ] ?: true
+                "itunes" -> preferences[COVER_SOURCE_ENABLED_ITUNES] ?: true
+                "netease" -> preferences[COVER_SOURCE_ENABLED_NETEASE] ?: true
+                "qq_music" -> preferences[COVER_SOURCE_ENABLED_QQ_MUSIC] ?: true
+                else -> true
+            }
+            val extraOptions = if (sourceId == "itunes") {
+                listOf("countryCode" to appleCountryCode)
+            } else {
+                emptyList()
+            }
+            DataSourceConfig(sourceId = sourceId, enabled = enabled, order = index, extraOptions = extraOptions)
+        }
+
+        return SourceConfigurations(
+            metadata = SourceTypeConfig(DataSourceType.METADATA, metadataSources),
+            lyrics = SourceTypeConfig(DataSourceType.LYRICS, lyricsSources),
+            cover = SourceTypeConfig(DataSourceType.COVER, coverSources)
+        )
+    }
+
+    /**
+     * Save unified source configurations
+     */
+    suspend fun setSourceConfigurations(config: SourceConfigurations) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[SOURCE_CONFIGURATIONS] = gson.toJson(config)
+        }
+    }
+
+    /**
+     * Update a single source within a source type configuration
+     */
+    suspend fun updateSourceConfig(type: DataSourceType, source: DataSourceConfig) {
+        context.settingsDataStore.edit { preferences ->
+            val current = migrateToNewFormat(preferences)
+            val typeConfig = current.getConfig(type)
+            val updated = typeConfig.updateSource(source)
+            val newConfig = current.updateConfig(updated)
+            preferences[SOURCE_CONFIGURATIONS] = gson.toJson(newConfig)
+        }
+    }
+
+    /**
+     * Reorder sources within a source type
+     */
+    suspend fun reorderSources(type: DataSourceType, orderedSourceIds: List<String>) {
+        context.settingsDataStore.edit { preferences ->
+            val current = migrateToNewFormat(preferences)
+            val typeConfig = current.getConfig(type)
+            val reordered = typeConfig.reorderSources(orderedSourceIds)
+            val newConfig = current.updateConfig(reordered)
+            preferences[SOURCE_CONFIGURATIONS] = gson.toJson(newConfig)
+        }
+    }
 
     /**
      * Save dark theme preference
@@ -561,6 +717,38 @@ class SettingsDataStore @Inject constructor(
     suspend fun setMinDurationFilterThresholdMs(thresholdMs: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[MIN_DURATION_FILTER_THRESHOLD_MS] = thresholdMs.coerceAtLeast(0)
+        }
+    }
+
+
+    /**
+     * Save whitelist enabled preference
+     */
+    suspend fun setWhitelistEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[WHITELIST_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Save blacklist enabled preference
+     */
+    suspend fun setBlacklistEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[BLACKLIST_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Save blacklist directory URI list. Empty list clears the key.
+     */
+    suspend fun setBlacklistDirectoryUris(uris: List<String>) {
+        context.settingsDataStore.edit { preferences ->
+            if (uris.isEmpty()) {
+                preferences.remove(BLACKLIST_DIRECTORY_URIS)
+            } else {
+                preferences[BLACKLIST_DIRECTORY_URIS] = uris.joinToString("\n")
+            }
         }
     }
 

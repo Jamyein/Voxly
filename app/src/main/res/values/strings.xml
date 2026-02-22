@@ -49,6 +49,8 @@
     <string name="take_photo">Take Photo</string>
     <string name="album_art_zoom">Zoom</string>
     <string name="album_art_rotate">Rotate</string>
+    <string name="album_art_options">Album Art Options</string>
+    <string name="album_art_view">View</string>
 
     <!-- ReplayGain -->
     <string name="replay_gain_track">Track Gain</string>
@@ -106,6 +108,7 @@
     <string name="cd_play_preview">Play audio preview</string>
     <string name="cd_more_options">More options</string>
     <string name="cd_back">Go back</string>
+    <string name="cd_close">Close</string>
     <string name="cd_search">Search</string>
     <string name="refresh_files">Refresh files</string>
     <string name="back_to_top">Back to top</string>
@@ -121,6 +124,7 @@
     <string name="file_sort_size_desc">Size (Large-Small)</string>
     <string name="file_sort_duration_desc">Duration (Long-Short)</string>
     <string name="add_directory">Add Directory</string>
+    <string name="remove_directory">Remove directory</string>
     <string name="selected_directories_count">%d directories selected</string>
     <string name="clear_directories">Clear directories</string>
     <string name="error_loading_files">Error loading files</string>
@@ -297,10 +301,10 @@
     <string name="settings_scan_mode_track_only">Track Only</string>
     <string name="settings_scan_mode_album_only">Single Album</string>
     <string name="settings_scan_mode_track_and_album">Albums</string>
-    <string name="settings_min_duration_filter">Minimum Duration Filter</string>
-    <string name="settings_min_duration_filter_subtitle">Filter out audio files shorter than the threshold</string>
-    <string name="settings_min_duration_threshold">Minimum Duration</string>
-    <string name="settings_min_duration_threshold_subtitle">Set the minimum audio file duration</string>
+    <string name="settings_min_duration_filter">Skip Short Audio</string>
+    <string name="settings_min_duration_filter_subtitle">Do not scan audio files shorter than 60 seconds</string>
+
+
     <string name="settings_language">App Language</string>
     <string name="settings_language_subtitle">Change the app language</string>
     <string name="settings_language_system">System Default</string>
@@ -428,9 +432,26 @@
     <string name="expand">Expand</string>
     <string name="collapse">Collapse</string>
 
+    <!-- Settings - Scanning -->
+    <string name="settings_min_duration_threshold">Minimum Duration Filter</string>
+    <string name="settings_min_duration_threshold_subtitle">Skip files shorter than this</string>
+    <string name="settings_drag_handle">Drag to reorder</string>
+    <string name="settings_scan_directory_settings">Scan Directory Settings</string>
+    <string name="settings_scan_directory_settings_subtitle">Configure whitelist and blacklist for scanning</string>
+    <string name="settings_whitelist_mode">Whitelist Mode</string>
+    <string name="settings_whitelist_mode_subtitle">Only scan selected directories</string>
+    <string name="settings_blacklist_mode">Blacklist Mode</string>
+    <string name="settings_blacklist_mode_subtitle">Exclude selected directories from scanning</string>
+    <string name="add_whitelist_directory">Add Whitelist Directory</string>
+    <string name="add_blacklist_directory">Add Blacklist Directory</string>
+    <string name="no_whitelist_directories">No whitelist directories added</string>
+    <string name="no_blacklist_directories">No blacklist directories added</string>
+
     <!-- Chinese Conversion -->
     <string name="convert_to_simplified">繁体转简体</string>
     <string name="convert_to_traditional">简体转繁体</string>
     <string name="select_fields_to_convert">选择要转换的字段：</string>
     <string name="deselect_all">取消全选</string>
+
+
 </resources>

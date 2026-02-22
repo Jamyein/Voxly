@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -228,19 +229,19 @@ private fun OnlineReleaseList(
 ) {
     LazyColumn(modifier = modifier.fillMaxWidth()) {
         items(releases) { release ->
-            Card(
+            ElevatedCard(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 4.dp)
+                    .padding(vertical = 6.dp)
                     .clickable { onSelect(release) },
-                shape = MaterialTheme.shapes.medium
+                shape = MaterialTheme.shapes.large
             ) {
-                Row(modifier = Modifier.padding(12.dp)) {
+                Row(modifier = Modifier.padding(16.dp)) {
                     ReleaseCover(
                         coverArtUrl = release.coverArtUrl,
-                        modifier = Modifier.size(56.dp)
+                        modifier = Modifier.size(120.dp)
                     )
-                    Spacer(modifier = Modifier.size(12.dp))
+                    Spacer(modifier = Modifier.size(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
                             text = "Song: ${release.songTitle?.ifBlank { release.title?.ifBlank { "-" } } ?: release.title?.ifBlank { "-" } ?: "-"}",

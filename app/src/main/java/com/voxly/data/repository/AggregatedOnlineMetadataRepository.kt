@@ -1,6 +1,6 @@
 package com.voxly.data.repository
 
-import com.ibm.icu.text.Transliterator
+import android.icu.text.Transliterator
 
 import android.os.SystemClock
 

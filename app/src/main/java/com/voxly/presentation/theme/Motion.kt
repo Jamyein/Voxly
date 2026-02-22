@@ -1,6 +1,7 @@
 package com.voxly.presentation.theme
 
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
@@ -11,50 +12,134 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.animateContentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /**
- * Motion configuration for MD3 Expressive animations.
+ * Material Design 3 Expressive Motion System
  * 
- * MD3 Expressive introduces MotionScheme for physics-based animations with
- * expressive, playful motion characteristics.
+ * MD3 Expressive Motion特点：
+ * 1. 基于物理的动画 - 使用Spring而非简单的tween
+ * 2. Expressive动画 - 更有弹性和活力的动画
+ * 3. Standard动画 - 标准的平滑动画
+ * 4. 自定义Easing - 更流畅的曲线
  * 
- * Note: MotionScheme API requires Material 3 Compose 1.4.0+ (available in BOM 2024.02.00+)
- * This file provides both MotionScheme support (when available) and fallback animation
- * utilities for backward compatibility.
+ * Motion Tokens:
+ * - Emphasized: 用于强调交互（按钮点击、选中状态）
+ * - Standard: 用于一般过渡
+ * - Legacy: 向后兼容的tween动画
  */
 
 // ============================================================================
-// MotionScheme Configuration (for future Material 3 MotionScheme API)
+// Motion Tokens (M3 Expressive规范)
 // ============================================================================
 
 /**
- * Expressive motion presets for MD3 Expressive theme.
- * These values provide playful, physics-based animations.
+ * Material 3 Expressive Motion Tokens
+ * 
+ * 基于Spring的物理动画参数
  */
 @Stable
+object ExpressiveMotionTokens {
+    // ===== Duration Tokens =====
+    const val Short1 = 75
+    const val Short2 = 100
+    const val Short3 = 150
+    const val Short4 = 200
+    
+    const val Medium1 = 250
+    const val Medium2 = 300
+    const val Medium3 = 350
+    const val Medium4 = 400
+    
+    const val Long1 = 450
+    const val Long2 = 500
+    const val Long3 = 550
+    const val Long4 = 600
+    
+    // ===== Spring Tokens =====
+    // Emphasized - 用于强调的交互效果（更有弹性）
+    val EmphasizedDecelerate = SpringSpec(
+        dampingRatio = 0.72f,
+        stiffness = 400f
+    )
+    
+    val EmphasizedAccelerate = SpringSpec(
+        dampingRatio = 0.72f,
+        stiffness = 400f
+    )
+    
+    val Emphasized = SpringSpec(
+        dampingRatio = 0.75f,
+        stiffness = 450f
+    )
+    
+    // Standard - 用于标准过渡
+    val StandardDecelerate = SpringSpec(
+        dampingRatio = 1.0f,
+        stiffness = 400f
+    )
+    
+    val StandardAccelerate = SpringSpec(
+        dampingRatio = 1.0f,
+        stiffness = 400f
+    )
+    
+    val Standard = SpringSpec(
+        dampingRatio = 1.0f,
+        stiffness = 450f
+    )
+    
+    // Legacy Easing (向后兼容)
+    val ExpressiveEasing = CubicBezierEasing(0.3f, 0.0f, 0.0f, 1.0f)
+    val StandardEasing = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f)
+    val LegacyFastOutSlowIn = FastOutSlowInEasing
+}
+
+/**
+ * Spring规格数据类
+ */
+data class SpringSpec(
+    val dampingRatio: Float,
+    val stiffness: Float
+)
+
+// ============================================================================
+// ExpressiveMotion Object (保留向后兼容)
+// ============================================================================
+
+@Stable
 object ExpressiveMotion {
-    // Standard durations for MD3 Expressive animations
+    // Duration constants
     const val ShortDuration = 150
     const val MediumDuration = 300
     const val LongDuration = 500
     
-    // Spring damping ratios (from Spring class constants)
+    // Spring damping ratios
     const val DampingRatioMediumBouncy = Spring.DampingRatioMediumBouncy
     const val DampingRatioNoBouncy = Spring.DampingRatioNoBouncy
     const val DampingRatioLowBouncy = Spring.DampingRatioLowBouncy
     
-    // Spring stiffness values
+    // Spring stiffness
     const val StiffnessMedium = Spring.StiffnessMedium
     const val StiffnessMediumLow = Spring.StiffnessMediumLow
     const val StiffnessLow = Spring.StiffnessLow
     
-    // Spring configurations for physics-based animations
+    // Animation specs
     val EmphasizedSpring: AnimationSpec<Float> = spring(
         dampingRatio = DampingRatioMediumBouncy,
         stiffness = StiffnessMedium
@@ -70,19 +155,115 @@ object ExpressiveMotion {
         stiffness = StiffnessLow
     )
     
-    // Easing curves for Expressive motion
     val ExpressiveEasing = FastOutSlowInEasing
     val StandardEasing = tween<Float>(durationMillis = MediumDuration, easing = FastOutSlowInEasing)
 }
 
 // ============================================================================
-// Animation Utilities (Fallback when MotionScheme not available)
+// Expressive Animations (可复用的动画效果)
 // ============================================================================
 
 /**
- * Creates a remember animated float value with spring physics.
- * Useful for responsive, physics-based UI animations.
+ * Material 3 Expressive动画预设
+ * 用于常见的UI动画场景
  */
+object ExpressiveAnimations {
+    // ===== Enter Animations =====
+    
+    /** 列表项进入动画 - 带有弹性 */
+    val ListItemEnter = slideInVertically(
+        initialOffsetY = { it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+        )
+    ) + fadeIn(animationSpec = tween(150))
+    
+    /** 卡片展开动画 - 标准平滑 */
+    val CardExpand = expandVertically(
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Standard.stiffness
+        )
+    )
+    
+    /** FAB出现动画 - 强调弹性 */
+    val FabEnter = slideInVertically(
+        initialOffsetY = { it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.EmphasizedDecelerate.dampingRatio,
+            stiffness = ExpressiveMotionTokens.EmphasizedDecelerate.stiffness
+        )
+    ) + fadeIn(animationSpec = tween(100))
+    
+    /** FAB退出动画 - 向上滑出+淡出 */
+    val FabExit = slideOutVertically(
+        targetOffsetY = { it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.EmphasizedAccelerate.dampingRatio,
+            stiffness = ExpressiveMotionTokens.EmphasizedAccelerate.stiffness
+        )
+    ) + fadeOut(animationSpec = tween(100))
+    
+    /** 对话框进入动画 - 缩放+淡入 */
+    val DialogEnter = slideInVertically(
+        initialOffsetY = { (it * 0.25).toInt() },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+        )
+    ) + fadeIn(animationSpec = tween(100))
+    
+    /** 页面进入动画 - 滑动+淡入 */
+    val PageEnter = slideInHorizontally(
+        initialOffsetX = { it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Standard.stiffness
+        )
+    ) + fadeIn(animationSpec = tween(150))
+    
+    // ===== Exit Animations =====
+    
+    /** 列表项退出动画 */
+    val ListItemExit = slideOutVertically(
+        targetOffsetY = { -it },
+        animationSpec = tween(150)
+    ) + fadeOut(animationSpec = tween(100))
+    
+    /** 卡片收起动画 */
+    val CardCollapse = shrinkVertically(
+        animationSpec = tween(200)
+    )
+    
+    /** 页面退出动画 */
+    val PageExit = slideOutHorizontally(
+        targetOffsetX = { -it },
+        animationSpec = tween(200)
+    ) + fadeOut(animationSpec = tween(100))
+    
+    // ===== State Change Animations =====
+    
+    /** 选中状态变化 - 弹性效果 */
+    val SelectionChange: AnimationSpec<Float> = spring(
+        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+    )
+    
+    /** 值变化 - 平滑过渡 */
+    val ValueChange = tween<Float>(durationMillis = 200)
+    
+    /** 展开/收起 - 带弹性 */
+    val ExpandCollapse: AnimationSpec<Float> = spring(
+        dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
+        stiffness = ExpressiveMotionTokens.Standard.stiffness
+    )
+}
+
+// ============================================================================
+// Animation Utilities
+// ============================================================================
+
 @Composable
 fun rememberSpringAnimatedFloat(
     targetValue: Float,
@@ -99,9 +280,6 @@ fun rememberSpringAnimatedFloat(
     ).value
 }
 
-/**
- * Infinite transition for continuous animations (loading states, etc.)
- */
 @Composable
 fun rememberInfiniteTransition(
     label: String = "infiniteTransition"
@@ -109,9 +287,6 @@ fun rememberInfiniteTransition(
     return androidx.compose.animation.core.rememberInfiniteTransition(label = label)
 }
 
-/**
- * Creates a pulsing scale animation for emphasis effects.
- */
 @Composable
 fun rememberPulseScale(
     initialScale: Float = 1f,
@@ -131,9 +306,6 @@ fun rememberPulseScale(
     ).value
 }
 
-/**
- * Creates a shimmer effect for loading states.
- */
 @Composable
 fun rememberShimmerOffset(
     width: Float,
@@ -156,28 +328,23 @@ fun rememberShimmerOffset(
 }
 
 // ============================================================================
-// Motion Modifier Extensions
+// Motion Modifiers
 // ============================================================================
 
-/**
- * Applies a scale animation to the composable.
- */
 @Composable
-fun animatedScale(
+fun Modifier.animateScale(
     targetScale: Float,
     dampingRatio: Float = ExpressiveMotion.DampingRatioMediumBouncy,
     stiffness: Float = ExpressiveMotion.StiffnessMedium
-): Float {
-    return rememberSpringAnimatedFloat(
-        targetValue = targetScale,
-        dampingRatio = dampingRatio,
-        stiffness = stiffness
+): Modifier = this.then(
+    Modifier.animateContentSize(
+        animationSpec = spring(
+            dampingRatio = dampingRatio,
+            stiffness = stiffness
+        )
     )
-}
+)
 
-/**
- * Applies an alpha animation to the composable.
- */
 @Composable
 fun animatedAlpha(
     targetAlpha: Float,
@@ -190,9 +357,6 @@ fun animatedAlpha(
     ).value
 }
 
-/**
- * Applies a translation animation to the composable.
- */
 @Composable
 fun animatedTranslationY(
     targetTranslation: Dp,
@@ -212,14 +376,10 @@ fun animatedTranslationY(
 }
 
 // ============================================================================
-// Preset Animation Specs
+// Motion Presets (Backward Compatibility)
 // ============================================================================
 
-/**
- * Common animation specs for UI transitions.
- */
 object MotionPresets {
-    // Enter animations
     val FadeIn: AnimationSpec<Float> = tween<Float>(durationMillis = ExpressiveMotion.ShortDuration)
     val SlideInUp: AnimationSpec<Float> = tween<Float>(durationMillis = ExpressiveMotion.MediumDuration, easing = FastOutSlowInEasing)
     val ScaleIn: AnimationSpec<Float> = spring(
@@ -227,18 +387,15 @@ object MotionPresets {
         stiffness = ExpressiveMotion.StiffnessMedium
     )
     
-    // Exit animations
     val FadeOut: AnimationSpec<Float> = tween<Float>(durationMillis = ExpressiveMotion.ShortDuration)
     val SlideOutDown: AnimationSpec<Float> = tween<Float>(durationMillis = ExpressiveMotion.MediumDuration, easing = FastOutSlowInEasing)
     val ScaleOut: AnimationSpec<Float> = tween<Float>(durationMillis = ExpressiveMotion.ShortDuration)
     
-    // State change animations
     val StateChange: AnimationSpec<Float> = spring(
         dampingRatio = ExpressiveMotion.DampingRatioNoBouncy,
         stiffness = ExpressiveMotion.StiffnessMediumLow
     )
     
-    // Emphasis animations (for interactive elements)
     val Emphasis: AnimationSpec<Float> = spring(
         dampingRatio = ExpressiveMotion.DampingRatioLowBouncy,
         stiffness = ExpressiveMotion.StiffnessLow
@@ -246,13 +403,9 @@ object MotionPresets {
 }
 
 // ============================================================================
-// Motion Logging (for debugging)
+// Motion Logging
 // ============================================================================
 
-/**
- * Debug logging for motion configuration.
- * Enable via Timber when debugging animations.
- */
 object MotionLogger {
     const val TAG = "Motion"
     

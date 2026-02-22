@@ -11,6 +11,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
+import com.voxly.domain.model.DataSourceConfig
+import com.voxly.domain.model.DataSourceType
+import com.voxly.domain.model.SourceConfigurations
 
 /** Timeout for StateFlow sharing in milliseconds */
 private const val STATE_FLOW_TIMEOUT_MS = 5000L
@@ -246,6 +249,63 @@ class SettingsViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
             initialValue = 60000
         )
+
+    /**
+     * Unified source configurations (new approach)
+     */
+    val sourceConfigurations: StateFlow<SourceConfigurations> = settingsDataStore.sourceConfigurations
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = SourceConfigurations()
+        )
+
+    /**
+     * Update a single source within a source type
+     */
+    fun updateSourceConfig(type: DataSourceType, source: DataSourceConfig) {
+        viewModelScope.launch {
+            settingsDataStore.updateSourceConfig(type, source)
+        }
+    }
+
+    /**
+     * Reorder sources within a source type
+     */
+    fun reorderSources(type: DataSourceType, orderedSourceIds: List<String>) {
+        viewModelScope.launch {
+            settingsDataStore.reorderSources(type, orderedSourceIds)
+        }
+    }
+
+    /**
+     * Set source enabled state
+     */
+    fun setSourceEnabled(type: DataSourceType, sourceId: String, enabled: Boolean) {
+        viewModelScope.launch {
+            val current = sourceConfigurations.value
+            val typeConfig = current.getConfig(type)
+            val source = typeConfig.getSource(sourceId)
+            if (source != null) {
+                settingsDataStore.updateSourceConfig(type, source.copy(enabled = enabled))
+            }
+        }
+    }
+
+    /**
+     * Set source extra option (e.g., country code for iTunes)
+     */
+    fun setSourceExtraOption(type: DataSourceType, sourceId: String, key: String, value: String) {
+        viewModelScope.launch {
+            val current = sourceConfigurations.value
+            val typeConfig = current.getConfig(type)
+            val source = typeConfig.getSource(sourceId)
+            if (source != null) {
+                val updated = source.withExtraOption(key, value)
+                settingsDataStore.updateSourceConfig(type, updated)
+            }
+        }
+    }
 
     /**
      * Set dark theme preference

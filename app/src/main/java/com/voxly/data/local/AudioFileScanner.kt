@@ -22,6 +22,8 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import android.provider.DocumentsContract
+import android.os.Environment
 
 /**
  * Local data source for scanning and accessing audio files from device storage.
@@ -566,6 +568,21 @@ class AudioFileScanner @Inject constructor(
         // Get duration filter settings
         val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled.first()
         val minDurationFilterThresholdMs = settingsDataStore.minDurationFilterThresholdMs.first()
+
+        // Get whitelist/blacklist filter settings
+        val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
+        val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
+        val whitelistDirs = if (whitelistEnabled) {
+            settingsDataStore.selectedDirectoryUris.first()
+                .map { getPathFromUri(Uri.parse(it)) }
+                .filter { it.isNotBlank() }
+        } else emptyList()
+        val blacklistDirs = if (blacklistEnabled) {
+            settingsDataStore.blacklistDirectoryUris.first()
+                .map { getPathFromUri(Uri.parse(it)) }
+                .filter { it.isNotBlank() }
+        } else emptyList()
+
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         
         // First, get the count for progress reporting
@@ -666,7 +683,10 @@ class AudioFileScanner @Inject constructor(
                     if (duration == 0L || (minDurationFilterEnabled && duration < minDurationFilterThresholdMs)) {
                         // Skip files that are too short or have no duration
                     } else {
-                        output.add(audioFile)
+                        // Apply whitelist/blacklist filter
+                        if (shouldIncludeFile(filePath, whitelistEnabled, blacklistEnabled, whitelistDirs, blacklistDirs)) {
+                            output.add(audioFile)
+                        }
                     }
 
                 }
@@ -701,5 +721,73 @@ class AudioFileScanner @Inject constructor(
         } catch (e: SecurityException) {
             false
         }
+    }
+
+    /**
+     * Converts a content URI to filesystem path.
+     * Used for whitelist/blacklist directory filtering.
+     */
+    private fun getPathFromUri(uri: Uri): String {
+        return runCatching {
+            if (uri.scheme == "file") return@runCatching uri.path.orEmpty()
+            if (uri.scheme != "content") return@runCatching uri.path.orEmpty()
+
+            val documentId = DocumentsContract.getTreeDocumentId(uri)
+            if (documentId.startsWith("raw:")) {
+                return@runCatching documentId.removePrefix("raw:")
+            }
+
+            val idParts = documentId.split(":", limit = 2)
+            val volume = idParts.firstOrNull().orEmpty()
+            val relativePath = idParts.getOrNull(1)?.trim('/').orEmpty()
+
+            when {
+                volume.equals("primary", ignoreCase = true) -> {
+                    val externalRoot = Environment.getExternalStorageDirectory().absolutePath
+                    if (relativePath.isEmpty()) externalRoot else "$externalRoot/$relativePath"
+                }
+                volume.equals("home", ignoreCase = true) -> {
+                    val externalRoot = Environment.getExternalStorageDirectory().absolutePath
+                    val documentsRoot = "$externalRoot/Documents"
+                    if (relativePath.isEmpty()) documentsRoot else "$documentsRoot/$relativePath"
+                }
+                volume.isNotEmpty() -> {
+                    if (relativePath.isEmpty()) "/storage/$volume" else "/storage/$volume/$relativePath"
+                }
+                else -> uri.path.orEmpty()
+            }
+        }.getOrElse {
+            uri.path.orEmpty()
+        }
+    }
+
+    /**
+     * Checks if a file path should be included based on whitelist/blacklist settings.
+     * Whitelist is applied first, then blacklist removes from the result.
+     */
+    private fun shouldIncludeFile(
+        filePath: String,
+        whitelistEnabled: Boolean,
+        blacklistEnabled: Boolean,
+        whitelistDirs: List<String>,
+        blacklistDirs: List<String>
+    ): Boolean {
+        // Whitelist check: if enabled and not empty, file must be in whitelist
+        if (whitelistEnabled && whitelistDirs.isNotEmpty()) {
+            val inWhitelist = whitelistDirs.any { dir ->
+                filePath.startsWith(dir.trimEnd('/') + "/") || filePath == dir
+            }
+            if (!inWhitelist) return false
+        }
+
+        // Blacklist check: if enabled and not empty, file must NOT be in blacklist
+        if (blacklistEnabled && blacklistDirs.isNotEmpty()) {
+            val inBlacklist = blacklistDirs.any { dir ->
+                filePath.startsWith(dir.trimEnd('/') + "/") || filePath == dir
+            }
+            if (inBlacklist) return false
+        }
+
+        return true
     }
 }

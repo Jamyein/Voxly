@@ -68,8 +68,14 @@ android {
         }
 
         create("dist") {
-            initWith(getByName("debug"))
-            applicationIdSuffix = ".dist"
+            // Copy from debug build type
+            isMinifyEnabled = false
+            isShrinkResources = false
+            if (debugUseReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            
+            applicationIdSuffix = ""
             // AGP limitation: debuggable=true disables R8 optimization/obfuscation.
             // Keep this variant slim for distribution testing.
             isDebuggable = false
@@ -163,7 +169,6 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.12.4")
 
     // Chinese conversion (ICU4J)
-    implementation("com.ibm.icu:icu4j:75.1")
 
     // Compose BOM
     implementation(platform("androidx.compose:compose-bom:2026.02.00"))
@@ -173,6 +178,9 @@ dependencies {
     implementation("androidx.compose.material3:material3")
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
+    
+    // Google Fonts - Variable Font支持 (使用Compose BOM中的版本)
+    implementation("androidx.compose.ui:ui-text-google-fonts")
     implementation("androidx.appcompat:appcompat:1.7.1")
 
     // Navigation

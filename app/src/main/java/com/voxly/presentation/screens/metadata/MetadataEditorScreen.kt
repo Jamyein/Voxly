@@ -7,7 +7,17 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -53,6 +63,8 @@ fun MetadataEditorScreen(
     viewModel: MetadataEditorViewModel = hiltViewModel(),
     onNavigateBack: () -> Unit,
     onNavigateToOnlineMetadata: () -> Unit,
+    onNavigateToOnlineLyricsSearch: () -> Unit,
+    onNavigateToOnlineCoverSearch: () -> Unit,
     pendingOnlineMetadata: com.voxly.domain.model.AudioMetadata? = null,
     onConsumePendingOnlineMetadata: () -> Unit = {}
 ) {
@@ -193,121 +205,156 @@ fun MetadataEditorScreen(
             )
         },
         floatingActionButton = {
-            Box {
-                if (showActionMenu) {
-                    // 半透明遮罩，点击关闭
+            Box(modifier = Modifier.fillMaxSize()) {
+                // 半透明遮罩 - 淡入淡出动画
+                AnimatedVisibility(
+                    visible = showActionMenu,
+                    enter = fadeIn(animationSpec = tween(200)),
+                    exit = fadeOut(animationSpec = tween(200))
+                ) {
                     Box(
                         modifier = Modifier
                             .fillMaxSize()
                             .clickable { showActionMenu = false }
                     )
-                    // 悬浮按钮列表
-                    Column(
-                        modifier = Modifier
-                            .align(Alignment.BottomEnd)
-                            .padding(end = 16.dp, bottom = 88.dp),
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                }
+                // 悬浮按钮列表 - 从底部滑入动画
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 88.dp),
+                    contentAlignment = Alignment.BottomEnd
+                ) {
+                    AnimatedVisibility(
+                        visible = showActionMenu,
+                        enter = slideInVertically(
+                            initialOffsetY = { it },
+                            animationSpec = tween(300)
+                        ) + fadeIn(animationSpec = tween(300)),
+                        exit = slideOutVertically(
+                            targetOffsetY = { it },
+                            animationSpec = tween(200)
+                        ) + fadeOut(animationSpec = tween(200))
                     ) {
-                        // 在线获取歌词
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.End
+                        Column(
+                            horizontalAlignment = Alignment.End,
+                            verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.surface,
-                                shape = MaterialTheme.shapes.small,
-                                shadowElevation = 2.dp
+                            // 在线获取歌词
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.End
                             ) {
-                                Text(
-                                    text = stringResource(R.string.search_online_lyrics),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            FloatingActionButton(
-                                onClick = {
-                                    showActionMenu = false
-                                    showOnlineLyricsDialog = true
-                                    viewModel.searchOnlineLyrics()
-                                },
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
-                            ) {
-                                Icon(
-                                    painter = appIconPainter(AppIcon.MusicNote),
-                                    contentDescription = null
-                                )
-                            }
-                        }
-                        // 获取在线元数据
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.surface,
-                                shape = MaterialTheme.shapes.small,
-                                shadowElevation = 2.dp
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.fetch_online_metadata),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            FloatingActionButton(
-                                onClick = {
-                                    showActionMenu = false
-                                    onNavigateToOnlineMetadata()
-                                },
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                            ) {
-                                Icon(
-                                    painter = appIconPainter(AppIcon.CloudDownload),
-                                    contentDescription = null
-                                )
-                            }
-                        }
-                        // 保存
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.End
-                        ) {
-                            Surface(
-                                color = MaterialTheme.colorScheme.surface,
-                                shape = MaterialTheme.shapes.small,
-                                shadowElevation = 2.dp
-                            ) {
-                                Text(
-                                    text = stringResource(R.string.dialog_save),
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            FloatingActionButton(
-                                onClick = {
-                                    showActionMenu = false
-                                    if (hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving) {
-                                        viewModel.saveMetadata()
-                                    }
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = MaterialTheme.shapes.small,
+                                    shadowElevation = 2.dp
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.search_online_lyrics),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
                                 }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                FloatingActionButton(
+                                    onClick = {
+                                        showActionMenu = false
+                                        onNavigateToOnlineLyricsSearch()
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
+                                ) {
+                                    Icon(
+                                        painter = appIconPainter(AppIcon.MusicNote),
+                                        contentDescription = null
+                                    )
+                                }
+                            }
+                            // 获取在线元数据
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.End
                             ) {
-                                Icon(Icons.Default.Save, contentDescription = null)
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = MaterialTheme.shapes.small,
+                                    shadowElevation = 2.dp
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.fetch_online_metadata),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                FloatingActionButton(
+                                    onClick = {
+                                        showActionMenu = false
+                                        onNavigateToOnlineMetadata()
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                                ) {
+                                    Icon(
+                                        painter = appIconPainter(AppIcon.CloudDownload),
+                                        contentDescription = null
+                                    )
+                                }
+                            }
+                            // 保存
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    shape = MaterialTheme.shapes.small,
+                                    shadowElevation = 2.dp
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.dialog_save),
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(12.dp))
+                                FloatingActionButton(
+                                    onClick = {
+                                        showActionMenu = false
+                                        if (hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving) {
+                                            viewModel.saveMetadata()
+                                        }
+                                    }
+                                ) {
+                                    Icon(Icons.Default.Save, contentDescription = null)
+                                }
                             }
                         }
                     }
                 }
-                // 主 FAB 按钮（最后绘制，在最上层）
+                // 主 FAB 按钮 - 带图标切换动画
                 FloatingActionButton(
-                    onClick = { showActionMenu = true }
+                    onClick = { showActionMenu = !showActionMenu },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
                 ) {
-                    Icon(
-                        painter = appIconPainter(AppIcon.MoreVert),
-                        contentDescription = stringResource(R.string.cd_more_options)
-                    )
+                    AnimatedContent(
+                        targetState = showActionMenu,
+                        transitionSpec = {
+                            (scaleIn(animationSpec = tween(200)) + fadeIn(animationSpec = tween(200)))
+                                .togetherWith(scaleOut(animationSpec = tween(200)) + fadeOut(animationSpec = tween(200)))
+                        },
+                        label = "fab_icon"
+                    ) { isExpanded ->
+                        Icon(
+                            painter = appIconPainter(
+                                if (isExpanded) AppIcon.Close else AppIcon.MoreVert
+                            ),
+                            contentDescription = stringResource(
+                                if (isExpanded) R.string.cd_close else R.string.cd_more_options
+                            )
+                        )
+                    }
                 }
             }
         }
@@ -446,6 +493,8 @@ fun MetadataEditorScreen(
     }
 
     if (showAlbumArtOptions) {
+        val hasAlbumArt = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt != null
+        
         ModalBottomSheet(
             onDismissRequest = { showAlbumArtOptions = false },
             shape = MaterialTheme.shapes.large,
@@ -493,10 +542,49 @@ fun MetadataEditorScreen(
                     },
                     modifier = Modifier.clickable {
                         showAlbumArtOptions = false
-                        showOnlineCoverDialog = true
-                        viewModel.searchOnlineCoverCandidates()
+                        onNavigateToOnlineCoverSearch()
                     }
                 )
+                
+                // 只有存在封面时才显示以下选项
+                if (hasAlbumArt) {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.album_art_view)) },
+                        leadingContent = {
+                            Icon(Icons.Default.ZoomIn, contentDescription = null)
+                        },
+                        modifier = Modifier.clickable {
+                            showAlbumArtOptions = false
+                            showAlbumArtPreview = true
+                        }
+                    )
+                    
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.album_art_rotate)) },
+                        leadingContent = {
+                            Icon(Icons.Default.RotateRight, contentDescription = null)
+                        },
+                        modifier = Modifier.clickable {
+                            showAlbumArtOptions = false
+                            (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt?.let { bytes ->
+                                rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
+                            }
+                        }
+                    )
+                    
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.remove_album_art)) },
+                        leadingContent = {
+                            Icon(Icons.Default.Delete, contentDescription = null)
+                        },
+                        modifier = Modifier.clickable {
+                            showAlbumArtOptions = false
+                            viewModel.updateAlbumArt(null)
+                        }
+                    )
+                }
             }
         }
     }
@@ -1194,7 +1282,7 @@ private fun AlbumArtSection(
                 label = "album_art_crossfade"
             ) { hasArt ->
                 if (hasArt && albumArt != null) {
-                    val bitmap = remember(albumArt) {
+                    val bitmap = remember(albumArt.contentHashCode()) {
                         decodeAlbumArtPreview(albumArt)
                     }
                     if (bitmap != null) {
@@ -1203,22 +1291,6 @@ private fun AlbumArtSection(
                             contentDescription = stringResource(R.string.cd_album_art),
                             modifier = Modifier.fillMaxSize()
                         )
-                        Row(
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            FilledTonalIconButton(onClick = onZoomAlbumArt) {
-                                Icon(Icons.Default.ZoomIn, contentDescription = stringResource(R.string.album_art_zoom))
-                            }
-                            FilledTonalIconButton(onClick = onRotateAlbumArt) {
-                                Icon(Icons.Default.RotateRight, contentDescription = stringResource(R.string.album_art_rotate))
-                            }
-                            FilledTonalIconButton(onClick = onRemoveAlbumArt) {
-                                Icon(Icons.Default.Delete, contentDescription = stringResource(R.string.remove_album_art))
-                            }
-                        }
                     } else {
                         EmptyAlbumArtContent()
                     }

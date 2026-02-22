@@ -604,7 +604,7 @@ class OnlineMetadataViewModel @Inject constructor(
                 album = candidate.albumTitle ?: candidate.title,
                 albumArtist = candidate.artist,
                 year = candidate.year?.toString(),
-                genre = null,
+                genre = candidate.genre,
                 trackNumber = candidate.trackNumber ?: 1,
                 totalTracks = candidate.trackCount,
                 discNumber = candidate.discNumber,

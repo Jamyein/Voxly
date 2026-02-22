@@ -309,8 +309,8 @@ fun FileBrowserScreen(
             } else {
                 AnimatedVisibility(
                     visible = isTopBarVisible,
-                    enter = fadeIn(animationSpec = tween(160)) + expandVertically(),
-                    exit = fadeOut(animationSpec = tween(130)) + shrinkVertically()
+                    enter = com.voxly.presentation.theme.ExpressiveAnimations.ListItemEnter,
+                    exit = com.voxly.presentation.theme.ExpressiveAnimations.ListItemExit
                 ) {
                     if (openedDirectory != null) {
                         TopAppBar(
@@ -358,7 +358,7 @@ fun FileBrowserScreen(
                                 }
                             },
                             colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
                                 titleContentColor = MaterialTheme.colorScheme.onSurface
                             ),
                             windowInsets = TopAppBarDefaults.windowInsets
@@ -397,7 +397,7 @@ fun FileBrowserScreen(
                                 }
                             },
                             colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.surface,
+                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
                                 titleContentColor = MaterialTheme.colorScheme.onSurface
                             ),
                             windowInsets = TopAppBarDefaults.windowInsets
@@ -431,7 +431,10 @@ fun FileBrowserScreen(
                         coroutineScope.launch {
                             listState.animateScrollToItem(0)
                         }
-                    }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = MaterialTheme.shapes.extraLarge
                 ) {
                     Icon(
                         imageVector = Icons.Default.KeyboardArrowUp,

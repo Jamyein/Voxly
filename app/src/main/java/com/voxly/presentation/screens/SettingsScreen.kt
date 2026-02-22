@@ -2,20 +2,46 @@ package com.voxly.presentation.screens
 
 import android.app.Activity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.DragHandle
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -25,6 +51,11 @@ import com.voxly.BuildConfig
 import com.voxly.R
 import com.voxly.core.util.LogManager
 import com.voxly.presentation.viewmodel.SettingsViewModel
+import com.voxly.domain.model.DataSourceConfig
+import com.voxly.domain.model.DataSourceType
+import com.voxly.domain.model.SourceConfigurations
+import com.voxly.domain.model.SourceTypeConfig
+import kotlin.math.roundToInt
 
 // ==================== Data Classes ====================
 
@@ -75,12 +106,7 @@ fun resolveCurrentLanguageTag(): String? {
 
 fun normalizeLanguageTag(tag: String?): String? = tag?.lowercase()
 
-fun formatDuration(milliseconds: Int): String {
-    val totalSeconds = milliseconds / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return "${minutes}分${seconds}秒"
-}
+
 
 fun sourceToDisplayName(source: String): String = when (source) {
     "itunes" -> "iTunes"
@@ -88,6 +114,297 @@ fun sourceToDisplayName(source: String): String = when (source) {
     "netease" -> "NetEase"
     "qq_music" -> "QQ Music"
     else -> source
+}
+
+/**
+ * Check if a source has extra options (like country code for iTunes)
+ */
+fun sourceHasExtraOptions(sourceId: String): Boolean = sourceId == "itunes"
+
+/**
+ * Get extra option display label for a source
+ */
+fun getExtraOptionLabel(sourceId: String): String = when (sourceId) {
+    "itunes" -> "Country Code"
+    else -> ""
+}
+
+/**
+ * Data class for source item state in the draggable dialog
+ */
+data class SourceItemState(
+    val sourceId: String,
+    val enabled: Boolean,
+    val order: Int,
+    val extraOptions: List<Pair<String, String>>,
+    val expanded: Boolean = false
+)
+
+/**
+ * Draggable source priority dialog with inline switches and extra options.
+ * Each source item shows: sequence number, drag handle, source name, switch, and more options menu.
+ * Supports drag-and-drop reordering.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DraggableSourcePriorityDialog(
+    title: String,
+    sourceTypeConfig: SourceTypeConfig,
+    appleCountryOptions: List<AppleCountryOption>,
+    currentAppleCountry: AppleCountryOption,
+    onDismiss: () -> Unit,
+    onSourceEnabledChange: (String, Boolean) -> Unit,
+    onSourceReorder: (List<String>) -> Unit,
+    onAppleCountryChange: (String) -> Unit
+) {
+    // Create mutable state for each source
+    var sourcesState by remember(sourceTypeConfig) {
+        mutableStateOf(
+            sourceTypeConfig.sources.sortedBy { it.order }.map { source ->
+                SourceItemState(
+                    sourceId = source.sourceId,
+                    enabled = source.enabled,
+                    order = source.order,
+                    extraOptions = source.extraOptions
+                )
+            }
+        )
+    }
+
+    // Drag state
+    var draggedIndex by remember { mutableStateOf<Int?>(null) }
+    var dragOffset by remember { mutableStateOf(0f) }
+    val itemHeight = 80.dp // Approximate item height
+    val density = androidx.compose.ui.platform.LocalDensity.current
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
+        title = { Text(title) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 450.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Text(
+                    text = stringResource(R.string.settings_source_priority_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                sourcesState.forEachIndexed { index, sourceState ->
+                    val isDragging = draggedIndex == index
+                    val targetIndex = remember(dragOffset, draggedIndex) {
+                        if (draggedIndex != null && draggedIndex != index) {
+                            val offsetInItems = dragOffset / with(density) { itemHeight.toPx() }
+                            (draggedIndex!! + offsetInItems.roundToInt()).coerceIn(0, sourcesState.lastIndex)
+                        } else {
+                            index
+                        }
+                    }
+
+                    Card(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .then(
+                                if (isDragging) {
+                                    Modifier
+                                        .zIndex(1f)
+                                        .offset { IntOffset(0, dragOffset.roundToInt()) }
+                                } else {
+                                    Modifier
+                                }
+                            )
+                            .pointerInput(Unit) {
+                                detectDragGesturesAfterLongPress(
+                                    onDragStart = {
+                                        draggedIndex = index
+                                        dragOffset = 0f
+                                    },
+                                    onDragEnd = {
+                                        if (draggedIndex != null && draggedIndex != index) {
+                                            val newList = sourcesState.toMutableList()
+                                            val item = newList.removeAt(draggedIndex!!)
+                                            newList.add(index, item)
+                                            sourcesState = newList
+                                            onSourceReorder(newList.map { it.sourceId })
+                                        }
+                                        draggedIndex = null
+                                        dragOffset = 0f
+                                    },
+                                    onDragCancel = {
+                                        draggedIndex = null
+                                        dragOffset = 0f
+                                    },
+                                    onDrag = { change, dragAmount ->
+                                        change.consume()
+                                        dragOffset += dragAmount.y
+                                        // Calculate target position
+                                        val offsetInItems = dragOffset / with(density) { itemHeight.toPx() }
+                                        val newTargetIndex = (draggedIndex!! + offsetInItems.roundToInt())
+                                            .coerceIn(0, sourcesState.lastIndex)
+                                        if (newTargetIndex != index && newTargetIndex in sourcesState.indices) {
+                                            // Swap items in the list for visual feedback
+                                            val newList = sourcesState.toMutableList()
+                                            val item = newList.removeAt(draggedIndex!!)
+                                            newList.add(newTargetIndex, item)
+                                            sourcesState = newList
+                                            draggedIndex = newTargetIndex
+                                            dragOffset = 0f
+                                        }
+                                    }
+                                )
+                            },
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isDragging) 
+                                MaterialTheme.colorScheme.primaryContainer 
+                            else 
+                                MaterialTheme.colorScheme.surfaceContainerHigh
+                        ),
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = if (isDragging) 8.dp else 0.dp
+                        )
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            // Main row: sequence, drag handle, name, switch, reorder buttons, more menu
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(8.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Sequence number
+                                Text(
+                                    text = "${index + 1}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.width(24.dp)
+                                )
+
+                                // Drag handle icon (visual indicator for draggable)
+                                Icon(
+                                    imageVector = Icons.Default.DragHandle,
+                                    contentDescription = stringResource(R.string.settings_drag_handle),
+                                    tint = if (isDragging) 
+                                        MaterialTheme.colorScheme.primary 
+                                    else 
+                                        MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+
+                                // Source name
+                                Text(
+                                    text = sourceToDisplayName(sourceState.sourceId),
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .padding(horizontal = 8.dp)
+                                )
+
+                                // Switch
+                                Switch(
+                                    checked = sourceState.enabled,
+                                    onCheckedChange = { enabled ->
+                                        onSourceEnabledChange(sourceState.sourceId, enabled)
+                                        // Update local state
+                                        sourcesState = sourcesState.toMutableList().also {
+                                            it[index] = sourceState.copy(enabled = enabled)
+                                        }
+                                    }
+                                )
+
+                                // More options menu button
+                                var showMenu by remember { mutableStateOf(false) }
+                                Box {
+                                    IconButton(onClick = { showMenu = true }) {
+                                        Icon(
+                                            imageVector = Icons.Default.MoreVert,
+                                            contentDescription = "More options"
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showMenu,
+                                        onDismissRequest = { showMenu = false }
+                                    ) {
+                                        // Enable/Disable toggle
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    if (sourceState.enabled) "禁用" else "启用"
+                                                )
+                                            },
+                                            onClick = {
+                                                onSourceEnabledChange(sourceState.sourceId, !sourceState.enabled)
+                                                sourcesState = sourcesState.toMutableList().also {
+                                                    it[index] = sourceState.copy(enabled = !sourceState.enabled)
+                                                }
+                                                showMenu = false
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = if (sourceState.enabled) 
+                                                        Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+                                                    contentDescription = null
+                                                )
+                                            }
+                                        )
+
+                                        HorizontalDivider()
+
+                                        // Extra options (iTunes country code)
+                                        if (sourceHasExtraOptions(sourceState.sourceId)) {
+                                            Text(
+                                                text = stringResource(R.string.settings_apple_country),
+                                                style = MaterialTheme.typography.labelSmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                                            )
+                                            appleCountryOptions.forEach { option ->
+                                                DropdownMenuItem(
+                                                    text = { Text(stringResource(option.labelResId)) },
+                                                    onClick = {
+                                                        onAppleCountryChange(option.value)
+                                                        showMenu = false
+                                                    },
+                                                    trailingIcon = {
+                                                        if (option.value == currentAppleCountry.value) {
+                                                            Text("✓", color = MaterialTheme.colorScheme.primary)
+                                                        }
+                                                    }
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Drag hint
+                            if (!isDragging) {
+                                Text(
+                                    text = "长按拖拽排序",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 8.dp)
+                                        .padding(bottom = 8.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_ok))
+            }
+        }
+    )
 }
 
 // ==================== Composable Helpers ====================
@@ -612,6 +929,7 @@ fun SearchLimitOption.displayLabel(): String {
 @Composable
 fun SettingsScreen(
     onNavigateToDirectoryManagement: () -> Unit = {},
+    onNavigateToScanDirectorySettings: () -> Unit = {},
     onNavigateToLogViewer: () -> Unit = {},
     onExportLogs: () -> Unit = {},
     onCleanupLogs: () -> Unit = {},
@@ -640,6 +958,7 @@ fun SettingsScreen(
     val coverSourceEnabledITunes by viewModel.coverSourceEnabledITunes.collectAsState()
     val coverSourceEnabledNetease by viewModel.coverSourceEnabledNetease.collectAsState()
     val coverSourceEnabledQQMusic by viewModel.coverSourceEnabledQQMusic.collectAsState()
+    val sourceConfigurations by viewModel.sourceConfigurations.collectAsState()
     val metadataSourcePriority by viewModel.metadataSourcePriority.collectAsState()
     val lyricsSourcePriority by viewModel.lyricsSourcePriority.collectAsState()
     val coverSourcePriority by viewModel.coverSourcePriority.collectAsState()
@@ -650,7 +969,7 @@ fun SettingsScreen(
     val replayGainTargetLoudness by viewModel.replayGainTargetLoudness.collectAsState()
     val scanMode by viewModel.scanMode.collectAsState()
     val minDurationFilterEnabled by viewModel.minDurationFilterEnabled.collectAsState()
-    val minDurationFilterThresholdMs by viewModel.minDurationFilterThresholdMs.collectAsState()
+
     
     var languageExpanded by remember { mutableStateOf(false) }
     val languageOptions = remember {
@@ -725,6 +1044,9 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.nav_settings)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer
+                ),
                 windowInsets = TopAppBarDefaults.windowInsets
             )
         }
@@ -818,23 +1140,12 @@ fun SettingsScreen(
                     checked = minDurationFilterEnabled,
                     onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                SettingsSlider(
-                    title = stringResource(R.string.settings_min_duration_threshold),
-                    subtitle = stringResource(R.string.settings_min_duration_threshold_subtitle),
-                    value = minDurationFilterThresholdMs.toFloat(),
-                    valueRange = 10000f..600000f,
-                    steps = 118,
-                    onValueChange = { viewModel.setMinDurationFilterThresholdMs(it.toInt()) },
-                    enabled = minDurationFilterEnabled,
-                    valueLabel = formatDuration(minDurationFilterThresholdMs)
-                )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
                 ListItem(
-                    headlineContent = { Text(stringResource(R.string.settings_directory_management)) },
-                    supportingContent = { Text(stringResource(R.string.settings_directory_management_subtitle)) },
+                    headlineContent = { Text(stringResource(R.string.settings_scan_directory_settings)) },
+                    supportingContent = { Text(stringResource(R.string.settings_scan_directory_settings_subtitle)) },
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-                    modifier = Modifier.clickable { onNavigateToDirectoryManagement() }
+                    modifier = Modifier.clickable { onNavigateToScanDirectorySettings() }
                 )
             }
 
@@ -1039,126 +1350,61 @@ fun SettingsScreen(
     }
 
     if (showMetadataSourceDialog) {
-        SourcePriorityDialog(
+        val metadataConfig = sourceConfigurations.metadata
+        DraggableSourcePriorityDialog(
             title = stringResource(R.string.settings_source_group_metadata),
-            priority = metadataSourcePriority,
+            sourceTypeConfig = metadataConfig,
+            appleCountryOptions = appleCountryOptions,
+            currentAppleCountry = currentAppleCountry,
             onDismiss = { showMetadataSourceDialog = false },
-            onPriorityChange = viewModel::setMetadataSourcePriority,
-            extraContent = {
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_musicbrainz_metadata),
-                    subtitle = stringResource(R.string.settings_source_musicbrainz_metadata_subtitle),
-                    checked = metadataSourceEnabledMusicBrainz,
-                    onCheckedChange = { viewModel.setMetadataSourceEnabledMusicBrainz(it) }
-                )
-                HorizontalDivider()
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_apple_music),
-                    subtitle = stringResource(R.string.settings_source_apple_music_subtitle),
-                    checked = metadataSourceEnabledITunes,
-                    onCheckedChange = { viewModel.setMetadataSourceEnabledITunes(it) }
-                )
-                HorizontalDivider()
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_netease),
-                    subtitle = stringResource(R.string.settings_source_netease_subtitle),
-                    checked = metadataSourceEnabledNetease,
-                    onCheckedChange = { viewModel.setMetadataSourceEnabledNetease(it) }
-                )
-                HorizontalDivider()
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_qq_music),
-                    subtitle = stringResource(R.string.settings_source_qq_music_subtitle),
-                    checked = metadataSourceEnabledQQMusic,
-                    onCheckedChange = { viewModel.setMetadataSourceEnabledQQMusic(it) }
-                )
-                HorizontalDivider()
-                SettingsDropdownRow(
-                    title = stringResource(R.string.settings_apple_country),
-                    subtitle = stringResource(R.string.settings_apple_country_subtitle),
-                    selectedLabel = stringResource(currentAppleCountry.labelResId),
-                    expanded = appleCountryExpanded,
-                    onExpandedChange = { appleCountryExpanded = it }
-                ) {
-                    appleCountryOptions.forEach { option ->
-                        DropdownMenuItem(
-                            text = { Text(stringResource(option.labelResId)) },
-                            onClick = {
-                                viewModel.setAppleCountryCode(option.value)
-                                appleCountryExpanded = false
-                            }
-                        )
-                    }
-                }
+            onSourceEnabledChange = { sourceId, enabled ->
+                viewModel.setSourceEnabled(DataSourceType.METADATA, sourceId, enabled)
+            },
+            onSourceReorder = { orderedIds ->
+                viewModel.reorderSources(DataSourceType.METADATA, orderedIds)
+            },
+            onAppleCountryChange = { countryCode ->
+                viewModel.setSourceExtraOption(DataSourceType.METADATA, "itunes", "country", countryCode)
             }
         )
     }
 
     if (showLyricsSourceDialog) {
-        SourcePriorityDialog(
+        val lyricsConfig = sourceConfigurations.lyrics
+        DraggableSourcePriorityDialog(
             title = stringResource(R.string.settings_source_group_lyrics),
-            priority = lyricsSourcePriority,
+            sourceTypeConfig = lyricsConfig,
+            appleCountryOptions = appleCountryOptions,
+            currentAppleCountry = currentAppleCountry,
             onDismiss = { showLyricsSourceDialog = false },
-            onPriorityChange = viewModel::setLyricsSourcePriority,
-            extraContent = {
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_musicbrainz),
-                    subtitle = stringResource(R.string.settings_source_musicbrainz_subtitle),
-                    checked = lyricsSourceEnabledMusicBrainz,
-                    onCheckedChange = { viewModel.setLyricsSourceEnabledMusicBrainz(it) }
-                )
-                HorizontalDivider()
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_netease),
-                    subtitle = stringResource(R.string.settings_source_netease_subtitle),
-                    checked = lyricsSourceEnabledNetease,
-                    onCheckedChange = { viewModel.setLyricsSourceEnabledNetease(it) }
-                )
-                HorizontalDivider()
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_qq_music),
-                    subtitle = stringResource(R.string.settings_source_qq_music_subtitle),
-                    checked = lyricsSourceEnabledQQMusic,
-                    onCheckedChange = { viewModel.setLyricsSourceEnabledQQMusic(it) }
-                )
+            onSourceEnabledChange = { sourceId, enabled ->
+                viewModel.setSourceEnabled(DataSourceType.LYRICS, sourceId, enabled)
+            },
+            onSourceReorder = { orderedIds ->
+                viewModel.reorderSources(DataSourceType.LYRICS, orderedIds)
+            },
+            onAppleCountryChange = { countryCode ->
+                viewModel.setSourceExtraOption(DataSourceType.LYRICS, "itunes", "country", countryCode)
             }
         )
     }
 
     if (showCoverSourceDialog) {
-        SourcePriorityDialog(
+        val coverConfig = sourceConfigurations.cover
+        DraggableSourcePriorityDialog(
             title = stringResource(R.string.settings_source_group_cover),
-            priority = coverSourcePriority,
+            sourceTypeConfig = coverConfig,
+            appleCountryOptions = appleCountryOptions,
+            currentAppleCountry = currentAppleCountry,
             onDismiss = { showCoverSourceDialog = false },
-            onPriorityChange = viewModel::setCoverSourcePriority,
-            extraContent = {
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_musicbrainz_cover),
-                    subtitle = stringResource(R.string.settings_source_musicbrainz_cover_subtitle),
-                    checked = coverSourceEnabledMusicBrainz,
-                    onCheckedChange = { viewModel.setCoverSourceEnabledMusicBrainz(it) }
-                )
-                HorizontalDivider()
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_apple_music),
-                    subtitle = stringResource(R.string.settings_source_apple_music_subtitle),
-                    checked = coverSourceEnabledITunes,
-                    onCheckedChange = { viewModel.setCoverSourceEnabledITunes(it) }
-                )
-                HorizontalDivider()
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_netease),
-                    subtitle = stringResource(R.string.settings_source_netease_subtitle),
-                    checked = coverSourceEnabledNetease,
-                    onCheckedChange = { viewModel.setCoverSourceEnabledNetease(it) }
-                )
-                HorizontalDivider()
-                SettingsSwitch(
-                    title = stringResource(R.string.settings_source_qq_music),
-                    subtitle = stringResource(R.string.settings_source_qq_music_subtitle),
-                    checked = coverSourceEnabledQQMusic,
-                    onCheckedChange = { viewModel.setCoverSourceEnabledQQMusic(it) }
-                )
+            onSourceEnabledChange = { sourceId, enabled ->
+                viewModel.setSourceEnabled(DataSourceType.COVER, sourceId, enabled)
+            },
+            onSourceReorder = { orderedIds ->
+                viewModel.reorderSources(DataSourceType.COVER, orderedIds)
+            },
+            onAppleCountryChange = { countryCode ->
+                viewModel.setSourceExtraOption(DataSourceType.COVER, "itunes", "country", countryCode)
             }
         )
     }

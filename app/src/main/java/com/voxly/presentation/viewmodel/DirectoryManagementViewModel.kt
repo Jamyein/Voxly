@@ -8,9 +8,11 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -22,8 +24,18 @@ class DirectoryManagementViewModel @Inject constructor(
     private val _directories = MutableStateFlow<List<SelectedDirectory>>(emptyList())
     val directories: StateFlow<List<SelectedDirectory>> = _directories.asStateFlow()
 
+    private val _blacklistDirectories = MutableStateFlow<List<SelectedDirectory>>(emptyList())
+    val blacklistDirectories: StateFlow<List<SelectedDirectory>> = _blacklistDirectories.asStateFlow()
+
+    val whitelistEnabled: StateFlow<Boolean> = settingsDataStore.whitelistEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
+    val blacklistEnabled: StateFlow<Boolean> = settingsDataStore.blacklistEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+
     init {
         loadDirectories()
+        loadBlacklistDirectories()
     }
 
     fun loadDirectories() {
@@ -59,6 +71,54 @@ class DirectoryManagementViewModel @Inject constructor(
         viewModelScope.launch {
             settingsDataStore.setSelectedDirectoryUris(directories.map { it.uri })
             _directories.value = directories
+        }
+    }
+
+    fun loadBlacklistDirectories() {
+        viewModelScope.launch {
+            val uris = settingsDataStore.blacklistDirectoryUris.first()
+            _blacklistDirectories.value = uris.mapNotNull { uriString ->
+                val parsed = runCatching { Uri.parse(uriString) }.getOrNull() ?: return@mapNotNull null
+                val path = getPathFromUri(parsed)
+                if (path.isBlank()) null else SelectedDirectory(uri = uriString, path = path)
+            }
+        }
+    }
+
+    fun addBlacklistDirectory(directoryUri: Uri) {
+        val path = getPathFromUri(directoryUri)
+        if (path.isBlank()) return
+        val uriString = directoryUri.toString()
+        val updated = (_blacklistDirectories.value + SelectedDirectory(uri = uriString, path = path))
+            .distinctBy { it.uri }
+        persistBlacklistDirectories(updated)
+    }
+
+    fun removeBlacklistDirectory(directoryUri: String) {
+        val updated = _blacklistDirectories.value.filterNot { it.uri == directoryUri }
+        persistBlacklistDirectories(updated)
+    }
+
+    fun clearBlacklistDirectories() {
+        persistBlacklistDirectories(emptyList())
+    }
+
+    private fun persistBlacklistDirectories(directories: List<SelectedDirectory>) {
+        viewModelScope.launch {
+            settingsDataStore.setBlacklistDirectoryUris(directories.map { it.uri })
+            _blacklistDirectories.value = directories
+        }
+    }
+
+    fun setWhitelistEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setWhitelistEnabled(enabled)
+        }
+    }
+
+    fun setBlacklistEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setBlacklistEnabled(enabled)
         }
     }
 

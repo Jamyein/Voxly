@@ -289,10 +289,10 @@
     <string name="settings_scan_mode_track_only">单轨增益</string>
     <string name="settings_scan_mode_album_only">单专辑扫描</string>
     <string name="settings_scan_mode_track_and_album">多专辑扫描</string>
-    <string name="settings_min_duration_filter">最短时长过滤</string>
-    <string name="settings_min_duration_filter_subtitle">过滤掉短于阈值的音频文件</string>
-    <string name="settings_min_duration_threshold">最短时长</string>
-    <string name="settings_min_duration_threshold_subtitle">设置最短音频文件时长</string>
+    <string name="settings_min_duration_filter">不扫描短音频</string>
+    <string name="settings_min_duration_filter_subtitle">不扫描60秒以下的音频文件</string>
+
+
     <string name="settings_language">应用语言</string>
     <string name="settings_language_subtitle">切换应用显示语言</string>
     <string name="settings_language_system">跟随系统</string>
@@ -425,5 +425,20 @@
     <string name="replay_gain_quality_accurate">精确</string>
     <string name="expand">展开</string>
     <string name="collapse">收起</string>
+
+    <!-- Settings - Scanning -->
+    <string name="settings_min_duration_threshold">最短时长过滤</string>
+    <string name="settings_min_duration_threshold_subtitle">跳过短于此时长的文件</string>
+    <string name="settings_drag_handle">拖动排序</string>
+    <string name="settings_scan_directory_settings">扫描目录设置</string>
+    <string name="settings_scan_directory_settings_subtitle">配置白名单和黑名单</string>
+    <string name="settings_whitelist_mode">白名单模式</string>
+    <string name="settings_whitelist_mode_subtitle">仅扫描选中的目录</string>
+    <string name="settings_blacklist_mode">黑名单模式</string>
+    <string name="settings_blacklist_mode_subtitle">从扫描中排除选中的目录</string>
+    <string name="add_whitelist_directory">添加白名单目录</string>
+    <string name="add_blacklist_directory">添加黑名单目录</string>
+    <string name="no_whitelist_directories">未添加白名单目录</string>
+    <string name="no_blacklist_directories">未添加黑名单目录</string>
 
 </resources>

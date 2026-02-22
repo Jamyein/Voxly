@@ -70,12 +70,12 @@ jobs:
           fi
           echo "SIGNING_KEY_ALIAS=${SIGNING_KEY_ALIAS:-voxly}" >> "$GITHUB_ENV"
 
-      - name: Build Debug APK
+      - name: Build Dist APK
         env:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || vars.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || vars.SIGNING_KEY_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ env.SIGNING_KEY_ALIAS }}
-        run: ./gradlew assembleDebug
+        run: ./gradlew assembleDist
 
       - name: Clean up keystore
         if: always()
@@ -85,9 +85,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          APK_PATH="$(find app/build -type f -path "*/apk/debug/*.apk" | head -n 1)"
+          APK_PATH="$(find app/build -type f -path "*/apk/dist/*.apk" | head -n 1)"
           if [ -z "${APK_PATH}" ]; then
-            echo "No debug APK found"
+            echo "No dist APK found"
             exit 1
           fi
           TS="$(date +%Y%m%d%H%M%S)"

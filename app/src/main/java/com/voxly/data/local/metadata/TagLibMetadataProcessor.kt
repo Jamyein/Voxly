@@ -90,6 +90,36 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
+     * Detects the MIME type of an image from its byte data.
+     * @param imageBytes The first few bytes of the image data
+     * @return The detected MIME type (e.g., "image/jpeg", "image/png", "image/webp")
+     */
+    private fun detectImageMimeType(imageBytes: ByteArray): String {
+        return when {
+            imageBytes.size >= 2 -> {
+                when {
+                    // JPEG: starts with FF D8
+                    imageBytes[0].toInt() and 0xFF == 0xFF && imageBytes[1].toInt() and 0xFF == 0xD8 -> "image/jpeg"
+                    // PNG: starts with 89 50 4E 47
+                    imageBytes[0].toInt() and 0xFF == 0x89 && imageBytes[1].toInt() and 0xFF == 0x50 -> "image/png"
+                    // GIF: starts with 47 49 46 38
+                    imageBytes[0].toInt() and 0xFF == 0x47 && imageBytes[1].toInt() and 0xFF == 0x49 -> "image/gif"
+                    // WebP: starts with 52 49 46 46 (RIFF) + 57 45 42 50 (WEBP)
+                    imageBytes.size >= 12 && 
+                        imageBytes[0].toInt() and 0xFF == 0x52 && imageBytes[1].toInt() and 0xFF == 0x49 &&
+                        imageBytes[2].toInt() and 0xFF == 0x46 && imageBytes[3].toInt() and 0xFF == 0x46 &&
+                        imageBytes[8].toInt() and 0xFF == 0x57 && imageBytes[9].toInt() and 0xFF == 0x45 &&
+                        imageBytes[10].toInt() and 0xFF == 0x42 && imageBytes[11].toInt() and 0xFF == 0x50 -> "image/webp"
+                    // BMP: starts with 42 4D
+                    imageBytes[0].toInt() and 0xFF == 0x42 && imageBytes[1].toInt() and 0xFF == 0x4D -> "image/bmp"
+                    else -> "image/jpeg" // Default to JPEG for compatibility
+                }
+            }
+            else -> "image/jpeg" // Default to JPEG for compatibility
+        }
+    }
+
+    /**
      * Reads metadata from an audio file.
      * @param filePath Path to the audio file
      * @param includeAlbumArt Whether to include album art bytes
@@ -500,6 +530,7 @@ class TagLibMetadataProcessor @Inject constructor(
             metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
             metadata.trackNumber?.let { properties["TRACK"] = arrayOf(it.toString()) }
             metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
+            metadata.lyrics?.let { properties["LYRICS"] = arrayOf(it) }
 
             metadata.albumArtist?.let { properties["ALBUMARTIST"] = arrayOf(it) }
             metadata.discNumber?.let { properties["DISCNUMBER"] = arrayOf(it.toString()) }
@@ -524,6 +555,21 @@ class TagLibMetadataProcessor @Inject constructor(
 
             // Write metadata using TagLib - TagLib takes ownership and closes its copy
             val success = TagLib.savePropertyMap(fdForTagLib, properties)
+            
+            // Save album art if provided
+            metadata.albumArt?.let { albumArtBytes ->
+                val mimeType = detectImageMimeType(albumArtBytes)
+                val picture = Picture(
+                    data = albumArtBytes,
+                    description = "Front Cover",
+                    pictureType = "Front Cover",
+                    mimeType = mimeType
+                )
+                val pictureSaved = TagLib.savePictures(fdForTagLib, arrayOf(picture))
+                if (!pictureSaved) {
+                    Log.w(TAG, "Failed to save album art for: $filePath")
+                }
+            }
             
             pfd.close()
 
@@ -554,6 +600,8 @@ class TagLibMetadataProcessor @Inject constructor(
             metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
             metadata.trackNumber?.let { properties["TRACK"] = arrayOf(it.toString()) }
             metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
+            metadata.lyrics?.let { properties["LYRICS"] = arrayOf(it) }
+
             metadata.albumArtist?.let { properties["ALBUMARTIST"] = arrayOf(it) }
             metadata.discNumber?.let { properties["DISCNUMBER"] = arrayOf(it.toString()) }
             metadata.composer?.let { properties["COMPOSER"] = arrayOf(it) }
@@ -579,6 +627,30 @@ class TagLibMetadataProcessor @Inject constructor(
             } finally {
                 pfd.close()
             }
+            
+            // Save album art if provided
+            metadata.albumArt?.let { albumArtBytes ->
+                val mimeType = detectImageMimeType(albumArtBytes)
+                val picture = Picture(
+                    data = albumArtBytes,
+                    description = "Front Cover",
+                    pictureType = "Front Cover",
+                    mimeType = mimeType
+                )
+                // Need to reopen file descriptor for picture saving since we closed it in finally
+                val pfd2 = context.contentResolver.openFileDescriptor(mediaUri, "rw")
+                    ?: return@runCatching Result.failure(IllegalStateException("Cannot reopen file descriptor for picture save"))
+                val fdForTagLib2 = pfd2.dup().detachFd()
+                try {
+                    val pictureSaved = TagLib.savePictures(fdForTagLib2, arrayOf(picture))
+                    if (!pictureSaved) {
+                        Log.w(TAG, "Failed to save album art for: $filePath")
+                    }
+                } finally {
+                    pfd2.close()
+                }
+            }
+            
             if (!success) {
                 return Result.failure(IllegalStateException("TagLib.savePropertyMap() returned false"))
             }
@@ -667,6 +739,7 @@ class TagLibMetadataProcessor @Inject constructor(
             metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
             metadata.trackNumber?.let { properties["TRACK"] = arrayOf(it.toString()) }
             metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
+            metadata.lyrics?.let { properties["LYRICS"] = arrayOf(it) }
 
             metadata.albumArtist?.let { properties["ALBUMARTIST"] = arrayOf(it) }
             metadata.discNumber?.let { properties["DISCNUMBER"] = arrayOf(it.toString()) }
@@ -692,6 +765,28 @@ class TagLibMetadataProcessor @Inject constructor(
             // TagLib takes ownership and closes its copy
             val success = TagLib.savePropertyMap(fdForTagLib, properties)
             pfd.close()
+
+            // Save album art if provided
+            metadata.albumArt?.let { albumArtBytes ->
+                val mimeType = detectImageMimeType(albumArtBytes)
+                val picture = Picture(
+                    data = albumArtBytes,
+                    description = "Front Cover",
+                    pictureType = "Front Cover",
+                    mimeType = mimeType
+                )
+                // Reopen file descriptor for picture saving
+                val pfd2 = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_WRITE)
+                val fdForTagLib2 = pfd2.dup().detachFd()
+                try {
+                    val pictureSaved = TagLib.savePictures(fdForTagLib2, arrayOf(picture))
+                    if (!pictureSaved) {
+                        Log.w(TAG, "Failed to save album art for: $filePath")
+                    }
+                } finally {
+                    pfd2.close()
+                }
+            }
 
             if (!success) {
                 return@withContext Result.failure(IllegalStateException("TagLib.savePropertyMap() returned false"))

@@ -2,22 +2,12 @@ package com.voxly.presentation.navigation
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutLinearInEasing
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
-import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 
@@ -39,7 +29,6 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.NavGraphBuilder
 import androidx.navigation.navArgument
 import com.voxly.R
 import com.voxly.core.util.LogManager
@@ -47,7 +36,6 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 
-import com.voxly.presentation.screens.DirectoryManagementScreen
 import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
 import com.voxly.presentation.screens.RecentEditsScreen
@@ -57,10 +45,15 @@ import com.voxly.presentation.screens.StatisticsScreen
 import com.voxly.presentation.screens.log.LogViewerScreen
 import java.net.URLDecoder
 import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
+import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
+import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
+import com.voxly.presentation.components.ExpressiveNavigationBar
+import com.voxly.presentation.components.ExpressiveNavigationBarItem
+import com.voxly.presentation.theme.ExpressiveAnimations
 
 /**
  * Main navigation host for the MP3 Tag Editor app.
- * Implements bottom navigation with Material Design 3 components.
+ * Implements bottom navigation with Material Design 3 Expressive components.
  */
 @Composable
 fun MP3TagNavHost(
@@ -86,27 +79,20 @@ fun MP3TagNavHost(
     }
 
     Scaffold(
-        contentWindowInsets = WindowInsets(0, 0, 0, 0),
+        contentWindowInsets = WindowInsets(0),
 
         bottomBar = {
             if (showBottomBar) {
                 AnimatedVisibility(
                     visible = isBottomBarVisible,
-                    enter = fadeIn(animationSpec = tween(160)) + expandVertically(),
-                    exit = fadeOut(animationSpec = tween(130)) + shrinkVertically()
+                    enter = ExpressiveAnimations.ListItemEnter,
+                    exit = ExpressiveAnimations.ListItemExit
                 ) {
-                    NavigationBar {
+                    ExpressiveNavigationBar {
                         bottomNavItems.forEach { item ->
                             val selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
                             val label = stringResource(item.labelResId)
-                            NavigationBarItem(
-                                icon = {
-                                    Icon(
-                                        painter = appIconPainter(if (selected) item.selectedIcon else item.unselectedIcon),
-                                        contentDescription = label
-                                    )
-                                },
-                                label = { Text(label) },
+                            ExpressiveNavigationBarItem(
                                 selected = selected,
                                 onClick = {
                                     navController.navigate(item.screen.route) {
@@ -116,52 +102,33 @@ fun MP3TagNavHost(
                                         launchSingleTop = true
                                         restoreState = true
                                     }
-                                }
+                                },
+                                icon = item.unselectedIcon.vector,
+                                selectedIcon = item.selectedIcon.vector,
+                                label = label
                             )
                         }
                     }
                 }
             }
         }
-    ) { _ ->
+    ) { innerPadding ->
         NavHost(
             navController = navController,
+            modifier = Modifier
+                .padding(innerPadding),
             startDestination = Screen.FileBrowser.route,
             enterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { fullWidth -> (fullWidth * 0.12f).toInt() },
-                    animationSpec = spring(
-                        dampingRatio = 0.6f,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeIn(animationSpec = tween(durationMillis = FORWARD_DURATION_MS - 20))
+                ExpressiveAnimations.PageEnter
             },
             exitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { fullWidth -> -(fullWidth * 0.06f).toInt() },
-                    animationSpec = spring(
-                        dampingRatio = 0.6f,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut(animationSpec = tween(durationMillis = FORWARD_DURATION_MS - 40))
+                ExpressiveAnimations.PageExit
             },
             popEnterTransition = {
-                slideInHorizontally(
-                    initialOffsetX = { fullWidth -> -(fullWidth * 0.1f).toInt() },
-                    animationSpec = spring(
-                        dampingRatio = 0.6f,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeIn(animationSpec = tween(durationMillis = BACK_DURATION_MS - 10))
+                ExpressiveAnimations.PageEnter
             },
             popExitTransition = {
-                slideOutHorizontally(
-                    targetOffsetX = { fullWidth -> (fullWidth * 0.1f).toInt() },
-                    animationSpec = spring(
-                        dampingRatio = 0.6f,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut(animationSpec = tween(durationMillis = BACK_DURATION_MS - 30))
+                ExpressiveAnimations.PageExit
             }
         ) {
             composable(Screen.FileBrowser.route) {
@@ -197,9 +164,6 @@ fun MP3TagNavHost(
             composable(Screen.Settings.route) {
                 val context = LocalContext.current
                 SettingsScreen(
-                    onNavigateToDirectoryManagement = {
-                        navController.navigate(Screen.DirectoryManagement.route)
-                    },
                     onNavigateToLogViewer = {
                         navController.navigate(Screen.LogViewer.route)
                     },
@@ -218,6 +182,9 @@ fun MP3TagNavHost(
                             }
                         }
                     },
+                    onNavigateToScanDirectorySettings = {
+                        navController.navigate(Screen.ScanDirectorySettings.route)
+                    },
                     onCleanupLogs = {
                         val deletedCount = LogManager.clearAllLogs()
                         Toast.makeText(
@@ -235,8 +202,8 @@ fun MP3TagNavHost(
                 )
             }
 
-            composable(Screen.DirectoryManagement.route) {
-                DirectoryManagementScreen(
+            composable(Screen.ScanDirectorySettings.route) {
+                com.voxly.presentation.screens.ScanDirectorySettingsScreen(
                     onNavigateBack = { navController.popBackStack() }
                 )
             }
@@ -257,6 +224,12 @@ fun MP3TagNavHost(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToOnlineMetadata = {
                         navController.navigate(Screen.OnlineMetadata.createRoute(filePath))
+                    },
+                    onNavigateToOnlineLyricsSearch = {
+                        navController.navigate(Screen.OnlineLyricsSearch.createRoute(filePath))
+                    },
+                    onNavigateToOnlineCoverSearch = {
+                        navController.navigate(Screen.OnlineCoverSearch.createRoute(filePath))
                     },
                     pendingOnlineMetadata = pendingOnlineMetadata,
                     onConsumePendingOnlineMetadata = {
@@ -298,6 +271,48 @@ fun MP3TagNavHost(
                         navController.previousBackStackEntry
                             ?.savedStateHandle
                             ?.set("online_metadata_result", metadata)
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            // Online lyrics search screen
+            composable(
+                route = Screen.OnlineLyricsSearch.route,
+                arguments = listOf(
+                    navArgument("filePath") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
+                val filePath = URLDecoder.decode(encodedPath, "UTF-8")
+                
+                OnlineLyricsSearchScreen(
+                    filePath = filePath,
+                    onNavigateBack = { navController.popBackStack() },
+                    onLyricsSelected = { lyricsResult ->
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("online_lyrics_result", lyricsResult)
+                        navController.popBackStack()
+                    }
+                )
+            }
+
+            // Online cover search screen
+            composable(
+                route = Screen.OnlineCoverSearch.route,
+                arguments = listOf(
+                    navArgument("filePath") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
+                OnlineCoverSearchScreen(
+                    filePath = URLDecoder.decode(encodedPath, "UTF-8"),
+                    onNavigateBack = { navController.popBackStack() },
+                    onCoverSelected = { coverBytes ->
+                        navController.previousBackStackEntry
+                            ?.savedStateHandle
+                            ?.set("online_cover_result", coverBytes)
                         navController.popBackStack()
                     }
                 )
@@ -346,6 +361,3 @@ private val bottomNavItems = listOf(
         unselectedIcon = AppIcon.SettingsOutlined
     )
 )
-
-private const val FORWARD_DURATION_MS = 240
-private const val BACK_DURATION_MS = 210
