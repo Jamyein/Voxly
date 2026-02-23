@@ -36,15 +36,17 @@ jobs:
           fi
           echo "${SIGNING_KEYSTORE_BASE64}" | base64 -d > app/voxly-release.keystore
 
+      - name: Make Gradle executable
+        run: chmod +x gradlew
+
       - name: Build with Gradle
-        uses: gradle/gradle-build-action@v2
+        run: |
+          ./gradlew assembleGithubRelease
         env:
           CI: true
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || vars.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || vars.SIGNING_KEY_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || vars.SIGNING_KEY_ALIAS || 'voxly' }}
-        with:
-          arguments: assembleGithubRelease
 
       - name: Clean up keystore
         if: always()
