@@ -66,6 +66,38 @@ app/src/main/java/com/voxly/
 7. 用户提出需求时需要利用提问问题工具获取更详细细节。
 8. 不要每完成一个todo进行一次build测试，在所有todo完成后才进行一次build测试。
 
+---
+
+## TopAppBar WindowInsets 处理方案 (2026-02-23)
+
+**问题**: 使用 `enableEdgeToEdge()` 后，顶栏内文字按钮被状态栏覆盖，或出现大片空白
+
+**解决方案**:
+
+1. **ExpressiveScaffold**: 禁用 Scaffold 默认的 `contentWindowInsets`
+   ```kotlin
+   Scaffold(
+       contentWindowInsets = WindowInsets(0, 0, 0, 0),  // 禁用默认 insets
+       ...
+   )
+   ```
+
+2. **ExpressiveTopAppBar** (所有变体): 使用 `windowInsets` 参数
+   ```kotlin
+   TopAppBar(
+       windowInsets = WindowInsets.statusBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
+       ...
+   )
+   ```
+
+**原理**:
+- `WindowInsets.statusBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)` 只应用顶部和水平 insets，不影响内容区域
+- 禁用 Scaffold 默认 insets 避免 TopAppBar 和内容区域同时争用空间
+
+**涉及文件**:
+- `presentation/components/ExpressiveScaffold.kt`
+- `presentation/components/ExpressiveTopAppBar.kt`
+
 
 ## 外部文件加载
 

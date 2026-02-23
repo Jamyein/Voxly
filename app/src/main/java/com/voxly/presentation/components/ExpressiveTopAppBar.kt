@@ -6,10 +6,12 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.MoreVert
@@ -64,9 +66,8 @@ fun ExpressiveTopAppBar(
                     overflow = TextOverflow.Ellipsis
                 )
             },
-            modifier = modifier
-                .fillMaxWidth()
-                .height(64.dp),
+            modifier = modifier.fillMaxWidth(),
+            windowInsets = WindowInsets.statusBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
             navigationIcon = {
                 if (navigationIcon != null && onNavigationClick != null) {
                     IconButton(onClick = onNavigationClick) {
@@ -93,9 +94,8 @@ fun ExpressiveTopAppBar(
                     overflow = TextOverflow.Ellipsis
                 )
             },
-            modifier = modifier
-                .fillMaxWidth()
-                .height(64.dp),
+            modifier = modifier.fillMaxWidth(),
+            windowInsets = WindowInsets.statusBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
             navigationIcon = {
                 if (navigationIcon != null && onNavigationClick != null) {
                     IconButton(onClick = onNavigationClick) {
@@ -137,8 +137,8 @@ fun ExpressiveLargeTopAppBar(
                 overflow = TextOverflow.Ellipsis
             )
         },
-        modifier = modifier
-            .fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
+        windowInsets = WindowInsets.statusBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         navigationIcon = {
             if (navigationIcon != null && onNavigationClick != null) {
                 IconButton(onClick = onNavigationClick) {
@@ -179,9 +179,8 @@ fun ExpressiveMediumTopAppBar(
                 overflow = TextOverflow.Ellipsis
             )
         },
-        modifier = modifier
-            .fillMaxWidth()
-            .height(112.dp),
+        modifier = modifier.fillMaxWidth(),
+        windowInsets = WindowInsets.statusBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         navigationIcon = {
             if (navigationIcon != null && onNavigationClick != null) {
                 IconButton(onClick = onNavigationClick) {
@@ -246,9 +245,8 @@ fun ExpressiveSearchTopAppBar(
                 )
             }
         },
-        modifier = modifier
-            .fillMaxWidth()
-            .height(64.dp),
+        modifier = modifier.fillMaxWidth(),
+        windowInsets = WindowInsets.statusBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
         navigationIcon = {
             if (navigationIcon != null && onNavigationClick != null) {
                 IconButton(onClick = onNavigationClick) {
