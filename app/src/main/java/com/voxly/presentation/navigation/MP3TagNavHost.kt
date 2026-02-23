@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
-import androidx.compose.material3.Scaffold
+import com.voxly.presentation.components.ExpressiveScaffold
 import androidx.compose.material3.Text
 
 import androidx.compose.runtime.Composable
@@ -50,6 +50,8 @@ import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
 import com.voxly.presentation.components.ExpressiveNavigationBar
 import com.voxly.presentation.components.ExpressiveNavigationBarItem
 import com.voxly.presentation.theme.ExpressiveAnimations
+import androidx.hilt.navigation.compose.hiltViewModel
+import com.voxly.presentation.viewmodel.AppViewModel
 
 /**
  * Main navigation host for the MP3 Tag Editor app.
@@ -59,6 +61,9 @@ import com.voxly.presentation.theme.ExpressiveAnimations
 fun MP3TagNavHost(
     navController: NavHostController = rememberNavController()
 ) {
+    // Initialize AppViewModel at navigation level to observe settings changes app-wide
+    val appViewModel: AppViewModel = hiltViewModel()
+    
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
@@ -78,8 +83,7 @@ fun MP3TagNavHost(
         }
     }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0),
+    ExpressiveScaffold(
 
         bottomBar = {
             if (showBottomBar) {
@@ -112,11 +116,10 @@ fun MP3TagNavHost(
                 }
             }
         }
-    ) { innerPadding ->
+    ) {
         NavHost(
             navController = navController,
-            modifier = Modifier
-                .padding(innerPadding),
+            modifier = Modifier,
             startDestination = Screen.FileBrowser.route,
             enterTransition = {
                 ExpressiveAnimations.PageEnter

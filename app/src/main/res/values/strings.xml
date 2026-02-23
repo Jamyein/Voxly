@@ -453,5 +453,17 @@
     <string name="select_fields_to_convert">选择要转换的字段：</string>
     <string name="deselect_all">取消全选</string>
 
+    <!-- Settings - Network/Proxy -->
+    <string name="settings_section_network">Network</string>
+    <string name="settings_proxy_enabled">Proxy</string>
+    <string name="settings_proxy_enabled_subtitle">Enable proxy for online metadata</string>
+    <string name="settings_proxy_type">Proxy Type</string>
+    <string name="settings_proxy_type_subtitle">HTTP, SOCKS or System proxy</string>
+    <string name="settings_proxy_type_system">System</string>
+    <string name="settings_proxy_host">Proxy Host</string>
+    <string name="settings_proxy_host_placeholder">Enter proxy hostname</string>
+    <string name="settings_proxy_port">Proxy Port</string>
+    <string name="settings_proxy_port_placeholder">Enter proxy port</string>
+
 
 </resources>

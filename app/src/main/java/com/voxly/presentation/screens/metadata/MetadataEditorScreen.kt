@@ -44,6 +44,8 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.components.ExpressiveTopAppBar
+import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.ConvertibleField
@@ -140,17 +142,14 @@ fun MetadataEditorScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.edit_metadata)) },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (hasUnsavedChanges) {
-                            showDiscardDialog = true
-                        } else {
-                            onNavigateBack()
-                        }
-                    }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
+            ExpressiveTopAppBar(
+                title = stringResource(R.string.edit_metadata),
+                navigationIcon = Icons.Default.ArrowBack,
+                onNavigationClick = {
+                    if (hasUnsavedChanges) {
+                        showDiscardDialog = true
+                    } else {
+                        onNavigateBack()
                     }
                 },
                 actions = {
@@ -200,8 +199,7 @@ fun MetadataEditorScreen(
                             Icon(Icons.Default.Save, contentDescription = stringResource(R.string.dialog_save))
                         }
                     }
-                },
-                windowInsets = TopAppBarDefaults.windowInsets
+                }
             )
         },
         floatingActionButton = {
@@ -227,14 +225,8 @@ fun MetadataEditorScreen(
                 ) {
                     AnimatedVisibility(
                         visible = showActionMenu,
-                        enter = slideInVertically(
-                            initialOffsetY = { it },
-                            animationSpec = tween(300)
-                        ) + fadeIn(animationSpec = tween(300)),
-                        exit = slideOutVertically(
-                            targetOffsetY = { it },
-                            animationSpec = tween(200)
-                        ) + fadeOut(animationSpec = tween(200))
+                        enter = ExpressiveAnimations.FabEnter,
+                        exit = ExpressiveAnimations.FabExit
                     ) {
                         Column(
                             horizontalAlignment = Alignment.End,

@@ -8,11 +8,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Card
+import com.voxly.presentation.components.ExpressiveCard
+import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
+import com.voxly.presentation.theme.ContainerLevel
+import com.voxly.presentation.theme.ExpressiveMotionTokens
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -21,8 +28,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -54,41 +59,26 @@ fun OnlineLyricsSearchScreen(
         viewModel.search(filePath)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.search_online_lyrics)) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.search(filePath) },
-                        enabled = !isLoading
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Search Again")
-                    }
-                },
-                windowInsets = TopAppBarDefaults.windowInsets
-            )
+    ExpressiveScaffoldWithTopBar(
+        title = stringResource(R.string.search_online_lyrics),
+        navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+        onNavigationClick = onNavigateBack,
+        actions = {
+            IconButton(
+                onClick = { viewModel.search(filePath) },
+                enabled = !isLoading
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = "Search Again")
+            }
         }
-    ) { innerPadding ->
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp)
+            .padding(16.dp)
         ) {
             // Search info card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
-            ) {
+            ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
                         text = "Search query:",
@@ -127,23 +117,40 @@ fun OnlineLyricsSearchScreen(
             }
 
             // Error message
-            errorMessage?.let { error ->
-                Text(
-                    text = error,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(vertical = 8.dp)
-                )
+            AnimatedVisibility(
+                visible = errorMessage != null,
+                enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness))
+            ) {
+                errorMessage?.let { error ->
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
             }
 
             // Results
-            if (lyricsResults.isEmpty() && !isLoading && errorMessage == null) {
+            AnimatedVisibility(
+                visible = lyricsResults.isEmpty() && !isLoading && errorMessage == null,
+                enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness))
+            ) {
                 Text(
                     text = stringResource(R.string.error_no_results),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(lyricsResults) { item ->
+            }
+            AnimatedVisibility(
+                visible = lyricsResults.isNotEmpty(),
+                enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)) + slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)
+                )
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    items(lyricsResults, key = { it.id }) { item ->
                         LyricsResultItem(
                             item = item,
                             onClick = {
@@ -161,14 +168,13 @@ fun OnlineLyricsSearchScreen(
 @Composable
 private fun LyricsResultItem(
     item: OnlineLyricsResult,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp)
-            .clickable { onClick() },
-        shape = MaterialTheme.shapes.medium
+    ExpressiveCard(
+        modifier = modifier.then(Modifier.fillMaxWidth().padding(vertical = 4.dp)),
+        containerLevel = ContainerLevel.Low,
+        onClick = onClick
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(

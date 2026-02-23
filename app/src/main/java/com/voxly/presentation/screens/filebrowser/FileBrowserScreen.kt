@@ -58,6 +58,7 @@ import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.components.ExpressiveTopAppBar
 import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.viewmodel.FileBrowserUiState
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
@@ -313,20 +314,10 @@ fun FileBrowserScreen(
                     exit = com.voxly.presentation.theme.ExpressiveAnimations.ListItemExit
                 ) {
                     if (openedDirectory != null) {
-                        TopAppBar(
-                            title = {
-                                Text(
-                                    openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }
-                                )
-                            },
-                            navigationIcon = {
-                                IconButton(onClick = viewModel::closeOpenedDirectory) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = stringResource(R.string.cd_back)
-                                    )
-                                }
-                            },
+                        ExpressiveTopAppBar(
+                            title = openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path },
+                            navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+                            onNavigationClick = viewModel::closeOpenedDirectory,
                             actions = {
                                 IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
                                     Icon(
@@ -356,16 +347,11 @@ fun FileBrowserScreen(
                                         contentDescription = stringResource(R.string.refresh_files)
                                     )
                                 }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                titleContentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            windowInsets = TopAppBarDefaults.windowInsets
+                            }
                         )
                     } else {
-                        TopAppBar(
-                            title = { Text(stringResource(R.string.app_name)) },
+                        ExpressiveTopAppBar(
+                            title = stringResource(R.string.nav_file_browser),
                             actions = {
                                 IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
                                     Icon(
@@ -395,12 +381,7 @@ fun FileBrowserScreen(
                                         contentDescription = stringResource(R.string.refresh_files)
                                     )
                                 }
-                            },
-                            colors = TopAppBarDefaults.topAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                                titleContentColor = MaterialTheme.colorScheme.onSurface
-                            ),
-                            windowInsets = TopAppBarDefaults.windowInsets
+                            }
                         )
                     }
                 }
@@ -1472,13 +1453,11 @@ private fun SelectionTopBar(
     onNavigateToReplayGain: () -> Unit,
     onBatchOperations: () -> Unit
 ) {
-    TopAppBar(
-        title = { Text(stringResource(R.string.selected_count, selectedCount)) },
-        navigationIcon = {
-            IconButton(onClick = onClearSelection) {
-                Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_selection))
-            }
-        },
+    ExpressiveTopAppBar(
+        title = stringResource(R.string.selected_count, selectedCount),
+        navigationIcon = Icons.Default.Close,
+        onNavigationClick = onClearSelection,
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
         actions = {
             TextButton(onClick = onSelectAll) {
                 Text(stringResource(R.string.select_all))
@@ -1519,11 +1498,7 @@ private fun SelectionTopBar(
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(R.string.replay_gain))
             }
-        },
-        colors = TopAppBarDefaults.topAppBarColors(
-            containerColor = MaterialTheme.colorScheme.secondaryContainer
-        ),
-        windowInsets = TopAppBarDefaults.windowInsets
+        }
     )
 }
 

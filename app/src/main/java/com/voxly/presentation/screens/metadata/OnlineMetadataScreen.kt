@@ -19,9 +19,9 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.ElevatedCard
+import com.voxly.presentation.components.ExpressiveCard
+import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
+import com.voxly.presentation.theme.ContainerLevel
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -92,35 +92,23 @@ fun OnlineMetadataScreen(
         }
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Online Metadata") },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.autoSearch() },
-                        enabled = !isLoading
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Search Again")
-                    }
-                },
-                windowInsets = TopAppBarDefaults.windowInsets
-            )
+    ExpressiveScaffoldWithTopBar(
+        title = "Online Metadata",
+        navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
+        onNavigationClick = onNavigateBack,
+        actions = {
+            IconButton(
+                onClick = { viewModel.autoSearch() },
+                enabled = !isLoading
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = "Search Again")
+            }
         }
-    ) { innerPadding ->
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
-                .padding(16.dp)
+            .padding(16.dp)
         ) {
             QuerySummaryCard(
                 title = query.title,
@@ -194,10 +182,7 @@ private fun QuerySummaryCard(
     album: String?,
     fromTags: Boolean
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium
-    ) {
+    ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 text = if (fromTags) "Auto query source: tags (priority)" else "Auto query source: file name fallback",
@@ -229,13 +214,7 @@ private fun OnlineReleaseList(
 ) {
     LazyColumn(modifier = modifier.fillMaxWidth()) {
         items(releases) { release ->
-            ElevatedCard(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 6.dp)
-                    .clickable { onSelect(release) },
-                shape = MaterialTheme.shapes.large
-            ) {
+            ExpressiveCard(    modifier = Modifier        .fillMaxWidth()        .padding(vertical = 6.dp),    containerLevel = ContainerLevel.Low,    onClick = { onSelect(release) }) {
                 Row(modifier = Modifier.padding(16.dp)) {
                     ReleaseCover(
                         coverArtUrl = release.coverArtUrl,
@@ -301,12 +280,10 @@ fun SearchProgressIndicator(
     val isLyricsSearching = searchState.isLyricsSearching
     val resultCount = searchState.results.size
 
-    Card(
+    ExpressiveCard(
         modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = androidx.compose.material3.CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
+        containerColor = MaterialTheme.colorScheme.surfaceVariant,
+        containerLevel = ContainerLevel.Low
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             // Status line with source indicators

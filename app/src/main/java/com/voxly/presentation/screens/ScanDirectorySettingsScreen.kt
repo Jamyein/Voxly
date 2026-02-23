@@ -17,13 +17,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
+import com.voxly.presentation.theme.ContainerLevel
+import com.voxly.presentation.components.ExpressiveCard
+import com.voxly.presentation.components.ExpressiveScaffoldWithBack
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -97,32 +99,18 @@ fun ScanDirectorySettingsScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(stringResource(R.string.settings_scan_directory_settings)) },
-            navigationIcon = {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.cd_back)
-                    )
-                }
-            }
-        )
-
+    ExpressiveScaffoldWithBack(
+        title = stringResource(R.string.settings_scan_directory_settings),
+        onBackClick = onNavigateBack
+    ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
+        contentPadding = PaddingValues(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
             // Whitelist Section
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                ) {
+                ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -184,12 +172,7 @@ fun ScanDirectorySettingsScreen(
 
             // Blacklist Section
             item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    )
-                ) {
+                ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -261,12 +244,7 @@ private fun WhitelistDirectoryItem(
     directory: SelectedDirectory,
     onRemove: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
+    ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -304,12 +282,7 @@ private fun BlacklistDirectoryItem(
     directory: SelectedDirectory,
     onRemove: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        )
-    ) {
+    ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()

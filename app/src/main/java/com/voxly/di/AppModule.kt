@@ -5,6 +5,7 @@ import com.voxly.data.remote.NetworkConstants
 import android.content.Context
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.presentation.viewmodel.AppViewModel
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.replaygain.ReplayGainScanner
@@ -56,7 +57,9 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideOkHttpClient(): OkHttpClient {
+    fun provideOkHttpClient(
+        proxyInterceptor: ProxyInterceptor
+    ): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
         }
@@ -71,6 +74,7 @@ object AppModule {
         }
 
         return OkHttpClient.Builder()
+            .addInterceptor(proxyInterceptor)
             .addInterceptor(userAgentInterceptor)
             .addInterceptor(loggingInterceptor)
             // Enable retry on connection failure
@@ -252,6 +256,13 @@ object AppModule {
         @ApplicationContext context: Context
     ): MusicCacheDatabaseProvider {
         return MusicCacheDatabaseProvider(context)
+    }
+
+    @Provides
+    fun provideAppViewModel(
+        settingsDataStore: SettingsDataStore
+    ): AppViewModel {
+        return AppViewModel(settingsDataStore)
     }
 }
 

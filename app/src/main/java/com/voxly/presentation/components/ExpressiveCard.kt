@@ -34,10 +34,12 @@ import com.voxly.presentation.theme.ContainerLevel
  * MD3 Expressive Card特点：
  * 1. 使用Surface Container颜色系统 - 通过色调而非阴影区分层级
  * 2. 支持ContainerLevel参数 - 控制背景色层级
- * 3. 物理动画 - 按压时有弹性反馈
- * 4. 使用extraLarge圆角 (28dp) - 更友好的视觉效果
+ * 3. 支持containerColor参数 - 直接指定背景色（优先于containerLevel）
+ * 4. 物理动画 - 按压时有弹性反馈
+ * 5. 使用extraLarge圆角 (28dp) - 更友好的视觉效果
  * 
  * @param containerLevel Surface Container层级
+ * @param containerColor 自定义背景色（优先于containerLevel）
  * @param onClick 点击事件
  * @param enabled 是否启用点击
  * @param shape 形状（默认使用extraLarge圆角）
@@ -47,6 +49,7 @@ import com.voxly.presentation.theme.ContainerLevel
 fun ExpressiveCard(
     modifier: Modifier = Modifier,
     containerLevel: ContainerLevel = ContainerLevel.Low,
+    containerColor: Color? = null,
     onClick: (() -> Unit)? = null,
     enabled: Boolean = true,
     shape: Shape = MaterialTheme.shapes.extraLarge,
@@ -65,9 +68,9 @@ fun ExpressiveCard(
         label = "cardScale"
     )
     
-    // 背景色动画
+    // 背景色动画 - 优先使用containerColor
     val backgroundColor by animateColorAsState(
-        targetValue = getContainerColor(containerLevel, isPressed),
+        targetValue = containerColor ?: getContainerColor(containerLevel, isPressed),
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMediumLow
@@ -204,4 +207,36 @@ fun ExpressiveExpandableCard(
             }
         }
     }
+}
+
+/**
+ * 兼容现有Card API的ExpressiveCard重载版本
+ * 
+ * 这个版本支持与标准Card相似的参数，便于从现有Card迁移到ExpressiveCard。
+ * 
+ * @param modifier 修饰符
+ * @param shape 形状（默认使用medium圆角，与标准Card一致）
+ * @param containerColor 背景色
+ * @param onClick 点击事件
+ * @param enabled 是否启用点击
+ * @param content 内容
+ */
+@Composable
+fun ExpressiveCard(
+    modifier: Modifier = Modifier,
+    shape: Shape = MaterialTheme.shapes.medium,
+    containerColor: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    onClick: (() -> Unit)? = null,
+    enabled: Boolean = true,
+    content: @Composable BoxScope.() -> Unit
+) {
+    ExpressiveCard(
+        modifier = modifier,
+        containerLevel = ContainerLevel.Low,
+        containerColor = containerColor,
+        onClick = onClick,
+        enabled = enabled,
+        shape = shape,
+        content = content
+    )
 }

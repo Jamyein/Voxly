@@ -18,6 +18,11 @@ import javax.inject.Singleton
 
 private const val TAG = "WangyRepository"
 
+// 错误追踪：防止无限循环
+private var consecutiveErrorCount = 0
+private const val MAX_CONSECUTIVE_ERRORS = 5
+private const val ERROR_RESET_TIMEOUT_MS = 30_000L  // 30秒后重置错误计数
+
 /**
  * Repository for WangY Music API operations.
  * Uses simplified web API (no encryption required).
@@ -94,6 +99,12 @@ class WangyRepositoryImpl @Inject constructor(
         page: Int,
         limit: Int
     ): Result<WangySearchResponse> = withContext(Dispatchers.IO) {
+        // 电路保护：如果连续错误太多，暂时跳过请求
+        if (consecutiveErrorCount >= MAX_CONSECUTIVE_ERRORS) {
+            Timber.w(TAG, "Circuit breaker activated: too many consecutive errors ($consecutiveErrorCount), skipping request")
+            return@withContext Result.failure(Exception("Circuit breaker: too many consecutive errors"))
+        }
+
         val normalizedPage = if (page <= 0) 1 else page
         val normalizedLimit = limit.coerceIn(1, 100)
         val offset = (normalizedPage - 1) * normalizedLimit
@@ -158,12 +169,18 @@ class WangyRepositoryImpl @Inject constructor(
 
             if (code == 200 && !parsedResponse.result?.songs.isNullOrEmpty()) {
                 Timber.d(TAG, "NetEase found ${parsedResponse.result.songs.size} songs for '$keywords'")
+                // 成功：重置错误计数
+                consecutiveErrorCount = 0
                 return@withContext Result.success(parsedResponse)
             }
 
             Timber.w(TAG, "NetEase API returned empty result for '$keywords'")
+            // 成功：重置错误计数
+            consecutiveErrorCount = 0
             Result.success(parsedResponse)
         } catch (e: Exception) {
+            // 失败：增加错误计数
+            consecutiveErrorCount++
             Timber.e(TAG, "Exception during API call: ${e.message}", e)
             Result.failure(e)
         }

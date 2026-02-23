@@ -8,6 +8,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.material3.CardDefaults
+import com.voxly.presentation.theme.ContainerLevel
+import com.voxly.presentation.components.ExpressiveCard
+import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -41,30 +45,20 @@ fun ReplayGainScannerScreen(
     var scanQuality by remember { mutableStateOf(ScanQuality.NORMAL) }
     val scope = rememberCoroutineScope()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.replay_gain_scanner_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = stringResource(R.string.cd_back))
-                    }
-                },
-                actions = {
-                    if (!isScanning) {
-                        IconButton(onClick = { showSettingsSheet = true }) {
-                            Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.nav_settings))
-                        }
-                    }
-                },
-                windowInsets = TopAppBarDefaults.windowInsets
-            )
+    ExpressiveScaffoldWithTopBar(
+        title = stringResource(R.string.replay_gain_scanner_title),
+        navigationIcon = Icons.Default.ArrowBack,
+        onNavigationClick = onNavigateBack,
+        actions = {
+            if (!isScanning) {
+                IconButton(onClick = { showSettingsSheet = true }) {
+                    Icon(Icons.Default.Settings, contentDescription = stringResource(R.string.nav_settings))
+                }
+            }
         }
-    ) { innerPadding ->
+    ) {
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+            modifier = Modifier.fillMaxSize()
         ) {
             if (isScanning) {
                 // Scanning UI
@@ -241,13 +235,7 @@ private fun ConfigurationContent(
         Spacer(modifier = Modifier.height(32.dp))
 
         // Scan Type Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
-        ) {
+        ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
             Column(
                 modifier = Modifier.padding(16.dp)
             ) {
@@ -278,13 +266,7 @@ private fun ConfigurationContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Target Loudness Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
-        ) {
+        ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
             Column(
                 modifier = Modifier.padding(16.dp)
             ) {
@@ -318,13 +300,7 @@ private fun ConfigurationContent(
         Spacer(modifier = Modifier.height(16.dp))
 
         // Scan Quality Card
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
-        ) {
+        ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
             Column(
                 modifier = Modifier.padding(16.dp)
             ) {

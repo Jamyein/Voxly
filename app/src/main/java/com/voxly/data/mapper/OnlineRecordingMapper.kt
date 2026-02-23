@@ -102,7 +102,8 @@ object OnlineRecordingMapper {
         name: String,
         singers: List<SingerData>?,
         interval: Int?,
-        album: AlbumInfo?
+        album: AlbumInfo?,
+        lyrics: String? = null
     ): OnlineRecording {
         val albumId = album?.id?.toString()
         val albumMid = album?.mid
@@ -115,7 +116,8 @@ object OnlineRecordingMapper {
             duration = interval,
             releaseId = albumMid ?: albumId,
             source = "QQ Music",
-            coverArtUrl = buildQQCoverUrl(albumMid, album?.pic, albumId)
+            coverArtUrl = buildQQCoverUrl(albumMid, album?.pic, albumId),
+            lyrics = lyrics
         )
     }
     

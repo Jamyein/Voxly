@@ -536,4 +536,82 @@ class SettingsViewModel @Inject constructor(
             settingsDataStore.setMinDurationFilterThresholdMs(thresholdMs)
         }
     }
+
+    // ==================== Proxy Settings ====================
+
+    /**
+     * Proxy enabled state
+     */
+    val proxyEnabled: StateFlow<Boolean> = settingsDataStore.proxyEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = false
+        )
+
+    /**
+     * Proxy type state (HTTP, SOCKS)
+     */
+    val proxyType: StateFlow<String> = settingsDataStore.proxyType
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = "HTTP"
+        )
+
+    /**
+     * Proxy host state
+     */
+    val proxyHost: StateFlow<String> = settingsDataStore.proxyHost
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = ""
+        )
+
+    /**
+     * Proxy port state
+     */
+    val proxyPort: StateFlow<Int> = settingsDataStore.proxyPort
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = 0
+        )
+
+    /**
+     * Set proxy enabled preference
+     */
+    fun setProxyEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setProxyEnabled(enabled)
+        }
+    }
+
+    /**
+     * Set proxy type preference
+     */
+    fun setProxyType(type: String) {
+        viewModelScope.launch {
+            settingsDataStore.setProxyType(type)
+        }
+    }
+
+    /**
+     * Set proxy host preference
+     */
+    fun setProxyHost(host: String) {
+        viewModelScope.launch {
+            settingsDataStore.setProxyHost(host)
+        }
+    }
+
+    /**
+     * Set proxy port preference
+     */
+    fun setProxyPort(port: Int) {
+        viewModelScope.launch {
+            settingsDataStore.setProxyPort(port)
+        }
+    }
 }

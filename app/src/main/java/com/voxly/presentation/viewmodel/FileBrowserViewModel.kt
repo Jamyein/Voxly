@@ -23,11 +23,13 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.last
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -42,7 +44,8 @@ class FileBrowserViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val audioRepository: AudioRepository,
     private val onlineMetadataRepository: OnlineMetadataRepository,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val appViewModel: AppViewModel
 ) : ViewModel() {
     companion object {
         private const val TAG = "FileBrowserViewModel"
@@ -81,8 +84,38 @@ class FileBrowserViewModel @Inject constructor(
     private var cachedGlobalFiles: List<AudioFile>? = null
     private val scrollPositions = mutableMapOf<String, ScrollPosition>()
 
+    // Scan filter settings - observe changes to trigger auto-refresh
+    private val whitelistEnabled = settingsDataStore.whitelistEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val blacklistEnabled = settingsDataStore.blacklistEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    private val minDurationFilterThresholdMs = settingsDataStore.minDurationFilterThresholdMs
+        .stateIn(viewModelScope, SharingStarted.Eagerly, 60000)
+    private val selectedDirectoryUris = settingsDataStore.selectedDirectoryUris
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    private val blacklistDirectoryUris = settingsDataStore.blacklistDirectoryUris
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    // Track previous settings to detect changes
+    private var lastWhitelistEnabled = false
+    private var lastBlacklistEnabled = false
+    private var lastMinDurationFilterEnabled = false
+    private var lastMinDurationFilterThresholdMs = 60000
+    private var lastSelectedDirectoryUris = listOf<String>()
+    private var lastBlacklistDirectoryUris = listOf<String>()
+
     init {
         restoreSelectedDirectories()
+        observeScanSettingsChanges()
+        // Also listen to app-level refresh events from AppViewModel
+        viewModelScope.launch {
+            appViewModel.libraryRefreshEvent.collect { _ ->
+                Log.d(TAG, "Received library refresh event from AppViewModel")
+                loadAudioFiles(forceRefresh = true)
+            }
+        }
     }
 
     /**
@@ -156,6 +189,80 @@ class FileBrowserViewModel @Inject constructor(
                         Log.e(TAG, "Global audio scan failed", e)
                         _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
                     }
+        }
+    }
+
+    /**
+     * Observes scan settings changes and triggers auto-refresh when relevant settings change.
+     * This includes whitelist mode, blacklist mode, duration filter, and directory changes.
+     */
+    private fun observeScanSettingsChanges() {
+        viewModelScope.launch {
+            // Observe whitelist enabled changes
+            launch {
+                whitelistEnabled.collect { enabled ->
+                    if (lastWhitelistEnabled != enabled) {
+                        lastWhitelistEnabled = enabled
+                        Log.d(TAG, "Whitelist enabled changed to: $enabled, triggering auto-refresh")
+                        loadAudioFiles(forceRefresh = true)
+                    }
+                }
+            }
+
+            // Observe blacklist enabled changes
+            launch {
+                blacklistEnabled.collect { enabled ->
+                    if (lastBlacklistEnabled != enabled) {
+                        lastBlacklistEnabled = enabled
+                        Log.d(TAG, "Blacklist enabled changed to: $enabled, triggering auto-refresh")
+                        loadAudioFiles(forceRefresh = true)
+                    }
+                }
+            }
+
+            // Observe min duration filter enabled changes
+            launch {
+                minDurationFilterEnabled.collect { enabled ->
+                    if (lastMinDurationFilterEnabled != enabled) {
+                        lastMinDurationFilterEnabled = enabled
+                        Log.d(TAG, "Min duration filter enabled changed to: $enabled, triggering auto-refresh")
+                        loadAudioFiles(forceRefresh = true)
+                    }
+                }
+            }
+
+            // Observe min duration filter threshold changes
+            launch {
+                minDurationFilterThresholdMs.collect { threshold ->
+                    if (lastMinDurationFilterThresholdMs != threshold) {
+                        lastMinDurationFilterThresholdMs = threshold
+                        Log.d(TAG, "Min duration filter threshold changed to: $threshold, triggering auto-refresh")
+                        loadAudioFiles(forceRefresh = true)
+                    }
+                }
+            }
+
+            // Observe whitelist directory changes
+            launch {
+                selectedDirectoryUris.collect { uris ->
+                    if (lastSelectedDirectoryUris != uris) {
+                        lastSelectedDirectoryUris = uris
+                        Log.d(TAG, "Selected directories changed, triggering auto-refresh")
+                        loadAudioFiles(forceRefresh = true)
+                    }
+                }
+            }
+
+            // Observe blacklist directory changes
+            launch {
+                blacklistDirectoryUris.collect { uris ->
+                    if (lastBlacklistDirectoryUris != uris) {
+                        lastBlacklistDirectoryUris = uris
+                        Log.d(TAG, "Blacklist directories changed, triggering auto-refresh")
+                        loadAudioFiles(forceRefresh = true)
+                    }
+                }
+            }
         }
     }
 

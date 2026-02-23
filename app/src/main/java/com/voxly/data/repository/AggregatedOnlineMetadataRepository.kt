@@ -1008,20 +1008,67 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         Timber.w(TAG, "QQ Music track search returned empty results for '$title' artist='$artist'")
                         Result.success(emptyList())
                     } else {
-                        val recordings = songs.map { song ->
-                            OnlineRecordingMapper.fromQQMusic(
-                                id = song.id.toInt(),
-                                name = song.name,
-                                singers = song.singer?.map { SingerData(it.name) },
-                                interval = song.interval,
-                                album = song.album?.let {
-                                    AlbumInfo(
-                                        id = it.id,
-                                        mid = it.mid,
-                                        name = it.name,
-                                        pic = it.pic
-                                    )
+                        // 并行获取每首歌的详情和歌词
+                        val detailJobs = songs.map { song ->
+                            coroutineScope {
+                                async {
+                                    // 并行获取详情和歌词
+                                    val detailDeferred = async { 
+                                        if (song.id > 0) {
+                                            tengxRepository.getSongDetail(listOf(song.id))
+                                        } else {
+                                            Result.failure(Exception("Invalid song id"))
+                                        }
+                                    }
+                                    val lyricsDeferred = async { 
+                                        if (song.mid.isNotBlank()) {
+                                            tengxRepository.getLyrics(song.mid)
+                                        } else {
+                                            Result.failure(Exception("Invalid song mid"))
+                                        }
+                                    }
+                                    
+                                    val detail = detailDeferred.await().getOrNull()
+                                    val lyricsResult = lyricsDeferred.await().getOrNull()
+                                    
+                                    Triple(song, detail, lyricsResult)
                                 }
+                            }
+                        }
+
+                        val recordings = detailJobs.mapNotNull { job ->
+                            val (searchSong, detailResponse, lyricsResult) = job.await()
+                            
+                            // 从详情响应中获取更多信息（可选）
+                            val detailSong = detailResponse?.data?.track?.firstOrNull()
+                            
+                            // 构建专辑信息 - 优先使用搜索结果中的专辑信息
+                            val albumInfo = searchSong.album?.let { album ->
+                                AlbumInfo(
+                                    id = album.id,
+                                    mid = album.mid,
+                                    name = album.name,
+                                    pic = album.pic
+                                )
+                            } ?: detailSong?.album?.let { album ->
+                                AlbumInfo(
+                                    id = album.id,
+                                    mid = album.mid,
+                                    name = album.name,
+                                    pic = album.pic
+                                )
+                            }
+                            
+                            // 获取歌词文本
+                            val lyricsText = lyricsResult?.lyrics?.takeIf { it.isNotBlank() }
+                            
+                            OnlineRecordingMapper.fromQQMusic(
+                                id = searchSong.id.toInt(),
+                                name = searchSong.name,
+                                singers = searchSong.singer?.map { SingerData(it.name) },
+                                interval = searchSong.interval,
+                                album = albumInfo,
+                                lyrics = lyricsText
                             )
                         }
                         Result.success(recordings)
@@ -1467,8 +1514,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val filtered = recordings.filter { recording ->
             val titleMatch = matchesTitle(title, recording.title)
             Timber.d("Filter check: queryTitle='$title', resultTitle='${recording.title}', match=$titleMatch")
-            val artistMatch = if (artist.isNullOrBlank()) {
-                true // 如果查询没有歌手名，只检查歌曲名
+            // 对于 iTunes/Apple Music 源：如果 title 匹配，则放宽 artist 检查
+            // 因为 iTunes 返回英文艺术家名，而用户音乐库可能是中文名
+            val artistMatch = if (titleMatch && recording.source.equals("iTunes", ignoreCase = true)) {
+                // iTunes 源：title 匹配时信任结果，跳过 artist 严格检查
+                Timber.d("Artist check: queryArtist='$artist', resultArtist='${recording.artist}', source=iTunes, match=relaxed")
+                true
+            } else if (artist.isNullOrBlank()) {
+                // 如果查询没有歌手名，只检查歌曲名
+                true
             } else {
                 val match = matchesArtist(artist, recording.artist)
                 Timber.d("Artist check: queryArtist='$artist', resultArtist='${recording.artist}', match=$match")

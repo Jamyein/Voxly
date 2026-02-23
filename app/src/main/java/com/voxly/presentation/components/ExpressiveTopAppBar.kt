@@ -66,7 +66,6 @@ fun ExpressiveTopAppBar(
             },
             modifier = modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
                 .height(64.dp),
             navigationIcon = {
                 if (navigationIcon != null && onNavigationClick != null) {
@@ -96,7 +95,6 @@ fun ExpressiveTopAppBar(
             },
             modifier = modifier
                 .fillMaxWidth()
-                .statusBarsPadding()
                 .height(64.dp),
             navigationIcon = {
                 if (navigationIcon != null && onNavigationClick != null) {
@@ -140,8 +138,7 @@ fun ExpressiveLargeTopAppBar(
             )
         },
         modifier = modifier
-            .fillMaxWidth()
-            .statusBarsPadding(),
+            .fillMaxWidth(),
         navigationIcon = {
             if (navigationIcon != null && onNavigationClick != null) {
                 IconButton(onClick = onNavigationClick) {
@@ -184,7 +181,6 @@ fun ExpressiveMediumTopAppBar(
         },
         modifier = modifier
             .fillMaxWidth()
-            .statusBarsPadding()
             .height(112.dp),
         navigationIcon = {
             if (navigationIcon != null && onNavigationClick != null) {
@@ -252,7 +248,6 @@ fun ExpressiveSearchTopAppBar(
         },
         modifier = modifier
             .fillMaxWidth()
-            .statusBarsPadding()
             .height(64.dp),
         navigationIcon = {
             if (navigationIcon != null && onNavigationClick != null) {

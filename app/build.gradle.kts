@@ -36,8 +36,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 28
         targetSdk = 36
-        versionCode = 12
-        versionName = "0.4.5"
+        versionCode = 13
+        versionName = "0.4.6"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -45,6 +45,14 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    flavorDimensions += "channel"
+    productFlavors {
+        create("github") {
+            isDefault = true
+            dimension = "channel"
         }
     }
 
@@ -63,31 +71,6 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
             if (debugUseReleaseSigning) {
-                signingConfig = signingConfigs.getByName("release")
-            }
-        }
-
-        create("dist") {
-            // Copy from debug build type
-            isMinifyEnabled = false
-            isShrinkResources = false
-            if (debugUseReleaseSigning) {
-                signingConfig = signingConfigs.getByName("release")
-            }
-            
-            applicationIdSuffix = ""
-            // AGP limitation: debuggable=true disables R8 optimization/obfuscation.
-            // Keep this variant slim for distribution testing.
-            isDebuggable = false
-            isMinifyEnabled = true
-            isShrinkResources = true
-            proguardFiles(
-                getDefaultProguardFile("proguard-android-optimize.txt"),
-                "proguard-rules.pro",
-                "proguard-debug.pro"
-            )
-            matchingFallbacks += listOf("debug")
-            if (signingEnabled) {
                 signingConfig = signingConfigs.getByName("release")
             }
         }

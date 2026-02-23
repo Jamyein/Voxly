@@ -3,7 +3,6 @@ package com.voxly.data.remote.wangy
 import com.voxly.data.remote.NetworkConstants
 import com.voxly.data.remote.wangy.model.WangyAlbumDetail
 import com.voxly.data.remote.wangy.model.WangyLyricsResponse
-import com.voxly.data.remote.wangy.model.WangySearchResponse
 import com.voxly.data.remote.wangy.model.WangySongDetail
 import okhttp3.ResponseBody
 import retrofit2.Response

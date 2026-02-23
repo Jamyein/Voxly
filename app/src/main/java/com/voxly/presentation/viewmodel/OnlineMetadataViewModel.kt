@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -85,9 +86,12 @@ class OnlineMetadataViewModel @Inject constructor(
     init {
         viewModelScope.launch {
             // 监听元数据源优先级设置变化，实时更新
-            settingsDataStore.metadataSourcePriority.collect { priority ->
-                metadataSourcePriority = priority
-            }
+            // 使用 debounce 防止设置变化时触发频繁的搜索操作
+            settingsDataStore.metadataSourcePriority
+                .debounce(500)
+                .collect { priority ->
+                    metadataSourcePriority = priority
+                }
         }
         viewModelScope.launch {
             // 初始化时获取元数据源优先级设置

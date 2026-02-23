@@ -22,10 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -39,6 +36,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
 import com.voxly.presentation.viewmodel.StatisticsUiState
 import com.voxly.presentation.viewmodel.StatisticsViewModel
 
@@ -50,28 +48,21 @@ fun StatisticsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.statistics_title)) },
-                actions = {
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(
-                            painter = appIconPainter(AppIcon.Settings),
-                            contentDescription = stringResource(R.string.nav_settings)
-                        )
-                    }
-                },
-                windowInsets = TopAppBarDefaults.windowInsets
-            )
+    ExpressiveScaffoldWithTopBar(
+        title = stringResource(R.string.statistics_title),
+        actions = {
+            IconButton(onClick = onNavigateToSettings) {
+                Icon(
+                    painter = appIconPainter(AppIcon.Settings),
+                    contentDescription = stringResource(R.string.nav_settings)
+                )
+            }
         }
-    ) { innerPadding ->
+    ) {
         when (val state = uiState) {
             is StatisticsUiState.Loading -> {
                 Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(innerPadding),
+                    modifier = Modifier.fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator()
@@ -79,13 +70,12 @@ fun StatisticsScreen(
             }
 
             is StatisticsUiState.Empty -> {
-                EmptyStatisticsContent(modifier = Modifier.padding(innerPadding))
+                EmptyStatisticsContent()
             }
 
             is StatisticsUiState.Success -> {
                 StatisticsContent(
-                    state = state,
-                    modifier = Modifier.padding(innerPadding)
+                    state = state
                 )
             }
         }

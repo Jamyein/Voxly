@@ -441,4 +441,16 @@
     <string name="no_whitelist_directories">未添加白名单目录</string>
     <string name="no_blacklist_directories">未添加黑名单目录</string>
 
+    <!-- Settings - Network/Proxy -->
+    <string name="settings_section_network">网络</string>
+    <string name="settings_proxy_enabled">代理</string>
+    <string name="settings_proxy_enabled_subtitle">启用代理以获取在线元数据</string>
+    <string name="settings_proxy_type">代理类型</string>
+    <string name="settings_proxy_type_subtitle">HTTP、SOCKS 或系统代理</string>
+    <string name="settings_proxy_type_system">系统</string>
+    <string name="settings_proxy_host">代理主机</string>
+    <string name="settings_proxy_host_placeholder">输入代理主机地址</string>
+    <string name="settings_proxy_port">代理端口</string>
+    <string name="settings_proxy_port_placeholder">输入代理端口</string>
+
 </resources>

@@ -18,18 +18,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -42,6 +38,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
+import com.voxly.presentation.components.ButtonEmphasis
+import com.voxly.presentation.components.ExpressiveButton
+import com.voxly.presentation.components.ExpressiveCard
+import com.voxly.presentation.components.ExpressiveScaffoldWithBack
+import com.voxly.presentation.theme.ContainerLevel
 import com.voxly.presentation.viewmodel.DirectoryManagementViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
 
@@ -81,74 +82,71 @@ fun DirectoryManagementScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        TopAppBar(
-            title = { Text(stringResource(R.string.settings_directory_management)) },
-            navigationIcon = {
-                IconButton(onClick = onNavigateBack) {
-                    Icon(
-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                        contentDescription = stringResource(R.string.cd_back)
-                    )
-                }
-            },
-            actions = {
-                IconButton(onClick = { folderPickerLauncher.launch(null) }) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = stringResource(R.string.add_directory)
-                    )
-                }
-            },
-            windowInsets = TopAppBarDefaults.windowInsets
-        )
-
-        if (directories.isEmpty()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(24.dp),
-                verticalArrangement = Arrangement.Center,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                Text(
-                    text = stringResource(R.string.directory_management_empty),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+    ExpressiveScaffoldWithBack(
+        title = stringResource(R.string.settings_directory_management),
+        onBackClick = onNavigateBack,
+        actions = {
+            IconButton(onClick = { folderPickerLauncher.launch(null) }) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = stringResource(R.string.add_directory)
                 )
-                Spacer(modifier = Modifier.height(12.dp))
-                Button(onClick = { folderPickerLauncher.launch(null) }) {
-                    Text(stringResource(R.string.add_directory))
-                }
             }
-        } else {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.selected_directories_count, directories.size),
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.weight(1f)
-                )
-                TextButton(onClick = { viewModel.clearDirectories() }) {
-                    Text(stringResource(R.string.clear_directories))
-                }
-            }
-
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-            ) {
-                items(directories, key = { it.uri }) { directory ->
-                    DirectoryManageItem(
-                        directory = directory,
-                        onRemove = { viewModel.removeDirectory(directory.uri) }
+        }
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            if (directories.isEmpty()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(24.dp),
+                    verticalArrangement = Arrangement.Center,
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        text = stringResource(R.string.directory_management_empty),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    ExpressiveButton(
+                        onClick = { folderPickerLauncher.launch(null) },
+                        emphasis = ButtonEmphasis.High
+                    ) {
+                        Text(stringResource(R.string.add_directory))
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.selected_directories_count, directories.size),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.weight(1f)
+                    )
+                    TextButton(onClick = { viewModel.clearDirectories() }) {
+                        Text(stringResource(R.string.clear_directories))
+                    }
+                }
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                ) {
+                    items(directories, key = { it.uri }) { directory ->
+                        DirectoryManageItem(
+                            directory = directory,
+                            onRemove = { viewModel.removeDirectory(directory.uri) }
+                        )
+                    }
                 }
             }
         }
@@ -160,14 +158,11 @@ private fun DirectoryManageItem(
     directory: SelectedDirectory,
     onRemove: () -> Unit
 ) {
-    Card(
+    ExpressiveCard(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        containerLevel = ContainerLevel.Low
     ) {
         Row(
             modifier = Modifier

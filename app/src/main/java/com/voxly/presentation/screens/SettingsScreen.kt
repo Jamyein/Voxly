@@ -39,6 +39,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
+import com.voxly.presentation.theme.ContainerLevel
+import com.voxly.presentation.components.ExpressiveCard
+import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -206,7 +209,7 @@ fun DraggableSourcePriorityDialog(
                         }
                     }
 
-                    Card(
+                    ExpressiveCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(
@@ -258,15 +261,11 @@ fun DraggableSourcePriorityDialog(
                                     }
                                 )
                             },
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isDragging) 
-                                MaterialTheme.colorScheme.primaryContainer 
-                            else 
-                                MaterialTheme.colorScheme.surfaceContainerHigh
-                        ),
-                        elevation = CardDefaults.cardElevation(
-                            defaultElevation = if (isDragging) 8.dp else 0.dp
-                        )
+                        containerLevel = if (isDragging) ContainerLevel.High else ContainerLevel.Medium,
+                        containerColor = if (isDragging) 
+                            MaterialTheme.colorScheme.primaryContainer 
+                        else 
+                            null
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             // Main row: sequence, drag handle, name, switch, reorder buttons, more menu
@@ -422,13 +421,7 @@ fun SettingsSection(
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.medium,
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            )
-        ) {
+        ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 content = content
@@ -1040,21 +1033,12 @@ fun SettingsScreen(
     val currentScanMode = scanModeOptions.firstOrNull { it.value == scanMode }
         ?: scanModeOptions[0]
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.nav_settings)) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                ),
-                windowInsets = TopAppBarDefaults.windowInsets
-            )
-        }
-    ) { innerPadding ->
+    ExpressiveScaffoldWithTopBar(
+        title = stringResource(R.string.nav_settings)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {

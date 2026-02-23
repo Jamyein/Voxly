@@ -73,6 +73,11 @@ class SettingsDataStore @Inject constructor(
         val WHITELIST_ENABLED = booleanPreferencesKey("whitelist_enabled")
         val BLACKLIST_ENABLED = booleanPreferencesKey("blacklist_enabled")
         val BLACKLIST_DIRECTORY_URIS = stringPreferencesKey("blacklist_directory_uris")
+        // Proxy settings
+        val PROXY_ENABLED = booleanPreferencesKey("proxy_enabled")
+        val PROXY_TYPE = stringPreferencesKey("proxy_type")
+        val PROXY_HOST = stringPreferencesKey("proxy_host")
+        val PROXY_PORT = intPreferencesKey("proxy_port")
     }
 
     /**
@@ -431,7 +436,17 @@ class SettingsDataStore @Inject constructor(
      */
     suspend fun updateSourceConfig(type: DataSourceType, source: DataSourceConfig) {
         context.settingsDataStore.edit { preferences ->
-            val current = migrateToNewFormat(preferences)
+            // First try to read from existing JSON, only migrate if no JSON exists
+            val current = try {
+                val json = preferences[SOURCE_CONFIGURATIONS]
+                if (!json.isNullOrBlank()) {
+                    gson.fromJson(json, SourceConfigurations::class.java)
+                } else {
+                    migrateToNewFormat(preferences)
+                }
+            } catch (e: Exception) {
+                migrateToNewFormat(preferences)
+            }
             val typeConfig = current.getConfig(type)
             val updated = typeConfig.updateSource(source)
             val newConfig = current.updateConfig(updated)
@@ -441,14 +456,40 @@ class SettingsDataStore @Inject constructor(
 
     /**
      * Reorder sources within a source type
+     * Also updates legacy priority strings for backward compatibility
      */
     suspend fun reorderSources(type: DataSourceType, orderedSourceIds: List<String>) {
         context.settingsDataStore.edit { preferences ->
-            val current = migrateToNewFormat(preferences)
+            // First try to read from existing JSON, only migrate if no JSON exists
+            val current = try {
+                val json = preferences[SOURCE_CONFIGURATIONS]
+                if (!json.isNullOrBlank()) {
+                    gson.fromJson(json, SourceConfigurations::class.java)
+                } else {
+                    migrateToNewFormat(preferences)
+                }
+            } catch (e: Exception) {
+                migrateToNewFormat(preferences)
+            }
             val typeConfig = current.getConfig(type)
             val reordered = typeConfig.reorderSources(orderedSourceIds)
             val newConfig = current.updateConfig(reordered)
             preferences[SOURCE_CONFIGURATIONS] = gson.toJson(newConfig)
+            
+            // Also update legacy priority strings for backward compatibility
+            // This ensures OnlineMetadataViewModel and AggregatedOnlineMetadataRepository 
+            // read the correct priority when using metadataSourcePriority/lyricsSourcePriority/coverSourcePriority
+            when (type) {
+                DataSourceType.METADATA -> {
+                    preferences[PRIORITY_METADATA_SOURCES] = orderedSourceIds.joinToString(",")
+                }
+                DataSourceType.LYRICS -> {
+                    preferences[PRIORITY_LYRICS_SOURCES] = orderedSourceIds.joinToString(",")
+                }
+                DataSourceType.COVER -> {
+                    preferences[PRIORITY_COVER_SOURCES] = orderedSourceIds.joinToString(",")
+                }
+            }
         }
     }
 
@@ -771,5 +812,75 @@ class SettingsDataStore @Inject constructor(
 
     private fun lyricsDefaultSourcePriority(): List<String> {
         return listOf("netease", "qq_music")
+    }
+
+    // ==================== Proxy Settings ====================
+
+    /**
+     * Proxy enabled state
+     */
+    val proxyEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[PROXY_ENABLED] ?: false
+        }
+
+    /**
+     * Proxy type state (HTTP, SOCKS)
+     */
+    val proxyType: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[PROXY_TYPE] ?: "HTTP"
+        }
+
+    /**
+     * Proxy host state
+     */
+    val proxyHost: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[PROXY_HOST] ?: ""
+        }
+
+    /**
+     * Proxy port state
+     */
+    val proxyPort: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[PROXY_PORT] ?: 0
+        }
+
+    /**
+     * Save proxy enabled preference
+     */
+    suspend fun setProxyEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PROXY_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Save proxy type preference
+     */
+    suspend fun setProxyType(type: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PROXY_TYPE] = type
+        }
+    }
+
+    /**
+     * Save proxy host preference
+     */
+    suspend fun setProxyHost(host: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PROXY_HOST] = host
+        }
+    }
+
+    /**
+     * Save proxy port preference
+     */
+    suspend fun setProxyPort(port: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[PROXY_PORT] = port.coerceIn(0, 65535)
+        }
     }
 }

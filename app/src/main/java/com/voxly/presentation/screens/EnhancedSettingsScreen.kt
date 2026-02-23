@@ -2,6 +2,7 @@ package com.voxly.presentation.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
+import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -31,18 +32,12 @@ fun EnhancedSettingsScreen(
             stringResource(R.string.settings_metadata_source_both)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.nav_settings)) },
-                windowInsets = TopAppBarDefaults.windowInsets
-            )
-        }
-    ) { innerPadding ->
+    ExpressiveScaffoldWithTopBar(
+        title = stringResource(R.string.nav_settings)
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(16.dp)
         ) {
             // Online Metadata Section

@@ -26,19 +26,6 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Grant execute permission for gradlew
-        run: chmod +x gradlew
-
-      - name: Cache Gradle dependencies
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
       - name: Decode signing keystore
         env:
           SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 || vars.SIGNING_KEYSTORE_BASE64 }}
@@ -48,59 +35,41 @@ jobs:
             exit 1
           fi
           echo "${SIGNING_KEYSTORE_BASE64}" | base64 -d > app/voxly-release.keystore
-          if [ ! -s app/voxly-release.keystore ]; then
-            echo "Decoded keystore is empty"
-            exit 1
-          fi
 
-      - name: Validate signing inputs
-        shell: bash
+      - name: Build with Gradle
+        uses: gradle/gradle-build-action@v2
         env:
+          CI: true
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || vars.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || vars.SIGNING_KEY_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || vars.SIGNING_KEY_ALIAS }}
-        run: |
-          if [ -z "${SIGNING_STORE_PASSWORD}" ]; then
-            echo "Missing SIGNING_STORE_PASSWORD (Secrets or Variables)"
-            exit 1
-          fi
-          if [ -z "${SIGNING_KEY_PASSWORD}" ]; then
-            echo "Missing SIGNING_KEY_PASSWORD (Secrets or Variables)"
-            exit 1
-          fi
-          echo "SIGNING_KEY_ALIAS=${SIGNING_KEY_ALIAS:-voxly}" >> "$GITHUB_ENV"
-
-      - name: Build Dist APK
-        env:
-          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || vars.SIGNING_STORE_PASSWORD }}
-          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || vars.SIGNING_KEY_PASSWORD }}
-          SIGNING_KEY_ALIAS: ${{ env.SIGNING_KEY_ALIAS }}
-        run: ./gradlew assembleDist
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || vars.SIGNING_KEY_ALIAS || 'voxly' }}
+        with:
+          arguments: assembleGithubRelease
 
       - name: Clean up keystore
         if: always()
         run: rm -f app/voxly-release.keystore
 
-      - name: Rename APK with hash and timestamp
+      - name: Find and rename APK
         shell: bash
         run: |
           set -euo pipefail
-          APK_PATH="$(find app/build -type f -path "*/apk/dist/*.apk" | head -n 1)"
+          APK_PATH="$(find app/build -type f -name "*.apk" | head -n 1)"
           if [ -z "${APK_PATH}" ]; then
-            echo "No dist APK found"
+            echo "No APK found"
             exit 1
           fi
-          TS="$(date +%Y%m%d%H%M%S)"
+          VERSION_NAME="0.4.5"
           SHORT_SHA="${GITHUB_SHA::7}"
-          OUT_DIR="app/build/outputs/renamed"
+          OUT_DIR="app/build/outputs/apk/github/release"
           mkdir -p "${OUT_DIR}"
-          OUT_NAME="Voxly-debug-${SHORT_SHA}-${TS}.apk"
+          OUT_NAME="Voxly-${VERSION_NAME}-${SHORT_SHA}.apk"
           cp "${APK_PATH}" "${OUT_DIR}/${OUT_NAME}"
           echo "RENAMED_APK=${OUT_DIR}/${OUT_NAME}" >> "$GITHUB_ENV"
 
-      - name: Upload Debug APK
+      - name: Upload Dev APK
         uses: actions/upload-artifact@v4
         with:
-          name: Voxly-debug
+          name: Voxly-GitHub-Build-${{ github.sha }}
           path: ${{ env.RENAMED_APK }}
           retention-days: 30

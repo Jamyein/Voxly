@@ -1,8 +1,14 @@
 package com.voxly.presentation.screens.metadata
 
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -14,18 +20,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.Card
+import com.voxly.presentation.components.ExpressiveCard
+import com.voxly.presentation.components.ExpressiveScaffoldWithBack
+import com.voxly.presentation.theme.ContainerLevel
+import com.voxly.presentation.theme.ExpressiveMotionTokens
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
+
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -34,9 +41,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.modifier.modifierLocalConsumer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -62,40 +67,27 @@ fun OnlineCoverSearchScreen(
         viewModel.search(filePath)
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.fetch_online_cover_art)) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.search(filePath) },
-                        enabled = !isLoading
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Search Again")
-                    }
-                },
-                windowInsets = TopAppBarDefaults.windowInsets
-            )
+    ExpressiveScaffoldWithBack(
+        title = stringResource(R.string.fetch_online_cover_art),
+        onBackClick = onNavigateBack,
+        actions = {
+            IconButton(
+                onClick = { viewModel.search(filePath) },
+                enabled = !isLoading
+            ) {
+                Icon(Icons.Default.Refresh, contentDescription = "Search Again")
+            }
         }
-    ) { innerPadding ->
+    ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(16.dp)
         ) {
             // Search info card
-            Card(
+            ExpressiveCard(
                 modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.medium
+                containerLevel = ContainerLevel.Low
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
@@ -129,22 +121,58 @@ fun OnlineCoverSearchScreen(
             }
 
             // Error message
-            errorMessage?.let { error ->
-                Text(
-                    text = error,
-                    color = MaterialTheme.colorScheme.error,
-                    modifier = Modifier.padding(vertical = 8.dp)
+            AnimatedVisibility(
+                visible = errorMessage != null,
+                enter = fadeIn(
+                    animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+                    )
                 )
+            ) {
+                errorMessage?.let { error ->
+                    Text(
+                        text = error,
+                        color = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.padding(vertical = 8.dp)
+                    )
+                }
             }
 
             // Results
-            if (coverResults.isEmpty() && !isLoading && errorMessage == null) {
+            AnimatedVisibility(
+                visible = coverResults.isEmpty() && !isLoading && errorMessage == null,
+                enter = fadeIn(
+                    animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+                    )
+                )
+            ) {
                 Text(
                     text = stringResource(R.string.error_no_results),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            } else {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+            }
+
+            AnimatedVisibility(
+                visible = coverResults.isNotEmpty(),
+                enter = fadeIn(
+                    animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+                    )
+                ) + slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+                    )
+                )
+            ) {
+                LazyColumn(
+                    modifier = Modifier.fillMaxSize()
+                ) {
                     items(coverResults) { item ->
                         CoverResultItem(
                             item = item,
@@ -170,14 +198,14 @@ private fun CoverResultItem(
     item: OnlineRecording,
     onClick: () -> Unit
 ) {
-    ElevatedCard(
+    ExpressiveCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp)
-            .clickable { onClick() },
-        shape = MaterialTheme.shapes.large
+            .padding(vertical = 6.dp),
+        containerLevel = ContainerLevel.Low,
+        onClick = onClick
     ) {
-        androidx.compose.foundation.layout.Row(
+        Row(
             modifier = Modifier.padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -185,7 +213,7 @@ private fun CoverResultItem(
                 coverArtUrl = item.coverArtUrl,
                 modifier = Modifier.size(120.dp)
             )
-            androidx.compose.foundation.layout.Spacer(modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.size(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = item.title,
@@ -210,14 +238,34 @@ private fun CoverThumbnail(
         value = loadImageBitmapFromUrl(coverArtUrl)
     }
 
-    if (bitmap != null) {
-        androidx.compose.foundation.Image(
-            bitmap = bitmap!!,
-            contentDescription = "Album cover",
-            modifier = modifier,
-            contentScale = ContentScale.Crop
+    AnimatedVisibility(
+        visible = bitmap != null,
+        enter = fadeIn(
+            animationSpec = spring(
+                dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+            )
         )
-    } else {
+    ) {
+        bitmap?.let {
+            Image(
+                bitmap = it,
+                contentDescription = "Album cover",
+                modifier = modifier,
+                contentScale = ContentScale.Crop
+            )
+        }
+    }
+
+    AnimatedVisibility(
+        visible = bitmap == null,
+        enter = fadeIn(
+            animationSpec = spring(
+                dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+            )
+        )
+    ) {
         Box(
             modifier = modifier,
             contentAlignment = Alignment.Center
