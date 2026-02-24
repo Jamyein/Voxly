@@ -14,8 +14,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -36,7 +34,10 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.components.ExpressiveCard
+import com.voxly.presentation.components.ExpressiveContentContainer
 import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
+import com.voxly.presentation.theme.ContainerLevel
 import com.voxly.presentation.viewmodel.StatisticsUiState
 import com.voxly.presentation.viewmodel.StatisticsViewModel
 
@@ -59,7 +60,11 @@ fun StatisticsScreen(
             }
         }
     ) {
-        when (val state = uiState) {
+        ExpressiveContentContainer(
+            modifier = Modifier.fillMaxSize(),
+            containerLevel = ContainerLevel.Medium
+        ) {
+            when (val state = uiState) {
             is StatisticsUiState.Loading -> {
                 Box(
                     modifier = Modifier.fillMaxSize(),
@@ -79,6 +84,7 @@ fun StatisticsScreen(
                 )
             }
         }
+        }
     }
 }
 
@@ -89,7 +95,7 @@ private fun StatisticsContent(
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
+        contentPadding = PaddingValues(vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
@@ -200,12 +206,9 @@ private fun StatCard(
     icon: AppIcon,
     modifier: Modifier = Modifier
 ) {
-    Card(
+    ExpressiveCard(
         modifier = modifier,
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        containerLevel = ContainerLevel.Low
     ) {
         Column(
             modifier = Modifier
@@ -236,11 +239,8 @@ private fun FormatDistributionCard(
     distribution: Map<String, Int>,
     totalFiles: Int
 ) {
-    Card(
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+    ExpressiveCard(
+        containerLevel = ContainerLevel.Low
     ) {
         Column(
             modifier = Modifier
@@ -274,11 +274,8 @@ private fun FormatDistributionCard(
 
 @Composable
 private fun TopArtistsCard(artists: List<Pair<String, Int>>) {
-    Card(
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+    ExpressiveCard(
+        containerLevel = ContainerLevel.Low
     ) {
         Column(
             modifier = Modifier
@@ -303,11 +300,8 @@ private fun TopArtistsCard(artists: List<Pair<String, Int>>) {
 
 @Composable
 private fun TopAlbumsCard(albums: List<Pair<String, Int>>) {
-    Card(
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+    ExpressiveCard(
+        containerLevel = ContainerLevel.Low
     ) {
         Column(
             modifier = Modifier
@@ -332,11 +326,8 @@ private fun TopAlbumsCard(albums: List<Pair<String, Int>>) {
 
 @Composable
 private fun RecentActivityCard(todayEdits: Int, weekEdits: Int, monthEdits: Int) {
-    Card(
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+    ExpressiveCard(
+        containerLevel = ContainerLevel.Low
     ) {
         Row(
             modifier = Modifier

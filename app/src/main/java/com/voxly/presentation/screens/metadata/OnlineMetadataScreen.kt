@@ -93,7 +93,7 @@ fun OnlineMetadataScreen(
     }
 
     ExpressiveScaffoldWithTopBar(
-        title = "Online Metadata",
+        title = stringResource(R.string.fetch_online_metadata),
         navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
         onNavigationClick = onNavigateBack,
         actions = {

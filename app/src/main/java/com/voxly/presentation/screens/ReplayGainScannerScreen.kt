@@ -5,7 +5,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.material3.CardDefaults
@@ -47,7 +47,7 @@ fun ReplayGainScannerScreen(
 
     ExpressiveScaffoldWithTopBar(
         title = stringResource(R.string.replay_gain_scanner_title),
-        navigationIcon = Icons.Default.ArrowBack,
+        navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
         onNavigationClick = onNavigateBack,
         actions = {
             if (!isScanning) {

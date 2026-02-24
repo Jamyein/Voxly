@@ -14,10 +14,10 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
 import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
+import com.voxly.presentation.components.ExpressiveScrollableContentContainer
+import com.voxly.presentation.components.ExpressiveScaffoldWithBack
 import com.voxly.presentation.theme.ContainerLevel
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import androidx.compose.material3.CircularProgressIndicator
@@ -26,7 +26,6 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,10 +58,9 @@ fun OnlineLyricsSearchScreen(
         viewModel.search(filePath)
     }
 
-    ExpressiveScaffoldWithTopBar(
+    ExpressiveScaffoldWithBack(
         title = stringResource(R.string.search_online_lyrics),
-        navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
-        onNavigationClick = onNavigateBack,
+        onBackClick = onNavigateBack,
         actions = {
             IconButton(
                 onClick = { viewModel.search(filePath) },
@@ -72,92 +70,99 @@ fun OnlineLyricsSearchScreen(
             }
         }
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-            .padding(16.dp)
+        ExpressiveScrollableContentContainer(
+            modifier = Modifier.fillMaxSize(),
+            containerLevel = ContainerLevel.Medium,
+            contentPadding = 16.dp
         ) {
-            // Search info card
-            ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Search query:",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "Title: ${viewModel.searchTitle}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    viewModel.searchArtist?.let { artist ->
+            Column(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Search info card
+                ExpressiveCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    containerLevel = ContainerLevel.Low
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
                         Text(
-                            text = "Artist: $artist",
+                            text = "Search query:",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = "Title: ${viewModel.searchTitle}",
                             style = MaterialTheme.typography.bodyMedium
                         )
+                        viewModel.searchArtist?.let { artist ->
+                            Text(
+                                text = "Artist: $artist",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                        viewModel.searchAlbum?.let { album ->
+                            Text(
+                                text = "Album: $album",
+                                style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
                     }
-                    viewModel.searchAlbum?.let { album ->
+                }
+
+                // Search progress
+                if (searchState.isSearching || isLoading) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(120.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        CircularProgressIndicator()
+                    }
+                }
+
+                // Error message
+                AnimatedVisibility(
+                    visible = errorMessage != null,
+                    enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness))
+                ) {
+                    errorMessage?.let { error ->
                         Text(
-                            text = "Album: $album",
-                            style = MaterialTheme.typography.bodyMedium
+                            text = error,
+                            color = MaterialTheme.colorScheme.error,
+                            modifier = Modifier.padding(vertical = 8.dp)
                         )
                     }
                 }
-            }
 
-            // Search progress
-            if (searchState.isSearching || isLoading) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(120.dp),
-                    contentAlignment = Alignment.Center
+                // Results
+                AnimatedVisibility(
+                    visible = lyricsResults.isEmpty() && !isLoading && errorMessage == null,
+                    enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness))
                 ) {
-                    CircularProgressIndicator()
-                }
-            }
-
-            // Error message
-            AnimatedVisibility(
-                visible = errorMessage != null,
-                enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness))
-            ) {
-                errorMessage?.let { error ->
                     Text(
-                        text = error,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                        text = stringResource(R.string.error_no_results),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            }
-
-            // Results
-            AnimatedVisibility(
-                visible = lyricsResults.isEmpty() && !isLoading && errorMessage == null,
-                enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness))
-            ) {
-                Text(
-                    text = stringResource(R.string.error_no_results),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            AnimatedVisibility(
-                visible = lyricsResults.isNotEmpty(),
-                enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)) + slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)
-                )
-            ) {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize()
+                AnimatedVisibility(
+                    visible = lyricsResults.isNotEmpty(),
+                    enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)) + slideInVertically(
+                        initialOffsetY = { it },
+                        animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)
+                    )
                 ) {
-                    items(lyricsResults, key = { it.id }) { item ->
-                        LyricsResultItem(
-                            item = item,
-                            onClick = {
-                                onLyricsSelected(item)
-                            }
-                        )
-                        HorizontalDivider()
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(lyricsResults, key = { it.id }) { item ->
+                            LyricsResultItem(
+                                item = item,
+                                onClick = {
+                                    onLyricsSelected(item)
+                                }
+                            )
+                            HorizontalDivider()
+                        }
                     }
                 }
             }
