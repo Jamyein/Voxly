@@ -388,6 +388,7 @@ fun FileBrowserScreen(
                 }
             }
         },
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
         floatingActionButton = {
             // Show batch operation FAB only when in directory view
             if (selectedFiles.isEmpty() && !isBatchProcessing) {
@@ -451,7 +452,11 @@ fun FileBrowserScreen(
                         if (filesToShow.isEmpty()) {
                             EmptyContent()
                         } else {
-                            Column(modifier = Modifier.fillMaxSize()) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(horizontal = 16.dp)
+                            ) {
                                 SearchBar(
                                     isExpanded = isSearchExpanded,
                                     query = searchQuery,
