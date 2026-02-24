@@ -69,6 +69,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlin.math.abs
+import java.text.Collator
+import java.util.Locale
+
+/** Collator for Chinese pinyin sorting */
+private val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply {
+    strength = Collator.PRIMARY
+}
 
 /**
  * File browser screen for browsing and selecting audio files.
@@ -1357,8 +1364,8 @@ private fun applySearchAndSort(
     }
 
     return when (sortOption) {
-        FileSortOption.NAME_ASC -> filtered.sortedBy { it.metadata.getDisplayTitle(it.name).lowercase() }
-        FileSortOption.NAME_DESC -> filtered.sortedByDescending { it.metadata.getDisplayTitle(it.name).lowercase() }
+        FileSortOption.NAME_ASC -> filtered.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
+        FileSortOption.NAME_DESC -> filtered.sortedWith(compareByDescending(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
         FileSortOption.SIZE_DESC -> filtered.sortedByDescending { it.size }
         FileSortOption.DURATION_DESC -> filtered.sortedByDescending { it.duration }
     }

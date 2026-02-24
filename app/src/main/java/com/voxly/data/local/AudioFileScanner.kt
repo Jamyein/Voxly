@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.text.Collator
+import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
 import android.provider.DocumentsContract
@@ -48,6 +50,11 @@ class AudioFileScanner @Inject constructor(
         private const val TAG = "AudioFileScanner"
         private val AUDIO_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         private val ALBUM_ART_URI = Uri.parse("content://media/external/audio/albumart")
+
+        /** Collator for Chinese pinyin sorting */
+        private val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply {
+            strength = Collator.PRIMARY
+        }
 
         // Helper function to parse MediaStore TRACK field correctly
         // MediaStore stores: trackNumber | (totalTracks << 16)
@@ -203,7 +210,7 @@ class AudioFileScanner @Inject constructor(
             }
         }
 
-        emit(audioFiles.sortedBy { it.metadata.getDisplayTitle(it.name) })
+        emit(audioFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) }))
     }.flowOn(Dispatchers.IO)
 
     /**
@@ -430,9 +437,9 @@ class AudioFileScanner @Inject constructor(
         // Update cache with all scanned files
         libraryCache.updateCache(allFiles)
         
-        // MediaStore query already returns sorted data by title, 
+        // MediaStore query already returns sorted data by title,
         // but we re-sort to ensure correct order after building the list
-        allFiles.sortBy { it.metadata.getDisplayTitle(it.name) }
+        allFiles.sortWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
         emit(allFiles)
     }.flowOn(Dispatchers.IO)
 
@@ -476,7 +483,7 @@ class AudioFileScanner @Inject constructor(
         // Clean up deleted files
         libraryCache.cleanupDeletedFiles(currentFiles.map { it.first })
         
-        emit(allFiles.sortedBy { it.metadata.getDisplayTitle(it.name) })
+        emit(allFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) }))
     }.flowOn(Dispatchers.IO)
 
     /**
