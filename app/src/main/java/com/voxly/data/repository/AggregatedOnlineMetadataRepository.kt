@@ -397,9 +397,9 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         }
 
         // Sort by user-defined priority (list order: first = highest priority)
+        // Use sourcePriorityIndex function to properly map "QQ Music" -> "qq_music"
         val sortedResults = mergedResults.sortedWith(compareBy<OnlineRelease> { release ->
-            val priorityIndex = settings.metadataPriority.indexOf(release.source.lowercase())
-            if (priorityIndex >= 0) priorityIndex else Int.MAX_VALUE
+            sourcePriorityIndex(release.source, settings.metadataPriority)
         })
 
         val finalizedResults = finalizeReleaseResults(
