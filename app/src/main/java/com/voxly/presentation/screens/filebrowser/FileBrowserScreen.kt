@@ -58,6 +58,7 @@ import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.components.ExpressiveCard
 import com.voxly.presentation.components.ExpressiveTopAppBar
 import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.viewmodel.FileBrowserUiState
@@ -1145,7 +1146,7 @@ private fun BatchRenameDialog(
                         readOnly = true,
                         label = { Text(stringResource(R.string.rename_pattern)) },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                        modifier = Modifier.menuAnchor()
+                        modifier = Modifier.menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                     )
                     
                     ExposedDropdownMenu(
@@ -1655,22 +1656,20 @@ private fun AudioFileItem(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    Card(
+    ExpressiveCard(
         modifier = modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(vertical = 4.dp)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        )
+        containerColor = if (isSelected) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            null
+        }
     ) {
         Row(
             modifier = Modifier
