@@ -296,45 +296,52 @@ class TengxRepositoryImpl(
         pageSize: Int,
         type: Int,
         method: String
-    ): Map<String, Any> {
+    ): JsonObject {
         // 使用 music-tag-web 的请求格式，更稳定
         val searchId = java.util.UUID.randomUUID().toString()
-        return mapOf(
-            "comm" to mapOf(
-                "wid" to "",
-                "tmeAppID" to "qqmusic",
-                "authst" to "",
-                "uid" to "",
-                "gray" to "0",
-                "OpenUDID" to "2d484d3157d4ed482e406e6c5fdcf8c3d3275deb",
-                "ct" to "6",
-                "patch" to "2",
-                "psrf_qqopenid" to "",
-                "sid" to "",
-                "psrf_access_token_expiresAt" to "",
-                "cv" to "80600",
-                "gzip" to "0",
-                "qq" to "",
-                "nettype" to "2",
-                "psrf_qqunionid" to "",
-                "psrf_qqaccess_token" to "",
-                "tmeLoginType" to "2"
-            ),
-            "music.search.SearchCgiService.DoSearchForQQMusicDesktop" to mapOf(
-                "module" to "music.search.SearchCgiService",
-                "method" to method,
-                "param" to mapOf(
-                    "num_per_page" to pageSize,
-                    "page_num" to pageNum,
-                    "remoteplace" to "txt.mac.search",
-                    "search_type" to type,
-                    "query" to keywords,
-                    "grp" to 1,
-                    "searchid" to searchId,
-                    "nqc_flag" to 0
-                )
-            )
-        )
+
+        val commJson = JsonObject().apply {
+            addProperty("wid", "")
+            addProperty("tmeAppID", "qqmusic")
+            addProperty("authst", "")
+            addProperty("uid", "")
+            addProperty("gray", "0")
+            addProperty("OpenUDID", "2d484d3157d4ed482e406e6c5fdcf8c3d3275deb")
+            addProperty("ct", "6")
+            addProperty("patch", "2")
+            addProperty("psrf_qqopenid", "")
+            addProperty("sid", "")
+            addProperty("psrf_access_token_expiresAt", "")
+            addProperty("cv", "80600")
+            addProperty("gzip", "0")
+            addProperty("qq", "")
+            addProperty("nettype", "2")
+            addProperty("psrf_qqunionid", "")
+            addProperty("psrf_qqaccess_token", "")
+            addProperty("tmeLoginType", "2")
+        }
+
+        val paramJson = JsonObject().apply {
+            addProperty("num_per_page", pageSize)
+            addProperty("page_num", pageNum)
+            addProperty("remoteplace", "txt.mac.search")
+            addProperty("search_type", type)
+            addProperty("query", keywords)
+            addProperty("grp", 1)
+            addProperty("searchid", searchId)
+            addProperty("nqc_flag", 0)
+        }
+
+        val searchServiceJson = JsonObject().apply {
+            addProperty("module", "music.search.SearchCgiService")
+            addProperty("method", method)
+            add("param", paramJson)
+        }
+
+        return JsonObject().apply {
+            add("comm", commJson)
+            add("music.search.SearchCgiService.DoSearchForQQMusicDesktop", searchServiceJson)
+        }
     }
 
     private fun parseV2SearchResponse(root: JsonObject): TengxSearchResponse? {

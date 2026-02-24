@@ -82,7 +82,7 @@ interface TengxApi {
     )
     suspend fun searchV2(
         @Url url: String = "https://u.y.qq.com/cgi-bin/musicu.fcg",
-        @Body body: Map<String, @JvmSuppressWildcards Any>
+        @Body body: JsonObject
     ): Response<JsonObject>
 
     /**
