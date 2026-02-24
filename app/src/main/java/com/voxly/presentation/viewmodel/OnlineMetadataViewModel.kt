@@ -254,6 +254,8 @@ class OnlineMetadataViewModel @Inject constructor(
     }
 
     private fun sortReleases(releases: List<OnlineRelease>, query: OnlineSearchQuery): List<OnlineRelease> {
+        if (releases.isEmpty()) return emptyList()
+
         val titleNeedle = when {
             query.title.isNotBlank() -> query.title
             !query.album.isNullOrBlank() -> query.album
@@ -261,8 +263,13 @@ class OnlineMetadataViewModel @Inject constructor(
         }
         val artistNeedle = query.artist.orEmpty()
 
-        // 计算每个结果的相关性分数
+        // 计算每个结果的相关性分数和综合分数
         // 相关性分数 = 歌曲名匹配分数(1-3) + 歌手名匹配分数(1-3)，范围 2-6
+        val maxPriority = metadataSourcePriority.size.coerceAtLeast(1)
+        val priorityWeight = 25  // 确保优先级差 × 25 > 相关性最大差(4)
+        // 动态计算：取用户设置的优先级数量和3的较小值
+        val priorityGroupCount = minOf(maxPriority, 3)
+
         val scored = releases.map { release ->
             val candidateTitle = (release.songTitle ?: release.albumTitle ?: release.title).trim()
             val titleScore = when {
@@ -279,26 +286,39 @@ class OnlineMetadataViewModel @Inject constructor(
             }
             val relevanceScore = titleScore + artistScore  // 2-6 分
             val sourcePriority = sourcePriorityIndex(release.source, metadataSourcePriority)
-            // Pair: first=相关性分数, second=源优先级
-            ReleaseSortKey(release, relevanceScore, sourcePriority)
+            // 综合分数 = 优先级权重 * 优先级差距 + 相关性分数
+            // 优先级差距 = (maxPriority - 1) - sourcePriority，确保优先级1的权重最高
+            val totalScore = (maxPriority - 1 - sourcePriority.coerceAtLeast(0)) * priorityWeight + relevanceScore
+            ReleaseSortKey(release, relevanceScore, sourcePriority, totalScore)
         }
 
-        // 全部结果按相关性分数降序 + 源优先级升序(索引小的优先)排列
-        val sorted = scored.sortedWith(
-            compareByDescending<ReleaseSortKey> { it.relevanceScore }
-                .thenBy { it.sourcePriority }
-        )
+        // 策略：前3个位置预留给优先级1、2、3的最佳结果，剩余的按综合分数排序
+        val topByPriority = metadataSourcePriority
+            .take(priorityGroupCount)
+            .mapIndexedNotNull { priorityIndex, _ ->
+                scored
+                    .filter { it.sourcePriority == priorityIndex }
+                    .maxByOrNull { it.relevanceScore }
+            }
 
-        return sorted.map { it.release }
+        // 排除已使用的前3个
+        val usedReleases = topByPriority.map { it.release }.toSet()
+        val remaining = scored
+            .filter { it.release !in usedReleases }
+            .sortedByDescending { it.totalScore }
+
+        // 最终结果 = 前3名(优先级冠军) + 剩余按综合分数
+        return (topByPriority + remaining).map { it.release }
     }
 
     /**
-     * 排序键：包含原始 release、相关性分数、源优先级
+     * 排序键：包含原始 release、相关性分数、源优先级、综合分数
      */
     private data class ReleaseSortKey(
         val release: OnlineRelease,
         val relevanceScore: Int,
-        val sourcePriority: Int
+        val sourcePriority: Int,
+        val totalScore: Int
     )
 
     /**
