@@ -13,6 +13,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import com.voxly.domain.model.DataSourceConfig
 import com.voxly.domain.model.DataSourceType
 import com.voxly.domain.model.SourceConfigurations
@@ -340,6 +341,8 @@ class SettingsDataStore @Inject constructor(
 
     // Gson instance for serialization
     private val gson = Gson()
+    // Type token for proper deserialization of nested generic types
+    private val sourceConfigurationsType = object : TypeToken<SourceConfigurations>() {}.type
 
     /**
      * Unified source configurations flow (new approach - stores enabled, priority, and extra options together)
@@ -352,7 +355,7 @@ class SettingsDataStore @Inject constructor(
                 migrateToNewFormat(preferences)
             } else {
                 try {
-                    gson.fromJson(json, SourceConfigurations::class.java)
+                    gson.fromJson(json, sourceConfigurationsType)
                 } catch (e: Exception) {
                     migrateToNewFormat(preferences)
                 }
@@ -440,7 +443,7 @@ class SettingsDataStore @Inject constructor(
             val current = try {
                 val json = preferences[SOURCE_CONFIGURATIONS]
                 if (!json.isNullOrBlank()) {
-                    gson.fromJson(json, SourceConfigurations::class.java)
+                    gson.fromJson(json, sourceConfigurationsType)
                 } else {
                     migrateToNewFormat(preferences)
                 }
@@ -464,7 +467,7 @@ class SettingsDataStore @Inject constructor(
             val current = try {
                 val json = preferences[SOURCE_CONFIGURATIONS]
                 if (!json.isNullOrBlank()) {
-                    gson.fromJson(json, SourceConfigurations::class.java)
+                    gson.fromJson(json, sourceConfigurationsType)
                 } else {
                     migrateToNewFormat(preferences)
                 }
