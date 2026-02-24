@@ -17,7 +17,7 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {
         Logger.wtf(
-            "Uncaught exception thread=${thread.name} id=${thread.id}",
+            "Uncaught exception thread=${thread.name} id=${thread.threadId()}",
             throwable
         )
         if (LogManager.isCrashReportingEnabled) {

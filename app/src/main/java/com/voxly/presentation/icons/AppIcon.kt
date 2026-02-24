@@ -10,7 +10,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Edit
@@ -23,7 +23,7 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.History
-import androidx.compose.material.icons.outlined.PlaylistAdd
+import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.painter.Painter
@@ -37,8 +37,8 @@ enum class AppIcon(
     FolderOutlined(Icons.Outlined.Folder),
     History(Icons.Filled.History),
     HistoryOutlined(Icons.Outlined.History),
-    PlaylistAdd(Icons.Filled.PlaylistAdd),
-    PlaylistAddOutlined(Icons.Outlined.PlaylistAdd),
+    PlaylistAdd(Icons.AutoMirrored.Filled.PlaylistAdd),
+    PlaylistAddOutlined(Icons.AutoMirrored.Outlined.PlaylistAdd),
     AudioFile(Icons.Filled.MusicNote),
     FolderOpen(Icons.Filled.FolderOpen),
     Equalizer(Icons.Filled.GraphicEq),

@@ -18,9 +18,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.FormatAlignLeft
+import androidx.compose.material.icons.automirrored.filled.FormatAlignLeft
 import androidx.compose.material.icons.filled.FormatAlignCenter
-import androidx.compose.material.icons.filled.FormatAlignRight
+import androidx.compose.material.icons.automirrored.filled.FormatAlignRight
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -272,7 +272,7 @@ fun IconToggleButtonExamples() {
                 onCheckedChange = { alignment = "left" }
             ) {
                 Icon(
-                    imageVector = Icons.Default.FormatAlignLeft,
+                    imageVector = Icons.AutoMirrored.Filled.FormatAlignLeft,
                     contentDescription = "Align left"
                 )
             }
@@ -290,7 +290,7 @@ fun IconToggleButtonExamples() {
                 onCheckedChange = { alignment = "right" }
             ) {
                 Icon(
-                    imageVector = Icons.Default.FormatAlignRight,
+                    imageVector = Icons.AutoMirrored.Filled.FormatAlignRight,
                     contentDescription = "Align right"
                 )
             }

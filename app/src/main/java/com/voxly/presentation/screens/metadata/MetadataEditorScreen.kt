@@ -27,6 +27,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.Surface
@@ -144,7 +146,7 @@ fun MetadataEditorScreen(
         topBar = {
             ExpressiveTopAppBar(
                 title = stringResource(R.string.edit_metadata),
-                navigationIcon = Icons.Default.ArrowBack,
+                navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
                 onNavigationClick = {
                     if (hasUnsavedChanges) {
                         showDiscardDialog = true
@@ -556,7 +558,7 @@ fun MetadataEditorScreen(
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.album_art_rotate)) },
                         leadingContent = {
-                            Icon(Icons.Default.RotateRight, contentDescription = null)
+                            Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = null)
                         },
                         modifier = Modifier.clickable {
                             showAlbumArtOptions = false

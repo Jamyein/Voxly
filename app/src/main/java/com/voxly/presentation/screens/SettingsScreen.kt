@@ -564,7 +564,7 @@ fun SettingsDropdownRow(
                     },
                     modifier = Modifier
                         .width(156.dp)
-                        .menuAnchor()
+                        .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                 )
 
                 ExposedDropdownMenu(
@@ -621,7 +621,7 @@ fun PerSourceSearchLimitRow(
                     },
                     modifier = Modifier
                         .width(120.dp)
-                        .menuAnchor()
+                        .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                 )
 
                 ExposedDropdownMenu(
@@ -832,7 +832,7 @@ private fun SearchLimitDropdown(
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
             modifier = Modifier
                 .fillMaxWidth()
-                .menuAnchor()
+                .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
         )
         ExposedDropdownMenu(
             expanded = expanded,
@@ -888,7 +888,7 @@ private fun SearchLimitRow(
                 trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
                 modifier = Modifier
                     .width(120.dp)
-                    .menuAnchor()
+                    .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
             )
             ExposedDropdownMenu(
                 expanded = expanded,
@@ -1039,7 +1039,7 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(16.dp)
+                .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
             // Appearance Section

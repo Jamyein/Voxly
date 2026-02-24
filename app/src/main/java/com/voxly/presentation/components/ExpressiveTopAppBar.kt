@@ -79,7 +79,7 @@ fun ExpressiveTopAppBar(
                 }
             },
             actions = actions,
-            colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
+            colors = TopAppBarDefaults.topAppBarColors(
                 containerColor = containerColor,
                 titleContentColor = MaterialTheme.colorScheme.onSurface
             )

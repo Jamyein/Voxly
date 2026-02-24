@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -35,6 +36,7 @@ import java.io.File
 import java.net.URLDecoder
 import javax.inject.Inject
 
+@OptIn(FlowPreview::class)
 @HiltViewModel
 class OnlineMetadataViewModel @Inject constructor(
     private val audioRepository: AudioRepository,

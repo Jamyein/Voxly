@@ -499,7 +499,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
             searchResult.fold(
                 onSuccess = { response ->
-                    val songs = response?.data?.song?.list ?: emptyList()
+                    val songs = response.data?.song?.list ?: emptyList()
                     
                     if (songs.isEmpty()) {
                         Timber.w(TAG, "QQ Music search returned empty results for '$artist $album'")
@@ -512,7 +512,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                 OnlineRelease(
                                     id = id.toString(),
                                     title = firstSong.album?.name ?: "Unknown Album",
-                                    artist = firstSong.singer?.joinToString(", ") { singer -> singer.name } ?: "",
+                                    artist = firstSong.singer.joinToString(", ") { singer -> singer.name },
                                     year = null,
                                     format = "Digital",
                                     trackCount = albumSongs.size,
@@ -1002,7 +1002,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
             searchResult.fold(
                 onSuccess = { response ->
-                    val songs = response?.data?.song?.list ?: emptyList()
+                    val songs = response.data?.song?.list ?: emptyList()
                     
                     if (songs.isEmpty()) {
                         Timber.w(TAG, "QQ Music track search returned empty results for '$title' artist='$artist'")
@@ -1065,7 +1065,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             OnlineRecordingMapper.fromQQMusic(
                                 id = searchSong.id.toInt(),
                                 name = searchSong.name,
-                                singers = searchSong.singer?.map { SingerData(it.name) },
+                                singers = searchSong.singer.map { SingerData(it.name) },
                                 interval = searchSong.interval,
                                 album = albumInfo,
                                 lyrics = lyricsText
@@ -1258,7 +1258,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             
             searchResult.fold(
                 onSuccess = { response ->
-                    val song = response?.data?.song?.list?.firstOrNull()
+                    val song = response.data?.song?.list?.firstOrNull()
                     if (song != null) {
                         // Try to get album details if we have album info
                         val albumId = song.album?.id

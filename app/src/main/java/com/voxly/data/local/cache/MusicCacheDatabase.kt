@@ -18,7 +18,7 @@ import javax.inject.Singleton
         AlbumThumbnailEntity::class
     ],
     version = 1,
-    exportSchema = true
+    exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
 abstract class MusicCacheDatabase : RoomDatabase() {

@@ -22,6 +22,11 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.voxly.presentation.theme.ContainerLevel
 
+// 默认内容间距
+private val DefaultContentPadding = 16.dp
+// 列表项间距（更紧凑）
+private val DefaultListItemPadding = 12.dp
+
 /**
  * Material Design 3 Expressive Content Container Component
  * 
@@ -65,7 +70,7 @@ fun ExpressiveContentContainer(
 fun ExpressiveScrollableContentContainer(
     modifier: Modifier = Modifier,
     containerLevel: ContainerLevel = ContainerLevel.Medium,
-    contentPadding: Dp = 16.dp,
+    contentPadding: Dp = DefaultContentPadding,
     content: @Composable BoxScope.() -> Unit
 ) {
     val backgroundColor by animateColorAsState(
@@ -110,7 +115,7 @@ fun ExpressiveSectionContainer(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.extraLarge)
             .background(backgroundColor)
-            .padding(16.dp),
+            .padding(DefaultContentPadding),
         content = content
     )
 }
@@ -138,7 +143,7 @@ fun ExpressiveCardContainer(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.extraLarge)
             .background(backgroundColor)
-            .padding(16.dp),
+            .padding(DefaultContentPadding),
         content = content
     )
 }
@@ -170,7 +175,7 @@ fun ExpressiveElevatedCardContainer(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.extraLarge)
             .background(backgroundColor)
-            .padding(16.dp),
+            .padding(DefaultContentPadding),
         content = content
     )
 }
@@ -202,7 +207,7 @@ fun ExpressiveListItemContainer(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.medium)
             .background(backgroundColor)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = DefaultContentPadding, vertical = DefaultListItemPadding),
         content = content
     )
 }
@@ -234,7 +239,7 @@ fun ExpressiveHighlightContainer(
             .fillMaxWidth()
             .clip(MaterialTheme.shapes.extraLarge)
             .background(backgroundColor)
-            .padding(16.dp),
+            .padding(DefaultContentPadding),
         content = content
     )
 }
@@ -260,7 +265,7 @@ private fun getContainerColor(level: ContainerLevel): Color {
 fun ExpressivePaddedContentContainer(
     modifier: Modifier = Modifier,
     containerLevel: ContainerLevel = ContainerLevel.Medium,
-    padding: Dp = 16.dp,
+    padding: Dp = DefaultContentPadding,
     content: @Composable BoxScope.() -> Unit
 ) {
     ExpressiveContentContainer(
