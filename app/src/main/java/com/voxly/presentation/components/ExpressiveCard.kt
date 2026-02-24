@@ -48,7 +48,7 @@ import com.voxly.presentation.theme.ContainerLevel
 @Composable
 fun ExpressiveCard(
     modifier: Modifier = Modifier,
-    containerLevel: ContainerLevel = ContainerLevel.Low,
+    containerLevel: ContainerLevel = ContainerLevel.Medium,
     containerColor: Color? = null,
     onClick: (() -> Unit)? = null,
     enabled: Boolean = true,
@@ -58,9 +58,9 @@ fun ExpressiveCard(
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
     
-    // 物理动画 - 按压时的弹性缩放
+    // 物理动画 - 按压时的弹性缩放（确保 padding 始终为非负数）
     val scale by animateDpAsState(
-        targetValue = if (isPressed) (-2).dp else 0.dp,
+        targetValue = if (isPressed) 2.dp else 0.dp,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
@@ -100,7 +100,7 @@ fun ExpressiveCard(
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Box(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(4.dp),
                 content = content
             )
         }
@@ -114,7 +114,7 @@ fun ExpressiveCard(
             elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
         ) {
             Box(
-                modifier = Modifier.padding(16.dp),
+                modifier = Modifier.padding(4.dp),
                 content = content
             )
         }
@@ -123,28 +123,30 @@ fun ExpressiveCard(
 
 /**
  * 获取Surface Container颜色
+ * 静态显示时使用更鲜艳的动态颜色配置（Primary/Secondary/Tertiary Container）
  */
 @Composable
 private fun getContainerColor(
     level: ContainerLevel,
     isPressed: Boolean
 ): Color {
+    // 基础颜色 - 使用更鲜艳的动态颜色（Primary/Secondary/Tertiary Container）
     val baseColor = when (level) {
-        ContainerLevel.Lowest -> MaterialTheme.colorScheme.surfaceContainerLowest
-        ContainerLevel.Low -> MaterialTheme.colorScheme.surfaceContainerLow
-        ContainerLevel.Medium -> MaterialTheme.colorScheme.surfaceContainer
-        ContainerLevel.High -> MaterialTheme.colorScheme.surfaceContainerHigh
-        ContainerLevel.Highest -> MaterialTheme.colorScheme.surfaceContainerHighest
+        ContainerLevel.Lowest -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+        ContainerLevel.Low -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+        ContainerLevel.Medium -> MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.7f)
+        ContainerLevel.High -> MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
+        ContainerLevel.Highest -> MaterialTheme.colorScheme.primaryContainer
     }
-    
-    // 按压时使用更高层级的颜色
+
+    // 按压时使用更高饱和度的颜色
     return if (isPressed) {
         when (level) {
-            ContainerLevel.Lowest -> MaterialTheme.colorScheme.surfaceContainerLow
-            ContainerLevel.Low -> MaterialTheme.colorScheme.surfaceContainer
-            ContainerLevel.Medium -> MaterialTheme.colorScheme.surfaceContainerHigh
-            ContainerLevel.High -> MaterialTheme.colorScheme.surfaceContainerHighest
-            ContainerLevel.Highest -> MaterialTheme.colorScheme.surfaceContainerHighest
+            ContainerLevel.Lowest -> MaterialTheme.colorScheme.primaryContainer
+            ContainerLevel.Low -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.9f)
+            ContainerLevel.Medium -> MaterialTheme.colorScheme.secondaryContainer
+            ContainerLevel.High -> MaterialTheme.colorScheme.tertiaryContainer
+            ContainerLevel.Highest -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.95f)
         }
     } else {
         baseColor
@@ -158,7 +160,7 @@ private fun getContainerColor(
 fun ExpressiveCardWithTitle(
     title: String,
     modifier: Modifier = Modifier,
-    containerLevel: ContainerLevel = ContainerLevel.Low,
+    containerLevel: ContainerLevel = ContainerLevel.Medium,
     onClick: (() -> Unit)? = null,
     content: @Composable BoxScope.() -> Unit
 ) {
@@ -188,7 +190,7 @@ fun ExpressiveExpandableCard(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
-    containerLevel: ContainerLevel = ContainerLevel.Low,
+    containerLevel: ContainerLevel = ContainerLevel.Medium,
     content: @Composable BoxScope.() -> Unit
 ) {
     ExpressiveCard(

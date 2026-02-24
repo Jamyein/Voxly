@@ -449,7 +449,7 @@ fun SettingsSwitch(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onCheckedChange(!checked) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
     )
 }
 
@@ -481,7 +481,7 @@ fun SettingsSlider(
                     color = MaterialTheme.colorScheme.primary
                 )
             },
-            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
         )
         Slider(
             value = value,
@@ -506,7 +506,7 @@ fun SettingsInfoRow(title: String, value: String) {
             )
         },
         trailingContent = { Text(text = value) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
     )
 }
 
@@ -525,7 +525,7 @@ fun SettingsSubmenuRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
     )
 }
 
@@ -574,7 +574,7 @@ fun SettingsDropdownRow(
                 )
             }
         },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
     )
 }
 
@@ -641,7 +641,7 @@ fun PerSourceSearchLimitRow(
                 )
             }
         },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
     )
 }
 
@@ -1128,7 +1128,7 @@ fun SettingsScreen(
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_scan_directory_settings)) },
                     supportingContent = { Text(stringResource(R.string.settings_scan_directory_settings_subtitle)) },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
                     modifier = Modifier.clickable { onNavigateToScanDirectorySettings() }
                 )
             }
@@ -1212,7 +1212,7 @@ fun SettingsScreen(
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_logging_size)) },
                     supportingContent = { Text(LogManager.formatLogSize(LogManager.getLogDirectorySize())) },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
                 )
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1220,7 +1220,7 @@ fun SettingsScreen(
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_logging_view)) },
                     supportingContent = { Text(stringResource(R.string.settings_logging_view_subtitle)) },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
                     modifier = Modifier.clickable { onNavigateToLogViewer() }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1228,7 +1228,7 @@ fun SettingsScreen(
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_logging_export)) },
                     supportingContent = { Text(stringResource(R.string.settings_logging_export_subtitle)) },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
                     modifier = Modifier.clickable { onExportLogs() }
                 )
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -1236,7 +1236,7 @@ fun SettingsScreen(
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_logging_cleanup)) },
                     supportingContent = { Text(stringResource(R.string.settings_logging_cleanup_subtitle)) },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
                     modifier = Modifier.clickable { onCleanupLogs() }
                 )
             }
@@ -1277,7 +1277,7 @@ fun SettingsScreen(
                             )
                         }
                     },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
                     modifier = Modifier.clickable { showReplayGainDialog = true }
                 )
                 

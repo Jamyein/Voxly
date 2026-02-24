@@ -59,6 +59,7 @@ import com.voxly.domain.usecase.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.components.ExpressiveCard
+import com.voxly.presentation.theme.ContainerLevel
 import com.voxly.presentation.components.ExpressiveTopAppBar
 import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.viewmodel.FileBrowserUiState
@@ -1536,7 +1537,7 @@ private fun DirectoryOverviewContent(
                 directory = directory,
                 fileCount = directoryFiles[directory.uri]?.size ?: 0,
                 onClick = { onOpenDirectory(directory.uri) },
-                modifier = Modifier.padding(vertical = 4.dp)
+                modifier = Modifier.padding(vertical = 0.dp)
             )
         }
     }
@@ -1631,7 +1632,7 @@ private fun AudioFileList(
     val isSelectionMode = selectedFiles.isNotEmpty()
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(vertical = 8.dp)
+        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
     ) {
         items(files, key = { it.path }) { audioFile ->
             AudioFileItem(
@@ -1668,32 +1669,33 @@ private fun AudioFileItem(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    ExpressiveCard(
+    val surfaceColor = if (isSelected) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+    } else {
+        MaterialTheme.colorScheme.surface
+    }
+
+    Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        shape = MaterialTheme.shapes.medium,
-        containerColor = if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer
-        } else {
-            null
-        }
+        color = surfaceColor,
+        shape = MaterialTheme.shapes.extraLarge
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
+                .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Album art display
             Box(
                 modifier = Modifier
-                    .size(48.dp)
-                    .clip(RoundedCornerShape(8.dp)),
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(6.dp)),
                 contentAlignment = Alignment.Center
             ) {
                 val albumArtBitmap by produceState<android.graphics.Bitmap?>(
@@ -1712,7 +1714,7 @@ private fun AudioFileItem(
                     albumArtCache[cacheKey] = bitmap
                     value = bitmap
                 }
-                
+
                 val bitmap = albumArtBitmap
                 if (bitmap != null) {
                     Image(
@@ -1724,17 +1726,18 @@ private fun AudioFileItem(
                     Icon(
                         painter = appIconPainter(AppIcon.MusicNote),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.outline
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(24.dp)
                     )
                 }
             }
 
-            Spacer(modifier = Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(10.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                    style = MaterialTheme.typography.titleSmall,
+                    style = MaterialTheme.typography.bodyMedium,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -1765,7 +1768,8 @@ private fun AudioFileItem(
                 Icon(
                     Icons.Default.CheckCircle,
                     contentDescription = stringResource(R.string.selected),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(8.dp)
                 )
             } else if (showActions) {
                 FileActionsMenu(
@@ -1995,19 +1999,14 @@ private fun DirectoryItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+    ExpressiveCard(
+        modifier = modifier,
+        containerLevel = ContainerLevel.Low,
+        onClick = onClick
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
@@ -2030,12 +2029,13 @@ private fun DirectoryItem(
                     overflow = TextOverflow.Ellipsis,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                    text = "$fileCount",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
             }
+            Text(
+                text = "$fileCount",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
+                modifier = Modifier.padding(start = 8.dp)
+            )
         }
     }
 }

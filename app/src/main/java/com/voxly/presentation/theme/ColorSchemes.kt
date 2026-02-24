@@ -96,11 +96,12 @@ val ExpressiveLightColorScheme = lightColorScheme(
     onSurface = Color(0xFF1D1B20),
     
     // ===== Surface Container Colors (MD3 Expressive tonal surface system) =====
+    // 注意：这些颜色之间需要有足够的对比度以形成视觉层级
     surfaceContainerLowest = Color(0xFFFFFFFF),
-    surfaceContainerLow = Color(0xFFF7F2F8),
-    surfaceContainer = Color(0xFFF3EDF7),
-    surfaceContainerHigh = Color(0xFFEDE6F2),
-    surfaceContainerHighest = Color(0xFFE8E2EC),
+    surfaceContainerLow = Color(0xFFF3EDF7),
+    surfaceContainer = Color(0xFFECE6F0),
+    surfaceContainerHigh = Color(0xFFE6E0E9),
+    surfaceContainerHighest = Color(0xFFDED8E1),
     
     // ===== Surface Variant =====
     surfaceVariant = Color(0xFFE7E0EC),
@@ -172,10 +173,11 @@ val ExpressiveDarkColorScheme = darkColorScheme(
     onSurface = Color(0xFFE6E1E5),
     
     // ===== Surface Container Colors =====
+    // 深色主题中层级越低越暗，层级越高越亮（与浅色主题相反）
     surfaceContainerLowest = Color(0xFF0F0D13),
-    surfaceContainerLow = Color(0xFF1D1B20),
+    surfaceContainerLow = Color(0xFF1A181D),
     surfaceContainer = Color(0xFF211F26),
-    surfaceContainerHigh = Color(0xFF2B292F),
+    surfaceContainerHigh = Color(0xFF2B282F),
     surfaceContainerHighest = Color(0xFF363339),
     
     // ===== Surface Variant =====
@@ -223,9 +225,9 @@ object SemanticColors {
  * 用于组件中指定背景层级
  */
 enum class ContainerLevel {
-    Lowest,   // 最浅/最深 - 用于最高elevation的卡片
-    Low,      // 较浅/较暗 - 用于一般卡片
+    Lowest,   // 最浅（浅色）/最深（深色） - 用于最高elevation的卡片
+    Low,      // 较浅（浅色）/较暗（深色） - 用于一般卡片
     Medium,   // 默认 - 用于主要内容区
-    High,     // 较深/较亮 - 用于高亮区域
-    Highest   // 最深/最亮 - 用于选中状态
+    High,     // 较深（浅色）/较亮（深色） - 用于高亮区域
+    Highest   // 最深（浅色）/最亮（深色） - 用于选中状态
 }

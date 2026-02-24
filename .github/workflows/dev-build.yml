@@ -56,12 +56,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          # Find APK
           APK_PATH="$(find app/build -type f -name "*.apk" | head -n 1)"
           if [ -z "${APK_PATH}" ]; then
             echo "No APK found"
             exit 1
           fi
-          VERSION_NAME="0.4.5"
+
+          # Extract VERSION_NAME from build.gradle.kts
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
           SHORT_SHA="${GITHUB_SHA::7}"
           OUT_DIR="app/build/outputs/apk/github/release"
           mkdir -p "${OUT_DIR}"
