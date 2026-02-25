@@ -123,6 +123,22 @@
 -keep class com.voxly.data.remote.itunes.model.** { *; }
 -keep class com.voxly.data.remote.musicbrainz.model.** { *; }
 
+# Keep generic type information for Retrofit Gson Converter
+# This prevents "Class cannot be cast to ParameterizedType" errors
+-keepattributes Signature
+-keep,allowobfuscation,allowshrinking class retrofit2.Response {
+    <fields>;
+}
+-keep,allowobfuscation,allowshrinking class retrofit2.Response<T> {
+    <init>(...);
+}
+-keepclassmembers,allowobfuscation,allowshrinking class retrofit2.Response {
+    <init>(...);
+}
+-keepclassmembers,allowobfuscation,allowshrinking class retrofit2.Response<*> {
+    <init>(...);
+}
+
 # Keep Retrofit interfaces (required for reflection-based creation)
 -keep class com.voxly.data.remote.** { *; }
 

@@ -2,9 +2,8 @@ package com.voxly.data.local.cache
 
 import android.content.Context
 import androidx.room.*
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
+import org.json.JSONObject
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,7 +23,7 @@ import javax.inject.Singleton
 abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun audioFileDao(): CachedAudioFileDao
     abstract fun albumThumbnailDao(): AlbumThumbnailDao
-    
+
     companion object {
         const val DATABASE_NAME = "music_cache.db"
     }
@@ -32,22 +31,28 @@ abstract class MusicCacheDatabase : RoomDatabase() {
 
 /**
  * Type converters for complex data types.
+ * Uses JSONObject instead of Gson to avoid TypeToken issues with obfuscation.
  */
 class RoomTypeConverters {
-    private val gson = Gson()
-    
+
     // Map<String, String> for customFields
     @TypeConverter
     fun fromStringMap(value: Map<String, String>?): String? {
-        return value?.let { gson.toJson(it) }
+        return value?.let {
+            JSONObject(it).toString()
+        }
     }
-    
+
     @TypeConverter
     fun toStringMap(value: String?): Map<String, String>? {
         return value?.let {
-            val type = object : TypeToken<Map<String, String>>() {}.type
             try {
-                gson.fromJson(it, type)
+                val json = JSONObject(it)
+                val map = mutableMapOf<String, String>()
+                json.keys().forEach { key ->
+                    map[key] = json.getString(key)
+                }
+                map
             } catch (e: Exception) {
                 emptyMap()
             }

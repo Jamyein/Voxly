@@ -208,6 +208,9 @@ dependencies {
     // Kotlinx Serialization for type-safe serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
 
+    // Retrofit Kotlinx Serialization Converter
+    implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
+
     // Room Database for caching
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")
