@@ -382,9 +382,9 @@ class SettingsDataStore @Inject constructor(
                 else -> true
             }
             val extraOptions = if (sourceId == "itunes") {
-                listOf("countryCode" to appleCountryCode)
+                mapOf("countryCode" to appleCountryCode)
             } else {
-                emptyList()
+                emptyMap()
             }
             DataSourceConfig(sourceId = sourceId, enabled = enabled, order = index, extraOptions = extraOptions)
         }
@@ -411,9 +411,9 @@ class SettingsDataStore @Inject constructor(
                 else -> true
             }
             val extraOptions = if (sourceId == "itunes") {
-                listOf("countryCode" to appleCountryCode)
+                mapOf("countryCode" to appleCountryCode)
             } else {
-                emptyList()
+                emptyMap()
             }
             DataSourceConfig(sourceId = sourceId, enabled = enabled, order = index, extraOptions = extraOptions)
         }

@@ -139,7 +139,7 @@ data class SourceItemState(
     val sourceId: String,
     val enabled: Boolean,
     val order: Int,
-    val extraOptions: List<Pair<String, String>>,
+    val extraOptions: Map<String, String>,
     val expanded: Boolean = false
 )
 

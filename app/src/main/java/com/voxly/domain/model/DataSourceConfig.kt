@@ -10,17 +10,14 @@ data class DataSourceConfig(
     val sourceId: String,           // e.g., "itunes", "musicbrainz", "netease", "qq_music"
     val enabled: Boolean = true,
     val order: Int = 0,
-    val extraOptions: List<Pair<String, String>> = emptyList()  // e.g., listOf("countryCode" to "us")
+    val extraOptions: Map<String, String> = emptyMap()  // e.g., mapOf("countryCode" to "us")
 ) {
     fun getExtraOption(key: String, default: String = ""): String {
-        return extraOptions.find { it.first == key }?.second ?: default
+        return extraOptions[key] ?: default
     }
 
     fun withExtraOption(key: String, value: String): DataSourceConfig {
-        val updated = extraOptions.toMutableList()
-        updated.removeAll { it.first == key }
-        updated.add(key to value)
-        return copy(extraOptions = updated)
+        return copy(extraOptions = extraOptions + (key to value))
     }
 
     companion object {
