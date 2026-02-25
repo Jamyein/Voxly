@@ -3,7 +3,10 @@ package com.voxly.data.local.cache
 import android.content.Context
 import androidx.room.*
 import dagger.hilt.android.qualifiers.ApplicationContext
-import org.json.JSONObject
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -31,15 +34,20 @@ abstract class MusicCacheDatabase : RoomDatabase() {
 
 /**
  * Type converters for complex data types.
- * Uses JSONObject instead of Gson to avoid TypeToken issues with obfuscation.
+ * Uses Kotlinx Serialization instead of Gson TypeToken to avoid obfuscation issues.
  */
 class RoomTypeConverters {
+
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
 
     // Map<String, String> for customFields
     @TypeConverter
     fun fromStringMap(value: Map<String, String>?): String? {
         return value?.let {
-            JSONObject(it).toString()
+            json.encodeToString(it)
         }
     }
 
@@ -47,12 +55,7 @@ class RoomTypeConverters {
     fun toStringMap(value: String?): Map<String, String>? {
         return value?.let {
             try {
-                val json = JSONObject(it)
-                val map = mutableMapOf<String, String>()
-                json.keys().forEach { key ->
-                    map[key] = json.getString(key)
-                }
-                map
+                json.decodeFromString<Map<String, String>>(it)
             } catch (e: Exception) {
                 emptyMap()
             }
