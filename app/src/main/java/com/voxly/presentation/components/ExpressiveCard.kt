@@ -2,7 +2,7 @@ package com.voxly.presentation.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -59,14 +59,17 @@ fun ExpressiveCard(
     val isPressed by interactionSource.collectIsPressedAsState()
     
     // 物理动画 - 按压时的弹性缩放（确保 padding 始终为非负数）
-    val scale by animateDpAsState(
-        targetValue = if (isPressed) 2.dp else 0.dp,
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) 2f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessMedium
         ),
         label = "cardScale"
     )
+
+    // 确保 padding 值始终非负
+    val paddingValue = scale.coerceAtLeast(0f).dp
     
     // 背景色动画 - 优先使用containerColor
     val backgroundColor by animateColorAsState(
@@ -80,7 +83,7 @@ fun ExpressiveCard(
     
     val cardModifier = modifier
         .fillMaxWidth()
-        .padding(scale)
+        .padding(paddingValue)
         .clip(shape)
         .background(backgroundColor)
     
