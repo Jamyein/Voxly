@@ -1,5 +1,6 @@
 package com.voxly.presentation.navigation
 
+import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -8,7 +9,10 @@ import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Icon
-import com.voxly.presentation.components.ExpressiveScaffold
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 
 import androidx.compose.runtime.Composable
@@ -47,16 +51,16 @@ import java.net.URLDecoder
 import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
-import com.voxly.presentation.components.ExpressiveNavigationBar
-import com.voxly.presentation.components.ExpressiveNavigationBarItem
+import androidx.compose.material3.NavigationBarItem
 import com.voxly.presentation.theme.ExpressiveAnimations
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.presentation.viewmodel.AppViewModel
 
 /**
  * Main navigation host for the MP3 Tag Editor app.
- * Implements bottom navigation with Material Design 3 Expressive components.
+ * Implements bottom navigation with Material Design 3 components.
  */
+@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun MP3TagNavHost(
     navController: NavHostController = rememberNavController()
@@ -83,8 +87,7 @@ fun MP3TagNavHost(
         }
     }
 
-    ExpressiveScaffold(
-
+    Scaffold(
         bottomBar = {
             if (showBottomBar) {
                 AnimatedVisibility(
@@ -92,11 +95,13 @@ fun MP3TagNavHost(
                     enter = ExpressiveAnimations.ListItemEnter,
                     exit = ExpressiveAnimations.ListItemExit
                 ) {
-                    ExpressiveNavigationBar {
+                    NavigationBar(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ) {
                         bottomNavItems.forEach { item ->
                             val selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
                             val label = stringResource(item.labelResId)
-                            ExpressiveNavigationBarItem(
+                            NavigationBarItem(
                                 selected = selected,
                                 onClick = {
                                     navController.navigate(item.screen.route) {
@@ -107,19 +112,23 @@ fun MP3TagNavHost(
                                         restoreState = true
                                     }
                                 },
-                                icon = item.unselectedIcon.vector,
-                                selectedIcon = item.selectedIcon.vector,
-                                label = label
+                                icon = {
+                                    Icon(
+                                        imageVector = if (selected) item.selectedIcon.vector else item.unselectedIcon.vector,
+                                        contentDescription = label
+                                    )
+                                },
+                                label = { Text(label) }
                             )
                         }
                     }
                 }
             }
         }
-    ) {
+    ) { innerPadding ->
         NavHost(
             navController = navController,
-            modifier = Modifier,
+            modifier = Modifier.padding(innerPadding),
             startDestination = Screen.FileBrowser.route,
             enterTransition = {
                 ExpressiveAnimations.PageEnter
@@ -201,7 +210,7 @@ fun MP3TagNavHost(
 
             composable(Screen.LogViewer.route) {
                 LogViewerScreen(
-                    onNavigateBack = { navController.popBackStack() }
+                    onBack = { navController.popBackStack() }
                 )
             }
 

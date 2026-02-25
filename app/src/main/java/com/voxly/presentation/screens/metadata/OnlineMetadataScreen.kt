@@ -19,15 +19,16 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
-import com.voxly.presentation.theme.ContainerLevel
+import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -89,23 +90,33 @@ fun OnlineMetadataScreen(
         }
     }
 
-    ExpressiveScaffoldWithTopBar(
-        title = stringResource(R.string.fetch_online_metadata),
-        navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
-        onNavigationClick = onNavigateBack,
-        actions = {
-            IconButton(
-                onClick = { viewModel.autoSearch() },
-                enabled = !isLoading
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Search Again")
-            }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.fetch_online_metadata)) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.autoSearch() },
+                        enabled = !isLoading
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Search Again")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            )
         }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-            .padding(16.dp)
+                .padding(16.dp)
         ) {
             QuerySummaryCard(
                 title = query.title,
@@ -179,7 +190,10 @@ private fun QuerySummaryCard(
     album: String?,
     fromTags: Boolean
 ) {
-    ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 text = if (fromTags) "Auto query source: tags (priority)" else "Auto query source: file name fallback",
@@ -211,7 +225,13 @@ private fun OnlineReleaseList(
 ) {
     LazyColumn(modifier = modifier.fillMaxWidth()) {
         items(releases) { release ->
-            ExpressiveCard(    modifier = Modifier        .fillMaxWidth()        .padding(vertical = 6.dp),    containerLevel = ContainerLevel.Low,    onClick = { onSelect(release) }) {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 6.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                onClick = { onSelect(release) }
+            ) {
                 Row(modifier = Modifier.padding(16.dp)) {
                     ReleaseCover(
                         coverArtUrl = release.coverArtUrl,
@@ -277,10 +297,12 @@ fun SearchProgressIndicator(
     val isLyricsSearching = searchState.isLyricsSearching
     val resultCount = searchState.results.size
 
-    ExpressiveCard(
+    Card(
         modifier = modifier.fillMaxWidth(),
-        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-        containerLevel = ContainerLevel.Low
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = androidx.compose.material3.CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             // Status line with source indicators

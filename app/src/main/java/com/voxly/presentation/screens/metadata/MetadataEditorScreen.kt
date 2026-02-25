@@ -31,13 +31,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import com.voxly.presentation.components.ExpressiveOutlinedTextField
-import com.voxly.presentation.components.ExpressiveButton
-import com.voxly.presentation.components.ExpressiveOutlinedButton
-import com.voxly.presentation.components.ButtonEmphasis
-import com.voxly.presentation.components.ExpressiveIconButton
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.theme.ContainerLevel
 import androidx.compose.runtime.*
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -52,7 +45,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.components.ExpressiveTopAppBar
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
@@ -150,16 +142,20 @@ fun MetadataEditorScreen(
 
     Scaffold(
         topBar = {
-            ExpressiveTopAppBar(
-                title = stringResource(R.string.edit_metadata),
-                navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
-                onNavigationClick = {
-                    if (hasUnsavedChanges) {
-                        showDiscardDialog = true
-                    } else {
-                        onNavigateBack()
+            TopAppBar(
+                title = { Text(stringResource(R.string.edit_metadata)) },
+                navigationIcon = {
+                    IconButton(onClick = {
+                        if (hasUnsavedChanges) {
+                            showDiscardDialog = true
+                        } else {
+                            onNavigateBack()
+                        }
+                    }) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },
+                colors = TopAppBarDefaults.topAppBarColors(),
                 actions = {
                     // Chinese conversion dropdown menu
                     Box {
@@ -405,10 +401,6 @@ fun MetadataEditorScreen(
                         onComposerChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.COMPOSER, it) },
                         onLyricistChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.LYRICIST, it) },
                         onCommentChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.COMMENT, it) },
-                        onRecordLabelChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.RECORD_LABEL, it) },
-                        onEncoderChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.ENCODER, it) },
-                        onIsrcChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.ISRC, it) },
-                        onCopyrightChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.COPYRIGHT, it) },
                         onLyricsChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.LYRICS, it) },
                         onTrackNumberChange = { track, total ->
                             viewModel.updateTrackNumber(
@@ -505,6 +497,12 @@ fun MetadataEditorScreen(
                     .fillMaxWidth()
                     .padding(bottom = 32.dp)
             ) {
+                VerticalDragHandle(
+                    modifier = Modifier
+                        .align(Alignment.CenterHorizontally)
+                        .padding(vertical = 12.dp)
+                )
+
                 Text(
                     text = stringResource(R.string.album_art_picker_title),
                     style = MaterialTheme.typography.titleLarge,
@@ -794,10 +792,6 @@ private fun MetadataForm(
     onComposerChange: (String) -> Unit,
     onLyricistChange: (String) -> Unit,
     onCommentChange: (String) -> Unit,
-    onRecordLabelChange: (String) -> Unit,
-    onEncoderChange: (String) -> Unit,
-    onIsrcChange: (String) -> Unit,
-    onCopyrightChange: (String) -> Unit,
     onLyricsChange: (String) -> Unit,
     onTrackNumberChange: (String, String) -> Unit,
     onDiscNumberChange: (String, String) -> Unit,
@@ -830,42 +824,46 @@ private fun MetadataForm(
         // Basic Information
         SectionTitle(stringResource(R.string.basic_information))
 
-        ExpressiveOutlinedTextField(
+        OutlinedTextField(
             value = metadata.title ?: "",
             onValueChange = onTitleChange,
             label = { Text(stringResource(R.string.metadata_title)) },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            shape = MaterialTheme.shapes.extraLarge
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        ExpressiveOutlinedTextField(
+        OutlinedTextField(
             value = metadata.artist ?: "",
             onValueChange = onArtistChange,
             label = { Text(stringResource(R.string.metadata_artist)) },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            shape = MaterialTheme.shapes.extraLarge
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        ExpressiveOutlinedTextField(
+        OutlinedTextField(
             value = metadata.album ?: "",
             onValueChange = onAlbumChange,
             label = { Text(stringResource(R.string.metadata_album)) },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            shape = MaterialTheme.shapes.extraLarge
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        ExpressiveOutlinedTextField(
+        OutlinedTextField(
             value = metadata.albumArtist ?: "",
             onValueChange = onAlbumArtistChange,
             label = { Text(stringResource(R.string.metadata_album_artist)) },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            shape = MaterialTheme.shapes.extraLarge
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -874,48 +872,26 @@ private fun MetadataForm(
         SectionTitle(stringResource(R.string.track_information))
 
         Row(modifier = Modifier.fillMaxWidth()) {
-            ExpressiveOutlinedTextField(
+            OutlinedTextField(
                 value = metadata.trackNumber?.toString() ?: "",
                 onValueChange = { onTrackNumberChange(it, metadata.totalTracks?.toString() ?: "") },
                 label = { Text(stringResource(R.string.label_track)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
-                keyboardType = KeyboardType.Number
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = MaterialTheme.shapes.extraLarge
             )
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            ExpressiveOutlinedTextField(
-                value = metadata.totalTracks?.toString() ?: "",
-                onValueChange = { onTrackNumberChange(metadata.trackNumber?.toString() ?: "", it) },
-                label = { Text(stringResource(R.string.label_total)) },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardType = KeyboardType.Number
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(modifier = Modifier.fillMaxWidth()) {
-            ExpressiveOutlinedTextField(
+            OutlinedTextField(
                 value = metadata.discNumber?.toString() ?: "",
                 onValueChange = { onDiscNumberChange(it, metadata.totalDiscs?.toString() ?: "") },
                 label = { Text(stringResource(R.string.label_disc)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
-                keyboardType = KeyboardType.Number
-            )
-
-            Spacer(modifier = Modifier.width(8.dp))
-
-            ExpressiveOutlinedTextField(
-                value = metadata.totalDiscs?.toString() ?: "",
-                onValueChange = { onDiscNumberChange(metadata.discNumber?.toString() ?: "", it) },
-                label = { Text(stringResource(R.string.label_total)) },
-                modifier = Modifier.weight(1f),
-                singleLine = true,
-                keyboardType = KeyboardType.Number
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = MaterialTheme.shapes.extraLarge
             )
         }
 
@@ -925,94 +901,59 @@ private fun MetadataForm(
         SectionTitle(stringResource(R.string.additional_information))
 
         Row(modifier = Modifier.fillMaxWidth()) {
-            ExpressiveOutlinedTextField(
+            OutlinedTextField(
                 value = metadata.year ?: "",
                 onValueChange = onYearChange,
                 label = { Text(stringResource(R.string.metadata_year)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
-                keyboardType = KeyboardType.Number
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                shape = MaterialTheme.shapes.extraLarge
             )
 
             Spacer(modifier = Modifier.width(8.dp))
 
-            ExpressiveOutlinedTextField(
+            OutlinedTextField(
                 value = metadata.genre ?: "",
                 onValueChange = onGenreChange,
                 label = { Text(stringResource(R.string.metadata_genre)) },
                 modifier = Modifier.weight(1f),
-                singleLine = true
+                singleLine = true,
+                shape = MaterialTheme.shapes.extraLarge
             )
         }
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        ExpressiveOutlinedTextField(
+        OutlinedTextField(
             value = metadata.composer ?: "",
             onValueChange = onComposerChange,
             label = { Text(stringResource(R.string.metadata_composer)) },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            shape = MaterialTheme.shapes.extraLarge
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        ExpressiveOutlinedTextField(
+        OutlinedTextField(
             value = metadata.lyricist ?: "",
             onValueChange = onLyricistChange,
             label = { Text(stringResource(R.string.metadata_lyricist)) },
             modifier = Modifier.fillMaxWidth(),
-            singleLine = true
+            singleLine = true,
+            shape = MaterialTheme.shapes.extraLarge
         )
 
         Spacer(modifier = Modifier.height(8.dp))
 
-        ExpressiveOutlinedTextField(
-            value = metadata.customFields["record_label"] ?: "",
-            onValueChange = onRecordLabelChange,
-            label = { Text(stringResource(R.string.metadata_record_label)) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(modifier = Modifier.fillMaxWidth()) {
-            ExpressiveOutlinedTextField(
-                value = metadata.customFields["encoder"] ?: "",
-                onValueChange = onEncoderChange,
-                label = { Text(stringResource(R.string.metadata_encoder)) },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            ExpressiveOutlinedTextField(
-                value = metadata.customFields["isrc"] ?: "",
-                onValueChange = onIsrcChange,
-                label = { Text(stringResource(R.string.metadata_isrc)) },
-                modifier = Modifier.weight(1f),
-                singleLine = true
-            )
-        }
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        ExpressiveOutlinedTextField(
-            value = metadata.customFields["copyright"] ?: "",
-            onValueChange = onCopyrightChange,
-            label = { Text(stringResource(R.string.metadata_copyright)) },
-            modifier = Modifier.fillMaxWidth(),
-            singleLine = true
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        ExpressiveOutlinedTextField(
+        OutlinedTextField(
             value = metadata.comment ?: "",
             onValueChange = onCommentChange,
             label = { Text(stringResource(R.string.metadata_comment)) },
             modifier = Modifier.fillMaxWidth(),
-            minLines = 3
+            minLines = 3,
+            shape = MaterialTheme.shapes.extraLarge
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1020,7 +961,7 @@ private fun MetadataForm(
         // Lyrics Section
         SectionTitle(stringResource(R.string.lyrics_section_title))
 
-        ExpressiveOutlinedTextField(
+        OutlinedTextField(
             value = metadata.lyrics ?: "",
             onValueChange = onLyricsChange,
             modifier = Modifier
@@ -1028,7 +969,8 @@ private fun MetadataForm(
                 .heightIn(min = 140.dp),
             label = { Text(stringResource(R.string.edit_lyrics)) },
             placeholder = { Text(stringResource(R.string.no_lyrics_added)) },
-            minLines = 6
+            minLines = 6,
+            shape = MaterialTheme.shapes.extraLarge
         )
 
         Spacer(modifier = Modifier.height(16.dp))
@@ -1097,9 +1039,9 @@ private fun ReplayGainSection(
 ) {
     var expanded by remember { mutableStateOf(false) }
 
-    ExpressiveCard(
+    Card(
         modifier = Modifier.fillMaxWidth(),
-        containerLevel = ContainerLevel.Lowest
+        shape = MaterialTheme.shapes.extraLarge
     ) {
         Column(
             modifier = Modifier
@@ -1186,17 +1128,19 @@ private fun ReplayGainSection(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        ExpressiveOutlinedButton(
+                        OutlinedButton(
                             onClick = onScan,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.extraLarge
                         ) {
                             Icon(Icons.Default.Refresh, contentDescription = null)
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(stringResource(R.string.replay_gain_rescan))
                         }
-                        ExpressiveOutlinedButton(
+                        OutlinedButton(
                             onClick = onClear,
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            shape = MaterialTheme.shapes.extraLarge
                         ) {
                             Icon(Icons.Default.Delete, contentDescription = null)
                             Spacer(modifier = Modifier.width(4.dp))
@@ -1213,10 +1157,10 @@ private fun ReplayGainSection(
                     
                     Spacer(modifier = Modifier.height(12.dp))
 
-                    ExpressiveButton(
+                    Button(
                         onClick = onScan,
-                        emphasis = ButtonEmphasis.High,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.extraLarge
                     ) {
                         Icon(Icons.Default.Equalizer, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))
@@ -1260,12 +1204,12 @@ private fun AlbumArtSection(
     onRotateAlbumArt: () -> Unit,
     onRemoveAlbumArt: () -> Unit
 ) {
-    ExpressiveCard(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .clickable(onClick = onPickAlbumArt),
-        containerLevel = ContainerLevel.Low
+        shape = MaterialTheme.shapes.extraLarge
     ) {
         Box(
             modifier = Modifier.fillMaxSize(),
@@ -1406,8 +1350,6 @@ private fun ConversionDialog(
                 ConvertibleField.COMPOSER,
                 ConvertibleField.LYRICIST,
                 ConvertibleField.COMMENT,
-                ConvertibleField.RECORD_LABEL,
-                ConvertibleField.COPYRIGHT,
                 ConvertibleField.LYRICS
             )
         )

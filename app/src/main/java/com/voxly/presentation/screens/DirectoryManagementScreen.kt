@@ -18,11 +18,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -35,13 +42,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
-import com.voxly.presentation.components.ButtonEmphasis
-import com.voxly.presentation.components.ExpressiveButton
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.components.ExpressiveScaffoldWithBack
-import com.voxly.presentation.components.ExpressiveIconButton
-import com.voxly.presentation.components.ExpressiveTextButton
-import com.voxly.presentation.theme.ContainerLevel
 import com.voxly.presentation.viewmodel.DirectoryManagementViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
 
@@ -81,15 +81,29 @@ fun DirectoryManagementScreen(
         }
     }
 
-    ExpressiveScaffoldWithBack(
-        title = stringResource(R.string.settings_directory_management),
-        onBackClick = onNavigateBack,
-        actions = {
-            ExpressiveIconButton(
-                onClick = { folderPickerLauncher.launch(null) },
-                icon = Icons.Default.Add,
-                contentDescription = stringResource(R.string.add_directory),
-                emphasis = ButtonEmphasis.Medium
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.settings_directory_management)) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = null
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(onClick = { folderPickerLauncher.launch(null) }) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = stringResource(R.string.add_directory)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
             )
         }
     ) {
@@ -110,9 +124,9 @@ fun DirectoryManagementScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                     Spacer(modifier = Modifier.height(12.dp))
-                    ExpressiveButton(
+                    Button(
                         onClick = { folderPickerLauncher.launch(null) },
-                        emphasis = ButtonEmphasis.High
+                        shape = MaterialTheme.shapes.extraLarge
                     ) {
                         Text(stringResource(R.string.add_directory))
                     }
@@ -129,7 +143,7 @@ fun DirectoryManagementScreen(
                         style = MaterialTheme.typography.labelLarge,
                         modifier = Modifier.weight(1f)
                     )
-                    ExpressiveTextButton(onClick = { viewModel.clearDirectories() }) {
+                    TextButton(onClick = { viewModel.clearDirectories() }) {
                         Text(stringResource(R.string.clear_directories))
                     }
                 }
@@ -157,11 +171,11 @@ private fun DirectoryManageItem(
     directory: SelectedDirectory,
     onRemove: () -> Unit
 ) {
-    ExpressiveCard(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp),
-        containerLevel = ContainerLevel.Low
+        shape = MaterialTheme.shapes.extraLarge
     ) {
         Row(
             modifier = Modifier
@@ -186,12 +200,14 @@ private fun DirectoryManageItem(
                 )
             }
             Spacer(modifier = Modifier.width(8.dp))
-            ExpressiveIconButton(
-                onClick = onRemove,
-                icon = Icons.Default.Close,
-                contentDescription = stringResource(R.string.clear_selection),
-                emphasis = ButtonEmphasis.Medium
-            )
+            IconButton(
+                onClick = onRemove
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.clear_selection)
+                )
+            }
         }
     }
 }

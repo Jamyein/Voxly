@@ -2,7 +2,7 @@ package com.voxly.presentation.screens
 
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
-import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -32,8 +32,16 @@ fun EnhancedSettingsScreen(
             stringResource(R.string.settings_metadata_source_both)
     }
 
-    ExpressiveScaffoldWithTopBar(
-        title = stringResource(R.string.nav_settings)
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.nav_settings)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        }
     ) {
         Column(
             modifier = Modifier

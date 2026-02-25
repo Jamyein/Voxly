@@ -6,21 +6,27 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -34,10 +40,6 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.components.ExpressiveContentContainer
-import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
-import com.voxly.presentation.theme.ContainerLevel
 import com.voxly.presentation.viewmodel.StatisticsUiState
 import com.voxly.presentation.viewmodel.StatisticsViewModel
 
@@ -49,20 +51,26 @@ fun StatisticsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    ExpressiveScaffoldWithTopBar(
-        title = stringResource(R.string.statistics_title),
-        actions = {
-            IconButton(onClick = onNavigateToSettings) {
-                Icon(
-                    painter = appIconPainter(AppIcon.Settings),
-                    contentDescription = stringResource(R.string.nav_settings)
-                )
-            }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.statistics_title)) },
+                actions = {
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(
+                            painter = appIconPainter(AppIcon.Settings),
+                            contentDescription = stringResource(R.string.nav_settings)
+                        )
+                    }
+                },
+                windowInsets = WindowInsets.statusBars
+            )
         }
-    ) {
-        ExpressiveContentContainer(
-            modifier = Modifier.fillMaxSize(),
-            containerLevel = ContainerLevel.Medium
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
             when (val state = uiState) {
             is StatisticsUiState.Loading -> {
@@ -206,9 +214,12 @@ private fun StatCard(
     icon: AppIcon,
     modifier: Modifier = Modifier
 ) {
-    ExpressiveCard(
+    Card(
         modifier = modifier,
-        containerLevel = ContainerLevel.Low
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(
             modifier = Modifier
@@ -239,8 +250,11 @@ private fun FormatDistributionCard(
     distribution: Map<String, Int>,
     totalFiles: Int
 ) {
-    ExpressiveCard(
-        containerLevel = ContainerLevel.Low
+    Card(
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(
             modifier = Modifier
@@ -274,8 +288,11 @@ private fun FormatDistributionCard(
 
 @Composable
 private fun TopArtistsCard(artists: List<Pair<String, Int>>) {
-    ExpressiveCard(
-        containerLevel = ContainerLevel.Low
+    Card(
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(
             modifier = Modifier
@@ -300,8 +317,11 @@ private fun TopArtistsCard(artists: List<Pair<String, Int>>) {
 
 @Composable
 private fun TopAlbumsCard(albums: List<Pair<String, Int>>) {
-    ExpressiveCard(
-        containerLevel = ContainerLevel.Low
+    Card(
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(
             modifier = Modifier
@@ -326,8 +346,11 @@ private fun TopAlbumsCard(albums: List<Pair<String, Int>>) {
 
 @Composable
 private fun RecentActivityCard(todayEdits: Int, weekEdits: Int, monthEdits: Int) {
-    ExpressiveCard(
-        containerLevel = ContainerLevel.Low
+    Card(
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Row(
             modifier = Modifier

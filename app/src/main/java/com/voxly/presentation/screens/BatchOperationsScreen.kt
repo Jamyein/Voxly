@@ -6,10 +6,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.CardDefaults
-import com.voxly.presentation.theme.ContainerLevel
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,14 +41,22 @@ fun BatchOperationsScreen(
     var showAlbumArtDialog by remember { mutableStateOf(false) }
     var selectedOperation by remember { mutableStateOf<BatchOperation?>(null) }
 
-    ExpressiveScaffoldWithTopBar(
-        title = stringResource(R.string.batch_operations_title),
-        actions = {
-            if (selectedFiles.isNotEmpty()) {
-                IconButton(onClick = { viewModel.clearSelection() }) {
-                    Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear_selection))
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.batch_operations_title)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                actions = {
+                    if (selectedFiles.isNotEmpty()) {
+                        IconButton(onClick = { viewModel.clearSelection() }) {
+                            Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear_selection))
+                        }
+                    }
                 }
-            }
+            )
         }
     ) {
         Column(
@@ -123,7 +128,11 @@ fun BatchOperationsScreen(
 
 @Composable
 private fun FileCountCard(fileCount: Int) {
-    ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -326,9 +335,9 @@ private fun CompletionContent(
 
 @Composable
 private fun StatCard(title: String, value: String, color: androidx.compose.ui.graphics.Color) {
-    ExpressiveCard(
-        containerColor = color.copy(alpha = 0.1f),
-        containerLevel = ContainerLevel.Low
+    Card(
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.1f))
     ) {
         Column(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp),
@@ -401,15 +410,17 @@ private fun OperationCard(
     onClick: () -> Unit,
     isDestructive: Boolean = false
 ) {
-    ExpressiveCard(
+    Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        containerColor = if (isDestructive) {
-            MaterialTheme.colorScheme.errorContainer
-        } else {
-            MaterialTheme.colorScheme.surface
-        },
-        containerLevel = ContainerLevel.Low
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isDestructive) {
+                MaterialTheme.colorScheme.errorContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        )
     ) {
         Row(
             modifier = Modifier
@@ -463,9 +474,9 @@ private fun OperationCard(
 
 @Composable
 private fun ErrorCard(error: String, onDismiss: () -> Unit) {
-    ExpressiveCard(
-        containerColor = MaterialTheme.colorScheme.errorContainer,
-        containerLevel = ContainerLevel.Low
+    Card(
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer)
     ) {
         Row(
             modifier = Modifier

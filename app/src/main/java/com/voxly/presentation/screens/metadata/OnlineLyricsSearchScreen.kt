@@ -8,25 +8,29 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.components.ExpressiveScrollableContentContainer
-import com.voxly.presentation.components.ExpressiveScaffoldWithBack
-import com.voxly.presentation.theme.ContainerLevel
 import com.voxly.presentation.theme.ExpressiveMotionTokens
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,30 +62,49 @@ fun OnlineLyricsSearchScreen(
         viewModel.search(filePath)
     }
 
-    ExpressiveScaffoldWithBack(
-        title = stringResource(R.string.search_online_lyrics),
-        onBackClick = onNavigateBack,
-        actions = {
-            IconButton(
-                onClick = { viewModel.search(filePath) },
-                enabled = !isLoading
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Search Again")
-            }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.search_online_lyrics)) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.search(filePath) },
+                        enabled = !isLoading
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Search Again")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            )
         }
-    ) {
-        ExpressiveScrollableContentContainer(
-            modifier = Modifier.fillMaxSize(),
-            containerLevel = ContainerLevel.Medium,
-            contentPadding = 16.dp
+    ) { paddingValues ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp)
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 // Search info card
-                ExpressiveCard(
+                Card(
                     modifier = Modifier.fillMaxWidth(),
-                    containerLevel = ContainerLevel.Low
+                    shape = MaterialTheme.shapes.extraLarge,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    )
                 ) {
                     Column(modifier = Modifier.padding(12.dp)) {
                         Text(
@@ -176,10 +199,15 @@ private fun LyricsResultItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ExpressiveCard(
-        modifier = modifier.then(Modifier.fillMaxWidth().padding(vertical = 4.dp)),
-        containerLevel = ContainerLevel.Low,
-        onClick = onClick
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable(onClick = onClick),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(

@@ -17,18 +17,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
-import com.voxly.presentation.theme.ContainerLevel
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.components.ExpressiveScaffoldWithBack
-import com.voxly.presentation.components.ExpressiveIconButton
-import com.voxly.presentation.components.ExpressiveTextButton
-import com.voxly.presentation.components.ButtonEmphasis
+import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -98,18 +97,37 @@ fun ScanDirectorySettingsScreen(
         }
     }
 
-    ExpressiveScaffoldWithBack(
-        title = stringResource(R.string.settings_scan_directory_settings),
-        onBackClick = onNavigateBack
-    ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.settings_scan_directory_settings)) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            )
+        }
+    ) { paddingValues ->
         LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(paddingValues),
+            contentPadding = PaddingValues(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
             // Whitelist Section
             item {
-                ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.extraLarge
+                ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -137,11 +155,15 @@ fun ScanDirectorySettingsScreen(
             // Whitelist directories (only show when enabled)
             if (whitelistEnabled) {
                 item {
-                    ExpressiveTextButton(
+                    TextButton(
                         onClick = { folderPickerLauncher.launch(null) },
-                        modifier = Modifier.fillMaxWidth(),
-                        icon = Icons.Default.Add
+                        modifier = Modifier.fillMaxWidth()
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
                         Text(stringResource(R.string.add_whitelist_directory))
                     }
                 }
@@ -167,7 +189,10 @@ fun ScanDirectorySettingsScreen(
 
             // Blacklist Section
             item {
-                ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.extraLarge
+                ) {
                     Column(modifier = Modifier.padding(16.dp)) {
                         Row(
                             modifier = Modifier.fillMaxWidth(),
@@ -195,11 +220,15 @@ fun ScanDirectorySettingsScreen(
             // Blacklist directories (only show when enabled)
             if (blacklistEnabled) {
                 item {
-                    ExpressiveTextButton(
+                    TextButton(
                         onClick = { blacklistFolderPickerLauncher.launch(null) },
-                        modifier = Modifier.fillMaxWidth(),
-                        icon = Icons.Default.Add
+                        modifier = Modifier.fillMaxWidth()
                     ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = null,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
                         Text(stringResource(R.string.add_blacklist_directory))
                     }
                 }
@@ -235,7 +264,10 @@ private fun WhitelistDirectoryItem(
     directory: SelectedDirectory,
     onRemove: () -> Unit
 ) {
-    ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -258,12 +290,14 @@ private fun WhitelistDirectoryItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            ExpressiveIconButton(
-                onClick = onRemove,
-                icon = Icons.Default.Close,
-                contentDescription = stringResource(R.string.remove_directory),
-                emphasis = ButtonEmphasis.Medium
-            )
+            IconButton(
+                onClick = onRemove
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.remove_directory)
+                )
+            }
         }
     }
 }
@@ -273,7 +307,10 @@ private fun BlacklistDirectoryItem(
     directory: SelectedDirectory,
     onRemove: () -> Unit
 ) {
-    ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -296,12 +333,14 @@ private fun BlacklistDirectoryItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            ExpressiveIconButton(
-                onClick = onRemove,
-                icon = Icons.Default.Close,
-                contentDescription = stringResource(R.string.remove_directory),
-                emphasis = ButtonEmphasis.Medium
-            )
+            IconButton(
+                onClick = onRemove
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = stringResource(R.string.remove_directory)
+                )
+            }
         }
     }
 }

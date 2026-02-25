@@ -58,9 +58,6 @@ import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.theme.ContainerLevel
-import com.voxly.presentation.components.ExpressiveTopAppBar
 import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.viewmodel.FileBrowserUiState
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
@@ -323,10 +320,19 @@ fun FileBrowserScreen(
                     exit = com.voxly.presentation.theme.ExpressiveAnimations.ListItemExit
                 ) {
                     if (openedDirectory != null) {
-                        ExpressiveTopAppBar(
-                            title = openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path },
-                            navigationIcon = Icons.AutoMirrored.Filled.ArrowBack,
-                            onNavigationClick = viewModel::closeOpenedDirectory,
+                        TopAppBar(
+                            title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                            ),
+                            navigationIcon = {
+                                IconButton(onClick = viewModel::closeOpenedDirectory) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = null
+                                    )
+                                }
+                            },
                             actions = {
                                 IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
                                     Icon(
@@ -359,8 +365,11 @@ fun FileBrowserScreen(
                             }
                         )
                     } else {
-                        ExpressiveTopAppBar(
-                            title = stringResource(R.string.nav_file_browser),
+                        TopAppBar(
+                            title = { Text(stringResource(R.string.nav_file_browser)) },
+                            colors = TopAppBarDefaults.topAppBarColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                            ),
                             actions = {
                                 IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
                                     Icon(
@@ -465,11 +474,31 @@ fun FileBrowserScreen(
                                     .fillMaxSize()
                                     .padding(horizontal = 16.dp)
                             ) {
-                                SearchBar(
-                                    isExpanded = isSearchExpanded,
-                                    query = searchQuery,
-                                    onQueryChange = { searchQuery = it }
-                                )
+                                DockedSearchBar(
+                                    inputField = {
+                                        SearchBarDefaults.InputField(
+                                            query = searchQuery,
+                                            onQueryChange = { searchQuery = it },
+                                            onSearch = { },
+                                            expanded = isSearchExpanded,
+                                            onExpandedChange = { isSearchExpanded = it },
+                                            placeholder = { Text(stringResource(R.string.file_search_hint)) },
+                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                            trailingIcon = {
+                                                if (searchQuery.isNotEmpty()) {
+                                                    IconButton(onClick = { searchQuery = "" }) {
+                                                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_selection))
+                                                    }
+                                                }
+                                            }
+                                        )
+                                    },
+                                    expanded = isSearchExpanded,
+                                    onExpandedChange = { isSearchExpanded = it },
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    // Search suggestions can be added here if needed
+                                }
                                 SortMenu(
                                     isExpanded = isSortExpanded,
                                     currentSortOption = FileSortOption.valueOf(sortOption),
@@ -1372,48 +1401,6 @@ private fun applySearchAndSort(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SearchBar(
-    isExpanded: Boolean,
-    query: String,
-    onQueryChange: (String) -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        androidx.compose.animation.AnimatedVisibility(visible = isExpanded) {
-            OutlinedTextField(
-                value = query,
-                onValueChange = onQueryChange,
-                modifier = Modifier.fillMaxWidth(),
-                singleLine = true,
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = null
-                    )
-                },
-                trailingIcon = {
-                    if (query.isNotEmpty()) {
-                        IconButton(onClick = { onQueryChange("") }) {
-                            Icon(
-                                imageVector = Icons.Default.Close,
-                                contentDescription = stringResource(R.string.clear_selection)
-                            )
-                        }
-                    }
-                },
-                placeholder = { Text(stringResource(R.string.file_search_hint)) },
-                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
-                    imeAction = androidx.compose.ui.text.input.ImeAction.Search
-                )
-            )
-        }
-    }
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1467,11 +1454,19 @@ private fun SelectionTopBar(
     onNavigateToReplayGain: () -> Unit,
     onBatchOperations: () -> Unit
 ) {
-    ExpressiveTopAppBar(
-        title = stringResource(R.string.selected_count, selectedCount),
-        navigationIcon = Icons.Default.Close,
-        onNavigationClick = onClearSelection,
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+    TopAppBar(
+        title = { Text(stringResource(R.string.selected_count, selectedCount)) },
+        navigationIcon = {
+            IconButton(onClick = onClearSelection) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = null
+                )
+            }
+        },
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer
+        ),
         actions = {
             TextButton(onClick = onSelectAll) {
                 Text(stringResource(R.string.select_all))
@@ -1999,14 +1994,18 @@ private fun DirectoryItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    ExpressiveCard(
+    Card(
         modifier = modifier,
-        containerLevel = ContainerLevel.Low,
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        ),
         onClick = onClick
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth(),
+                .fillMaxWidth()
+                .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(

@@ -20,18 +20,19 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.components.ExpressiveScaffoldWithBack
-import com.voxly.presentation.theme.ContainerLevel
 import com.voxly.presentation.theme.ExpressiveMotionTokens
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -67,16 +68,30 @@ fun OnlineCoverSearchScreen(
         viewModel.search(filePath)
     }
 
-    ExpressiveScaffoldWithBack(
-        title = stringResource(R.string.fetch_online_cover_art),
-        onBackClick = onNavigateBack,
-        actions = {
-            IconButton(
-                onClick = { viewModel.search(filePath) },
-                enabled = !isLoading
-            ) {
-                Icon(Icons.Default.Refresh, contentDescription = "Search Again")
-            }
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.fetch_online_cover_art)) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.search(filePath) },
+                        enabled = !isLoading
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Search Again")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
+            )
         }
     ) {
         Column(
@@ -85,9 +100,12 @@ fun OnlineCoverSearchScreen(
                 .padding(16.dp)
         ) {
             // Search info card
-            ExpressiveCard(
+            Card(
                 modifier = Modifier.fillMaxWidth(),
-                containerLevel = ContainerLevel.Low
+                shape = MaterialTheme.shapes.extraLarge,
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                )
             ) {
                 Column(modifier = Modifier.padding(12.dp)) {
                     Text(
@@ -198,11 +216,14 @@ private fun CoverResultItem(
     item: OnlineRecording,
     onClick: () -> Unit
 ) {
-    ExpressiveCard(
+    Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
-        containerLevel = ContainerLevel.Low,
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
         onClick = onClick
     ) {
         Row(

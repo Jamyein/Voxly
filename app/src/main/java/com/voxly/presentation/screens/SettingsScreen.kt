@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,6 +18,8 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -39,9 +42,6 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
-import com.voxly.presentation.theme.ContainerLevel
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.components.ExpressiveScaffoldWithTopBar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -209,7 +209,7 @@ fun DraggableSourcePriorityDialog(
                         }
                     }
 
-                    ExpressiveCard(
+                    Card(
                         modifier = Modifier
                             .fillMaxWidth()
                             .then(
@@ -261,11 +261,13 @@ fun DraggableSourcePriorityDialog(
                                     }
                                 )
                             },
-                        containerLevel = if (isDragging) ContainerLevel.High else ContainerLevel.Medium,
-                        containerColor = if (isDragging) 
-                            MaterialTheme.colorScheme.primaryContainer 
-                        else 
-                            null
+                        shape = MaterialTheme.shapes.extraLarge,
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (isDragging)
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.surfaceContainerLow
+                        )
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
                             // Main row: sequence, drag handle, name, switch, reorder buttons, more menu
@@ -421,7 +423,11 @@ fun SettingsSection(
             modifier = Modifier.padding(bottom = 8.dp)
         )
 
-        ExpressiveCard(    modifier = Modifier.fillMaxWidth(),    containerLevel = ContainerLevel.Low) {
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.extraLarge,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 content = content
@@ -1033,13 +1039,23 @@ fun SettingsScreen(
     val currentScanMode = scanModeOptions.firstOrNull { it.value == scanMode }
         ?: scanModeOptions[0]
 
-    ExpressiveScaffoldWithTopBar(
-        title = stringResource(R.string.nav_settings)
-    ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.nav_settings)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                windowInsets = WindowInsets.statusBars
+            )
+        }
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(horizontal = 16.dp)
+                .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
             // Appearance Section

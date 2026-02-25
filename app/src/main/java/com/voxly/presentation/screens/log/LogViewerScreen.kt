@@ -13,16 +13,14 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Archive
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
-import com.voxly.presentation.theme.ContainerLevel
-import com.voxly.presentation.components.ExpressiveCard
-import com.voxly.presentation.components.ExpressiveScaffoldWithBack
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,7 +37,7 @@ import com.voxly.R
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LogViewerScreen(
-    onNavigateBack: () -> Unit,
+    onBack: () -> Unit,
     viewModel: LogViewerViewModel = hiltViewModel()
 ) {
     val uiState by viewModel.uiState.collectAsState()
@@ -47,62 +45,79 @@ fun LogViewerScreen(
     val listState = rememberLazyListState()
     var showDeleteDialog by remember { mutableStateOf(false) }
 
-    ExpressiveScaffoldWithBack(
-        title = if (uiState.selectedLogFile == null) {
-            stringResource(R.string.log_viewer_title)
-        } else {
-            uiState.selectedLogFile!!.name
-        },
-        onBackClick = { viewModel.clearSelectedLog() },
-        actions = {
-            if (uiState.selectedLogFile != null) {
-                IconButton(onClick = {
-                    val content = viewModel.getCopyableContent()
-                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                    val clip = ClipData.newPlainText("Voxly Log", content)
-                    clipboard.setPrimaryClip(clip)
-                    Toast.makeText(context, R.string.log_viewer_copied, Toast.LENGTH_SHORT).show()
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.ContentCopy,
-                        contentDescription = stringResource(R.string.log_viewer_copy)
-                    )
-                }
-                IconButton(onClick = {
-                    viewModel.shareLog(context, viewModel.getFilteredLogs().joinToString("\n"))
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Share,
-                        contentDescription = stringResource(R.string.log_viewer_share)
-                    )
-                }
-                IconButton(onClick = { showDeleteDialog = true }) {
-                    Icon(
-                        imageVector = Icons.Default.Delete,
-                        contentDescription = stringResource(R.string.log_viewer_delete)
-                    )
-                }
-            }
-        },
-        floatingActionButton = if (uiState.selectedLogFile == null && uiState.logFiles.isNotEmpty()) {
-            Icons.Default.Archive
-        } else null,
-        onFabClick = if (uiState.selectedLogFile == null && uiState.logFiles.isNotEmpty()) {
-            {
-                viewModel.exportLogs(context) { uri ->
-                    if (uri != null) {
-                        val intent = Intent(Intent.ACTION_SEND).apply {
-                            type = "application/zip"
-                            putExtra(Intent.EXTRA_STREAM, uri)
-                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+    val title = if (uiState.selectedLogFile == null) {
+        stringResource(R.string.log_viewer_title)
+    } else {
+        uiState.selectedLogFile!!.name
+    }
+
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(title) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (uiState.selectedLogFile != null) {
+                        IconButton(onClick = {
+                            val content = viewModel.getCopyableContent()
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("Voxly Log", content)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, R.string.log_viewer_copied, Toast.LENGTH_SHORT).show()
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.ContentCopy,
+                                contentDescription = stringResource(R.string.log_viewer_copy)
+                            )
                         }
-                        context.startActivity(Intent.createChooser(intent, "Export Logs"))
-                    } else {
-                        Toast.makeText(context, "Failed to export logs", Toast.LENGTH_SHORT).show()
+                        IconButton(onClick = {
+                            viewModel.shareLog(context, viewModel.getFilteredLogs().joinToString("\n"))
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = stringResource(R.string.log_viewer_share)
+                            )
+                        }
+                        IconButton(onClick = { showDeleteDialog = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.log_viewer_delete)
+                            )
+                        }
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        },
+        floatingActionButton = {
+            if (uiState.selectedLogFile == null && uiState.logFiles.isNotEmpty()) {
+            FloatingActionButton(
+                onClick = {
+                    viewModel.exportLogs(context) { uri ->
+                        if (uri != null) {
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/zip"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            }
+                            context.startActivity(Intent.createChooser(intent, "Export Logs"))
+                        } else {
+                            Toast.makeText(context, "Failed to export logs", Toast.LENGTH_SHORT).show()
+                        }
                     }
                 }
+            ) {
+                Icon(Icons.Default.Archive, contentDescription = null)
             }
-        } else null
+            }
+        }
     ) {
         Column(
             modifier = Modifier.fillMaxSize()
@@ -186,10 +201,11 @@ private fun LogFileCard(
     item: LogFileItem,
     onClick: () -> Unit
 ) {
-    ExpressiveCard(
+    Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
-        containerLevel = ContainerLevel.Low
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     ) {
         Row(
             modifier = Modifier
