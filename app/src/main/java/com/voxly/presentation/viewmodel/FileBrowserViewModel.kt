@@ -1154,9 +1154,9 @@ class FileBrowserViewModel @Inject constructor(
                 if (path.isBlank()) null else SelectedDirectory(uri = uriString, path = path)
             }
             _selectedDirectories.value = restored
-            if (restored.isNotEmpty()) {
-                loadAudioFiles()
-            }
+            // Always load audio files on first launch (before whitelist is set)
+            // This ensures scanning happens after permission is granted
+            loadAudioFiles()
         }
     }
 
