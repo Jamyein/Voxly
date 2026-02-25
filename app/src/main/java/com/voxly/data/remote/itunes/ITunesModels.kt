@@ -1,128 +1,131 @@
 package com.voxly.data.remote.itunes
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 /**
  * Response model for iTunes Search API.
  */
+@Serializable
 data class ITunesSearchResponse(
-    @SerializedName("resultCount")
+    @SerialName("resultCount")
     val resultCount: Int,
 
-    @SerializedName("results")
+    @SerialName("results")
     val results: List<ITunesResult>
 )
 
 /**
  * Single result from iTunes Search API.
  */
+@Serializable
 data class ITunesResult(
-    @SerializedName("wrapperType")
+    @SerialName("wrapperType")
     val wrapperType: String? = null,
 
-    @SerializedName("kind")
+    @SerialName("kind")
     val kind: String? = null,
 
-    @SerializedName("artistId")
+    @SerialName("artistId")
     val artistId: Long? = null,
 
-    @SerializedName("collectionId")
+    @SerialName("collectionId")
     val collectionId: Long? = null,
 
-    @SerializedName("trackId")
+    @SerialName("trackId")
     val trackId: Long? = null,
 
-    @SerializedName("artistName")
+    @SerialName("artistName")
     val artistName: String? = null,
 
-    @SerializedName("collectionName")
+    @SerialName("collectionName")
     val collectionName: String? = null,
 
-    @SerializedName("trackName")
+    @SerialName("trackName")
     val trackName: String? = null,
 
-    @SerializedName("collectionCensoredName")
+    @SerialName("collectionCensoredName")
     val collectionCensoredName: String? = null,
 
-    @SerializedName("trackCensoredName")
+    @SerialName("trackCensoredName")
     val trackCensoredName: String? = null,
 
-    @SerializedName("artistViewUrl")
+    @SerialName("artistViewUrl")
     val artistViewUrl: String? = null,
 
-    @SerializedName("collectionViewUrl")
+    @SerialName("collectionViewUrl")
     val collectionViewUrl: String? = null,
 
-    @SerializedName("trackViewUrl")
+    @SerialName("trackViewUrl")
     val trackViewUrl: String? = null,
 
-    @SerializedName("previewUrl")
+    @SerialName("previewUrl")
     val previewUrl: String? = null,
 
-    @SerializedName("artworkUrl30")
+    @SerialName("artworkUrl30")
     val artworkUrl30: String? = null,
 
-    @SerializedName("artworkUrl60")
+    @SerialName("artworkUrl60")
     val artworkUrl60: String? = null,
 
-    @SerializedName("artworkUrl100")
+    @SerialName("artworkUrl100")
     val artworkUrl100: String? = null,
 
-    @SerializedName("artworkUrl512")
+    @SerialName("artworkUrl512")
     val artworkUrl512: String? = null,
 
-    @SerializedName("artworkUrl600")
+    @SerialName("artworkUrl600")
     val artworkUrl600: String? = null,
 
-    @SerializedName("collectionPrice")
+    @SerialName("collectionPrice")
     val collectionPrice: Double? = null,
 
-    @SerializedName("trackPrice")
+    @SerialName("trackPrice")
     val trackPrice: Double? = null,
 
-    @SerializedName("releaseDate")
+    @SerialName("releaseDate")
     val releaseDate: String? = null,
 
-    @SerializedName("collectionExplicitness")
+    @SerialName("collectionExplicitness")
     val collectionExplicitness: String? = null,
 
-    @SerializedName("trackExplicitness")
+    @SerialName("trackExplicitness")
     val trackExplicitness: String? = null,
 
-    @SerializedName("discCount")
+    @SerialName("discCount")
     val discCount: Int? = null,
 
-    @SerializedName("discNumber")
+    @SerialName("discNumber")
     val discNumber: Int? = null,
 
-    @SerializedName("trackCount")
+    @SerialName("trackCount")
     val trackCount: Int? = null,
 
-    @SerializedName("trackNumber")
+    @SerialName("trackNumber")
     val trackNumber: Int? = null,
 
-    @SerializedName("trackTimeMillis")
+    @SerialName("trackTimeMillis")
     val trackTimeMillis: Long? = null,
 
-    @SerializedName("country")
+    @SerialName("country")
     val country: String? = null,
 
-    @SerializedName("currency")
+    @SerialName("currency")
     val currency: String? = null,
 
-    @SerializedName("primaryGenreName")
+    @SerialName("primaryGenreName")
     val primaryGenreName: String? = null,
 
-    @SerializedName("contentAdvisoryRating")
+    @SerialName("contentAdvisoryRating")
     val contentAdvisoryRating: String? = null,
 
-    @SerializedName("isStreamable")
+    @SerialName("isStreamable")
     val isStreamable: Boolean? = null,
 
-    @SerializedName("collectionArtistId")
+    @SerialName("collectionArtistId")
     val collectionArtistId: Long? = null,
 
-    @SerializedName("collectionArtistName")
+    @SerialName("collectionArtistName")
     val collectionArtistName: String? = null
 ) {
     /**

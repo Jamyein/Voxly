@@ -1,10 +1,13 @@
 package com.voxly.data.remote.tengx.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * TengX Music lyrics response model.
  * Response structure from TengX Music lyrics API.
  * Lyrics content is Base64 encoded and needs to be decoded.
  */
+@Serializable
 data class TengxLyricsResponse(
     /** Request result code */
     val code: Int,
@@ -20,6 +23,7 @@ data class TengxLyricsResponse(
  * Container for TengX Music lyrics.
  * Lyric content is Base64 encoded and needs to be decoded.
  */
+@Serializable
 data class TengxLyricContainer(
     /** Lyrics content - Base64 encoded, needs decode */
     val lyric: String = "",
@@ -30,6 +34,7 @@ data class TengxLyricContainer(
 /**
  * Represents a single lyric line with timestamp.
  */
+@Serializable
 data class TengxLyricLine(
     /** Timestamp in milliseconds */
     val timestamp: Long,

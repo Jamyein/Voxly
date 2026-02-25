@@ -1,9 +1,12 @@
 package com.voxly.data.remote.tengx.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * TengX Music album detail response model.
  * Response structure from TengX Music album detail API.
  */
+@Serializable
 data class TengxAlbumDetail(
     /** Request result code */
     val code: Int,
@@ -16,6 +19,7 @@ data class TengxAlbumDetail(
 /**
  * TengX Music album detail container.
  */
+@Serializable
 data class TengxAlbumDetailData(
     /** Album information */
     val album: TengxAlbumDetailInfo? = null,
@@ -26,6 +30,7 @@ data class TengxAlbumDetailData(
 /**
  * TengX Music detailed album information.
  */
+@Serializable
 data class TengxAlbumDetailInfo(
     /** Album ID */
     val id: Long,
@@ -54,6 +59,7 @@ data class TengxAlbumDetailInfo(
 /**
  * TengX Music song in album.
  */
+@Serializable
 data class TengxAlbumSong(
     /** Song ID */
     val id: Long,

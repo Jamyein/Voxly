@@ -1,12 +1,13 @@
 package com.voxly.data.remote.wangy.model
 
-import com.google.gson.JsonObject
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 /**
  * WangY Music error response model.
  * Used when API returns error responses (301, 302, 400, 403, 404, etc.)
  */
+@Serializable
 data class WangyErrorResponse(
     /** Error code */
     val code: Int = -1,
@@ -15,88 +16,74 @@ data class WangyErrorResponse(
 )
 
 /**
- * Flexible search response model that can handle multiple API formats.
- * Uses JsonObject for flexible parsing of different response structures.
+ * WangY Music search response model.
+ * Response structure from WangY Music search API.
  */
+@Serializable
 data class WangySearchResponse(
     /** Request result code: 200 indicates success */
-    @SerializedName("code")
+    @SerialName("code")
     val code: Int = -1,
     /** Search result data (for web APIs) */
-    @SerializedName("result")
-    val result: WangySearchResult? = null,
-    /** Search data (for EAPI) */
-    @SerializedName("data")
-    val data: JsonObject? = null,
-    /** Raw JSON for flexible parsing */
-    @SerializedName("raw")
-    val raw: JsonObject? = null
-) {
-    companion object {
-        fun fromJsonObject(jsonObject: JsonObject): WangySearchResponse {
-            return WangySearchResponse(
-                code = jsonObject.get("code")?.asInt ?: -1,
-                result = null,
-                data = jsonObject.get("data")?.asJsonObject,
-                raw = jsonObject
-            )
-        }
-    }
-}
+    @SerialName("result")
+    val result: WangySearchResult? = null
+)
 
 /**
  * WangY Music search result container.
  */
+@Serializable
 data class WangySearchResult(
     /** Whether there are more results */
-    @SerializedName("hasMore")
+    @SerialName("hasMore")
     val hasMore: Boolean = false,
     /** Search query */
-    @SerializedName("queryCorrected")
+    @SerialName("queryCorrected")
     val queryCorrected: List<String> = emptyList(),
     /** Song search results */
-    @SerializedName("songs")
+    @SerialName("songs")
     val songs: List<WangySong> = emptyList(),
     /** Album search results */
-    @SerializedName("albums")
+    @SerialName("albums")
     val albums: List<WangyAlbum> = emptyList(),
     /** Artist search results */
-    @SerializedName("artists")
+    @SerialName("artists")
     val artists: List<WangyArtist> = emptyList(),
     /** Total number of songs */
-    @SerializedName("songCount")
+    @SerialName("songCount")
     val songCount: Int = 0,
     /** Total number of albums */
-    @SerializedName("albumCount")
+    @SerialName("albumCount")
     val albumCount: Int = 0,
     /** Total number of artists */
-    @SerializedName("artistCount")
+    @SerialName("artistCount")
     val artistCount: Int = 0
 )
 
 /**
  * WangY Music song item in search results.
  */
+@Serializable
 data class WangySong(
     /** Song ID */
     val id: Long,
     /** Song name */
     val name: String,
     /** Artist information (JSON field: ar) */
-    @SerializedName("ar")
+    @SerialName("ar")
     val artists: List<WangyArtist> = emptyList(),
     /** Album information (JSON field: al) */
-    @SerializedName("al")
+    @SerialName("al")
     val album: WangyAlbum? = null,
     /** Duration in milliseconds (JSON field: dt) */
-    @SerializedName("dt")
+    @SerialName("dt")
     val duration: Long = 0,
     /** Copyright ID */
     val copyrightId: Long = 0,
     /** Whether it's a paid song */
     val fee: Int = 0,
     /** Track number in album (JSON field: no) */
-    @SerializedName("no")
+    @SerialName("no")
     val trackNumber: Int = 0,
     /** Song version */
     val version: Int = 0,
@@ -109,6 +96,7 @@ data class WangySong(
 /**
  * WangY Music album item in search results.
  */
+@Serializable
 data class WangyAlbum(
     /** Album ID */
     val id: Long,
@@ -117,15 +105,15 @@ data class WangyAlbum(
     /** Artist information (JSON field: artist) */
     val artist: WangyArtist? = null,
     /** Album publish date (format: "yyyy-MM-dd") (JSON field: publishTime) */
-    @SerializedName("publishTime")
+    @SerialName("publishTime")
     val publishDate: String = "",
     /** Album size (JSON field: size) */
     val size: Int = 0,
     /** Number of songs (JSON field: size) */
-    @SerializedName("size")
+    @SerialName("size")
     val songsCount: Int = 0,
     /** Album cover image URL (JSON field: picUrl) */
-    @SerializedName("picUrl")
+    @SerialName("picUrl")
     val picUrl: String = "",
     /** 唱片公司 (JSON field: company) */
     val company: String = ""
@@ -134,6 +122,7 @@ data class WangyAlbum(
 /**
  * WangY Music artist item.
  */
+@Serializable
 data class WangyArtist(
     /** Artist ID */
     val id: Long,
@@ -153,6 +142,7 @@ data class WangyArtist(
  * WangY Music search response model for eapi endpoint.
  * Response structure from new eapi search endpoint `/api/search/song/list/page`.
  */
+@Serializable
 data class WangySearchResponseEapi(
     /** Request result code: 200 indicates success */
     val code: Int = 0,
@@ -163,6 +153,7 @@ data class WangySearchResponseEapi(
 /**
  * WangY Music search data container for eapi response.
  */
+@Serializable
 data class WangySearchDataEapi(
     /** Total number of results */
     val totalCount: Int = 0,
@@ -173,6 +164,7 @@ data class WangySearchDataEapi(
 /**
  * WangY Music search resource item in eapi response.
  */
+@Serializable
 data class WangySearchResource(
     /** Resource type (0 = song) */
     val resourceType: Int = 0,
@@ -183,6 +175,7 @@ data class WangySearchResource(
 /**
  * WangY Music base info containing simple song data.
  */
+@Serializable
 data class WangyBaseInfo(
     /** Simplified song data */
     val simpleSongData: WangySimpleSong? = null
@@ -191,6 +184,7 @@ data class WangyBaseInfo(
 /**
  * WangY Music simplified song data in eapi search response.
  */
+@Serializable
 data class WangySimpleSong(
     /** Song ID */
     val id: Long = 0,

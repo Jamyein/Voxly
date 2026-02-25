@@ -41,9 +41,10 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
+import okhttp3.MediaType.Companion.toMediaType
 import retrofit2.Retrofit
-import com.google.gson.GsonBuilder
-import retrofit2.converter.gson.GsonConverterFactory
+import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
+import kotlinx.serialization.json.Json
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
@@ -97,12 +98,20 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideJson(): Json = Json {
+        ignoreUnknownKeys = true
+        isLenient = true
+        encodeDefaults = true
+    }
+
+    @Provides
+    @Singleton
     @Named("musicbrainz")
-    fun provideMusicBrainzRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    fun provideMusicBrainzRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
         return Retrofit.Builder()
             .baseUrl(MusicBrainzApi.BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
     }
 
@@ -115,11 +124,11 @@ object AppModule {
     @Provides
     @Singleton
     @Named("itunes")
-    fun provideITunesRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    fun provideITunesRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
         return Retrofit.Builder()
             .baseUrl(ITunesApi.BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
     }
 
@@ -134,11 +143,11 @@ object AppModule {
     @Provides
     @Singleton
     @Named("tengx")
-    fun provideTengxRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    fun provideTengxRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
         return Retrofit.Builder()
             .baseUrl(TengxApi.SEARCH_BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
     }
 
@@ -159,18 +168,11 @@ object AppModule {
     @Provides
     @Singleton
     @Named("wangy")
-    fun provideWangyRetrofit(okHttpClient: OkHttpClient): Retrofit {
+    fun provideWangyRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
         return Retrofit.Builder()
             .baseUrl(WangyApi.BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(
-                GsonConverterFactory.create(
-                    GsonBuilder()
-                        .serializeNulls()
-                        .setLenient()
-                        .create()
-                )
-            )
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
     }
 

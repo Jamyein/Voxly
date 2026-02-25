@@ -1,56 +1,59 @@
 package com.voxly.data.remote.musicbrainz.model
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 /**
  * Response model for MusicBrainz search API.
  */
+@Serializable
 data class MusicBrainzSearchResponse(
-    @SerializedName("created")
+    @SerialName("created")
     val created: String? = null,
 
-    @SerializedName("count")
+    @SerialName("count")
     val count: Int = 0,
 
-    @SerializedName("offset")
+    @SerialName("offset")
     val offset: Int = 0,
 
-    @SerializedName("release-groups")
+    @SerialName("release-groups")
     val releaseGroups: List<MusicBrainzReleaseGroup>? = null,
 
-    @SerializedName("recordings")
+    @SerialName("recordings")
     val recordings: List<MusicBrainzRecording>? = null
 )
 
 /**
  * Model representing a MusicBrainz release group (album).
  */
+@Serializable
 data class MusicBrainzReleaseGroup(
-    @SerializedName("id")
+    @SerialName("id")
     val id: String,
 
-    @SerializedName("type")
+    @SerialName("type")
     val type: String? = null,
 
-    @SerializedName("title")
+    @SerialName("title")
     val title: String,
 
-    @SerializedName("first-release-date")
+    @SerialName("first-release-date")
     val firstReleaseDate: String? = null,
 
-    @SerializedName("primary-type")
+    @SerialName("primary-type")
     val primaryType: String? = null,
 
-    @SerializedName("artist-credit")
+    @SerialName("artist-credit")
     val artistCredit: List<MusicBrainzArtistCredit>? = null,
 
-    @SerializedName("releases")
+    @SerialName("releases")
     val releases: List<MusicBrainzReleaseInfo>? = null,
 
-    @SerializedName("tags")
+    @SerialName("tags")
     val tags: List<MusicBrainzTag>? = null,
 
-    @SerializedName("genres")
+    @SerialName("genres")
     val genres: List<MusicBrainzGenre>? = null
 ) {
     /**
@@ -71,20 +74,21 @@ data class MusicBrainzReleaseGroup(
 /**
  * Model representing a MusicBrainz recording (track).
  */
+@Serializable
 data class MusicBrainzRecording(
-    @SerializedName("id")
+    @SerialName("id")
     val id: String,
 
-    @SerializedName("title")
+    @SerialName("title")
     val title: String,
 
-    @SerializedName("length")
+    @SerialName("length")
     val length: Long? = null,
 
-    @SerializedName("artist-credit")
+    @SerialName("artist-credit")
     val artistCredit: List<MusicBrainzArtistCredit>? = null,
 
-    @SerializedName("releases")
+    @SerialName("releases")
     val releases: List<MusicBrainzReleaseInfo>? = null
 ) {
     /**
@@ -103,41 +107,42 @@ data class MusicBrainzRecording(
 /**
  * Model representing detailed release information.
  */
+@Serializable
 data class MusicBrainzReleaseResponse(
-    @SerializedName("id")
+    @SerialName("id")
     val id: String,
 
-    @SerializedName("title")
+    @SerialName("title")
     val title: String,
 
-    @SerializedName("status")
+    @SerialName("status")
     val status: String? = null,
 
-    @SerializedName("date")
+    @SerialName("date")
     val date: String? = null,
 
-    @SerializedName("country")
+    @SerialName("country")
     val country: String? = null,
 
-    @SerializedName("barcode")
+    @SerialName("barcode")
     val barcode: String? = null,
 
-    @SerializedName("asin")
+    @SerialName("asin")
     val asin: String? = null,
 
-    @SerializedName("artist-credit")
+    @SerialName("artist-credit")
     val artistCredit: List<MusicBrainzArtistCredit>? = null,
 
-    @SerializedName("release-group")
+    @SerialName("release-group")
     val releaseGroup: MusicBrainzReleaseGroupInfo? = null,
 
-    @SerializedName("media")
+    @SerialName("media")
     val media: List<MusicBrainzMedia>? = null,
 
-    @SerializedName("genres")
+    @SerialName("genres")
     val genres: List<MusicBrainzGenre>? = null,
 
-    @SerializedName("tags")
+    @SerialName("tags")
     val tags: List<MusicBrainzTag>? = null
 ) {
     /**
@@ -165,96 +170,102 @@ data class MusicBrainzReleaseResponse(
 /**
  * Model representing an artist credit.
  */
+@Serializable
 data class MusicBrainzArtistCredit(
-    @SerializedName("artist")
+    @SerialName("artist")
     val artist: MusicBrainzArtist? = null,
 
-    @SerializedName("name")
+    @SerialName("name")
     val name: String? = null,
 
-    @SerializedName("joinphrase")
+    @SerialName("joinphrase")
     val joinPhrase: String? = null
 )
 
 /**
  * Model representing a MusicBrainz artist.
  */
+@Serializable
 data class MusicBrainzArtist(
-    @SerializedName("id")
+    @SerialName("id")
     val id: String,
 
-    @SerializedName("name")
+    @SerialName("name")
     val name: String,
 
-    @SerializedName("sort-name")
+    @SerialName("sort-name")
     val sortName: String? = null
 )
 
 /**
  * Model representing a MusicBrainz release group info.
  */
+@Serializable
 data class MusicBrainzReleaseGroupInfo(
-    @SerializedName("id")
+    @SerialName("id")
     val id: String,
 
-    @SerializedName("type")
+    @SerialName("type")
     val type: String? = null,
 
-    @SerializedName("primary-type")
+    @SerialName("primary-type")
     val primaryType: String? = null
 )
 
 /**
  * Model representing a MusicBrainz release info.
  */
+@Serializable
 data class MusicBrainzReleaseInfo(
-    @SerializedName("id")
+    @SerialName("id")
     val id: String,
 
-    @SerializedName("title")
+    @SerialName("title")
     val title: String? = null,
 
-    @SerializedName("date")
+    @SerialName("date")
     val date: String? = null
 )
 
 /**
  * Model representing media (e.g., CD, digital) in a release.
  */
+@Serializable
 data class MusicBrainzMedia(
-    @SerializedName("position")
+    @SerialName("position")
     val position: Int? = null,
 
-    @SerializedName("format")
+    @SerialName("format")
     val format: String? = null,
 
-    @SerializedName("track-count")
+    @SerialName("track-count")
     val trackCount: Int = 0,
 
-    @SerializedName("tracks")
+    @SerialName("tracks")
     val tracks: List<MusicBrainzTrack>? = null
 )
 
 /**
  * Model representing a track in a release.
  */
+@Serializable
 data class MusicBrainzTrack(
-    @SerializedName("id")
+    @SerialName("id")
     val id: String,
 
-    @SerializedName("number")
+    @SerialName("number")
     val number: String? = null,
 
-    @SerializedName("title")
+    @SerialName("title")
     val title: String,
 
-    @SerializedName("length")
+    @SerialName("length")
     val length: Long? = null,
 
-    @SerializedName("artist-credit")
+    @SerialName("artist-credit")
     val artistCredit: List<MusicBrainzArtistCredit>? = null,
 
-    @SerializedName("recording")
+    @SerialName("recording")
     val recording: MusicBrainzRecording? = null
 ) {
     /**
@@ -280,21 +291,23 @@ data class MusicBrainzTrack(
 /**
  * Model representing a MusicBrainz tag.
  */
+@Serializable
 data class MusicBrainzTag(
-    @SerializedName("name")
+    @SerialName("name")
     val name: String,
 
-    @SerializedName("count")
+    @SerialName("count")
     val count: Int = 0
 )
 
 /**
  * Model representing a MusicBrainz genre.
  */
+@Serializable
 data class MusicBrainzGenre(
-    @SerializedName("name")
+    @SerialName("name")
     val name: String,
 
-    @SerializedName("count")
+    @SerialName("count")
     val count: Int = 0
 )

@@ -1,9 +1,12 @@
 package com.voxly.data.remote.wangy.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * WangY Music lyrics response model.
  * Response structure from WangY Cloud Music lyrics API.
  */
+@Serializable
 data class WangyLyricsResponse(
     /** Request result code: 200 indicates success */
     val code: Int,
@@ -20,6 +23,7 @@ data class WangyLyricsResponse(
 /**
  * Container for standard lyrics.
  */
+@Serializable
 data class WangyLrcContainer(
     /** Lyrics version */
     val version: Int = 0,
@@ -30,6 +34,7 @@ data class WangyLrcContainer(
 /**
  * Container for YRC (synced) lyrics.
  */
+@Serializable
 data class WangyYrcContainer(
     /** Lyrics version */
     val version: Int = 0,
@@ -40,6 +45,7 @@ data class WangyYrcContainer(
 /**
  * Represents a single lyric line with timestamp.
  */
+@Serializable
 data class WangyLyricLine(
     /** Timestamp in milliseconds */
     val timestamp: Long,

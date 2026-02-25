@@ -1,9 +1,12 @@
 package com.voxly.data.remote.wangy.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * WangY Music album detail response model.
  * Response structure from WangY Cloud Music album detail API.
  */
+@Serializable
 data class WangyAlbumDetail(
     /** Request result code: 200 indicates success */
     val code: Int,
@@ -18,6 +21,7 @@ data class WangyAlbumDetail(
 /**
  * WangY Music detailed album information.
  */
+@Serializable
 data class WangyAlbumDetailInfo(
     /** Album ID */
     val id: Long,
@@ -44,6 +48,7 @@ data class WangyAlbumDetailInfo(
 /**
  * WangY Music basic artist information.
  */
+@Serializable
 data class WangyArtistBasic(
     /** Artist ID */
     val id: Long,
@@ -56,6 +61,7 @@ data class WangyArtistBasic(
 /**
  * WangY Music song in album.
  */
+@Serializable
 data class WangyAlbumSong(
     /** Song ID */
     val id: Long,
@@ -78,6 +84,7 @@ data class WangyAlbumSong(
 /**
  * WangY Music basic album information.
  */
+@Serializable
 data class WangyAlbumBasic(
     /** Album ID */
     val id: Long,

@@ -1,9 +1,12 @@
 package com.voxly.data.remote.tengx.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * TengX Music search response model.
  * Response structure from TengX Music search API.
  */
+@Serializable
 data class TengxSearchResponse(
     /** Request result code */
     val code: Int,
@@ -16,6 +19,7 @@ data class TengxSearchResponse(
 /**
  * TengX Music search result container.
  */
+@Serializable
 data class TengxSearchData(
     /** Song search results */
     val song: TengxSongResult? = null,
@@ -28,6 +32,7 @@ data class TengxSearchData(
 /**
  * TengX Music song search result.
  */
+@Serializable
 data class TengxSongResult(
     /** List of songs */
     val list: List<TengxSong> = emptyList(),
@@ -38,6 +43,7 @@ data class TengxSongResult(
 /**
  * TengX Music song item.
  */
+@Serializable
 data class TengxSong(
     /** Song ID */
     val id: Long,
@@ -62,6 +68,7 @@ data class TengxSong(
 /**
  * TengX Music album search result.
  */
+@Serializable
 data class TengxAlbumResult(
     /** List of albums */
     val list: List<TengxAlbum> = emptyList(),
@@ -72,6 +79,7 @@ data class TengxAlbumResult(
 /**
  * TengX Music album item.
  */
+@Serializable
 data class TengxAlbum(
     /** Album ID */
     val id: Long,
@@ -92,6 +100,7 @@ data class TengxAlbum(
 /**
  * TengX Music singer search result.
  */
+@Serializable
 data class TengxSingerResult(
     /** List of singers */
     val list: List<TengxSinger> = emptyList(),
@@ -102,6 +111,7 @@ data class TengxSingerResult(
 /**
  * TengX Music singer/artist item.
  */
+@Serializable
 data class TengxSinger(
     /** Singer ID */
     val id: Long,
