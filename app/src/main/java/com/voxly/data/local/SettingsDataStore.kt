@@ -12,8 +12,8 @@ import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import com.voxly.domain.model.DataSourceConfig
 import com.voxly.domain.model.DataSourceType
 import com.voxly.domain.model.SourceConfigurations
@@ -339,23 +339,24 @@ class SettingsDataStore @Inject constructor(
                 ?: emptyList()
         }
 
-    // Gson instance for serialization
-    private val gson = Gson()
-    // Type token for proper deserialization of nested generic types
-    private val sourceConfigurationsType = object : TypeToken<SourceConfigurations>() {}.type
+    // Json instance for serialization (Kotlinx Serialization)
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
 
     /**
      * Unified source configurations flow (new approach - stores enabled, priority, and extra options together)
      */
     val sourceConfigurations: Flow<SourceConfigurations> = context.settingsDataStore.data
         .map { preferences ->
-            val json = preferences[SOURCE_CONFIGURATIONS]
-            if (json.isNullOrBlank()) {
+            val jsonString = preferences[SOURCE_CONFIGURATIONS]
+            if (jsonString.isNullOrBlank()) {
                 // Return default configurations with migration from old settings
                 migrateToNewFormat(preferences)
             } else {
                 try {
-                    gson.fromJson(json, sourceConfigurationsType)
+                    json.decodeFromString<SourceConfigurations>(jsonString)
                 } catch (e: Exception) {
                     migrateToNewFormat(preferences)
                 }
@@ -430,7 +431,7 @@ class SettingsDataStore @Inject constructor(
      */
     suspend fun setSourceConfigurations(config: SourceConfigurations) {
         context.settingsDataStore.edit { preferences ->
-            preferences[SOURCE_CONFIGURATIONS] = gson.toJson(config)
+            preferences[SOURCE_CONFIGURATIONS] = json.encodeToString(config)
         }
     }
 
@@ -441,9 +442,9 @@ class SettingsDataStore @Inject constructor(
         context.settingsDataStore.edit { preferences ->
             // First try to read from existing JSON, only migrate if no JSON exists
             val current = try {
-                val json = preferences[SOURCE_CONFIGURATIONS]
-                if (!json.isNullOrBlank()) {
-                    gson.fromJson(json, sourceConfigurationsType)
+                val jsonString = preferences[SOURCE_CONFIGURATIONS]
+                if (!jsonString.isNullOrBlank()) {
+                    json.decodeFromString<SourceConfigurations>(jsonString)
                 } else {
                     migrateToNewFormat(preferences)
                 }
@@ -453,7 +454,7 @@ class SettingsDataStore @Inject constructor(
             val typeConfig = current.getConfig(type)
             val updated = typeConfig.updateSource(source)
             val newConfig = current.updateConfig(updated)
-            preferences[SOURCE_CONFIGURATIONS] = gson.toJson(newConfig)
+            preferences[SOURCE_CONFIGURATIONS] = json.encodeToString(newConfig)
         }
     }
 
@@ -465,9 +466,9 @@ class SettingsDataStore @Inject constructor(
         context.settingsDataStore.edit { preferences ->
             // First try to read from existing JSON, only migrate if no JSON exists
             val current = try {
-                val json = preferences[SOURCE_CONFIGURATIONS]
-                if (!json.isNullOrBlank()) {
-                    gson.fromJson(json, sourceConfigurationsType)
+                val jsonString = preferences[SOURCE_CONFIGURATIONS]
+                if (!jsonString.isNullOrBlank()) {
+                    json.decodeFromString<SourceConfigurations>(jsonString)
                 } else {
                     migrateToNewFormat(preferences)
                 }
@@ -477,7 +478,7 @@ class SettingsDataStore @Inject constructor(
             val typeConfig = current.getConfig(type)
             val reordered = typeConfig.reorderSources(orderedSourceIds)
             val newConfig = current.updateConfig(reordered)
-            preferences[SOURCE_CONFIGURATIONS] = gson.toJson(newConfig)
+            preferences[SOURCE_CONFIGURATIONS] = json.encodeToString(newConfig)
             
             // Also update legacy priority strings for backward compatibility
             // This ensures OnlineMetadataViewModel and AggregatedOnlineMetadataRepository 

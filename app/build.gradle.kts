@@ -26,6 +26,7 @@ plugins {
     id("com.google.devtools.ksp")
     id("com.google.dagger.hilt.android")
     id("org.jetbrains.kotlin.plugin.compose")
+    id("org.jetbrains.kotlin.plugin.serialization")
 }
 
 android {
@@ -201,8 +202,11 @@ dependencies {
     // DataStore Preferences
     implementation("androidx.datastore:datastore-preferences:1.2.0")
 
-    // Gson for JSON serialization
+    // Gson for JSON serialization (Retrofit)
     implementation("com.google.code.gson:gson:2.13.2")
+
+    // Kotlinx Serialization for type-safe serialization
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
 
     // Room Database for caching
     implementation("androidx.room:room-runtime:2.8.4")

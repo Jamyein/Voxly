@@ -1,11 +1,14 @@
 package com.voxly.domain.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * Represents a data source configuration that includes:
  * - enabled state (switch)
  * - priority/order index
  * - extra options (e.g., country code for iTunes)
  */
+@Serializable
 data class DataSourceConfig(
     val sourceId: String,           // e.g., "itunes", "musicbrainz", "netease", "qq_music"
     val enabled: Boolean = true,
@@ -40,6 +43,7 @@ data class DataSourceConfig(
 /**
  * Type of data source (metadata, lyrics, cover)
  */
+@Serializable
 enum class DataSourceType {
     METADATA,
     LYRICS,
@@ -49,6 +53,7 @@ enum class DataSourceType {
 /**
  * Full source configuration for a specific type
  */
+@Serializable
 data class SourceTypeConfig(
     val type: DataSourceType,
     val sources: List<DataSourceConfig> = emptyList()
@@ -75,6 +80,7 @@ data class SourceTypeConfig(
 /**
  * All source configurations combined
  */
+@Serializable
 data class SourceConfigurations(
     val metadata: SourceTypeConfig = SourceTypeConfig(DataSourceType.METADATA, DataSourceConfig.defaultMetadataSources()),
     val lyrics: SourceTypeConfig = SourceTypeConfig(DataSourceType.LYRICS, DataSourceConfig.defaultLyricsSources()),
