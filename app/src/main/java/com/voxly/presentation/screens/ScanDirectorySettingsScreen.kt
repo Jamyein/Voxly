@@ -20,16 +20,15 @@ import androidx.compose.material.icons.filled.Close
 import com.voxly.presentation.theme.ContainerLevel
 import com.voxly.presentation.components.ExpressiveCard
 import com.voxly.presentation.components.ExpressiveScaffoldWithBack
+import com.voxly.presentation.components.ExpressiveIconButton
+import com.voxly.presentation.components.ExpressiveTextButton
+import com.voxly.presentation.components.ButtonEmphasis
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -138,15 +137,11 @@ fun ScanDirectorySettingsScreen(
             // Whitelist directories (only show when enabled)
             if (whitelistEnabled) {
                 item {
-                    TextButton(
+                    ExpressiveTextButton(
                         onClick = { folderPickerLauncher.launch(null) },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = Icons.Default.Add
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
                         Text(stringResource(R.string.add_whitelist_directory))
                     }
                 }
@@ -200,15 +195,11 @@ fun ScanDirectorySettingsScreen(
             // Blacklist directories (only show when enabled)
             if (blacklistEnabled) {
                 item {
-                    TextButton(
+                    ExpressiveTextButton(
                         onClick = { blacklistFolderPickerLauncher.launch(null) },
-                        modifier = Modifier.fillMaxWidth()
+                        modifier = Modifier.fillMaxWidth(),
+                        icon = Icons.Default.Add
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = null,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
                         Text(stringResource(R.string.add_blacklist_directory))
                     }
                 }
@@ -267,12 +258,12 @@ private fun WhitelistDirectoryItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            IconButton(onClick = onRemove) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.remove_directory)
-                )
-            }
+            ExpressiveIconButton(
+                onClick = onRemove,
+                icon = Icons.Default.Close,
+                contentDescription = stringResource(R.string.remove_directory),
+                emphasis = ButtonEmphasis.Medium
+            )
         }
     }
 }
@@ -305,12 +296,12 @@ private fun BlacklistDirectoryItem(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            IconButton(onClick = onRemove) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = stringResource(R.string.remove_directory)
-                )
-            }
+            ExpressiveIconButton(
+                onClick = onRemove,
+                icon = Icons.Default.Close,
+                contentDescription = stringResource(R.string.remove_directory),
+                emphasis = ButtonEmphasis.Medium
+            )
         }
     }
 }
