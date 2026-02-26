@@ -437,6 +437,7 @@ class SettingsDataStore @Inject constructor(
 
     /**
      * Update a single source within a source type configuration
+     * Also updates legacy preference keys for backward compatibility
      */
     suspend fun updateSourceConfig(type: DataSourceType, source: DataSourceConfig) {
         context.settingsDataStore.edit { preferences ->
@@ -455,6 +456,35 @@ class SettingsDataStore @Inject constructor(
             val updated = typeConfig.updateSource(source)
             val newConfig = current.updateConfig(updated)
             preferences[SOURCE_CONFIGURATIONS] = json.encodeToString(newConfig)
+
+            // Sync to legacy preference keys for backward compatibility
+            // This ensures AggregatedOnlineMetadataRepository reads the correct enabled state
+            when (type) {
+                DataSourceType.METADATA -> {
+                    when (source.sourceId) {
+                        "musicbrainz" -> preferences[METADATA_SOURCE_ENABLED_MUSICBRAINZ] = source.enabled
+                        "itunes" -> preferences[METADATA_SOURCE_ENABLED_ITUNES] = source.enabled
+                        "netease" -> preferences[METADATA_SOURCE_ENABLED_NETEASE] = source.enabled
+                        "qq_music" -> preferences[METADATA_SOURCE_ENABLED_QQ_MUSIC] = source.enabled
+                    }
+                }
+                DataSourceType.LYRICS -> {
+                    when (source.sourceId) {
+                        "musicbrainz" -> preferences[LYRICS_SOURCE_ENABLED_MUSICBRAINZ] = source.enabled
+                        "itunes" -> preferences[LYRICS_SOURCE_ENABLED_ITUNES] = source.enabled
+                        "netease" -> preferences[LYRICS_SOURCE_ENABLED_NETEASE] = source.enabled
+                        "qq_music" -> preferences[LYRICS_SOURCE_ENABLED_QQ_MUSIC] = source.enabled
+                    }
+                }
+                DataSourceType.COVER -> {
+                    when (source.sourceId) {
+                        "musicbrainz" -> preferences[COVER_SOURCE_ENABLED_MUSICBRAINZ] = source.enabled
+                        "itunes" -> preferences[COVER_SOURCE_ENABLED_ITUNES] = source.enabled
+                        "netease" -> preferences[COVER_SOURCE_ENABLED_NETEASE] = source.enabled
+                        "qq_music" -> preferences[COVER_SOURCE_ENABLED_QQ_MUSIC] = source.enabled
+                    }
+                }
+            }
         }
     }
 
