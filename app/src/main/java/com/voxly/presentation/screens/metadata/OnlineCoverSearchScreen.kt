@@ -207,7 +207,7 @@ fun OnlineCoverSearchScreen(
                                 }
                             }
                         )
-                        HorizontalDivider()
+                        Spacer(modifier = Modifier.height(4.dp))
                     }
                 }
             }

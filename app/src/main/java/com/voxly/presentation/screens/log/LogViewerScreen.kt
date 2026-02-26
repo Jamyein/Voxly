@@ -358,8 +358,9 @@ private fun LogLine(line: String) {
             .background(backgroundColor)
             .padding(horizontal = 8.dp, vertical = 4.dp),
         color = textColor,
-        fontFamily = FontFamily.Monospace,
-        fontSize = 12.sp
+        style = MaterialTheme.typography.bodySmall.copy(
+            fontFamily = FontFamily.Monospace
+        )
     )
 }
 

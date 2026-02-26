@@ -188,7 +188,7 @@ fun OnlineLyricsSearchScreen(
                                     onLyricsSelected(item)
                                 }
                             )
-                            HorizontalDivider()
+                            Spacer(modifier = Modifier.height(4.dp))
                         }
                     }
                 }

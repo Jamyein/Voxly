@@ -174,6 +174,9 @@ fun DraggableSourcePriorityDialog(
         )
     }
 
+    // Track original drag start position
+    var originalDragIndex by remember { mutableStateOf<Int?>(null) }
+
     // Drag state
     var draggedIndex by remember { mutableStateOf<Int?>(null) }
     var dragOffset by remember { mutableStateOf(0f) }
@@ -224,21 +227,22 @@ fun DraggableSourcePriorityDialog(
                             .pointerInput(Unit) {
                                 detectDragGesturesAfterLongPress(
                                     onDragStart = {
+                                        originalDragIndex = index
                                         draggedIndex = index
                                         dragOffset = 0f
                                     },
                                     onDragEnd = {
-                                        if (draggedIndex != null && draggedIndex != index) {
-                                            val newList = sourcesState.toMutableList()
-                                            val item = newList.removeAt(draggedIndex!!)
-                                            newList.add(index, item)
-                                            sourcesState = newList
-                                            onSourceReorder(newList.map { it.sourceId })
+                                        // Use originalDragIndex to check if position changed
+                                        if (originalDragIndex != null && originalDragIndex != index) {
+                                            // sourcesState is already updated from onDrag, just save it
+                                            onSourceReorder(sourcesState.map { it.sourceId })
                                         }
+                                        originalDragIndex = null
                                         draggedIndex = null
                                         dragOffset = 0f
                                     },
                                     onDragCancel = {
+                                        originalDragIndex = null
                                         draggedIndex = null
                                         dragOffset = 0f
                                     },
@@ -347,16 +351,14 @@ fun DraggableSourcePriorityDialog(
                                             },
                                             leadingIcon = {
                                                 Icon(
-                                                    imageVector = if (sourceState.enabled)
+                                                    imageVector = if (sourceState.enabled) 
                                                         Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-                                                    contentDescription = if (sourceState.enabled)
-                                                        stringResource(R.string.cd_disable_source)
-                                                    else stringResource(R.string.cd_enable_source)
+                                                    contentDescription = null
                                                 )
                                             }
                                         )
 
-                                        HorizontalDivider()
+                                        Spacer(modifier = Modifier.height(4.dp))
 
                                         // Extra options (iTunes country code)
                                         if (sourceHasExtraOptions(sourceState.sourceId)) {
@@ -514,7 +516,7 @@ fun SettingsInfoRow(title: String, value: String) {
             )
         },
         trailingContent = { Text(text = value) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f))
     )
 }
 
@@ -528,10 +530,7 @@ fun SettingsSubmenuRow(
         headlineContent = { Text(text = title) },
         supportingContent = { Text(text = subtitle) },
         trailingContent = {
-            Icon(
-                imageVector = Icons.Default.ArrowDropDown,
-                contentDescription = stringResource(R.string.cd_expand_menu)
-            )
+            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -768,7 +767,7 @@ fun SearchLimitDialog(
                     onLimitChange = onGlobalLimitChange
                 )
 
-                HorizontalDivider()
+                Spacer(modifier = Modifier.height(4.dp))
 
                 // Per-source limits
                 Text(
@@ -1052,7 +1051,7 @@ fun SettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                contentPadding = WindowInsets.statusBars.asPaddingValues()
+                windowInsets = WindowInsets.statusBars
             )
         }
     ) { innerPadding ->
@@ -1083,7 +1082,7 @@ fun SettingsScreen(
                     }
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
 
                 SettingsSwitch(
                     title = stringResource(R.string.settings_dynamic_color),
@@ -1138,7 +1137,8 @@ fun SettingsScreen(
                         )
                     }
                 }
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
+
                 SettingsSwitch(
                     title = stringResource(R.string.settings_min_duration_filter),
                     subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
@@ -1162,19 +1162,19 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_source_group_metadata_subtitle),
                     onClick = { showMetadataSourceDialog = true }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
                 SettingsSubmenuRow(
                     title = stringResource(R.string.settings_source_group_lyrics),
                     subtitle = stringResource(R.string.settings_source_group_lyrics_subtitle),
                     onClick = { showLyricsSourceDialog = true }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
                 SettingsSubmenuRow(
                     title = stringResource(R.string.settings_source_group_cover),
                     subtitle = stringResource(R.string.settings_source_group_cover_subtitle),
                     onClick = { showCoverSourceDialog = true }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
                 SettingsSubmenuRow(
                     title = stringResource(R.string.settings_online_search_limits_submenu),
                     subtitle = stringResource(R.string.settings_online_search_limits_submenu_subtitle),
@@ -1195,7 +1195,7 @@ fun SettingsScreen(
                         viewModel.setLoggingEnabled(it)
                     }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
 
                 SettingsSwitch(
                     title = stringResource(R.string.settings_logging_file),
@@ -1206,7 +1206,7 @@ fun SettingsScreen(
                         viewModel.setFileLoggingEnabled(it)
                     }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
 
                 SettingsSwitch(
                     title = stringResource(R.string.settings_logging_console),
@@ -1217,7 +1217,7 @@ fun SettingsScreen(
                         viewModel.setConsoleLoggingEnabled(it)
                     }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
 
                 SettingsSwitch(
                     title = stringResource(R.string.settings_logging_crash),
@@ -1228,15 +1228,15 @@ fun SettingsScreen(
                         viewModel.setCrashReportingEnabled(it)
                     }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
 
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_logging_size)) },
                     supportingContent = { Text(LogManager.formatLogSize(LogManager.getLogDirectorySize())) },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f))
                 )
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
 
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_logging_view)) },
@@ -1244,7 +1244,7 @@ fun SettingsScreen(
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
                     modifier = Modifier.clickable { onNavigateToLogViewer() }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
 
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_logging_export)) },
@@ -1252,7 +1252,7 @@ fun SettingsScreen(
                     colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
                     modifier = Modifier.clickable { onExportLogs() }
                 )
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
 
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_logging_cleanup)) },
@@ -1298,10 +1298,10 @@ fun SettingsScreen(
                             )
                         }
                     },
-                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
+                    colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)),
                     modifier = Modifier.clickable { showReplayGainDialog = true }
                 )
-                
+
                 // ReplayGain target loudness selection dialog
                 if (showReplayGainDialog) {
                     AlertDialog(
@@ -1348,7 +1348,7 @@ fun SettingsScreen(
             // About Section
             SettingsSection(title = stringResource(R.string.settings_section_about)) {
                 SettingsInfoRow(title = stringResource(R.string.settings_version_label), value = BuildConfig.VERSION_NAME)
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
                 SettingsInfoRow(title = stringResource(R.string.settings_developer_label), value = stringResource(R.string.settings_developer_value))
             }
         }

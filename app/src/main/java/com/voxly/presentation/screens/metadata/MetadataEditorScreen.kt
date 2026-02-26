@@ -44,6 +44,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
+import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveAnimations
@@ -69,7 +70,9 @@ fun MetadataEditorScreen(
     onNavigateToOnlineLyricsSearch: () -> Unit,
     onNavigateToOnlineCoverSearch: () -> Unit,
     pendingOnlineMetadata: com.voxly.domain.model.AudioMetadata? = null,
-    onConsumePendingOnlineMetadata: () -> Unit = {}
+    onConsumePendingOnlineMetadata: () -> Unit = {},
+    pendingOnlineLyrics: com.voxly.domain.repository.OnlineLyricsResult? = null,
+    onConsumePendingOnlineLyrics: () -> Unit = {}
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -110,6 +113,13 @@ fun MetadataEditorScreen(
         val metadata = pendingOnlineMetadata ?: return@LaunchedEffect
         viewModel.applyOnlineMetadata(metadata)
         onConsumePendingOnlineMetadata()
+    }
+
+    // Handle online lyrics result from search screen
+    LaunchedEffect(pendingOnlineLyrics) {
+        val lyricsResult = pendingOnlineLyrics ?: return@LaunchedEffect
+        viewModel.applyOnlineLyrics(lyricsResult)
+        onConsumePendingOnlineLyrics()
     }
 
     // Handle save result
@@ -516,9 +526,9 @@ fun MetadataEditorScreen(
                     style = MaterialTheme.typography.titleLarge,
                     modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
                 )
-                
-                HorizontalDivider()
-                
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.select_album_art)) },
                     leadingContent = {
@@ -563,7 +573,7 @@ fun MetadataEditorScreen(
 
                 // 只有存在封面时才显示以下选项
                 if (hasAlbumArt) {
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    Spacer(modifier = Modifier.height(4.dp))
 
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.album_art_view)) },
@@ -687,7 +697,7 @@ fun MetadataEditorScreen(
                                         viewModel.clearOnlineLyricsResults()
                                     }
                                 )
-                                HorizontalDivider()
+                                Spacer(modifier = Modifier.height(4.dp))
                             }
                         }
                     }
@@ -762,7 +772,7 @@ fun MetadataEditorScreen(
                                 viewModel.clearOnlineCoverResults()
                             }
                         )
-                                HorizontalDivider()
+                                Spacer(modifier = Modifier.height(4.dp))
                             }
                         }
                     }
@@ -1429,9 +1439,9 @@ private fun ConversionDialog(
                         Text(stringResource(R.string.deselect_all))
                     }
                 }
-                
-                HorizontalDivider()
-                
+
+                Spacer(modifier = Modifier.height(4.dp))
+
                 LazyColumn(
                     modifier = Modifier.heightIn(max = 320.dp)
                 ) {

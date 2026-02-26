@@ -14,7 +14,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -24,7 +24,6 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -59,6 +58,7 @@ import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.viewmodel.FileBrowserUiState
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
@@ -856,7 +856,7 @@ private fun MenuItem(
         // Label
         Surface(
             color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = RoundedCornerShape(4.dp),
+            shape = MaterialTheme.shapes.extraSmall,
             modifier = Modifier.padding(end = 12.dp)
         ) {
             Text(
@@ -1694,7 +1694,7 @@ private fun AudioFileItem(
             Box(
                 modifier = Modifier
                     .size(44.dp)
-                    .clip(RoundedCornerShape(6.dp)),
+                    .clip(MaterialTheme.shapes.extraSmall),
                 contentAlignment = Alignment.Center
             ) {
                 val albumArtBitmap by produceState<android.graphics.Bitmap?>(
@@ -1842,7 +1842,7 @@ private fun FileActionsMenu(
                     onFixMetadata()
                 }
             )
-            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             DropdownMenuItem(
                 text = { Text(stringResource(R.string.rename_file)) },
                 leadingIcon = {
@@ -2079,9 +2079,9 @@ private fun BatchOperationsMenuDialog(
                         label = stringResource(R.string.batch_online_metadata),
                         onClick = onOnlineMetadata
                     )
-                    
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     BatchMenuItem(
                         icon = AppIcon.Edit,
                         label = stringResource(R.string.batch_unified_field),
@@ -2099,9 +2099,9 @@ private fun BatchOperationsMenuDialog(
                         label = stringResource(R.string.batch_auto_number),
                         onClick = onAutoNumber
                     )
-                    
-                    HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
-                    
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
                     BatchMenuItem(
                         icon = AppIcon.Rename,
                         label = stringResource(R.string.batch_rename_files),

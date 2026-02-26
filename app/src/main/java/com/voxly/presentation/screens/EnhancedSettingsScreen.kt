@@ -82,7 +82,7 @@ fun EnhancedSettingsScreen(
                     )
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
 
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_metadata_source_subtitle)) },
@@ -109,7 +109,7 @@ fun EnhancedSettingsScreen(
             // About Section
             SettingsSection(title = stringResource(R.string.settings_section_about)) {
                 SettingsInfoRow(title = stringResource(R.string.settings_version_label), value = BuildConfig.VERSION_NAME)
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
                 SettingsInfoRow(title = stringResource(R.string.settings_data_sources_label), value = stringResource(R.string.settings_data_sources_value))
             }
         }

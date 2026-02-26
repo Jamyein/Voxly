@@ -152,7 +152,7 @@ fun DirectoryManagementScreen(
                     }
                 }
 
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                Spacer(modifier = Modifier.height(4.dp))
 
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
