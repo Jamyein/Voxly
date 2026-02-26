@@ -15,6 +15,7 @@ import com.voxly.domain.usecase.BatchReplayGainUseCase
 import com.voxly.domain.usecase.BatchStatus
 import com.voxly.domain.usecase.MetadataField
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -49,6 +50,9 @@ class BatchOperationsViewModel @Inject constructor(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    // Job reference for cancellation support
+    private var currentJob: Job? = null
 
     // Scan mode setting
     private val _scanMode = MutableStateFlow(ScanMode.TRACK_ONLY)
@@ -134,7 +138,7 @@ class BatchOperationsViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
+        currentJob = viewModelScope.launch {
             _isProcessing.value = true
             _operationComplete.value = false
             _error.value = null
@@ -189,7 +193,7 @@ class BatchOperationsViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
+        currentJob = viewModelScope.launch {
             _isProcessing.value = true
             _operationComplete.value = false
             _error.value = null
@@ -222,7 +226,7 @@ class BatchOperationsViewModel @Inject constructor(
             return
         }
 
-        viewModelScope.launch {
+        currentJob = viewModelScope.launch {
             _isProcessing.value = true
             _operationComplete.value = false
             _error.value = null
@@ -249,6 +253,18 @@ class BatchOperationsViewModel @Inject constructor(
      */
     fun clearError() {
         _error.value = null
+    }
+
+    /**
+     * Cancels the current batch operation.
+     */
+    fun cancelOperation() {
+        currentJob?.cancel()
+        currentJob = null
+        _isProcessing.value = false
+        _batchProgress.value = null
+        _operationComplete.value = false
+        _error.value = "Operation cancelled by user"
     }
 
     /**

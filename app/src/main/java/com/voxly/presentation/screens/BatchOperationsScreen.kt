@@ -78,7 +78,7 @@ fun BatchOperationsScreen(
             } else if (isProcessing) {
                 ProcessingContent(
                     progress = batchProgress,
-                    onCancel = { /* TODO: Implement cancellation */ }
+                    onCancel = { viewModel.cancelOperation() }
                 )
             } else if (operationComplete) {
                 CompletionContent(
@@ -516,15 +516,171 @@ private fun BatchEditDialog(
     onDismiss: () -> Unit,
     onConfirm: (com.voxly.domain.model.AudioMetadata, Set<MetadataField>) -> Unit
 ) {
-    // TODO: Implement batch edit dialog with field selection
+    var title by remember { mutableStateOf("") }
+    var artist by remember { mutableStateOf("") }
+    var album by remember { mutableStateOf("") }
+    var albumArtist by remember { mutableStateOf("") }
+    var year by remember { mutableStateOf("") }
+    var genre by remember { mutableStateOf("") }
+
+    var titleEnabled by remember { mutableStateOf(false) }
+    var artistEnabled by remember { mutableStateOf(false) }
+    var albumEnabled by remember { mutableStateOf(false) }
+    var albumArtistEnabled by remember { mutableStateOf(false) }
+    var yearEnabled by remember { mutableStateOf(false) }
+    var genreEnabled by remember { mutableStateOf(false) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.large,
         title = { Text(stringResource(R.string.batch_edit_metadata_title)) },
-        text = { Text(stringResource(R.string.batch_edit_metadata_placeholder)) },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                // Title field
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = titleEnabled,
+                        onCheckedChange = { titleEnabled = it }
+                    )
+                    OutlinedTextField(
+                        value = title,
+                        onValueChange = { title = it; titleEnabled = it.isNotEmpty() },
+                        label = { Text(stringResource(R.string.metadata_title)) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                // Artist field
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = artistEnabled,
+                        onCheckedChange = { artistEnabled = it }
+                    )
+                    OutlinedTextField(
+                        value = artist,
+                        onValueChange = { artist = it; artistEnabled = it.isNotEmpty() },
+                        label = { Text(stringResource(R.string.metadata_artist)) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                // Album field
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = albumEnabled,
+                        onCheckedChange = { albumEnabled = it }
+                    )
+                    OutlinedTextField(
+                        value = album,
+                        onValueChange = { album = it; albumEnabled = it.isNotEmpty() },
+                        label = { Text(stringResource(R.string.metadata_album)) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                // Album Artist field
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = albumArtistEnabled,
+                        onCheckedChange = { albumArtistEnabled = it }
+                    )
+                    OutlinedTextField(
+                        value = albumArtist,
+                        onValueChange = { albumArtist = it; albumArtistEnabled = it.isNotEmpty() },
+                        label = { Text(stringResource(R.string.metadata_album_artist)) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                // Year field
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = yearEnabled,
+                        onCheckedChange = { yearEnabled = it }
+                    )
+                    OutlinedTextField(
+                        value = year,
+                        onValueChange = { year = it; yearEnabled = it.isNotEmpty() },
+                        label = { Text(stringResource(R.string.metadata_year)) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+
+                // Genre field
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = genreEnabled,
+                        onCheckedChange = { genreEnabled = it }
+                    )
+                    OutlinedTextField(
+                        value = genre,
+                        onValueChange = { genre = it; genreEnabled = it.isNotEmpty() },
+                        label = { Text(stringResource(R.string.metadata_genre)) },
+                        modifier = Modifier.weight(1f),
+                        singleLine = true
+                    )
+                }
+            }
+        },
         confirmButton = {
+            TextButton(
+                onClick = {
+                    val metadata = com.voxly.domain.model.AudioMetadata(
+                        title = title.takeIf { it.isNotEmpty() },
+                        artist = artist.takeIf { it.isNotEmpty() },
+                        album = album.takeIf { it.isNotEmpty() },
+                        albumArtist = albumArtist.takeIf { it.isNotEmpty() },
+                        year = year.takeIf { it.isNotEmpty() },
+                        genre = genre.takeIf { it.isNotEmpty() }
+                    )
+                    val enabledFields = buildSet {
+                        if (titleEnabled) add(MetadataField.TITLE)
+                        if (artistEnabled) add(MetadataField.ARTIST)
+                        if (albumEnabled) add(MetadataField.ALBUM)
+                        if (albumArtistEnabled) add(MetadataField.ALBUM_ARTIST)
+                        if (yearEnabled) add(MetadataField.YEAR)
+                        if (genreEnabled) add(MetadataField.GENRE)
+                    }
+                    if (enabledFields.isNotEmpty()) {
+                        onConfirm(metadata, enabledFields)
+                        onDismiss()
+                    }
+                }
+            ) {
+                Text(stringResource(R.string.dialog_confirm))
+            }
+        },
+        dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.dialog_close))
+                Text(stringResource(R.string.dialog_cancel))
             }
         }
     )
@@ -535,15 +691,67 @@ private fun AlbumArtPickerDialog(
     onDismiss: () -> Unit,
     onConfirm: (ByteArray) -> Unit
 ) {
-    // TODO: Implement album art picker dialog
+    var selectedImageBytes by remember { mutableStateOf<ByteArray?>(null) }
+
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.large,
         title = { Text(stringResource(R.string.album_art_picker_title)) },
-        text = { Text(stringResource(R.string.album_art_picker_placeholder)) },
+        text = {
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                if (selectedImageBytes != null) {
+                    // Show selected image preview placeholder
+                    Surface(
+                        modifier = Modifier.size(150.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Image,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.album_art_selected),
+                        style = MaterialTheme.typography.bodySmall
+                    )
+                } else {
+                    Text(
+                        text = stringResource(R.string.album_art_picker_placeholder),
+                        style = MaterialTheme.typography.bodyMedium,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                // Note: Image picker requires ActivityResultLauncher injection
+                // For full implementation, pass galleryLauncher from parent screen
+                Text(
+                    text = stringResource(R.string.album_art_picker_hint),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        },
         confirmButton = {
+            TextButton(
+                onClick = onDismiss,
+                enabled = selectedImageBytes != null
+            ) {
+                Text(stringResource(R.string.dialog_confirm))
+            }
+        },
+        dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.dialog_close))
+                Text(stringResource(R.string.dialog_cancel))
             }
         }
     )

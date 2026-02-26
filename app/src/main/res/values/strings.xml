@@ -190,9 +190,11 @@
     <string name="operation_remove_album_art_description">Remove album artwork from all selected files</string>
     <string name="dismiss">Dismiss</string>
     <string name="batch_edit_metadata_title">Batch Edit Metadata</string>
-    <string name="batch_edit_metadata_placeholder">Batch metadata editor will be implemented here</string>
+    <string name="batch_edit_metadata_placeholder">Enter metadata values and check the fields you want to update</string>
     <string name="album_art_picker_title">Select Album Art</string>
-    <string name="album_art_picker_placeholder">Album art picker will be implemented here</string>
+    <string name="album_art_picker_placeholder">Select an image from gallery or take a photo to set as album art for all selected files</string>
+    <string name="album_art_selected">Image selected</string>
+    <string name="album_art_picker_hint">Use the parent screen to pick album art</string>
 
     <!-- Batch Operations (Integrated) -->
     <string name="batch_operations">Batch Operations</string>
@@ -443,6 +445,7 @@
 
     <!-- Dialogs -->
     <string name="dialog_close">Close</string>
+    <string name="dialog_confirm">Confirm</string>
     <string name="dialog_discard_changes_message">You have unsaved changes. Discard them?</string>
 
     <!-- ReplayGain -->

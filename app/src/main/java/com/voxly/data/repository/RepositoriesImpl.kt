@@ -9,6 +9,7 @@ import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
+import com.voxly.domain.model.parseMediaStoreTrackField
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanProgress
@@ -167,25 +168,9 @@ class AudioRepositoryImpl @Inject constructor(
                 arrayOf(filePath),
                 null
             )
-            // Helper to parse MediaStore TRACK field: trackNumber | (totalTracks << 16)
-            // Also handles corrupted track values like 1001 which should be 1
-            fun parseTrackField(value: Int): Pair<Int?, Int?> {
-                if (value <= 0) return Pair(null, null)
-                var trackNumber = value and 0xFFFF
-                val totalTracks = (value shr 16) and 0xFFFF
-                
-                // Normalize corrupted track numbers (some sources add 1000 offset incorrectly)
-                // e.g., 1001 should be 1, 1012 should be 12
-                if (trackNumber > 1000 && trackNumber < 10000) {
-                    val normalized = trackNumber - 1000
-                    if (normalized in 1..999) trackNumber = normalized
-                }
-                
-                return Pair(
-                    if (trackNumber > 0) trackNumber else null,
-                    if (totalTracks > 0) totalTracks else null
-                )
-            }
+            // Helper to parse MediaStore TRACK field
+            // Uses shared implementation from domain model
+            fun parseTrackField(value: Int): Pair<Int?, Int?> = parseMediaStoreTrackField(value)
             cursor?.use {
                 if (!it.moveToFirst()) {
                     return@use null
