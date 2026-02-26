@@ -2,29 +2,28 @@ package com.voxly.presentation.navigation
 
 import android.annotation.SuppressLint
 import android.widget.Toast
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -37,8 +36,10 @@ import androidx.navigation.navArgument
 import com.voxly.R
 import com.voxly.core.util.LogManager
 import com.voxly.domain.model.AudioMetadata
+import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.components.FlexibleBottomAppBar
 
 import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
@@ -75,51 +76,23 @@ fun MP3TagNavHost(
     val bottomNavRoutes = BottomNavItem.entries.map { it.screen.route }
     val showBottomBar = currentDestination?.route in bottomNavRoutes
 
-    // Scroll state for controlling bottom bar visibility
-    var isBottomBarVisible by remember { mutableStateOf(true) }
+    // Scroll progress for flexible bottom bar (0 = expanded, 1 = collapsed)
+    var scrollProgress by remember { mutableFloatStateOf(0f) }
+
+    // Reset scroll progress when navigating to non-bottom-nav screens
     LaunchedEffect(currentDestination?.route) {
         if (currentDestination?.route !in bottomNavRoutes) {
-            isBottomBarVisible = true
+            scrollProgress = 0f
         }
     }
 
     Scaffold(
         bottomBar = {
-            if (showBottomBar) {
-                AnimatedVisibility(
-                    visible = isBottomBarVisible,
-                    enter = ExpressiveAnimations.ListItemEnter,
-                    exit = ExpressiveAnimations.ListItemExit
-                ) {
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    ) {
-                        bottomNavItems.forEach { item ->
-                            val selected = currentDestination?.hierarchy?.any { it.route == item.screen.route } == true
-                            val label = stringResource(item.labelResId)
-                            NavigationBarItem(
-                                selected = selected,
-                                onClick = {
-                                    navController.navigate(item.screen.route) {
-                                        popUpTo(navController.graph.findStartDestination().id) {
-                                            saveState = true
-                                        }
-                                        launchSingleTop = true
-                                        restoreState = true
-                                    }
-                                },
-                                icon = {
-                                    Icon(
-                                        imageVector = if (selected) item.selectedIcon.vector else item.unselectedIcon.vector,
-                                        contentDescription = label
-                                    )
-                                },
-                                label = { Text(label) }
-                            )
-                        }
-                    }
-                }
-            }
+            FlexibleBottomAppBar(
+                navController = navController,
+                currentRoute = currentDestination?.route,
+                scrollProgress = scrollProgress
+            )
         }
     ) { innerPadding ->
         NavHost(
@@ -147,8 +120,8 @@ fun MP3TagNavHost(
                     onNavigateToReplayGain = { filePaths ->
                         navController.navigate(Screen.ReplayGainScanner.createRoute(filePaths))
                     },
-                    onBottomBarVisibilityChange = { isVisible ->
-                        isBottomBarVisible = isVisible
+                    onBottomBarScrollProgressChange = { progress ->
+                        scrollProgress = progress
                     }
                 )
             }
@@ -227,6 +200,9 @@ fun MP3TagNavHost(
                 val pendingOnlineMetadata by backStackEntry.savedStateHandle
                     .getStateFlow<AudioMetadata?>("online_metadata_result", null)
                     .collectAsState()
+                val pendingOnlineLyrics by backStackEntry.savedStateHandle
+                    .getStateFlow<OnlineLyricsResult?>("online_lyrics_result", null)
+                    .collectAsState()
                 MetadataEditorScreen(
                     filePath = filePath,
                     onNavigateBack = { navController.popBackStack() },
@@ -242,6 +218,10 @@ fun MP3TagNavHost(
                     pendingOnlineMetadata = pendingOnlineMetadata,
                     onConsumePendingOnlineMetadata = {
                         backStackEntry.savedStateHandle.remove<AudioMetadata>("online_metadata_result")
+                    },
+                    pendingOnlineLyrics = pendingOnlineLyrics,
+                    onConsumePendingOnlineLyrics = {
+                        backStackEntry.savedStateHandle.remove<OnlineLyricsResult>("online_lyrics_result")
                     }
                 )
             }

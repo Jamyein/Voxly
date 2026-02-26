@@ -209,7 +209,7 @@ fun FileBrowserScreen(
             }
 
             // Calculate scroll progress (0 = fully visible, 1 = fully hidden)
-            val progress = (kotlin.math.abs(accumulatedScrollDelta) / (scrollHideThreshold * 10))
+            val progress = (kotlin.math.abs(accumulatedScrollDelta).toFloat() / (scrollHideThreshold * 10f))
                 .coerceIn(0f, 1f)
 
             when {
@@ -339,7 +339,7 @@ fun FileBrowserScreen(
                     if (openedDirectory != null) {
                         LargeTopAppBar(
                             title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
-                            colors = LargeTopAppBarDefaults.largeTopAppBarColors(
+                            colors = TopAppBarDefaults.largeTopAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                             ),
                             navigationIcon = {
@@ -384,7 +384,7 @@ fun FileBrowserScreen(
                     } else {
                         LargeTopAppBar(
                             title = { Text(stringResource(R.string.nav_file_browser)) },
-                            colors = LargeTopAppBarDefaults.largeTopAppBarColors(
+                            colors = TopAppBarDefaults.largeTopAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                             ),
                             actions = {
@@ -1496,7 +1496,7 @@ private fun SelectionTopBar(
                 )
             }
         },
-        colors = LargeTopAppBarDefaults.largeTopAppBarColors(
+        colors = TopAppBarDefaults.largeTopAppBarColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         ),
         actions = {
