@@ -86,7 +86,6 @@ fun FlexibleBottomAppBar(
     val bottomNavRoutes = listOf(
         Screen.FileBrowser.route,
         Screen.RecentEdits.route,
-        Screen.BatchOperations.route,
         Screen.Statistics.route,
         Screen.Settings.route
     )
@@ -181,12 +180,6 @@ private val bottomNavItems = listOf(
         labelResId = R.string.nav_recent_edits,
         selectedIcon = AppIcon.History,
         unselectedIcon = AppIcon.HistoryOutlined
-    ),
-    FlexibleBottomNavItem(
-        screen = Screen.BatchOperations,
-        labelResId = R.string.nav_batch_operations,
-        selectedIcon = AppIcon.PlaylistAdd,
-        unselectedIcon = AppIcon.PlaylistAddOutlined
     ),
     FlexibleBottomNavItem(
         screen = Screen.Statistics,
