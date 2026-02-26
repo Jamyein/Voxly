@@ -53,6 +53,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.BuildConfig
 import com.voxly.R
 import com.voxly.core.util.LogManager
+import com.voxly.presentation.components.SettingsSection
 import com.voxly.presentation.viewmodel.SettingsViewModel
 import com.voxly.domain.model.DataSourceConfig
 import com.voxly.domain.model.DataSourceType
@@ -414,31 +415,7 @@ fun DraggableSourcePriorityDialog(
 
 // ==================== Composable Helpers ====================
 
-@Composable
-fun SettingsSection(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column {
-        Text(
-            text = title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 8.dp)
-        )
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            shape = MaterialTheme.shapes.extraLarge,
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
-        ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                content = content
-            )
-        }
-    }
-}
+// SettingsSection is imported from com.voxly.presentation.components
 
 @Composable
 fun SettingsSwitch(

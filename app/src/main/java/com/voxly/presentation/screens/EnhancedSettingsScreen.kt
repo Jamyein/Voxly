@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.BuildConfig
 import com.voxly.R
+import com.voxly.presentation.components.SettingsSection
 import com.voxly.presentation.viewmodel.EnhancedOnlineMetadataViewModel
 
 /**

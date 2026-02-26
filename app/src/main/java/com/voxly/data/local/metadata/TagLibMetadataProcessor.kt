@@ -10,6 +10,7 @@ import android.util.Log
 import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
 import com.voxly.domain.model.AudioMetadata
+import com.voxly.domain.model.parseMediaStoreTrackField
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -302,15 +303,10 @@ class TagLibMetadataProcessor @Inject constructor(
 
         // Normalize track number: some sources incorrectly add 1000 offset
         // e.g., "1001" should be "1", "1012" should be "12"
+        // Uses shared implementation from domain model
         fun normalizeTrackNumber(track: Int): Int {
-            return if (track > 1000 && track < 10000) {
-                // Likely a corrupted value: 1001-9999 likely means track + 1000 offset
-                // Check if removing 1000 gives a valid track number
-                val normalized = track - 1000
-                if (normalized in 1..999) normalized else track
-            } else {
-                track
-            }
+            val (normalized, _) = parseMediaStoreTrackField(track)
+            return normalized ?: track
         }
 
         // Helper function to parse track field - handles both "1" and "1/10" formats
