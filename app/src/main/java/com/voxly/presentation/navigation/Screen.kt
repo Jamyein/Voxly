@@ -3,28 +3,31 @@ package com.voxly.presentation.navigation
 /**
  * Sealed class representing all navigation destinations in the app.
  */
-sealed class Screen(val route: String) {
-    data object FileBrowser : Screen("file_browser")
-    data object RecentEdits : Screen("recent_edits")
-    data object Statistics : Screen("statistics")
-    data object BatchOperations : Screen("batch_operations")
-    data object Settings : Screen("settings")
-    data object ScanDirectorySettings : Screen("scan_directory_settings")
-    data object LogViewer : Screen("log_viewer")
-    data object MetadataEditor : Screen("metadata_editor/{filePath}") {
+sealed class Screen(
+    val route: String,
+    val showBottomBar: Boolean = false
+) {
+    data object FileBrowser : Screen("file_browser", showBottomBar = true)
+    data object RecentEdits : Screen("recent_edits", showBottomBar = true)
+    data object Statistics : Screen("statistics", showBottomBar = true)
+    data object BatchOperations : Screen("batch_operations", showBottomBar = false)
+    data object Settings : Screen("settings", showBottomBar = true)
+    data object ScanDirectorySettings : Screen("scan_directory_settings", showBottomBar = false)
+    data object LogViewer : Screen("log_viewer", showBottomBar = false)
+    data object MetadataEditor : Screen("metadata_editor/{filePath}", showBottomBar = false) {
         fun createRoute(filePath: String) = "metadata_editor/${java.net.URLEncoder.encode(filePath, "UTF-8")}"
     }
-    data object ReplayGainScanner : Screen("replay_gain_scanner/{filePaths}") {
+    data object ReplayGainScanner : Screen("replay_gain_scanner/{filePaths}", showBottomBar = false) {
         fun createRoute(filePaths: List<String>) =
             "replay_gain_scanner/${filePaths.joinToString(",") { java.net.URLEncoder.encode(it, "UTF-8") }}"
     }
-    data object OnlineMetadata : Screen("online_metadata/{filePath}") {
+    data object OnlineMetadata : Screen("online_metadata/{filePath}", showBottomBar = false) {
         fun createRoute(filePath: String) = "online_metadata/${java.net.URLEncoder.encode(filePath, "UTF-8")}"
     }
-    data object OnlineLyricsSearch : Screen("online_lyrics_search/{filePath}") {
+    data object OnlineLyricsSearch : Screen("online_lyrics_search/{filePath}", showBottomBar = false) {
         fun createRoute(filePath: String) = "online_lyrics_search/${java.net.URLEncoder.encode(filePath, "UTF-8")}"
     }
-    data object OnlineCoverSearch : Screen("online_cover_search/{filePath}") {
+    data object OnlineCoverSearch : Screen("online_cover_search/{filePath}", showBottomBar = false) {
         fun createRoute(filePath: String) = "online_cover_search/${java.net.URLEncoder.encode(filePath, "UTF-8")}"
     }
 }

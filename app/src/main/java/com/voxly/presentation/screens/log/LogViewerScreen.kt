@@ -8,6 +8,7 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -93,7 +94,8 @@ fun LogViewerScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
+                ),
+                contentPadding = WindowInsets.statusBars.asPaddingValues()
             )
         },
         floatingActionButton = {

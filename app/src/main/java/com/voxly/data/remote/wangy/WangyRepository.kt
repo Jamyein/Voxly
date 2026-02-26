@@ -207,9 +207,7 @@ class WangyRepositoryImpl @Inject constructor(
 
         return WangySearchResponse(
             code = code,
-            result = result,
-            data = null,
-            raw = jsonObject
+            result = result
         )
     }
 
@@ -286,7 +284,6 @@ class WangyRepositoryImpl @Inject constructor(
             name = albumJson.get("name")?.asString ?: "",
             artist = albumJson.get("artist")?.asJsonObject?.let { parseArtist(it) },
             publishDate = albumJson.get("publishTime")?.asString ?: "",
-            size = albumJson.get("size")?.asInt ?: 0,
             songsCount = albumJson.get("size")?.asInt ?: 0,
             picUrl = albumJson.get("picUrl")?.asString ?: ""
         )

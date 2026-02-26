@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.material3.*
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
@@ -28,7 +29,7 @@ fun RecentEditsScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                windowInsets = WindowInsets.statusBars
+                contentPadding = WindowInsets.statusBars.asPaddingValues()
             )
         }
     ) { innerPadding ->

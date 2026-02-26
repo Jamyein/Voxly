@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -55,7 +56,8 @@ fun BatchOperationsScreen(
                             Icon(Icons.Default.Clear, contentDescription = stringResource(R.string.clear_selection))
                         }
                     }
-                }
+                },
+                contentPadding = WindowInsets.statusBars.asPaddingValues()
             )
         }
     ) {

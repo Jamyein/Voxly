@@ -220,14 +220,3 @@ object SemanticColors {
     fun editingColor(isDark: Boolean) = if (isDark) Color(0xFF5E403B) else Color(0xFFFFDAD2)
 }
 
-/**
- * Surface Container层级枚举
- * 用于组件中指定背景层级
- */
-enum class ContainerLevel {
-    Lowest,   // 最浅（浅色）/最深（深色） - 用于最高elevation的卡片
-    Low,      // 较浅（浅色）/较暗（深色） - 用于一般卡片
-    Medium,   // 默认 - 用于主要内容区
-    High,     // 较深（浅色）/较亮（深色） - 用于高亮区域
-    Highest   // 最深（浅色）/最亮（深色） - 用于选中状态
-}

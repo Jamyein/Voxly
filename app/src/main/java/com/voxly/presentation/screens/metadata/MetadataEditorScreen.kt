@@ -21,6 +21,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -152,7 +153,10 @@ fun MetadataEditorScreen(
                             onNavigateBack()
                         }
                     }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(),
@@ -174,7 +178,7 @@ fun MetadataEditorScreen(
                                     showConversionDialog = true
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Translate, contentDescription = null)
+                                    Icon(Icons.Default.Translate, contentDescription = stringResource(R.string.convert_to_simplified))
                                 }
                             )
                             DropdownMenuItem(
@@ -185,7 +189,7 @@ fun MetadataEditorScreen(
                                     showConversionDialog = true
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Translate, contentDescription = null)
+                                    Icon(Icons.Default.Translate, contentDescription = stringResource(R.string.convert_to_traditional))
                                 }
                             )
                         }
@@ -203,7 +207,8 @@ fun MetadataEditorScreen(
                             Icon(Icons.Default.Save, contentDescription = stringResource(R.string.dialog_save))
                         }
                     }
-                }
+                },
+                contentPadding = WindowInsets.statusBars.asPaddingValues()
             )
         },
         floatingActionButton = {
@@ -262,7 +267,7 @@ fun MetadataEditorScreen(
                                 ) {
                                     Icon(
                                         painter = appIconPainter(AppIcon.MusicNote),
-                                        contentDescription = null
+                                        contentDescription = stringResource(R.string.cd_online_lyrics)
                                     )
                                 }
                             }
@@ -292,7 +297,7 @@ fun MetadataEditorScreen(
                                 ) {
                                     Icon(
                                         painter = appIconPainter(AppIcon.CloudDownload),
-                                        contentDescription = null
+                                        contentDescription = stringResource(R.string.cd_online_metadata)
                                     )
                                 }
                             }
@@ -321,7 +326,10 @@ fun MetadataEditorScreen(
                                         }
                                     }
                                 ) {
-                                    Icon(Icons.Default.Save, contentDescription = null)
+                                    Icon(
+                                        Icons.Default.Save,
+                                        contentDescription = stringResource(R.string.cd_save)
+                                    )
                                 }
                             }
                         }
@@ -441,7 +449,7 @@ fun MetadataEditorScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Icon(
                                 painter = appIconPainter(AppIcon.Error),
-                                contentDescription = null,
+                                contentDescription = stringResource(R.string.cd_error),
                                 tint = MaterialTheme.colorScheme.error
                             )
                             Spacer(modifier = Modifier.height(16.dp))
@@ -514,55 +522,70 @@ fun MetadataEditorScreen(
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.select_album_art)) },
                     leadingContent = {
-                        Icon(Icons.Default.PhotoLibrary, contentDescription = null)
+                        Icon(
+                            Icons.Default.PhotoLibrary,
+                            contentDescription = stringResource(R.string.cd_select_album_art)
+                        )
                     },
                     modifier = Modifier.clickable {
                         showAlbumArtOptions = false
                         galleryPickerLauncher.launch("image/*")
                     }
                 )
-                
+
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.take_photo)) },
                     leadingContent = {
-                        Icon(Icons.Default.CameraAlt, contentDescription = null)
+                        Icon(
+                            Icons.Default.CameraAlt,
+                            contentDescription = stringResource(R.string.cd_take_photo)
+                        )
                     },
                     modifier = Modifier.clickable {
                         showAlbumArtOptions = false
                         cameraLauncher.launch(null)
                     }
                 )
-                
+
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.fetch_online_cover_art)) },
                     leadingContent = {
-                        Icon(Icons.Default.CloudDownload, contentDescription = null)
+                        Icon(
+                            Icons.Default.CloudDownload,
+                            contentDescription = stringResource(R.string.cd_fetch_online_cover)
+                        )
                     },
                     modifier = Modifier.clickable {
                         showAlbumArtOptions = false
                         onNavigateToOnlineCoverSearch()
                     }
                 )
-                
+
                 // 只有存在封面时才显示以下选项
                 if (hasAlbumArt) {
                     HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
-                    
+
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.album_art_view)) },
                         leadingContent = {
-                            Icon(Icons.Default.ZoomIn, contentDescription = null)
+                            Icon(
+                                Icons.Default.ZoomIn,
+                                contentDescription = stringResource(R.string.cd_zoom_album_art)
+                            )
                         },
                         modifier = Modifier.clickable {
                             showAlbumArtOptions = false
                             showAlbumArtPreview = true
                         }
                     )
-                    
+
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.album_art_rotate)) },
                         leadingContent = {
-                            Icon(Icons.AutoMirrored.Filled.RotateRight, contentDescription = null)
+                            Icon(
+                                Icons.AutoMirrored.Filled.RotateRight,
+                                contentDescription = stringResource(R.string.cd_rotate_album_art)
+                            )
                         },
                         modifier = Modifier.clickable {
                             showAlbumArtOptions = false
@@ -571,11 +594,14 @@ fun MetadataEditorScreen(
                             }
                         }
                     )
-                    
+
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.remove_album_art)) },
                         leadingContent = {
-                            Icon(Icons.Default.Delete, contentDescription = null)
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.cd_remove_album_art)
+                            )
                         },
                         modifier = Modifier.clickable {
                             showAlbumArtOptions = false
@@ -1061,7 +1087,7 @@ private fun ReplayGainSection(
                 ) {
                     Icon(
                         painter = appIconPainter(AppIcon.Equalizer),
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.replay_gain_section_title),
                         tint = MaterialTheme.colorScheme.primary,
                         modifier = Modifier.size(24.dp)
                     )
@@ -1133,7 +1159,10 @@ private fun ReplayGainSection(
                             modifier = Modifier.weight(1f),
                             shape = MaterialTheme.shapes.extraLarge
                         ) {
-                            Icon(Icons.Default.Refresh, contentDescription = null)
+                            Icon(
+                                Icons.Default.Refresh,
+                                contentDescription = stringResource(R.string.cd_rescan_replay_gain)
+                            )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(stringResource(R.string.replay_gain_rescan))
                         }
@@ -1142,7 +1171,10 @@ private fun ReplayGainSection(
                             modifier = Modifier.weight(1f),
                             shape = MaterialTheme.shapes.extraLarge
                         ) {
-                            Icon(Icons.Default.Delete, contentDescription = null)
+                            Icon(
+                                Icons.Default.Delete,
+                                contentDescription = stringResource(R.string.cd_clear_replay_gain)
+                            )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(stringResource(R.string.replay_gain_clear))
                         }
@@ -1154,7 +1186,7 @@ private fun ReplayGainSection(
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    
+
                     Spacer(modifier = Modifier.height(12.dp))
 
                     Button(
@@ -1162,7 +1194,10 @@ private fun ReplayGainSection(
                         modifier = Modifier.fillMaxWidth(),
                         shape = MaterialTheme.shapes.extraLarge
                     ) {
-                        Icon(Icons.Default.Equalizer, contentDescription = null)
+                        Icon(
+                            Icons.Default.Equalizer,
+                            contentDescription = stringResource(R.string.cd_scan_replay_gain)
+                        )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(stringResource(R.string.replay_gain_scan))
                     }
@@ -1249,7 +1284,7 @@ private fun EmptyAlbumArtContent() {
     ) {
         Icon(
             painter = appIconPainter(AppIcon.MusicNote),
-            contentDescription = null,
+            contentDescription = stringResource(R.string.cd_album_art),
             modifier = Modifier.size(64.dp),
             tint = MaterialTheme.colorScheme.outline
         )
@@ -1281,7 +1316,7 @@ private fun CoverCandidateThumbnail(
     if (bitmap != null) {
         Image(
             bitmap = bitmap!!,
-            contentDescription = null,
+            contentDescription = stringResource(R.string.cd_cover_thumbnail),
             modifier = modifier
         )
     } else {
@@ -1291,7 +1326,7 @@ private fun CoverCandidateThumbnail(
         ) {
             Icon(
                 imageVector = Icons.Default.Image,
-                contentDescription = null,
+                contentDescription = stringResource(R.string.cd_no_cover),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

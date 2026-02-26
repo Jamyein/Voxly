@@ -347,9 +347,11 @@ fun DraggableSourcePriorityDialog(
                                             },
                                             leadingIcon = {
                                                 Icon(
-                                                    imageVector = if (sourceState.enabled) 
+                                                    imageVector = if (sourceState.enabled)
                                                         Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-                                                    contentDescription = null
+                                                    contentDescription = if (sourceState.enabled)
+                                                        stringResource(R.string.cd_disable_source)
+                                                    else stringResource(R.string.cd_enable_source)
                                                 )
                                             }
                                         )
@@ -526,7 +528,10 @@ fun SettingsSubmenuRow(
         headlineContent = { Text(text = title) },
         supportingContent = { Text(text = subtitle) },
         trailingContent = {
-            Icon(imageVector = Icons.Default.ArrowDropDown, contentDescription = null)
+            Icon(
+                imageVector = Icons.Default.ArrowDropDown,
+                contentDescription = stringResource(R.string.cd_expand_menu)
+            )
         },
         modifier = Modifier
             .fillMaxWidth()
@@ -1047,7 +1052,7 @@ fun SettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                windowInsets = WindowInsets.statusBars
+                contentPadding = WindowInsets.statusBars.asPaddingValues()
             )
         }
     ) { innerPadding ->

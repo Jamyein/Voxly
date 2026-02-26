@@ -47,8 +47,6 @@ enum class ConvertibleField(val displayName: String) {
     COMPOSER("作曲"),
     LYRICIST("作词"),
     COMMENT("备注"),
-    RECORD_LABEL("唱片标签"),
-    COPYRIGHT("版权"),
     LYRICS("歌词")
 }
 
@@ -193,10 +191,6 @@ class MetadataEditorViewModel @Inject constructor(
             MetadataField.CONDUCTOR -> currentMetadata.copy(conductor = value.takeIf { it.isNotBlank() })
             MetadataField.COMMENT -> currentMetadata.copy(comment = value.takeIf { it.isNotBlank() })
             MetadataField.LYRICS -> currentMetadata.copy(lyrics = value)
-            MetadataField.RECORD_LABEL -> currentMetadata.withCustomField("record_label", value)
-            MetadataField.ENCODER -> currentMetadata.withCustomField("encoder", value)
-            MetadataField.ISRC -> currentMetadata.withCustomField("isrc", value)
-            MetadataField.COPYRIGHT -> currentMetadata.withCustomField("copyright", value)
         }
 
         _editedMetadata.value = updatedMetadata
@@ -580,8 +574,6 @@ class MetadataEditorViewModel @Inject constructor(
                 ConvertibleField.COMPOSER -> currentMetadata.composer
                 ConvertibleField.LYRICIST -> currentMetadata.lyricist
                 ConvertibleField.COMMENT -> currentMetadata.comment
-                ConvertibleField.RECORD_LABEL -> currentMetadata.customFields["record_label"]
-                ConvertibleField.COPYRIGHT -> currentMetadata.customFields["copyright"]
                 ConvertibleField.LYRICS -> currentMetadata.lyrics
             }
             
@@ -605,8 +597,6 @@ class MetadataEditorViewModel @Inject constructor(
                     ConvertibleField.COMPOSER -> updatedMetadata.copy(composer = converted)
                     ConvertibleField.LYRICIST -> updatedMetadata.copy(lyricist = converted)
                     ConvertibleField.COMMENT -> updatedMetadata.copy(comment = converted)
-                    ConvertibleField.RECORD_LABEL -> updatedMetadata.withCustomField("record_label", converted)
-                    ConvertibleField.COPYRIGHT -> updatedMetadata.withCustomField("copyright", converted)
                     ConvertibleField.LYRICS -> updatedMetadata.copy(lyrics = converted)
                 }
             }
@@ -901,11 +891,7 @@ enum class MetadataField {
     LYRICIST,
     CONDUCTOR,
     COMMENT,
-    LYRICS,
-    RECORD_LABEL,
-    ENCODER,
-    ISRC,
-    COPYRIGHT
+    LYRICS
 }
 
 /**

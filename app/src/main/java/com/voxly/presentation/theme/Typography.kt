@@ -4,6 +4,7 @@ import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.LineHeightStyle
 import androidx.compose.ui.unit.sp
 
 /**
@@ -21,6 +22,39 @@ import androidx.compose.ui.unit.sp
 
 // 默认字体（系统字体，性能最佳）
 private val DefaultFontFamily = FontFamily.Default
+
+/**
+ * Line height style configuration for consistent vertical rhythm
+ * Used to ensure text is properly aligned and has consistent spacing
+ */
+private val NiaLineHeightStyle = LineHeightStyle(
+    alignment = LineHeightStyle.Alignment.Proportional,
+    trim = LineHeightStyle.Trim.None
+)
+
+/**
+ * Line height style for display text (large headlines)
+ */
+private val DisplayLineHeightStyle = LineHeightStyle(
+    alignment = LineHeightStyle.Alignment.Proportional,
+    trim = LineHeightStyle.Trim.None
+)
+
+/**
+ * Line height style for body text
+ */
+private val BodyLineHeightStyle = LineHeightStyle(
+    alignment = LineHeightStyle.Alignment.Proportional,
+    trim = LineHeightStyle.Trim.None
+)
+
+/**
+ * Line height style for label text (small text)
+ */
+private val LabelLineHeightStyle = LineHeightStyle(
+    alignment = LineHeightStyle.Alignment.Proportional,
+    trim = LineHeightStyle.Trim.None
+)
 
 /**
  * Expressive Typography - 增强的排版样式
@@ -79,6 +113,7 @@ val Typography = Typography(
         fontWeight = FontWeight.Normal,
         fontSize = 57.sp,
         lineHeight = 64.sp,
+        lineHeightStyle = DisplayLineHeightStyle,
         letterSpacing = (-0.25).sp
     ),
     displayMedium = TextStyle(
@@ -86,6 +121,7 @@ val Typography = Typography(
         fontWeight = FontWeight.Normal,
         fontSize = 45.sp,
         lineHeight = 52.sp,
+        lineHeightStyle = DisplayLineHeightStyle,
         letterSpacing = 0.sp
     ),
     displaySmall = TextStyle(
@@ -93,15 +129,17 @@ val Typography = Typography(
         fontWeight = FontWeight.Normal,
         fontSize = 36.sp,
         lineHeight = 44.sp,
+        lineHeightStyle = DisplayLineHeightStyle,
         letterSpacing = 0.sp
     ),
-    
+
     // Headline - 强调使用Bold/ExtraBold（M3 Expressive特点）
     headlineLarge = TextStyle(
         fontFamily = DefaultFontFamily,
         fontWeight = FontWeight.Bold,
         fontSize = 32.sp,
         lineHeight = 40.sp,
+        lineHeightStyle = NiaLineHeightStyle,
         letterSpacing = 0.sp
     ),
     headlineMedium = TextStyle(
@@ -109,6 +147,7 @@ val Typography = Typography(
         fontWeight = FontWeight.SemiBold,
         fontSize = 28.sp,
         lineHeight = 36.sp,
+        lineHeightStyle = NiaLineHeightStyle,
         letterSpacing = 0.sp
     ),
     headlineSmall = TextStyle(
@@ -116,15 +155,17 @@ val Typography = Typography(
         fontWeight = FontWeight.SemiBold,
         fontSize = 24.sp,
         lineHeight = 32.sp,
+        lineHeightStyle = NiaLineHeightStyle,
         letterSpacing = 0.sp
     ),
-    
+
     // Title - 使用SemiBold增强
     titleLarge = TextStyle(
         fontFamily = DefaultFontFamily,
         fontWeight = FontWeight.SemiBold,
         fontSize = 22.sp,
         lineHeight = 28.sp,
+        lineHeightStyle = NiaLineHeightStyle,
         letterSpacing = 0.sp
     ),
     titleMedium = TextStyle(
@@ -132,6 +173,7 @@ val Typography = Typography(
         fontWeight = FontWeight.Medium,
         fontSize = 16.sp,
         lineHeight = 24.sp,
+        lineHeightStyle = NiaLineHeightStyle,
         letterSpacing = 0.15.sp
     ),
     titleSmall = TextStyle(
@@ -139,15 +181,17 @@ val Typography = Typography(
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp,
+        lineHeightStyle = NiaLineHeightStyle,
         letterSpacing = 0.1.sp
     ),
-    
+
     // Body - 保持标准
     bodyLarge = TextStyle(
         fontFamily = DefaultFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
         lineHeight = 24.sp,
+        lineHeightStyle = BodyLineHeightStyle,
         letterSpacing = 0.5.sp
     ),
     bodyMedium = TextStyle(
@@ -155,6 +199,7 @@ val Typography = Typography(
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
         lineHeight = 20.sp,
+        lineHeightStyle = BodyLineHeightStyle,
         letterSpacing = 0.25.sp
     ),
     bodySmall = TextStyle(
@@ -162,15 +207,17 @@ val Typography = Typography(
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
         lineHeight = 16.sp,
+        lineHeightStyle = BodyLineHeightStyle,
         letterSpacing = 0.4.sp
     ),
-    
+
     // Label - 保持标准
     labelLarge = TextStyle(
         fontFamily = DefaultFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 14.sp,
         lineHeight = 20.sp,
+        lineHeightStyle = LabelLineHeightStyle,
         letterSpacing = 0.1.sp
     ),
     labelMedium = TextStyle(
@@ -178,6 +225,7 @@ val Typography = Typography(
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
+        lineHeightStyle = LabelLineHeightStyle,
         letterSpacing = 0.5.sp
     ),
     labelSmall = TextStyle(
@@ -185,6 +233,7 @@ val Typography = Typography(
         fontWeight = FontWeight.Medium,
         fontSize = 11.sp,
         lineHeight = 16.sp,
+        lineHeightStyle = LabelLineHeightStyle,
         letterSpacing = 0.5.sp
     )
 )

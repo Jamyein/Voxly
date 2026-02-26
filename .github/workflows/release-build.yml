@@ -40,6 +40,9 @@ jobs:
           fi
           echo "${SIGNING_KEYSTORE_BASE64}" | base64 -d > app/voxly-release.keystore
 
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
       - name: Build with Gradle
         uses: gradle/gradle-build-action@v2
         env:

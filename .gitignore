@@ -79,3 +79,4 @@ local.properties
 *.properties
 /.claude
 /.kotlin
+/.ui-design

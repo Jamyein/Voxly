@@ -71,18 +71,14 @@ fun MP3TagNavHost(
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
 
-    // Determine if bottom bar should be shown
-    val showBottomBar = currentDestination?.route in listOf(
-        Screen.FileBrowser.route,
-        Screen.RecentEdits.route,
-        Screen.Statistics.route,
-        Screen.Settings.route
-    )
+    // Determine if bottom bar should be shown based on BottomNavItem routes
+    val bottomNavRoutes = BottomNavItem.entries.map { it.screen.route }
+    val showBottomBar = currentDestination?.route in bottomNavRoutes
 
     // Scroll state for controlling bottom bar visibility
     var isBottomBarVisible by remember { mutableStateOf(true) }
     LaunchedEffect(currentDestination?.route) {
-        if (currentDestination?.route != Screen.FileBrowser.route) {
+        if (currentDestination?.route !in bottomNavRoutes) {
             isBottomBarVisible = true
         }
     }

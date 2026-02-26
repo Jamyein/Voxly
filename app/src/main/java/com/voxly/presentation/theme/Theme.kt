@@ -3,22 +3,39 @@ package com.voxly.presentation.theme
 import android.app.Activity
 import android.os.Build
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.ui.Modifier
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
 import androidx.core.view.WindowCompat
 
 // Import MD3 Expressive color schemes
 import com.voxly.presentation.theme.ExpressiveLightColorScheme
 import com.voxly.presentation.theme.ExpressiveDarkColorScheme
+
+// Import new theme components
+import com.voxly.presentation.theme.BackgroundThemeProvider
+import com.voxly.presentation.theme.ExpressiveBackgroundThemeDark
+import com.voxly.presentation.theme.ExpressiveBackgroundThemeLight
+import com.voxly.presentation.theme.ExpressiveGradientColorsDark
+import com.voxly.presentation.theme.ExpressiveGradientColorsLight
+import com.voxly.presentation.theme.ExpressiveTintThemeDark
+import com.voxly.presentation.theme.ExpressiveTintThemeLight
+import com.voxly.presentation.theme.GradientColorsProvider
+import com.voxly.presentation.theme.TintThemeProvider
 
 // Material Design 3 Color Schemes (Fallback for older Android)
 private val LightColorScheme = lightColorScheme(
@@ -85,6 +102,11 @@ private val DarkColorScheme = darkColorScheme(
  * MP3 Tag Editor theme with Material Design 3 Expressive support.
  * Supports dynamic colors on Android 12+, Expressive color schemes, and automatic dark theme.
  * Uses MD3 Expressive surface container colors and shapes for a more playful appearance.
+ *
+ * Integrates:
+ * - GradientColors: For gradient backgrounds
+ * - BackgroundTheme: For unified background handling
+ * - TintTheme: For icon and component tints
  */
 @Composable
 fun MP3TagTheme(
@@ -108,6 +130,15 @@ fun MP3TagTheme(
         else -> LightColorScheme
     }
 
+    // Get the appropriate background theme
+    val backgroundTheme = if (darkTheme) ExpressiveBackgroundThemeDark else ExpressiveBackgroundThemeLight
+
+    // Get the appropriate gradient colors
+    val gradientColors = if (darkTheme) ExpressiveGradientColorsDark else ExpressiveGradientColorsLight
+
+    // Get the appropriate tint theme
+    val tintTheme = if (darkTheme) ExpressiveTintThemeDark else ExpressiveTintThemeLight
+
     val view = LocalView.current
     if (!view.isInEditMode) {
         SideEffect {
@@ -118,10 +149,86 @@ fun MP3TagTheme(
         }
     }
 
-    MaterialTheme(
-        colorScheme = colorScheme,
-        typography = Typography,
-        shapes = Shapes,  // Use MD3 Expressive shapes
+    // Provide all theme contexts
+    CompositionLocalProvider(
+        // Background theme
+        com.voxly.presentation.theme.LocalBackgroundTheme provides backgroundTheme,
+        // Gradient colors
+        com.voxly.presentation.theme.LocalGradientColors provides gradientColors,
+        // Tint theme
+        com.voxly.presentation.theme.LocalTintTheme provides tintTheme
+    ) {
+        MaterialTheme(
+            colorScheme = colorScheme,
+            typography = Typography,
+            shapes = Shapes,  // Use MD3 Expressive shapes
+            content = content
+        )
+    }
+}
+
+/**
+ * Alias for MP3TagTheme for backward compatibility
+ */
+@Composable
+fun VoxlyTheme(
+    darkTheme: Boolean = isSystemInDarkTheme(),
+    dynamicColor: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    MP3TagTheme(
+        darkTheme = darkTheme,
+        dynamicColor = dynamicColor,
         content = content
     )
+}
+
+// ==================== Theme Previews ====================
+
+@Preview
+@Composable
+fun LightThemePreview() {
+    MP3TagTheme(darkTheme = false, dynamicColor = false) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            MaterialTheme.colorScheme.primary
+        }
+    }
+}
+
+@Preview
+@Composable
+fun DarkThemePreview() {
+    MP3TagTheme(darkTheme = true, dynamicColor = false) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            MaterialTheme.colorScheme.primary
+        }
+    }
+}
+
+@Preview
+@Composable
+fun LightDynamicThemePreview() {
+    MP3TagTheme(darkTheme = false, dynamicColor = true) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            MaterialTheme.colorScheme.primary
+        }
+    }
+}
+
+@Preview
+@Composable
+fun DarkDynamicThemePreview() {
+    MP3TagTheme(darkTheme = true, dynamicColor = true) {
+        Box(
+            modifier = Modifier.fillMaxSize()
+        ) {
+            MaterialTheme.colorScheme.primary
+        }
+    }
 }

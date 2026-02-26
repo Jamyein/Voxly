@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
@@ -60,7 +61,8 @@ fun ReplayGainScannerScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                )
+                ),
+                contentPadding = WindowInsets.statusBars.asPaddingValues()
             )
         }
     ) { paddingValues ->

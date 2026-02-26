@@ -107,8 +107,6 @@ data class WangyAlbum(
     /** Album publish date (format: "yyyy-MM-dd") (JSON field: publishTime) */
     @SerialName("publishTime")
     val publishDate: String = "",
-    /** Album size (JSON field: size) */
-    val size: Int = 0,
     /** Number of songs (JSON field: size) */
     @SerialName("size")
     val songsCount: Int = 0,

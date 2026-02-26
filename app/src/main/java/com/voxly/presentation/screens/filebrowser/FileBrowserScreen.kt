@@ -20,6 +20,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -325,11 +326,12 @@ fun FileBrowserScreen(
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                             ),
+                            contentPadding = WindowInsets.statusBars.asPaddingValues(),
                             navigationIcon = {
                                 IconButton(onClick = viewModel::closeOpenedDirectory) {
                                     Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = null
+                                        contentDescription = stringResource(R.string.cd_back)
                                     )
                                 }
                             },
@@ -370,6 +372,7 @@ fun FileBrowserScreen(
                             colors = TopAppBarDefaults.topAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                             ),
+                            contentPadding = WindowInsets.statusBars.asPaddingValues(),
                             actions = {
                                 IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
                                     Icon(
@@ -483,7 +486,7 @@ fun FileBrowserScreen(
                                             expanded = isSearchExpanded,
                                             onExpandedChange = { isSearchExpanded = it },
                                             placeholder = { Text(stringResource(R.string.file_search_hint)) },
-                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = stringResource(R.string.cd_search)) },
                                             trailingIcon = {
                                                 if (searchQuery.isNotEmpty()) {
                                                     IconButton(onClick = { searchQuery = "" }) {
@@ -915,7 +918,7 @@ private fun BatchProgressDialog(
                     BatchStatus.COMPLETED -> {
                         Icon(
                             imageVector = Icons.Default.CheckCircle,
-                            contentDescription = null,
+                            contentDescription = stringResource(R.string.batch_complete),
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.primary
                         )
@@ -923,7 +926,7 @@ private fun BatchProgressDialog(
                     BatchStatus.CANCELLED -> {
                         Icon(
                             painter = appIconPainter(AppIcon.Close),
-                            contentDescription = null,
+                            contentDescription = stringResource(R.string.batch_cancelled),
                             modifier = Modifier.size(48.dp),
                             tint = MaterialTheme.colorScheme.error
                         )
@@ -1053,7 +1056,7 @@ private fun BatchOnlineMetadataDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.large,
-        icon = { Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = null) },
+        icon = { Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = stringResource(R.string.cd_online_metadata)) },
         title = { Text(stringResource(R.string.batch_online_metadata_title)) },
         text = {
             Column {
@@ -1166,7 +1169,7 @@ private fun BatchRenameDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.large,
-        icon = { Icon(painter = appIconPainter(AppIcon.Rename), contentDescription = null) },
+        icon = { Icon(painter = appIconPainter(AppIcon.Rename), contentDescription = stringResource(R.string.cd_batch_rename)) },
         title = { Text(stringResource(R.string.batch_rename_title)) },
         text = {
             Column {
@@ -1260,7 +1263,7 @@ private fun BatchFixMetadataDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.large,
-        icon = { Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = null) },
+        icon = { Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = stringResource(R.string.cd_batch_fix)) },
         title = { Text(stringResource(R.string.batch_fix_metadata_title)) },
         text = {
             Column {
@@ -1423,7 +1426,7 @@ private fun SortMenu(
                         {
                             Icon(
                                 imageVector = Icons.Default.CheckCircle,
-                                contentDescription = null,
+                                contentDescription = stringResource(R.string.cd_selected),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -1460,13 +1463,14 @@ private fun SelectionTopBar(
             IconButton(onClick = onClearSelection) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = null
+                    contentDescription = stringResource(R.string.cd_clear_selection)
                 )
             }
         },
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         ),
+        contentPadding = WindowInsets.statusBars.asPaddingValues(),
         actions = {
             TextButton(onClick = onSelectAll) {
                 Text(stringResource(R.string.select_all))
@@ -1489,7 +1493,7 @@ private fun SelectionTopBar(
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.batch_online_metadata)) },
                         leadingIcon = {
-                            Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = null)
+                            Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = stringResource(R.string.cd_online_metadata))
                         },
                         onClick = {
                             expanded = false
@@ -1503,7 +1507,7 @@ private fun SelectionTopBar(
                 onClick = onNavigateToReplayGain,
                 modifier = Modifier.padding(horizontal = 8.dp)
             ) {
-                Icon(painter = appIconPainter(AppIcon.Equalizer), contentDescription = null)
+                Icon(painter = appIconPainter(AppIcon.Equalizer), contentDescription = stringResource(R.string.cd_scan_replay_gain))
                 Spacer(modifier = Modifier.width(4.dp))
                 Text(stringResource(R.string.replay_gain))
             }
@@ -1561,7 +1565,7 @@ private fun EmptyContent() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
                 painter = appIconPainter(AppIcon.MusicNote),
-                contentDescription = null,
+                contentDescription = stringResource(R.string.cd_no_files),
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.outline
             )
@@ -1590,7 +1594,7 @@ private fun ErrorContent(message: String) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             Icon(
                 painter = appIconPainter(AppIcon.Error),
-                contentDescription = null,
+                contentDescription = stringResource(R.string.cd_error),
                 modifier = Modifier.size(64.dp),
                 tint = MaterialTheme.colorScheme.error
             )
@@ -1720,7 +1724,7 @@ private fun AudioFileItem(
                 } else {
                     Icon(
                         painter = appIconPainter(AppIcon.MusicNote),
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.cd_no_cover),
                         tint = MaterialTheme.colorScheme.outline,
                         modifier = Modifier.size(24.dp)
                     )
@@ -1804,7 +1808,7 @@ private fun FileActionsMenu(
                 leadingIcon = {
                     Icon(
                         painter = appIconPainter(AppIcon.Edit),
-                        contentDescription = null
+                        contentDescription = stringResource(R.string.cd_edit_file)
                     )
                 },
                 onClick = {
@@ -1817,7 +1821,7 @@ private fun FileActionsMenu(
                 leadingIcon = {
                     Icon(
                         painter = appIconPainter(AppIcon.CloudDownload),
-                        contentDescription = null
+                        contentDescription = stringResource(R.string.cd_online_metadata)
                     )
                 },
                 onClick = {
@@ -1830,7 +1834,7 @@ private fun FileActionsMenu(
                 leadingIcon = {
                     Icon(
                         painter = appIconPainter(AppIcon.AutoFix),
-                        contentDescription = null
+                        contentDescription = stringResource(R.string.cd_batch_fix)
                     )
                 },
                 onClick = {
@@ -1844,7 +1848,7 @@ private fun FileActionsMenu(
                 leadingIcon = {
                     Icon(
                         painter = appIconPainter(AppIcon.Rename),
-                        contentDescription = null
+                        contentDescription = stringResource(R.string.cd_batch_rename)
                     )
                 },
                 onClick = {
@@ -1857,7 +1861,7 @@ private fun FileActionsMenu(
                 leadingIcon = {
                     Icon(
                         painter = appIconPainter(AppIcon.Close),
-                        contentDescription = null,
+                        contentDescription = stringResource(R.string.cd_delete_file),
                         tint = MaterialTheme.colorScheme.error
                     )
                 },
@@ -2010,7 +2014,7 @@ private fun DirectoryItem(
         ) {
             Icon(
                 painter = appIconPainter(AppIcon.Folder),
-                contentDescription = null,
+                contentDescription = stringResource(R.string.cd_directory),
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(modifier = Modifier.width(12.dp))
@@ -2057,7 +2061,7 @@ private fun BatchOperationsMenuDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.large,
-        icon = { Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = null) },
+        icon = { Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = stringResource(R.string.cd_edit_file)) },
         title = { Text(stringResource(R.string.batch_operations)) },
         text = {
             Column {
@@ -2132,7 +2136,7 @@ private fun BatchMenuItem(
         leadingContent = {
             Icon(
                 painter = appIconPainter(icon),
-                contentDescription = null,
+                contentDescription = label,
                 tint = MaterialTheme.colorScheme.primary
             )
         },
@@ -2166,7 +2170,7 @@ private fun UnifiedFieldDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.large,
-        icon = { Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = null) },
+        icon = { Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = stringResource(R.string.cd_edit_file)) },
         title = { Text(stringResource(R.string.batch_unified_field_title)) },
         text = {
             Column {
@@ -2259,7 +2263,7 @@ private fun ReplaceTextDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.large,
-        icon = { Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = null) },
+        icon = { Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = stringResource(R.string.cd_batch_fix)) },
         title = { Text(stringResource(R.string.batch_replace_text_title)) },
         text = {
             Column {
@@ -2377,7 +2381,7 @@ private fun AutoNumberDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.large,
-        icon = { Icon(painter = appIconPainter(AppIcon.Schedule), contentDescription = null) },
+        icon = { Icon(painter = appIconPainter(AppIcon.Schedule), contentDescription = stringResource(R.string.replay_gain_scan)) },
         title = { Text(stringResource(R.string.batch_auto_number_title)) },
         text = {
             Column {
