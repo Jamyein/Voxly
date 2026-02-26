@@ -85,7 +85,7 @@ fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel(),
     onNavigateToMetadata: (String) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
-    onBottomBarVisibilityChange: (Boolean) -> Unit = {}
+    onBottomBarScrollProgressChange: (Float) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -157,14 +157,22 @@ fun FileBrowserScreen(
     var lastScrollIndex by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.index) }
     var lastScrollOffset by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.offset) }
     var accumulatedScrollDelta by remember(currentListKey) { mutableIntStateOf(0) }
+    // Update bottom bar with scroll progress (0 = expanded, 1 = collapsed)
     val updateBarsVisibility: (Boolean) -> Unit = { visible ->
         if (isTopBarVisible != visible) {
             isTopBarVisible = visible
-            onBottomBarVisibilityChange(visible)
+            // Convert visibility to progress (true -> 0f, false -> 1f)
+            onBottomBarScrollProgressChange(if (visible) 0f else 1f)
         }
+    }
+
+    // Calculate and report scroll progress to bottom bar
+    val updateScrollProgress: (Float) -> Unit = { progress ->
+        onBottomBarScrollProgressChange(progress)
     }
     
     // Track scroll direction with hysteresis so top/bottom bars do not toggle rapidly.
+    // Now reports scroll progress (0-1) instead of simple visibility
     LaunchedEffect(listState) {
         snapshotFlow {
             Triple(
@@ -178,7 +186,7 @@ fun FileBrowserScreen(
                 lastScrollOffset = offset
                 accumulatedScrollDelta = 0
                 if (index == 0 && offset == 0) {
-                    updateBarsVisibility(true)
+                    onBottomBarScrollProgressChange(0f)
                 }
                 return@collect
             }
@@ -200,18 +208,26 @@ fun FileBrowserScreen(
                 }
             }
 
+            // Calculate scroll progress (0 = fully visible, 1 = fully hidden)
+            val progress = (kotlin.math.abs(accumulatedScrollDelta) / (scrollHideThreshold * 10))
+                .coerceIn(0f, 1f)
+
             when {
                 index == 0 && offset == 0 -> {
-                    updateBarsVisibility(true)
+                    onBottomBarScrollProgressChange(0f)
                     accumulatedScrollDelta = 0
                 }
                 accumulatedScrollDelta > scrollHideThreshold -> {
-                    updateBarsVisibility(false)
+                    onBottomBarScrollProgressChange(1f)
                     accumulatedScrollDelta = 0
                 }
                 accumulatedScrollDelta < -scrollHideThreshold -> {
-                    updateBarsVisibility(true)
+                    onBottomBarScrollProgressChange(0f)
                     accumulatedScrollDelta = 0
+                }
+                else -> {
+                    // Report continuous progress for smooth animation
+                    onBottomBarScrollProgressChange(progress)
                 }
             }
 
@@ -321,12 +337,11 @@ fun FileBrowserScreen(
                     exit = com.voxly.presentation.theme.ExpressiveAnimations.ListItemExit
                 ) {
                     if (openedDirectory != null) {
-                        TopAppBar(
+                        LargeTopAppBar(
                             title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
-                            colors = TopAppBarDefaults.topAppBarColors(
+                            colors = LargeTopAppBarDefaults.largeTopAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                             ),
-                            contentPadding = WindowInsets.statusBars.asPaddingValues(),
                             navigationIcon = {
                                 IconButton(onClick = viewModel::closeOpenedDirectory) {
                                     Icon(
@@ -367,12 +382,11 @@ fun FileBrowserScreen(
                             }
                         )
                     } else {
-                        TopAppBar(
+                        LargeTopAppBar(
                             title = { Text(stringResource(R.string.nav_file_browser)) },
-                            colors = TopAppBarDefaults.topAppBarColors(
+                            colors = LargeTopAppBarDefaults.largeTopAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                             ),
-                            contentPadding = WindowInsets.statusBars.asPaddingValues(),
                             actions = {
                                 IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
                                     Icon(
@@ -783,10 +797,13 @@ private fun BatchOperationsFAB(
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 45f else 0f,
-        animationSpec = tween(durationMillis = 200),
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+        ),
         label = "fab_rotation"
     )
-    
+
     Column(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -794,8 +811,20 @@ private fun BatchOperationsFAB(
         // Menu items
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn(animationSpec = tween(150)) + expandVertically(),
-            exit = fadeOut(animationSpec = tween(150)) + shrinkVertically()
+            enter = fadeIn(animationSpec = spring(
+                dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
+                stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
+            )) + expandVertically(animationSpec = spring(
+                dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
+                stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
+            )),
+            exit = fadeOut(animationSpec = spring(
+                dampingRatio = ExpressiveMotionTokens.StandardAccelerate.dampingRatio,
+                stiffness = ExpressiveMotionTokens.StandardAccelerate.stiffness
+            )) + shrinkVertically(animationSpec = spring(
+                dampingRatio = ExpressiveMotionTokens.StandardAccelerate.dampingRatio,
+                stiffness = ExpressiveMotionTokens.StandardAccelerate.stiffness
+            ))
         ) {
             Column(
                 horizontalAlignment = Alignment.End,
@@ -1457,7 +1486,7 @@ private fun SelectionTopBar(
     onNavigateToReplayGain: () -> Unit,
     onBatchOperations: () -> Unit
 ) {
-    TopAppBar(
+    LargeTopAppBar(
         title = { Text(stringResource(R.string.selected_count, selectedCount)) },
         navigationIcon = {
             IconButton(onClick = onClearSelection) {
@@ -1467,10 +1496,9 @@ private fun SelectionTopBar(
                 )
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(
+        colors = LargeTopAppBarDefaults.largeTopAppBarColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         ),
-        contentPadding = WindowInsets.statusBars.asPaddingValues(),
         actions = {
             TextButton(onClick = onSelectAll) {
                 Text(stringResource(R.string.select_all))
