@@ -596,10 +596,33 @@ class OnlineMetadataViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Get synced lyrics for the selected release, fetching synchronously if not already available.
+     */
+    private fun getSyncedLyricsForSelected(): Lyrics? {
+        val candidate = _selectedReleaseCandidate.value ?: return null
+
+        // First check if we already have the lyrics from async search
+        val existingLyrics = _syncedLyricsByReleaseId.value[candidate.id]
+        if (existingLyrics != null) {
+            return existingLyrics
+        }
+
+        // If not found, fetch synchronously
+        return try {
+            kotlinx.coroutines.runBlocking {
+                fetchSyncedLyrics(candidate)
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to fetch synced lyrics synchronously")
+            null
+        }
+    }
+
     fun applyMetadata(): AudioMetadata? {
         val details = _selectedRelease.value
         val candidate = _selectedReleaseCandidate.value
-        val lyrics = selectedSyncedLyrics
+        val lyrics = getSyncedLyricsForSelected()
         val albumArt = _downloadedAlbumArt.value
 
         // 详情存在时使用详情，详情不存在时使用候选，二选一不混合

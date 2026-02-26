@@ -78,16 +78,15 @@ fun OnlineMetadataScreen(
     // Track if we've already triggered apply for the current selection
     var hasAppliedForCurrentSelection by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
 
-    // Auto-apply metadata when album art is downloaded
-    LaunchedEffect(downloadedAlbumArt, selectedRelease, selectedReleaseCandidate) {
-        val albumArt = downloadedAlbumArt
+    // Auto-apply metadata when release or candidate is selected (not dependent on album art)
+    LaunchedEffect(selectedRelease, selectedReleaseCandidate) {
         val release = selectedRelease
         val candidate = selectedReleaseCandidate
-        // Only apply when we have release details OR candidate with album art ready
-        if ((release != null || candidate != null) && albumArt != null && !hasAppliedForCurrentSelection) {
+        // Apply when we have release details OR candidate selected (no longer require album art)
+        if ((release != null || candidate != null) && !hasAppliedForCurrentSelection) {
             hasAppliedForCurrentSelection = true
             viewModel.applyMetadata()?.let { metadata ->
-                Timber.d("OnlineMetadataScreen: auto applying metadata with cover for ${metadata.title}")
+                Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}")
                 onApplyMetadata(metadata)
             }
         }

@@ -30,6 +30,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLDecoder
@@ -804,8 +805,11 @@ class MetadataEditorViewModel @Inject constructor(
     }
 
     fun applyOnlineLyrics(result: OnlineLyricsResult) {
-        viewModelScope.launch {
-            val lyrics = lyricsRepository.getOnlineLyrics(result).getOrNull() ?: return@launch
+        // Synchronously fetch and apply lyrics
+        val lyrics = runBlocking {
+            lyricsRepository.getOnlineLyrics(result).getOrNull()
+        }
+        if (lyrics != null) {
             val text = if (lyrics.isSynced) lyrics.toLrcFormat() else lyrics.text
             updateMetadataField(MetadataField.LYRICS, text)
         }
