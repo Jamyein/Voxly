@@ -1122,7 +1122,11 @@ fun SettingsScreen(
                     checked = minDurationFilterEnabled,
                     onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) }
                 )
+            }
 
+            Spacer(modifier = Modifier.height(16.dp))
+
+            SettingsSection(title = stringResource(R.string.settings_scan_directory_settings)) {
                 ListItem(
                     headlineContent = { Text(stringResource(R.string.settings_scan_directory_settings)) },
                     supportingContent = { Text(stringResource(R.string.settings_scan_directory_settings_subtitle)) },

@@ -1,19 +1,15 @@
 package com.voxly.presentation.screens.metadata
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -93,17 +89,15 @@ fun OnlineLyricsSearchScreen(
             )
         }
     ) { paddingValues ->
-        Column(
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(paddingValues)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                // Search info card
+            // Search info card (as header item)
+            item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.extraLarge,
@@ -135,9 +129,11 @@ fun OnlineLyricsSearchScreen(
                         }
                     }
                 }
+            }
 
-                // Search progress
-                if (searchState.isSearching || isLoading) {
+            // Search progress
+            if (searchState.isSearching || isLoading) {
+                item {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -147,8 +143,10 @@ fun OnlineLyricsSearchScreen(
                         CircularProgressIndicator()
                     }
                 }
+            }
 
-                // Error message
+            // Error message
+            item {
                 AnimatedVisibility(
                     visible = errorMessage != null,
                     enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness))
@@ -161,36 +159,38 @@ fun OnlineLyricsSearchScreen(
                         )
                     }
                 }
+            }
 
-                // Results
-                AnimatedVisibility(
-                    visible = lyricsResults.isEmpty() && !isLoading && errorMessage == null,
-                    enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness))
-                ) {
-                    Text(
-                        text = stringResource(R.string.error_no_results),
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                AnimatedVisibility(
-                    visible = lyricsResults.isNotEmpty(),
-                    enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)) + slideInVertically(
-                        initialOffsetY = { it },
-                        animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)
-                    )
-                ) {
-                    LazyColumn(
-                        modifier = Modifier.fillMaxWidth()
+            // Results
+            if (lyricsResults.isEmpty() && !isLoading && errorMessage == null) {
+                item {
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness))
                     ) {
-                        items(lyricsResults, key = { it.id }) { item ->
-                            LyricsResultItem(
-                                item = item,
-                                onClick = {
-                                    onLyricsSelected(item)
-                                }
-                            )
-                            Spacer(modifier = Modifier.height(4.dp))
-                        }
+                        Text(
+                            text = stringResource(R.string.error_no_results),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (lyricsResults.isNotEmpty()) {
+                items(lyricsResults, key = { it.id }) { item ->
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)) + slideInVertically(
+                            initialOffsetY = { it },
+                            animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)
+                        )
+                    ) {
+                        LyricsResultItem(
+                            item = item,
+                            onClick = {
+                                onLyricsSelected(item)
+                            }
+                        )
                     }
                 }
             }
