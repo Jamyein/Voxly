@@ -342,6 +342,7 @@ fun FileBrowserScreen(
                             colors = TopAppBarDefaults.largeTopAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                             ),
+windowInsets = WindowInsets(0.dp),
                             navigationIcon = {
                                 IconButton(onClick = viewModel::closeOpenedDirectory) {
                                     Icon(
@@ -386,7 +387,7 @@ fun FileBrowserScreen(
                             title = { Text(stringResource(R.string.nav_file_browser)) },
                             colors = TopAppBarDefaults.largeTopAppBarColors(
                                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                            ),
+                            ),windowInsets = WindowInsets(0.dp),
                             actions = {
                                 IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
                                     Icon(
@@ -1499,6 +1500,7 @@ private fun SelectionTopBar(
         colors = TopAppBarDefaults.largeTopAppBarColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         ),
+windowInsets = WindowInsets(0.dp),
         actions = {
             TextButton(onClick = onSelectAll) {
                 Text(stringResource(R.string.select_all))
@@ -2037,7 +2039,7 @@ private fun DirectoryItem(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(8.dp),
+                .padding(24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
