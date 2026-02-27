@@ -44,7 +44,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
-import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveAnimations
@@ -71,7 +70,7 @@ fun MetadataEditorScreen(
     onNavigateToOnlineCoverSearch: () -> Unit,
     pendingOnlineMetadata: com.voxly.domain.model.AudioMetadata? = null,
     onConsumePendingOnlineMetadata: () -> Unit = {},
-    pendingOnlineLyrics: com.voxly.domain.repository.OnlineLyricsResult? = null,
+    pendingOnlineLyrics: String? = null,
     onConsumePendingOnlineLyrics: () -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -117,8 +116,8 @@ fun MetadataEditorScreen(
 
     // Handle online lyrics result from search screen
     LaunchedEffect(pendingOnlineLyrics) {
-        val lyricsResult = pendingOnlineLyrics ?: return@LaunchedEffect
-        viewModel.applyOnlineLyrics(lyricsResult)
+        val lyricsText = pendingOnlineLyrics ?: return@LaunchedEffect
+        viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.LYRICS, lyricsText)
         onConsumePendingOnlineLyrics()
     }
 

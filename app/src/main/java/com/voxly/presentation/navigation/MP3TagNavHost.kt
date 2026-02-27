@@ -36,12 +36,12 @@ import androidx.navigation.navArgument
 import com.voxly.R
 import com.voxly.core.util.LogManager
 import com.voxly.domain.model.AudioMetadata
-import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.components.FlexibleBottomAppBar
 
 import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
+import com.voxly.presentation.screens.filebrowser.FileSearchScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
 import com.voxly.presentation.screens.RecentEditsScreen
 import com.voxly.presentation.screens.ReplayGainScannerScreen
@@ -120,8 +120,34 @@ fun MP3TagNavHost(
                     onNavigateToReplayGain = { filePaths ->
                         navController.navigate(Screen.ReplayGainScanner.createRoute(filePaths))
                     },
+                    onNavigateToSearch = { audioFiles ->
+                        navController.navigate(Screen.FileSearch.createRoute(audioFiles.map { it.path }))
+                    },
                     onBottomBarScrollProgressChange = { progress ->
                         scrollProgress = progress
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.FileSearch.route,
+                arguments = listOf(
+                    navArgument("filePaths") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val encodedPaths = backStackEntry.arguments?.getString("filePaths") ?: ""
+                val filePaths = if (encodedPaths.isNotBlank()) {
+                    encodedPaths.split(",").map { URLDecoder.decode(it, "UTF-8") }
+                } else {
+                    emptyList()
+                }
+                FileSearchScreen(
+                    filePaths = filePaths,
+                    onNavigateBack = { navController.popBackStack() },
+                    onFileSelected = { filePath ->
+                        navController.navigate(Screen.MetadataEditor.createRoute(filePath)) {
+                            popUpTo(Screen.FileBrowser.route)
+                        }
                     }
                 )
             }
@@ -201,7 +227,7 @@ fun MP3TagNavHost(
                     .getStateFlow<AudioMetadata?>("online_metadata_result", null)
                     .collectAsState()
                 val pendingOnlineLyrics by backStackEntry.savedStateHandle
-                    .getStateFlow<OnlineLyricsResult?>("online_lyrics_result", null)
+                    .getStateFlow<String?>("online_lyrics_result", null)
                     .collectAsState()
                 MetadataEditorScreen(
                     filePath = filePath,
@@ -221,7 +247,7 @@ fun MP3TagNavHost(
                     },
                     pendingOnlineLyrics = pendingOnlineLyrics,
                     onConsumePendingOnlineLyrics = {
-                        backStackEntry.savedStateHandle.remove<OnlineLyricsResult>("online_lyrics_result")
+                        backStackEntry.savedStateHandle.remove<String>("online_lyrics_result")
                     }
                 )
             }
@@ -277,10 +303,10 @@ fun MP3TagNavHost(
                 OnlineLyricsSearchScreen(
                     filePath = filePath,
                     onNavigateBack = { navController.popBackStack() },
-                    onLyricsSelected = { lyricsResult ->
+                    onLyricsSelected = { lyricsText ->
                         navController.previousBackStackEntry
                             ?.savedStateHandle
-                            ?.set("online_lyrics_result", lyricsResult)
+                            ?.set("online_lyrics_result", lyricsText)
                         navController.popBackStack()
                     }
                 )
