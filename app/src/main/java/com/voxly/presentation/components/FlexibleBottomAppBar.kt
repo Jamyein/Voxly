@@ -1,8 +1,10 @@
 package com.voxly.presentation.components
 
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
@@ -52,34 +54,43 @@ fun FlexibleBottomAppBar(
     scrollProgress: Float,
     modifier: Modifier = Modifier
 ) {
-    // Calculate height based on scroll progress (0 = full height, 1 = collapsed)
+    // Calculate height based on scroll progress (0 = full height, 1 = fully hidden)
     val targetHeight by remember(scrollProgress) {
         derivedStateOf {
-            val minHeight = 56.dp  // Collapsed height (only icons visible)
+            val minHeight = 0.dp   // Fully hidden
             val maxHeight = 80.dp  // Full height
-            maxHeight - (scrollProgress * (maxHeight.value - minHeight.value)).dp
+            // Use smooth curve for more natural hiding effect
+            val progress = scrollProgress.coerceIn(0f, 1f)
+            val easedProgress = progress * progress * (3f - 2f * progress) // Smoothstep
+            maxHeight - (easedProgress * maxHeight.value).dp
         }
     }
 
-    // Calculate alpha based on scroll progress
+    // Calculate alpha based on scroll progress - fully hidden = 0 alpha
     val targetAlpha by remember(scrollProgress) {
         derivedStateOf {
-            // Fade out when fully collapsed
-            (1f - scrollProgress * 0.3f).coerceIn(0.7f, 1f)
+            // Smooth fade out as it scrolls away, 0 when fully hidden
+            (1f - scrollProgress).coerceIn(0f, 1f)
         }
     }
 
-    // Animate height changes smoothly
+    // Animate height changes smoothly with spring physics (M3E style)
     val animatedHeight by animateDpAsState(
         targetValue = targetHeight,
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
         label = "bottomBarHeight"
     )
 
-    // Animate alpha changes smoothly
+    // Animate alpha changes smoothly with spring physics
     val animatedAlpha by animateFloatAsState(
         targetValue = targetAlpha,
-        animationSpec = tween(durationMillis = 150),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
         label = "bottomBarAlpha"
     )
 
@@ -94,14 +105,17 @@ fun FlexibleBottomAppBar(
     val currentDestination = navBackStackEntry?.destination
     val showBottomBar = currentRoute in bottomNavRoutes
 
-    if (showBottomBar) {
+    if (showBottomBar && animatedHeight > 0.dp) {
         Box(
             modifier = modifier
                 .fillMaxWidth()
                 .alpha(animatedAlpha)
                 .height(animatedHeight)
                 .animateContentSize(
-                    animationSpec = tween(durationMillis = 150)
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
                 )
         ) {
             NavigationBar(
@@ -135,8 +149,8 @@ fun FlexibleBottomAppBar(
                             )
                         },
                         label = {
-                            // Only show label when not fully collapsed
-                            if (animatedHeight > 65.dp) {
+                            // Only show label when height is sufficient (> 60dp)
+                            if (animatedHeight > 60.dp) {
                                 Text(
                                     text = label,
                                     maxLines = 1

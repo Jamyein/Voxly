@@ -24,6 +24,7 @@ import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -85,6 +86,7 @@ fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel(),
     onNavigateToMetadata: (String) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
+    onNavigateToSearch: (List<AudioFile>) -> Unit = {},
     onBottomBarScrollProgressChange: (Float) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -107,11 +109,9 @@ fun FileBrowserScreen(
     val batchProgress by viewModel.batchProgress.collectAsState()
     val batchError by viewModel.batchError.collectAsState()
     
-    var searchQuery by rememberSaveable { mutableStateOf("") }
     var sortOption by rememberSaveable { mutableStateOf(FileSortOption.NAME_ASC.name) }
-    var isSearchExpanded by rememberSaveable { mutableStateOf(false) }
     var isSortExpanded by rememberSaveable { mutableStateOf(false) }
-    
+
     // Dialog states
     var showBatchMenu by remember { mutableStateOf(false) }
     var showBatchOperationsMenu by remember { mutableStateOf(false) }
@@ -126,10 +126,9 @@ fun FileBrowserScreen(
     var deleteTargetFile by remember { mutableStateOf<AudioFile?>(null) }
     var selectedFilesForBatch by remember { mutableStateOf<Set<String>>(emptySet()) }
     
-    val visibleFiles = remember(visibleFilesRaw, searchQuery, sortOption) {
-        applySearchAndSort(
+    val visibleFiles = remember(visibleFilesRaw, sortOption) {
+        applySort(
             files = visibleFilesRaw,
-            query = searchQuery,
             sortOption = FileSortOption.valueOf(sortOption)
         )
     }
@@ -142,6 +141,7 @@ fun FileBrowserScreen(
         initialFirstVisibleItemIndex = initialScrollPosition.index,
         initialFirstVisibleItemScrollOffset = initialScrollPosition.offset
     )
+
     val canScrollToTop by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
@@ -149,30 +149,18 @@ fun FileBrowserScreen(
     }
     val coroutineScope = rememberCoroutineScope()
 
-    // Scroll detection threshold - use accumulated delta to avoid flickering on item boundary jumps.
+    // Top bar visibility state (controlled by scroll)
+    var isTopBarVisible by remember { mutableStateOf(true) }
+
+    // Scroll detection threshold for top bar visibility
     val scrollHideThreshold = 56
 
-    // Scroll detection for hiding/showing top bar and bottom bar.
-    var isTopBarVisible by remember { mutableStateOf(true) }
+    // Track scroll state for hiding top bar and bottom bar
     var lastScrollIndex by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.index) }
     var lastScrollOffset by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.offset) }
     var accumulatedScrollDelta by remember(currentListKey) { mutableIntStateOf(0) }
-    // Update bottom bar with scroll progress (0 = expanded, 1 = collapsed)
-    val updateBarsVisibility: (Boolean) -> Unit = { visible ->
-        if (isTopBarVisible != visible) {
-            isTopBarVisible = visible
-            // Convert visibility to progress (true -> 0f, false -> 1f)
-            onBottomBarScrollProgressChange(if (visible) 0f else 1f)
-        }
-    }
 
-    // Calculate and report scroll progress to bottom bar
-    val updateScrollProgress: (Float) -> Unit = { progress ->
-        onBottomBarScrollProgressChange(progress)
-    }
-    
-    // Track scroll direction with hysteresis so top/bottom bars do not toggle rapidly.
-    // Now reports scroll progress (0-1) instead of simple visibility
+    // Track scroll progress using LazyColumn state
     LaunchedEffect(listState) {
         snapshotFlow {
             Triple(
@@ -208,25 +196,27 @@ fun FileBrowserScreen(
                 }
             }
 
-            // Calculate scroll progress (0 = fully visible, 1 = fully hidden)
-            val progress = (kotlin.math.abs(accumulatedScrollDelta).toFloat() / (scrollHideThreshold * 10f))
+            // Calculate progress (0 = fully visible, 1 = fully hidden)
+            val progress = (kotlin.math.abs(accumulatedScrollDelta).toFloat() / (scrollHideThreshold * 8f))
                 .coerceIn(0f, 1f)
 
             when {
                 index == 0 && offset == 0 -> {
                     onBottomBarScrollProgressChange(0f)
+                    isTopBarVisible = true
                     accumulatedScrollDelta = 0
                 }
                 accumulatedScrollDelta > scrollHideThreshold -> {
                     onBottomBarScrollProgressChange(1f)
+                    isTopBarVisible = false
                     accumulatedScrollDelta = 0
                 }
                 accumulatedScrollDelta < -scrollHideThreshold -> {
                     onBottomBarScrollProgressChange(0f)
+                    isTopBarVisible = true
                     accumulatedScrollDelta = 0
                 }
                 else -> {
-                    // Report continuous progress for smooth animation
                     onBottomBarScrollProgressChange(progress)
                 }
             }
@@ -235,15 +225,15 @@ fun FileBrowserScreen(
             lastScrollOffset = offset
         }
     }
-    
-    // Reset visibility state when switching directories
+
+    // Reset visibility when switching directories
     LaunchedEffect(currentListKey) {
         lastScrollIndex = initialScrollPosition.index
         lastScrollOffset = initialScrollPosition.offset
         accumulatedScrollDelta = 0
-        updateBarsVisibility(true)
+        isTopBarVisible = true
+        onBottomBarScrollProgressChange(0f)
     }
-    
     // Show progress dialog when batch processing starts
     LaunchedEffect(isBatchProcessing) {
         if (isBatchProcessing) {
@@ -333,14 +323,14 @@ fun FileBrowserScreen(
             } else {
                 AnimatedVisibility(
                     visible = isTopBarVisible,
-                    enter = com.voxly.presentation.theme.ExpressiveAnimations.ListItemEnter,
-                    exit = com.voxly.presentation.theme.ExpressiveAnimations.ListItemExit
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
                 ) {
                     if (openedDirectory != null) {
                         LargeTopAppBar(
                             title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
-                colors = TopAppBarDefaults.topAppBarColors(),
-windowInsets = WindowInsets(0.dp),
+                            colors = TopAppBarDefaults.topAppBarColors(),
+                            windowInsets = WindowInsets(0.dp),
                             navigationIcon = {
                                 IconButton(onClick = viewModel::closeOpenedDirectory) {
                                     Icon(
@@ -350,15 +340,10 @@ windowInsets = WindowInsets(0.dp),
                                 }
                             },
                             actions = {
-                                IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
+                                IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
                                     Icon(
                                         imageVector = Icons.Default.Search,
-                                        contentDescription = stringResource(R.string.cd_search),
-                                        tint = if (isSearchExpanded || searchQuery.isNotEmpty()) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface
-                                        }
+                                        contentDescription = stringResource(R.string.cd_search)
                                     )
                                 }
                                 IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
@@ -383,19 +368,13 @@ windowInsets = WindowInsets(0.dp),
                     } else {
                         LargeTopAppBar(
                             title = { Text(stringResource(R.string.nav_file_browser)) },
-                            colors = TopAppBarDefaults.largeTopAppBarColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                            ),windowInsets = WindowInsets(0.dp),
+                            colors = TopAppBarDefaults.largeTopAppBarColors(),
+                            windowInsets = WindowInsets(0.dp),
                             actions = {
-                                IconButton(onClick = { isSearchExpanded = !isSearchExpanded }) {
+                                IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
                                     Icon(
                                         imageVector = Icons.Default.Search,
-                                        contentDescription = stringResource(R.string.cd_search),
-                                        tint = if (isSearchExpanded || searchQuery.isNotEmpty()) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface
-                                        }
+                                        contentDescription = stringResource(R.string.cd_search)
                                     )
                                 }
                                 IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
@@ -490,31 +469,6 @@ windowInsets = WindowInsets(0.dp),
                                     .fillMaxSize()
                                     .padding(horizontal = 16.dp)
                             ) {
-                                DockedSearchBar(
-                                    inputField = {
-                                        SearchBarDefaults.InputField(
-                                            query = searchQuery,
-                                            onQueryChange = { searchQuery = it },
-                                            onSearch = { },
-                                            expanded = isSearchExpanded,
-                                            onExpandedChange = { isSearchExpanded = it },
-                                            placeholder = { Text(stringResource(R.string.file_search_hint)) },
-                                            leadingIcon = { Icon(Icons.Default.Search, contentDescription = stringResource(R.string.cd_search)) },
-                                            trailingIcon = {
-                                                if (searchQuery.isNotEmpty()) {
-                                                    IconButton(onClick = { searchQuery = "" }) {
-                                                        Icon(Icons.Default.Close, contentDescription = stringResource(R.string.clear_selection))
-                                                    }
-                                                }
-                                            }
-                                        )
-                                    },
-                                    expanded = isSearchExpanded,
-                                    onExpandedChange = { isSearchExpanded = it },
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    // Search suggestions can be added here if needed
-                                }
                                 SortMenu(
                                     isExpanded = isSortExpanded,
                                     currentSortOption = FileSortOption.valueOf(sortOption),
@@ -743,10 +697,10 @@ windowInsets = WindowInsets(0.dp),
     }
 
     if (deleteTargetFile != null) {
-    AlertDialog(
-        onDismissRequest = { deleteTargetFile = null },
-        shape = MaterialTheme.shapes.large,
-        title = { Text(stringResource(R.string.dialog_confirm_delete)) },
+        AlertDialog(
+            onDismissRequest = { deleteTargetFile = null },
+            shape = MaterialTheme.shapes.large,
+            title = { Text(stringResource(R.string.dialog_confirm_delete)) },
             text = {
                 Text(
                     text = stringResource(
@@ -1429,6 +1383,18 @@ private fun applySearchAndSort(
         FileSortOption.NAME_DESC -> filtered.sortedWith(compareByDescending(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
         FileSortOption.SIZE_DESC -> filtered.sortedByDescending { it.size }
         FileSortOption.DURATION_DESC -> filtered.sortedByDescending { it.duration }
+    }
+}
+
+private fun applySort(
+    files: List<AudioFile>,
+    sortOption: FileSortOption
+): List<AudioFile> {
+    return when (sortOption) {
+        FileSortOption.NAME_ASC -> files.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
+        FileSortOption.NAME_DESC -> files.sortedWith(compareByDescending(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
+        FileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
+        FileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
     }
 }
 
