@@ -3,8 +3,10 @@ package com.voxly.presentation.screens.metadata
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -27,9 +29,9 @@ import androidx.compose.material.icons.filled.Refresh
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Surface
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -42,7 +44,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
@@ -66,6 +74,8 @@ fun OnlineCoverSearchScreen(
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val coverResults by viewModel.coverResults.collectAsState()
+    var isSelectingCover by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
 
     // Start search on screen load
     LaunchedEffect(filePath) {
@@ -92,9 +102,7 @@ fun OnlineCoverSearchScreen(
                         Icon(Icons.Default.Refresh, contentDescription = "Search Again")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(),
                 windowInsets = WindowInsets(0.dp)
             )
         }
@@ -105,46 +113,91 @@ fun OnlineCoverSearchScreen(
                 .padding(innerPadding)
                 .padding(16.dp)
         ) {
-            // Search info card
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = MaterialTheme.shapes.extraLarge,
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            // Search info card - 使用 Surface 容器 + tertiary 颜色点缀
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(
+                    animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+                    )
+                ) + scaleIn(
+                    initialScale = 0.95f,
+                    animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+                    )
                 )
             ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Search query:",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = "Title: ${viewModel.searchTitle}",
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    viewModel.searchArtist?.let { artist ->
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
+                    tonalElevation = 2.dp
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Text(
+                                text = "🔍",
+                                style = MaterialTheme.typography.labelMedium
+                            )
+                            Text(
+                                text = stringResource(R.string.search_query),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                            )
+                        }
                         Text(
-                            text = "Artist: $artist",
-                            style = MaterialTheme.typography.bodyMedium
+                            text = viewModel.searchTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
+                        viewModel.searchArtist?.let { artist ->
+                            Text(
+                                text = artist,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
+                            )
+                        }
                     }
                 }
             }
 
-            // Search progress
-            if (isLoading) {
+            // Search progress - 使用弹性缩放动画
+            AnimatedVisibility(
+                visible = isLoading,
+                enter = fadeIn(
+                    animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+                    )
+                ) + scaleIn(
+                    initialScale = 0.8f,
+                    animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+                    )
+                )
+            ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(120.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    CircularProgressIndicator()
+                    CircularProgressIndicator(
+                        color = MaterialTheme.colorScheme.primary
+                    )
                 }
             }
 
-            // Error message
+            // Error message - 使用 Surface 容器
             AnimatedVisibility(
                 visible = errorMessage != null,
                 enter = fadeIn(
@@ -152,18 +205,32 @@ fun OnlineCoverSearchScreen(
                         dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
                         stiffness = ExpressiveMotionTokens.Emphasized.stiffness
                     )
+                ) + slideInVertically(
+                    initialOffsetY = { -it / 2 },
+                    animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+                    )
                 )
             ) {
                 errorMessage?.let { error ->
-                    Text(
-                        text = error,
-                        color = MaterialTheme.colorScheme.error,
-                        modifier = Modifier.padding(vertical = 8.dp)
-                    )
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        tonalElevation = 1.dp
+                    ) {
+                        Text(
+                            text = error,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
+                            modifier = Modifier.padding(12.dp)
+                        )
+                    }
                 }
             }
 
-            // Results
+            // Results - 无结果提示
             AnimatedVisibility(
                 visible = coverResults.isEmpty() && !isLoading && errorMessage == null,
                 enter = fadeIn(
@@ -171,14 +238,29 @@ fun OnlineCoverSearchScreen(
                         dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
                         stiffness = ExpressiveMotionTokens.Emphasized.stiffness
                     )
+                ) + scaleIn(
+                    initialScale = 0.9f,
+                    animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+                    )
                 )
             ) {
-                Text(
-                    text = stringResource(R.string.error_no_results),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.surfaceContainerLow
+                ) {
+                    Text(
+                        text = stringResource(R.string.error_no_results),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
             }
 
+            // Results - 封面列表
             AnimatedVisibility(
                 visible = coverResults.isNotEmpty(),
                 enter = fadeIn(
@@ -201,12 +283,14 @@ fun OnlineCoverSearchScreen(
                     items(coverResults) { item ->
                         CoverResultItem(
                             item = item,
+                            isLoading = isSelectingCover,
                             onClick = {
-                                // Use sync method to get cover bytes
-                                kotlinx.coroutines.runBlocking {
+                                isSelectingCover = true
+                                coroutineScope.launch {
                                     viewModel.getCoverBytes(item)?.let { bytes ->
                                         onCoverSelected(bytes)
                                     }
+                                    isSelectingCover = false
                                 }
                             }
                         )
@@ -221,37 +305,69 @@ fun OnlineCoverSearchScreen(
 @Composable
 private fun CoverResultItem(
     item: OnlineRecording,
+    isLoading: Boolean,
     onClick: () -> Unit
 ) {
+    // 交替使用不同颜色容器
+    val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 6.dp),
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = containerColor
         ),
         onClick = onClick
     ) {
         Row(
-            modifier = Modifier.padding(16.dp),
+            modifier = Modifier.padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            CoverThumbnail(
-                coverArtUrl = item.coverArtUrl,
-                modifier = Modifier.size(120.dp)
-            )
+            Box(
+                modifier = Modifier.size(100.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                CoverThumbnail(
+                    coverArtUrl = item.coverArtUrl,
+                    modifier = Modifier.size(100.dp)
+                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            }
             Spacer(modifier = Modifier.size(16.dp))
-            Column(modifier = Modifier.weight(1f)) {
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 Text(
                     text = item.title,
-                    style = MaterialTheme.typography.titleSmall
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
-                    text = "${item.artist} • ${item.source}",
-                    style = MaterialTheme.typography.bodySmall,
+                    text = item.artist,
+                    style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+                // 来源标签使用 tertiary 颜色
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.tertiaryContainer
+                ) {
+                    Text(
+                        text = item.source,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                    )
+                }
             }
         }
     }

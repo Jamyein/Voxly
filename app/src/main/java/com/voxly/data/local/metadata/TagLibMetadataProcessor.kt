@@ -2,6 +2,7 @@ package com.voxly.data.local.metadata
 
 import android.content.Context
 import android.content.ContentUris
+import android.content.Intent
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
@@ -71,22 +72,37 @@ class TagLibMetadataProcessor @Inject constructor(
      */
     private fun normalizeFilePath(filePath: String): String {
         return try {
-            // First, clean up obvious issues
-            var normalized = filePath
-                .replace(Regex("//+"), "/")  // Remove duplicate slashes
-                .trimEnd('/')                // Remove trailing slash
-            
-            // Try to get canonical path for proper path resolution
-            val file = File(normalized)
-            if (file.exists()) {
-                file.canonicalPath
-            } else {
-                // Try without canonical resolution - might be a path that needs SAF
+            // 1. Replace backslashes with forward slashes
+            var normalized = filePath.replace('\\', '/')
+
+            // 2. Remove duplicate slashes
+            normalized = normalized.replace(Regex("//+"), "/")
+
+            // 3. Remove trailing slash
+            normalized = normalized.trimEnd('/')
+
+            // 4. Normalize Unicode (NFC form) - same as findDocumentUriInTree
+            normalized = Normalizer.normalize(normalized, Normalizer.Form.NFC)
+
+            // 5. Handle URL-encoded characters if present
+            normalized = try {
+                java.net.URLDecoder.decode(normalized, "UTF-8")
+            } catch (e: Exception) {
                 normalized
             }
+
+            // 6. Try to get canonical path for proper path resolution (only if file exists)
+            val file = File(normalized)
+            if (file.exists()) {
+                val canonical = file.canonicalPath
+                // Apply normalization again after canonical resolution
+                return Normalizer.normalize(canonical.replace('\\', '/'), Normalizer.Form.NFC)
+            }
+
+            normalized
         } catch (e: Exception) {
             // If anything fails, return cleaned original path
-            filePath.replace(Regex("//+"), "/").trimEnd('/')
+            filePath.replace('\\', '/').replace(Regex("//+"), "/").trimEnd('/')
         }
     }
 
@@ -576,7 +592,14 @@ class TagLibMetadataProcessor @Inject constructor(
             Result.success(Unit)
         } catch (e: Exception) {
             Log.e(TAG, "Failed to update metadata directly: $filePath", e)
-            Result.failure(e)
+            // Check for permission denied error
+            val errorMessage = if (e.message?.contains("EACCES") == true ||
+                e.message?.contains("Permission denied") == true) {
+                "Write permission denied for: $filePath. The SAF permission may have expired. Please re-select the file or its parent directory through the file browser to restore write access."
+            } else {
+                e.message ?: "Failed to update metadata for: $filePath"
+            }
+            Result.failure(IllegalStateException(errorMessage, e))
         }
     }
 
@@ -665,11 +688,31 @@ class TagLibMetadataProcessor @Inject constructor(
         metadata: AudioMetadata
     ): Result<Unit> = withContext(Dispatchers.IO) {
         // Find valid persisted URI permission
-        val validPermission = findValidPermission(filePath)
+        var validPermission = findValidPermission(filePath)
         if (validPermission == null) {
-            return@withContext Result.failure(
-                IllegalStateException("No SAF write permission for: $filePath")
-            )
+            Log.w(TAG, "tryUpdateMetadataViaSaf: No valid permission found, attempting to get permission from file URI")
+
+            // Try to get permission directly from file URI
+            val fileUri = Uri.fromFile(File(filePath))
+            try {
+                context.contentResolver.takePersistableUriPermission(
+                    fileUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+                )
+                Log.d(TAG, "tryUpdateMetadataViaSaf: Successfully obtained permission from file URI")
+            } catch (e: Exception) {
+                Log.w(TAG, "tryUpdateMetadataViaSaf: Failed to get permission from file URI", e)
+            }
+
+            // Re-check for valid permission after attempting to get new permission
+            validPermission = findValidPermission(filePath)
+            if (validPermission == null) {
+                val errorMsg = "SAF write permission expired or not granted for: $filePath. Please re-select the file or its parent directory through the file browser to restore write access."
+                Log.e(TAG, errorMsg)
+                return@withContext Result.failure(
+                    IllegalStateException(errorMsg)
+                )
+            }
         }
 
         // Get document URI
@@ -677,7 +720,7 @@ class TagLibMetadataProcessor @Inject constructor(
         val targetDocUri = findDocumentUriInTree(validPermission.uri, relativePath)
         if (targetDocUri == null) {
             return@withContext Result.failure(
-                IllegalStateException("Cannot find document URI for: $filePath")
+                IllegalStateException("Cannot find document URI for: $filePath. The file may have been moved or deleted.")
             )
         }
 
@@ -700,6 +743,7 @@ class TagLibMetadataProcessor @Inject constructor(
 
     /**
      * Performs the actual SAF update operation
+     * @param retryCount Internal parameter to limit recursion depth
      */
     private suspend fun doSafUpdate(
         targetDocUri: Uri,
@@ -707,8 +751,33 @@ class TagLibMetadataProcessor @Inject constructor(
         metadata: AudioMetadata,
         validPermission: android.content.UriPermission,
         fileExtension: String,
-        filePath: String
+        filePath: String,
+        retryCount: Int = 0
     ): Result<Unit> = withContext(Dispatchers.IO) {
+        // Validate permission before starting the update (limit retries to prevent infinite recursion)
+        if (retryCount < 2 && !isPermissionValid(validPermission, filePath)) {
+            Log.w(TAG, "doSafUpdate: Permission became invalid (retry $retryCount), attempting to reacquire")
+
+            // Try to reacquire permission
+            val newPermission = findValidPermission(filePath)
+            if (newPermission == null) {
+                return@withContext Result.failure(
+                    IllegalStateException("SAF permission no longer valid and could not be reacquired. Please re-select the file or its parent directory through the file browser to restore write access.")
+                )
+            }
+            // Update permission reference for relative path resolution
+            val newRelativePath = getRelativePath(filePath, newPermission)
+            val newTargetDocUri = findDocumentUriInTree(newPermission.uri, newRelativePath)
+            if (newTargetDocUri == null) {
+                return@withContext Result.failure(
+                    IllegalStateException("Cannot find document URI after permission reacquisition.")
+                )
+            }
+
+            // Continue with new permission (increment retry count)
+            return@withContext doSafUpdate(newTargetDocUri, tempFile, metadata, newPermission, fileExtension, filePath, retryCount + 1)
+        }
+
         try {
             // Read original file via SAF
             val sourceStream = context.contentResolver.openInputStream(targetDocUri)
@@ -1003,22 +1072,73 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
+     * Validates if a permission is truly effective by attempting to open the file
+     */
+    private fun isPermissionValid(perm: android.content.UriPermission, filePath: String): Boolean {
+        return try {
+            // Try to open the file using the permission
+            context.contentResolver.openFileDescriptor(perm.uri, "r")?.use {
+                true
+            } ?: false
+        } catch (e: SecurityException) {
+            Log.w(TAG, "Permission validation failed (SecurityException) for: $filePath", e)
+            false
+        } catch (e: Exception) {
+            Log.w(TAG, "Permission validation failed for: $filePath", e)
+            false
+        }
+    }
+
+    /**
      * Finds a valid persisted URI permission for the given file path
      */
     private fun findValidPermission(filePath: String): android.content.UriPermission? {
-        val normalizedPath = runCatching { File(filePath).canonicalPath }.getOrDefault(filePath)
-        
+        // Step 1: Normalize the file path
+        val normalizedFilePath = normalizeFilePath(filePath)
+        Log.d(TAG, "findValidPermission: original path: $filePath")
+        Log.d(TAG, "findValidPermission: normalized path: $normalizedFilePath")
+
         val permissions = context.contentResolver.persistedUriPermissions
             .filter { it.isReadPermission && it.isWritePermission }
 
+        Log.d(TAG, "findValidPermission: found ${permissions.size} persisted write permissions")
+
         for (perm in permissions) {
-            val treePath = mapTreeUriToPath(perm.uri) ?: continue
-            val normalizedTree = treePath.trimEnd('/')
-            
-            if (normalizedPath.startsWith("$normalizedTree/") || normalizedPath == normalizedTree) {
-                return perm
+            val treePath = mapTreeUriToPath(perm.uri)
+            if (treePath == null) {
+                Log.d(TAG, "findValidPermission: could not map tree URI: ${perm.uri}")
+                continue
+            }
+
+            // Step 2: Normalize tree path the same way
+            val normalizedTreePath = normalizeFilePath(treePath)
+            Log.d(TAG, "findValidPermission: checking permission tree: $normalizedTreePath")
+
+            // Step 3: Try multiple matching strategies
+            // Direct match
+            if (normalizedFilePath == normalizedTreePath) {
+                // Validate permission by actually trying to access the file
+                if (isPermissionValid(perm, filePath)) {
+                    Log.d(TAG, "findValidPermission: found valid permission for: $normalizedTreePath")
+                    return perm
+                } else {
+                    Log.w(TAG, "findValidPermission: permission exists but invalid: $normalizedTreePath")
+                    // Continue to try other permissions
+                }
+            }
+            // Prefix match (file is inside the tree)
+            if (normalizedFilePath.startsWith("$normalizedTreePath/")) {
+                // Validate permission by actually trying to access the file
+                if (isPermissionValid(perm, filePath)) {
+                    Log.d(TAG, "findValidPermission: found valid permission for: $normalizedTreePath")
+                    return perm
+                } else {
+                    Log.w(TAG, "findValidPermission: permission exists but invalid: $normalizedTreePath")
+                    // Continue to try other permissions
+                }
             }
         }
+        Log.w(TAG, "findValidPermission: no valid permission found for: $filePath")
         return null
     }
 
@@ -1027,9 +1147,10 @@ class TagLibMetadataProcessor @Inject constructor(
      */
     private fun getRelativePath(filePath: String, permission: android.content.UriPermission): String {
         val treePath = mapTreeUriToPath(permission.uri) ?: return filePath
-        val normalizedTree = treePath.trimEnd('/')
-        return if (filePath.startsWith("$normalizedTree/")) {
-            filePath.removePrefix("$normalizedTree/")
+        val normalizedFilePath = normalizeFilePath(filePath)
+        val normalizedTreePath = normalizeFilePath(treePath)
+        return if (normalizedFilePath.startsWith("$normalizedTreePath/")) {
+            normalizedFilePath.removePrefix("$normalizedTreePath/")
         } else {
             File(filePath).name
         }
@@ -1041,12 +1162,12 @@ class TagLibMetadataProcessor @Inject constructor(
     private fun mapTreeUriToPath(treeUri: Uri): String? {
         val documentId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
         if (documentId.startsWith("raw:")) return documentId.removePrefix("raw:")
-        
+
         val parts = documentId.split(":", limit = 2)
         val volume = parts.firstOrNull().orEmpty()
         val relative = parts.getOrNull(1)?.trim('/').orEmpty()
-        
-        return when {
+
+        val path = when {
             volume.equals("primary", ignoreCase = true) -> {
                 val root = "/storage/emulated/0"
                 if (relative.isEmpty()) root else "$root/$relative"
@@ -1057,6 +1178,9 @@ class TagLibMetadataProcessor @Inject constructor(
             }
             else -> if (relative.isEmpty()) "/storage/$volume" else "/storage/$volume/$relative"
         }
+
+        // Apply normalization to ensure consistent path format
+        return normalizeFilePath(path)
     }
 
     private fun queryMediaStoreUriByPath(filePath: String): Uri? {

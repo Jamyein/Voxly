@@ -112,9 +112,7 @@ fun ScanDirectorySettingsScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(),
                 windowInsets = WindowInsets(0.dp),
             )
         }

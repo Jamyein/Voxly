@@ -91,10 +91,7 @@ fun LogViewerScreen(
                         }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(),
                 windowInsets = WindowInsets(0.dp)
             )
         },

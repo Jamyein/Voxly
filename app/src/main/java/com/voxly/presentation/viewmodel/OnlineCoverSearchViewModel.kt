@@ -6,6 +6,8 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineRecording
+import com.voxly.presentation.ui.getCoverArtBytes
+import com.voxly.presentation.ui.prefetchCoverArtBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,6 +96,10 @@ class OnlineCoverSearchViewModel @Inject constructor(
                 val result = aggregatedOnlineMetadataRepository.searchByTrackForCover(title, artist)
                 result.fold(
                     onSuccess = { recordings ->
+                        // Prefetch cover art bytes in background (fire-and-forget) for all results
+                        recordings.forEach { recording ->
+                            recording.coverArtUrl?.let { prefetchCoverArtBytes(it) }
+                        }
                         _searchState.update { it.copy(results = recordings, isSearching = false) }
                         _coverResults.value = recordings
                     },
@@ -112,8 +118,8 @@ class OnlineCoverSearchViewModel @Inject constructor(
                     state.copy(errorSources = state.errorSources + ("System" to message))
                 }
                 _errorMessage.value = message
-                _searchState.update { it.copy(isSearching = false) }
             } finally {
+                _searchState.update { it.copy(isSearching = false) }
                 _isLoading.value = false
             }
         }
@@ -125,15 +131,19 @@ class OnlineCoverSearchViewModel @Inject constructor(
     fun applyCover(recording: OnlineRecording): ByteArray? {
         val existingCoverUrl = recording.coverArtUrl
         if (!existingCoverUrl.isNullOrBlank()) {
-            return try {
-                val url = java.net.URL(existingCoverUrl)
-                val connection = url.openConnection()
-                connection.setRequestProperty("User-Agent", "Mozilla/5.0")
-                connection.getInputStream().use { it.readBytes() }
-            } catch (e: Exception) {
-                _coverFetchMessage.value = "Failed to load cover: ${e.message}"
-                null
+            // Use cache-first approach
+            var result: ByteArray? = null
+            viewModelScope.launch {
+                result = getCoverArtBytes(existingCoverUrl)
             }
+            // Run synchronously for immediate return
+            runCatching {
+                kotlinx.coroutines.runBlocking {
+                    getCoverArtBytes(existingCoverUrl)
+                }
+            }.onFailure {
+                _coverFetchMessage.value = "Failed to load cover: ${it.message}"
+            }.getOrNull()?.let { return it }
         }
 
         val releaseId = recording.releaseId
@@ -184,15 +194,8 @@ class OnlineCoverSearchViewModel @Inject constructor(
     suspend fun getCoverBytes(recording: OnlineRecording): ByteArray? {
         val existingCoverUrl = recording.coverArtUrl
         if (!existingCoverUrl.isNullOrBlank()) {
-            return try {
-                val url = java.net.URL(existingCoverUrl)
-                val connection = url.openConnection()
-                connection.setRequestProperty("User-Agent", "Mozilla/5.0")
-                connection.getInputStream().use { it.readBytes() }
-            } catch (e: Exception) {
-                _coverFetchMessage.value = "Failed to load cover: ${e.message}"
-                null
-            }
+            // Use cache-first approach
+            return getCoverArtBytes(existingCoverUrl)
         }
 
         val releaseId = recording.releaseId

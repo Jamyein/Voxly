@@ -54,8 +54,12 @@ class LyricsRepositoryImpl @Inject constructor(
         data class Error(val source: String, val message: String) : LyricsSourceResult()
     }
 
-    // Simple in-memory cache (in production, use Room database)
-    private val lyricsCache = mutableMapOf<String, Lyrics>()
+    // LRU cache for lyrics content (50 entries, session-level)
+    private val lyricsCache = object : LinkedHashMap<String, Lyrics>(50, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Lyrics>?): Boolean {
+            return size > 50
+        }
+    }
 
     // Data source preference
     enum class LyricsSource {
@@ -507,8 +511,18 @@ class LyricsRepositoryImpl @Inject constructor(
 
     override suspend fun getOnlineLyrics(result: OnlineLyricsResult): Result<Lyrics> =
         withContext(Dispatchers.IO) {
+            // Generate cache key based on source and sourceKey/id
+            val cacheKey = generateLyricsCacheKey(result)
+
+            // Check cache first
+            lyricsCache[cacheKey]?.let { cachedLyrics ->
+                Timber.d("Lyrics cache hit: $cacheKey")
+                return@withContext Result.success(cachedLyrics)
+            }
+
+            // Cache miss - fetch from network
             try {
-                when (result.source) {
+                val lyricsResult = when (result.source) {
                     "NetEase" -> getNetEaseLyrics(result.id)
                     "QQ Music" -> {
                         val songMid = result.sourceKey?.trim().takeUnless { it.isNullOrEmpty() }
@@ -521,6 +535,14 @@ class LyricsRepositoryImpl @Inject constructor(
                     }
                     else -> Result.failure(LyricsException("Unsupported lyrics source: ${result.source}"))
                 }
+
+                // Cache the result if successful
+                lyricsResult.getOrNull()?.let { lyrics ->
+                    lyricsCache[cacheKey] = lyrics
+                    Timber.d("Lyrics cached: $cacheKey")
+                }
+
+                lyricsResult
             } catch (e: Exception) {
                 Result.failure(LyricsException("Network error", e))
             }
@@ -624,7 +646,14 @@ class LyricsRepositoryImpl @Inject constructor(
     }
 
     /**
-     * Generates a cache key for lyrics.
+     * Generates a cache key for lyrics content based on source and ID.
+     */
+    private fun generateLyricsCacheKey(result: OnlineLyricsResult): String {
+        return "${result.source}_${result.sourceKey ?: result.id}"
+    }
+
+    /**
+     * Generates a cache key for lyrics (legacy method for metadata-based caching).
      */
     private fun generateCacheKey(trackName: String, artistName: String): String {
         return "${artistName.lowercase()}_${trackName.lowercase()}"

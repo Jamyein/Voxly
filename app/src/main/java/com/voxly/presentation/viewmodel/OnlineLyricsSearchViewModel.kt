@@ -11,6 +11,7 @@ import com.voxly.domain.repository.OnlineLyricsResult
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.MutableStateFlow
+import timber.log.Timber
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
@@ -108,6 +109,8 @@ class OnlineLyricsSearchViewModel @Inject constructor(
                             val newResults = _searchState.value.results + result.lyrics
                             _searchState.update { it.copy(results = newResults) }
                             _lyricsResults.value = newResults
+                            // Prefetch lyrics content in background (fire-and-forget)
+                            prefetchLyricsContent(result.lyrics)
                         }
 
                         is LyricsSourceResult.SourceCompleted -> {
@@ -147,7 +150,25 @@ class OnlineLyricsSearchViewModel @Inject constructor(
     }
 
     /**
+     * Prefetch lyrics content in background (fire-and-forget).
+     * This downloads lyrics content when search results arrive,
+     * so it's ready when user selects a result.
+     */
+    private fun prefetchLyricsContent(result: OnlineLyricsResult) {
+        viewModelScope.launch {
+            try {
+                lyricsRepository.getOnlineLyrics(result)
+                // Result is cached automatically in getOnlineLyrics()
+            } catch (e: Exception) {
+                // Silently fail - prefetch is best-effort
+                Timber.d("Lyrics prefetch failed: ${e.message}")
+            }
+        }
+    }
+
+    /**
      * Get the lyrics content for the selected result.
+     * Now uses cache-first approach (prefetched during search).
      */
     suspend fun getLyricsContent(result: OnlineLyricsResult): String? {
         return try {

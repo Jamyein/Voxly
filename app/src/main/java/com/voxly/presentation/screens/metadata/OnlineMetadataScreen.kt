@@ -75,19 +75,37 @@ fun OnlineMetadataScreen(
     val query by viewModel.searchQuery.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val downloadedAlbumArt by viewModel.downloadedAlbumArt.collectAsState()
+    val isCoverArtTimeout by viewModel.isCoverArtTimeout.collectAsState()
 
     // Track if we've already triggered apply for the current selection
     var hasAppliedForCurrentSelection by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    // Track the selection ID to detect when selection changes
+    var lastAppliedSelectionId by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
 
-    // Auto-apply metadata when release or candidate is selected (not dependent on album art)
-    LaunchedEffect(selectedRelease, selectedReleaseCandidate) {
+    // Auto-apply metadata when release or candidate is selected, and cover art is downloaded
+    // Wait for cover art to be downloaded before applying (if cover is available)
+    // If cover download times out, apply metadata without cover
+    LaunchedEffect(selectedRelease, selectedReleaseCandidate, downloadedAlbumArt, isCoverArtTimeout) {
         val release = selectedRelease
         val candidate = selectedReleaseCandidate
-        // Apply when we have release details OR candidate selected (no longer require album art)
-        if ((release != null || candidate != null) && !hasAppliedForCurrentSelection) {
+        val albumArt = downloadedAlbumArt
+        val isTimeout = isCoverArtTimeout
+        val currentSelectionId = candidate?.id
+
+        // Reset flag when selection changes
+        if (currentSelectionId != null && currentSelectionId != lastAppliedSelectionId) {
+            hasAppliedForCurrentSelection = false
+        }
+
+        // Apply when we have release details OR candidate selected
+        // If candidate has cover art URL, wait until it's downloaded OR timeout
+        val candidateHasCover = candidate?.coverArtUrl != null
+        val isCoverDownloaded = !candidateHasCover || albumArt != null || isTimeout
+        if ((release != null || candidate != null) && !hasAppliedForCurrentSelection && isCoverDownloaded) {
             hasAppliedForCurrentSelection = true
+            lastAppliedSelectionId = currentSelectionId
             viewModel.applyMetadata()?.let { metadata ->
-                Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}")
+                Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}, hasCover=${metadata.albumArt != null}")
                 onApplyMetadata(metadata)
             }
         }
@@ -110,9 +128,7 @@ fun OnlineMetadataScreen(
                         Icon(Icons.Default.Refresh, contentDescription = "Search Again")
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(),
                 windowInsets = WindowInsets(0.dp)
             )
         }

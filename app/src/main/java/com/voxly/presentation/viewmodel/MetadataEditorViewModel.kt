@@ -30,7 +30,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.URLDecoder
@@ -508,11 +507,18 @@ class MetadataEditorViewModel @Inject constructor(
                         error,
                         "MetadataEditor"
                     )
-                    _saveResult.value = SaveResult.Error(error.message ?: "Failed to save")
+                    // Check if this is a permission-related error
+                    val errorMessage = error.message ?: "Failed to save"
+                    val requiresReauthorization = errorMessage.contains("SAF write permission") ||
+                            errorMessage.contains("Permission denied") ||
+                            errorMessage.contains("EACCES") ||
+                            errorMessage.contains("write permission")
+
+                    _saveResult.value = SaveResult.Error(errorMessage, requiresReauthorization)
                     val currentState = _uiState.value
                     if (currentState is MetadataEditorUiState.Saving) {
                         _uiState.value = MetadataEditorUiState.Error(
-                            error.message ?: "Failed to save metadata"
+                            errorMessage + if (requiresReauthorization) "\n\n请重新选择文件以恢复写入权限。" else ""
                         )
                     }
                 }
@@ -805,13 +811,23 @@ class MetadataEditorViewModel @Inject constructor(
     }
 
     fun applyOnlineLyrics(result: OnlineLyricsResult) {
-        // Synchronously fetch and apply lyrics
-        val lyrics = runBlocking {
-            lyricsRepository.getOnlineLyrics(result).getOrNull()
-        }
-        if (lyrics != null) {
-            val text = if (lyrics.isSynced) lyrics.toLrcFormat() else lyrics.text
-            updateMetadataField(MetadataField.LYRICS, text)
+        viewModelScope.launch {
+            _isOnlineLyricsLoading.value = true
+            try {
+                val lyrics = withContext(Dispatchers.IO) {
+                    lyricsRepository.getOnlineLyrics(result).getOrNull()
+                }
+                if (lyrics != null) {
+                    val text = if (lyrics.isSynced) lyrics.toLrcFormat() else lyrics.text
+                    updateMetadataField(MetadataField.LYRICS, text)
+                } else {
+                    _onlineLyricsError.value = "Failed to load lyrics content"
+                }
+            } catch (e: Exception) {
+                _onlineLyricsError.value = "Failed to load lyrics: ${e.message}"
+            } finally {
+                _isOnlineLyricsLoading.value = false
+            }
         }
     }
 
@@ -903,7 +919,7 @@ enum class MetadataField {
  */
 sealed class SaveResult {
     data object Success : SaveResult()
-    data class Error(val message: String) : SaveResult()
+    data class Error(val message: String, val requiresReauthorization: Boolean = false) : SaveResult()
 }
 
 data class LyricsSearchState(

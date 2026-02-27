@@ -25,10 +25,7 @@ fun RecentEditsScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.recent_edits_title)) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(),
                 windowInsets = WindowInsets(0.dp),
             )
         }

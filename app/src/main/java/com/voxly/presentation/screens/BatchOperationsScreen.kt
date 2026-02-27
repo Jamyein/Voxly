@@ -46,10 +46,7 @@ fun BatchOperationsScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.batch_operations_title)) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(),
                 actions = {
                     if (selectedFiles.isNotEmpty()) {
                         IconButton(onClick = { viewModel.clearSelection() }) {

@@ -14,7 +14,9 @@ import com.voxly.domain.repository.OnlineMetadataRepository
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
+import com.voxly.presentation.ui.getCoverArtBytes
 import com.voxly.presentation.ui.loadImageBytesFromUrl
+import com.voxly.presentation.ui.prefetchCoverArtBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -84,6 +86,10 @@ class OnlineMetadataViewModel @Inject constructor(
     // 预下载的封面图
     private val _downloadedAlbumArt = MutableStateFlow<ByteArray?>(null)
     val downloadedAlbumArt: StateFlow<ByteArray?> = _downloadedAlbumArt.asStateFlow()
+
+    // 标记封面下载是否超时（超时后允许应用没有封面的元数据）
+    private val _isCoverArtTimeout = MutableStateFlow(false)
+    val isCoverArtTimeout: StateFlow<Boolean> = _isCoverArtTimeout.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -165,6 +171,9 @@ class OnlineMetadataViewModel @Inject constructor(
                 searcher.collect { result ->
                     when (result) {
                         is OnlineSourceResult.ReleaseResult -> {
+                            // Prefetch cover art bytes in background (fire-and-forget)
+                            result.release.coverArtUrl?.let { prefetchCoverArtBytes(it) }
+
                             val normalized = result.release.copy(
                                 albumTitle = result.release.albumTitle ?: result.release.title,
                                 source = if (result.release.source == "Unknown") result.source else result.release.source
@@ -178,6 +187,9 @@ class OnlineMetadataViewModel @Inject constructor(
                         }
 
                         is OnlineSourceResult.RecordingResult -> {
+                            // Prefetch cover art bytes in background (fire-and-forget)
+                            result.recording.coverArtUrl?.let { prefetchCoverArtBytes(it) }
+
                             val release = result.recording.toOnlineRelease() ?: return@collect
                             _searchState.update { state ->
                                 val merged = mergeRelease(state.results, release)
@@ -529,19 +541,32 @@ class OnlineMetadataViewModel @Inject constructor(
         _selectedReleaseCandidate.value = release
         _selectedRelease.value = null
         selectedSyncedLyrics = _syncedLyricsByReleaseId.value[release.id]
-        // 清除之前的封面图
+        // 清除之前的封面图和超时标志
         _downloadedAlbumArt.value = null
+        _isCoverArtTimeout.value = false
 
         Timber.d("selectRelease: candidate set, launching coroutines for details and cover")
 
-        // 并行启动两个协程：一个下载封面，一个获取详情
+        // 并行启动两个协程：一个获取封面（优先读缓存），一个获取详情
+        // 协程1：获取搜索结果中的封面图（优先缓存，带超时回退到下载）
         viewModelScope.launch {
-            // 协程1：下载搜索结果中的封面图（使用候选的coverArtUrl）
             if (!release.coverArtUrl.isNullOrBlank()) {
-                val cover = loadImageBytesFromUrl(release.coverArtUrl)
-                if (cover != null) {
-                    _downloadedAlbumArt.value = cover
-                    Timber.d("selectRelease: cover art downloaded from candidate, size=${cover.size}")
+                try {
+                    // 优先从缓存获取，如果没有则下载，最多等待5秒
+                    val cover = kotlinx.coroutines.withTimeoutOrNull(5000L) {
+                        getCoverArtBytes(release.coverArtUrl)
+                    }
+                    if (cover != null) {
+                        _downloadedAlbumArt.value = cover
+                        Timber.d("selectRelease: cover art loaded from cache, size=${cover.size}")
+                    } else {
+                        // 超时或下载失败
+                        _isCoverArtTimeout.value = true
+                        Timber.w("selectRelease: cover art load timeout or failed for ${release.coverArtUrl}")
+                    }
+                } catch (e: Exception) {
+                    _isCoverArtTimeout.value = true
+                    Timber.e(e, "selectRelease: cover art load error")
                 }
             }
         }
@@ -556,20 +581,36 @@ class OnlineMetadataViewModel @Inject constructor(
                     onSuccess = { details ->
                         Timber.d("selectRelease: got details, title=${details.title}, tracks=${details.tracks.size}")
                         _selectedRelease.value = details
-                        // 预下载封面图
+                        // 获取封面图（优先缓存，带超时回退到下载）
                         val coverUrl = details.coverArtUrl ?: release.coverArtUrl
                         if (!coverUrl.isNullOrBlank()) {
-                            _downloadedAlbumArt.value = loadImageBytesFromUrl(coverUrl)
-                            Timber.d("selectRelease: cover art downloaded, size=${_downloadedAlbumArt.value?.size}")
+                            try {
+                                val cover = kotlinx.coroutines.withTimeoutOrNull(5000L) {
+                                    getCoverArtBytes(coverUrl)
+                                }
+                                if (cover != null) {
+                                    _downloadedAlbumArt.value = cover
+                                    Timber.d("selectRelease: cover art loaded, size=${_downloadedAlbumArt.value?.size}")
+                                }
+                            } catch (e: Exception) {
+                                Timber.e(e, "selectRelease: cover art load from details failed")
+                            }
                         }
                     },
                     onFailure = { error ->
                         Timber.e(error, "Failed to get release details for ${release.id} from ${release.source}")
                         _errorMessage.value = "无法获取专辑详情，将应用基本信息 (来源: ${release.source})"
                         _selectedRelease.value = null
-                        // 即使获取详情失败，也尝试下载候选的封面图
+                        // 即使获取详情失败，也尝试获取候选的封面图（优先缓存，带超时回退到下载）
                         if (!release.coverArtUrl.isNullOrBlank()) {
-                            _downloadedAlbumArt.value = loadImageBytesFromUrl(release.coverArtUrl)
+                            try {
+                                val cover = kotlinx.coroutines.withTimeoutOrNull(5000L) {
+                                    getCoverArtBytes(release.coverArtUrl)
+                                }
+                                _downloadedAlbumArt.value = cover
+                            } catch (e: Exception) {
+                                Timber.e(e, "selectRelease: fallback cover art load failed")
+                            }
                         }
                     }
                 )

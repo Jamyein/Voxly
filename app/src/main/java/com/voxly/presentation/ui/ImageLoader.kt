@@ -3,16 +3,24 @@ package com.voxly.presentation.ui
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.voxly.data.remote.NetworkConstants
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
+import java.util.LinkedHashMap
 import java.util.concurrent.locks.ReentrantLock
 
-// Session-scoped LRU cache for search result album covers
+// Session-scoped LRU cache for search result album covers (ImageBitmap)
 private val searchResultCache = mutableMapOf<String, ImageBitmap>()
 private val cacheLock = ReentrantLock()
+
+// Session-scoped LRU cache for cover art bytes (ByteArray)
+private val coverArtByteCache = LinkedHashMap<String, ByteArray>(16, 0.75f, true)
+private val byteCacheLock = ReentrantLock()
+private const val MAX_BYTE_CACHE_SIZE = 30
 
 /**
  * Loads an image from URL and returns as ImageBitmap.
@@ -49,6 +57,88 @@ fun clearSearchResultImageCache() {
     cacheLock.lock()
     searchResultCache.clear()
     cacheLock.unlock()
+
+    // Also clear the byte array cache
+    clearCoverArtByteCache()
+}
+
+/**
+ * Clears the cover art byte array cache.
+ */
+fun clearCoverArtByteCache() {
+    byteCacheLock.lock()
+    coverArtByteCache.clear()
+    byteCacheLock.unlock()
+}
+
+/**
+ * Prefetches cover art bytes in the background (fire-and-forget).
+ * Called when search results are returned to pre-download cover art.
+ */
+fun prefetchCoverArtBytes(url: String?) {
+    if (url.isNullOrBlank()) return
+
+    // Check if already in cache
+    byteCacheLock.lock()
+    val alreadyCached = coverArtByteCache.containsKey(url)
+    byteCacheLock.unlock()
+    if (alreadyCached) return
+
+    // Fire-and-forget: download in background
+    CoroutineScope(Dispatchers.IO).launch {
+        try {
+            val bytes = loadImageBytesFromUrl(url)
+            if (bytes != null) {
+                // Store in cache with LRU eviction
+                byteCacheLock.lock()
+                try {
+                    // Remove oldest entries if at capacity
+                    while (coverArtByteCache.size >= MAX_BYTE_CACHE_SIZE) {
+                        val oldestKey = coverArtByteCache.keys.first()
+                        coverArtByteCache.remove(oldestKey)
+                    }
+                    coverArtByteCache[url] = bytes
+                } finally {
+                    byteCacheLock.unlock()
+                }
+            }
+        } catch (e: Exception) {
+            // Silently ignore prefetch failures
+        }
+    }
+}
+
+/**
+ * Gets cover art bytes, preferring cache over network.
+ * Returns cached bytes if available, otherwise downloads and caches.
+ */
+suspend fun getCoverArtBytes(url: String?): ByteArray? {
+    if (url.isNullOrBlank()) return null
+
+    // Try cache first
+    byteCacheLock.lock()
+    val cached = coverArtByteCache[url]
+    byteCacheLock.unlock()
+    if (cached != null) {
+        return cached
+    }
+
+    // Download from network
+    val bytes = loadImageBytesFromUrl(url) ?: return null
+
+    // Store in cache with LRU eviction
+    byteCacheLock.lock()
+    try {
+        while (coverArtByteCache.size >= MAX_BYTE_CACHE_SIZE) {
+            val oldestKey = coverArtByteCache.keys.first()
+            coverArtByteCache.remove(oldestKey)
+        }
+        coverArtByteCache[url] = bytes
+    } finally {
+        byteCacheLock.unlock()
+    }
+
+    return bytes
 }
 
 /**

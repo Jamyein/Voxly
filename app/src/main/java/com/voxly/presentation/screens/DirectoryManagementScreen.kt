@@ -104,9 +104,7 @@ fun DirectoryManagementScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(),
                 windowInsets = WindowInsets(0.dp)
             )
         }
@@ -158,7 +156,7 @@ fun DirectoryManagementScreen(
 
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp, bottom = 16.dp)
+                    contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 16.dp)
                 ) {
                     items(directories, key = { it.uri }) { directory ->
                         DirectoryManageItem(
@@ -180,7 +178,7 @@ private fun DirectoryManageItem(
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 4.dp),
+            .padding(vertical = 16.dp),
         shape = MaterialTheme.shapes.extraLarge
     ) {
         Row(
