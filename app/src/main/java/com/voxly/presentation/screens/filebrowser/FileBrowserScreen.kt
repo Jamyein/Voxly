@@ -339,6 +339,7 @@ fun FileBrowserScreen(
                     if (openedDirectory != null) {
                         LargeTopAppBar(
                             title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
+                colors = TopAppBarDefaults.topAppBarColors(),
 windowInsets = WindowInsets(0.dp),
                             navigationIcon = {
                                 IconButton(onClick = viewModel::closeOpenedDirectory) {
