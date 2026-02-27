@@ -8,6 +8,10 @@ sealed class Screen(
     val showBottomBar: Boolean = false
 ) {
     data object FileBrowser : Screen("file_browser", showBottomBar = true)
+    data object FileSearch : Screen("file_search/{filePaths}", showBottomBar = false) {
+        fun createRoute(filePaths: List<String>) =
+            "file_search/${filePaths.joinToString(",") { java.net.URLEncoder.encode(it, "UTF-8") }}"
+    }
     data object RecentEdits : Screen("recent_edits", showBottomBar = true)
     data object Statistics : Screen("statistics", showBottomBar = true)
     data object BatchOperations : Screen("batch_operations", showBottomBar = false)

@@ -88,6 +88,7 @@
     <string name="error_saving_file">Error saving file</string>
     <string name="error_network">Network error. Please check your connection.</string>
     <string name="error_no_results">No results found</string>
+    <string name="search_query">Search query</string>
     <string name="permission_required">Permission Required</string>
     <string name="permission_storage_message">Storage permission is required to access audio files.</string>
     <string name="grant_permission">Grant Permission</string>
@@ -154,6 +155,8 @@
     <string name="loading_audio_files">Loading audio files...</string>
     <string name="import_audio_files_or_select_folder">Import audio files or select a folder</string>
     <string name="file_search_hint">Search files, artist, album...</string>
+    <string name="file_search_title">Search Files</string>
+    <string name="file_search_results_count">%d results</string>
     <string name="file_sort_label">Sort</string>
     <string name="file_sort_name_asc">Name (A-Z)</string>
     <string name="file_sort_name_desc">Name (Z-A)</string>
