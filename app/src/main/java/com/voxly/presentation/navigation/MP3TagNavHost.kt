@@ -54,7 +54,7 @@ import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
 import androidx.compose.material3.NavigationBarItem
 import com.voxly.presentation.theme.ExpressiveAnimations
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.presentation.viewmodel.AppViewModel
 
 /**

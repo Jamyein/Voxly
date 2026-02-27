@@ -11,7 +11,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.appcompat.app.AppCompatActivity
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.presentation.navigation.MP3TagNavHost
 import com.voxly.presentation.theme.MP3TagTheme
 import com.voxly.presentation.viewmodel.SettingsViewModel

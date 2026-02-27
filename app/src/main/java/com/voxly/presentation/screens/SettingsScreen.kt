@@ -18,17 +18,17 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.CornerSize
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
@@ -38,6 +38,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.BrightnessAuto
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DragHandle
@@ -45,21 +47,27 @@ import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.Looks3
+import androidx.compose.material.icons.filled.LooksOne
+import androidx.compose.material.icons.filled.LooksTwo
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.animation.animateDpAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import androidx.annotation.StringRes
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.BuildConfig
 import com.voxly.R
 import com.voxly.core.util.LogManager
@@ -94,6 +102,20 @@ data class ScanModeOption(
     val value: String,
     @StringRes val labelResId: Int
 )
+
+data class ConnectedIconOption<T>(
+    val value: T,
+    val icon: ImageVector,
+    val tooltip: String
+)
+
+private fun connectedGroupWidth(optionCount: Int): Dp {
+    val perButtonBase = 56.dp
+    val spacing = 2.dp
+    val count = optionCount.coerceAtLeast(1)
+    val width = perButtonBase * count + spacing * (count - 1)
+    return width.coerceIn(160.dp, 320.dp)
+}
 
 // ==================== Helper Functions ====================
 
@@ -138,6 +160,105 @@ fun sourceHasExtraOptions(sourceId: String): Boolean = sourceId == "itunes"
 fun getExtraOptionLabel(sourceId: String): String = when (sourceId) {
     "itunes" -> "Country Code"
     else -> ""
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
+@Composable
+private fun <T> ConnectedIconButtonGroup(
+    options: List<ConnectedIconOption<T>>,
+    selectedValue: T,
+    onSelected: (T) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val mediumHeight = ButtonDefaults.MediumContainerHeight
+    val outerRadius = mediumHeight / 2
+    val innerRadius = 8.dp
+    val pressedInnerRadius = 4.dp
+    val checkedInnerRadius = 8.dp
+
+    Row(
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        options.forEachIndexed { index, option ->
+            val tooltipState = rememberTooltipState()
+            TooltipBox(
+                modifier = Modifier.weight(1f),
+                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
+                tooltip = {
+                    PlainTooltip {
+                        Text(option.tooltip)
+                    }
+                },
+                state = tooltipState
+            ) {
+                ToggleButton(
+                    checked = option.value == selectedValue,
+                    onCheckedChange = { checked ->
+                        if (checked) onSelected(option.value)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = mediumHeight)
+                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                        .semantics { role = Role.RadioButton },
+                    shapes = when (index) {
+                        0 -> ToggleButtonDefaults.shapes(
+                            shape = RoundedCornerShape(
+                                topStart = outerRadius,
+                                bottomStart = outerRadius,
+                                topEnd = innerRadius,
+                                bottomEnd = innerRadius
+                            ),
+                            pressedShape = RoundedCornerShape(
+                                topStart = outerRadius,
+                                bottomStart = outerRadius,
+                                topEnd = pressedInnerRadius,
+                                bottomEnd = pressedInnerRadius
+                            ),
+                            checkedShape = RoundedCornerShape(
+                                topStart = outerRadius,
+                                bottomStart = outerRadius,
+                                topEnd = checkedInnerRadius,
+                                bottomEnd = checkedInnerRadius
+                            )
+                        )
+                        options.lastIndex -> ToggleButtonDefaults.shapes(
+                            shape = RoundedCornerShape(
+                                topStart = innerRadius,
+                                bottomStart = innerRadius,
+                                topEnd = outerRadius,
+                                bottomEnd = outerRadius
+                            ),
+                            pressedShape = RoundedCornerShape(
+                                topStart = pressedInnerRadius,
+                                bottomStart = pressedInnerRadius,
+                                topEnd = outerRadius,
+                                bottomEnd = outerRadius
+                            ),
+                            checkedShape = RoundedCornerShape(
+                                topStart = checkedInnerRadius,
+                                bottomStart = checkedInnerRadius,
+                                topEnd = outerRadius,
+                                bottomEnd = outerRadius
+                            )
+                        )
+                        else -> ToggleButtonDefaults.shapes(
+                            shape = RoundedCornerShape(innerRadius),
+                            pressedShape = RoundedCornerShape(pressedInnerRadius),
+                            checkedShape = RoundedCornerShape(checkedInnerRadius)
+                        )
+                    },
+                    contentPadding = PaddingValues(2.dp)
+                ) {
+                    Icon(
+                        imageVector = option.icon,
+                        contentDescription = option.tooltip
+                    )
+                }
+            }
+        }
+    }
 }
 
 /**
@@ -737,13 +858,8 @@ fun SearchLimitDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Global limit
-                Text(
+                SearchLimitRow(
                     text = stringResource(R.string.settings_online_search_limit),
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                SearchLimitDropdown(
                     currentLimit = globalLimit,
                     searchLimitOptions = searchLimitOptions,
                     onLimitChange = onGlobalLimitChange
@@ -760,7 +876,7 @@ fun SearchLimitDialog(
 
                 // MusicBrainz
                 SearchLimitRow(
-                    title = stringResource(R.string.settings_online_search_limit_musicbrainz),
+                    text = stringResource(R.string.settings_online_search_limit_musicbrainz),
                     currentLimit = musicBrainzLimit,
                     searchLimitOptions = searchLimitOptions,
                     onLimitChange = onMusicBrainzLimitChange
@@ -768,7 +884,7 @@ fun SearchLimitDialog(
 
                 // iTunes
                 SearchLimitRow(
-                    title = stringResource(R.string.settings_online_search_limit_itunes),
+                    text = stringResource(R.string.settings_online_search_limit_itunes),
                     currentLimit = itunesLimit,
                     searchLimitOptions = searchLimitOptions,
                     onLimitChange = onItunesLimitChange
@@ -776,7 +892,7 @@ fun SearchLimitDialog(
 
                 // NetEase
                 SearchLimitRow(
-                    title = stringResource(R.string.settings_online_search_limit_netease),
+                    text = stringResource(R.string.settings_online_search_limit_netease),
                     currentLimit = neteaseLimit,
                     searchLimitOptions = searchLimitOptions,
                     onLimitChange = onNeteaseLimitChange
@@ -784,7 +900,7 @@ fun SearchLimitDialog(
 
                 // QQ Music
                 SearchLimitRow(
-                    title = stringResource(R.string.settings_online_search_limit_qq_music),
+                    text = stringResource(R.string.settings_online_search_limit_qq_music),
                     currentLimit = qqMusicLimit,
                     searchLimitOptions = searchLimitOptions,
                     onLimitChange = onQQMusicLimitChange
@@ -806,123 +922,51 @@ private fun SearchLimitDropdown(
     searchLimitOptions: List<SearchLimitOption>,
     onLimitChange: (Int) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val currentOption = searchLimitOptions.firstOrNull { it.value == currentLimit }
-        ?: searchLimitOptions.firstOrNull { it.value == 0 }
-        ?: searchLimitOptions[0]
-
-    ExposedDropdownMenuBox(
-        expanded = expanded,
-        onExpandedChange = { expanded = it }
-    ) {
-        OutlinedTextField(
-            value = currentOption.displayLabel(),
-            onValueChange = {},
-            readOnly = true,
-            singleLine = true,
-            textStyle = MaterialTheme.typography.bodyMedium,
-            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-            modifier = Modifier
-                .fillMaxWidth()
-                .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-        )
-        ExposedDropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            searchLimitOptions.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(option.displayLabel()) },
-                    onClick = {
-                        onLimitChange(option.value)
-                        expanded = false
-                    }
-                )
-            }
-        }
-    }
+    ConnectedIconButtonGroup(
+        options = searchLimitOptions.map { option ->
+            ConnectedIconOption(
+                value = option.value,
+                icon = when (option.value) {
+                    0 -> Icons.Default.AllInclusive
+                    10 -> Icons.Default.LooksOne
+                    25 -> Icons.Default.LooksTwo
+                    else -> Icons.Default.Looks3
+                },
+                tooltip = option.displayLabel()
+            )
+        },
+        selectedValue = currentLimit,
+        onSelected = onLimitChange
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SearchLimitRow(
-    title: String,
+    text: String,
     currentLimit: Int,
     searchLimitOptions: List<SearchLimitOption>,
     onLimitChange: (Int) -> Unit
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val currentOption = searchLimitOptions.firstOrNull { it.value == currentLimit }
-        ?: searchLimitOptions.firstOrNull { it.value == 0 }
-        ?: searchLimitOptions[0]
-
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
-            text = title,
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.weight(1f)
+            text = text,
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.padding(end = 8.dp),
+            color = MaterialTheme.colorScheme.onSurface
         )
-        ExposedDropdownMenuBox(
-            expanded = expanded,
-            onExpandedChange = { expanded = it },
-            modifier = Modifier.weight(1f)
-        ) {
-            OutlinedTextField(
-                value = if (currentLimit <= 0) stringResource(R.string.settings_online_search_limit_unlimited) else currentLimit.toString(),
-                onValueChange = {},
-                readOnly = true,
-                singleLine = true,
-                textStyle = MaterialTheme.typography.bodyMedium,
-                trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
-                modifier = Modifier
-                    .width(120.dp)
-                    .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+        Spacer(modifier = Modifier.weight(1f))
+        Box(modifier = Modifier.width(connectedGroupWidth(searchLimitOptions.size))) {
+            SearchLimitDropdown(
+                currentLimit = currentLimit,
+                searchLimitOptions = searchLimitOptions,
+                onLimitChange = onLimitChange
             )
-            ExposedDropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false }
-            ) {
-                searchLimitOptions.forEach { option ->
-                    DropdownMenuItem(
-                        text = { Text(option.displayLabel()) },
-                        onClick = {
-                            onLimitChange(option.value)
-                            expanded = false
-                        }
-                    )
-                }
-            }
         }
-    }
-}
-
-/**
- * Returns the appropriate shape for a button in a connected button group.
- * First button gets rounded left corners, last button gets rounded right corners,
- * middle buttons are square (connected).
- */
-@Composable
-private fun getButtonGroupShape(index: Int, count: Int): androidx.compose.ui.graphics.Shape {
-    return when {
-        count == 1 -> MaterialTheme.shapes.extraLarge
-        index == 0 -> MaterialTheme.shapes.extraLarge.copy(
-            topEnd = CornerSize(0.dp),
-            bottomEnd = CornerSize(0.dp)
-        )
-        index == count - 1 -> MaterialTheme.shapes.extraLarge.copy(
-            topStart = CornerSize(0.dp),
-            bottomStart = CornerSize(0.dp)
-        )
-        else -> MaterialTheme.shapes.small.copy(
-            topStart = CornerSize(0.dp),
-            topEnd = CornerSize(0.dp),
-            bottomStart = CornerSize(0.dp),
-            bottomEnd = CornerSize(0.dp)
-        )
     }
 }
 
@@ -1014,8 +1058,6 @@ fun SettingsScreen(
     val currentAppleCountry = appleCountryOptions.firstOrNull { it.value == appleCountryCode.lowercase() }
         ?: appleCountryOptions.first()
 
-    var searchLimitExpanded by remember { mutableStateOf(false) }
-
     var showMetadataSourceDialog by remember { mutableStateOf(false) }
     var showLyricsSourceDialog by remember { mutableStateOf(false) }
     var showCoverSourceDialog by remember { mutableStateOf(false) }
@@ -1060,49 +1102,29 @@ fun SettingsScreen(
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
                 // Theme Segmented Buttons - First item
                 SettingsItemCard(position = CardPosition.FIRST) {
-                    Text(
-                        text = stringResource(R.string.settings_theme),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(0.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        listOf(
-                            Triple("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
-                            Triple("light", Icons.Default.LightMode, stringResource(R.string.settings_theme_light)),
-                            Triple("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
-                        ).forEachIndexed { index, (mode, icon, label) ->
-                            val isSelected = themeMode == mode
-                            val cornerSize by animateDpAsState(
-                                targetValue = if (isSelected) 8.dp else 0.dp,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-                                label = "cornerSize"
+                        Text(
+                            text = stringResource(R.string.settings_theme),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        val themeOptionCount = 3
+                        Box(modifier = Modifier.width(connectedGroupWidth(themeOptionCount))) {
+                            ConnectedIconButtonGroup(
+                                options = listOf(
+                                    ConnectedIconOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
+                                    ConnectedIconOption("light", Icons.Default.LightMode, stringResource(R.string.settings_theme_light)),
+                                    ConnectedIconOption("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
+                                ),
+                                selectedValue = themeMode,
+                                onSelected = viewModel::setThemeMode
                             )
-                            FilledTonalButton(
-                                onClick = { viewModel.setThemeMode(mode) },
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp),
-                                shape = getButtonGroupShape(index = index, count = 3).let { baseShape ->
-                                    RoundedCornerShape(
-                                        topStart = if (index == 0) CornerSize(28.dp) else CornerSize(cornerSize),
-                                        topEnd = if (index == 2) CornerSize(28.dp) else CornerSize(cornerSize),
-                                        bottomStart = if (index == 0) CornerSize(28.dp) else CornerSize(cornerSize),
-                                        bottomEnd = if (index == 2) CornerSize(28.dp) else CornerSize(cornerSize)
-                                    )
-                                },
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-                                    else MaterialTheme.colorScheme.surfaceContainerHigh
-                                )
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Icon(icon, contentDescription = mode, modifier = Modifier.size(20.dp))
-                                    Text(label, style = MaterialTheme.typography.labelSmall)
-                                }
-                            }
                         }
                     }
 
@@ -1153,46 +1175,34 @@ fun SettingsScreen(
             SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
                 // Scan Mode Segmented Buttons - First item
                 SettingsItemCard(position = CardPosition.FIRST) {
-                    Text(
-                        text = stringResource(R.string.settings_scan_mode),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(bottom = 8.dp)
-                    )
-
                     Row(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(0.dp)
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        scanModeOptions.forEachIndexed { index, option ->
-                            val isSelected = scanMode == option.value
-                            val cornerSize by animateDpAsState(
-                                targetValue = if (isSelected) 8.dp else 0.dp,
-                                animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
-                                label = "cornerSize"
-                            )
-                            FilledTonalButton(
-                                onClick = { viewModel.setScanMode(option.value) },
-                                modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(horizontal = 2.dp, vertical = 8.dp),
-                                shape = getButtonGroupShape(index = index, count = scanModeOptions.size).let { baseShape ->
-                                    RoundedCornerShape(
-                                        topStart = if (index == 0) CornerSize(28.dp) else CornerSize(cornerSize),
-                                        topEnd = if (index == scanModeOptions.size - 1) CornerSize(28.dp) else CornerSize(cornerSize),
-                                        bottomStart = if (index == 0) CornerSize(28.dp) else CornerSize(cornerSize),
-                                        bottomEnd = if (index == scanModeOptions.size - 1) CornerSize(28.dp) else CornerSize(cornerSize)
+                        Text(
+                            text = stringResource(R.string.settings_scan_mode),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Spacer(modifier = Modifier.weight(1f))
+                        Box(modifier = Modifier.width(connectedGroupWidth(scanModeOptions.size))) {
+                            ConnectedIconButtonGroup(
+                                options = scanModeOptions.map { option ->
+                                    ConnectedIconOption(
+                                        value = option.value,
+                                        icon = when (option.value) {
+                                            "TRACK_ONLY" -> Icons.Default.MusicNote
+                                            "SINGLE_ALBUM" -> Icons.Default.Album
+                                            else -> Icons.Default.LibraryMusic
+                                        },
+                                        tooltip = stringResource(option.labelResId)
                                     )
                                 },
-                                colors = ButtonDefaults.filledTonalButtonColors(
-                                    containerColor = if (isSelected) MaterialTheme.colorScheme.secondaryContainer
-                                    else MaterialTheme.colorScheme.surfaceContainerHigh
-                                )
-                            ) {
-                                Text(
-                                    text = stringResource(option.labelResId),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    maxLines = 1
-                                )
-                            }
+                                selectedValue = scanMode,
+                                onSelected = viewModel::setScanMode
+                            )
                         }
                     }
 

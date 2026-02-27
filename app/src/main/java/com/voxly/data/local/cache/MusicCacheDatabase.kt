@@ -83,7 +83,7 @@ class MusicCacheDatabaseProvider @Inject constructor(
                 // Enable WAL mode for better concurrent performance
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
                 // Fallback to destructive migration during development
-                .fallbackToDestructiveMigration()
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 .build()
             instance = newInstance
             newInstance

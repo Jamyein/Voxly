@@ -1,5 +1,6 @@
 package com.voxly.presentation.components
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +38,7 @@ fun SettingsSection(
         ) {
             Column(
                 modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
                 content = content
             )
         }

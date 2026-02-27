@@ -21,6 +21,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -49,7 +50,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.core.content.ContextCompat
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
@@ -368,7 +369,7 @@ fun FileBrowserScreen(
                     } else {
                         LargeTopAppBar(
                             title = { Text(stringResource(R.string.nav_file_browser)) },
-                            colors = TopAppBarDefaults.largeTopAppBarColors(),
+                            colors = TopAppBarDefaults.topAppBarColors(),
                             windowInsets = WindowInsets(0.dp),
                             actions = {
                                 IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
@@ -1461,7 +1462,7 @@ private fun SelectionTopBar(
                 )
             }
         },
-        colors = TopAppBarDefaults.largeTopAppBarColors(
+        colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         ),
 windowInsets = WindowInsets(0.dp),
@@ -1523,14 +1524,14 @@ private fun DirectoryOverviewContent(
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         items(directories, key = { it.uri }) { directory ->
             DirectoryItem(
                 directory = directory,
                 fileCount = directoryFiles[directory.uri]?.size ?: 0,
-                onClick = { onOpenDirectory(directory.uri) },
-                modifier = Modifier.padding(vertical = 0.dp)
+                onClick = { onOpenDirectory(directory.uri) }
             )
         }
     }
@@ -1662,12 +1663,6 @@ private fun AudioFileItem(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
-    val surfaceColor = if (isSelected) {
-        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
-    } else {
-        MaterialTheme.colorScheme.surface
-    }
-
     Surface(
         modifier = modifier
             .fillMaxWidth()
@@ -1675,20 +1670,19 @@ private fun AudioFileItem(
                 onClick = onClick,
                 onLongClick = onLongClick
             ),
-        color = surfaceColor,
-        shape = MaterialTheme.shapes.extraLarge
+        color = Color.Transparent
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+                .padding(start = 12.dp, end = 4.dp, top = 14.dp, bottom = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Album art display
             Box(
                 modifier = Modifier
-                    .size(44.dp)
-                    .clip(MaterialTheme.shapes.extraSmall),
+                    .size(64.dp)
+                    .clip(MaterialTheme.shapes.medium),
                 contentAlignment = Alignment.Center
             ) {
                 val albumArtBitmap by produceState<android.graphics.Bitmap?>(

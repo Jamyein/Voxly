@@ -47,7 +47,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineRelease
@@ -264,7 +264,7 @@ private fun OnlineReleaseList(
                     Spacer(modifier = Modifier.size(16.dp))
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = "Song: ${release.songTitle?.ifBlank { release.title?.ifBlank { "-" } } ?: release.title?.ifBlank { "-" } ?: "-"}",
+                            text = "Song: ${release.songTitle?.ifBlank { release.title.ifBlank { "-" } } ?: release.title.ifBlank { "-" } }",
                             style = MaterialTheme.typography.titleSmall,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
@@ -277,7 +277,7 @@ private fun OnlineReleaseList(
                             overflow = TextOverflow.Ellipsis
                         )
                         Text(
-                            text = "Album: ${release.albumTitle?.ifBlank { "-" } ?: release.title?.ifBlank { "-" } ?: "-"}",
+                            text = "Album: ${release.albumTitle?.ifBlank { "-" } ?: release.title.ifBlank { "-" }}",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,

@@ -158,7 +158,7 @@ class LyricsRepositoryImpl @Inject constructor(
                     )
 
                 val result = metadataProcessor.updateMetadata(normalizedPath, updatedMetadata)
-                    ?: metadataProcessor.updateMetadata(filePath, updatedMetadata)
+                    .recover { metadataProcessor.updateMetadata(filePath, updatedMetadata) }
                 if (result.isFailure) {
                     return@withContext Result.failure(LyricsException("Failed to save lyrics"))
                 }
@@ -195,7 +195,7 @@ class LyricsRepositoryImpl @Inject constructor(
                     ?: return@withContext Result.failure(LyricsException("Cannot read file metadata"))
 
                 val result = metadataProcessor.updateMetadata(normalizedPath, updatedMetadata)
-                    ?: metadataProcessor.updateMetadata(filePath, updatedMetadata)
+                    .recover { metadataProcessor.updateMetadata(filePath, updatedMetadata) }
                 if (result.isFailure) {
                     return@withContext Result.failure(LyricsException("Failed to remove lyrics"))
                 }
@@ -500,9 +500,9 @@ class LyricsRepositoryImpl @Inject constructor(
         }.thenByDescending {
             if (it.hasSyncedLyrics) 2 else 0
         }.thenByDescending {
-            if (artistName != null && 
-                (it.artistName?.contains(artistName, ignoreCase = true) == true ||
-                 artistName.contains(it.artistName ?: "", ignoreCase = true))
+            if (artistName != null &&
+                (it.artistName.contains(artistName, ignoreCase = true) ||
+                 artistName.contains(it.artistName, ignoreCase = true))
             ) 1 else 0
         })
 

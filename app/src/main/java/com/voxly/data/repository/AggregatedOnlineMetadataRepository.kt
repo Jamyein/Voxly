@@ -1029,11 +1029,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             val lyricsText = lyricsResponse?.lrc?.lyric?.takeIf { it.isNotBlank() }
 
                             // 解析碟号
-                            val discNumber = searchSong.disc?.toIntOrNull()
+                            val discNumber = searchSong.disc.toIntOrNull()
                             // 解析曲目号
-                            val trackNumber = searchSong.trackNumber?.takeIf { it > 0 }
+                            val trackNumber = searchSong.trackNumber.takeIf { it > 0 }
                             // 别名/注释
-                            val alias = searchSong.alias?.takeIf { it.isNotEmpty() }?.joinToString("; ")
+                            val alias = searchSong.alias.takeIf { it.isNotEmpty() }?.joinToString("; ")
 
                             OnlineRecording(
                                 id = searchSong.id.toString(),
