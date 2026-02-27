@@ -95,7 +95,7 @@ fun LogViewerScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                contentPadding = WindowInsets.statusBars.asPaddingValues()
+                windowInsets = WindowInsets(0.dp)
             )
         },
         floatingActionButton = {
@@ -120,9 +120,11 @@ fun LogViewerScreen(
             }
             }
         }
-    ) {
+    ) { innerPadding ->
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
             if (uiState.selectedLogFile == null) {
                 LogFileList(

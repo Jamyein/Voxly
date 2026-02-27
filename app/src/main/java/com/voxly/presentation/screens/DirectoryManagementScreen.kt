@@ -107,12 +107,14 @@ fun DirectoryManagementScreen(
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                 ),
-                contentPadding = WindowInsets.statusBars.asPaddingValues()
+                windowInsets = WindowInsets(0.dp)
             )
         }
-    ) {
+    ) { innerPadding ->
         Column(
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
         ) {
             if (directories.isEmpty()) {
                 Column(
@@ -156,7 +158,7 @@ fun DirectoryManagementScreen(
 
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp, bottom = 16.dp)
                 ) {
                     items(directories, key = { it.uri }) { directory ->
                         DirectoryManageItem(

@@ -57,13 +57,14 @@ fun BatchOperationsScreen(
                         }
                     }
                 },
-                contentPadding = WindowInsets.statusBars.asPaddingValues()
+                windowInsets = WindowInsets(0.dp)
             )
         }
-    ) {
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(innerPadding)
                 .padding(16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
