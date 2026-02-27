@@ -170,6 +170,7 @@ fun MetadataEditorScreen(
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(),
+windowInsets = WindowInsets(0.dp),
                 actions = {
                     // Chinese conversion dropdown menu
                     Box {
