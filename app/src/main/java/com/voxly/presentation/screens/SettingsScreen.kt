@@ -161,19 +161,14 @@ fun DraggableSourcePriorityDialog(
     onSourceReorder: (List<String>) -> Unit,
     onAppleCountryChange: (String) -> Unit
 ) {
-    // Create mutable state for each source
-    var sourcesState by remember(sourceTypeConfig) {
-        mutableStateOf(
-            sourceTypeConfig.sources.sortedBy { it.order }.map { source ->
-                SourceItemState(
-                    sourceId = source.sourceId,
-                    enabled = source.enabled,
-                    order = source.order,
-                    extraOptions = source.extraOptions
-                )
-            }
-        )
+    // Get sources directly from sourceTypeConfig (observing StateFlow changes)
+    val sources = remember(sourceTypeConfig) {
+        sourceTypeConfig.sources.sortedBy { it.order }
     }
+
+    // Local drag visual state - only used for visual feedback during drag
+    // This is set when drag starts and cleared when drag ends
+    var localDragList by remember { mutableStateOf<List<SourceItemState>?>(null) }
 
     // Track original drag start position
     var originalDragIndex by remember { mutableStateOf<Int?>(null) }
@@ -183,6 +178,16 @@ fun DraggableSourcePriorityDialog(
     var dragOffset by remember { mutableStateOf(0f) }
     val itemHeight = 80.dp // Approximate item height
     val density = androidx.compose.ui.platform.LocalDensity.current
+
+    // Use local drag list if available, otherwise use the actual sources
+    val displayList = localDragList ?: sources.map { source ->
+        SourceItemState(
+            sourceId = source.sourceId,
+            enabled = source.enabled,
+            order = source.order,
+            extraOptions = source.extraOptions
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -202,16 +207,8 @@ fun DraggableSourcePriorityDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                sourcesState.forEachIndexed { index, sourceState ->
+                displayList.forEachIndexed { index, sourceState ->
                     val isDragging = draggedIndex == index
-                    val targetIndex = remember(dragOffset, draggedIndex) {
-                        if (draggedIndex != null && draggedIndex != index) {
-                            val offsetInItems = dragOffset / with(density) { itemHeight.toPx() }
-                            (draggedIndex!! + offsetInItems.roundToInt()).coerceIn(0, sourcesState.lastIndex)
-                        } else {
-                            index
-                        }
-                    }
 
                     Card(
                         modifier = Modifier
@@ -231,18 +228,24 @@ fun DraggableSourcePriorityDialog(
                                         originalDragIndex = index
                                         draggedIndex = index
                                         dragOffset = 0f
+                                        // Initialize local drag list for visual feedback
+                                        localDragList = displayList.toList()
                                     },
                                     onDragEnd = {
                                         // Use originalDragIndex to check if position changed
                                         if (originalDragIndex != null && originalDragIndex != index) {
-                                            // sourcesState is already updated from onDrag, just save it
-                                            onSourceReorder(sourcesState.map { it.sourceId })
+                                            // Save the reordered list
+                                            onSourceReorder(localDragList?.map { it.sourceId } ?: displayList.map { it.sourceId })
                                         }
+                                        // Clear local drag list
+                                        localDragList = null
                                         originalDragIndex = null
                                         draggedIndex = null
                                         dragOffset = 0f
                                     },
                                     onDragCancel = {
+                                        // Clear local drag list
+                                        localDragList = null
                                         originalDragIndex = null
                                         draggedIndex = null
                                         dragOffset = 0f
@@ -253,13 +256,13 @@ fun DraggableSourcePriorityDialog(
                                         // Calculate target position
                                         val offsetInItems = dragOffset / with(density) { itemHeight.toPx() }
                                         val newTargetIndex = (draggedIndex!! + offsetInItems.roundToInt())
-                                            .coerceIn(0, sourcesState.lastIndex)
-                                        if (newTargetIndex != index && newTargetIndex in sourcesState.indices) {
+                                            .coerceIn(0, localDragList!!.lastIndex)
+                                        if (newTargetIndex != index && newTargetIndex in localDragList!!.indices) {
                                             // Swap items in the list for visual feedback
-                                            val newList = sourcesState.toMutableList()
+                                            val newList = localDragList!!.toMutableList()
                                             val item = newList.removeAt(draggedIndex!!)
                                             newList.add(newTargetIndex, item)
-                                            sourcesState = newList
+                                            localDragList = newList
                                             draggedIndex = newTargetIndex
                                             dragOffset = 0f
                                         }
@@ -315,11 +318,8 @@ fun DraggableSourcePriorityDialog(
                                 Switch(
                                     checked = sourceState.enabled,
                                     onCheckedChange = { enabled ->
+                                        // Directly trigger ViewModel callback for real-time save
                                         onSourceEnabledChange(sourceState.sourceId, enabled)
-                                        // Update local state
-                                        sourcesState = sourcesState.toMutableList().also {
-                                            it[index] = sourceState.copy(enabled = enabled)
-                                        }
                                     }
                                 )
 
@@ -344,15 +344,13 @@ fun DraggableSourcePriorityDialog(
                                                 )
                                             },
                                             onClick = {
+                                                // Directly trigger ViewModel callback for real-time save
                                                 onSourceEnabledChange(sourceState.sourceId, !sourceState.enabled)
-                                                sourcesState = sourcesState.toMutableList().also {
-                                                    it[index] = sourceState.copy(enabled = !sourceState.enabled)
-                                                }
                                                 showMenu = false
                                             },
                                             leadingIcon = {
                                                 Icon(
-                                                    imageVector = if (sourceState.enabled) 
+                                                    imageVector = if (sourceState.enabled)
                                                         Icons.Default.ExpandMore else Icons.Default.ExpandLess,
                                                     contentDescription = null
                                                 )
@@ -994,10 +992,12 @@ fun SettingsScreen(
         ?: appleCountryOptions.first()
 
     var searchLimitExpanded by remember { mutableStateOf(false) }
+
     var showMetadataSourceDialog by remember { mutableStateOf(false) }
     var showLyricsSourceDialog by remember { mutableStateOf(false) }
     var showCoverSourceDialog by remember { mutableStateOf(false) }
     var showSearchLimitsDialog by remember { mutableStateOf(false) }
+
     val searchLimitOptions = remember {
         listOf(
             SearchLimitOption(0, R.string.settings_online_search_limit_unlimited),
@@ -1024,10 +1024,7 @@ fun SettingsScreen(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.nav_settings)) },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
+                colors = TopAppBarDefaults.topAppBarColors(),
                 windowInsets = WindowInsets(0.dp) 
             )
         }
