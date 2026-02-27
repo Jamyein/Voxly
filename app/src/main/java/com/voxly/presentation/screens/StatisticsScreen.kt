@@ -63,7 +63,7 @@ fun StatisticsScreen(
                         )
                     }
                 },
-                contentPadding = WindowInsets.statusBars.asPaddingValues()
+                windowInsets = WindowInsets(0.dp) 
             )
         }
     ) { innerPadding ->
