@@ -18,7 +18,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
@@ -110,11 +109,11 @@ data class ConnectedIconOption<T>(
 )
 
 private fun connectedGroupWidth(optionCount: Int): Dp {
-    val perButtonBase = 56.dp
+    val perButtonBase = 40.dp
     val spacing = 2.dp
     val count = optionCount.coerceAtLeast(1)
     val width = perButtonBase * count + spacing * (count - 1)
-    return width.coerceIn(160.dp, 320.dp)
+    return width.coerceIn(124.dp, 220.dp)
 }
 
 // ==================== Helper Functions ====================
@@ -175,6 +174,7 @@ private fun <T> ConnectedIconButtonGroup(
     val innerRadius = 8.dp
     val pressedInnerRadius = 4.dp
     val checkedInnerRadius = 8.dp
+    val itemWidth = 40.dp
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -183,7 +183,7 @@ private fun <T> ConnectedIconButtonGroup(
         options.forEachIndexed { index, option ->
             val tooltipState = rememberTooltipState()
             TooltipBox(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(itemWidth),
                 positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
                 tooltip = {
                     PlainTooltip {
@@ -200,7 +200,6 @@ private fun <T> ConnectedIconButtonGroup(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = mediumHeight)
-                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                         .semantics { role = Role.RadioButton },
                     shapes = when (index) {
                         0 -> ToggleButtonDefaults.shapes(
@@ -956,10 +955,13 @@ private fun SearchLimitRow(
         Text(
             text = text,
             style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.padding(end = 8.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .weight(1f)
+                .padding(end = 8.dp),
             color = MaterialTheme.colorScheme.onSurface
         )
-        Spacer(modifier = Modifier.weight(1f))
         Box(modifier = Modifier.width(connectedGroupWidth(searchLimitOptions.size))) {
             SearchLimitDropdown(
                 currentLimit = currentLimit,
@@ -1111,9 +1113,12 @@ fun SettingsScreen(
                             text = stringResource(R.string.settings_theme),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(end = 8.dp)
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         )
-                        Spacer(modifier = Modifier.weight(1f))
                         val themeOptionCount = 3
                         Box(modifier = Modifier.width(connectedGroupWidth(themeOptionCount))) {
                             ConnectedIconButtonGroup(
@@ -1184,9 +1189,12 @@ fun SettingsScreen(
                             text = stringResource(R.string.settings_scan_mode),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(end = 8.dp)
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         )
-                        Spacer(modifier = Modifier.weight(1f))
                         Box(modifier = Modifier.width(connectedGroupWidth(scanModeOptions.size))) {
                             ConnectedIconButtonGroup(
                                 options = scanModeOptions.map { option ->

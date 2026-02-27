@@ -328,7 +328,7 @@ fun FileBrowserScreen(
                     exit = fadeOut() + shrinkVertically()
                 ) {
                     if (openedDirectory != null) {
-                        LargeTopAppBar(
+                        TopAppBar(
                             title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
                             colors = TopAppBarDefaults.topAppBarColors(),
                             windowInsets = WindowInsets(0.dp),
@@ -1452,7 +1452,7 @@ private fun SelectionTopBar(
     onNavigateToReplayGain: () -> Unit,
     onBatchOperations: () -> Unit
 ) {
-    LargeTopAppBar(
+    TopAppBar(
         title = { Text(stringResource(R.string.selected_count, selectedCount)) },
         navigationIcon = {
             IconButton(onClick = onClearSelection) {
@@ -1465,7 +1465,7 @@ private fun SelectionTopBar(
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         ),
-windowInsets = WindowInsets(0.dp),
+        windowInsets = WindowInsets(0.dp),
         actions = {
             TextButton(onClick = onSelectAll) {
                 Text(stringResource(R.string.select_all))

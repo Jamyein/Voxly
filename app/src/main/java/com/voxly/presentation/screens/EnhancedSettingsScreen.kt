@@ -35,11 +35,11 @@ data class EnhancedConnectedIconOption<T>(
 )
 
 private fun connectedGroupWidth(optionCount: Int): Dp {
-    val perButtonBase = 56.dp
+    val perButtonBase = 40.dp
     val spacing = 2.dp
     val count = optionCount.coerceAtLeast(1)
     val width = perButtonBase * count + spacing * (count - 1)
-    return width.coerceIn(160.dp, 320.dp)
+    return width.coerceIn(124.dp, 220.dp)
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
@@ -55,6 +55,7 @@ private fun <T> EnhancedConnectedIconButtonGroup(
     val innerRadius = 8.dp
     val pressedInnerRadius = 4.dp
     val checkedInnerRadius = 8.dp
+    val itemWidth = 40.dp
 
     Row(
         modifier = modifier.fillMaxWidth(),
@@ -63,7 +64,7 @@ private fun <T> EnhancedConnectedIconButtonGroup(
         options.forEachIndexed { index, option ->
             val tooltipState = rememberTooltipState()
             TooltipBox(
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.width(itemWidth),
                 positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
                 tooltip = {
                     PlainTooltip {
@@ -80,7 +81,6 @@ private fun <T> EnhancedConnectedIconButtonGroup(
                     modifier = Modifier
                         .fillMaxWidth()
                         .heightIn(min = mediumHeight)
-                        .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
                         .semantics { role = Role.RadioButton },
                     shapes = when (index) {
                         0 -> ToggleButtonDefaults.shapes(
@@ -178,9 +178,12 @@ fun EnhancedSettingsScreen(
                             text = stringResource(R.string.settings_metadata_source),
                             style = MaterialTheme.typography.titleSmall,
                             color = MaterialTheme.colorScheme.onSurface,
-                            modifier = Modifier.padding(end = 8.dp)
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier
+                                .weight(1f)
+                                .padding(end = 8.dp)
                         )
-                        Spacer(modifier = Modifier.weight(1f))
                         val sourceOptionCount = 3
                         Box(modifier = Modifier.width(connectedGroupWidth(sourceOptionCount))) {
                             EnhancedConnectedIconButtonGroup(
