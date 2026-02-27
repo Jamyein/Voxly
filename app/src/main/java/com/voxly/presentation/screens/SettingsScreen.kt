@@ -1028,7 +1028,7 @@ fun SettingsScreen(
                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                windowInsets = WindowInsets.statusBars
+                windowInsets = WindowInsets(0.dp) 
             )
         }
     ) { innerPadding ->
