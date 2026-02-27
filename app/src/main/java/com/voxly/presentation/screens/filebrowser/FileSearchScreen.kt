@@ -67,7 +67,7 @@ fun FileSearchScreen(
     viewModel: FileSearchViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    var searchQuery by rememberSaveable { mutableStateOf("") }
+    var searchQuery by remember { mutableStateOf("") }
     var sortOption by rememberSaveable { mutableStateOf(SearchSortOption.NAME_ASC.name) }
     var isSortExpanded by rememberSaveable { mutableStateOf(false) }
 
@@ -185,20 +185,55 @@ fun FileSearchScreen(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            // File list
-            LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(filteredFiles, key = { it.path }) { audioFile ->
-                    SearchResultItem(
-                        audioFile = audioFile,
-                        albumArtCache = albumArtCache,
-                        onClick = { onFileSelected(audioFile.path) }
-                    )
+            // File list or empty state
+            if (filteredFiles.isEmpty()) {
+                EmptySearchState(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                )
+            } else {
+                LazyColumn(
+                    state = listState,
+                    contentPadding = PaddingValues(top = 4.dp, bottom = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                    modifier = Modifier.weight(1f)
+                ) {
+                    items(filteredFiles, key = { it.path }) { audioFile ->
+                        SearchResultItem(
+                            audioFile = audioFile,
+                            albumArtCache = albumArtCache,
+                            onClick = { onFileSelected(audioFile.path) }
+                        )
+                    }
                 }
             }
+        }
+    }
+}
+
+@Composable
+private fun EmptySearchState(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.Search,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.file_search_empty),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
         }
     }
 }
