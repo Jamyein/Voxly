@@ -24,7 +24,8 @@ object OnlineRecordingMapper {
         discCount: Int? = null,
         trackNumber: Int? = null,
         trackCount: Int? = null,
-        collectionName: String? = null  // 专辑名
+        collectionName: String? = null,  // 专辑名
+        releaseDate: String? = null  // 发布日期
     ): OnlineRecording {
         return OnlineRecording(
             id = trackId?.toString() ?: "",
@@ -40,8 +41,16 @@ object OnlineRecordingMapper {
             discNumber = discNumber,
             discCount = discCount,
             trackNumber = trackNumber,
-            trackCount = trackCount
+            trackCount = trackCount,
+            year = releaseDate?.let { getReleaseYear(it) }
         )
+    }
+
+    /**
+     * 从日期字符串提取年份
+     */
+    private fun getReleaseYear(releaseDate: String?): Int? {
+        return releaseDate?.take(4)?.toIntOrNull()
     }
     
     /**

@@ -496,7 +496,7 @@ class OnlineMetadataViewModel @Inject constructor(
                 id = "unknown-${System.nanoTime()}",
                 title = title,
                 artist = artist,
-                year = null,
+                year = this.year,
                 format = null,
                 trackCount = null,
                 coverArtUrl = coverArtUrl,
@@ -507,14 +507,15 @@ class OnlineMetadataViewModel @Inject constructor(
                 discCount = discCount,
                 trackNumber = trackNumber,
                 recordLabel = recordLabel,
-                comment = comment
+                comment = comment,
+                genre = genre
             )
         }
         return OnlineRelease(
             id = effectiveReleaseId,
             title = title,
             artist = artist,
-            year = null,
+            year = this.year,
             format = null,
             trackCount = null,
             coverArtUrl = coverArtUrl,
@@ -525,7 +526,8 @@ class OnlineMetadataViewModel @Inject constructor(
             discCount = discCount,
             trackNumber = trackNumber,
             recordLabel = recordLabel,
-            comment = comment
+            comment = comment,
+            genre = genre
         )
     }
 
