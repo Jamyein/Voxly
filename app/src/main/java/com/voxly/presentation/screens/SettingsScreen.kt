@@ -917,7 +917,7 @@ private fun SearchLimitRow(
                 .padding(end = 8.dp),
             color = MaterialTheme.colorScheme.onSurface
         )
-        Box(modifier = Modifier.width(connectedGroupWidth(searchLimitOptions.size))) {
+        Box(modifier = Modifier.fillMaxWidth()) {
             SearchLimitDropdown(
                 currentLimit = currentLimit,
                 searchLimitOptions = searchLimitOptions,
@@ -1071,11 +1071,10 @@ fun SettingsScreen(
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier
-                                .weight(1f)
                                 .padding(end = 8.dp)
                         )
                         val themeOptionCount = 3
-                        Box(modifier = Modifier.width(connectedGroupWidth(themeOptionCount))) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             ConnectedIconButtonGroup(
                                 options = listOf(
                                     ConnectedIconOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
@@ -1150,7 +1149,7 @@ fun SettingsScreen(
                                 .weight(1f)
                                 .padding(end = 8.dp)
                         )
-                        Box(modifier = Modifier.width(connectedGroupWidth(scanModeOptions.size))) {
+                        Box(modifier = Modifier.fillMaxWidth()) {
                             ConnectedIconButtonGroup(
                                 options = scanModeOptions.map { option ->
                                     ConnectedIconOption(
