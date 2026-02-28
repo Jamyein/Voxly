@@ -1061,7 +1061,12 @@ fun SettingsScreen(
                 SettingsItemCard(position = CardPosition.FIRST) {
                     ListItem(
                         headlineContent = {
-                            Text(stringResource(R.string.settings_theme))
+                            Text(
+                                text = stringResource(R.string.settings_theme),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
                         },
                         trailingContent = {
                             Box(modifier = Modifier.weight(1f)) {
@@ -1134,7 +1139,12 @@ fun SettingsScreen(
                 SettingsItemCard(position = CardPosition.FIRST) {
                     ListItem(
                         headlineContent = {
-                            Text(stringResource(R.string.settings_scan_mode))
+                            Text(
+                                text = stringResource(R.string.settings_scan_mode),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
                         },
                         trailingContent = {
                             Box(modifier = Modifier.weight(1f)) {
