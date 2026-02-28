@@ -172,41 +172,43 @@ private fun <T> ConnectedIconButtonGroup(
     val mediumHeight = ButtonDefaults.MediumContainerHeight
 
     Row(
-        modifier = modifier,
+        modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
     ) {
         options.forEachIndexed { index, option ->
             val tooltipState = rememberTooltipState()
-            TooltipBox(
-                modifier = Modifier,
-                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
-                tooltip = {
-                    PlainTooltip {
-                        Text(option.tooltip)
-                    }
-                },
-                state = tooltipState
-            ) {
-                ToggleButton(
-                    checked = option.value == selectedValue,
-                    onCheckedChange = { checked ->
-                        if (checked) onSelected(option.value)
+            Box(modifier = Modifier.weight(1f)) {
+                TooltipBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
+                    tooltip = {
+                        PlainTooltip {
+                            Text(option.tooltip)
+                        }
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(mediumHeight)
-                        .semantics { role = Role.RadioButton },
-                    shapes = when (index) {
-                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                    },
-                    contentPadding = PaddingValues(2.dp)
+                    state = tooltipState
                 ) {
-                    Icon(
-                        imageVector = option.icon,
-                        contentDescription = option.tooltip
-                    )
+                    ToggleButton(
+                        checked = option.value == selectedValue,
+                        onCheckedChange = { checked ->
+                            if (checked) onSelected(option.value)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(mediumHeight)
+                            .semantics { role = Role.RadioButton },
+                        shapes = when (index) {
+                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                        },
+                        contentPadding = PaddingValues(2.dp)
+                    ) {
+                        Icon(
+                            imageVector = option.icon,
+                            contentDescription = option.tooltip
+                        )
+                    }
                 }
             }
         }
@@ -1064,11 +1066,19 @@ fun SettingsScreen(
                         trailingContent = {
                             Box(modifier = Modifier.weight(1f)) {
                                 ConnectedIconButtonGroup(
-                                    options = listOf(
-                                        ConnectedIconOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
-                                        ConnectedIconOption("light", Icons.Default.LightMode, stringResource(R.string.settings_theme_light)),
-                                        ConnectedIconOption("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
-                                    ),
+                                    options = listOf(ConnectedIconOption(
+                                            "system",
+                                            Icons.Default.BrightnessAuto,
+                                            stringResource(R.string.settings_theme_system)
+                                        ), ConnectedIconOption(
+                                            "light",
+                                            Icons.Default.LightMode,
+                                            stringResource(R.string.settings_theme_light)
+                                        ), ConnectedIconOption(
+                                            "dark",
+                                            Icons.Default.DarkMode,
+                                            stringResource(R.string.settings_theme_dark)
+                                        )),
                                     selectedValue = themeMode,
                                     onSelected = viewModel::setThemeMode
                                 )
