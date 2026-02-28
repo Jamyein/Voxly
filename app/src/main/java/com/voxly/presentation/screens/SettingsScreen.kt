@@ -177,38 +177,36 @@ private fun <T> ConnectedIconButtonGroup(
     ) {
         options.forEachIndexed { index, option ->
             val tooltipState = rememberTooltipState()
-            Box(modifier = Modifier.weight(1f)) {
-                TooltipBox(
-                    modifier = Modifier.fillMaxWidth(),
-                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
-                    tooltip = {
-                        PlainTooltip {
-                            Text(option.tooltip)
-                        }
-                    },
-                    state = tooltipState
-                ) {
-                    ToggleButton(
-                        checked = option.value == selectedValue,
-                        onCheckedChange = { checked ->
-                            if (checked) onSelected(option.value)
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(mediumHeight)
-                            .semantics { role = Role.RadioButton },
-                        shapes = when (index) {
-                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        },
-                        contentPadding = PaddingValues(2.dp)
-                    ) {
-                        Icon(
-                            imageVector = option.icon,
-                            contentDescription = option.tooltip
-                        )
+            TooltipBox(
+                modifier = Modifier,
+                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
+                tooltip = {
+                    PlainTooltip {
+                        Text(option.tooltip)
                     }
+                },
+                state = tooltipState
+            ) {
+                ToggleButton(
+                    checked = option.value == selectedValue,
+                    onCheckedChange = { checked ->
+                        if (checked) onSelected(option.value)
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(mediumHeight)
+                        .semantics { role = Role.RadioButton },
+                    shapes = when (index) {
+                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                    },
+                    contentPadding = PaddingValues(2.dp)
+                ) {
+                    Icon(
+                        imageVector = option.icon,
+                        contentDescription = option.tooltip
+                    )
                 }
             }
         }
