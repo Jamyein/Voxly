@@ -170,90 +170,45 @@ private fun <T> ConnectedIconButtonGroup(
     modifier: Modifier = Modifier
 ) {
     val mediumHeight = ButtonDefaults.MediumContainerHeight
-    val outerRadius = mediumHeight / 2
-    val innerRadius = 8.dp
-    val pressedInnerRadius = 4.dp
-    val checkedInnerRadius = 8.dp
-    val itemWidth = 40.dp
 
     Row(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
     ) {
         options.forEachIndexed { index, option ->
             val tooltipState = rememberTooltipState()
-            TooltipBox(
-                modifier = Modifier.width(itemWidth),
-                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
-                tooltip = {
-                    PlainTooltip {
-                        Text(option.tooltip)
-                    }
-                },
-                state = tooltipState
-            ) {
-                ToggleButton(
-                    checked = option.value == selectedValue,
-                    onCheckedChange = { checked ->
-                        if (checked) onSelected(option.value)
+            Box(modifier = Modifier.weight(1f)) {
+                TooltipBox(
+                    modifier = Modifier.fillMaxWidth(),
+                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
+                    tooltip = {
+                        PlainTooltip {
+                            Text(option.tooltip)
+                        }
                     },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = mediumHeight)
-                        .semantics { role = Role.RadioButton },
-                    shapes = when (index) {
-                        0 -> ToggleButtonDefaults.shapes(
-                            shape = RoundedCornerShape(
-                                topStart = outerRadius,
-                                bottomStart = outerRadius,
-                                topEnd = innerRadius,
-                                bottomEnd = innerRadius
-                            ),
-                            pressedShape = RoundedCornerShape(
-                                topStart = outerRadius,
-                                bottomStart = outerRadius,
-                                topEnd = pressedInnerRadius,
-                                bottomEnd = pressedInnerRadius
-                            ),
-                            checkedShape = RoundedCornerShape(
-                                topStart = outerRadius,
-                                bottomStart = outerRadius,
-                                topEnd = checkedInnerRadius,
-                                bottomEnd = checkedInnerRadius
-                            )
-                        )
-                        options.lastIndex -> ToggleButtonDefaults.shapes(
-                            shape = RoundedCornerShape(
-                                topStart = innerRadius,
-                                bottomStart = innerRadius,
-                                topEnd = outerRadius,
-                                bottomEnd = outerRadius
-                            ),
-                            pressedShape = RoundedCornerShape(
-                                topStart = pressedInnerRadius,
-                                bottomStart = pressedInnerRadius,
-                                topEnd = outerRadius,
-                                bottomEnd = outerRadius
-                            ),
-                            checkedShape = RoundedCornerShape(
-                                topStart = checkedInnerRadius,
-                                bottomStart = checkedInnerRadius,
-                                topEnd = outerRadius,
-                                bottomEnd = outerRadius
-                            )
-                        )
-                        else -> ToggleButtonDefaults.shapes(
-                            shape = RoundedCornerShape(innerRadius),
-                            pressedShape = RoundedCornerShape(pressedInnerRadius),
-                            checkedShape = RoundedCornerShape(checkedInnerRadius)
-                        )
-                    },
-                    contentPadding = PaddingValues(2.dp)
+                    state = tooltipState
                 ) {
-                    Icon(
-                        imageVector = option.icon,
-                        contentDescription = option.tooltip
-                    )
+                    ToggleButton(
+                        checked = option.value == selectedValue,
+                        onCheckedChange = { checked ->
+                            if (checked) onSelected(option.value)
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(mediumHeight)
+                            .semantics { role = Role.RadioButton },
+                        shapes = when (index) {
+                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                        },
+                        contentPadding = PaddingValues(2.dp)
+                    ) {
+                        Icon(
+                            imageVector = option.icon,
+                            contentDescription = option.tooltip
+                        )
+                    }
                 }
             }
         }
@@ -266,7 +221,6 @@ private fun <T> ConnectedIconButtonGroup(
 data class SourceItemState(
     val sourceId: String,
     val enabled: Boolean,
-    val order: Int,
     val extraOptions: Map<String, String>,
     val expanded: Boolean = false
 )
@@ -307,11 +261,11 @@ fun DraggableSourcePriorityDialog(
     val density = androidx.compose.ui.platform.LocalDensity.current
 
     // Use local drag list if available, otherwise use the actual sources
+    // Note: The position in the list (index) represents the order, not a separate field
     val displayList = localDragList ?: sources.map { source ->
         SourceItemState(
             sourceId = source.sourceId,
             enabled = source.enabled,
-            order = source.order,
             extraOptions = source.extraOptions
         )
     }
@@ -359,8 +313,9 @@ fun DraggableSourcePriorityDialog(
                                         localDragList = displayList.toList()
                                     },
                                     onDragEnd = {
-                                        // Use originalDragIndex to check if position changed
-                                        if (originalDragIndex != null && originalDragIndex != index) {
+                                        // Use draggedIndex (current position in list) to check if position changed
+                                        // draggedIndex is updated during drag to reflect the actual position in localDragList
+                                        if (originalDragIndex != null && originalDragIndex != draggedIndex) {
                                             // Save the reordered list
                                             onSourceReorder(localDragList?.map { it.sourceId } ?: displayList.map { it.sourceId })
                                         }
