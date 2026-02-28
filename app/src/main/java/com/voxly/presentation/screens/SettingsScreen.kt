@@ -1057,24 +1057,11 @@ fun SettingsScreen(
         ) {
             // Appearance Section
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-                // Theme Segmented Buttons - First item
-                SettingsItemCard(position = CardPosition.FIRST) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_theme),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .padding(end = 8.dp)
-                        )
-                        val themeOptionCount = 3
-                        Box(modifier = Modifier.fillMaxWidth()) {
+                // Theme Segmented Buttons - Single item
+                SettingsItemCard(position = CardPosition.SINGLE) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.settings_theme)) },
+                        trailingContent = {
                             ConnectedIconButtonGroup(
                                 options = listOf(
                                     ConnectedIconOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
@@ -1084,10 +1071,9 @@ fun SettingsScreen(
                                 selectedValue = themeMode,
                                 onSelected = viewModel::setThemeMode
                             )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
+                        },
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
+                    )
                 }
 
                 // SettingsSwitch - Last item
@@ -1132,24 +1118,11 @@ fun SettingsScreen(
 
             // Scanning Section
             SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
-                // Scan Mode Segmented Buttons - First item
-                SettingsItemCard(position = CardPosition.FIRST) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.settings_scan_mode),
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier
-                                .weight(1f)
-                                .padding(end = 8.dp)
-                        )
-                        Box(modifier = Modifier.fillMaxWidth()) {
+                // Scan Mode Segmented Buttons - Single item
+                SettingsItemCard(position = CardPosition.SINGLE) {
+                    ListItem(
+                        headlineContent = { Text(stringResource(R.string.settings_scan_mode)) },
+                        trailingContent = {
                             ConnectedIconButtonGroup(
                                 options = scanModeOptions.map { option ->
                                     ConnectedIconOption(
@@ -1165,10 +1138,9 @@ fun SettingsScreen(
                                 selectedValue = scanMode,
                                 onSelected = viewModel::setScanMode
                             )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(12.dp))
+                        },
+                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
+                    )
                 }
 
                 // SettingsSwitch - Last item
