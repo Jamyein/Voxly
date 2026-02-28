@@ -172,7 +172,7 @@ private fun <T> ConnectedIconButtonGroup(
     val mediumHeight = ButtonDefaults.MediumContainerHeight
 
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
     ) {
         options.forEachIndexed { index, option ->
