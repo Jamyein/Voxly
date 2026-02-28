@@ -1059,20 +1059,20 @@ fun SettingsScreen(
                 SettingsItemCard(position = CardPosition.FIRST) {
                     ListItem(
                         headlineContent = {
-                            Box(modifier = Modifier.weight(1f)) {
-                                Text(stringResource(R.string.settings_theme))
-                            }
+                            Text(stringResource(R.string.settings_theme))
                         },
                         trailingContent = {
-                            ConnectedIconButtonGroup(
-                                options = listOf(
-                                    ConnectedIconOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
-                                    ConnectedIconOption("light", Icons.Default.LightMode, stringResource(R.string.settings_theme_light)),
-                                    ConnectedIconOption("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
-                                ),
-                                selectedValue = themeMode,
-                                onSelected = viewModel::setThemeMode
-                            )
+                            Box(modifier = Modifier.weight(1f)) {
+                                ConnectedIconButtonGroup(
+                                    options = listOf(
+                                        ConnectedIconOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
+                                        ConnectedIconOption("light", Icons.Default.LightMode, stringResource(R.string.settings_theme_light)),
+                                        ConnectedIconOption("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
+                                    ),
+                                    selectedValue = themeMode,
+                                    onSelected = viewModel::setThemeMode
+                                )
+                            }
                         },
                         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
                     )
@@ -1124,26 +1124,26 @@ fun SettingsScreen(
                 SettingsItemCard(position = CardPosition.FIRST) {
                     ListItem(
                         headlineContent = {
-                            Box(modifier = Modifier.weight(1f)) {
-                                Text(stringResource(R.string.settings_scan_mode))
-                            }
+                            Text(stringResource(R.string.settings_scan_mode))
                         },
                         trailingContent = {
-                            ConnectedIconButtonGroup(
-                                options = scanModeOptions.map { option ->
-                                    ConnectedIconOption(
-                                        value = option.value,
-                                        icon = when (option.value) {
-                                            "TRACK_ONLY" -> Icons.Default.MusicNote
-                                            "SINGLE_ALBUM" -> Icons.Default.Album
-                                            else -> Icons.Default.LibraryMusic
-                                        },
-                                        tooltip = stringResource(option.labelResId)
-                                    )
-                                },
-                                selectedValue = scanMode,
-                                onSelected = viewModel::setScanMode
-                            )
+                            Box(modifier = Modifier.weight(1f)) {
+                                ConnectedIconButtonGroup(
+                                    options = scanModeOptions.map { option ->
+                                        ConnectedIconOption(
+                                            value = option.value,
+                                            icon = when (option.value) {
+                                                "TRACK_ONLY" -> Icons.Default.MusicNote
+                                                "SINGLE_ALBUM" -> Icons.Default.Album
+                                                else -> Icons.Default.LibraryMusic
+                                            },
+                                            tooltip = stringResource(option.labelResId)
+                                        )
+                                    },
+                                    selectedValue = scanMode,
+                                    onSelected = viewModel::setScanMode
+                                )
+                            }
                         },
                         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
                     )
