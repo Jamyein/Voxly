@@ -10,6 +10,7 @@ import android.provider.MediaStore
 import android.util.Log
 import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
+import com.voxly.data.local.SafPermissionCache
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.parseMediaStoreTrackField
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -31,7 +32,8 @@ import javax.inject.Singleton
  */
 @Singleton
 class TagLibMetadataProcessor @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val safPermissionCache: SafPermissionCache
 ) {
     companion object {
         private const val TAG = "TagLibProcessor"
@@ -687,7 +689,10 @@ class TagLibMetadataProcessor @Inject constructor(
         filePath: String,
         metadata: AudioMetadata
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        // Find valid persisted URI permission
+        // Initialize cache for batch operations optimization
+        safPermissionCache.initialize()
+
+        // Try to find valid permission using cache-first approach
         var validPermission = findValidPermission(filePath)
         if (validPermission == null) {
             Log.w(TAG, "tryUpdateMetadataViaSaf: No valid permission found, attempting to get permission from file URI")
@@ -1230,7 +1235,15 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
-     * Finds document URI in tree
+     * Finds document URI in tree using progressive query.
+     *
+     * Core principle: "Don't guess, query." Instead of manually constructing
+     * Document IDs, we query the system to get the correct ID. This is
+     * essential for compatibility with different storage providers
+     * (Google Drive, ExternalStorageProvider, OneDrive) that handle
+     * special characters and path separators differently.
+     *
+     * Uses cache for folder Document ID optimization.
      */
     private fun findDocumentUriInTree(treeUri: Uri, relativePath: String): Uri? {
         val rootDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
@@ -1238,25 +1251,39 @@ class TagLibMetadataProcessor @Inject constructor(
             return DocumentsContract.buildDocumentUriUsingTree(treeUri, rootDocId)
         }
 
-        // Try direct document-id composition first (faster and more robust for special chars).
         val normalizedRelative = relativePath.trim('/').replace('\\', '/')
-        val directDocId = "$rootDocId/$normalizedRelative"
-        val directUri = DocumentsContract.buildDocumentUriUsingTree(treeUri, directDocId)
-        val directReadable = runCatching {
-            context.contentResolver.openFileDescriptor(directUri, "r")?.use { }
-            true
-        }.getOrDefault(false)
-        if (directReadable) {
-            return directUri
-        }
-        
+        val segments = normalizedRelative.split('/').filter { it.isNotBlank() }
+        val totalSegments = segments.size
+
+        // Try to use cached folder Document IDs first for performance
         var currentDocId = rootDocId
-        val segments = relativePath.split('/').filter { it.isNotBlank() }
-        for (segment in segments) {
+        var startIndex = 0
+
+        // Build cumulative folder paths for cache lookup
+        val folderPaths = mutableListOf<String>()
+        for (i in 0 until totalSegments - 1) {
+            folderPaths.add(segments.subList(0, i + 1).joinToString("/"))
+        }
+
+        // Check cached folder IDs
+        for ((index, folderPath) in folderPaths.withIndex()) {
+            val cachedFolderDocId = safPermissionCache.getOrFindFolderDocId(treeUri, folderPath)
+            if (cachedFolderDocId != null) {
+                currentDocId = cachedFolderDocId
+                startIndex = index + 1
+            } else {
+                break
+            }
+        }
+
+        // Progressive query: navigate through each segment, querying the system
+        // for the correct Document ID instead of guessing
+        for (i in startIndex until totalSegments) {
+            val segment = segments[i]
             val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, currentDocId)
             var nextDocId: String? = null
             val normalizedSegment = Normalizer.normalize(segment, Normalizer.Form.NFC)
-            
+
             context.contentResolver.query(
                 childrenUri,
                 arrayOf(
@@ -1267,19 +1294,38 @@ class TagLibMetadataProcessor @Inject constructor(
             )?.use { cursor ->
                 val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
                 val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+
                 while (cursor.moveToNext()) {
                     val displayName = cursor.getString(nameIndex)
                     val normalizedName = Normalizer.normalize(displayName ?: "", Normalizer.Form.NFC)
-                    if (normalizedName == normalizedSegment) {
+
+                    // Use system-returned name for matching (solves encoding issues)
+                    if (normalizedName.equals(normalizedSegment, ignoreCase = true)) {
+                        // Get the system-generated ID, never construct it manually
                         nextDocId = cursor.getString(idIndex)
                         break
                     }
                 }
             }
-            
-            currentDocId = nextDocId ?: return null
+
+            if (nextDocId == null) {
+                Log.w(TAG, "findDocumentUriInTree: segment not found: $segment")
+                return null
+            }
+
+            currentDocId = nextDocId
+
+            // Cache intermediate folder Document IDs (not the final file)
+            if (i < totalSegments - 1) {
+                val folderPath = segments.subList(0, i + 1).joinToString("/")
+                safPermissionCache.cacheFileDocId(treeUri, folderPath, currentDocId)
+            }
         }
-        
+
+        // Cache the final file Document ID for future batch operations
+        safPermissionCache.cacheFileDocId(treeUri, normalizedRelative, currentDocId)
+
+        // Only now build the URI with the system-verified Document ID
         return DocumentsContract.buildDocumentUriUsingTree(treeUri, currentDocId)
     }
 

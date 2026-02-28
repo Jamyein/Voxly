@@ -1,10 +1,18 @@
 package com.voxly.presentation.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.LibraryMusic
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material3.*
@@ -51,20 +59,16 @@ private fun <T> EnhancedConnectedIconButtonGroup(
     modifier: Modifier = Modifier
 ) {
     val mediumHeight = ButtonDefaults.MediumContainerHeight
-    val outerRadius = mediumHeight / 2
-    val innerRadius = 8.dp
-    val pressedInnerRadius = 4.dp
-    val checkedInnerRadius = 8.dp
-    val itemWidth = 40.dp
 
     Row(
-        modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(2.dp)
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(top = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
     ) {
         options.forEachIndexed { index, option ->
             val tooltipState = rememberTooltipState()
             TooltipBox(
-                modifier = Modifier.width(itemWidth),
                 positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
                 tooltip = {
                     PlainTooltip {
@@ -79,55 +83,14 @@ private fun <T> EnhancedConnectedIconButtonGroup(
                         if (checked) onSelected(option.value)
                     },
                     modifier = Modifier
+                        .weight(1f)
                         .fillMaxWidth()
-                        .heightIn(min = mediumHeight)
+                        .height(mediumHeight)
                         .semantics { role = Role.RadioButton },
                     shapes = when (index) {
-                        0 -> ToggleButtonDefaults.shapes(
-                            shape = RoundedCornerShape(
-                                topStart = outerRadius,
-                                bottomStart = outerRadius,
-                                topEnd = innerRadius,
-                                bottomEnd = innerRadius
-                            ),
-                            pressedShape = RoundedCornerShape(
-                                topStart = outerRadius,
-                                bottomStart = outerRadius,
-                                topEnd = pressedInnerRadius,
-                                bottomEnd = pressedInnerRadius
-                            ),
-                            checkedShape = RoundedCornerShape(
-                                topStart = outerRadius,
-                                bottomStart = outerRadius,
-                                topEnd = checkedInnerRadius,
-                                bottomEnd = checkedInnerRadius
-                            )
-                        )
-                        options.lastIndex -> ToggleButtonDefaults.shapes(
-                            shape = RoundedCornerShape(
-                                topStart = innerRadius,
-                                bottomStart = innerRadius,
-                                topEnd = outerRadius,
-                                bottomEnd = outerRadius
-                            ),
-                            pressedShape = RoundedCornerShape(
-                                topStart = pressedInnerRadius,
-                                bottomStart = pressedInnerRadius,
-                                topEnd = outerRadius,
-                                bottomEnd = outerRadius
-                            ),
-                            checkedShape = RoundedCornerShape(
-                                topStart = checkedInnerRadius,
-                                bottomStart = checkedInnerRadius,
-                                topEnd = outerRadius,
-                                bottomEnd = outerRadius
-                            )
-                        )
-                        else -> ToggleButtonDefaults.shapes(
-                            shape = RoundedCornerShape(innerRadius),
-                            pressedShape = RoundedCornerShape(pressedInnerRadius),
-                            checkedShape = RoundedCornerShape(checkedInnerRadius)
-                        )
+                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                     },
                     contentPadding = PaddingValues(2.dp)
                 ) {
@@ -135,6 +98,17 @@ private fun <T> EnhancedConnectedIconButtonGroup(
                         imageVector = option.icon,
                         contentDescription = option.tooltip
                     )
+                    AnimatedVisibility(
+                        visible = option.value == selectedValue,
+                        enter = scaleIn() + fadeIn() + expandHorizontally(),
+                        exit = scaleOut() + fadeOut() + shrinkHorizontally()
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            modifier = Modifier.size(ToggleButtonDefaults.IconSpacing)
+                        )
+                    }
                 }
             }
         }

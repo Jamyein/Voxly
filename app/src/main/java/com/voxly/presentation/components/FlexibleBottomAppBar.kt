@@ -1,17 +1,14 @@
 package com.voxly.presentation.components
 
-import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -21,12 +18,11 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
@@ -54,39 +50,20 @@ fun FlexibleBottomAppBar(
     scrollProgress: Float,
     modifier: Modifier = Modifier
 ) {
-    // Calculate height based on scroll progress (0 = full height, 1 = fully hidden)
-    val targetHeight by remember(scrollProgress) {
-        derivedStateOf {
-            val minHeight = 0.dp   // Fully hidden
-            val maxHeight = 80.dp  // Full height
-            // Use smooth curve for more natural hiding effect
-            val progress = scrollProgress.coerceIn(0f, 1f)
-            val easedProgress = progress * progress * (3f - 2f * progress) // Smoothstep
-            maxHeight - (easedProgress * maxHeight.value).dp
-        }
-    }
+    // M3E optimized: use translationY instead of height to avoid re-layout
+    // Calculate offset Y based on scroll progress (0 = visible, 1 = hidden)
+    val bottomBarHeight = 80.dp
 
-    // Calculate alpha based on scroll progress - fully hidden = 0 alpha
-    val targetAlpha by remember(scrollProgress) {
-        derivedStateOf {
-            // Smooth fade out as it scrolls away, 0 when fully hidden
-            (1f - scrollProgress).coerceIn(0f, 1f)
-        }
-    }
-
-    // Animate height changes smoothly with spring physics (M3E style)
-    val animatedHeight by animateDpAsState(
-        targetValue = targetHeight,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
-        label = "bottomBarHeight"
+    // Animate offsetY using translationY (M3E best practice)
+    val offsetY by animateDpAsState(
+        targetValue = if (scrollProgress > 0.5f) bottomBarHeight else 0.dp,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "bottomBarOffset"
     )
 
     // Animate alpha changes smoothly with spring physics
     val animatedAlpha by animateFloatAsState(
-        targetValue = targetAlpha,
+        targetValue = (1f - scrollProgress).coerceIn(0f, 1f),
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessLow
@@ -105,18 +82,15 @@ fun FlexibleBottomAppBar(
     val currentDestination = navBackStackEntry?.destination
     val showBottomBar = currentRoute in bottomNavRoutes
 
-    if (showBottomBar && animatedHeight > 0.dp) {
+    if (showBottomBar && scrollProgress < 1f) {
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .alpha(animatedAlpha)
-                .height(animatedHeight)
-                .animateContentSize(
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    )
-                )
+                .height(bottomBarHeight) // Fixed height, use translationY for hiding
+                .graphicsLayer {
+                    translationY = offsetY.toPx()
+                    alpha = animatedAlpha
+                }
         ) {
             NavigationBar(
                 modifier = Modifier
@@ -149,8 +123,8 @@ fun FlexibleBottomAppBar(
                             )
                         },
                         label = {
-                            // Only show label when height is sufficient (> 60dp)
-                            if (animatedHeight > 60.dp) {
+                            // Only show label when bottom bar is mostly visible (scrollProgress < 0.3)
+                            if (scrollProgress < 0.3f) {
                                 Text(
                                     text = label,
                                     maxLines = 1

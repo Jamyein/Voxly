@@ -222,6 +222,46 @@ object ExpressiveAnimations {
             stiffness = ExpressiveMotionTokens.Standard.stiffness
         )
     ) + fadeIn(animationSpec = tween(150))
+
+    /** 页面进入动画 - 从右侧滑入 + 缩放 + 淡入 (更有表现力) */
+    val PageEnterExpressive = slideInHorizontally(
+        initialOffsetX = { it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+        )
+    ) + fadeIn(animationSpec = tween(200))
+
+    /** 页面退出动画 - 向左滑出 + 缩放 + 淡出 */
+    val PageExitExpressive = slideOutHorizontally(
+        targetOffsetX = { -it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+        )
+    ) + fadeOut(animationSpec = tween(150))
+
+    /** 页面进入动画 - 从左侧滑入 (用于返回导航) */
+    val PageEnterFromLeft = slideInHorizontally(
+        initialOffsetX = { -it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Standard.stiffness
+        )
+    ) + fadeIn(animationSpec = tween(200))
+
+    /** 页面退出动画 - 向右滑出 (用于返回导航) */
+    val PageExitToRight = slideOutHorizontally(
+        targetOffsetX = { it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Standard.stiffness
+        )
+    ) + fadeOut(animationSpec = tween(150))
+
+    /** 底部导航主页间切换 - 交叉淡入淡出 */
+    val CrossFadeEnter = fadeIn(animationSpec = tween(300))
+    val CrossFadeExit = fadeOut(animationSpec = tween(300))
     
     // ===== Exit Animations =====
     
@@ -239,7 +279,10 @@ object ExpressiveAnimations {
     /** 页面退出动画 */
     val PageExit = slideOutHorizontally(
         targetOffsetX = { -it },
-        animationSpec = tween(200)
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Standard.stiffness
+        )
     ) + fadeOut(animationSpec = tween(100))
     
     // ===== State Change Animations =====

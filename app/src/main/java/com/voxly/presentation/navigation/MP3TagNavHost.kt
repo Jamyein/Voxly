@@ -100,16 +100,45 @@ fun MP3TagNavHost(
             modifier = Modifier.padding(innerPadding),
             startDestination = Screen.FileBrowser.route,
             enterTransition = {
-                ExpressiveAnimations.PageEnter
+                // 判断是否是返回导航（通过backQueue大小判断）
+                // 如果backQueue只有1个元素，说明是首次加载，使用默认动画
+                // 否则判断导航方向
+                val isReturning = initialState.destination.route in bottomNavRoutes
+                val destinations = bottomNavRoutes
+                val fromRoute = initialState.destination.route
+                val toRoute = targetState.destination.route
+
+                when {
+                    // 底部导航主页间使用交叉淡入
+                    fromRoute in destinations && toRoute in destinations -> {
+                        ExpressiveAnimations.CrossFadeEnter
+                    }
+                    // 从非主页返回时从左侧滑入
+                    fromRoute !in destinations -> {
+                        ExpressiveAnimations.PageEnterFromLeft
+                    }
+                    // 新页面从右侧滑入
+                    else -> ExpressiveAnimations.PageEnterExpressive
+                }
             },
             exitTransition = {
-                ExpressiveAnimations.PageExit
+                val fromRoute = initialState.destination.route
+                val toRoute = targetState.destination.route
+
+                // 主页间切换使用淡出
+                if (fromRoute in bottomNavRoutes && toRoute in bottomNavRoutes) {
+                    ExpressiveAnimations.CrossFadeExit
+                } else {
+                    ExpressiveAnimations.PageExitExpressive
+                }
             },
             popEnterTransition = {
-                ExpressiveAnimations.PageEnter
+                // 返回时从左侧进入
+                ExpressiveAnimations.PageEnterFromLeft
             },
             popExitTransition = {
-                ExpressiveAnimations.PageExit
+                // 返回时向右滑出
+                ExpressiveAnimations.PageExitToRight
             }
         ) {
             composable(Screen.FileBrowser.route) {

@@ -414,7 +414,7 @@ fun FileBrowserScreen(
                 }
             }
         },
-        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        containerColor = MaterialTheme.colorScheme.surface,
         floatingActionButton = {
             // Show batch operation FAB only when in directory view
             if (selectedFiles.isEmpty() && !isBatchProcessing) {
