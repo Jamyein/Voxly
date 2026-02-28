@@ -169,7 +169,7 @@ private fun <T> ConnectedIconButtonGroup(
     onSelected: (T) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val mediumHeight = ButtonDefaults.MediumContainerHeight
+    val mediumHeight = 32.dp
 
     Row(
         modifier = modifier.fillMaxWidth(),
