@@ -1058,9 +1058,10 @@ fun SettingsScreen(
             // Appearance Section
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
                 // Theme Segmented Buttons - Single item
-                SettingsItemCard(position = CardPosition.SINGLE) {
+                SettingsItemCard(position = CardPosition.FIRST) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.settings_theme)) },
+                        supportingContent = { Text(" ") },
                         trailingContent = {
                             ConnectedIconButtonGroup(
                                 options = listOf(
@@ -1119,9 +1120,10 @@ fun SettingsScreen(
             // Scanning Section
             SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
                 // Scan Mode Segmented Buttons - Single item
-                SettingsItemCard(position = CardPosition.SINGLE) {
+                SettingsItemCard(position = CardPosition.FIRST) {
                     ListItem(
                         headlineContent = { Text(stringResource(R.string.settings_scan_mode)) },
+                        supportingContent = { Text(" ") },
                         trailingContent = {
                             ConnectedIconButtonGroup(
                                 options = scanModeOptions.map { option ->
