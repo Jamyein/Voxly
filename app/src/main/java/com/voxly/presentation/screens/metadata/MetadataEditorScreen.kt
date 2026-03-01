@@ -50,6 +50,7 @@ import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.ConvertibleField
+import com.voxly.data.local.saf.SafGrantType
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -85,6 +86,7 @@ fun MetadataEditorScreen(
     var showOnlineCoverDialog by remember { mutableStateOf(false) }
     var showConversionMenu by remember { mutableStateOf(false) }
     var showConversionDialog by remember { mutableStateOf(false) }
+    var showReauthorizeDialog by remember { mutableStateOf(false) }
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     var showActionMenu by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -131,6 +133,10 @@ fun MetadataEditorScreen(
             viewModel.clearSaveResult()
         } else if (saveResult is com.voxly.presentation.viewmodel.SaveResult.Error) {
             exitAfterSave = false
+            val error = saveResult as com.voxly.presentation.viewmodel.SaveResult.Error
+            if (error.requiresReauthorization) {
+                showReauthorizeDialog = true
+            }
             viewModel.clearSaveResult()
         }
     }
@@ -148,6 +154,18 @@ fun MetadataEditorScreen(
         bitmap?.let { image ->
             bitmapToJpegBytes(image)?.let { bytes -> viewModel.updateAlbumArt(bytes) }
         }
+    }
+
+    val reauthorizeFileLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.reauthorizeAndRetrySave(it, SafGrantType.DOCUMENT) }
+    }
+
+    val reauthorizeDirectoryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocumentTree()
+    ) { uri: Uri? ->
+        uri?.let { viewModel.reauthorizeAndRetrySave(it, SafGrantType.TREE) }
     }
 
     Scaffold(
@@ -496,6 +514,38 @@ windowInsets = WindowInsets(0.dp),
                     onNavigateBack()
                 }) {
                     Text(stringResource(R.string.dialog_discard))
+                }
+            }
+        )
+    }
+
+    if (showReauthorizeDialog) {
+        AlertDialog(
+            onDismissRequest = { showReauthorizeDialog = false },
+            shape = MaterialTheme.shapes.large,
+            title = { Text("Write permission required") },
+            text = {
+                Text("Select the current file or its parent directory to restore SAF write access.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showReauthorizeDialog = false
+                    reauthorizeDirectoryLauncher.launch(null)
+                }) {
+                    Text("Select directory")
+                }
+            },
+            dismissButton = {
+                Row {
+                    TextButton(onClick = {
+                        showReauthorizeDialog = false
+                        reauthorizeFileLauncher.launch(arrayOf("audio/*", "*/*"))
+                    }) {
+                        Text("Select file")
+                    }
+                    TextButton(onClick = { showReauthorizeDialog = false }) {
+                        Text(stringResource(R.string.dialog_cancel))
+                    }
                 }
             }
         )

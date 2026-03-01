@@ -2,7 +2,6 @@ package com.voxly.data.local.metadata
 
 import android.content.Context
 import android.content.ContentUris
-import android.content.Intent
 import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
@@ -11,6 +10,7 @@ import android.util.Log
 import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
 import com.voxly.data.local.SafPermissionCache
+import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.parseMediaStoreTrackField
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -33,7 +33,8 @@ import javax.inject.Singleton
 @Singleton
 class TagLibMetadataProcessor @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val safPermissionCache: SafPermissionCache
+    private val safPermissionCache: SafPermissionCache,
+    private val safWriteAccessService: SafWriteAccessService
 ) {
     companion object {
         private const val TAG = "TagLibProcessor"
@@ -689,40 +690,16 @@ class TagLibMetadataProcessor @Inject constructor(
         filePath: String,
         metadata: AudioMetadata
     ): Result<Unit> = withContext(Dispatchers.IO) {
-        // Initialize cache for batch operations optimization
-        safPermissionCache.initialize()
-
-        // Try to find valid permission using cache-first approach
-        var validPermission = findValidPermission(filePath)
+        val validPermission = safWriteAccessService.findValidWritePermission(filePath)
         if (validPermission == null) {
-            Log.w(TAG, "tryUpdateMetadataViaSaf: No valid permission found, attempting to get permission from file URI")
-
-            // Try to get permission directly from file URI
-            val fileUri = Uri.fromFile(File(filePath))
-            try {
-                context.contentResolver.takePersistableUriPermission(
-                    fileUri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                )
-                Log.d(TAG, "tryUpdateMetadataViaSaf: Successfully obtained permission from file URI")
-            } catch (e: Exception) {
-                Log.w(TAG, "tryUpdateMetadataViaSaf: Failed to get permission from file URI", e)
-            }
-
-            // Re-check for valid permission after attempting to get new permission
-            validPermission = findValidPermission(filePath)
-            if (validPermission == null) {
-                val errorMsg = "SAF write permission expired or not granted for: $filePath. Please re-select the file or its parent directory through the file browser to restore write access."
-                Log.e(TAG, errorMsg)
-                return@withContext Result.failure(
-                    IllegalStateException(errorMsg)
-                )
-            }
+            val errorMsg = "SAF write permission expired or not granted for: $filePath. Please re-select the file or its parent directory through the file browser to restore write access."
+            Log.e(TAG, errorMsg)
+            return@withContext Result.failure(
+                IllegalStateException(errorMsg)
+            )
         }
 
-        // Get document URI
-        val relativePath = getRelativePath(filePath, validPermission)
-        val targetDocUri = findDocumentUriInTree(validPermission.uri, relativePath)
+        val targetDocUri = safWriteAccessService.resolveDocumentUri(filePath, validPermission)
         if (targetDocUri == null) {
             return@withContext Result.failure(
                 IllegalStateException("Cannot find document URI for: $filePath. The file may have been moved or deleted.")
@@ -760,19 +737,17 @@ class TagLibMetadataProcessor @Inject constructor(
         retryCount: Int = 0
     ): Result<Unit> = withContext(Dispatchers.IO) {
         // Validate permission before starting the update (limit retries to prevent infinite recursion)
-        if (retryCount < 2 && !isPermissionValid(validPermission, filePath)) {
+        if (retryCount < 2 && !safWriteAccessService.isPermissionValid(validPermission, filePath)) {
             Log.w(TAG, "doSafUpdate: Permission became invalid (retry $retryCount), attempting to reacquire")
 
             // Try to reacquire permission
-            val newPermission = findValidPermission(filePath)
+            val newPermission = safWriteAccessService.findValidWritePermission(filePath)
             if (newPermission == null) {
                 return@withContext Result.failure(
                     IllegalStateException("SAF permission no longer valid and could not be reacquired. Please re-select the file or its parent directory through the file browser to restore write access.")
                 )
             }
-            // Update permission reference for relative path resolution
-            val newRelativePath = getRelativePath(filePath, newPermission)
-            val newTargetDocUri = findDocumentUriInTree(newPermission.uri, newRelativePath)
+            val newTargetDocUri = safWriteAccessService.resolveDocumentUri(filePath, newPermission)
             if (newTargetDocUri == null) {
                 return@withContext Result.failure(
                     IllegalStateException("Cannot find document URI after permission reacquisition.")
@@ -885,6 +860,13 @@ class TagLibMetadataProcessor @Inject constructor(
                 "In-place SAF overwrite failed for: $filePath, fallback to recreate",
                 overwriteResult.exceptionOrNull()
             )
+
+            val isTreePermission = runCatching { DocumentsContract.getTreeDocumentId(validPermission.uri) }.isSuccess
+            if (!isTreePermission) {
+                return@withContext Result.failure(
+                    IllegalStateException("In-place SAF overwrite failed and fallback recreate requires directory permission. Please re-select the parent directory.")
+                )
+            }
 
             // Fallback: delete and recreate in the same parent directory.
             val targetDocId = runCatching { DocumentsContract.getDocumentId(targetDocUri) }.getOrNull()

@@ -1,6 +1,8 @@
 package com.voxly.data.local.metadata
 
 import android.content.Context
+import com.voxly.data.local.SafPermissionCache
+import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioMetadata
 import io.mockk.MockKAnnotations
 import io.mockk.every
@@ -17,14 +19,18 @@ import java.io.File
 class TagLibMetadataProcessorTest {
 
     private lateinit var context: Context
+    private lateinit var safPermissionCache: SafPermissionCache
+    private lateinit var safWriteAccessService: SafWriteAccessService
     private lateinit var processor: TagLibMetadataProcessor
 
     @Before
     fun setup() {
         MockKAnnotations.init(this)
         context = mockk()
+        safPermissionCache = mockk(relaxed = true)
+        safWriteAccessService = mockk(relaxed = true)
         every { context.applicationContext } returns context
-        processor = TagLibMetadataProcessor(context)
+        processor = TagLibMetadataProcessor(context, safPermissionCache, safWriteAccessService)
     }
 
     @Test

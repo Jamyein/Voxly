@@ -479,9 +479,7 @@ fun FileBrowserScreen(
                             EmptyContent()
                         } else {
                             Column(
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .padding(horizontal = 16.dp)
+                                modifier = Modifier.fillMaxSize()
                             ) {
                                 SortMenu(
                                     isExpanded = isSortExpanded,

@@ -2,6 +2,11 @@ package com.voxly.presentation.screens
 
 import android.app.Activity
 import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -29,6 +35,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
@@ -169,17 +176,18 @@ private fun <T> ConnectedIconButtonGroup(
     onSelected: (T) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val mediumHeight = 32.dp
-
+    val mediumHeight = 40.dp
+    val mediumWeight = 64.dp
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
     ) {
         options.forEachIndexed { index, option ->
             val tooltipState = rememberTooltipState()
-            Box(modifier = Modifier.weight(1f)) {
+            val isSelected = option.value == selectedValue
+
+            Box {
                 TooltipBox(
-                    modifier = Modifier.fillMaxWidth(),
                     positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
                     tooltip = {
                         PlainTooltip {
@@ -189,12 +197,12 @@ private fun <T> ConnectedIconButtonGroup(
                     state = tooltipState
                 ) {
                     ToggleButton(
-                        checked = option.value == selectedValue,
+                        checked = isSelected,
                         onCheckedChange = { checked ->
                             if (checked) onSelected(option.value)
                         },
                         modifier = Modifier
-                            .fillMaxWidth()
+                            .width(mediumWeight)
                             .height(mediumHeight)
                             .semantics { role = Role.RadioButton },
                         shapes = when (index) {
@@ -206,7 +214,13 @@ private fun <T> ConnectedIconButtonGroup(
                     ) {
                         Icon(
                             imageVector = option.icon,
-                            contentDescription = option.tooltip
+                            contentDescription = option.tooltip,
+                            modifier = Modifier.animateContentSize(
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessMedium
+                                )
+                            )
                         )
                     }
                 }
@@ -242,9 +256,10 @@ fun DraggableSourcePriorityDialog(
     onSourceReorder: (List<String>) -> Unit,
     onAppleCountryChange: (String) -> Unit
 ) {
-    // Get sources directly from sourceTypeConfig (observing StateFlow changes)
-    val sources = remember(sourceTypeConfig) {
-        sourceTypeConfig.sources.sortedBy { it.order }
+    // Track current sources - updated immediately on drag end for instant feedback
+    // This ensures the next drag operation sees the updated order
+    var currentSources by remember(sourceTypeConfig) {
+        mutableStateOf(sourceTypeConfig.sources.sortedBy { it.order })
     }
 
     // Local drag visual state - only used for visual feedback during drag
@@ -260,9 +275,9 @@ fun DraggableSourcePriorityDialog(
     val itemHeight = 80.dp // Approximate item height
     val density = androidx.compose.ui.platform.LocalDensity.current
 
-    // Use local drag list if available, otherwise use the actual sources
+    // Use local drag list if available, otherwise use the current sources
     // Note: The position in the list (index) represents the order, not a separate field
-    val displayList = localDragList ?: sources.map { source ->
+    val displayList = localDragList ?: currentSources.map { source ->
         SourceItemState(
             sourceId = source.sourceId,
             enabled = source.enabled,
@@ -279,7 +294,13 @@ fun DraggableSourcePriorityDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .heightIn(max = 450.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .animateContentSize(
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        )
+                    ),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
@@ -291,9 +312,28 @@ fun DraggableSourcePriorityDialog(
                 displayList.forEachIndexed { index, sourceState ->
                     val isDragging = draggedIndex == index
 
+                    // Animated hover effects for dragged item
+                    val animatedScale by animateFloatAsState(
+                        targetValue = if (isDragging) 1.05f else 1f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        label = "scale"
+                    )
+                    val animatedElevation by animateDpAsState(
+                        targetValue = if (isDragging) 8.dp else 0.dp,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMediumLow
+                        ),
+                        label = "elevation"
+                    )
+
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
+                            .scale(animatedScale)
                             .then(
                                 if (isDragging) {
                                     Modifier
@@ -315,9 +355,15 @@ fun DraggableSourcePriorityDialog(
                                     onDragEnd = {
                                         // Use draggedIndex (current position in list) to check if position changed
                                         // draggedIndex is updated during drag to reflect the actual position in localDragList
+                                        val reorderedIds = localDragList?.map { it.sourceId } ?: displayList.map { it.sourceId }
                                         if (originalDragIndex != null && originalDragIndex != draggedIndex) {
-                                            // Save the reordered list
-                                            onSourceReorder(localDragList?.map { it.sourceId } ?: displayList.map { it.sourceId })
+                                            // Update current sources immediately for next drag operation
+                                            currentSources = currentSources.map { source ->
+                                                val newOrder = reorderedIds.indexOf(source.sourceId)
+                                                source.copy(order = newOrder)
+                                            }.sortedBy { it.order }
+                                            // Save the reordered list to persistent storage
+                                            onSourceReorder(reorderedIds)
                                         }
                                         // Clear local drag list
                                         localDragList = null
@@ -357,6 +403,11 @@ fun DraggableSourcePriorityDialog(
                                 MaterialTheme.colorScheme.primaryContainer
                             else
                                 MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        elevation = CardDefaults.cardElevation(
+                            defaultElevation = animatedElevation,
+                            pressedElevation = animatedElevation,
+                            draggedElevation = animatedElevation
                         )
                     ) {
                         Column(modifier = Modifier.fillMaxWidth()) {
@@ -1051,7 +1102,6 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 16.dp)
                 .padding(innerPadding)
                 .verticalScroll(rememberScrollState())
         ) {
@@ -1066,25 +1116,23 @@ fun SettingsScreen(
                             )
                         },
                         trailingContent = {
-                            Box(modifier = Modifier.weight(1f)) {
-                                ConnectedIconButtonGroup(
-                                    options = listOf(ConnectedIconOption(
-                                            "system",
-                                            Icons.Default.BrightnessAuto,
-                                            stringResource(R.string.settings_theme_system)
-                                        ), ConnectedIconOption(
-                                            "light",
-                                            Icons.Default.LightMode,
-                                            stringResource(R.string.settings_theme_light)
-                                        ), ConnectedIconOption(
-                                            "dark",
-                                            Icons.Default.DarkMode,
-                                            stringResource(R.string.settings_theme_dark)
-                                        )),
-                                    selectedValue = themeMode,
-                                    onSelected = viewModel::setThemeMode
-                                )
-                            }
+                            ConnectedIconButtonGroup(
+                                options = listOf(ConnectedIconOption(
+                                        "system",
+                                        Icons.Default.BrightnessAuto,
+                                        stringResource(R.string.settings_theme_system)
+                                    ), ConnectedIconOption(
+                                        "light",
+                                        Icons.Default.LightMode,
+                                        stringResource(R.string.settings_theme_light)
+                                    ), ConnectedIconOption(
+                                        "dark",
+                                        Icons.Default.DarkMode,
+                                        stringResource(R.string.settings_theme_dark)
+                                    )),
+                                selectedValue = themeMode,
+                                onSelected = viewModel::setThemeMode
+                            )
                         },
                         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
                     )
@@ -1139,23 +1187,21 @@ fun SettingsScreen(
                             Text(text = stringResource(R.string.settings_scan_mode),)
                         },
                         trailingContent = {
-                            Box(modifier = Modifier.weight(1f)) {
-                                ConnectedIconButtonGroup(
-                                    options = scanModeOptions.map { option ->
-                                        ConnectedIconOption(
-                                            value = option.value,
-                                            icon = when (option.value) {
-                                                "TRACK_ONLY" -> Icons.Default.MusicNote
-                                                "SINGLE_ALBUM" -> Icons.Default.Album
-                                                else -> Icons.Default.LibraryMusic
-                                            },
-                                            tooltip = stringResource(option.labelResId)
-                                        )
-                                    },
-                                    selectedValue = scanMode,
-                                    onSelected = viewModel::setScanMode
-                                )
-                            }
+                            ConnectedIconButtonGroup(
+                                options = scanModeOptions.map { option ->
+                                    ConnectedIconOption(
+                                        value = option.value,
+                                        icon = when (option.value) {
+                                            "TRACK_ONLY" -> Icons.Default.MusicNote
+                                            "SINGLE_ALBUM" -> Icons.Default.Album
+                                            else -> Icons.Default.LibraryMusic
+                                        },
+                                        tooltip = stringResource(option.labelResId)
+                                    )
+                                },
+                                selectedValue = scanMode,
+                                onSelected = viewModel::setScanMode
+                            )
                         },
                         colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
                     )

@@ -100,45 +100,47 @@ fun MP3TagNavHost(
             modifier = Modifier.padding(innerPadding),
             startDestination = Screen.FileBrowser.route,
             enterTransition = {
-                // 判断是否是返回导航（通过backQueue大小判断）
-                // 如果backQueue只有1个元素，说明是首次加载，使用默认动画
-                // 否则判断导航方向
-                val isReturning = initialState.destination.route in bottomNavRoutes
                 val destinations = bottomNavRoutes
                 val fromRoute = initialState.destination.route
                 val toRoute = targetState.destination.route
 
                 when {
-                    // 底部导航主页间使用交叉淡入
+                    // 底部导航主页间使用滑动+淡入 (更有表现力)
                     fromRoute in destinations && toRoute in destinations -> {
-                        ExpressiveAnimations.CrossFadeEnter
+                        ExpressiveAnimations.BottomNavSlideEnter
                     }
-                    // 从非主页返回时从左侧滑入
-                    fromRoute !in destinations -> {
-                        ExpressiveAnimations.PageEnterFromLeft
+                    // 从非主页返回时从左侧滑入 (Shared Axis)
+                    fromRoute !in destinations && toRoute in destinations -> {
+                        ExpressiveAnimations.SharedAxisPopEnter
                     }
-                    // 新页面从右侧滑入
-                    else -> ExpressiveAnimations.PageEnterExpressive
+                    // 新页面从右侧滑入 (Shared Axis - 新页面滑入，旧页面轻微向左)
+                    else -> ExpressiveAnimations.SharedAxisEnter
                 }
             },
             exitTransition = {
                 val fromRoute = initialState.destination.route
                 val toRoute = targetState.destination.route
 
-                // 主页间切换使用淡出
-                if (fromRoute in bottomNavRoutes && toRoute in bottomNavRoutes) {
-                    ExpressiveAnimations.CrossFadeExit
-                } else {
-                    ExpressiveAnimations.PageExitExpressive
+                when {
+                    // 主页间切换使用向下滑出
+                    fromRoute in bottomNavRoutes && toRoute in bottomNavRoutes -> {
+                        ExpressiveAnimations.BottomNavSlideExit
+                    }
+                    // 进入子页面时旧页面向左轻微移动 (Shared Axis)
+                    fromRoute in bottomNavRoutes && toRoute !in bottomNavRoutes -> {
+                        ExpressiveAnimations.SharedAxisExit
+                    }
+                    // 返回时向右滑出
+                    else -> ExpressiveAnimations.SharedAxisPopExit
                 }
             },
             popEnterTransition = {
-                // 返回时从左侧进入
-                ExpressiveAnimations.PageEnterFromLeft
+                // 返回时从左侧进入 (Shared Axis)
+                ExpressiveAnimations.SharedAxisPopEnter
             },
             popExitTransition = {
-                // 返回时向右滑出
-                ExpressiveAnimations.PageExitToRight
+                // 返回时向右滑出 (Shared Axis)
+                ExpressiveAnimations.SharedAxisPopExit
             }
         ) {
             composable(Screen.FileBrowser.route) {

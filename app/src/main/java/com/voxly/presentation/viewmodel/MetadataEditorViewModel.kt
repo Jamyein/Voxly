@@ -1,6 +1,7 @@
 package com.voxly.presentation.viewmodel
 
 import android.content.ContentResolver
+import android.net.Uri
 import android.os.SystemClock
 import android.provider.MediaStore
 import androidx.lifecycle.SavedStateHandle
@@ -8,6 +9,8 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.saf.SafGrantType
+import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.data.repository.LyricsRepositoryImpl
 import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
@@ -62,6 +65,7 @@ class MetadataEditorViewModel @Inject constructor(
     private val lyricsRepository: LyricsRepository,
     private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository,
     private val settingsDataStore: SettingsDataStore,
+    private val safWriteAccessService: SafWriteAccessService,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -514,7 +518,15 @@ class MetadataEditorViewModel @Inject constructor(
                             errorMessage.contains("EACCES") ||
                             errorMessage.contains("write permission")
 
-                    _saveResult.value = SaveResult.Error(errorMessage, requiresReauthorization)
+                    _saveResult.value = SaveResult.Error(
+                        message = errorMessage,
+                        requiresReauthorization = requiresReauthorization,
+                        errorCode = if (requiresReauthorization) {
+                            SaveErrorCode.PERMISSION_REQUIRED
+                        } else {
+                            SaveErrorCode.SAVE_FAILED
+                        }
+                    )
                     val currentState = _uiState.value
                     if (currentState is MetadataEditorUiState.Saving) {
                         _uiState.value = MetadataEditorUiState.Error(
@@ -633,6 +645,29 @@ class MetadataEditorViewModel @Inject constructor(
      */
     fun clearSaveResult() {
         _saveResult.value = null
+    }
+
+    fun reauthorizeAndRetrySave(uri: Uri, grantType: SafGrantType) {
+        viewModelScope.launch {
+            val permissionResult = safWriteAccessService.persistPermission(uri, grantType)
+            permissionResult.fold(
+                onSuccess = {
+                    Logger.i("SAF permission updated for file=$filePath grantType=$grantType", TAG)
+                    saveMetadata()
+                },
+                onFailure = { error ->
+                    val message = error.message
+                        ?: "Failed to persist SAF permission. Please retry selecting the file or directory."
+                    Logger.e("SAF reauthorization failed file=$filePath reason=$message", error, TAG)
+                    _saveResult.value = SaveResult.Error(
+                        message = message,
+                        requiresReauthorization = true,
+                        errorCode = SaveErrorCode.PERMISSION_REAUTHORIZE_FAILED
+                    )
+                    _uiState.value = MetadataEditorUiState.Error(message)
+                }
+            )
+        }
     }
 
     fun searchOnlineCoverCandidates() {
@@ -919,7 +954,17 @@ enum class MetadataField {
  */
 sealed class SaveResult {
     data object Success : SaveResult()
-    data class Error(val message: String, val requiresReauthorization: Boolean = false) : SaveResult()
+    data class Error(
+        val message: String,
+        val requiresReauthorization: Boolean = false,
+        val errorCode: SaveErrorCode = SaveErrorCode.SAVE_FAILED
+    ) : SaveResult()
+}
+
+enum class SaveErrorCode {
+    PERMISSION_REQUIRED,
+    PERMISSION_REAUTHORIZE_FAILED,
+    SAVE_FAILED
 }
 
 data class LyricsSearchState(
