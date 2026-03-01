@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens.metadata
 
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -138,6 +139,7 @@ fun OnlineMetadataScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
                 .padding(16.dp)
+                .pointerInput(Unit) { } // Prevent touch events during exit animation
         ) {
             QuerySummaryCard(
                 title = query.title,

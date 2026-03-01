@@ -27,6 +27,9 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -1103,13 +1106,17 @@ fun SettingsScreen(
             )
         }
     ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = innerPadding.calculateTopPadding())
-                .padding(horizontal = 16.dp)
-                .verticalScroll(rememberScrollState())
+        Box(
+            modifier = Modifier.fillMaxSize()
         ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding())
+                    .padding(horizontal = 16.dp)
+                    .verticalScroll(rememberScrollState())
+                    .align(Alignment.BottomCenter)
+            ) {
             // Appearance Section
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
                 // Theme Segmented Buttons - Single item
@@ -1517,6 +1524,7 @@ fun SettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+        }
     }
 
     if (showSearchLimitsDialog) {

@@ -20,6 +20,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.lazy.LazyColumn
@@ -394,6 +395,7 @@ windowInsets = WindowInsets(0.dp),
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .pointerInput(Unit) { } // Prevent touch events during exit animation
         ) {
             when (val state = uiState) {
                 is MetadataEditorUiState.Loading -> {
@@ -1079,9 +1081,6 @@ private fun MetadataForm(
             onScan = onScanReplayGain,
             onClear = onClearReplayGain
         )
-
-        // Bottom spacing for FAB
-        Spacer(modifier = Modifier.height(80.dp))
     }
 }
 
