@@ -114,8 +114,9 @@ data class ScanModeOption(
 
 data class ConnectedIconOption<T>(
     val value: T,
-    val icon: ImageVector,
-    val tooltip: String
+    val icon: ImageVector? = null,
+    val tooltip: String,
+    val text: String? = null
 )
 
 private fun connectedGroupWidth(optionCount: Int): Dp {
@@ -215,16 +216,29 @@ private fun <T> ConnectedIconButtonGroup(
                         },
                         contentPadding = PaddingValues(2.dp)
                     ) {
-                        Icon(
-                            imageVector = option.icon,
-                            contentDescription = option.tooltip,
-                            modifier = Modifier.animateContentSize(
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessMedium
+                        if (option.text != null) {
+                            Text(
+                                text = option.text,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier.animateContentSize(
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
                                 )
                             )
-                        )
+                        } else {
+                            Icon(
+                                imageVector = option.icon!!,
+                                contentDescription = option.tooltip,
+                                modifier = Modifier.animateContentSize(
+                                    animationSpec = spring(
+                                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                                        stiffness = Spring.StiffnessMedium
+                                    )
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -938,12 +952,8 @@ private fun SearchLimitDropdown(
         options = searchLimitOptions.map { option ->
             ConnectedIconOption(
                 value = option.value,
-                icon = when (option.value) {
-                    0 -> Icons.Default.AllInclusive
-                    10 -> Icons.Default.LooksOne
-                    25 -> Icons.Default.LooksTwo
-                    else -> Icons.Default.Looks3
-                },
+                icon = if (option.value == 0) Icons.Default.AllInclusive else null,
+                text = if (option.value != 0) option.value.toString() else null,
                 tooltip = option.displayLabel()
             )
         },
@@ -960,19 +970,15 @@ private fun SearchLimitRow(
     searchLimitOptions: List<SearchLimitOption>,
     onLimitChange: (Int) -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
         Text(
             text = text,
             style = MaterialTheme.typography.titleSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .weight(1f)
-                .padding(end = 8.dp),
             color = MaterialTheme.colorScheme.onSurface
         )
         Box(modifier = Modifier.fillMaxWidth()) {
