@@ -17,7 +17,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,7 +25,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -69,11 +67,9 @@ fun AlphabetIndexer(
     val density = LocalDensity.current
     val letterHeight = with(density) { 20.dp.toPx() }
 
-    // M3E spring animation specs
-    val colorSpringSpec = spring<Color>(
-        dampingRatio = Spring.DampingRatioMediumBouncy,
-        stiffness = Spring.StiffnessMediumLow
-    )
+    // Static font sizes for selected/unselected states (no animation for stability)
+    val selectedFontSize = 16.sp
+    val unselectedFontSize = 12.sp
 
     Column(
         modifier = modifier
@@ -134,40 +130,27 @@ fun AlphabetIndexer(
         displayLetters.forEachIndexed { index, letter ->
             val isAvailable = letter in availableLetters
             val isSelected = selectedLetter == letter
-            val animatedScale by animateDpAsState(
-                targetValue = if (isSelected) 16.dp else 12.dp,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                ),
-                label = "letter_scale"
-            )
-            val animatedColor by animateColorAsState(
-                targetValue = when {
-                    isSelected -> MaterialTheme.colorScheme.primary
-                    !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f) // Disabled
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                },
-                animationSpec = colorSpringSpec,
-                label = "letter_color"
-            )
+
+            // Static styles without animation - direct conditional assignment
+            val fontSize = if (isSelected) selectedFontSize else unselectedFontSize
+            val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+            val color = when {
+                isSelected -> MaterialTheme.colorScheme.primary
+                !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
 
             Text(
                 text = letter.uppercase(),
-                fontSize = animatedScale.value.sp,
-                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-                color = animatedColor,
-                modifier = Modifier
-                    .padding(vertical = 1.dp)
-                    .graphicsLayer {
-                        scaleX = if (isSelected) 1.2f else 1f
-                        scaleY = if (isSelected) 1.2f else 1f
-                    }
+                fontSize = fontSize,
+                fontWeight = fontWeight,
+                color = color,
+                modifier = Modifier.padding(vertical = 1.dp)
             )
         }
     }
 
-    // Preview tooltip
+    // Preview tooltip (with animation - follows finger movement)
     if (isTouching && selectedLetter != null) {
         Box(
             modifier = Modifier

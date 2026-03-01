@@ -145,7 +145,7 @@ object AppModule {
     @Named("tengx")
     fun provideTengxRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
         return Retrofit.Builder()
-            .baseUrl(TengxApi.SEARCH_BASE_URL)
+            .baseUrl(TengxApi.BASE_URL)
             .client(okHttpClient)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
