@@ -5,12 +5,19 @@ import com.voxly.data.mapper.OnlineRecordingMapper
 import com.voxly.data.remote.musicbrainz.model.*
 import com.voxly.domain.repository.*
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
+import timber.log.Timber
+import java.io.IOException
+import java.security.cert.CertificateException
 import javax.inject.Inject
 import javax.inject.Singleton
+import javax.net.ssl.SSLException
+import javax.net.ssl.SSLHandshakeException
+import javax.net.ssl.SSLPeerUnverifiedException
 
 /**
  * Implementation of OnlineMetadataRepository using MusicBrainz API.
@@ -28,6 +35,10 @@ class MusicBrainzRepository @Inject constructor(
         
         // Request rate limiting (MusicBrainz requires 1 second between requests)
         const val MIN_REQUEST_INTERVAL = 1000L
+
+        // Transient TLS/network retry config
+        private const val MAX_TRANSIENT_RETRIES = 2
+        private const val INITIAL_RETRY_DELAY_MS = 400L
     }
 
     private var lastRequestTime = 0L
@@ -47,6 +58,56 @@ class MusicBrainzRepository @Inject constructor(
         return call()
     }
 
+    private suspend fun <T> callWithTransientRetry(
+        operation: String,
+        block: suspend () -> T
+    ): T {
+        var attempt = 0
+        var backoffMs = INITIAL_RETRY_DELAY_MS
+
+        while (true) {
+            try {
+                return block()
+            } catch (e: Exception) {
+                val shouldRetry = isTransientRetryable(e)
+                if (!shouldRetry || attempt >= MAX_TRANSIENT_RETRIES) {
+                    throw e
+                }
+
+                attempt += 1
+                Timber.w(e, "MusicBrainz transient failure on %s, retry %d/%d", operation, attempt, MAX_TRANSIENT_RETRIES)
+                delay(backoffMs)
+                backoffMs *= 2
+            }
+        }
+    }
+
+    private fun isTransientRetryable(error: Throwable): Boolean {
+        if (error is SSLHandshakeException && error.cause is CertificateException) {
+            return false
+        }
+        if (error is SSLPeerUnverifiedException) {
+            return false
+        }
+
+        if (error is SSLException) {
+            val msg = error.message.orEmpty()
+            return msg.contains("connection closed", ignoreCase = true) ||
+                msg.contains("connection reset", ignoreCase = true) ||
+                msg.contains("unexpected end", ignoreCase = true) ||
+                msg.contains("handshake", ignoreCase = true)
+        }
+
+        if (error is IOException) {
+            val msg = error.message.orEmpty()
+            return msg.contains("connection closed", ignoreCase = true) ||
+                msg.contains("connection reset", ignoreCase = true) ||
+                msg.contains("timeout", ignoreCase = true)
+        }
+
+        return false
+    }
+
     override suspend fun searchByArtistAlbum(
         artist: String,
         album: String
@@ -58,8 +119,10 @@ class MusicBrainzRepository @Inject constructor(
                 append("release:\"").append(album).append("\"")
             }
 
-            val response = rateLimitedCall {
-                musicBrainzApi.searchReleases(query = query)
+            val response = callWithTransientRetry("searchReleases") {
+                rateLimitedCall {
+                    musicBrainzApi.searchReleases(query = query)
+                }
             }
 
             if (response.isSuccessful) {
@@ -96,9 +159,11 @@ class MusicBrainzRepository @Inject constructor(
             // MusicBrainz 支持简单的文本搜索，会自动匹配相关记录
             val query = SearchQueryBuilder.build(title, artist)
 
-            val response = rateLimitedCall {
-                // 使用 recording 端点进行搜索
-                musicBrainzApi.searchRecordings(query = query)
+            val response = callWithTransientRetry("searchRecordings") {
+                rateLimitedCall {
+                    // 使用 recording 端点进行搜索
+                    musicBrainzApi.searchRecordings(query = query)
+                }
             }
 
             if (response.isSuccessful) {
@@ -139,8 +204,10 @@ class MusicBrainzRepository @Inject constructor(
         releaseId: String
     ): Result<OnlineReleaseDetails> = withContext(Dispatchers.IO) {
         try {
-            val response = rateLimitedCall {
-                musicBrainzApi.getReleaseDetails(releaseId = releaseId)
+            val response = callWithTransientRetry("getReleaseDetails") {
+                rateLimitedCall {
+                    musicBrainzApi.getReleaseDetails(releaseId = releaseId)
+                }
             }
 
             if (response.isSuccessful) {
@@ -251,8 +318,10 @@ class MusicBrainzRepository @Inject constructor(
         limit: Int = 25
     ): Result<List<OnlineRelease>> = withContext(Dispatchers.IO) {
         try {
-            val response = rateLimitedCall {
-                musicBrainzApi.searchReleases(query = query, limit = limit)
+            val response = callWithTransientRetry("searchFreeText") {
+                rateLimitedCall {
+                    musicBrainzApi.searchReleases(query = query, limit = limit)
+                }
             }
 
             if (response.isSuccessful) {
