@@ -477,12 +477,87 @@ fun FileBrowserScreen(
                 .padding(innerPadding)
         ) {
             if (isDirectoryListLevel) {
-                DirectoryOverviewContent(
-                    directories = selectedDirectories,
-                    directoryFiles = directoryFiles,
-                    onOpenDirectory = viewModel::openDirectory
-                )
+                // Root directory - show TabRow with tabs
+                Column(modifier = Modifier.fillMaxSize()) {
+                    // TabRow at root level
+                    TabRow(
+                        selectedTabIndex = selectedRootTab.ordinal,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Tab(
+                            selected = selectedRootTab == RootTab.DIRECTORIES,
+                            onClick = { selectedRootTab = RootTab.DIRECTORIES },
+                            text = { Text(stringResource(R.string.tab_directories)) },
+                            icon = { Icon(Icons.Default.Folder, contentDescription = null) }
+                        )
+                        Tab(
+                            selected = selectedRootTab == RootTab.ALBUMS,
+                            onClick = { selectedRootTab = RootTab.ALBUMS },
+                            text = { Text(stringResource(R.string.tab_albums)) },
+                            icon = { Icon(Icons.Default.Album, contentDescription = null) }
+                        )
+                        Tab(
+                            selected = selectedRootTab == RootTab.ARTISTS,
+                            onClick = { selectedRootTab = RootTab.ARTISTS },
+                            text = { Text(stringResource(R.string.tab_artists)) },
+                            icon = { Icon(Icons.Default.Person, contentDescription = null) }
+                        )
+                        Tab(
+                            selected = selectedRootTab == RootTab.ALL,
+                            onClick = { selectedRootTab = RootTab.ALL },
+                            text = { Text(stringResource(R.string.tab_all)) },
+                            icon = { Icon(Icons.Default.MusicNote, contentDescription = null) }
+                        )
+                    }
+
+                    // Tab content based on selected tab
+                    when (selectedRootTab) {
+                        RootTab.DIRECTORIES -> {
+                            DirectoryOverviewContent(
+                                directories = selectedDirectories,
+                                directoryFiles = directoryFiles,
+                                onOpenDirectory = viewModel::openDirectory
+                            )
+                        }
+                        RootTab.ALBUMS -> {
+                            AlbumTabContent(
+                                albums = albums,
+                                albumArtCache = albumArtCache,
+                                onAlbumClick = { album ->
+                                    // TODO: Navigate to album detail or filter by album
+                                }
+                            )
+                        }
+                        RootTab.ARTISTS -> {
+                            ArtistTabContent(
+                                artists = artists,
+                                albumArtCache = albumArtCache,
+                                onArtistClick = { artist ->
+                                    // TODO: Navigate to artist detail or filter by artist
+                                }
+                            )
+                        }
+                        RootTab.ALL -> {
+                            AllAudiosTabContent(
+                                audios = allAudios,
+                                albumArtCache = albumArtCache,
+                                selectedFiles = selectedFiles,
+                                onFileClick = { audioFile ->
+                                    if (selectedFiles.isNotEmpty()) {
+                                        viewModel.toggleFileSelection(audioFile.path)
+                                    } else {
+                                        onNavigateToMetadata(audioFile.path)
+                                    }
+                                },
+                                onFileLongClick = { audioFile ->
+                                    viewModel.toggleFileSelection(audioFile.path)
+                                }
+                            )
+                        }
+                    }
+                }
             } else {
+                // Inside directory - show file list without Tab
                 Box(modifier = Modifier.fillMaxSize()) {
                 when (val state = uiState) {
                     is FileBrowserUiState.Loading -> {
@@ -492,43 +567,10 @@ fun FileBrowserScreen(
                         EmptyContent()
                     }
                     is FileBrowserUiState.Success -> {
-                        // Root tab row for switching between directories/albums/artists/all
-                        TabRow(
-                            selectedTabIndex = selectedRootTab.ordinal,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Tab(
-                                selected = selectedRootTab == RootTab.DIRECTORIES,
-                                onClick = { selectedRootTab = RootTab.DIRECTORIES },
-                                text = { Text(stringResource(R.string.tab_directories)) },
-                                icon = { Icon(Icons.Default.Folder, contentDescription = null) }
-                            )
-                            Tab(
-                                selected = selectedRootTab == RootTab.ALBUMS,
-                                onClick = { selectedRootTab = RootTab.ALBUMS },
-                                text = { Text(stringResource(R.string.tab_albums)) },
-                                icon = { Icon(Icons.Default.Album, contentDescription = null) }
-                            )
-                            Tab(
-                                selected = selectedRootTab == RootTab.ARTISTS,
-                                onClick = { selectedRootTab = RootTab.ARTISTS },
-                                text = { Text(stringResource(R.string.tab_artists)) },
-                                icon = { Icon(Icons.Default.Person, contentDescription = null) }
-                            )
-                            Tab(
-                                selected = selectedRootTab == RootTab.ALL,
-                                onClick = { selectedRootTab = RootTab.ALL },
-                                text = { Text(stringResource(R.string.tab_all)) },
-                                icon = { Icon(Icons.Default.MusicNote, contentDescription = null) }
-                            )
-                        }
-
-                        when (selectedRootTab) {
-                            RootTab.DIRECTORIES -> {
-                                val filesToShow = visibleFiles
-                                if (filesToShow.isEmpty()) {
-                                    EmptyContent()
-                                } else {
+                        val filesToShow = visibleFiles
+                        if (filesToShow.isEmpty()) {
+                            EmptyContent()
+                        } else {
                             // Create letter to index mapping for fast navigation
                             val letterToIndex = remember(filesToShow) {
                                 filesToShow.mapIndexed { index, file ->
@@ -595,46 +637,6 @@ fun FileBrowserScreen(
                                         .align(Alignment.CenterEnd)
                                         .fillMaxHeight()
                                         .padding(top = 80.dp, bottom = 80.dp)
-                                )
-                                }
-                            }
-                            }
-
-                            RootTab.ALBUMS -> {
-                                AlbumTabContent(
-                                    albums = albums,
-                                    albumArtCache = albumArtCache,
-                                    onAlbumClick = { album ->
-                                        // TODO: Navigate to album detail or filter by album
-                                    }
-                                )
-                            }
-
-                            RootTab.ARTISTS -> {
-                                ArtistTabContent(
-                                    artists = artists,
-                                    albumArtCache = albumArtCache,
-                                    onArtistClick = { artist ->
-                                        // TODO: Navigate to artist detail or filter by artist
-                                    }
-                                )
-                            }
-
-                            RootTab.ALL -> {
-                                AllAudiosTabContent(
-                                    audios = allAudios,
-                                    albumArtCache = albumArtCache,
-                                    selectedFiles = selectedFiles,
-                                    onFileClick = { audioFile ->
-                                        if (selectedFiles.isNotEmpty()) {
-                                            viewModel.toggleFileSelection(audioFile.path)
-                                        } else {
-                                            onNavigateToMetadata(audioFile.path)
-                                        }
-                                    },
-                                    onFileLongClick = { audioFile ->
-                                        viewModel.toggleFileSelection(audioFile.path)
-                                    }
                                 )
                             }
                         }
