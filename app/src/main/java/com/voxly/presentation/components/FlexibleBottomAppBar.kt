@@ -56,7 +56,7 @@ fun FlexibleBottomAppBar(
 
     // Animate offsetY using translationY (M3E best practice)
     val offsetY by animateDpAsState(
-        targetValue = if (scrollProgress > 0.5f) bottomBarHeight else 0.dp,
+        targetValue = if (scrollProgress > 0.8f) bottomBarHeight else 0.dp,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "bottomBarOffset"
     )
@@ -66,7 +66,7 @@ fun FlexibleBottomAppBar(
         targetValue = (1f - scrollProgress).coerceIn(0f, 1f),
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
+            stiffness = Spring.StiffnessMediumLow
         ),
         label = "bottomBarAlpha"
     )

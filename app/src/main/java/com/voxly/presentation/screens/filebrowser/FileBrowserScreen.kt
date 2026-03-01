@@ -156,7 +156,7 @@ fun FileBrowserScreen(
     var isTopBarVisible by remember { mutableStateOf(true) }
 
     // Scroll detection threshold for top bar visibility
-    val scrollHideThreshold = 56
+    val scrollHideThreshold = 100
 
     // Track scroll state for hiding top bar and bottom bar
     var lastScrollIndex by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.index) }
@@ -175,7 +175,7 @@ fun FileBrowserScreen(
             if (!isScrolling) {
                 lastScrollIndex = index
                 lastScrollOffset = offset
-                accumulatedScrollDelta = 0
+                // 滚动停止时保持当前状态，不重置 accumulatedScrollDelta
                 if (index == 0 && offset == 0) {
                     onBottomBarScrollProgressChange(0f)
                 }
@@ -209,10 +209,10 @@ fun FileBrowserScreen(
                     isTopBarVisible = true
                     accumulatedScrollDelta = 0
                 }
-                accumulatedScrollDelta > scrollHideThreshold -> {
+                accumulatedScrollDelta > scrollHideThreshold * 2 -> {
                     onBottomBarScrollProgressChange(1f)
                     isTopBarVisible = false
-                    accumulatedScrollDelta = 0
+                    // 保持隐藏状态，不再重置 accumulatedScrollDelta
                 }
                 accumulatedScrollDelta < -scrollHideThreshold -> {
                     onBottomBarScrollProgressChange(0f)
