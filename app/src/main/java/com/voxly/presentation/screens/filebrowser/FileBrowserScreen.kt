@@ -28,6 +28,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -46,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.asImageBitmap
@@ -62,6 +64,8 @@ import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.components.AlphabetIndexer
+import com.voxly.presentation.components.getFirstLetter
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.viewmodel.FileBrowserUiState
@@ -478,47 +482,72 @@ fun FileBrowserScreen(
                         if (filesToShow.isEmpty()) {
                             EmptyContent()
                         } else {
-                            Column(
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                SortMenu(
-                                    isExpanded = isSortExpanded,
-                                    currentSortOption = FileSortOption.valueOf(sortOption),
-                                    onSortOptionChange = { sortOption = it.name },
-                                    onDismiss = { isSortExpanded = false }
-                                )
-                                AudioFileList(
-                                    files = filesToShow,
-                                    listState = listState,
-                                    albumArtCache = albumArtCache,
-                                    selectedFiles = selectedFiles,
-                                    onFileClick = { audioFile ->
-                                        if (selectedFiles.isNotEmpty()) {
+                            // Create letter to index mapping for fast navigation
+                            val letterToIndex = remember(filesToShow) {
+                                filesToShow.mapIndexed { index, file ->
+                                    getFirstLetter(file.name) to index
+                                }.distinctBy { it.first }.toMap()
+                            }
+
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                Column(
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    SortMenu(
+                                        isExpanded = isSortExpanded,
+                                        currentSortOption = FileSortOption.valueOf(sortOption),
+                                        onSortOptionChange = { sortOption = it.name },
+                                        onDismiss = { isSortExpanded = false }
+                                    )
+                                    AudioFileList(
+                                        files = filesToShow,
+                                        listState = listState,
+                                        albumArtCache = albumArtCache,
+                                        selectedFiles = selectedFiles,
+                                        onFileClick = { audioFile ->
+                                            if (selectedFiles.isNotEmpty()) {
+                                                viewModel.toggleFileSelection(audioFile.path)
+                                            } else {
+                                                onNavigateToMetadata(audioFile.path)
+                                            }
+                                        },
+                                        onFileLongClick = { audioFile ->
                                             viewModel.toggleFileSelection(audioFile.path)
-                                        } else {
+                                        },
+                                        onEditFileMetadata = { audioFile ->
                                             onNavigateToMetadata(audioFile.path)
+                                        },
+                                        onRenameFile = { audioFile ->
+                                            renameTargetFile = audioFile
+                                        },
+                                        onDeleteFile = { audioFile ->
+                                            deleteTargetFile = audioFile
+                                        },
+                                        onFetchOnlineMetadata = { audioFile ->
+                                            selectedFilesForBatch = setOf(audioFile.path)
+                                            showOnlineMetadataDialog = true
+                                        },
+                                        onFixMetadata = { audioFile ->
+                                            selectedFilesForBatch = setOf(audioFile.path)
+                                            showFixMetadataDialog = true
+                                        }
+                                    )
+                                }
+
+                                // Alphabet indexer sidebar
+                                AlphabetIndexer(
+                                    groupedFiles = letterToIndex.mapValues { listOf() },
+                                    onLetterSelected = { letter ->
+                                        letterToIndex[letter]?.let { targetIndex ->
+                                            coroutineScope.launch {
+                                                listState.animateScrollToItem(targetIndex)
+                                            }
                                         }
                                     },
-                                    onFileLongClick = { audioFile ->
-                                        viewModel.toggleFileSelection(audioFile.path)
-                                    },
-                                    onEditFileMetadata = { audioFile ->
-                                        onNavigateToMetadata(audioFile.path)
-                                    },
-                                    onRenameFile = { audioFile ->
-                                        renameTargetFile = audioFile
-                                    },
-                                    onDeleteFile = { audioFile ->
-                                        deleteTargetFile = audioFile
-                                    },
-                                    onFetchOnlineMetadata = { audioFile ->
-                                        selectedFilesForBatch = setOf(audioFile.path)
-                                        showOnlineMetadataDialog = true
-                                    },
-                                    onFixMetadata = { audioFile ->
-                                        selectedFilesForBatch = setOf(audioFile.path)
-                                        showFixMetadataDialog = true
-                                    }
+                                    modifier = Modifier
+                                        .align(Alignment.CenterEnd)
+                                        .fillMaxHeight()
+                                        .padding(top = 80.dp, bottom = 80.dp)
                                 )
                             }
                         }
@@ -1620,6 +1649,7 @@ private fun ErrorContent(message: String) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun AudioFileList(
     files: List<AudioFile>,
@@ -1635,6 +1665,7 @@ private fun AudioFileList(
     onFixMetadata: (AudioFile) -> Unit
 ) {
     val isSelectionMode = selectedFiles.isNotEmpty()
+
     LazyColumn(
         state = listState,
         contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
