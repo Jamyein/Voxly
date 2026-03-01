@@ -33,9 +33,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -60,6 +64,9 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.AlbumGroup
+import com.voxly.domain.model.ArtistGroup
+import com.voxly.domain.model.RootTab
 import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
 import com.voxly.presentation.icons.AppIcon
@@ -110,7 +117,13 @@ fun FileBrowserScreen(
         is FileBrowserUiState.Success -> if (openedDirectory != null) openedDirectoryFiles else state.files
         else -> emptyList()
     }
-    
+
+    // Tab states for albums/artists view
+    val albums by viewModel.albums.collectAsState()
+    val artists by viewModel.artists.collectAsState()
+    val allAudios by viewModel.allAudios.collectAsState()
+    var selectedRootTab by rememberSaveable { mutableStateOf(RootTab.DIRECTORIES) }
+
     // Batch operation states
     val isBatchProcessing by viewModel.isBatchProcessing.collectAsState()
     val batchProgress by viewModel.batchProgress.collectAsState()
@@ -478,10 +491,43 @@ fun FileBrowserScreen(
                         EmptyContent()
                     }
                     is FileBrowserUiState.Success -> {
-                        val filesToShow = visibleFiles
-                        if (filesToShow.isEmpty()) {
-                            EmptyContent()
-                        } else {
+                        // Root tab row for switching between directories/albums/artists/all
+                        TabRow(
+                            selectedTabIndex = selectedRootTab.ordinal,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Tab(
+                                selected = selectedRootTab == RootTab.DIRECTORIES,
+                                onClick = { selectedRootTab = RootTab.DIRECTORIES },
+                                text = { Text(stringResource(R.string.tab_directories)) },
+                                icon = { Icon(Icons.Default.Folder, contentDescription = null) }
+                            )
+                            Tab(
+                                selected = selectedRootTab == RootTab.ALBUMS,
+                                onClick = { selectedRootTab = RootTab.ALBUMS },
+                                text = { Text(stringResource(R.string.tab_albums)) },
+                                icon = { Icon(Icons.Default.Album, contentDescription = null) }
+                            )
+                            Tab(
+                                selected = selectedRootTab == RootTab.ARTISTS,
+                                onClick = { selectedRootTab = RootTab.ARTISTS },
+                                text = { Text(stringResource(R.string.tab_artists)) },
+                                icon = { Icon(Icons.Default.Person, contentDescription = null) }
+                            )
+                            Tab(
+                                selected = selectedRootTab == RootTab.ALL,
+                                onClick = { selectedRootTab = RootTab.ALL },
+                                text = { Text(stringResource(R.string.tab_all)) },
+                                icon = { Icon(Icons.Default.MusicNote, contentDescription = null) }
+                            )
+                        }
+
+                        when (selectedRootTab) {
+                            RootTab.DIRECTORIES -> {
+                                val filesToShow = visibleFiles
+                                if (filesToShow.isEmpty()) {
+                                    EmptyContent()
+                                } else {
                             // Create letter to index mapping for fast navigation
                             val letterToIndex = remember(filesToShow) {
                                 filesToShow.mapIndexed { index, file ->
@@ -548,6 +594,46 @@ fun FileBrowserScreen(
                                         .align(Alignment.CenterEnd)
                                         .fillMaxHeight()
                                         .padding(top = 80.dp, bottom = 80.dp)
+                                )
+                                }
+                            }
+                            }
+
+                            RootTab.ALBUMS -> {
+                                AlbumTabContent(
+                                    albums = albums,
+                                    albumArtCache = albumArtCache,
+                                    onAlbumClick = { album ->
+                                        // TODO: Navigate to album detail or filter by album
+                                    }
+                                )
+                            }
+
+                            RootTab.ARTISTS -> {
+                                ArtistTabContent(
+                                    artists = artists,
+                                    albumArtCache = albumArtCache,
+                                    onArtistClick = { artist ->
+                                        // TODO: Navigate to artist detail or filter by artist
+                                    }
+                                )
+                            }
+
+                            RootTab.ALL -> {
+                                AllAudiosTabContent(
+                                    audios = allAudios,
+                                    albumArtCache = albumArtCache,
+                                    selectedFiles = selectedFiles,
+                                    onFileClick = { audioFile ->
+                                        if (selectedFiles.isNotEmpty()) {
+                                            viewModel.toggleFileSelection(audioFile.path)
+                                        } else {
+                                            onNavigateToMetadata(audioFile.path)
+                                        }
+                                    },
+                                    onFileLongClick = { audioFile ->
+                                        viewModel.toggleFileSelection(audioFile.path)
+                                    }
                                 )
                             }
                         }
@@ -2491,7 +2577,7 @@ private fun AutoNumberDialog(
         confirmButton = {
             TextButton(
                 onClick = { 
-                    onConfirm(startNumber, step, if (setTotalTracks) totalTracks else null) 
+                    onConfirm(startNumber, step, if (setTotalTracks) totalTracks else null)
                 }
             ) {
                 Text(stringResource(R.string.batch_start))
@@ -2503,4 +2589,284 @@ private fun AutoNumberDialog(
             }
         }
     )
+}
+
+@Composable
+private fun AlbumTabContent(
+    albums: List<AlbumGroup>,
+    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
+    onAlbumClick: (AlbumGroup) -> Unit
+) {
+    if (albums.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = stringResource(R.string.no_albums_found),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(albums, key = { it.name }) { album ->
+                AlbumListItem(
+                    album = album,
+                    onClick = { onAlbumClick(album) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtistTabContent(
+    artists: List<ArtistGroup>,
+    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
+    onArtistClick: (ArtistGroup) -> Unit
+) {
+    if (artists.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = stringResource(R.string.no_artists_found),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(artists, key = { it.name }) { artist ->
+                ArtistListItem(
+                    artist = artist,
+                    onClick = { onArtistClick(artist) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AllAudiosTabContent(
+    audios: List<AudioFile>,
+    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
+    selectedFiles: Set<String>,
+    onFileClick: (AudioFile) -> Unit,
+    onFileLongClick: (AudioFile) -> Unit
+) {
+    if (audios.isEmpty()) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            Text(
+                text = stringResource(R.string.no_audio_files),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    } else {
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            items(audios, key = { it.path }) { audioFile ->
+                val isSelected = audioFile.path in selectedFiles
+                SimpleAudioFileItem(
+                    audioFile = audioFile,
+                    isSelected = isSelected,
+                    onClick = { onFileClick(audioFile) },
+                    onLongClick = { onFileLongClick(audioFile) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AlbumListItem(
+    album: AlbumGroup,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(48.dp),
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.primaryContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Album,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = album.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = album.artist ?: stringResource(R.string.unknown_artist),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = stringResource(R.string.track_count, album.files.size),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+    }
+}
+
+@Composable
+private fun ArtistListItem(
+    artist: ArtistGroup,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(48.dp),
+                shape = MaterialTheme.shapes.extraLarge,
+                color = MaterialTheme.colorScheme.secondaryContainer
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(12.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = artist.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = stringResource(R.string.album_count, artist.albums.size),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Text(
+                text = stringResource(R.string.track_count, artist.files.size),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+        }
+    }
+}
+
+@Composable
+private fun SimpleAudioFileItem(
+    audioFile: AudioFile,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                modifier = Modifier.size(40.dp),
+                shape = MaterialTheme.shapes.extraSmall,
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = audioFile.metadata.album ?: "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = audioFile.getFormattedDuration(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            if (isSelected) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = stringResource(R.string.cd_selected),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
 }
