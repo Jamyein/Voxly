@@ -24,6 +24,7 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -2614,6 +2615,7 @@ private fun AlbumTabContent(
             items(albums, key = { it.name }) { album ->
                 AlbumListItem(
                     album = album,
+                    albumArtCache = albumArtCache,
                     onClick = { onAlbumClick(album) }
                 )
             }
@@ -2644,6 +2646,7 @@ private fun ArtistTabContent(
             items(artists, key = { it.name }) { artist ->
                 ArtistListItem(
                     artist = artist,
+                    albumArtCache = albumArtCache,
                     onClick = { onArtistClick(artist) }
                 )
             }
@@ -2677,6 +2680,7 @@ private fun AllAudiosTabContent(
                 val isSelected = audioFile.path in selectedFiles
                 SimpleAudioFileItem(
                     audioFile = audioFile,
+                    albumArtCache = albumArtCache,
                     isSelected = isSelected,
                     onClick = { onFileClick(audioFile) },
                     onLongClick = { onFileLongClick(audioFile) }
@@ -2689,8 +2693,11 @@ private fun AllAudiosTabContent(
 @Composable
 private fun AlbumListItem(
     album: AlbumGroup,
+    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -2705,17 +2712,57 @@ private fun AlbumListItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.primaryContainer
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MaterialTheme.shapes.small),
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Album,
+                val albumArtBitmap by produceState<android.graphics.Bitmap?>(
+                    initialValue = album.coverPath?.let { albumArtCache[it] },
+                    key1 = album.coverPath,
+                    key2 = album.files.firstOrNull()?.mediaStoreAlbumId
+                ) {
+                    val coverPath = album.coverPath
+                    if (coverPath != null && albumArtCache.containsKey(coverPath)) {
+                        value = albumArtCache[coverPath]
+                        return@produceState
+                    }
+                    val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                        ?: album.files.firstOrNull()
+                    val bitmap = if (coverFile != null) {
+                        withContext(Dispatchers.IO) {
+                            loadAlbumArt(context, coverFile)
+                        }
+                    } else null
+                    if (coverPath != null) {
+                        albumArtCache[coverPath] = bitmap
+                    }
+                    value = bitmap
+                }
+
+                val bitmap = albumArtBitmap
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
+                } else {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = MaterialTheme.shapes.small,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Album,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -2746,8 +2793,11 @@ private fun AlbumListItem(
 @Composable
 private fun ArtistListItem(
     artist: ArtistGroup,
+    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     onClick: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -2762,17 +2812,56 @@ private fun ArtistListItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                modifier = Modifier.size(48.dp),
-                shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.secondaryContainer
+            Box(
+                modifier = Modifier
+                    .size(48.dp)
+                    .clip(MaterialTheme.shapes.extraLarge),
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.Person,
+                val albumArtBitmap by produceState<android.graphics.Bitmap?>(
+                    initialValue = artist.coverPath?.let { albumArtCache[it] },
+                    key1 = artist.coverPath,
+                    key2 = artist.files.size
+                ) {
+                    val coverPath = artist.coverPath
+                    if (coverPath != null && albumArtCache.containsKey(coverPath)) {
+                        value = albumArtCache[coverPath]
+                        return@produceState
+                    }
+                    val coverFile = artist.files.randomOrNull()
+                    val bitmap = if (coverFile != null) {
+                        withContext(Dispatchers.IO) {
+                            loadAlbumArt(context, coverFile)
+                        }
+                    } else null
+                    if (coverPath != null) {
+                        albumArtCache[coverPath] = bitmap
+                    }
+                    value = bitmap
+                }
+
+                val bitmap = albumArtBitmap
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSecondaryContainer
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
+                } else {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = MaterialTheme.shapes.extraLarge,
+                        color = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -2801,10 +2890,13 @@ private fun ArtistListItem(
 @Composable
 private fun SimpleAudioFileItem(
     audioFile: AudioFile,
+    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     isSelected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
+    val context = LocalContext.current
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
@@ -2823,18 +2915,52 @@ private fun SimpleAudioFileItem(
                 .padding(8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Surface(
-                modifier = Modifier.size(40.dp),
-                shape = MaterialTheme.shapes.extraSmall,
-                color = MaterialTheme.colorScheme.surfaceVariant
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(MaterialTheme.shapes.extraSmall),
+                contentAlignment = Alignment.Center
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = Icons.Default.MusicNote,
+                val albumArtBitmap by produceState<android.graphics.Bitmap?>(
+                    initialValue = albumArtCache[audioFile.path],
+                    key1 = audioFile.path,
+                    key2 = audioFile.mediaStoreAlbumId
+                ) {
+                    val cacheKey = audioFile.path
+                    if (albumArtCache.containsKey(cacheKey)) {
+                        value = albumArtCache[cacheKey]
+                        return@produceState
+                    }
+                    val bitmap = withContext(Dispatchers.IO) {
+                        loadAlbumArt(context, audioFile)
+                    }
+                    albumArtCache[cacheKey] = bitmap
+                    value = bitmap
+                }
+
+                val bitmap = albumArtBitmap
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
+                } else {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = MaterialTheme.shapes.extraSmall,
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
