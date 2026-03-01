@@ -262,6 +262,9 @@ fun DraggableSourcePriorityDialog(
         mutableStateOf(sourceTypeConfig.sources.sortedBy { it.order })
     }
 
+    // Track current iTunes country locally for instant UI update
+    var localAppleCountry by remember { mutableStateOf(currentAppleCountry) }
+
     // Local drag visual state - only used for visual feedback during drag
     // This is set when drag starts and cleared when drag ends
     var localDragList by remember { mutableStateOf<List<SourceItemState>?>(null) }
@@ -504,11 +507,12 @@ fun DraggableSourcePriorityDialog(
                                                 DropdownMenuItem(
                                                     text = { Text(stringResource(option.labelResId)) },
                                                     onClick = {
+                                                        localAppleCountry = option
                                                         onAppleCountryChange(option.value)
                                                         showMenu = false
                                                     },
                                                     trailingIcon = {
-                                                        if (option.value == currentAppleCountry.value) {
+                                                        if (option.value == localAppleCountry.value) {
                                                             Text("✓", color = MaterialTheme.colorScheme.primary)
                                                         }
                                                     }
@@ -1101,8 +1105,8 @@ fun SettingsScreen(
     ) { innerPadding ->
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
+                .fillMaxWidth()
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
@@ -1511,6 +1515,8 @@ fun SettingsScreen(
                 viewModel.setSourceExtraOption(DataSourceType.COVER, "itunes", "country", countryCode)
             }
         )
+
+        Spacer(modifier = Modifier.height(16.dp))
     }
 
     if (showSearchLimitsDialog) {
