@@ -210,6 +210,36 @@ data class DirectoryEntry(
 )
 
 /**
+ * Domain model representing a group of audio files by album.
+ */
+data class AlbumGroup(
+    val name: String,
+    val artist: String?,
+    val files: List<AudioFile>,
+    val coverPath: String? = null
+)
+
+/**
+ * Domain model representing a group of audio files by artist.
+ */
+data class ArtistGroup(
+    val name: String,
+    val albums: List<String>,
+    val files: List<AudioFile>,
+    val coverPath: String? = null
+)
+
+/**
+ * Enum representing root tab selection in file browser.
+ */
+enum class RootTab {
+    DIRECTORIES,
+    ALBUMS,
+    ARTISTS,
+    ALL
+}
+
+/**
  * Enum representing audio file formats.
  */
 enum class AudioFormat(val extensions: List<String>, val displayName: String) {

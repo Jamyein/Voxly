@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.AlbumGroup
+import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
@@ -70,6 +72,16 @@ class FileBrowserViewModel @Inject constructor(
 
     private val _openedDirectoryUri = MutableStateFlow<String?>(null)
     val openedDirectoryUri: StateFlow<String?> = _openedDirectoryUri.asStateFlow()
+
+    // Aggregated data for tabs
+    private val _allAudios = MutableStateFlow<List<AudioFile>>(emptyList())
+    val allAudios: StateFlow<List<AudioFile>> = _allAudios.asStateFlow()
+
+    private val _albums = MutableStateFlow<List<AlbumGroup>>(emptyList())
+    val albums: StateFlow<List<AlbumGroup>> = _albums.asStateFlow()
+
+    private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
+    val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
 
     // Batch operation states
     private val _isBatchProcessing = MutableStateFlow(false)
@@ -1137,6 +1149,51 @@ class FileBrowserViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Aggregates audio files into albums and artists groups.
+     */
+    private fun aggregateData() {
+        val allFiles = _directoryFiles.value.values.flatten()
+
+        // Aggregate all audios
+        _allAudios.value = allFiles
+
+        // Aggregate albums
+        val albumsMap = allFiles
+            .filter { it.metadata.album?.isNotBlank() == true }
+            .groupBy { it.metadata.album!! }
+            .map { (albumName, files) ->
+                val coverFile = files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    ?: files.firstOrNull()
+                AlbumGroup(
+                    name = albumName,
+                    artist = files.firstOrNull()?.metadata?.artist,
+                    files = files.sortedBy { it.metadata.trackNumber },
+                    coverPath = coverFile?.path
+                )
+            }
+            .sortedBy { it.name.lowercase() }
+
+        _albums.value = albumsMap
+
+        // Aggregate artists
+        val artistsMap = allFiles
+            .filter { it.metadata.artist?.isNotBlank() == true }
+            .groupBy { it.metadata.artist!! }
+            .map { (artistName, files) ->
+                val coverFile = files.randomOrNull()
+                ArtistGroup(
+                    name = artistName,
+                    albums = files.mapNotNull { it.metadata.album }.distinct().sorted(),
+                    files = files.sortedBy { it.metadata.album },
+                    coverPath = coverFile?.path
+                )
+            }
+            .sortedBy { it.name.lowercase() }
+
+        _artists.value = artistsMap
+    }
+
     private fun restoreSelectedDirectories() {
         viewModelScope.launch {
             val uris = settingsDataStore.selectedDirectoryUris.first()
@@ -1207,6 +1264,7 @@ class FileBrowserViewModel @Inject constructor(
                     selectedCount = _selectedFiles.value.size
                 )
             }
+            aggregateData()
         }.onFailure { error ->
             if (error is CancellationException) {
                 return@onFailure
