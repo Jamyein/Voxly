@@ -1486,6 +1486,7 @@ fun SettingsScreen(
             },
             onAppleCountryChange = { countryCode ->
                 viewModel.setSourceExtraOption(DataSourceType.METADATA, "itunes", "country", countryCode)
+                viewModel.setAppleCountryCode(countryCode)
             }
         )
     }
@@ -1506,6 +1507,7 @@ fun SettingsScreen(
             },
             onAppleCountryChange = { countryCode ->
                 viewModel.setSourceExtraOption(DataSourceType.LYRICS, "itunes", "country", countryCode)
+                viewModel.setAppleCountryCode(countryCode)
             }
         )
     }
@@ -1526,6 +1528,7 @@ fun SettingsScreen(
             },
             onAppleCountryChange = { countryCode ->
                 viewModel.setSourceExtraOption(DataSourceType.COVER, "itunes", "country", countryCode)
+                viewModel.setAppleCountryCode(countryCode)
             }
         )
 
