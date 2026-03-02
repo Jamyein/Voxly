@@ -2,24 +2,27 @@ package com.voxly.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.domain.repository.RecentEditsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
  * ViewModel for the Statistics screen.
- * Calculates and provides library statistics.
+ * Provides library statistics from Room database.
  */
 @HiltViewModel
 class StatisticsViewModel @Inject constructor(
     private val recentEditsRepository: RecentEditsRepository,
-    private val settingsDataStore: SettingsDataStore
+    private val databaseProvider: MusicCacheDatabaseProvider
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<StatisticsUiState>(StatisticsUiState.Loading)
@@ -34,50 +37,43 @@ class StatisticsViewModel @Inject constructor(
             try {
                 _uiState.value = StatisticsUiState.Loading
 
-                val recentEdits = recentEditsRepository.getRecentEdits(limit = 1000).first()
-                
-                if (recentEdits.isEmpty()) {
+                val db = withContext(Dispatchers.IO) {
+                    databaseProvider.getDatabase()
+                }
+                val dao = db.audioFileDao()
+
+                // Get real statistics from database
+                val totalFiles = dao.getTotalFileCount()
+
+                if (totalFiles == 0) {
                     _uiState.value = StatisticsUiState.Empty
                     return@launch
                 }
 
-                // Calculate statistics from recent edits
-                val totalFiles = recentEdits.size
-                val editedFilesCount = recentEdits.distinctBy { it.filePath }.size
-                
-                // Format total duration (placeholder - would need duration from audio files)
-                val totalDurationFormatted = "0h 0m" // Placeholder
+                // Get real duration and size
+                val totalDurationMs = dao.getTotalDuration()
+                val totalSizeBytes = dao.getTotalSize()
 
-                // Calculate format distribution
-                val formatDistribution = mutableMapOf<String, Int>()
-                recentEdits.forEach { edit ->
-                    val extension = edit.fileName.substringAfterLast('.', "Unknown").uppercase()
-                    formatDistribution[extension] = (formatDistribution[extension] ?: 0) + 1
-                }
+                // Format total duration
+                val totalDurationFormatted = formatDuration(totalDurationMs)
 
-                // Calculate top artists
-                val artistCounts = mutableMapOf<String, Int>()
-                recentEdits.forEach { edit ->
-                    val artist = edit.newMetadata.artist ?: "Unknown Artist"
-                    artistCounts[artist] = (artistCounts[artist] ?: 0) + 1
-                }
-                val topArtists = artistCounts.entries
-                    .sortedByDescending { it.value }
-                    .take(10)
-                    .map { it.key to it.value }
+                // Get format distribution
+                val formatDistributionRaw = dao.getFormatDistribution()
+                val formatDistribution = formatDistributionRaw.associate { it.format to it.count }
 
-                // Calculate top albums
-                val albumCounts = mutableMapOf<String, Int>()
-                recentEdits.forEach { edit ->
-                    val album = edit.newMetadata.album ?: "Unknown Album"
-                    albumCounts[album] = (albumCounts[album] ?: 0) + 1
-                }
-                val topAlbums = albumCounts.entries
-                    .sortedByDescending { it.value }
-                    .take(10)
-                    .map { it.key to it.value }
+                // Get top artists
+                val topArtistsRaw = dao.getTopArtists(10)
+                val topArtists = topArtistsRaw.map { it.artist to it.count }
 
-                // Calculate recent activity
+                // Get top albums
+                val topAlbumsRaw = dao.getTopAlbums(10)
+                val topAlbums = topAlbumsRaw.map { "${it.album}" to it.count }
+
+                // Calculate total size formatted
+                val totalSizeFormatted = formatSize(totalSizeBytes)
+
+                // Get recent activity from recent edits
+                val recentEdits = recentEditsRepository.getRecentEdits(limit = 1000).first()
                 val now = System.currentTimeMillis()
                 val dayMs = 24 * 60 * 60 * 1000L
                 val weekMs = 7 * dayMs
@@ -87,14 +83,11 @@ class StatisticsViewModel @Inject constructor(
                 val weekEdits = recentEdits.count { now - it.timestamp < weekMs }
                 val monthEdits = recentEdits.count { now - it.timestamp < monthMs }
 
-                // Calculate total size (placeholder)
-                val totalSizeFormatted = calculateTotalSize(recentEdits.size * 5_000_000L) // ~5MB per file estimate
-
                 _uiState.value = StatisticsUiState.Success(
                     totalFiles = totalFiles,
                     totalDurationFormatted = totalDurationFormatted,
                     totalSizeFormatted = totalSizeFormatted,
-                    editedFilesCount = editedFilesCount,
+                    editedFilesCount = recentEdits.distinctBy { it.filePath }.size,
                     formatDistribution = formatDistribution,
                     topArtists = topArtists,
                     topAlbums = topAlbums,
@@ -103,12 +96,42 @@ class StatisticsViewModel @Inject constructor(
                     monthEdits = monthEdits
                 )
             } catch (e: Exception) {
-                _uiState.value = StatisticsUiState.Empty
+                Timber.e(e, "Failed to load statistics")
+                // Check if database is empty vs query error
+                try {
+                    val diagnosticDb = withContext(Dispatchers.IO) {
+                        databaseProvider.getDatabase()
+                    }
+                    val diagnosticDao = diagnosticDb.audioFileDao()
+                    val count = diagnosticDao.getTotalFileCount()
+                    Timber.d("Database has $count files")
+                    if (count == 0) {
+                        _uiState.value = StatisticsUiState.Empty
+                    } else {
+                        // Database has data but other queries failed
+                        Timber.w("Statistics queries failed but database has data")
+                        _uiState.value = StatisticsUiState.Empty
+                    }
+                } catch (countError: Exception) {
+                    Timber.e(countError, "Failed to get file count for error diagnosis")
+                    _uiState.value = StatisticsUiState.Empty
+                }
             }
         }
     }
 
-    private fun calculateTotalSize(bytes: Long): String {
+    private fun formatDuration(durationMs: Long): String {
+        val totalSeconds = durationMs / 1000
+        val hours = totalSeconds / 3600
+        val minutes = (totalSeconds % 3600) / 60
+
+        return when {
+            hours > 0 -> "${hours}h ${minutes}m"
+            else -> "${minutes}m"
+        }
+    }
+
+    private fun formatSize(bytes: Long): String {
         return when {
             bytes >= 1_000_000_000 -> String.format("%.2f GB", bytes / 1_000_000_000.0)
             bytes >= 1_000_000 -> String.format("%.2f MB", bytes / 1_000_000.0)
