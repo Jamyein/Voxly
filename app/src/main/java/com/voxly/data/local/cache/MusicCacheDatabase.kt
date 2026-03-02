@@ -17,15 +17,17 @@ import javax.inject.Singleton
 @Database(
     entities = [
         CachedAudioFileEntity::class,
-        AlbumThumbnailEntity::class
+        AlbumThumbnailEntity::class,
+        RecentEditEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
 abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun audioFileDao(): CachedAudioFileDao
     abstract fun albumThumbnailDao(): AlbumThumbnailDao
+    abstract fun recentEditDao(): RecentEditDao
 
     companion object {
         const val DATABASE_NAME = "music_cache.db"

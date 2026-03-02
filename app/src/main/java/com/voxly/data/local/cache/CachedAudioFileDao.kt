@@ -170,4 +170,81 @@ interface CachedAudioFileDao {
      */
     @Query("DELETE FROM cached_audio_files")
     suspend fun deleteAll()
+
+    // ==================== Statistics Queries ====================
+
+    /**
+     * Gets total count of audio files.
+     */
+    @Query("SELECT COUNT(*) FROM cached_audio_files")
+    suspend fun getTotalFileCount(): Int
+
+    /**
+     * Gets total duration in milliseconds.
+     */
+    @Query("SELECT COALESCE(SUM(duration), 0) FROM cached_audio_files")
+    suspend fun getTotalDuration(): Long
+
+    /**
+     * Gets total file size in bytes.
+     */
+    @Query("SELECT COALESCE(SUM(size), 0) FROM cached_audio_files")
+    suspend fun getTotalSize(): Long
+
+    /**
+     * Gets format distribution - format and count.
+     */
+    @Query("SELECT format, COUNT(*) as count FROM cached_audio_files GROUP BY format ORDER BY count DESC")
+    suspend fun getFormatDistribution(): List<FormatCount>
+
+    /**
+     * Gets top artists by file count.
+     */
+    @Query("""
+        SELECT artist, COUNT(*) as count
+        FROM cached_audio_files
+        WHERE artist IS NOT NULL AND artist != ''
+        GROUP BY artist
+        ORDER BY count DESC
+        LIMIT :limit
+    """)
+    suspend fun getTopArtists(limit: Int): List<ArtistCount>
+
+    /**
+     * Gets top albums by file count.
+     */
+    @Query("""
+        SELECT album, artist, COUNT(*) as count
+        FROM cached_audio_files
+        WHERE album IS NOT NULL AND album != ''
+        GROUP BY album, artist
+        ORDER BY count DESC
+        LIMIT :limit
+    """)
+    suspend fun getTopAlbums(limit: Int): List<AlbumCount>
 }
+
+/**
+ * Data class for format count.
+ */
+data class FormatCount(
+    val format: String,
+    val count: Int
+)
+
+/**
+ * Data class for artist count.
+ */
+data class ArtistCount(
+    val artist: String,
+    val count: Int
+)
+
+/**
+ * Data class for album count.
+ */
+data class AlbumCount(
+    val album: String,
+    val artist: String?,
+    val count: Int
+)

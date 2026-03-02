@@ -186,6 +186,10 @@
     <string name="replay_gain">ReplayGain</string>
     <string name="selected">Selected</string>
     <string name="unknown_artist">Unknown Artist</string>
+    <string name="unknown_album">Unknown Album</string>
+    <string name="unknown_album_artist">Unknown Album Artist</string>
+    <string name="album_cover">Album Cover</string>
+    <string name="back">Back</string>
 
     <!-- Batch Operations -->
     <string name="batch_operations_title">Batch Operations</string>

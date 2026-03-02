@@ -23,6 +23,7 @@ import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.ReplayGainRepository
+import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.repository.ScanMode
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -66,6 +67,7 @@ class MetadataEditorViewModel @Inject constructor(
     private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository,
     private val settingsDataStore: SettingsDataStore,
     private val safWriteAccessService: SafWriteAccessService,
+    private val recentEditsRepository: RecentEditsRepository,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -133,6 +135,7 @@ class MetadataEditorViewModel @Inject constructor(
     val pendingReplayGainInfo: StateFlow<ReplayGainInfo?> = _pendingReplayGainInfo.asStateFlow()
 
     private val _isScanningReplayGain = MutableStateFlow(false)
+    private var _originalMetadata: AudioMetadata? = null
     val isScanningReplayGain: StateFlow<Boolean> = _isScanningReplayGain.asStateFlow()
 
     init {
@@ -477,6 +480,15 @@ class MetadataEditorViewModel @Inject constructor(
                     
                     _hasUnsavedChanges.value = false
                     _saveResult.value = SaveResult.Success
+
+                    // Add to recent edits history
+                    _originalMetadata?.let { original ->
+                        recentEditsRepository.addRecentEdit(
+                            filePath = filePath,
+                            originalMetadata = original,
+                            newMetadata = metadataToSave
+                        )
+                    }
                     val currentSuccessState = _uiState.value as? MetadataEditorUiState.Success
                     _uiState.value = currentSuccessState?.copy(
                         editedMetadata = metadataToSave,
@@ -546,6 +558,7 @@ class MetadataEditorViewModel @Inject constructor(
             val result = audioRepository.readMetadata(filePath)
             result.onSuccess { originalMetadata ->
                 _editedMetadata.value = originalMetadata
+                _originalMetadata = originalMetadata
                 _hasUnsavedChanges.value = false
                 val currentState = _uiState.value
                 if (currentState is MetadataEditorUiState.Success) {
