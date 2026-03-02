@@ -52,6 +52,7 @@ import java.net.URLDecoder
 import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
+import com.voxly.presentation.screens.album.AlbumDetailScreen
 import androidx.compose.material3.NavigationBarItem
 import com.voxly.presentation.theme.ExpressiveAnimations
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -153,6 +154,9 @@ fun MP3TagNavHost(
                     },
                     onNavigateToSearch = { audioFiles ->
                         navController.navigate(Screen.FileSearch.createRoute(audioFiles.map { it.path }))
+                    },
+                    onNavigateToAlbum = { albumName, albumArtist ->
+                        navController.navigate(Screen.AlbumDetail.createRoute(albumName, albumArtist))
                     },
                     onBottomBarScrollProgressChange = { progress ->
                         scrollProgress = progress
@@ -359,6 +363,30 @@ fun MP3TagNavHost(
                             ?.savedStateHandle
                             ?.set("online_cover_result", coverBytes)
                         navController.popBackStack()
+                    }
+                )
+            }
+
+            // Album detail screen
+            composable(
+                route = Screen.AlbumDetail.route,
+                arguments = listOf(
+                    navArgument("albumName") { type = NavType.StringType },
+                    navArgument("albumArtist") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val albumName = backStackEntry.arguments?.getString("albumName")?.let {
+                    URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+                val albumArtist = backStackEntry.arguments?.getString("albumArtist")?.let {
+                    URLDecoder.decode(it, "UTF-8")
+                }?.takeIf { it.isNotEmpty() }
+                AlbumDetailScreen(
+                    albumName = albumName,
+                    albumArtist = albumArtist,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToMetadata = { filePath ->
+                        navController.navigate(Screen.MetadataEditor.createRoute(filePath))
                     }
                 )
             }

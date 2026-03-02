@@ -102,6 +102,7 @@ fun FileBrowserScreen(
     onNavigateToMetadata: (String) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
     onNavigateToSearch: (List<AudioFile>) -> Unit = {},
+    onNavigateToAlbum: (String, String?) -> Unit = { _, _ -> },
     onBottomBarScrollProgressChange: (Float) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -124,6 +125,12 @@ fun FileBrowserScreen(
     val artists by viewModel.artists.collectAsState()
     val allAudios by viewModel.allAudios.collectAsState()
     var selectedRootTab by rememberSaveable { mutableStateOf(RootTab.DIRECTORIES) }
+
+    // Navigation state for album/artist detail
+    // Note: Cannot use rememberSaveable for AlbumGroup/ArtistGroup as they contain
+    // AudioFile objects with non-serializable data (lyrics, customFields, etc.)
+    var selectedAlbum by remember { mutableStateOf<AlbumGroup?>(null) }
+    var selectedArtist by remember { mutableStateOf<ArtistGroup?>(null) }
 
     // Batch operation states
     val isBatchProcessing by viewModel.isBatchProcessing.collectAsState()
@@ -397,7 +404,7 @@ fun FileBrowserScreen(
                                 }
                             )
                         } else {
-                            LargeTopAppBar(
+                            TopAppBar(
                                 title = { Text(stringResource(R.string.nav_file_browser)) },
                                 colors = TopAppBarDefaults.topAppBarColors(),
                                 windowInsets = WindowInsets(0.dp),
@@ -524,18 +531,26 @@ fun FileBrowserScreen(
                                 albums = albums,
                                 albumArtCache = albumArtCache,
                                 onAlbumClick = { album ->
-                                    // TODO: Navigate to album detail or filter by album
+                                    viewModel.cacheAlbum(album)
+                                    onNavigateToAlbum(album.name, album.artist)
                                 }
                             )
                         }
                         RootTab.ARTISTS -> {
-                            ArtistTabContent(
-                                artists = artists,
-                                albumArtCache = albumArtCache,
-                                onArtistClick = { artist ->
-                                    // TODO: Navigate to artist detail or filter by artist
-                                }
-                            )
+                            if (selectedArtist != null) {
+                                ArtistDetailContent(
+                                    artist = selectedArtist!!,
+                                    albumArtCache = albumArtCache,
+                                    onBackClick = { selectedArtist = null },
+                                    onNavigateToMetadata = onNavigateToMetadata
+                                )
+                            } else {
+                                ArtistTabContent(
+                                    artists = artists,
+                                    albumArtCache = albumArtCache,
+                                    onArtistClick = { artist -> selectedArtist = artist }
+                                )
+                            }
                         }
                         RootTab.ALL -> {
                             AllAudiosTabContent(
@@ -2656,6 +2671,293 @@ private fun ArtistTabContent(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun AlbumDetailContent(
+    album: AlbumGroup,
+    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
+    onBackClick: () -> Unit,
+    onNavigateToMetadata: (String) -> Unit
+) {
+    val context = LocalContext.current
+
+    // Sort by disc number and track number
+    val sortedFiles = remember(album.files) {
+        album.files.sortedWith(
+            compareBy({ it.metadata.discNumber ?: 1 }, { it.metadata.trackNumber ?: 0 })
+        )
+    }
+
+    // Calculate total duration
+    val totalDuration = remember(album.files) {
+        album.files.sumOf { it.duration }
+    }
+    val formattedTotalDuration = remember(totalDuration) {
+        val hours = totalDuration / 3600000
+        val minutes = (totalDuration % 3600000) / 60000
+        val seconds = (totalDuration % 60000) / 1000
+        if (hours > 0) {
+            String.format("%d:%02d:%02d", hours, minutes, seconds)
+        } else {
+            String.format("%d:%02d", minutes, seconds)
+        }
+    }
+
+    // Get album year
+    val albumYear = remember(album.files) {
+        album.files.firstOrNull()?.metadata?.year
+    }
+
+    // Get album artist (prefer albumArtist field)
+    val unknownAlbumArtist = stringResource(R.string.unknown_album_artist)
+    val albumArtist = remember(album.files, unknownAlbumArtist) {
+        album.files.firstOrNull()?.metadata?.albumArtist
+            ?: album.artist
+            ?: unknownAlbumArtist
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // TopAppBar with back button
+        TopAppBar(
+            title = { },
+            navigationIcon = {
+                IconButton(onClick = onBackClick) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.back)
+                    )
+                }
+            },
+            windowInsets = WindowInsets(0.dp)
+        )
+
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Large Card: Cover + Album Info
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.large,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Left: Cover image
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(MaterialTheme.shapes.medium),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val coverFile = album.files.firstOrNull()
+                            val bitmap = remember(coverFile) {
+                                coverFile?.let { loadAlbumArt(context, it) }
+                            }
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap.asImageBitmap(),
+                                    contentDescription = stringResource(R.string.album_cover),
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                Surface(
+                                    modifier = Modifier.fillMaxSize(),
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = MaterialTheme.shapes.medium
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Album,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .padding(24.dp)
+                                            .fillMaxSize(),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(16.dp))
+
+                        // Right: Album info
+                        Column(
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = album.name,
+                                style = MaterialTheme.typography.titleLarge,
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = albumArtist,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = "${album.files.firstOrNull()?.bitrate ?: 0} kbps",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                            Text(
+                                text = "${album.files.firstOrNull()?.sampleRate ?: 0} Hz",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Small Card: Statistics
+            item {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = MaterialTheme.shapes.medium,
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    )
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceEvenly
+                    ) {
+                        Text(
+                            text = stringResource(R.string.track_count, album.files.size),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = formattedTotalDuration,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                        Text(
+                            text = albumYear ?: "N/A",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
+                    }
+                }
+            }
+
+            // Song list
+            items(sortedFiles, key = { it.path }) { audioFile ->
+                SimpleAudioFileItem(
+                    audioFile = audioFile,
+                    albumArtCache = albumArtCache,
+                    isSelected = false,
+                    onClick = { onNavigateToMetadata(audioFile.path) },
+                    onLongClick = {}
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtistDetailContent(
+    artist: ArtistGroup,
+    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
+    onBackClick: () -> Unit,
+    onNavigateToMetadata: (String) -> Unit
+) {
+    val context = LocalContext.current
+    val unknownAlbum = stringResource(R.string.unknown_album)
+
+    // Group files by album
+    val albumsWithFiles = remember(artist.files) {
+        artist.files.groupBy { it.metadata.album ?: unknownAlbum }
+            .toList()
+            .sortedBy { it.first }
+    }
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        // Header with artist info
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            shape = MaterialTheme.shapes.large
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = onBackClick) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = artist.name,
+                        style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(modifier = Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.album_count, artist.albums.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.outline
+                )
+                Text(
+                    text = stringResource(R.string.track_count, artist.files.size),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+
+        // Album sections with songs
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            albumsWithFiles.forEach { (albumName, files) ->
+                item(key = albumName) {
+                    Column {
+                        // Album header
+                        Text(
+                            text = albumName,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                        // Songs in album
+                        files.sortedBy { it.metadata.trackNumber ?: 0 }.forEach { audioFile ->
+                            SimpleAudioFileItem(
+                                audioFile = audioFile,
+                                albumArtCache = albumArtCache,
+                                isSelected = false,
+                                onClick = { onNavigateToMetadata(audioFile.path) },
+                                onLongClick = {}
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun AllAudiosTabContent(
     audios: List<AudioFile>,
@@ -2890,7 +3192,7 @@ private fun ArtistListItem(
 }
 
 @Composable
-private fun SimpleAudioFileItem(
+fun SimpleAudioFileItem(
     audioFile: AudioFile,
     albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     isSelected: Boolean,

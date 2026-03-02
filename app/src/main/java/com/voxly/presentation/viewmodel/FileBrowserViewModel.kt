@@ -9,6 +9,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafWriteAccessService
+import com.voxly.data.repository.AlbumCacheRepository
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
@@ -49,7 +50,8 @@ class FileBrowserViewModel @Inject constructor(
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val settingsDataStore: SettingsDataStore,
     private val appViewModel: AppViewModel,
-    private val safWriteAccessService: SafWriteAccessService
+    private val safWriteAccessService: SafWriteAccessService,
+    private val albumCacheRepository: AlbumCacheRepository
 ) : ViewModel() {
     companion object {
         private const val TAG = "FileBrowserViewModel"
@@ -82,6 +84,13 @@ class FileBrowserViewModel @Inject constructor(
 
     private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
     val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
+
+    /**
+     * Cache an album to the repository for instant loading in AlbumDetailScreen.
+     */
+    fun cacheAlbum(album: AlbumGroup) {
+        albumCacheRepository.cacheAlbum(album)
+    }
 
     // Batch operation states
     private val _isBatchProcessing = MutableStateFlow(false)
