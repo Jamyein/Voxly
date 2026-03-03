@@ -126,24 +126,19 @@ class OnlineCoverSearchViewModel @Inject constructor(
     }
 
     /**
-     * Apply the selected cover art.
+     * Apply the selected cover art asynchronously.
+     * Returns the cover art bytes or null if not available.
      */
-    fun applyCover(recording: OnlineRecording): ByteArray? {
+    suspend fun applyCover(recording: OnlineRecording): ByteArray? {
+        // First try to get from existing cover URL
         val existingCoverUrl = recording.coverArtUrl
         if (!existingCoverUrl.isNullOrBlank()) {
-            // Use cache-first approach
-            var result: ByteArray? = null
-            viewModelScope.launch {
-                result = getCoverArtBytes(existingCoverUrl)
+            return try {
+                getCoverArtBytes(existingCoverUrl)
+            } catch (e: Exception) {
+                _coverFetchMessage.value = "Failed to load cover: ${e.message}"
+                null
             }
-            // Run synchronously for immediate return
-            runCatching {
-                kotlinx.coroutines.runBlocking {
-                    getCoverArtBytes(existingCoverUrl)
-                }
-            }.onFailure {
-                _coverFetchMessage.value = "Failed to load cover: ${it.message}"
-            }.getOrNull()?.let { return it }
         }
 
         val releaseId = recording.releaseId
@@ -152,40 +147,35 @@ class OnlineCoverSearchViewModel @Inject constructor(
             return null
         }
 
-        var resultBytes: ByteArray? = null
-
-        viewModelScope.launch {
-            val oldPreferred = aggregatedOnlineMetadataRepository.preferredSource
-            try {
-                val targetSource = when (recording.source) {
-                    "MusicBrainz" -> AggregatedOnlineMetadataRepository.DataSource.MUSICBRAINZ
-                    "iTunes" -> AggregatedOnlineMetadataRepository.DataSource.ITUNES
-                    "NetEase" -> AggregatedOnlineMetadataRepository.DataSource.NETEASE
-                    "QQ Music" -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
-                    else -> AggregatedOnlineMetadataRepository.DataSource.BOTH
-                }
-                aggregatedOnlineMetadataRepository.preferredSource = targetSource
-
-                val coverResult = aggregatedOnlineMetadataRepository.getCoverArt(releaseId)
-                coverResult.fold(
-                    onSuccess = { cover ->
-                        resultBytes = cover
-                        if (cover != null) {
-                            _coverFetchMessage.value = "Cover fetched successfully"
-                        } else {
-                            _coverFetchMessage.value = "No online cover found"
-                        }
-                    },
-                    onFailure = {
-                        _coverFetchMessage.value = it.message ?: "Cover fetch failed"
-                    }
-                )
-            } finally {
-                aggregatedOnlineMetadataRepository.preferredSource = oldPreferred
+        val oldPreferred = aggregatedOnlineMetadataRepository.preferredSource
+        return try {
+            val targetSource = when (recording.source) {
+                "MusicBrainz" -> AggregatedOnlineMetadataRepository.DataSource.MUSICBRAINZ
+                "iTunes" -> AggregatedOnlineMetadataRepository.DataSource.ITUNES
+                "NetEase" -> AggregatedOnlineMetadataRepository.DataSource.NETEASE
+                "QQ Music" -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
+                else -> AggregatedOnlineMetadataRepository.DataSource.BOTH
             }
-        }
+            aggregatedOnlineMetadataRepository.preferredSource = targetSource
 
-        return resultBytes
+            val coverResult = aggregatedOnlineMetadataRepository.getCoverArt(releaseId)
+            coverResult.fold(
+                onSuccess = { cover ->
+                    if (cover != null) {
+                        _coverFetchMessage.value = "Cover fetched successfully"
+                    } else {
+                        _coverFetchMessage.value = "No online cover found"
+                    }
+                    cover
+                },
+                onFailure = { error ->
+                    _coverFetchMessage.value = error.message ?: "Cover fetch failed"
+                    null
+                }
+            )
+        } finally {
+            aggregatedOnlineMetadataRepository.preferredSource = oldPreferred
+        }
     }
 
     /**

@@ -2,7 +2,6 @@ package com.voxly.data.repository
 
 import android.content.Context
 import android.provider.MediaStore
-import android.util.Log
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.replaygain.ReplayGainScanner
@@ -19,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -83,7 +83,7 @@ class AudioRepositoryImpl @Inject constructor(
                         }
                     }
                 } catch (e: Exception) {
-                    Log.w(TAG, "Failed to query MediaStore for: $filePath", e)
+                    Timber.w(e, "Failed to query MediaStore for: $filePath")
                 }
 
                 // Fallback: if MediaStore has no data, use TagLib to read audio properties

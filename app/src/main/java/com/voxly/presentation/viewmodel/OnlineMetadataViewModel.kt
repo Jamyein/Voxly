@@ -547,9 +547,12 @@ class OnlineMetadataViewModel @Inject constructor(
         _downloadedAlbumArt.value = null
         _isCoverArtTimeout.value = false
 
-        Timber.d("selectRelease: candidate set, launching coroutines for details and cover")
+        Timber.d("selectRelease: candidate set, launching coroutines for details, cover and lyrics")
 
-        // 并行启动两个协程：一个获取封面（优先读缓存），一个获取详情
+        // Track if cover has been downloaded to avoid duplicate downloads
+        var coverDownloaded = false
+
+        // 并行启动三个协程：封面图、详情、歌词
         // 协程1：获取搜索结果中的封面图（优先缓存，带超时回退到下载）
         viewModelScope.launch {
             if (!release.coverArtUrl.isNullOrBlank()) {
@@ -560,6 +563,7 @@ class OnlineMetadataViewModel @Inject constructor(
                     }
                     if (cover != null) {
                         _downloadedAlbumArt.value = cover
+                        coverDownloaded = true
                         Timber.d("selectRelease: cover art loaded from cache, size=${cover.size}")
                     } else {
                         // 超时或下载失败
@@ -583,15 +587,16 @@ class OnlineMetadataViewModel @Inject constructor(
                     onSuccess = { details ->
                         Timber.d("selectRelease: got details, title=${details.title}, tracks=${details.tracks.size}")
                         _selectedRelease.value = details
-                        // 获取封面图（优先缓存，带超时回退到下载）
+                        // 获取封面图（如果尚未下载）
                         val coverUrl = details.coverArtUrl ?: release.coverArtUrl
-                        if (!coverUrl.isNullOrBlank()) {
+                        if (!coverUrl.isNullOrBlank() && !coverDownloaded) {
                             try {
                                 val cover = kotlinx.coroutines.withTimeoutOrNull(5000L) {
                                     getCoverArtBytes(coverUrl)
                                 }
                                 if (cover != null) {
                                     _downloadedAlbumArt.value = cover
+                                    coverDownloaded = true
                                     Timber.d("selectRelease: cover art loaded, size=${_downloadedAlbumArt.value?.size}")
                                 }
                             } catch (e: Exception) {
@@ -603,13 +608,14 @@ class OnlineMetadataViewModel @Inject constructor(
                         Timber.e(error, "Failed to get release details for ${release.id} from ${release.source}")
                         _errorMessage.value = "无法获取专辑详情，将应用基本信息 (来源: ${release.source})"
                         _selectedRelease.value = null
-                        // 即使获取详情失败，也尝试获取候选的封面图（优先缓存，带超时回退到下载）
-                        if (!release.coverArtUrl.isNullOrBlank()) {
+                        // 即使获取详情失败，也尝试获取候选的封面图（如果尚未下载）
+                        if (!release.coverArtUrl.isNullOrBlank() && !coverDownloaded) {
                             try {
                                 val cover = kotlinx.coroutines.withTimeoutOrNull(5000L) {
                                     getCoverArtBytes(release.coverArtUrl)
                                 }
                                 _downloadedAlbumArt.value = cover
+                                coverDownloaded = true
                             } catch (e: Exception) {
                                 Timber.e(e, "selectRelease: fallback cover art load failed")
                             }
@@ -626,6 +632,25 @@ class OnlineMetadataViewModel @Inject constructor(
                 Timber.d("selectRelease: coroutine finished, isLoading=false")
             }
         }
+
+        // 协程3：预加载歌词
+        viewModelScope.launch {
+            try {
+                val lyrics = fetchSyncedLyrics(release)
+                if (lyrics != null) {
+                    _syncedLyricsByReleaseId.value = _syncedLyricsByReleaseId.value.toMutableMap().apply {
+                        put(release.id, lyrics)
+                    }
+                    // 如果是当前选中的候选，也更新 selectedSyncedLyrics
+                    if (_selectedReleaseCandidate.value?.id == release.id) {
+                        selectedSyncedLyrics = lyrics
+                    }
+                    Timber.d("selectRelease: lyrics preloaded for ${release.id}")
+                }
+            } catch (e: Exception) {
+                Timber.w(e, "selectRelease: failed to preload lyrics for ${release.id}")
+            }
+        }
     }
 
     private fun setRepositoryPreferredSource(source: String) {
@@ -640,26 +665,14 @@ class OnlineMetadataViewModel @Inject constructor(
     }
 
     /**
-     * Get synced lyrics for the selected release, fetching synchronously if not already available.
+     * Get synced lyrics for the selected release.
+     * Note: Lyrics should be preloaded in selectRelease, so this only reads from cache.
      */
     private fun getSyncedLyricsForSelected(): Lyrics? {
         val candidate = _selectedReleaseCandidate.value ?: return null
 
-        // First check if we already have the lyrics from async search
-        val existingLyrics = _syncedLyricsByReleaseId.value[candidate.id]
-        if (existingLyrics != null) {
-            return existingLyrics
-        }
-
-        // If not found, fetch synchronously
-        return try {
-            kotlinx.coroutines.runBlocking {
-                fetchSyncedLyrics(candidate)
-            }
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to fetch synced lyrics synchronously")
-            null
-        }
+        // Get from cache (should be preloaded in selectRelease)
+        return _syncedLyricsByReleaseId.value[candidate.id]
     }
 
     fun applyMetadata(): AudioMetadata? {

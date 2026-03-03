@@ -4,7 +4,6 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
-import android.util.Log
 import com.google.gson.Gson
 import com.voxly.data.local.cache.*
 import com.voxly.domain.model.AudioFile
@@ -13,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.inject.Inject
@@ -115,7 +115,7 @@ class MusicLibraryCache @Inject constructor(
         // Use chunked insert for large libraries
         audioFileDao.insertAllChunked(entities)
         
-        Log.d(TAG, "Cached ${entities.size} audio files")
+        Timber.d(TAG, "Cached ${entities.size} audio files")
     }
     
     /**
@@ -149,7 +149,7 @@ class MusicLibraryCache @Inject constructor(
     suspend fun clearCache() = withContext(Dispatchers.IO) {
         audioFileDao.deleteAll()
         albumThumbnailDao.deleteAll()
-        Log.d(TAG, "Cache cleared")
+        Timber.d(TAG, "Cache cleared")
     }
     
     // ==================== Incremental Scan Support ====================
@@ -235,7 +235,7 @@ class MusicLibraryCache @Inject constructor(
         )
         
         albumThumbnailDao.insert(entity)
-        Log.d(TAG, "Cached thumbnail for album $albumId (${bytes.size} bytes)")
+        Timber.d(TAG, "Cached thumbnail for album $albumId (${bytes.size} bytes)")
     }
     
     /**
@@ -265,7 +265,7 @@ class MusicLibraryCache @Inject constructor(
             
             if (scaledBitmap != bitmap) scaledBitmap.recycle()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to cache thumbnail for album $albumId", e)
+            Timber.w(TAG, "Failed to cache thumbnail for album $albumId", e)
         }
     }
     

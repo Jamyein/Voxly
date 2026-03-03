@@ -170,9 +170,25 @@ object ExpressiveMotion {
         dampingRatio = DampingRatioLowBouncy,
         stiffness = StiffnessLow
     )
-    
+
+    // Short duration spring for quick UI feedback
+    val ShortSpring: AnimationSpec<Float> = spring(
+        dampingRatio = DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessHigh
+    )
+
+    // Medium duration spring for standard transitions
+    val MediumSpring: AnimationSpec<Float> = spring(
+        dampingRatio = DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessMediumLow
+    )
+
     val ExpressiveEasing = FastOutSlowInEasing
-    val StandardEasing = tween<Float>(durationMillis = MediumDuration, easing = FastOutSlowInEasing)
+    // Using spring for StandardEasing per M3E spec
+    val StandardEasing = spring<Float>(
+        dampingRatio = DampingRatioMediumBouncy,
+        stiffness = StiffnessMediumLow
+    )
 }
 
 // ============================================================================
@@ -193,7 +209,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
             stiffness = ExpressiveMotionTokens.Emphasized.stiffness
         )
-    ) + fadeIn(animationSpec = tween(150))
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
     
     /** 卡片展开动画 - 标准平滑 */
     val CardExpand = expandVertically(
@@ -210,7 +226,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.EmphasizedDecelerate.dampingRatio,
             stiffness = ExpressiveMotionTokens.EmphasizedDecelerate.stiffness
         )
-    ) + fadeIn(animationSpec = tween(100))
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh))
     
     /** FAB退出动画 - 向上滑出+淡出 */
     val FabExit = slideOutVertically(
@@ -219,7 +235,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.EmphasizedAccelerate.dampingRatio,
             stiffness = ExpressiveMotionTokens.EmphasizedAccelerate.stiffness
         )
-    ) + fadeOut(animationSpec = tween(100))
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh))
     
     /** 对话框进入动画 - 缩放+淡入 */
     val DialogEnter = slideInVertically(
@@ -228,7 +244,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
             stiffness = ExpressiveMotionTokens.Emphasized.stiffness
         )
-    ) + fadeIn(animationSpec = tween(100))
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh))
     
     /** 页面进入动画 - 滑动+淡入 */
     val PageEnter = slideInHorizontally(
@@ -237,7 +253,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
             stiffness = ExpressiveMotionTokens.Standard.stiffness
         )
-    ) + fadeIn(animationSpec = tween(150))
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
 
     /** 页面进入动画 - 从右侧滑入 + 缩放 + 淡入 (更有表现力) */
     val PageEnterExpressive = slideInHorizontally(
@@ -246,7 +262,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
             stiffness = ExpressiveMotionTokens.PageTransition.stiffness
         )
-    ) + fadeIn(animationSpec = tween(200))
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
 
     /** 页面退出动画 - 向左滑出 + 缩放 + 淡出 */
     val PageExitExpressive = slideOutHorizontally(
@@ -255,7 +271,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
             stiffness = ExpressiveMotionTokens.PageTransition.stiffness
         )
-    ) + fadeOut(animationSpec = tween(150))
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
 
     /** 页面进入动画 - 从左侧滑入 (用于返回导航) */
     val PageEnterFromLeft = slideInHorizontally(
@@ -264,7 +280,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
             stiffness = ExpressiveMotionTokens.Standard.stiffness
         )
-    ) + fadeIn(animationSpec = tween(200))
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
 
     /** 页面退出动画 - 向右滑出 (用于返回导航) */
     val PageExitToRight = slideOutHorizontally(
@@ -273,7 +289,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
             stiffness = ExpressiveMotionTokens.Standard.stiffness
         )
-    ) + fadeOut(animationSpec = tween(150))
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
 
     /** 底部导航主页间切换 - 滑动+淡入 (更有表现力) */
     val BottomNavSlideEnter = slideInVertically(
@@ -282,7 +298,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.BottomNavTransition.dampingRatio,
             stiffness = ExpressiveMotionTokens.BottomNavTransition.stiffness
         )
-    ) + fadeIn(animationSpec = tween(200))
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
 
     /** 底部导航主页间切换 - 向下滑出 */
     val BottomNavSlideExit = slideOutVertically(
@@ -291,11 +307,11 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.BottomNavTransition.dampingRatio,
             stiffness = ExpressiveMotionTokens.BottomNavTransition.stiffness
         )
-    ) + fadeOut(animationSpec = tween(200))
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
 
     /** 底部导航主页间切换 - 交叉淡入淡出 (备用) */
-    val CrossFadeEnter = fadeIn(animationSpec = tween(300))
-    val CrossFadeExit = fadeOut(animationSpec = tween(300))
+    val CrossFadeEnter = fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
+    val CrossFadeExit = fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
 
     /** 页面进入动画 - 带缩放效果 (更流畅) */
     val PageEnterWithScale = slideInHorizontally(
@@ -304,7 +320,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
             stiffness = ExpressiveMotionTokens.PageTransition.stiffness
         )
-    ) + fadeIn(animationSpec = tween(200)) + scaleIn(
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)) + scaleIn(
         initialScale = 0.95f,
         animationSpec = spring(
             dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
@@ -319,7 +335,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
             stiffness = ExpressiveMotionTokens.PageTransition.stiffness
         )
-    ) + fadeOut(animationSpec = tween(150)) + scaleOut(
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)) + scaleOut(
         targetScale = 0.95f,
         animationSpec = spring(
             dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
@@ -334,7 +350,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
             stiffness = ExpressiveMotionTokens.PageTransition.stiffness
         )
-    ) + fadeIn(animationSpec = tween(150))
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
 
     /** Shared Axis - 旧页面同时向右轻微移动 */
     val SharedAxisExit = slideOutHorizontally(
@@ -343,7 +359,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
             stiffness = ExpressiveMotionTokens.PageTransition.stiffness
         )
-    ) + fadeOut(animationSpec = tween(150))
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
 
     /** Shared Axis - 返回时新页面从左滑入 */
     val SharedAxisPopEnter = slideInHorizontally(
@@ -352,7 +368,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
             stiffness = ExpressiveMotionTokens.PageTransition.stiffness
         )
-    ) + fadeIn(animationSpec = tween(150))
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
 
     /** Shared Axis - 返回时旧页面向右滑出 */
     val SharedAxisPopExit = slideOutHorizontally(
@@ -361,19 +377,19 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
             stiffness = ExpressiveMotionTokens.PageTransition.stiffness
         )
-    ) + fadeOut(animationSpec = tween(150))
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
     
     // ===== Exit Animations =====
     
     /** 列表项退出动画 */
     val ListItemExit = slideOutVertically(
         targetOffsetY = { -it },
-        animationSpec = tween(150)
-    ) + fadeOut(animationSpec = tween(100))
-    
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh))
+
     /** 卡片收起动画 */
     val CardCollapse = shrinkVertically(
-        animationSpec = tween(200)
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
     )
     
     /** 页面退出动画 */
@@ -383,7 +399,7 @@ object ExpressiveAnimations {
             dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
             stiffness = ExpressiveMotionTokens.Standard.stiffness
         )
-    ) + fadeOut(animationSpec = tween(100))
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh))
     
     // ===== State Change Animations =====
     
@@ -394,7 +410,10 @@ object ExpressiveAnimations {
     )
     
     /** 值变化 - 平滑过渡 */
-    val ValueChange = tween<Float>(durationMillis = 200)
+    val ValueChange: AnimationSpec<Float> = spring(
+        dampingRatio = Spring.DampingRatioMediumBouncy,
+        stiffness = Spring.StiffnessMedium
+    )
     
     /** 展开/收起 - 带弹性 */
     val ExpandCollapse: AnimationSpec<Float> = spring(
@@ -491,11 +510,12 @@ fun Modifier.animateScale(
 @Composable
 fun animatedAlpha(
     targetAlpha: Float,
-    durationMillis: Int = ExpressiveMotion.MediumDuration
+    dampingRatio: Float = Spring.DampingRatioMediumBouncy,
+    stiffness: Float = Spring.StiffnessMedium
 ): Float {
     return animateFloatAsState(
         targetValue = targetAlpha,
-        animationSpec = tween(durationMillis = durationMillis),
+        animationSpec = spring(dampingRatio = dampingRatio, stiffness = stiffness),
         label = "alphaAnimation"
     ).value
 }
@@ -523,22 +543,38 @@ fun animatedTranslationY(
 // ============================================================================
 
 object MotionPresets {
-    val FadeIn: AnimationSpec<Float> = tween<Float>(durationMillis = ExpressiveMotion.ShortDuration)
-    val SlideInUp: AnimationSpec<Float> = tween<Float>(durationMillis = ExpressiveMotion.MediumDuration, easing = FastOutSlowInEasing)
+    // Using spring per M3E spec
+    val FadeIn: AnimationSpec<Float> = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessHigh
+    )
+    val SlideInUp: AnimationSpec<Float> = spring(
+        dampingRatio = ExpressiveMotion.DampingRatioMediumBouncy,
+        stiffness = ExpressiveMotion.StiffnessMedium
+    )
     val ScaleIn: AnimationSpec<Float> = spring(
         dampingRatio = ExpressiveMotion.DampingRatioMediumBouncy,
         stiffness = ExpressiveMotion.StiffnessMedium
     )
-    
-    val FadeOut: AnimationSpec<Float> = tween<Float>(durationMillis = ExpressiveMotion.ShortDuration)
-    val SlideOutDown: AnimationSpec<Float> = tween<Float>(durationMillis = ExpressiveMotion.MediumDuration, easing = FastOutSlowInEasing)
-    val ScaleOut: AnimationSpec<Float> = tween<Float>(durationMillis = ExpressiveMotion.ShortDuration)
-    
+
+    val FadeOut: AnimationSpec<Float> = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessHigh
+    )
+    val SlideOutDown: AnimationSpec<Float> = spring(
+        dampingRatio = ExpressiveMotion.DampingRatioMediumBouncy,
+        stiffness = ExpressiveMotion.StiffnessMedium
+    )
+    val ScaleOut: AnimationSpec<Float> = spring(
+        dampingRatio = Spring.DampingRatioNoBouncy,
+        stiffness = Spring.StiffnessHigh
+    )
+
     val StateChange: AnimationSpec<Float> = spring(
         dampingRatio = ExpressiveMotion.DampingRatioNoBouncy,
         stiffness = ExpressiveMotion.StiffnessMediumLow
     )
-    
+
     val Emphasis: AnimationSpec<Float> = spring(
         dampingRatio = ExpressiveMotion.DampingRatioLowBouncy,
         stiffness = ExpressiveMotion.StiffnessLow

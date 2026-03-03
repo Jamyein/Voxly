@@ -4,8 +4,8 @@ import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
-import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
 import java.text.Normalizer
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -53,7 +53,7 @@ class SafPermissionCache @Inject constructor(
         val permissions = context.contentResolver.persistedUriPermissions
             .filter { it.isReadPermission && it.isWritePermission }
 
-        Log.d(TAG, "Initializing cache with ${permissions.size} persisted permissions")
+        Timber.d(TAG, "Initializing cache with ${permissions.size} persisted permissions")
 
         for (perm in permissions) {
             val path = mapTreeUriToPath(perm.uri)
@@ -65,12 +65,12 @@ class SafPermissionCache @Inject constructor(
                 val rootDocId = DocumentsContract.getTreeDocumentId(perm.uri)
                 rootDocIdCache[perm.uri] = rootDocId
 
-                Log.d(TAG, "Cached: ${perm.uri} -> $path")
+                Timber.d(TAG, "Cached: ${perm.uri} -> $path")
             }
         }
 
         isInitialized = true
-        Log.d(TAG, "Cache initialized: ${treeUriToPathMap.size} entries")
+        Timber.d(TAG, "Cache initialized: ${treeUriToPathMap.size} entries")
     }
 
     /**
@@ -83,7 +83,7 @@ class SafPermissionCache @Inject constructor(
         folderDocIdCache.clear()
         rootDocIdCache.clear()
         isInitialized = false
-        Log.d(TAG, "Cache invalidated")
+        Timber.d(TAG, "Cache invalidated")
     }
 
     /**

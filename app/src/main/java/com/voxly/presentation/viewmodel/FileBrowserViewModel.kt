@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
@@ -38,6 +37,7 @@ import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
 
@@ -138,7 +138,7 @@ class FileBrowserViewModel @Inject constructor(
         // Also listen to app-level refresh events from AppViewModel
         viewModelScope.launch {
             appViewModel.libraryRefreshEvent.collect { _ ->
-                Log.d(TAG, "Received library refresh event from AppViewModel")
+                Timber.d(TAG, "Received library refresh event from AppViewModel")
                 loadAudioFiles(forceRefresh = true)
             }
         }
@@ -168,7 +168,7 @@ class FileBrowserViewModel @Inject constructor(
                             files = cachedFiles,
                             selectedCount = _selectedFiles.value.size
                         )
-                        Log.d(TAG, "Loaded ${cachedFiles.size} files from cache")
+                        Timber.d(TAG, "Loaded ${cachedFiles.size} files from cache")
                         return@launch
                     }
                 }
@@ -212,7 +212,7 @@ class FileBrowserViewModel @Inject constructor(
                     }
                     .onFailure { e ->
                         if (e is CancellationException) return@onFailure
-                        Log.e(TAG, "Global audio scan failed", e)
+                        Timber.e(TAG, "Global audio scan failed", e)
                         _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
                     }
         }
@@ -229,7 +229,7 @@ class FileBrowserViewModel @Inject constructor(
                 whitelistEnabled.collect { enabled ->
                     if (lastWhitelistEnabled != enabled) {
                         lastWhitelistEnabled = enabled
-                        Log.d(TAG, "Whitelist enabled changed to: $enabled, triggering auto-refresh")
+                        Timber.d(TAG, "Whitelist enabled changed to: $enabled, triggering auto-refresh")
                         loadAudioFiles(forceRefresh = true)
                     }
                 }
@@ -240,7 +240,7 @@ class FileBrowserViewModel @Inject constructor(
                 blacklistEnabled.collect { enabled ->
                     if (lastBlacklistEnabled != enabled) {
                         lastBlacklistEnabled = enabled
-                        Log.d(TAG, "Blacklist enabled changed to: $enabled, triggering auto-refresh")
+                        Timber.d(TAG, "Blacklist enabled changed to: $enabled, triggering auto-refresh")
                         loadAudioFiles(forceRefresh = true)
                     }
                 }
@@ -251,7 +251,7 @@ class FileBrowserViewModel @Inject constructor(
                 minDurationFilterEnabled.collect { enabled ->
                     if (lastMinDurationFilterEnabled != enabled) {
                         lastMinDurationFilterEnabled = enabled
-                        Log.d(TAG, "Min duration filter enabled changed to: $enabled, triggering auto-refresh")
+                        Timber.d(TAG, "Min duration filter enabled changed to: $enabled, triggering auto-refresh")
                         loadAudioFiles(forceRefresh = true)
                     }
                 }
@@ -262,7 +262,7 @@ class FileBrowserViewModel @Inject constructor(
                 minDurationFilterThresholdMs.collect { threshold ->
                     if (lastMinDurationFilterThresholdMs != threshold) {
                         lastMinDurationFilterThresholdMs = threshold
-                        Log.d(TAG, "Min duration filter threshold changed to: $threshold, triggering auto-refresh")
+                        Timber.d(TAG, "Min duration filter threshold changed to: $threshold, triggering auto-refresh")
                         loadAudioFiles(forceRefresh = true)
                     }
                 }
@@ -273,7 +273,7 @@ class FileBrowserViewModel @Inject constructor(
                 selectedDirectoryUris.collect { uris ->
                     if (lastSelectedDirectoryUris != uris) {
                         lastSelectedDirectoryUris = uris
-                        Log.d(TAG, "Selected directories changed, triggering auto-refresh")
+                        Timber.d(TAG, "Selected directories changed, triggering auto-refresh")
                         loadAudioFiles(forceRefresh = true)
                     }
                 }
@@ -284,7 +284,7 @@ class FileBrowserViewModel @Inject constructor(
                 blacklistDirectoryUris.collect { uris ->
                     if (lastBlacklistDirectoryUris != uris) {
                         lastBlacklistDirectoryUris = uris
-                        Log.d(TAG, "Blacklist directories changed, triggering auto-refresh")
+                        Timber.d(TAG, "Blacklist directories changed, triggering auto-refresh")
                         loadAudioFiles(forceRefresh = true)
                     }
                 }
@@ -642,7 +642,7 @@ class FileBrowserViewModel @Inject constructor(
                                             }
                                         }
                                     } catch (e: Exception) {
-                                        Log.w(TAG, "Failed to fetch album art for $filePath", e)
+                                        Timber.w(TAG, "Failed to fetch album art for $filePath", e)
                                     }
                                 }
 
@@ -661,7 +661,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to process $filePath", e)
+                    Timber.e(TAG, "Failed to process $filePath", e)
                     failureCount++
                 }
             }
@@ -737,7 +737,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to rename $filePath", e)
+                    Timber.e(TAG, "Failed to rename $filePath", e)
                     failureCount++
                 }
             }
@@ -832,7 +832,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to fix metadata for $filePath", e)
+                    Timber.e(TAG, "Failed to fix metadata for $filePath", e)
                     failureCount++
                 }
             }
@@ -924,7 +924,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to set unified field for $filePath", e)
+                    Timber.e(TAG, "Failed to set unified field for $filePath", e)
                     failureCount++
                 }
             }
@@ -1020,7 +1020,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to replace text for $filePath", e)
+                    Timber.e(TAG, "Failed to replace text for $filePath", e)
                     failureCount++
                 }
             }
@@ -1089,7 +1089,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Log.e(TAG, "Failed to auto-number track for $filePath", e)
+                    Timber.e(TAG, "Failed to auto-number track for $filePath", e)
                     failureCount++
                 }
             }
@@ -1291,7 +1291,7 @@ class FileBrowserViewModel @Inject constructor(
             if (error is CancellationException) {
                 return@onFailure
             }
-            Log.e(TAG, "Directory scan failed for ${directories.joinToString { it.path }}", error)
+            Timber.e(TAG, "Directory scan failed for ${directories.joinToString { it.path }}", error)
             _uiState.value = FileBrowserUiState.Error(error.message ?: "Unknown error")
         }
     }

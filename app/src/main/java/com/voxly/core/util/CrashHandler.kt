@@ -65,7 +65,7 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
 
             Timber.e("Crash report saved to: ${crashFile.absolutePath}")
         } catch (e: Exception) {
-            android.util.Log.e("CrashHandler", "Failed to save crash report: ${e.message}")
+            Timber.e(e, "Failed to save crash report: ${e.message}")
         }
     }
 

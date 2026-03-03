@@ -13,13 +13,14 @@ import com.voxly.data.remote.wangy.model.WangySongDetail
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "WangyRepository"
 
-// 错误追踪：防止无限循环
-private var consecutiveErrorCount = 0
+// 错误追踪：防止无限循环 (线程安全)
+private val consecutiveErrorCount = AtomicInteger(0)
 private const val MAX_CONSECUTIVE_ERRORS = 5
 private const val ERROR_RESET_TIMEOUT_MS = 30_000L  // 30秒后重置错误计数
 
@@ -100,8 +101,8 @@ class WangyRepositoryImpl @Inject constructor(
         limit: Int
     ): Result<WangySearchResponse> = withContext(Dispatchers.IO) {
         // 电路保护：如果连续错误太多，暂时跳过请求
-        if (consecutiveErrorCount >= MAX_CONSECUTIVE_ERRORS) {
-            Timber.w(TAG, "Circuit breaker activated: too many consecutive errors ($consecutiveErrorCount), skipping request")
+        if (consecutiveErrorCount.get() >= MAX_CONSECUTIVE_ERRORS) {
+            Timber.w(TAG, "Circuit breaker activated: too many consecutive errors (${consecutiveErrorCount.get()}), skipping request")
             return@withContext Result.failure(Exception("Circuit breaker: too many consecutive errors"))
         }
 
@@ -170,17 +171,17 @@ class WangyRepositoryImpl @Inject constructor(
             if (code == 200 && !parsedResponse.result?.songs.isNullOrEmpty()) {
                 Timber.d(TAG, "NetEase found ${parsedResponse.result.songs.size} songs for '$keywords'")
                 // 成功：重置错误计数
-                consecutiveErrorCount = 0
+                consecutiveErrorCount.set(0)
                 return@withContext Result.success(parsedResponse)
             }
 
             Timber.w(TAG, "NetEase API returned empty result for '$keywords'")
             // 成功：重置错误计数
-            consecutiveErrorCount = 0
+            consecutiveErrorCount.set(0)
             Result.success(parsedResponse)
         } catch (e: Exception) {
             // 失败：增加错误计数
-            consecutiveErrorCount++
+            consecutiveErrorCount.incrementAndGet()
             Timber.e(TAG, "Exception during API call: ${e.message}", e)
             Result.failure(e)
         }

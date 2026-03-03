@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -16,7 +17,7 @@ import javax.inject.Inject
  * App-level ViewModel that observes scan settings changes from anywhere in the app.
  * This ensures that when settings are changed in Settings screen, the library
  * refresh is triggered even if FileBrowser hasn't been visited yet.
- * 
+ *
  * Uses @HiltViewModel for dependency injection via hiltViewModel().
  */
 @HiltViewModel
@@ -46,34 +47,27 @@ class AppViewModel @Inject constructor(
     }
 
     private fun observeScanSettingsChanges() {
+        // Use combine to efficiently observe all three settings with single collector
         viewModelScope.launch {
-            // Observe min duration filter enabled changes
-            launch {
-                minDurationFilterEnabled.collect { enabled ->
-                    if (lastMinDurationFilterEnabled != enabled) {
-                        lastMinDurationFilterEnabled = enabled
-                        triggerLibraryRefresh()
-                    }
+            combine(
+                minDurationFilterEnabled,
+                whitelistEnabled,
+                blacklistEnabled
+            ) { minDuration, whitelist, blacklist ->
+                Triple(minDuration, whitelist, blacklist)
+            }.collect { (minDuration, whitelist, blacklist) ->
+                // Check and trigger refresh for each setting that changed
+                if (lastMinDurationFilterEnabled != minDuration) {
+                    lastMinDurationFilterEnabled = minDuration
+                    triggerLibraryRefresh()
                 }
-            }
-
-            // Observe whitelist enabled changes
-            launch {
-                whitelistEnabled.collect { enabled ->
-                    if (lastWhitelistEnabled != enabled) {
-                        lastWhitelistEnabled = enabled
-                        triggerLibraryRefresh()
-                    }
+                if (lastWhitelistEnabled != whitelist) {
+                    lastWhitelistEnabled = whitelist
+                    triggerLibraryRefresh()
                 }
-            }
-
-            // Observe blacklist enabled changes
-            launch {
-                blacklistEnabled.collect { enabled ->
-                    if (lastBlacklistEnabled != enabled) {
-                        lastBlacklistEnabled = enabled
-                        triggerLibraryRefresh()
-                    }
+                if (lastBlacklistEnabled != blacklist) {
+                    lastBlacklistEnabled = blacklist
+                    triggerLibraryRefresh()
                 }
             }
         }

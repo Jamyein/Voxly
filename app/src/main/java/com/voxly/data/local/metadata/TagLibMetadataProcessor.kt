@@ -3,10 +3,10 @@ package com.voxly.data.local.metadata
 import android.content.Context
 import android.content.ContentUris
 import android.net.Uri
+import android.os.Environment
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.MediaStore
-import android.util.Log
 import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
 import com.voxly.data.local.SafPermissionCache
@@ -16,10 +16,32 @@ import com.voxly.domain.model.parseMediaStoreTrackField
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import java.text.Normalizer
 import javax.inject.Inject
 import javax.inject.Singleton
+
+// Common base directories for path normalization
+private val BASE_DIRECTORIES = listOf(
+    Environment.getExternalStorageDirectory().absolutePath,
+    "/storage/emulated/0",
+    "/sdcard"
+)
+
+// Search directories for file resolution
+private val SEARCH_DIRECTORIES = listOf(
+    "${Environment.getExternalStorageDirectory()}/Music",
+    "${Environment.getExternalStorageDirectory()}/Download",
+    "${Environment.getExternalStorageDirectory()}/Downloads",
+    "${Environment.getExternalStorageDirectory()}/Ringtones",
+    "${Environment.getExternalStorageDirectory()}/Podcasts",
+    "${Environment.getExternalStorageDirectory()}/Audiobooks",
+    Environment.getExternalStorageDirectory().absolutePath,
+    "/sdcard/Music",
+    "/sdcard/Download",
+    "/sdcard"
+)
 
 /**
  * Audio metadata processor using Kyant0/taglib library.
@@ -165,13 +187,13 @@ class TagLibMetadataProcessor @Inject constructor(
                         return@withContext readMetadataFromFile(resolvedFile, includeAlbumArt)
                     }
                 }
-                Log.w(TAG, "File does not exist: $filePath (normalized: $normalizedPath)")
+                Timber.w(TAG, "File does not exist: $filePath (normalized: $normalizedPath)")
                 return@withContext null
             }
 
             readMetadataFromFile(file, includeAlbumArt)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to read metadata: $filePath", e)
+            Timber.e(TAG, "Failed to read metadata: $filePath", e)
             null
         }
     }
@@ -187,21 +209,14 @@ class TagLibMetadataProcessor @Inject constructor(
             if (File(cleanedPath).exists()) return cleanedPath
 
             // Strategy 2: Try common base directories
-            val baseDirs = listOf(
-                "/storage/emulated/0",
-                "/storage/emulated/0/",
-                "/sdcard",
-                "/sdcard/"
-            )
-            
             // Extract relative path components
             val pathParts = originalPath
                 .replace(Regex("//+"), "/")
                 .trimStart('/')
                 .split('/')
                 .filter { it.isNotBlank() }
-            
-            for (baseDir in baseDirs) {
+
+            for (baseDir in BASE_DIRECTORIES) {
                 val candidatePath = "$baseDir/${pathParts.joinToString("/")}"
                 if (File(candidatePath).exists()) {
                     return candidatePath
@@ -209,20 +224,7 @@ class TagLibMetadataProcessor @Inject constructor(
             }
 
             // Strategy 3: Search in common directories for the file
-            val searchDirs = listOf(
-                "/storage/emulated/0/Music",
-                "/storage/emulated/0/Download",
-                "/storage/emulated/0/Downloads",
-                "/storage/emulated/0/Ringtones",
-                "/storage/emulated/0/Podcasts",
-                "/storage/emulated/0/Audiobooks",
-                "/storage/emulated/0",
-                "/sdcard/Music",
-                "/sdcard/Download",
-                "/sdcard"
-            )
-            
-            for (searchDir in searchDirs) {
+            for (searchDir in SEARCH_DIRECTORIES) {
                 val dir = File(searchDir)
                 if (dir.exists() && dir.isDirectory) {
                     // Recursively search for the file (limited depth)
@@ -231,7 +233,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Path resolution failed for: $originalPath", e)
+            Timber.w(TAG, "Path resolution failed for: $originalPath", e)
         }
         return null
     }
@@ -270,14 +272,14 @@ class TagLibMetadataProcessor @Inject constructor(
         val metadata = try {
             TagLib.getMetadata(fdForTagLib, readPictures = includeAlbumArt)
         } catch (e: Exception) {
-            Log.w(TAG, "TagLib.getMetadata failed", e)
+            Timber.w(TAG, "TagLib.getMetadata failed", e)
             null
         }
 
         pfd.close()
 
         if (metadata == null) {
-            Log.w(TAG, "Failed to read metadata: ${file.absolutePath}")
+            Timber.w(TAG, "Failed to read metadata: ${file.absolutePath}")
             return null
         }
 
@@ -315,7 +317,7 @@ class TagLibMetadataProcessor @Inject constructor(
             try {
                 metadata.pictures.firstOrNull()?.data
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to get album art: ${file.absolutePath}", e)
+                Timber.w(TAG, "Failed to get album art: ${file.absolutePath}", e)
                 null
             }
         } else null
@@ -462,7 +464,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 customFields = customFields
             )
         }.onFailure {
-            Log.w(TAG, "Failed to read metadata from MediaStore URI for: $filePath", it)
+            Timber.w(TAG, "Failed to read metadata from MediaStore URI for: $filePath", it)
         }.getOrNull()
     }
 
@@ -479,10 +481,10 @@ class TagLibMetadataProcessor @Inject constructor(
             if (isExternalStorage(filePath)) {
                 val safResult = tryUpdateMetadataViaSaf(filePath, metadata)
                 if (safResult.isSuccess) {
-                    Log.d(TAG, "SAF write successful: $filePath")
+                    Timber.d(TAG, "SAF write successful: $filePath")
                     return@withContext safResult
                 }
-                Log.w(
+                Timber.w(
                     TAG,
                     "SAF write failed, trying direct access: $filePath, reason=${safResult.exceptionOrNull()?.message}",
                     safResult.exceptionOrNull()
@@ -493,11 +495,11 @@ class TagLibMetadataProcessor @Inject constructor(
             try {
                 val result = updateMetadataDirect(filePath, metadata)
                 if (result.isSuccess) {
-                    Log.d(TAG, "Direct write successful: $filePath")
+                    Timber.d(TAG, "Direct write successful: $filePath")
                 }
                 return@withContext result
             } catch (e: Exception) {
-                Log.e(TAG, "Direct write failed: $filePath", e)
+                Timber.e(TAG, "Direct write failed: $filePath", e)
                 return@withContext Result.failure(e)
             }
         }
@@ -582,7 +584,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 )
                 val pictureSaved = TagLib.savePictures(fdForTagLib, arrayOf(picture))
                 if (!pictureSaved) {
-                    Log.w(TAG, "Failed to save album art for: $filePath")
+                    Timber.w(TAG, "Failed to save album art for: $filePath")
                 }
             }
             
@@ -594,7 +596,7 @@ class TagLibMetadataProcessor @Inject constructor(
 
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "Failed to update metadata directly: $filePath", e)
+            Timber.e(TAG, "Failed to update metadata directly: $filePath", e)
             // Check for permission denied error
             val errorMessage = if (e.message?.contains("EACCES") == true ||
                 e.message?.contains("Permission denied") == true) {
@@ -666,7 +668,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 try {
                     val pictureSaved = TagLib.savePictures(fdForTagLib2, arrayOf(picture))
                     if (!pictureSaved) {
-                        Log.w(TAG, "Failed to save album art for: $filePath")
+                        Timber.w(TAG, "Failed to save album art for: $filePath")
                     }
                 } finally {
                     pfd2.close()
@@ -693,7 +695,7 @@ class TagLibMetadataProcessor @Inject constructor(
         val validPermission = safWriteAccessService.findValidWritePermission(filePath)
         if (validPermission == null) {
             val errorMsg = "SAF write permission expired or not granted for: $filePath. Please re-select the file or its parent directory through the file browser to restore write access."
-            Log.e(TAG, errorMsg)
+            Timber.e(TAG, errorMsg)
             return@withContext Result.failure(
                 IllegalStateException(errorMsg)
             )
@@ -706,7 +708,7 @@ class TagLibMetadataProcessor @Inject constructor(
             )
         }
 
-        Log.d(TAG, "Found document URI: $targetDocUri for file: $filePath")
+        Timber.d(TAG, "Found document URI: $targetDocUri for file: $filePath")
 
         // Create temp file for editing
         val fileExtension = File(filePath).extension.lowercase()
@@ -738,7 +740,7 @@ class TagLibMetadataProcessor @Inject constructor(
     ): Result<Unit> = withContext(Dispatchers.IO) {
         // Validate permission before starting the update (limit retries to prevent infinite recursion)
         if (retryCount < 2 && !safWriteAccessService.isPermissionValid(validPermission, filePath)) {
-            Log.w(TAG, "doSafUpdate: Permission became invalid (retry $retryCount), attempting to reacquire")
+            Timber.w(TAG, "doSafUpdate: Permission became invalid (retry $retryCount), attempting to reacquire")
 
             // Try to reacquire permission
             val newPermission = safWriteAccessService.findValidWritePermission(filePath)
@@ -826,7 +828,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 try {
                     val pictureSaved = TagLib.savePictures(fdForTagLib2, arrayOf(picture))
                     if (!pictureSaved) {
-                        Log.w(TAG, "Failed to save album art for: $filePath")
+                        Timber.w(TAG, "Failed to save album art for: $filePath")
                     }
                 } finally {
                     pfd2.close()
@@ -855,7 +857,7 @@ class TagLibMetadataProcessor @Inject constructor(
             if (overwriteResult.isSuccess) {
                 return@withContext Result.success(Unit)
             }
-            Log.w(
+            Timber.w(
                 TAG,
                 "In-place SAF overwrite failed for: $filePath, fallback to recreate",
                 overwriteResult.exceptionOrNull()
@@ -884,7 +886,7 @@ class TagLibMetadataProcessor @Inject constructor(
             }
 
             runCatching { DocumentsContract.deleteDocument(context.contentResolver, targetDocUri) }
-                .onFailure { Log.w(TAG, "Failed to delete target document for fallback recreate: $filePath", it) }
+                .onFailure { Timber.w(TAG, "Failed to delete target document for fallback recreate: $filePath", it) }
 
             val mimeType = getMimeType(fileExtension)
             val newDocUri = DocumentsContract.createDocument(
@@ -917,7 +919,7 @@ class TagLibMetadataProcessor @Inject constructor(
 
             Result.success(Unit)
         } catch (e: Exception) {
-            Log.e(TAG, "SAF write operation failed: $filePath", e)
+            Timber.e(TAG, "SAF write operation failed: $filePath", e)
             Result.failure(e)
         }
     }
@@ -972,7 +974,7 @@ class TagLibMetadataProcessor @Inject constructor(
             
             pictures.firstOrNull()?.data
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to extract album art: $filePath", e)
+            Timber.w(TAG, "Failed to extract album art: $filePath", e)
             null
         }
     }
@@ -1034,7 +1036,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 durationMs = audioProperties.length.toLong() * 1000
             )
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to read audio info: $filePath", e)
+            Timber.w(TAG, "Failed to read audio info: $filePath", e)
             null
         }
     }
@@ -1068,10 +1070,10 @@ class TagLibMetadataProcessor @Inject constructor(
                 true
             } ?: false
         } catch (e: SecurityException) {
-            Log.w(TAG, "Permission validation failed (SecurityException) for: $filePath", e)
+            Timber.w(TAG, "Permission validation failed (SecurityException) for: $filePath", e)
             false
         } catch (e: Exception) {
-            Log.w(TAG, "Permission validation failed for: $filePath", e)
+            Timber.w(TAG, "Permission validation failed for: $filePath", e)
             false
         }
     }
@@ -1082,34 +1084,34 @@ class TagLibMetadataProcessor @Inject constructor(
     private fun findValidPermission(filePath: String): android.content.UriPermission? {
         // Step 1: Normalize the file path
         val normalizedFilePath = normalizeFilePath(filePath)
-        Log.d(TAG, "findValidPermission: original path: $filePath")
-        Log.d(TAG, "findValidPermission: normalized path: $normalizedFilePath")
+        Timber.d(TAG, "findValidPermission: original path: $filePath")
+        Timber.d(TAG, "findValidPermission: normalized path: $normalizedFilePath")
 
         val permissions = context.contentResolver.persistedUriPermissions
             .filter { it.isReadPermission && it.isWritePermission }
 
-        Log.d(TAG, "findValidPermission: found ${permissions.size} persisted write permissions")
+        Timber.d(TAG, "findValidPermission: found ${permissions.size} persisted write permissions")
 
         for (perm in permissions) {
             val treePath = mapTreeUriToPath(perm.uri)
             if (treePath == null) {
-                Log.d(TAG, "findValidPermission: could not map tree URI: ${perm.uri}")
+                Timber.d(TAG, "findValidPermission: could not map tree URI: ${perm.uri}")
                 continue
             }
 
             // Step 2: Normalize tree path the same way
             val normalizedTreePath = normalizeFilePath(treePath)
-            Log.d(TAG, "findValidPermission: checking permission tree: $normalizedTreePath")
+            Timber.d(TAG, "findValidPermission: checking permission tree: $normalizedTreePath")
 
             // Step 3: Try multiple matching strategies
             // Direct match
             if (normalizedFilePath == normalizedTreePath) {
                 // Validate permission by actually trying to access the file
                 if (isPermissionValid(perm, filePath)) {
-                    Log.d(TAG, "findValidPermission: found valid permission for: $normalizedTreePath")
+                    Timber.d(TAG, "findValidPermission: found valid permission for: $normalizedTreePath")
                     return perm
                 } else {
-                    Log.w(TAG, "findValidPermission: permission exists but invalid: $normalizedTreePath")
+                    Timber.w(TAG, "findValidPermission: permission exists but invalid: $normalizedTreePath")
                     // Continue to try other permissions
                 }
             }
@@ -1117,15 +1119,15 @@ class TagLibMetadataProcessor @Inject constructor(
             if (normalizedFilePath.startsWith("$normalizedTreePath/")) {
                 // Validate permission by actually trying to access the file
                 if (isPermissionValid(perm, filePath)) {
-                    Log.d(TAG, "findValidPermission: found valid permission for: $normalizedTreePath")
+                    Timber.d(TAG, "findValidPermission: found valid permission for: $normalizedTreePath")
                     return perm
                 } else {
-                    Log.w(TAG, "findValidPermission: permission exists but invalid: $normalizedTreePath")
+                    Timber.w(TAG, "findValidPermission: permission exists but invalid: $normalizedTreePath")
                     // Continue to try other permissions
                 }
             }
         }
-        Log.w(TAG, "findValidPermission: no valid permission found for: $filePath")
+        Timber.w(TAG, "findValidPermission: no valid permission found for: $filePath")
         return null
     }
 
@@ -1291,7 +1293,7 @@ class TagLibMetadataProcessor @Inject constructor(
             }
 
             if (nextDocId == null) {
-                Log.w(TAG, "findDocumentUriInTree: segment not found: $segment")
+                Timber.w(TAG, "findDocumentUriInTree: segment not found: $segment")
                 return null
             }
 

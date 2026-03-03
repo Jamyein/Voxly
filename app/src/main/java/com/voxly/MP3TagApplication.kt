@@ -7,8 +7,11 @@ import com.voxly.core.util.LogManager
 import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
 import dagger.hilt.android.HiltAndroidApp
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 import timber.log.Timber
 
 /**
@@ -19,6 +22,7 @@ import timber.log.Timber
 class MP3TagApplication : Application() {
 
     private lateinit var fileLoggingTree: FileLoggingTree
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     override fun onCreate() {
         super.onCreate()
@@ -27,8 +31,9 @@ class MP3TagApplication : Application() {
     }
 
     private fun initLogging() {
-        // Initialize LogManager first
+        // Initialize LogManager first with default values
         LogManager.init(this)
+        // Apply settings asynchronously
         applyLoggingSettings()
         Logger.init()
 
@@ -53,12 +58,16 @@ class MP3TagApplication : Application() {
     }
 
     private fun applyLoggingSettings() {
-        runBlocking {
-            val settings = SettingsDataStore(this@MP3TagApplication)
-            LogManager.isLoggingEnabled = settings.loggingEnabled.first()
-            LogManager.isFileLoggingEnabled = settings.fileLoggingEnabled.first()
-            LogManager.isConsoleLoggingEnabled = settings.consoleLoggingEnabled.first()
-            LogManager.isCrashReportingEnabled = settings.crashReportingEnabled.first()
+        appScope.launch {
+            try {
+                val settings = SettingsDataStore(this@MP3TagApplication)
+                LogManager.isLoggingEnabled = settings.loggingEnabled.first()
+                LogManager.isFileLoggingEnabled = settings.fileLoggingEnabled.first()
+                LogManager.isConsoleLoggingEnabled = settings.consoleLoggingEnabled.first()
+                LogManager.isCrashReportingEnabled = settings.crashReportingEnabled.first()
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to load logging settings, using defaults")
+            }
         }
     }
 }

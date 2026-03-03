@@ -4,9 +4,9 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.DocumentsContract
-import android.util.Log
 import com.voxly.data.local.SafPermissionCache
 import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
 import java.io.File
 import java.text.Normalizer
 import javax.inject.Inject
@@ -126,10 +126,10 @@ class SafWriteAccessService @Inject constructor(
             val targetDocUri = resolveDocumentUri(filePath, permission) ?: return false
             context.contentResolver.openFileDescriptor(targetDocUri, "rw")?.use { true } ?: false
         } catch (e: SecurityException) {
-            Log.w(TAG, "Permission validation failed with SecurityException for: $filePath", e)
+            Timber.w(TAG, "Permission validation failed with SecurityException for: $filePath", e)
             false
         } catch (e: Exception) {
-            Log.w(TAG, "Permission validation failed for: $filePath", e)
+            Timber.w(TAG, "Permission validation failed for: $filePath", e)
             false
         }
     }
@@ -263,7 +263,7 @@ class SafWriteAccessService @Inject constructor(
             }
 
             if (nextDocId == null) {
-                Log.w(TAG, "findDocumentUriInTree: segment not found: $segment")
+                Timber.w(TAG, "findDocumentUriInTree: segment not found: $segment")
                 return null
             }
 

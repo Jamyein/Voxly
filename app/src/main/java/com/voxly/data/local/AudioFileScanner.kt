@@ -5,7 +5,8 @@ import android.content.Context
 import android.database.Cursor
 import android.net.Uri
 import android.provider.MediaStore
-import android.util.Log
+import android.provider.DocumentsContract
+import android.os.Environment
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioFormat
@@ -20,13 +21,12 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import java.text.Collator
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
-import android.provider.DocumentsContract
-import android.os.Environment
 
 /**
  * Local data source for scanning and accessing audio files from device storage.
@@ -96,7 +96,7 @@ class AudioFileScanner @Inject constructor(
 
         // Check cache first (unless forceRefresh)
         if (!forceRefresh && normalizedDirectory in directoryScanCache) {
-            Log.d(TAG, "Using directory cache: $normalizedDirectory")
+            Timber.d(TAG, "Using directory cache: $normalizedDirectory")
             emit(directoryScanCache[normalizedDirectory]!!)
             return@flow
         }
@@ -227,7 +227,7 @@ class AudioFileScanner @Inject constructor(
         try {
             metadataProcessor.readMetadata(filePath, includeAlbumArt)
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to load detailed metadata: $filePath", e)
+            Timber.w(TAG, "Failed to load detailed metadata: $filePath", e)
             null
         }
     }
@@ -244,7 +244,7 @@ class AudioFileScanner @Inject constructor(
             try {
                 metadataProcessor.readAudioInfo(filePath)
             } catch (e: Exception) {
-                Log.w(TAG, "Failed to load audio properties: $filePath", e)
+                Timber.w(TAG, "Failed to load audio properties: $filePath", e)
                 null
             }
         }
@@ -306,7 +306,7 @@ class AudioFileScanner @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to query MediaStore for: $filePath", e)
+            Timber.w(TAG, "Failed to query MediaStore for: $filePath", e)
         }
 
         // Fallback: if MediaStore has no data, use TagLib to read audio properties
@@ -406,7 +406,7 @@ class AudioFileScanner @Inject constructor(
             // Fast check: get count first to avoid loading all data if cache is empty
             val cachedCount = libraryCache.getCachedFileCount()
             if (cachedCount > 0) {
-                Log.d(TAG, "Using cache: $cachedCount files")
+                Timber.d(TAG, "Using cache: $cachedCount files")
                 val cachedFiles = mutableListOf<AudioFile>()
                 libraryCache.getCachedAudioFiles().collect { cached ->
                     cachedFiles.addAll(cached)
@@ -417,7 +417,7 @@ class AudioFileScanner @Inject constructor(
                     return@flow  // Return cache only - no full scan needed
                 }
             } else {
-                Log.d(TAG, "No cache found, performing full scan")
+                Timber.d(TAG, "No cache found, performing full scan")
             }
         }
 
@@ -431,7 +431,7 @@ class AudioFileScanner @Inject constructor(
             // Note: yield is handled by flowOn(Dispatchers.IO) below
         }
         
-        Log.d(TAG, "Full scan complete: ${allFiles.size} files found")
+        Timber.d(TAG, "Full scan complete: ${allFiles.size} files found")
         
         // Update cache with all scanned files
         libraryCache.updateCache(allFiles)
@@ -459,7 +459,7 @@ class AudioFileScanner @Inject constructor(
         // Find files that need rescanning
         val pathsNeedingRescan = libraryCache.getFilesNeedingRescan(currentFiles)
         
-        Log.i(TAG, "Incremental scan: ${pathsNeedingRescan.size} files need rescanning")
+        Timber.i(TAG, "Incremental scan: ${pathsNeedingRescan.size} files need rescanning")
         
         // Get cached files that don't need rescan
         val cachedFiles = mutableListOf<AudioFile>()
@@ -502,7 +502,7 @@ class AudioFileScanner @Inject constructor(
                     try {
                         createAudioFileFromPath(path)
                     } catch (e: Exception) {
-                        Log.w(TAG, "Failed to scan: $path", e)
+                        Timber.w(TAG, "Failed to scan: $path", e)
                         null
                     }
                 }
@@ -602,7 +602,7 @@ class AudioFileScanner @Inject constructor(
         val totalCount = countCursor?.count ?: 0
         countCursor?.close()
         
-        Log.d(TAG, "Starting full scan of $totalCount audio files")
+        Timber.d(TAG, "Starting full scan of $totalCount audio files")
 
         // Now scan with actual data
         val cursor: Cursor? = contentResolver.query(
@@ -699,13 +699,13 @@ class AudioFileScanner @Inject constructor(
             }
         }
         
-        Log.d(TAG, "Full scan complete: ${output.size} files found")
+        Timber.d(TAG, "Full scan complete: ${output.size} files found")
     }
 
     /**
      * Clear the scan cache.
      */
-    suspend fun clearCache(): Int = libraryCache.clearCache()
+    suspend fun clearCache(): Unit = libraryCache.clearCache()
 
     /**
      * Remove a file from cache (e.g., when file is deleted).
