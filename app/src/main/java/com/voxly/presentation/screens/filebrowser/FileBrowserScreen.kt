@@ -107,6 +107,7 @@ fun FileBrowserScreen(
     onNavigateToReplayGain: (List<String>) -> Unit,
     onNavigateToSearch: (List<AudioFile>) -> Unit = {},
     onNavigateToAlbum: (String, String?) -> Unit = { _, _ -> },
+    onNavigateToArtist: (String) -> Unit = {},
     onBottomBarScrollProgressChange: (Float) -> Unit = {}
 ) {
     val context = LocalContext.current
