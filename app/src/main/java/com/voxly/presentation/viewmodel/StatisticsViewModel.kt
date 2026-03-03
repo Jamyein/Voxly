@@ -1,18 +1,26 @@
 package com.voxly.presentation.viewmodel
 
+import android.net.Uri
+import android.os.Environment
+import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.cache.CachedAudioFileEntity
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
+import com.voxly.data.repository.ArtistCacheRepository
 import com.voxly.domain.repository.RecentEditsRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.text.Normalizer
 import javax.inject.Inject
 
 /**
@@ -22,7 +30,9 @@ import javax.inject.Inject
 @HiltViewModel
 class StatisticsViewModel @Inject constructor(
     private val recentEditsRepository: RecentEditsRepository,
-    private val databaseProvider: MusicCacheDatabaseProvider
+    private val databaseProvider: MusicCacheDatabaseProvider,
+    private val settingsDataStore: SettingsDataStore,
+    private val artistCacheRepository: ArtistCacheRepository
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow<StatisticsUiState>(StatisticsUiState.Loading)
@@ -30,6 +40,19 @@ class StatisticsViewModel @Inject constructor(
 
     init {
         loadStatistics()
+        // Listen to whitelist/blacklist settings changes and refresh statistics
+        viewModelScope.launch {
+            combine(
+                settingsDataStore.whitelistEnabled,
+                settingsDataStore.blacklistEnabled,
+                settingsDataStore.selectedDirectoryUris,
+                settingsDataStore.blacklistDirectoryUris
+            ) { _, _, _, _ -> Unit }
+                .collect {
+                    // Settings changed, refresh statistics
+                    loadStatistics()
+                }
+        }
     }
 
     private fun loadStatistics() {
@@ -37,13 +60,33 @@ class StatisticsViewModel @Inject constructor(
             try {
                 _uiState.value = StatisticsUiState.Loading
 
+                // Read whitelist and blacklist settings
+                val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
+                val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
+                val whitelistUris = settingsDataStore.selectedDirectoryUris.first()
+                val blacklistUris = settingsDataStore.blacklistDirectoryUris.first()
+
+                // Convert URIs to paths
+                val whitelistPaths = if (whitelistEnabled && whitelistUris.isNotEmpty()) {
+                    whitelistUris.map { uri -> mapUriToPath(uri) }.filter { it.isNotBlank() }
+                } else emptyList()
+
+                val blacklistPaths = if (blacklistEnabled && blacklistUris.isNotEmpty()) {
+                    blacklistUris.map { uri -> mapUriToPath(uri) }.filter { it.isNotBlank() }
+                } else emptyList()
+
+                // Build path filter query
                 val db = withContext(Dispatchers.IO) {
                     databaseProvider.getDatabase()
                 }
                 val dao = db.audioFileDao()
+                val whitelist = whitelistPaths.takeIf { it.isNotEmpty() }
+                val blacklist = blacklistPaths.takeIf { it.isNotEmpty() }
 
-                // Get real statistics from database
-                val totalFiles = dao.getTotalFileCount()
+                // Get real statistics from database (with optional path filtering)
+                val totalFiles = dao.buildPathFilterQuery(
+                    whitelist, blacklist, "SELECT COUNT(*) FROM cached_audio_files"
+                )?.let { dao.getTotalFileCountFiltered(it) } ?: dao.getTotalFileCount()
 
                 if (totalFiles == 0) {
                     _uiState.value = StatisticsUiState.Empty
@@ -51,22 +94,56 @@ class StatisticsViewModel @Inject constructor(
                 }
 
                 // Get real duration and size
-                val totalDurationMs = dao.getTotalDuration()
-                val totalSizeBytes = dao.getTotalSize()
+                val totalDurationQuery = dao.buildPathFilterQuery(
+                    whitelist, blacklist, "SELECT COALESCE(SUM(duration), 0) FROM cached_audio_files"
+                )
+                val totalDurationMs = totalDurationQuery?.let { dao.getTotalDurationFiltered(it) } ?: dao.getTotalDuration()
+
+                val totalSizeQuery = dao.buildPathFilterQuery(
+                    whitelist, blacklist, "SELECT COALESCE(SUM(size), 0) FROM cached_audio_files"
+                )
+                val totalSizeBytes = totalSizeQuery?.let { dao.getTotalSizeFiltered(it) } ?: dao.getTotalSize()
 
                 // Format total duration
                 val totalDurationFormatted = formatDuration(totalDurationMs)
 
                 // Get format distribution
-                val formatDistributionRaw = dao.getFormatDistribution()
+                val formatDistributionQuery = dao.buildPathFilterQuery(
+                    whitelist, blacklist, "SELECT format, COUNT(*) as count FROM cached_audio_files GROUP BY format ORDER BY count DESC"
+                )
+                val formatDistributionRaw = formatDistributionQuery?.let { dao.getFormatDistributionFiltered(it) } ?: dao.getFormatDistribution()
                 val formatDistribution = formatDistributionRaw.associate { it.format to it.count }
 
                 // Get top artists
-                val topArtistsRaw = dao.getTopArtists(10)
+                val topArtistsQuery = dao.buildPathFilterQuery(
+                    whitelist, blacklist,
+                    "SELECT artist, COUNT(*) as count FROM cached_audio_files WHERE artist IS NOT NULL AND artist != '' GROUP BY artist ORDER BY count DESC",
+                    limit = 10
+                )
+                val topArtistsRaw = topArtistsQuery?.let { dao.getTopArtistsFiltered(it) } ?: dao.getTopArtists(10)
                 val topArtists = topArtistsRaw.map { it.artist to it.count }
 
+                // Cache top artists data for navigation
+                topArtistsRaw.take(5).forEach { artistCount ->
+                    val files = dao.getAudioFilesByArtistOnce(artistCount.artist)
+                    if (files.isNotEmpty()) {
+                        val audioFiles = files.map { entity -> entity.toAudioFile() }
+                        artistCacheRepository.cacheArtist(
+                            com.voxly.data.repository.ArtistGroup(
+                                name = artistCount.artist,
+                                files = audioFiles
+                            )
+                        )
+                    }
+                }
+
                 // Get top albums
-                val topAlbumsRaw = dao.getTopAlbums(10)
+                val topAlbumsQuery = dao.buildPathFilterQuery(
+                    whitelist, blacklist,
+                    "SELECT album, artist, COUNT(*) as count FROM cached_audio_files WHERE album IS NOT NULL AND album != '' GROUP BY album, artist ORDER BY count DESC",
+                    limit = 10
+                )
+                val topAlbumsRaw = topAlbumsQuery?.let { dao.getTopAlbumsFiltered(it) } ?: dao.getTopAlbums(10)
                 val topAlbums = topAlbumsRaw.map { "${it.album}" to it.count }
 
                 // Calculate total size formatted
@@ -137,6 +214,49 @@ class StatisticsViewModel @Inject constructor(
             bytes >= 1_000_000 -> String.format("%.2f MB", bytes / 1_000_000.0)
             bytes >= 1_000 -> String.format("%.2f KB", bytes / 1_000.0)
             else -> "$bytes B"
+        }
+    }
+
+    /**
+     * Converts a content URI to a filesystem path.
+     * Used for whitelist/blacklist path filtering.
+     */
+    private fun mapUriToPath(uriString: String): String {
+        return try {
+            val uri = Uri.parse(uriString)
+            if (uri.scheme == "file") return uri.path ?: ""
+
+            if (uri.scheme != "content") return uri.path ?: ""
+
+            val documentId = DocumentsContract.getTreeDocumentId(uri)
+            if (documentId.startsWith("raw:")) {
+                return documentId.removePrefix("raw:")
+            }
+
+            val idParts = documentId.split(":", limit = 2)
+            val volume = idParts.firstOrNull().orEmpty()
+            val relativePath = idParts.getOrNull(1)?.trim('/').orEmpty()
+
+            val result = when {
+                volume.equals("primary", ignoreCase = true) -> {
+                    val externalRoot = Environment.getExternalStorageDirectory().absolutePath
+                    if (relativePath.isEmpty()) externalRoot else "$externalRoot/$relativePath"
+                }
+                volume.equals("home", ignoreCase = true) -> {
+                    val externalRoot = Environment.getExternalStorageDirectory().absolutePath
+                    val documentsRoot = "$externalRoot/Documents"
+                    if (relativePath.isEmpty()) documentsRoot else "$documentsRoot/$relativePath"
+                }
+                volume.isNotEmpty() -> {
+                    if (relativePath.isEmpty()) "/storage/$volume" else "/storage/$volume/$relativePath"
+                }
+                else -> uri.path ?: ""
+            }
+            // Apply NFC normalization to ensure consistent path matching
+            Normalizer.normalize(result, Normalizer.Form.NFC)
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to convert URI to path: $uriString")
+            Uri.parse(uriString).path.orEmpty()
         }
     }
 

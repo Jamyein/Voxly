@@ -1,7 +1,10 @@
 package com.voxly.data.local.cache
 
 import androidx.room.*
+import androidx.sqlite.db.SimpleSQLiteQuery
+import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
+import java.text.Normalizer
 
 /**
  * DAO for cached audio files.
@@ -43,6 +46,18 @@ interface CachedAudioFileDao {
      */
     @Query("SELECT * FROM cached_audio_files WHERE albumId = :albumId ORDER BY trackNumber ASC, COALESCE(title, name) ASC")
     fun getAudioFilesByAlbum(albumId: Long): Flow<List<CachedAudioFileEntity>>
+
+    /**
+     * Gets audio files by artist name.
+     */
+    @Query("SELECT * FROM cached_audio_files WHERE artist = :artist ORDER BY COALESCE(album, ''), trackNumber ASC, COALESCE(title, name) ASC")
+    fun getAudioFilesByArtist(artist: String): Flow<List<CachedAudioFileEntity>>
+
+    /**
+     * Gets audio files by artist name (one-shot).
+     */
+    @Query("SELECT * FROM cached_audio_files WHERE artist = :artist ORDER BY COALESCE(album, ''), trackNumber ASC, COALESCE(title, name) ASC")
+    suspend fun getAudioFilesByArtistOnce(artist: String): List<CachedAudioFileEntity>
     
     /**
      * Searches audio files by title, artist, or album.
@@ -222,6 +237,117 @@ interface CachedAudioFileDao {
         LIMIT :limit
     """)
     suspend fun getTopAlbums(limit: Int): List<AlbumCount>
+
+    // ==================== Statistics Queries with Path Filtering ====================
+
+    /**
+     * Gets total count of audio files with optional path filtering.
+     * @param query SupportSQLiteQuery with path filter clause
+     */
+    @RawQuery(observedEntities = [CachedAudioFileEntity::class])
+    suspend fun getTotalFileCountFiltered(query: SupportSQLiteQuery): Int
+
+    /**
+     * Gets total duration with optional path filtering.
+     */
+    @RawQuery(observedEntities = [CachedAudioFileEntity::class])
+    suspend fun getTotalDurationFiltered(query: SupportSQLiteQuery): Long
+
+    /**
+     * Gets total file size with optional path filtering.
+     */
+    @RawQuery(observedEntities = [CachedAudioFileEntity::class])
+    suspend fun getTotalSizeFiltered(query: SupportSQLiteQuery): Long
+
+    /**
+     * Gets format distribution with optional path filtering.
+     */
+    @RawQuery(observedEntities = [CachedAudioFileEntity::class])
+    suspend fun getFormatDistributionFiltered(query: SupportSQLiteQuery): List<FormatCount>
+
+    /**
+     * Gets top artists with optional path filtering.
+     */
+    @RawQuery(observedEntities = [CachedAudioFileEntity::class])
+    suspend fun getTopArtistsFiltered(query: SupportSQLiteQuery): List<ArtistCount>
+
+    /**
+     * Gets top albums with optional path filtering.
+     */
+    @RawQuery(observedEntities = [CachedAudioFileEntity::class])
+    suspend fun getTopAlbumsFiltered(query: SupportSQLiteQuery): List<AlbumCount>
+
+    /**
+     * Builds a SupportSQLiteQuery for path filtering from whitelist and blacklist paths.
+     * @param whitelistPaths List of allowed directory paths (null or empty means no whitelist)
+     * @param blacklistPaths List of blocked directory paths (null or empty means no blacklist)
+     * @param baseSql The base SQL query (e.g., "SELECT COUNT(*) FROM cached_audio_files")
+     * @param limit Limit for TOP queries (optional)
+     * @return SupportSQLiteQuery or null if no filtering needed
+     */
+    fun buildPathFilterQuery(
+        whitelistPaths: List<String>?,
+        blacklistPaths: List<String>?,
+        baseSql: String,
+        limit: Int? = null
+    ): SupportSQLiteQuery? {
+        val whitelist = whitelistPaths?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
+        val blacklist = blacklistPaths?.filter { it.isNotBlank() }?.takeIf { it.isNotEmpty() }
+
+        // No filtering needed - return query without WHERE clause
+        if (whitelist.isNullOrEmpty() && blacklist.isNullOrEmpty()) {
+            return if (limit != null) {
+                SimpleSQLiteQuery("$baseSql LIMIT ?", arrayOf(limit))
+            } else {
+                SimpleSQLiteQuery(baseSql)
+            }
+        }
+
+        val conditions = mutableListOf<String>()
+
+        // Whitelist: file must start with one of the whitelist prefixes
+        if (!whitelist.isNullOrEmpty()) {
+            val whitelistConditions = whitelist.map { path ->
+                val normalizedPath = Normalizer.normalize(path.trimEnd('/'), Normalizer.Form.NFC)
+                "path LIKE '$normalizedPath/%'"
+            }
+            conditions.add("(${whitelistConditions.joinToString(" OR ")})")
+        }
+
+        // Blacklist: file must NOT start with any of the blacklist prefixes
+        if (!blacklist.isNullOrEmpty()) {
+            val blacklistConditions = blacklist.map { path ->
+                val normalizedPath = Normalizer.normalize(path.trimEnd('/'), Normalizer.Form.NFC)
+                "path LIKE '$normalizedPath/%'"
+            }
+            conditions.add("NOT (${blacklistConditions.joinToString(" OR ")})")
+        }
+
+        val whereClause = conditions.joinToString(" AND ")
+
+        // Insert WHERE clause at the correct position in SQL
+        // ORDER BY comes after WHERE and GROUP BY
+        val finalSql = when {
+            baseSql.uppercase().contains(" WHERE ") -> {
+                // Already has WHERE, append to it
+                baseSql.replace(Regex("(?i)(WHERE.+)$"), "$1 AND $whereClause")
+            }
+            baseSql.uppercase().contains(" GROUP BY ") -> {
+                // Insert WHERE before GROUP BY
+                baseSql.replace(Regex("(?i)( GROUP BY )", RegexOption.IGNORE_CASE), " WHERE $whereClause$1")
+            }
+            baseSql.uppercase().contains(" ORDER BY ") -> {
+                // Insert WHERE before ORDER BY
+                baseSql.replace(Regex("(?i)( ORDER BY )", RegexOption.IGNORE_CASE), " WHERE $whereClause$1")
+            }
+            else -> {
+                // No special clause, append WHERE at the end
+                "$baseSql WHERE $whereClause"
+            }
+        } + if (limit != null) " LIMIT $limit" else ""
+
+        return SimpleSQLiteQuery(finalSql)
+    }
 }
 
 /**
