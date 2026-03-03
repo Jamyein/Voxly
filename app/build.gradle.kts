@@ -164,6 +164,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.foundation:foundation")
     // Material3 Alpha 版本 - 覆盖 BOM 中的稳定版以使用最新特性
     implementation("androidx.compose.material3:material3:1.5.0-alpha14")
     implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha14")

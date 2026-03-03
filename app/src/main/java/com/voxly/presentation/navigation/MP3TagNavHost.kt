@@ -53,6 +53,7 @@ import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
 import com.voxly.presentation.screens.album.AlbumDetailScreen
+import com.voxly.presentation.screens.artist.ArtistDetailScreen
 import androidx.compose.material3.NavigationBarItem
 import com.voxly.presentation.theme.ExpressiveAnimations
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -158,6 +159,9 @@ fun MP3TagNavHost(
                     onNavigateToAlbum = { albumName, albumArtist ->
                         navController.navigate(Screen.AlbumDetail.createRoute(albumName, albumArtist))
                     },
+                    onNavigateToArtist = { artistName ->
+                        navController.navigate(Screen.ArtistDetail.createRoute(artistName))
+                    },
                     onBottomBarScrollProgressChange = { progress ->
                         scrollProgress = progress
                     }
@@ -199,6 +203,9 @@ fun MP3TagNavHost(
                 StatisticsScreen(
                     onNavigateToSettings = {
                         navController.navigate(Screen.Settings.route)
+                    },
+                    onNavigateToArtist = { artistName ->
+                        navController.navigate(Screen.ArtistDetail.createRoute(artistName))
                     }
                 )
             }
@@ -384,6 +391,25 @@ fun MP3TagNavHost(
                 AlbumDetailScreen(
                     albumName = albumName,
                     albumArtist = albumArtist,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToMetadata = { filePath ->
+                        navController.navigate(Screen.MetadataEditor.createRoute(filePath))
+                    }
+                )
+            }
+
+            // Artist detail screen
+            composable(
+                route = Screen.ArtistDetail.route,
+                arguments = listOf(
+                    navArgument("artistName") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val artistName = backStackEntry.arguments?.getString("artistName")?.let {
+                    URLDecoder.decode(it, "UTF-8")
+                } ?: ""
+                ArtistDetailScreen(
+                    artistName = artistName,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToMetadata = { filePath ->
                         navController.navigate(Screen.MetadataEditor.createRoute(filePath))

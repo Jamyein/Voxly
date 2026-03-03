@@ -10,6 +10,8 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.repository.AlbumCacheRepository
+import com.voxly.data.repository.ArtistCacheRepository
+import com.voxly.data.repository.ArtistGroup as RepoArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
@@ -51,7 +53,8 @@ class FileBrowserViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val appViewModel: AppViewModel,
     private val safWriteAccessService: SafWriteAccessService,
-    private val albumCacheRepository: AlbumCacheRepository
+    private val albumCacheRepository: AlbumCacheRepository,
+    private val artistCacheRepository: ArtistCacheRepository
 ) : ViewModel() {
     companion object {
         private const val TAG = "FileBrowserViewModel"
@@ -1201,6 +1204,16 @@ class FileBrowserViewModel @Inject constructor(
             .sortedBy { it.name.lowercase() }
 
         _artists.value = artistsMap
+
+        // Cache artists for detail screen
+        artistsMap.forEach { artist ->
+            val repoArtist = RepoArtistGroup(
+                name = artist.name,
+                files = artist.files,
+                coverPath = artist.coverPath
+            )
+            artistCacheRepository.cacheArtist(repoArtist)
+        }
     }
 
     private fun restoreSelectedDirectories() {

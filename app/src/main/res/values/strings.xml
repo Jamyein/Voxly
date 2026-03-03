@@ -25,6 +25,8 @@
     <string name="no_artists_found">No artists found</string>
     <string name="track_count">%d tracks</string>
     <string name="album_count">%d albums</string>
+    <string name="singles">Singles</string>
+    <string name="albums">Albums</string>
 
     <!-- Metadata -->
     <string name="metadata_title">Title</string>
@@ -189,6 +191,9 @@
     <string name="unknown_album">Unknown Album</string>
     <string name="unknown_album_artist">Unknown Album Artist</string>
     <string name="album_cover">Album Cover</string>
+    <string name="artist_cover">Artist</string>
+    <string name="no_tracks_for_artist">No tracks found for this artist</string>
+    <string name="more_tracks">+%d more</string>
     <string name="back">Back</string>
 
     <!-- Batch Operations -->

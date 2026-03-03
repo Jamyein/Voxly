@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -47,7 +48,8 @@ import com.voxly.presentation.viewmodel.StatisticsViewModel
 @Composable
 fun StatisticsScreen(
     viewModel: StatisticsViewModel = hiltViewModel(),
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToArtist: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -88,7 +90,8 @@ fun StatisticsScreen(
 
             is StatisticsUiState.Success -> {
                 StatisticsContent(
-                    state = state
+                    state = state,
+                    onNavigateToArtist = onNavigateToArtist
                 )
             }
         }
@@ -99,7 +102,8 @@ fun StatisticsScreen(
 @Composable
 private fun StatisticsContent(
     state: StatisticsUiState.Success,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateToArtist: (String) -> Unit = {}
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
@@ -176,7 +180,7 @@ private fun StatisticsContent(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
-            item { TopArtistsCard(artists = state.topArtists) }
+            item { TopArtistsCard(artists = state.topArtists, onArtistClick = onNavigateToArtist) }
         }
 
         if (state.topAlbums.isNotEmpty()) {
@@ -287,7 +291,10 @@ private fun FormatDistributionCard(
 }
 
 @Composable
-private fun TopArtistsCard(artists: List<Pair<String, Int>>) {
+private fun TopArtistsCard(
+    artists: List<Pair<String, Int>>,
+    onArtistClick: (String) -> Unit = {}
+) {
     Card(
         shape = MaterialTheme.shapes.extraLarge,
         colors = CardDefaults.cardColors(
@@ -301,14 +308,34 @@ private fun TopArtistsCard(artists: List<Pair<String, Int>>) {
             verticalArrangement = Arrangement.spacedBy(10.dp)
         ) {
             artists.take(5).forEachIndexed { index, item ->
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        text = "${index + 1}.",
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.width(24.dp)
-                    )
-                    Text(text = item.first, modifier = Modifier.weight(1f), maxLines = 1)
-                    Text(text = item.second.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Surface(
+                    onClick = { onArtistClick(item.first) },
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "${index + 1}.",
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.width(24.dp)
+                        )
+                        Text(
+                            text = item.first,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 1,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = item.second.toString(),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
                 }
             }
         }

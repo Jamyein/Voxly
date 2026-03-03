@@ -43,7 +43,8 @@ class AudioRepositoryImpl @Inject constructor(
             // Use optimized scanning with cache
             audioFileScanner.scanAudioFilesOptimized(forceRefresh = forceRefresh)
         } else {
-            audioFileScanner.scanDirectory(directoryPath)
+            // Use directory scan, forceRefresh forces MediaStore re-query
+            audioFileScanner.scanDirectory(directoryPath, forceRefresh)
         }.flowOn(Dispatchers.IO)
     }
 

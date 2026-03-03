@@ -38,6 +38,10 @@ sealed class Screen(
         fun createRoute(albumName: String, albumArtist: String?) =
             "album_detail/${java.net.URLEncoder.encode(albumName, "UTF-8")}/${java.net.URLEncoder.encode(albumArtist ?: "", "UTF-8")}"
     }
+    data object ArtistDetail : Screen("artist_detail/{artistName}", showBottomBar = false) {
+        fun createRoute(artistName: String) =
+            "artist_detail/${java.net.URLEncoder.encode(artistName, "UTF-8")}"
+    }
 }
 
 /**

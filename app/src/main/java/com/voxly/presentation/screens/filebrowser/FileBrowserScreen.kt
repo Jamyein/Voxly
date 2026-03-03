@@ -490,7 +490,7 @@ fun FileBrowserScreen(
         ) {
             if (isDirectoryListLevel) {
                 // Root directory - show TabRow with tabs
-                Column(modifier = Modifier.fillMaxSize()) {
+                Column(modifier = Modifier.weight(1f)) {
                     // Pager state for swipe gesture
                     val pagerState = rememberPagerState(
                         initialPage = selectedRootTab.ordinal,
@@ -1684,23 +1684,25 @@ private fun DirectoryOverviewContent(
     directoryFiles: Map<String, List<AudioFile>>,
     onOpenDirectory: (String) -> Unit
 ) {
-    Text(
-        text = stringResource(R.string.selected_directories_count, directories.size),
-        style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-    )
+    Column(modifier = Modifier.fillMaxSize()) {
+        Text(
+            text = stringResource(R.string.selected_directories_count, directories.size),
+            style = MaterialTheme.typography.labelLarge,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        items(directories, key = { it.uri }) { directory ->
-            DirectoryItem(
-                directory = directory,
-                fileCount = directoryFiles[directory.uri]?.size ?: 0,
-                onClick = { onOpenDirectory(directory.uri) }
-            )
+        LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(directories, key = { it.uri }) { directory ->
+                DirectoryItem(
+                    directory = directory,
+                    fileCount = directoryFiles[directory.uri]?.size ?: 0,
+                    onClick = { onOpenDirectory(directory.uri) }
+                )
+            }
         }
     }
 }

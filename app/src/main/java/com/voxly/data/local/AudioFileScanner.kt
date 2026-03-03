@@ -47,6 +47,9 @@ class AudioFileScanner @Inject constructor(
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
 
+    // Simple memory cache for directory scans (respects forceRefresh)
+    private val directoryScanCache = mutableMapOf<String, List<AudioFile>>()
+
     companion object {
         private const val TAG = "AudioFileScanner"
         private val AUDIO_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
@@ -85,11 +88,20 @@ class AudioFileScanner @Inject constructor(
     /**
      * Scans audio files within a specific directory.
      * @param directoryPath The directory path to scan
+     * @param forceRefresh If true, bypass cache and re-scan from MediaStore
      * @return Flow emitting lists of audio files found
      */
-    fun scanDirectory(directoryPath: String): Flow<List<AudioFile>> = flow {
-        val audioFiles = mutableListOf<AudioFile>()
+    fun scanDirectory(directoryPath: String, forceRefresh: Boolean = false): Flow<List<AudioFile>> = flow {
         val normalizedDirectory = directoryPath.trimEnd('/', '\\')
+
+        // Check cache first (unless forceRefresh)
+        if (!forceRefresh && normalizedDirectory in directoryScanCache) {
+            Log.d(TAG, "Using directory cache: $normalizedDirectory")
+            emit(directoryScanCache[normalizedDirectory]!!)
+            return@flow
+        }
+
+        val audioFiles = mutableListOf<AudioFile>()
 
         // Get duration filter settings
         val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled.first()
@@ -193,7 +205,11 @@ class AudioFileScanner @Inject constructor(
             }
         }
 
-        emit(audioFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) }))
+        // Cache the result
+        val sortedFiles = audioFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
+        directoryScanCache[normalizedDirectory] = sortedFiles
+
+        emit(sortedFiles)
     }.flowOn(Dispatchers.IO)
 
     /**

@@ -5,6 +5,7 @@ import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
 import kotlinx.coroutines.flow.Flow
 import java.text.Normalizer
+import kotlin.text.RegexOption
 
 /**
  * DAO for cached audio files.
@@ -326,24 +327,36 @@ interface CachedAudioFileDao {
         val whereClause = conditions.joinToString(" AND ")
 
         // Insert WHERE clause at the correct position in SQL
-        // ORDER BY comes after WHERE and GROUP BY
+        // Order: WHERE -> GROUP BY -> ORDER BY -> LIMIT
         val finalSql = when {
-            baseSql.uppercase().contains(" WHERE ") -> {
-                // Already has WHERE, append to it
-                baseSql.replace(Regex("(?i)(WHERE.+)$"), "$1 AND $whereClause")
-            }
-            baseSql.uppercase().contains(" GROUP BY ") -> {
-                // Insert WHERE before GROUP BY
-                baseSql.replace(Regex("(?i)( GROUP BY )", RegexOption.IGNORE_CASE), " WHERE $whereClause$1")
-            }
+            // Case 1: Has ORDER BY (with or without GROUP BY)
             baseSql.uppercase().contains(" ORDER BY ") -> {
-                // Insert WHERE before ORDER BY
-                baseSql.replace(Regex("(?i)( ORDER BY )", RegexOption.IGNORE_CASE), " WHERE $whereClause$1")
+                baseSql.replace(Regex("(?i)( ORDER BY )", RegexOption.IGNORE_CASE),
+                    " WHERE $whereClause$1")
             }
-            else -> {
-                // No special clause, append WHERE at the end
-                "$baseSql WHERE $whereClause"
+            // Case 2: Has GROUP BY but no ORDER BY
+            baseSql.uppercase().contains(" GROUP BY ") -> {
+                baseSql.replace(Regex("(?i)( GROUP BY )", RegexOption.IGNORE_CASE),
+                    " WHERE $whereClause$1")
             }
+            // Case 3: Has WHERE (simple queries)
+            baseSql.uppercase().contains(" WHERE ") -> {
+                // Append to existing WHERE - need to find the position before GROUP BY/ORDER BY/LIMIT
+                val groupByMatch = Regex("(?i) GROUP BY ", RegexOption.IGNORE_CASE).find(baseSql)
+                val orderByMatch = Regex("(?i) ORDER BY ", RegexOption.IGNORE_CASE).find(baseSql)
+                val limitMatch = Regex(" LIMIT ", RegexOption.IGNORE_CASE).find(baseSql)
+
+                val insertPos = listOfNotNull(groupByMatch, orderByMatch, limitMatch)
+                    .minByOrNull { it.range.first }
+                    ?.range?.first
+                    ?: baseSql.length
+
+                val before = baseSql.substring(0, insertPos)
+                val after = baseSql.substring(insertPos)
+                "$before AND $whereClause$after"
+            }
+            // Case 4: No special clauses
+            else -> "$baseSql WHERE $whereClause"
         } + if (limit != null) " LIMIT $limit" else ""
 
         return SimpleSQLiteQuery(finalSql)
