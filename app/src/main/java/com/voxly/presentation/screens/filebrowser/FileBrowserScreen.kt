@@ -571,7 +571,7 @@ fun FileBrowserScreen(
                                     ArtistTabContent(
                                         artists = artists,
                                         albumArtCache = albumArtCache,
-                                        onArtistClick = { artist -> selectedArtist = artist }
+                                        onArtistClick = { artist -> onNavigateToArtist(artist.name) }
                                     )
                                 }
                             }
