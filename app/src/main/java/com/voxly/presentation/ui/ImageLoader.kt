@@ -1,5 +1,10 @@
 package com.voxly.presentation.ui
 
+import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.media.MediaMetadataRetriever
+import android.provider.MediaStore
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.voxly.data.remote.NetworkConstants
@@ -7,6 +12,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
@@ -21,6 +27,15 @@ private val cacheLock = ReentrantLock()
 private val coverArtByteCache = LinkedHashMap<String, ByteArray>(16, 0.75f, true)
 private val byteCacheLock = ReentrantLock()
 private const val MAX_BYTE_CACHE_SIZE = 30
+
+// LRU cache for local album art (Bitmap)
+private val localAlbumArtCache = LinkedHashMap<String, Bitmap>(200, 0.75f, true)
+private val localCacheLock = ReentrantLock()
+private const val MAX_LOCAL_CACHE_SIZE = 200
+
+// MediaStore album art cache (Bitmap)
+private val mediaStoreAlbumCache = LinkedHashMap<String, Bitmap>(50, 0.75f, true)
+private const val MAX_MEDIASTORE_CACHE_SIZE = 50
 
 /**
  * Loads an image from URL and returns as ImageBitmap.
@@ -181,4 +196,214 @@ suspend fun loadImageBytesFromUrl(url: String?): ByteArray? {
             }
         }.getOrNull()
     }
+}
+
+/**
+ * Loads local album art from file path with LRU cache.
+ * Uses embedded album art from MediaMetadataRetriever.
+ *
+ * @param filePath The path to the audio file
+ * @return Bitmap of the album art, or null if not found
+ */
+fun loadLocalAlbumArt(filePath: String): Bitmap? {
+    if (filePath.isBlank()) return null
+
+    // Check cache first
+    localCacheLock.lock()
+    val cached = localAlbumArtCache[filePath]
+    localCacheLock.unlock()
+    if (cached != null && !cached.isRecycled) {
+        return cached
+    }
+
+    // Load from file
+    val bitmap = loadEmbeddedAlbumArt(filePath)
+
+    // Cache the result
+    if (bitmap != null) {
+        localCacheLock.lock()
+        try {
+            while (localAlbumArtCache.size >= MAX_LOCAL_CACHE_SIZE) {
+                val oldestKey = localAlbumArtCache.keys.first()
+                localAlbumArtCache.remove(oldestKey)?.recycle()
+            }
+            localAlbumArtCache[filePath] = bitmap
+        } finally {
+            localCacheLock.unlock()
+        }
+    }
+
+    return bitmap
+}
+
+/**
+ * Loads embedded album art from an audio file using MediaMetadataRetriever.
+ */
+private fun loadEmbeddedAlbumArt(filePath: String): Bitmap? {
+    return try {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(filePath)
+            val artBytes = retriever.embeddedPicture
+            if (artBytes != null) {
+                decodeSampledBitmapFromBytes(artBytes, 300)
+            } else {
+                // Try to load from folder cover (cover.jpg, folder.jpg, etc.)
+                loadFolderCoverArt(filePath)
+            }
+        } catch (e: Exception) {
+            null
+        } finally {
+            try {
+                retriever.release()
+            } catch (e: Exception) {
+                // Ignore
+            }
+        }
+    } catch (e: Exception) {
+        null
+    }
+}
+
+/**
+ * Loads folder cover art from the parent directory of the audio file.
+ */
+private fun loadFolderCoverArt(filePath: String): Bitmap? {
+    val folder = File(filePath).parentFile ?: return null
+    val coverFileNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
+
+    for (fileName in coverFileNames) {
+        val coverFile = File(folder, fileName)
+        if (coverFile.exists()) {
+            return try {
+                decodeSampledBitmapFromFile(coverFile.absolutePath, 300)
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+    return null
+}
+
+/**
+ * Decodes a sampled bitmap from byte array to reduce memory usage.
+ */
+private fun decodeSampledBitmapFromBytes(bytes: ByteArray, targetSize: Int): Bitmap? {
+    val options = BitmapFactory.Options().apply {
+        inJustDecodeBounds = true
+    }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+
+    var sampleSize = 1
+    while (options.outWidth / sampleSize > targetSize || options.outHeight / sampleSize > targetSize) {
+        sampleSize *= 2
+    }
+
+    val decodeOptions = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+    }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
+}
+
+/**
+ * Decodes a sampled bitmap from file path to reduce memory usage.
+ */
+private fun decodeSampledBitmapFromFile(filePath: String, targetSize: Int): Bitmap? {
+    val options = BitmapFactory.Options().apply {
+        inJustDecodeBounds = true
+    }
+    BitmapFactory.decodeFile(filePath, options)
+
+    var sampleSize = 1
+    while (options.outWidth / sampleSize > targetSize || options.outHeight / sampleSize > targetSize) {
+        sampleSize *= 2
+    }
+
+    val decodeOptions = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+    }
+    return BitmapFactory.decodeFile(filePath, decodeOptions)
+}
+
+/**
+ * Preloads multiple album arts in the background (fire-and-forget).
+ */
+fun preloadLocalAlbumArts(filePaths: List<String>) {
+    CoroutineScope(Dispatchers.IO).launch {
+        filePaths.forEach { path ->
+            try {
+                loadLocalAlbumArt(path)
+            } catch (e: Exception) {
+                // Silently ignore preload failures
+            }
+        }
+    }
+}
+
+/**
+ * Clears the local album art cache.
+ * Call this when the app needs to free memory.
+ */
+fun clearLocalAlbumArtCache() {
+    localCacheLock.lock()
+    try {
+        localAlbumArtCache.values.forEach { it.recycle() }
+        localAlbumArtCache.clear()
+    } finally {
+        localCacheLock.unlock()
+    }
+}
+
+/**
+ * Loads MediaStore album art with caching.
+ * Uses content://media/external/audio/albumart URI.
+ *
+ * @param context Android context
+ * @param albumId MediaStore album ID
+ * @return Bitmap of the album art, or null if not found
+ */
+fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
+    if (albumId <= 0L) return null
+
+    val cacheKey = "mediastore_$albumId"
+
+    // Check cache first
+    mediaStoreAlbumCache[cacheKey]?.let { cached ->
+        if (!cached.isRecycled) return cached
+    }
+
+    // Load from MediaStore
+    val uri = Uri.withAppendedPath(
+        Uri.parse("content://media/external/audio/albumart"),
+        albumId.toString()
+    )
+
+    val bitmap = try {
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            val bytes = stream.readBytes()
+            decodeSampledBitmapFromBytes(bytes, 300)
+        }
+    } catch (e: Exception) {
+        null
+    }
+
+    // Cache the result
+    if (bitmap != null) {
+        while (mediaStoreAlbumCache.size >= MAX_MEDIASTORE_CACHE_SIZE) {
+            mediaStoreAlbumCache.keys.firstOrNull()?.let { key ->
+                mediaStoreAlbumCache.remove(key)?.recycle()
+            }
+        }
+        mediaStoreAlbumCache[cacheKey] = bitmap
+    }
+
+    return bitmap
+}
+
+/**
+ * Clears the MediaStore album art cache.
+ */
+fun clearMediaStoreAlbumCache() {
+    mediaStoreAlbumCache.values.forEach { it.recycle() }
+    mediaStoreAlbumCache.clear()
 }

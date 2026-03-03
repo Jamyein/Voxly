@@ -15,7 +15,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
@@ -43,18 +42,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.screens.filebrowser.SimpleAudioFileItem
+import com.voxly.presentation.components.CardPosition
+import com.voxly.presentation.components.SettingsItemCard
+import com.voxly.presentation.components.SettingsSection
+import com.voxly.presentation.components.TrackListItem
+import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * Album detail screen showing album info and track list.
@@ -83,7 +78,6 @@ fun AlbumDetailScreen(
     val coverPath by viewModel.coverPath.collectAsState()
 
     val context = LocalContext.current
-    val albumArtCache = remember { mutableMapOf<String, Bitmap?>() }
 
     // Calculate total duration
     val totalDuration = remember(files) {
@@ -153,7 +147,7 @@ fun AlbumDetailScreen(
                             contentAlignment = Alignment.Center
                         ) {
                             val firstFile = files.firstOrNull()
-                            val bitmap = remember(firstFile, coverPath) {
+                            val bitmap = remember(coverPath) {
                                 firstFile?.let { loadAlbumArtFromPath(context, it.path, coverPath) }
                             }
                             if (bitmap != null) {
@@ -248,83 +242,49 @@ fun AlbumDetailScreen(
                 }
             }
 
-            // Song list
-            items(sortedFiles, key = { it.path }) { audioFile ->
-                SimpleAudioFileItem(
-                    audioFile = audioFile,
-                    albumArtCache = albumArtCache,
-                    isSelected = false,
-                    onClick = { onNavigateToMetadata(audioFile.path) },
-                    onLongClick = {}
-                )
+            // Song list grouped by disc
+            val groupedFiles = sortedFiles.groupBy { it.metadata.discNumber ?: 1 }
+            val sortedDiscNumbers = groupedFiles.keys.sorted()
+
+            items(sortedDiscNumbers.size) { discIndex ->
+                val discNumber = sortedDiscNumbers[discIndex]
+                val discFiles = groupedFiles[discNumber] ?: return@items
+
+                // Always show disc title
+                SettingsSection(
+                    title = "Disc $discNumber"
+                ) {
+                    discFiles.forEachIndexed { index, audioFile ->
+                        val position = when {
+                            discFiles.size == 1 -> CardPosition.SINGLE
+                            index == 0 -> CardPosition.FIRST
+                            index == discFiles.lastIndex -> CardPosition.LAST
+                            else -> CardPosition.MIDDLE
+                        }
+
+                        SettingsItemCard(position = position) {
+                            TrackListItem(
+                                audioFile = audioFile,
+                                onClick = { onNavigateToMetadata(audioFile.path) }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
 }
 
 private fun loadAlbumArtFromPath(context: android.content.Context, filePath: String, coverPath: String?): Bitmap? {
-    return try {
-        // First try embedded album art from the file using MediaMetadataRetriever
-        val retriever = android.media.MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(filePath)
-            val artBytes = retriever.embeddedPicture
-            if (artBytes != null) {
-                // Decode with sample size for large images
-                val options = android.graphics.BitmapFactory.Options().apply {
-                    inJustDecodeBounds = true
-                }
-                android.graphics.BitmapFactory.decodeByteArray(artBytes, 0, artBytes.size, options)
+    // First check global cache (covers embedded + folder cover)
+    loadLocalAlbumArt(filePath)?.let { return it }
 
-                val targetSize = 300
-                var sampleSize = 1
-                while (options.outWidth / sampleSize > targetSize || options.outHeight / sampleSize > targetSize) {
-                    sampleSize *= 2
-                }
-
-                val decodeOptions = android.graphics.BitmapFactory.Options().apply {
-                    inSampleSize = sampleSize
-                }
-                return android.graphics.BitmapFactory.decodeByteArray(artBytes, 0, artBytes.size, decodeOptions)
-            }
-        } catch (e: Exception) {
-            // Ignore and try other methods
-        } finally {
-            try {
-                retriever.release()
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
-
-        // Then try coverPath if available
-        if (coverPath != null) {
-            try {
-                val coverFile = java.io.File(coverPath)
-                if (coverFile.exists()) {
-                    val options = android.graphics.BitmapFactory.Options().apply {
-                        inJustDecodeBounds = true
-                    }
-                    android.graphics.BitmapFactory.decodeFile(coverPath, options)
-
-                    val targetSize = 300
-                    var sampleSize = 1
-                    while (options.outWidth / sampleSize > targetSize || options.outHeight / sampleSize > targetSize) {
-                        sampleSize *= 2
-                    }
-
-                    val decodeOptions = android.graphics.BitmapFactory.Options().apply {
-                        inSampleSize = sampleSize
-                    }
-                    return android.graphics.BitmapFactory.decodeFile(coverPath, decodeOptions)
-                }
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
-
-        null
-    } catch (e: Exception) {
-        null
+    // If coverPath is different from filePath, check that too
+    if (coverPath != null && coverPath != filePath) {
+        loadLocalAlbumArt(coverPath)?.let { return it }
     }
+
+    return null
 }

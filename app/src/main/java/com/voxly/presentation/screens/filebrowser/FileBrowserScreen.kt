@@ -23,6 +23,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
@@ -76,6 +78,8 @@ import com.voxly.presentation.components.AlphabetIndexer
 import com.voxly.presentation.components.getFirstLetter
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.ui.decodeBitmapFromBytes
+import com.voxly.presentation.ui.loadLocalAlbumArt
+import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.FileBrowserUiState
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
@@ -486,6 +490,19 @@ fun FileBrowserScreen(
             if (isDirectoryListLevel) {
                 // Root directory - show TabRow with tabs
                 Column(modifier = Modifier.fillMaxSize()) {
+                    // Pager state for swipe gesture
+                    val pagerState = rememberPagerState(
+                        initialPage = selectedRootTab.ordinal,
+                        pageCount = { RootTab.entries.size }
+                    )
+
+                    // Sync pager scroll with selectedTab
+                    LaunchedEffect(pagerState) {
+                        snapshotFlow { pagerState.currentPage }.collect { page ->
+                            selectedRootTab = RootTab.entries[page]
+                        }
+                    }
+
                     // TabRow at root level
                     TabRow(
                         selectedTabIndex = selectedRootTab.ordinal,
@@ -493,81 +510,87 @@ fun FileBrowserScreen(
                     ) {
                         Tab(
                             selected = selectedRootTab == RootTab.DIRECTORIES,
-                            onClick = { selectedRootTab = RootTab.DIRECTORIES },
+                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
                             text = { Text(stringResource(R.string.tab_directories)) },
                             icon = { Icon(Icons.Default.Folder, contentDescription = null) }
                         )
                         Tab(
                             selected = selectedRootTab == RootTab.ALBUMS,
-                            onClick = { selectedRootTab = RootTab.ALBUMS },
+                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
                             text = { Text(stringResource(R.string.tab_albums)) },
                             icon = { Icon(Icons.Default.Album, contentDescription = null) }
                         )
                         Tab(
                             selected = selectedRootTab == RootTab.ARTISTS,
-                            onClick = { selectedRootTab = RootTab.ARTISTS },
+                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
                             text = { Text(stringResource(R.string.tab_artists)) },
                             icon = { Icon(Icons.Default.Person, contentDescription = null) }
                         )
                         Tab(
                             selected = selectedRootTab == RootTab.ALL,
-                            onClick = { selectedRootTab = RootTab.ALL },
+                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(3) } },
                             text = { Text(stringResource(R.string.tab_all)) },
                             icon = { Icon(Icons.Default.MusicNote, contentDescription = null) }
                         )
                     }
 
-                    // Tab content based on selected tab
-                    when (selectedRootTab) {
-                        RootTab.DIRECTORIES -> {
-                            DirectoryOverviewContent(
-                                directories = selectedDirectories,
-                                directoryFiles = directoryFiles,
-                                onOpenDirectory = viewModel::openDirectory
-                            )
-                        }
-                        RootTab.ALBUMS -> {
-                            AlbumTabContent(
-                                albums = albums,
-                                albumArtCache = albumArtCache,
-                                onAlbumClick = { album ->
-                                    viewModel.cacheAlbum(album)
-                                    onNavigateToAlbum(album.name, album.artist)
-                                }
-                            )
-                        }
-                        RootTab.ARTISTS -> {
-                            if (selectedArtist != null) {
-                                ArtistDetailContent(
-                                    artist = selectedArtist!!,
-                                    albumArtCache = albumArtCache,
-                                    onBackClick = { selectedArtist = null },
-                                    onNavigateToMetadata = onNavigateToMetadata
-                                )
-                            } else {
-                                ArtistTabContent(
-                                    artists = artists,
-                                    albumArtCache = albumArtCache,
-                                    onArtistClick = { artist -> selectedArtist = artist }
+                    // HorizontalPager for swipe content
+                    HorizontalPager(
+                        state = pagerState,
+                        beyondViewportPageCount = 1,
+                        modifier = Modifier.fillMaxSize()
+                    ) { page ->
+                        when (RootTab.entries[page]) {
+                            RootTab.DIRECTORIES -> {
+                                DirectoryOverviewContent(
+                                    directories = selectedDirectories,
+                                    directoryFiles = directoryFiles,
+                                    onOpenDirectory = viewModel::openDirectory
                                 )
                             }
-                        }
-                        RootTab.ALL -> {
-                            AllAudiosTabContent(
-                                audios = allAudios,
-                                albumArtCache = albumArtCache,
-                                selectedFiles = selectedFiles,
-                                onFileClick = { audioFile ->
-                                    if (selectedFiles.isNotEmpty()) {
-                                        viewModel.toggleFileSelection(audioFile.path)
-                                    } else {
-                                        onNavigateToMetadata(audioFile.path)
+                            RootTab.ALBUMS -> {
+                                AlbumTabContent(
+                                    albums = albums,
+                                    albumArtCache = albumArtCache,
+                                    onAlbumClick = { album ->
+                                        viewModel.cacheAlbum(album)
+                                        onNavigateToAlbum(album.name, album.artist)
                                     }
-                                },
-                                onFileLongClick = { audioFile ->
-                                    viewModel.toggleFileSelection(audioFile.path)
+                                )
+                            }
+                            RootTab.ARTISTS -> {
+                                if (selectedArtist != null) {
+                                    ArtistDetailContent(
+                                        artist = selectedArtist!!,
+                                        albumArtCache = albumArtCache,
+                                        onBackClick = { selectedArtist = null },
+                                        onNavigateToMetadata = onNavigateToMetadata
+                                    )
+                                } else {
+                                    ArtistTabContent(
+                                        artists = artists,
+                                        albumArtCache = albumArtCache,
+                                        onArtistClick = { artist -> selectedArtist = artist }
+                                    )
                                 }
-                            )
+                            }
+                            RootTab.ALL -> {
+                                AllAudiosTabContent(
+                                    audios = allAudios,
+                                    albumArtCache = albumArtCache,
+                                    selectedFiles = selectedFiles,
+                                    onFileClick = { audioFile ->
+                                        if (selectedFiles.isNotEmpty()) {
+                                            viewModel.toggleFileSelection(audioFile.path)
+                                        } else {
+                                            onNavigateToMetadata(audioFile.path)
+                                        }
+                                    },
+                                    onFileLongClick = { audioFile ->
+                                        viewModel.toggleFileSelection(audioFile.path)
+                                    }
+                                )
+                            }
                         }
                     }
                 }
@@ -2064,15 +2087,18 @@ private fun loadAlbumArt(
     context: android.content.Context,
     audioFile: AudioFile
 ): android.graphics.Bitmap? {
-    // First try embedded album art from the file
+    // 1. First check global cache (embedded + folder cover)
+    loadLocalAlbumArt(audioFile.path)?.let { return it }
+
+    // 2. Try embedded album art from the file
     val embeddedArt = loadEmbeddedAlbumArt(context, audioFile.path)
     if (embeddedArt != null) {
-        return embeddedArt
+        return embeddedArt  // loadLocalAlbumArt already cached it
     }
 
-    // Then try MediaStore album art
+    // 3. Try MediaStore album art (with global caching)
     if (audioFile.mediaStoreAlbumId != null && audioFile.mediaStoreAlbumId > 0L) {
-        val mediaStoreArt = loadMediaStoreAlbumBitmap(context, audioFile.mediaStoreAlbumId)
+        val mediaStoreArt = loadMediaStoreAlbumArt(context, audioFile.mediaStoreAlbumId)
         if (mediaStoreArt != null) {
             return mediaStoreArt
         }
