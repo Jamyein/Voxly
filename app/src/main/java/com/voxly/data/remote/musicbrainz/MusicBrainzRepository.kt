@@ -136,7 +136,7 @@ class MusicBrainzRepository @Inject constructor(
                         format = releaseGroup.primaryType,
                         trackCount = releaseGroup.releases?.firstOrNull()?.let { 0 }, // Will be populated later
                         coverArtUrl = null, // Will be fetched separately
-                        source = "MusicBrainz",
+                        source = OnlineSource.MUSICBRAINZ,
                         albumTitle = releaseGroup.title
                     )
                 } ?: emptyList()
@@ -335,7 +335,7 @@ class MusicBrainzRepository @Inject constructor(
                         format = releaseGroup.primaryType,
                         trackCount = null,
                         coverArtUrl = null,
-                        source = "MusicBrainz",
+                        source = OnlineSource.MUSICBRAINZ,
                         albumTitle = releaseGroup.title
                     )
                 } ?: emptyList()

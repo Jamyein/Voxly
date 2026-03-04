@@ -300,14 +300,8 @@ object ExpressiveAnimations {
         )
     ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
 
-    /** 底部导航主页间切换 - 向下滑出 */
-    val BottomNavSlideExit = slideOutVertically(
-        targetOffsetY = { (it * 0.3).toInt() },
-        animationSpec = spring(
-            dampingRatio = ExpressiveMotionTokens.BottomNavTransition.dampingRatio,
-            stiffness = ExpressiveMotionTokens.BottomNavTransition.stiffness
-        )
-    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow))
+    /** 底部导航主页间切换 - 快速淡出 (简化退出动画以配合 predictive back) */
+    val BottomNavSlideExit = fadeOut(animationSpec = tween(durationMillis = ExpressiveMotionTokens.Short2))
 
     /** 底部导航主页间切换 - 交叉淡入淡出 (备用) */
     val CrossFadeEnter = fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
@@ -352,14 +346,8 @@ object ExpressiveAnimations {
         )
     ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
 
-    /** Shared Axis - 旧页面同时向右轻微移动 */
-    val SharedAxisExit = slideOutHorizontally(
-        targetOffsetX = { (it * 0.3).toInt() },
-        animationSpec = spring(
-            dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
-            stiffness = ExpressiveMotionTokens.PageTransition.stiffness
-        )
-    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
+    /** Shared Axis - 旧页面快速淡出 (简化退出动画以配合 predictive back) */
+    val SharedAxisExit = fadeOut(animationSpec = tween(durationMillis = ExpressiveMotionTokens.Short2))
 
     /** Shared Axis - 返回时新页面从左滑入 */
     val SharedAxisPopEnter = slideInHorizontally(
@@ -370,14 +358,8 @@ object ExpressiveAnimations {
         )
     ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
 
-    /** Shared Axis - 返回时旧页面向右滑出 */
-    val SharedAxisPopExit = slideOutHorizontally(
-        targetOffsetX = { (it * 0.3).toInt() },
-        animationSpec = spring(
-            dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
-            stiffness = ExpressiveMotionTokens.PageTransition.stiffness
-        )
-    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
+    /** Shared Axis - 返回时旧页面快速淡出 (简化退出动画以配合 predictive back) */
+    val SharedAxisPopExit = fadeOut(animationSpec = tween(durationMillis = ExpressiveMotionTokens.Short2))
     
     // ===== Exit Animations =====
     
@@ -392,14 +374,8 @@ object ExpressiveAnimations {
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
     )
     
-    /** 页面退出动画 */
-    val PageExit = slideOutHorizontally(
-        targetOffsetX = { -it },
-        animationSpec = spring(
-            dampingRatio = ExpressiveMotionTokens.Standard.dampingRatio,
-            stiffness = ExpressiveMotionTokens.Standard.stiffness
-        )
-    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh))
+    /** 页面退出动画 - 快速淡出 (简化退出动画以配合 predictive back) */
+    val PageExit = fadeOut(animationSpec = tween(durationMillis = ExpressiveMotionTokens.Short2))
     
     // ===== State Change Animations =====
     

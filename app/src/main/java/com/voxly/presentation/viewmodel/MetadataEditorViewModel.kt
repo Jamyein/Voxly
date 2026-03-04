@@ -22,6 +22,7 @@ import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.domain.repository.OnlineRecording
+import com.voxly.domain.repository.OnlineSource
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.repository.ScanMode
@@ -766,10 +767,10 @@ class MetadataEditorViewModel @Inject constructor(
             val oldPreferred = aggregatedOnlineMetadataRepository.preferredSource
             try {
                 val targetSource = when (recording.source) {
-                    "MusicBrainz" -> AggregatedOnlineMetadataRepository.DataSource.MUSICBRAINZ
-                    "iTunes" -> AggregatedOnlineMetadataRepository.DataSource.ITUNES
-                    "NetEase" -> AggregatedOnlineMetadataRepository.DataSource.NETEASE
-                    "QQ Music" -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
+                    OnlineSource.MUSICBRAINZ -> AggregatedOnlineMetadataRepository.DataSource.MUSICBRAINZ
+                    OnlineSource.ITUNES -> AggregatedOnlineMetadataRepository.DataSource.ITUNES
+                    OnlineSource.NETEASE -> AggregatedOnlineMetadataRepository.DataSource.NETEASE
+                    OnlineSource.QQ_MUSIC -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
                     else -> AggregatedOnlineMetadataRepository.DataSource.BOTH
                 }
                 Logger.d("applyOnlineCover: setting preferredSource=$targetSource", TAG)

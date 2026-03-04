@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineRecording
+import com.voxly.domain.repository.OnlineSource
 import com.voxly.presentation.ui.getCoverArtBytes
 import com.voxly.presentation.ui.prefetchCoverArtBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -150,10 +151,10 @@ class OnlineCoverSearchViewModel @Inject constructor(
         val oldPreferred = aggregatedOnlineMetadataRepository.preferredSource
         return try {
             val targetSource = when (recording.source) {
-                "MusicBrainz" -> AggregatedOnlineMetadataRepository.DataSource.MUSICBRAINZ
-                "iTunes" -> AggregatedOnlineMetadataRepository.DataSource.ITUNES
-                "NetEase" -> AggregatedOnlineMetadataRepository.DataSource.NETEASE
-                "QQ Music" -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
+                OnlineSource.MUSICBRAINZ -> AggregatedOnlineMetadataRepository.DataSource.MUSICBRAINZ
+                OnlineSource.ITUNES -> AggregatedOnlineMetadataRepository.DataSource.ITUNES
+                OnlineSource.NETEASE -> AggregatedOnlineMetadataRepository.DataSource.NETEASE
+                OnlineSource.QQ_MUSIC -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
                 else -> AggregatedOnlineMetadataRepository.DataSource.BOTH
             }
             aggregatedOnlineMetadataRepository.preferredSource = targetSource
@@ -199,10 +200,10 @@ class OnlineCoverSearchViewModel @Inject constructor(
         val oldPreferred = aggregatedOnlineMetadataRepository.preferredSource
         try {
             val targetSource = when (recording.source) {
-                "MusicBrainz" -> AggregatedOnlineMetadataRepository.DataSource.MUSICBRAINZ
-                "iTunes" -> AggregatedOnlineMetadataRepository.DataSource.ITUNES
-                "NetEase" -> AggregatedOnlineMetadataRepository.DataSource.NETEASE
-                "QQ Music" -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
+                OnlineSource.MUSICBRAINZ -> AggregatedOnlineMetadataRepository.DataSource.MUSICBRAINZ
+                OnlineSource.ITUNES -> AggregatedOnlineMetadataRepository.DataSource.ITUNES
+                OnlineSource.NETEASE -> AggregatedOnlineMetadataRepository.DataSource.NETEASE
+                OnlineSource.QQ_MUSIC -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
                 else -> AggregatedOnlineMetadataRepository.DataSource.BOTH
             }
             aggregatedOnlineMetadataRepository.preferredSource = targetSource

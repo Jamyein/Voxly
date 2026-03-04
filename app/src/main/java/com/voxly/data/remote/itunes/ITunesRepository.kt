@@ -68,7 +68,7 @@ class ITunesRepository @Inject constructor(
                             format = "iTunes Album",
                             trackCount = result.trackCount,
                             coverArtUrl = getHighResArtworkUrl(result.getBestArtworkUrl(), 3000),
-                            source = "iTunes",
+                            source = OnlineSource.ITUNES,
                             albumTitle = result.collectionName,
                             genre = result.primaryGenreName,
                             albumArtist = result.collectionArtistName ?: result.artistName,

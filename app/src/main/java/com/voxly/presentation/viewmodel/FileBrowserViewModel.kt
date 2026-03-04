@@ -212,7 +212,7 @@ class FileBrowserViewModel @Inject constructor(
                     }
                     .onFailure { e ->
                         if (e is CancellationException) return@onFailure
-                        Timber.e(TAG, "Global audio scan failed", e)
+                        Timber.tag(TAG).e( "Global audio scan failed", e)
                         _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
                     }
         }
@@ -642,7 +642,7 @@ class FileBrowserViewModel @Inject constructor(
                                             }
                                         }
                                     } catch (e: Exception) {
-                                        Timber.w(TAG, "Failed to fetch album art for $filePath", e)
+                                        Timber.tag(TAG).w( "Failed to fetch album art for $filePath", e)
                                     }
                                 }
 
@@ -661,7 +661,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Timber.e(TAG, "Failed to process $filePath", e)
+                    Timber.tag(TAG).e( "Failed to process $filePath", e)
                     failureCount++
                 }
             }
@@ -737,7 +737,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Timber.e(TAG, "Failed to rename $filePath", e)
+                    Timber.tag(TAG).e( "Failed to rename $filePath", e)
                     failureCount++
                 }
             }
@@ -832,7 +832,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Timber.e(TAG, "Failed to fix metadata for $filePath", e)
+                    Timber.tag(TAG).e( "Failed to fix metadata for $filePath", e)
                     failureCount++
                 }
             }
@@ -924,7 +924,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Timber.e(TAG, "Failed to set unified field for $filePath", e)
+                    Timber.tag(TAG).e( "Failed to set unified field for $filePath", e)
                     failureCount++
                 }
             }
@@ -1020,7 +1020,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Timber.e(TAG, "Failed to replace text for $filePath", e)
+                    Timber.tag(TAG).e( "Failed to replace text for $filePath", e)
                     failureCount++
                 }
             }
@@ -1089,7 +1089,7 @@ class FileBrowserViewModel @Inject constructor(
                         failureCount++
                     }
                 } catch (e: Exception) {
-                    Timber.e(TAG, "Failed to auto-number track for $filePath", e)
+                    Timber.tag(TAG).e( "Failed to auto-number track for $filePath", e)
                     failureCount++
                 }
             }
@@ -1291,7 +1291,7 @@ class FileBrowserViewModel @Inject constructor(
             if (error is CancellationException) {
                 return@onFailure
             }
-            Timber.e(TAG, "Directory scan failed for ${directories.joinToString { it.path }}", error)
+            Timber.tag(TAG).e( "Directory scan failed for ${directories.joinToString { it.path }}", error)
             _uiState.value = FileBrowserUiState.Error(error.message ?: "Unknown error")
         }
     }

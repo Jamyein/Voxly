@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens.artist
 
 import android.graphics.Bitmap
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -12,9 +13,11 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,6 +33,9 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -39,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -48,14 +55,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.screens.filebrowser.SimpleAudioFileItem
+import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
-import kotlinx.coroutines.Dispatchers
 
 /**
  * Artist detail screen showing artist info and song list.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ArtistDetailScreen(
     artistName: String,
@@ -72,9 +79,6 @@ fun ArtistDetailScreen(
     val files by viewModel.files.collectAsState()
     val coverPath by viewModel.coverPath.collectAsState()
     val albumCovers by viewModel.albumCovers.collectAsState()
-
-    val context = LocalContext.current
-    val albumArtCache = remember { mutableMapOf<String, Bitmap?>() }
 
     // Separate singles (songs without album) and albums
     val singles = remember(files) {
@@ -177,7 +181,6 @@ fun ArtistDetailScreen(
                 items(singles, key = { "single_${it.path}" }) { audioFile ->
                     SimpleAudioFileItem(
                         audioFile = audioFile,
-                        albumArtCache = albumArtCache,
                         isSelected = false,
                         onClick = { onNavigateToMetadata(audioFile.path) },
                         onLongClick = {}
@@ -196,16 +199,23 @@ fun ArtistDetailScreen(
                     )
                 }
 
-                // Album cards in horizontal row
+                // Album cards in carousel
                 item {
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(vertical = 8.dp)
-                    ) {
-                        items(albumsGrouped.keys.toList()) { albumName ->
+                    val albumList = albumsGrouped.keys.toList()
+                    if (albumList.isNotEmpty()) {
+                        val pagerState = rememberPagerState(pageCount = { albumList.size })
+
+                        HorizontalPager(
+                            state = pagerState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(180.dp),
+                            contentPadding = PaddingValues(horizontal = 40.dp),
+                            pageSpacing = 12.dp
+                        ) { page ->
+                            val albumName = albumList[page]
                             val albumFiles = albumsGrouped[albumName] ?: emptyList()
                             val albumArtPath = albumCovers[albumName]
-                            // Use produceState for async loading with LRU cache
                             val albumArt by produceState<Bitmap?>(initialValue = null, albumArtPath) {
                                 value = albumArtPath?.let { loadLocalAlbumArt(it) }
                             }
@@ -234,7 +244,6 @@ fun ArtistDetailScreen(
                     items(albumFiles.take(3), key = { "album_${albumName}_${it.path}" }) { audioFile ->
                         SimpleAudioFileItem(
                             audioFile = audioFile,
-                            albumArtCache = albumArtCache,
                             isSelected = false,
                             onClick = { onNavigateToMetadata(audioFile.path) },
                             onLongClick = {}
@@ -276,7 +285,7 @@ fun ArtistDetailScreen(
 }
 
 /**
- * Album card for horizontal album list.
+ * Album card for carousel with responsive sizing and spring animation.
  */
 @Composable
 private fun AlbumCard(
@@ -285,10 +294,22 @@ private fun AlbumCard(
     albumArt: Bitmap?,
     onClick: () -> Unit
 ) {
+    val scale by animateFloatAsState(
+        targetValue = 1f,
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
+            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
+        ),
+        label = "albumCardScale"
+    )
+
     Card(
         onClick = onClick,
-        modifier = Modifier.size(120.dp),
-        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .width(140.dp)
+            .height(170.dp)
+            .scale(scale),
+        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )

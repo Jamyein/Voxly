@@ -28,6 +28,9 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -169,7 +172,6 @@ fun FileBrowserScreen(
     val initialScrollPosition = remember(currentListKey) {
         viewModel.getScrollPosition(currentListKey)
     }
-    val albumArtCache = remember { mutableMapOf<String, android.graphics.Bitmap?>() }
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = initialScrollPosition.index,
         initialFirstVisibleItemScrollOffset = initialScrollPosition.offset
@@ -548,7 +550,6 @@ fun FileBrowserScreen(
                             RootTab.ALBUMS -> {
                                 AlbumTabContent(
                                     albums = albums,
-                                    albumArtCache = albumArtCache,
                                     onAlbumClick = { album ->
                                         viewModel.cacheAlbum(album)
                                         onNavigateToAlbum(album.name, album.artist)
@@ -559,14 +560,12 @@ fun FileBrowserScreen(
                                 if (selectedArtist != null) {
                                     ArtistDetailContent(
                                         artist = selectedArtist!!,
-                                        albumArtCache = albumArtCache,
                                         onBackClick = { selectedArtist = null },
                                         onNavigateToMetadata = onNavigateToMetadata
                                     )
                                 } else {
                                     ArtistTabContent(
                                         artists = artists,
-                                        albumArtCache = albumArtCache,
                                         onArtistClick = { artist -> onNavigateToArtist(artist.name) }
                                     )
                                 }
@@ -574,7 +573,6 @@ fun FileBrowserScreen(
                             RootTab.ALL -> {
                                 AllAudiosTabContent(
                                     audios = allAudios,
-                                    albumArtCache = albumArtCache,
                                     selectedFiles = selectedFiles,
                                     onFileClick = { audioFile ->
                                         if (selectedFiles.isNotEmpty()) {
@@ -626,7 +624,6 @@ fun FileBrowserScreen(
                                     AudioFileList(
                                         files = filesToShow,
                                         listState = listState,
-                                        albumArtCache = albumArtCache,
                                         selectedFiles = selectedFiles,
                                         onFileClick = { audioFile ->
                                             if (selectedFiles.isNotEmpty()) {
@@ -1780,7 +1777,6 @@ private fun ErrorContent(message: String) {
 private fun AudioFileList(
     files: List<AudioFile>,
     listState: androidx.compose.foundation.lazy.LazyListState,
-    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     selectedFiles: Set<String>,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
@@ -1799,7 +1795,6 @@ private fun AudioFileList(
         items(files, key = { it.path }) { audioFile ->
             AudioFileItem(
                 audioFile = audioFile,
-                albumArtCache = albumArtCache,
                 isSelected = audioFile.path in selectedFiles,
                 onClick = { onFileClick(audioFile) },
                 onLongClick = { onFileLongClick(audioFile) },
@@ -1818,7 +1813,6 @@ private fun AudioFileList(
 @OptIn(ExperimentalFoundationApi::class)
 private fun AudioFileItem(
     audioFile: AudioFile,
-    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     isSelected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -1854,20 +1848,13 @@ private fun AudioFileItem(
                 contentAlignment = Alignment.Center
             ) {
                 val albumArtBitmap by produceState<android.graphics.Bitmap?>(
-                    initialValue = albumArtCache[audioFile.path],
+                    initialValue = null,
                     key1 = audioFile.path,
                     key2 = audioFile.mediaStoreAlbumId
                 ) {
-                    val cacheKey = audioFile.path
-                    if (albumArtCache.containsKey(cacheKey)) {
-                        value = albumArtCache[cacheKey]
-                        return@produceState
+                    value = withContext(Dispatchers.IO) {
+                        loadLocalAlbumArt(audioFile.path)
                     }
-                    val bitmap = withContext(Dispatchers.IO) {
-                        loadAlbumArt(context, audioFile)
-                    }
-                    albumArtCache[cacheKey] = bitmap
-                    value = bitmap
                 }
 
                 val bitmap = albumArtBitmap
@@ -2637,7 +2624,6 @@ private fun AutoNumberDialog(
 @Composable
 private fun AlbumTabContent(
     albums: List<AlbumGroup>,
-    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     onAlbumClick: (AlbumGroup) -> Unit
 ) {
     if (albums.isEmpty()) {
@@ -2649,15 +2635,16 @@ private fun AlbumTabContent(
             )
         }
     } else {
-        LazyColumn(
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(2),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             items(albums, key = { it.name }) { album ->
-                AlbumListItem(
+                AlbumGridItem(
                     album = album,
-                    albumArtCache = albumArtCache,
                     onClick = { onAlbumClick(album) }
                 )
             }
@@ -2668,7 +2655,6 @@ private fun AlbumTabContent(
 @Composable
 private fun ArtistTabContent(
     artists: List<ArtistGroup>,
-    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     onArtistClick: (ArtistGroup) -> Unit
 ) {
     if (artists.isEmpty()) {
@@ -2688,7 +2674,6 @@ private fun ArtistTabContent(
             items(artists, key = { it.name }) { artist ->
                 ArtistListItem(
                     artist = artist,
-                    albumArtCache = albumArtCache,
                     onClick = { onArtistClick(artist) }
                 )
             }
@@ -2700,12 +2685,9 @@ private fun ArtistTabContent(
 @Composable
 private fun AlbumDetailContent(
     album: AlbumGroup,
-    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     onBackClick: () -> Unit,
     onNavigateToMetadata: (String) -> Unit
 ) {
-    val context = LocalContext.current
-
     // Sort by disc number and track number
     val sortedFiles = remember(album.files) {
         album.files.sortedWith(
@@ -2785,7 +2767,7 @@ private fun AlbumDetailContent(
                         ) {
                             val coverFile = album.files.firstOrNull()
                             val bitmap = remember(coverFile) {
-                                coverFile?.let { loadAlbumArt(context, it) }
+                                coverFile?.let { loadLocalAlbumArt(it.path) }
                             }
                             if (bitmap != null) {
                                 Image(
@@ -2883,7 +2865,6 @@ private fun AlbumDetailContent(
             items(sortedFiles, key = { it.path }) { audioFile ->
                 SimpleAudioFileItem(
                     audioFile = audioFile,
-                    albumArtCache = albumArtCache,
                     isSelected = false,
                     onClick = { onNavigateToMetadata(audioFile.path) },
                     onLongClick = {}
@@ -2896,11 +2877,9 @@ private fun AlbumDetailContent(
 @Composable
 private fun ArtistDetailContent(
     artist: ArtistGroup,
-    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     onBackClick: () -> Unit,
     onNavigateToMetadata: (String) -> Unit
 ) {
-    val context = LocalContext.current
     val unknownAlbum = stringResource(R.string.unknown_album)
 
     // Group files by album
@@ -2970,7 +2949,6 @@ private fun ArtistDetailContent(
                         files.sortedBy { it.metadata.trackNumber ?: 0 }.forEach { audioFile ->
                             SimpleAudioFileItem(
                                 audioFile = audioFile,
-                                albumArtCache = albumArtCache,
                                 isSelected = false,
                                 onClick = { onNavigateToMetadata(audioFile.path) },
                                 onLongClick = {}
@@ -2986,7 +2964,6 @@ private fun ArtistDetailContent(
 @Composable
 private fun AllAudiosTabContent(
     audios: List<AudioFile>,
-    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     selectedFiles: Set<String>,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit
@@ -3009,7 +2986,6 @@ private fun AllAudiosTabContent(
                 val isSelected = audioFile.path in selectedFiles
                 SimpleAudioFileItem(
                     audioFile = audioFile,
-                    albumArtCache = albumArtCache,
                     isSelected = isSelected,
                     onClick = { onFileClick(audioFile) },
                     onLongClick = { onFileLongClick(audioFile) }
@@ -3022,11 +2998,8 @@ private fun AllAudiosTabContent(
 @Composable
 private fun AlbumListItem(
     album: AlbumGroup,
-    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -3048,26 +3021,13 @@ private fun AlbumListItem(
                 contentAlignment = Alignment.Center
             ) {
                 val albumArtBitmap by produceState<android.graphics.Bitmap?>(
-                    initialValue = album.coverPath?.let { albumArtCache[it] },
+                    initialValue = null,
                     key1 = album.coverPath,
                     key2 = album.files.firstOrNull()?.mediaStoreAlbumId
                 ) {
-                    val coverPath = album.coverPath
-                    if (coverPath != null && albumArtCache.containsKey(coverPath)) {
-                        value = albumArtCache[coverPath]
-                        return@produceState
-                    }
                     val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
                         ?: album.files.firstOrNull()
-                    val bitmap = if (coverFile != null) {
-                        withContext(Dispatchers.IO) {
-                            loadAlbumArt(context, coverFile)
-                        }
-                    } else null
-                    if (coverPath != null) {
-                        albumArtCache[coverPath] = bitmap
-                    }
-                    value = bitmap
+                    value = coverFile?.let { withContext(Dispatchers.IO) { loadLocalAlbumArt(it.path) } }
                 }
 
                 val bitmap = albumArtBitmap
@@ -3120,13 +3080,99 @@ private fun AlbumListItem(
 }
 
 @Composable
-private fun ArtistListItem(
-    artist: ArtistGroup,
-    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
+private fun AlbumGridItem(
+    album: AlbumGroup,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        ),
+        onClick = onClick
+    ) {
+        Column {
+            // Album cover - square aspect ratio
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(MaterialTheme.shapes.medium),
+                contentAlignment = Alignment.Center
+            ) {
+                val albumArtBitmap by produceState<android.graphics.Bitmap?>(
+                    initialValue = null,
+                    key1 = album.coverPath,
+                    key2 = album.files.firstOrNull()?.mediaStoreAlbumId
+                ) {
+                    val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                        ?: album.files.firstOrNull()
+                    value = coverFile?.let { withContext(Dispatchers.IO) { loadLocalAlbumArt(it.path) } }
+                }
 
+                val bitmap = albumArtBitmap
+                if (bitmap != null) {
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = MaterialTheme.shapes.medium,
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.Album,
+                                contentDescription = null,
+                                modifier = Modifier.size(48.dp),
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+            }
+            // Album info
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 8.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = album.name,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.Medium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = album.artist ?: stringResource(R.string.unknown_artist),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = stringResource(R.string.track_count, album.files.size),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ArtistListItem(
+    artist: ArtistGroup,
+    onClick: () -> Unit
+) {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -3148,25 +3194,12 @@ private fun ArtistListItem(
                 contentAlignment = Alignment.Center
             ) {
                 val albumArtBitmap by produceState<android.graphics.Bitmap?>(
-                    initialValue = artist.coverPath?.let { albumArtCache[it] },
+                    initialValue = null,
                     key1 = artist.coverPath,
                     key2 = artist.files.size
                 ) {
-                    val coverPath = artist.coverPath
-                    if (coverPath != null && albumArtCache.containsKey(coverPath)) {
-                        value = albumArtCache[coverPath]
-                        return@produceState
-                    }
                     val coverFile = artist.files.randomOrNull()
-                    val bitmap = if (coverFile != null) {
-                        withContext(Dispatchers.IO) {
-                            loadAlbumArt(context, coverFile)
-                        }
-                    } else null
-                    if (coverPath != null) {
-                        albumArtCache[coverPath] = bitmap
-                    }
-                    value = bitmap
+                    value = coverFile?.let { withContext(Dispatchers.IO) { loadLocalAlbumArt(it.path) } }
                 }
 
                 val bitmap = albumArtBitmap
@@ -3219,13 +3252,10 @@ private fun ArtistListItem(
 @Composable
 fun SimpleAudioFileItem(
     audioFile: AudioFile,
-    albumArtCache: MutableMap<String, android.graphics.Bitmap?>,
     isSelected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit
 ) {
-    val context = LocalContext.current
-
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.small,
@@ -3251,20 +3281,13 @@ fun SimpleAudioFileItem(
                 contentAlignment = Alignment.Center
             ) {
                 val albumArtBitmap by produceState<android.graphics.Bitmap?>(
-                    initialValue = albumArtCache[audioFile.path],
+                    initialValue = null,
                     key1 = audioFile.path,
                     key2 = audioFile.mediaStoreAlbumId
                 ) {
-                    val cacheKey = audioFile.path
-                    if (albumArtCache.containsKey(cacheKey)) {
-                        value = albumArtCache[cacheKey]
-                        return@produceState
+                    value = withContext(Dispatchers.IO) {
+                        loadLocalAlbumArt(audioFile.path)
                     }
-                    val bitmap = withContext(Dispatchers.IO) {
-                        loadAlbumArt(context, audioFile)
-                    }
-                    albumArtCache[cacheKey] = bitmap
-                    value = bitmap
                 }
 
                 val bitmap = albumArtBitmap

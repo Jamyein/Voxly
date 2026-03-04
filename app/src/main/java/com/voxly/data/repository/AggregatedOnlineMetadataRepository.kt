@@ -26,6 +26,7 @@ import com.voxly.domain.repository.OnlineMetadataRepository
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
 import com.voxly.domain.repository.OnlineRecording
+import com.voxly.domain.repository.OnlineSource
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -50,17 +51,17 @@ private const val TAG = "AggregatedMetadata"
 public sealed class OnlineSourceResult {
     public data class ReleaseResult(
         val release: OnlineRelease,
-        val source: String
+        val source: OnlineSource
     ) : OnlineSourceResult()
 
     public data class RecordingResult(
         val recording: OnlineRecording,
-        val source: String
+        val source: OnlineSource
     ) : OnlineSourceResult()
 
-    public data class SourceCompleted(val source: String) : OnlineSourceResult()
+    public data class SourceCompleted(val source: OnlineSource) : OnlineSourceResult()
 
-    public data class Error(val source: String, val message: String) : OnlineSourceResult()
+    public data class Error(val source: OnlineSource, val message: String) : OnlineSourceResult()
 }
 
 /**
@@ -192,7 +193,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val useMusicBrainz = settings.enableMusicBrainz && (preferredSource == DataSource.MUSICBRAINZ || preferredSource == DataSource.BOTH)
 
         if (!useITunes && !useQQMusic && !useNetease && !useMusicBrainz) {
-            trySend(OnlineSourceResult.Error("System", "No metadata sources enabled"))
+            trySend(OnlineSourceResult.Error(OnlineSource.UNKNOWN, "No metadata sources enabled"))
             channel.close()
         }
 
@@ -211,16 +212,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         }
                         .onSuccess { releases ->
                             releases.forEach { release ->
-                                trySend(OnlineSourceResult.ReleaseResult(release, "iTunes"))
+                                trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.ITUNES))
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("iTunes", error.message ?: "Failed"))
+                            trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, error.message ?: "Failed"))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("iTunes", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.message ?: "Failed"))
                 } finally {
-                    trySend(OnlineSourceResult.SourceCompleted("iTunes"))
+                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.ITUNES))
                 }
             }
         }
@@ -240,16 +241,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         }
                         .onSuccess { releases ->
                             releases.forEach { release ->
-                                trySend(OnlineSourceResult.ReleaseResult(release, "QQ Music"))
+                                trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.QQ_MUSIC))
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("QQ Music", error.message ?: "Failed"))
+                            trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, error.message ?: "Failed"))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("QQ Music", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.message ?: "Failed"))
                 } finally {
-                    trySend(OnlineSourceResult.SourceCompleted("QQ Music"))
+                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.QQ_MUSIC))
                 }
             }
         }
@@ -269,16 +270,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         }
                         .onSuccess { releases ->
                             releases.forEach { release ->
-                                trySend(OnlineSourceResult.ReleaseResult(release, "NetEase"))
+                                trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.NETEASE))
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("NetEase", error.message ?: "Failed"))
+                            trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, error.message ?: "Failed"))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("NetEase", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.message ?: "Failed"))
                 } finally {
-                    trySend(OnlineSourceResult.SourceCompleted("NetEase"))
+                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.NETEASE))
                 }
             }
         }
@@ -298,16 +299,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         }
                         .onSuccess { releases ->
                             releases.forEach { release ->
-                                trySend(OnlineSourceResult.ReleaseResult(release, "MusicBrainz"))
+                                trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.MUSICBRAINZ))
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("MusicBrainz", error.message ?: "Failed"))
+                            trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, error.message ?: "Failed"))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("MusicBrainz", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.message ?: "Failed"))
                 } finally {
-                    trySend(OnlineSourceResult.SourceCompleted("MusicBrainz"))
+                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.MUSICBRAINZ))
                 }
             }
         }
@@ -457,7 +458,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                     format = "Digital",
                                     trackCount = albumSongs.size,
                                     coverArtUrl = coverUrl,
-                                    source = "NetEase",
+                                    source = OnlineSource.NETEASE,
                                     albumTitle = albumName
                                 )
                             }
@@ -521,7 +522,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                         rawCoverUrl = firstSong.album?.pic,
                                         fallbackId = id.toString()
                                     ),
-                                    source = "QQ Music",
+                                    source = OnlineSource.QQ_MUSIC,
                                     albumTitle = firstSong.album?.name
                                 )
                             }
@@ -678,7 +679,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val useMusicBrainz = settings.enableMusicBrainz && (preferredSource == DataSource.MUSICBRAINZ || preferredSource == DataSource.BOTH)
 
         if (!useITunes && !useQQMusic && !useNetease && !useMusicBrainz) {
-            trySend(OnlineSourceResult.Error("System", "No metadata sources enabled"))
+            trySend(OnlineSourceResult.Error(OnlineSource.UNKNOWN, "No metadata sources enabled"))
             channel.close()
         }
 
@@ -699,16 +700,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         }
                         .onSuccess { recordings ->
                             recordings.forEach { recording ->
-                                trySend(OnlineSourceResult.RecordingResult(recording, "iTunes"))
+                                trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.ITUNES))
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("iTunes", error.toUserFriendlyError()))
+                            trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, error.toUserFriendlyError()))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("iTunes", e.toUserFriendlyError()))
+                    trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.toUserFriendlyError()))
                 } finally {
-                    trySend(OnlineSourceResult.SourceCompleted("iTunes"))
+                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.ITUNES))
                 }
             }
         }
@@ -729,16 +730,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         }
                         .onSuccess { recordings ->
                             recordings.forEach { recording ->
-                                trySend(OnlineSourceResult.RecordingResult(recording, "QQ Music"))
+                                trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.QQ_MUSIC))
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("QQ Music", error.toUserFriendlyError()))
+                            trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, error.toUserFriendlyError()))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("QQ Music", e.toUserFriendlyError()))
+                    trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.toUserFriendlyError()))
                 } finally {
-                    trySend(OnlineSourceResult.SourceCompleted("QQ Music"))
+                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.QQ_MUSIC))
                 }
             }
         }
@@ -759,16 +760,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         }
                         .onSuccess { recordings ->
                             recordings.forEach { recording ->
-                                trySend(OnlineSourceResult.RecordingResult(recording, "NetEase"))
+                                trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.NETEASE))
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("NetEase", error.toUserFriendlyError()))
+                            trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, error.toUserFriendlyError()))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("NetEase", e.toUserFriendlyError()))
+                    trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.toUserFriendlyError()))
                 } finally {
-                    trySend(OnlineSourceResult.SourceCompleted("NetEase"))
+                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.NETEASE))
                 }
             }
         }
@@ -789,16 +790,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         }
                         .onSuccess { recordings ->
                             recordings.forEach { recording ->
-                                trySend(OnlineSourceResult.RecordingResult(recording, "MusicBrainz"))
+                                trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.MUSICBRAINZ))
                             }
                         }
                         .onFailure { error ->
-                            trySend(OnlineSourceResult.Error("MusicBrainz", error.toUserFriendlyError()))
+                            trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, error.toUserFriendlyError()))
                         }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("MusicBrainz", e.toUserFriendlyError()))
+                    trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.toUserFriendlyError()))
                 } finally {
-                    trySend(OnlineSourceResult.SourceCompleted("MusicBrainz"))
+                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.MUSICBRAINZ))
                 }
             }
         }
@@ -867,7 +868,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     ): Flow<OnlineSourceResult> = callbackFlow {
         val settings = getOnlineSourceSettings()
         if (!settings.hasAnyCoverEnabledSource) {
-            trySend(OnlineSourceResult.Error("SYSTEM", "No cover sources enabled"))
+            trySend(OnlineSourceResult.Error(OnlineSource.UNKNOWN, "No cover sources enabled"))
             close()
             return@callbackFlow
         }
@@ -880,7 +881,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
         val completedSources = java.util.concurrent.atomic.AtomicInteger(0)
 
-        fun markSourceCompleted(source: String) {
+        fun markSourceCompleted(source: OnlineSource) {
             trySend(OnlineSourceResult.SourceCompleted(source))
             if (completedSources.incrementAndGet() >= enabledSources.size) {
                 close()
@@ -892,15 +893,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = musicBrainzRepository.searchByTrack(title, artist)
                     result.getOrNull()?.forEach { recording ->
-                        trySend(OnlineSourceResult.RecordingResult(recording, "MusicBrainz"))
+                        trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.MUSICBRAINZ))
                     }
                     if (result.isFailure) {
-                        trySend(OnlineSourceResult.Error("MusicBrainz", result.exceptionOrNull()?.message ?: "Failed"))
+                        trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, result.exceptionOrNull()?.message ?: "Failed"))
                     }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("MusicBrainz", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.message ?: "Failed"))
                 } finally {
-                    markSourceCompleted("MusicBrainz")
+                    markSourceCompleted(OnlineSource.MUSICBRAINZ)
                 }
             }
         }
@@ -910,15 +911,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = iTunesRepository.searchByTrack(title, artist)
                     result.getOrNull()?.forEach { recording ->
-                        trySend(OnlineSourceResult.RecordingResult(recording, "iTunes"))
+                        trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.ITUNES))
                     }
                     if (result.isFailure) {
-                        trySend(OnlineSourceResult.Error("iTunes", result.exceptionOrNull()?.message ?: "Failed"))
+                        trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, result.exceptionOrNull()?.message ?: "Failed"))
                     }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("iTunes", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.message ?: "Failed"))
                 } finally {
-                    markSourceCompleted("iTunes")
+                    markSourceCompleted(OnlineSource.ITUNES)
                 }
             }
         }
@@ -928,15 +929,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = searchNeteaseByTrack(title, artist, settings.requestLimit)
                     result.getOrNull()?.forEach { recording ->
-                        trySend(OnlineSourceResult.RecordingResult(recording, "NetEase"))
+                        trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.NETEASE))
                     }
                     if (result.isFailure) {
-                        trySend(OnlineSourceResult.Error("NetEase", result.exceptionOrNull()?.message ?: "Failed"))
+                        trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, result.exceptionOrNull()?.message ?: "Failed"))
                     }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("NetEase", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.message ?: "Failed"))
                 } finally {
-                    markSourceCompleted("NetEase")
+                    markSourceCompleted(OnlineSource.NETEASE)
                 }
             }
         }
@@ -946,15 +947,15 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 try {
                     val result = searchQQMusicByTrack(title, artist, settings.requestLimit)
                     result.getOrNull()?.forEach { recording ->
-                        trySend(OnlineSourceResult.RecordingResult(recording, "QQ Music"))
+                        trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.QQ_MUSIC))
                     }
                     if (result.isFailure) {
-                        trySend(OnlineSourceResult.Error("QQ Music", result.exceptionOrNull()?.message ?: "Failed"))
+                        trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, result.exceptionOrNull()?.message ?: "Failed"))
                     }
                 } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error("QQ Music", e.message ?: "Failed"))
+                    trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.message ?: "Failed"))
                 } finally {
-                    markSourceCompleted("QQ Music")
+                    markSourceCompleted(OnlineSource.QQ_MUSIC)
                 }
             }
         }
@@ -1042,7 +1043,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                 album = albumName,
                                 duration = (searchSong.duration / 1000).toInt(),
                                 releaseId = albumId?.toString() ?: searchSong.id.toString(),
-                                source = "NetEase",
+                                source = OnlineSource.NETEASE,
                                 coverArtUrl = coverUrl,
                                 discNumber = discNumber,
                                 trackNumber = trackNumber,
@@ -1621,7 +1622,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             Timber.d("Filter check: queryTitle='$title', resultTitle='${recording.title}', match=$titleMatch")
             // 对于 iTunes/Apple Music 源：如果 title 匹配，则放宽 artist 检查
             // 因为 iTunes 返回英文艺术家名，而用户音乐库可能是中文名
-            val artistMatch = if (titleMatch && recording.source.equals("iTunes", ignoreCase = true)) {
+            val artistMatch = if (titleMatch && recording.source == OnlineSource.ITUNES) {
                 // iTunes 源：title 匹配时信任结果，跳过 artist 严格检查
                 Timber.d("Artist check: queryArtist='$artist', resultArtist='${recording.artist}', source=iTunes, match=relaxed")
                 true
@@ -1783,13 +1784,13 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             get() = coverEnableMusicBrainz || coverEnableITunes || coverEnableNetease || coverEnableQQMusic
     }
 
-    private fun sourcePriorityIndex(source: String, priority: List<String>): Int {
+    private fun sourcePriorityIndex(source: OnlineSource, priority: List<String>): Int {
         val key = when (source) {
-            "iTunes" -> "itunes"
-            "MusicBrainz" -> "musicbrainz"
-            "NetEase" -> "netease"
-            "QQ Music" -> "qq_music"
-            else -> "unknown"
+            OnlineSource.ITUNES -> "itunes"
+            OnlineSource.MUSICBRAINZ -> "musicbrainz"
+            OnlineSource.NETEASE -> "netease"
+            OnlineSource.QQ_MUSIC -> "qq_music"
+            OnlineSource.UNKNOWN -> "unknown"
         }
         val index = priority.indexOf(key)
         return if (index >= 0) index else Int.MAX_VALUE

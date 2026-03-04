@@ -33,6 +33,7 @@ import com.voxly.R
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.FileSearchViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -71,7 +72,6 @@ fun FileSearchScreen(
     var sortOption by rememberSaveable { mutableStateOf(SearchSortOption.NAME_ASC.name) }
     var isSortExpanded by rememberSaveable { mutableStateOf(false) }
 
-    val albumArtCache = remember { mutableMapOf<String, Bitmap?>() }
     val listState = rememberLazyListState()
 
     // Load audio files from the cache based on paths
@@ -202,7 +202,6 @@ fun FileSearchScreen(
                     items(filteredFiles, key = { it.path }) { audioFile ->
                         SearchResultItem(
                             audioFile = audioFile,
-                            albumArtCache = albumArtCache,
                             onClick = { onFileSelected(audioFile.path) }
                         )
                     }
@@ -241,11 +240,8 @@ private fun EmptySearchState(modifier: Modifier = Modifier) {
 @Composable
 private fun SearchResultItem(
     audioFile: AudioFile,
-    albumArtCache: MutableMap<String, Bitmap?>,
     onClick: () -> Unit
 ) {
-    val context = LocalContext.current
-
     Surface(
         modifier = Modifier
             .fillMaxWidth()
@@ -267,19 +263,12 @@ private fun SearchResultItem(
                 contentAlignment = Alignment.Center
             ) {
                 val albumArtBitmap by produceState<Bitmap?>(
-                    initialValue = albumArtCache[audioFile.path],
+                    initialValue = null,
                     key1 = audioFile.path
                 ) {
-                    val cacheKey = audioFile.path
-                    if (albumArtCache.containsKey(cacheKey)) {
-                        value = albumArtCache[cacheKey]
-                        return@produceState
+                    value = withContext(Dispatchers.IO) {
+                        loadLocalAlbumArt(audioFile.path)
                     }
-                    val bitmap = withContext(Dispatchers.IO) {
-                        loadAlbumArt(context, audioFile)
-                    }
-                    albumArtCache[cacheKey] = bitmap
-                    value = bitmap
                 }
 
                 val bitmap = albumArtBitmap

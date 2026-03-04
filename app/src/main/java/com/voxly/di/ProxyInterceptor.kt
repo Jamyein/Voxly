@@ -37,6 +37,9 @@ class ProxyInterceptor @Inject constructor(
     // System proxy lookup results (cached)
     @Volatile private var systemProxyCache: Proxy? = null
 
+    // Cached OkHttpClient with proxy - lazily created
+    @Volatile private var cachedProxyClient: OkHttpClient? = null
+
     init {
         // Initialize proxy settings on first use
         refreshProxySettings()
@@ -64,11 +67,14 @@ class ProxyInterceptor @Inject constructor(
     override fun intercept(chain: Interceptor.Chain): Response {
         val originalRequest = chain.request()
 
-        // Wait for cache to be valid (with timeout)
+        // Wait for cache to be valid (spin wait with timeout)
         if (!cacheValid) {
             refreshProxySettings()
-            // Small delay to allow initial load (rare case)
-            Thread.sleep(50)
+            // Spin wait up to 100ms for cache to become valid
+            val startTime = System.currentTimeMillis()
+            while (!cacheValid && System.currentTimeMillis() - startTime < 100) {
+                Thread.yield()
+            }
         }
 
         // Use cached proxy
@@ -79,16 +85,17 @@ class ProxyInterceptor @Inject constructor(
             return chain.proceed(originalRequest)
         }
 
-        // Create a new client with the proxy for this request
-        val client = OkHttpClient.Builder()
-            .proxy(proxy)
-            .build()
-
         // Re-build the request with the same attributes
         val newRequest = originalRequest.newBuilder()
             .url(originalRequest.url)
             .headers(originalRequest.headers)
             .build()
+
+        // Use cached OkHttpClient to avoid expensive recreation
+        val client = cachedProxyClient ?: OkHttpClient.Builder()
+            .proxy(proxy)
+            .build()
+            .also { cachedProxyClient = it }
 
         return client.newCall(newRequest).execute()
     }
@@ -102,7 +109,7 @@ class ProxyInterceptor @Inject constructor(
         val proxyType = settingsDataStore.proxyType.first()
 
         // System proxy - use Android's default proxy settings
-        if (proxyType == "SYSTEM") {
+        if (proxyType == PROXY_TYPE_SYSTEM) {
             return getSystemProxy()
         }
 
@@ -114,7 +121,7 @@ class ProxyInterceptor @Inject constructor(
         }
 
         val proxyTypeEnum = when (proxyType) {
-            "SOCKS" -> Proxy.Type.SOCKS
+            PROXY_TYPE_SOCKS -> Proxy.Type.SOCKS
             else -> Proxy.Type.HTTP
         }
 
@@ -166,5 +173,10 @@ class ProxyInterceptor @Inject constructor(
 
     companion object {
         private const val TAG = "ProxyInterceptor"
+
+        // Proxy type constants
+        private const val PROXY_TYPE_SYSTEM = "SYSTEM"
+        private const val PROXY_TYPE_SOCKS = "SOCKS"
+        private const val PROXY_TYPE_HTTP = "HTTP"
     }
 }

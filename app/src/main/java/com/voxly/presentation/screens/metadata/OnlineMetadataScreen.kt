@@ -52,6 +52,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineRelease
+import com.voxly.domain.repository.OnlineSource
 import com.voxly.presentation.ui.clearSearchResultImageCache
 import com.voxly.presentation.ui.loadImageBitmapFromUrl
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
@@ -316,7 +317,7 @@ fun SearchProgressIndicator(
     searchState: SearchProgressState,
     modifier: Modifier = Modifier
 ) {
-    val allSources = listOf("iTunes", "QQ Music", "NetEase", "MusicBrainz")
+    val allSources = listOf(OnlineSource.ITUNES, OnlineSource.QQ_MUSIC, OnlineSource.NETEASE, OnlineSource.MUSICBRAINZ)
     val completedSources = searchState.completedSources
     val errorSources = searchState.errorSources
     val isSearching = searchState.isSearching
@@ -341,7 +342,7 @@ fun SearchProgressIndicator(
                     val hasError = source in errorSources
 
                     SourceStatusChip(
-                        name = source,
+                        name = source.toDisplayString(),
                         isCompleted = isCompleted,
                         hasError = hasError
                     )
@@ -437,7 +438,7 @@ private fun ReleaseCover(
 }
 
 private fun displaySource(release: OnlineRelease): String {
-    if (release.source != "Unknown") return release.source
+    if (release.source != OnlineSource.UNKNOWN) return release.source.toDisplayString()
     val format = release.format.orEmpty().lowercase()
     val cover = release.coverArtUrl.orEmpty().lowercase()
     return when {

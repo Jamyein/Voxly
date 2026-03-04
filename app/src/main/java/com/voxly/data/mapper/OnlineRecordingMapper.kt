@@ -1,6 +1,7 @@
 package com.voxly.data.mapper
 
 import com.voxly.domain.repository.OnlineRecording
+import com.voxly.domain.repository.OnlineSource
 
 /**
  * 统一搜索结果映射器
@@ -34,7 +35,7 @@ object OnlineRecordingMapper {
             album = collectionName,  // 填充专辑名
             duration = durationMs?.toInt(), // Convert Long to Int
             releaseId = collectionId?.toString(),
-            source = "iTunes",
+            source = OnlineSource.ITUNES,
             coverArtUrl = artworkUrl100?.let { getHighResArtworkUrl(it, 3000) },
             genre = primaryGenreName,
             albumArtist = collectionArtistName,
@@ -72,7 +73,7 @@ object OnlineRecordingMapper {
             album = album,  // 填充专辑名
             duration = durationMs?.toInt(),
             releaseId = releaseId,
-            source = "MusicBrainz",
+            source = OnlineSource.MUSICBRAINZ,
             coverArtUrl = null,
             coverArtBytes = coverArtBytes
         )
@@ -98,7 +99,7 @@ object OnlineRecordingMapper {
             album = albumName,  // 填充专辑名
             duration = duration?.toInt(),
             releaseId = album?.id?.toString(),
-            source = "NetEase",
+            source = OnlineSource.NETEASE,
             coverArtUrl = album?.picUrl?.takeIf { it.isNotBlank() }
         )
     }
@@ -124,7 +125,7 @@ object OnlineRecordingMapper {
             album = albumName,  // 填充专辑名
             duration = interval,
             releaseId = albumMid ?: albumId,
-            source = "QQ Music",
+            source = OnlineSource.QQ_MUSIC,
             coverArtUrl = buildQQCoverUrl(albumMid, album?.pic, albumId),
             lyrics = lyrics
         )

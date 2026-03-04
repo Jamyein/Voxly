@@ -256,7 +256,7 @@ data class OnlineRelease(
     val format: String?,
     val trackCount: Int?,
     val coverArtUrl: String?,
-    val source: String = "Unknown",
+    val source: OnlineSource = OnlineSource.UNKNOWN,
     val songTitle: String? = null,
     val albumTitle: String? = null,
     val hasSyncedLyrics: Boolean = false,
@@ -271,6 +271,40 @@ data class OnlineRelease(
 
 
 /**
+ * Enum representing the source of online metadata.
+ */
+enum class OnlineSource {
+    MUSICBRAINZ,
+    ITUNES,
+    NETEASE,
+    QQ_MUSIC,
+    UNKNOWN;
+
+    companion object {
+        fun fromString(value: String): OnlineSource {
+            return when (value) {
+                "MusicBrainz" -> MUSICBRAINZ
+                "iTunes" -> ITUNES
+                "NetEase" -> NETEASE
+                "QQ Music" -> QQ_MUSIC
+                else -> UNKNOWN
+            }
+        }
+    }
+
+    fun toDisplayString(): String {
+        return when (this) {
+            MUSICBRAINZ -> "MusicBrainz"
+            ITUNES -> "iTunes"
+            NETEASE -> "NetEase"
+            QQ_MUSIC -> "QQ Music"
+            UNKNOWN -> "Unknown"
+        }
+    }
+}
+
+
+/**
  * Data class representing an online recording.
  */
 data class OnlineRecording(
@@ -280,7 +314,7 @@ data class OnlineRecording(
     val album: String? = null,  // Album name for track search results
     val duration: Int?,
     val releaseId: String?,
-    val source: String = "Unknown",
+    val source: OnlineSource = OnlineSource.UNKNOWN,
     val coverArtUrl: String? = null,
     val coverArtBytes: ByteArray? = null,  // 二进制封面数据 (如 MusicBrainz)
     val discNumber: Int? = null,      // 碟号 (song.disc)
