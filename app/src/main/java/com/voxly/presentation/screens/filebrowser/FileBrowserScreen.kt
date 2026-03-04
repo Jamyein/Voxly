@@ -512,26 +512,22 @@ fun FileBrowserScreen(
                         Tab(
                             selected = selectedRootTab == RootTab.DIRECTORIES,
                             onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
-                            text = { Text(stringResource(R.string.tab_directories)) },
-                            icon = { Icon(Icons.Default.Folder, contentDescription = null) }
+                            icon = { Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.tab_directories)) }
                         )
                         Tab(
                             selected = selectedRootTab == RootTab.ALBUMS,
                             onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
-                            text = { Text(stringResource(R.string.tab_albums)) },
-                            icon = { Icon(Icons.Default.Album, contentDescription = null) }
+                            icon = { Icon(Icons.Default.Album, contentDescription = stringResource(R.string.tab_albums)) }
                         )
                         Tab(
                             selected = selectedRootTab == RootTab.ARTISTS,
                             onClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
-                            text = { Text(stringResource(R.string.tab_artists)) },
-                            icon = { Icon(Icons.Default.Person, contentDescription = null) }
+                            icon = { Icon(Icons.Default.Person, contentDescription = stringResource(R.string.tab_artists)) }
                         )
                         Tab(
                             selected = selectedRootTab == RootTab.ALL,
                             onClick = { coroutineScope.launch { pagerState.animateScrollToPage(3) } },
-                            text = { Text(stringResource(R.string.tab_all)) },
-                            icon = { Icon(Icons.Default.MusicNote, contentDescription = null) }
+                            icon = { Icon(Icons.Default.MusicNote, contentDescription = stringResource(R.string.tab_all)) }
                         )
                     }
 
