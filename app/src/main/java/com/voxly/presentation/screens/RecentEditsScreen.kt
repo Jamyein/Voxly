@@ -35,18 +35,23 @@ fun RecentEditsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.recent_edits_title)) },
-                colors = TopAppBarDefaults.topAppBarColors(),
-                windowInsets = WindowInsets(0.dp),
-            )
-        }
-    ) { innerPadding ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        // TopAppBar
+        TopAppBar(
+            title = { Text(stringResource(R.string.recent_edits_title)) },
+            colors = TopAppBarDefaults.topAppBarColors(),
+            windowInsets = WindowInsets(0.dp),
+        )
+
+        // Content with top padding for TopAppBar and bottom padding for bottom nav
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(top = 56.dp, bottom = 80.dp)
         ) {
             when (val state = uiState) {
                 is RecentEditsUiState.Loading -> {

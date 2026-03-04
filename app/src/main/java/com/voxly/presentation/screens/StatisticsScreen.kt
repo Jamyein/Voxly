@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -53,25 +54,30 @@ fun StatisticsScreen(
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.statistics_title)) },
-                actions = {
-                    IconButton(onClick = onNavigateToSettings) {
-                        Icon(
-                            painter = appIconPainter(AppIcon.Settings),
-                            contentDescription = stringResource(R.string.nav_settings)
-                        )
-                    }
-                },
-                windowInsets = WindowInsets(0.dp) 
-            )
-        }
-    ) { innerPadding ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        // TopAppBar
+        TopAppBar(
+            title = { Text(stringResource(R.string.statistics_title)) },
+            actions = {
+                IconButton(onClick = onNavigateToSettings) {
+                    Icon(
+                        painter = appIconPainter(AppIcon.Settings),
+                        contentDescription = stringResource(R.string.nav_settings)
+                    )
+                }
+            },
+            windowInsets = WindowInsets(0.dp)
+        )
+
+        // Content with top padding for TopAppBar and bottom padding for bottom nav
         Box(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(top = 56.dp, bottom = 80.dp)
         ) {
             when (val state = uiState) {
             is StatisticsUiState.Loading -> {

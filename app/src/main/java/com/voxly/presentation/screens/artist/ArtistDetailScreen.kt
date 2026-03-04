@@ -225,7 +225,8 @@ fun ArtistDetailScreen(
                                 albumName = albumName,
                                 trackCount = albumFiles.size,
                                 albumArt = albumArt,
-                                onClick = { /* Could navigate to album detail */ }
+                                onClick = { /* Could navigate to album detail */ },
+                                modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
                             )
                         }
                     }
@@ -293,7 +294,8 @@ private fun AlbumCard(
     albumName: String,
     trackCount: Int,
     albumArt: Bitmap?,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val scale by animateFloatAsState(
         targetValue = 1f,
@@ -306,11 +308,10 @@ private fun AlbumCard(
 
     Card(
         onClick = onClick,
-        modifier = Modifier
+        modifier = modifier
             .width(140.dp)
             .height(170.dp)
             .scale(scale),
-        shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )

@@ -341,153 +341,162 @@ fun FileBrowserScreen(
     }
 
 
-    Scaffold(
-        topBar = {
-            if (selectedFiles.isNotEmpty()) {
-                SelectionTopBar(
-                    selectedCount = selectedFiles.size,
-                    onSelectAll = { viewModel.selectFilePaths(visibleFiles.map { it.path }) },
-                    onClearSelection = { viewModel.clearSelection() },
-                    onNavigateToReplayGain = {
-                        onNavigateToReplayGain(viewModel.getSelectedFilePaths())
-                    },
-                    onBatchOperations = {
-                        showBatchOperationsMenu = true
-                    }
-                )
-            } else {
-                AnimatedVisibility(
-                    visible = isTopBarVisible,
-                    enter = fadeIn() + expandVertically(),
-                    exit = fadeOut() + shrinkVertically()
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .animateContentSize(
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                )
-                            )
-                    ) {
-                        if (openedDirectory != null) {
-                            TopAppBar(
-                                title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
-                                colors = TopAppBarDefaults.topAppBarColors(),
-                                windowInsets = WindowInsets(0.dp),
-                                navigationIcon = {
-                                    IconButton(onClick = viewModel::closeOpenedDirectory) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                            contentDescription = stringResource(R.string.cd_back)
-                                        )
-                                    }
-                                },
-                                actions = {
-                                    IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Search,
-                                            contentDescription = stringResource(R.string.cd_search)
-                                        )
-                                    }
-                                    IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                                            contentDescription = stringResource(R.string.file_sort_label),
-                                            tint = if (isSortExpanded) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurface
-                                            }
-                                        )
-                                    }
-                                    IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Refresh,
-                                            contentDescription = stringResource(R.string.refresh_files)
-                                        )
-                                    }
-                                }
-                            )
-                        } else {
-                            TopAppBar(
-                                title = { Text(stringResource(R.string.nav_file_browser)) },
-                                colors = TopAppBarDefaults.topAppBarColors(),
-                                windowInsets = WindowInsets(0.dp),
-                                actions = {
-                                    IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Search,
-                                            contentDescription = stringResource(R.string.cd_search)
-                                        )
-                                    }
-                                    IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                                            contentDescription = stringResource(R.string.file_sort_label),
-                                            tint = if (isSortExpanded) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurface
-                                            }
-                                        )
-                                    }
-                                    IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
-                                        Icon(
-                                            imageVector = Icons.Default.Refresh,
-                                            contentDescription = stringResource(R.string.refresh_files)
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                    }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        // TopBar
+        if (selectedFiles.isNotEmpty()) {
+            SelectionTopBar(
+                selectedCount = selectedFiles.size,
+                onSelectAll = { viewModel.selectFilePaths(visibleFiles.map { it.path }) },
+                onClearSelection = { viewModel.clearSelection() },
+                onNavigateToReplayGain = {
+                    onNavigateToReplayGain(viewModel.getSelectedFilePaths())
+                },
+                onBatchOperations = {
+                    showBatchOperationsMenu = true
                 }
-            }
-        },
-        containerColor = MaterialTheme.colorScheme.surface,
-        floatingActionButton = {
-            // Show batch operation FAB only when in directory view
-            if (selectedFiles.isEmpty() && !isBatchProcessing) {
-                BatchOperationsFAB(
-                    expanded = showBatchMenu,
-                    onExpandChange = { showBatchMenu = it },
-                    onOnlineMetadata = { 
-                        showBatchMenu = false
-                        showOnlineMetadataDialog = true 
-                    },
-                    onRenameFiles = { 
-                        showBatchMenu = false
-                        showRenameDialog = true 
-                    },
-                    onFixMetadata = { 
-                        showBatchMenu = false
-                        showFixMetadataDialog = true 
-                    }
-                )
-            } else if (selectedFiles.isEmpty() && canScrollToTop && visibleFiles.isNotEmpty()) {
-                SmallFloatingActionButton(
-                    onClick = {
-                        coroutineScope.launch {
-                            listState.animateScrollToItem(0)
-                        }
-                    },
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                    shape = MaterialTheme.shapes.extraLarge
+            )
+        } else {
+            AnimatedVisibility(
+                visible = isTopBarVisible,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically()
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .animateContentSize(
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioMediumBouncy,
+                                stiffness = Spring.StiffnessLow
+                            )
+                        )
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
-                        contentDescription = stringResource(R.string.back_to_top)
-                    )
+                    if (openedDirectory != null) {
+                        TopAppBar(
+                            title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
+                            colors = TopAppBarDefaults.topAppBarColors(),
+                            windowInsets = WindowInsets(0.dp),
+                            navigationIcon = {
+                                IconButton(onClick = viewModel::closeOpenedDirectory) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                        contentDescription = stringResource(R.string.cd_back)
+                                    )
+                                }
+                            },
+                            actions = {
+                                IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = stringResource(R.string.cd_search)
+                                    )
+                                }
+                                IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Sort,
+                                        contentDescription = stringResource(R.string.file_sort_label),
+                                        tint = if (isSortExpanded) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                }
+                                IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = stringResource(R.string.refresh_files)
+                                    )
+                                }
+                            }
+                        )
+                    } else {
+                        TopAppBar(
+                            title = { Text(stringResource(R.string.nav_file_browser)) },
+                            colors = TopAppBarDefaults.topAppBarColors(),
+                            windowInsets = WindowInsets(0.dp),
+                            actions = {
+                                IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Search,
+                                        contentDescription = stringResource(R.string.cd_search)
+                                    )
+                                }
+                                IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Sort,
+                                        contentDescription = stringResource(R.string.file_sort_label),
+                                        tint = if (isSortExpanded) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.onSurface
+                                        }
+                                    )
+                                }
+                                IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Refresh,
+                                        contentDescription = stringResource(R.string.refresh_files)
+                                    )
+                                }
+                            }
+                        )
+                    }
                 }
             }
         }
-    ) { innerPadding ->
+
+        // FAB
+        if (selectedFiles.isEmpty() && !isBatchProcessing) {
+            BatchOperationsFAB(
+                expanded = showBatchMenu,
+                onExpandChange = { showBatchMenu = it },
+                onOnlineMetadata = {
+                    showBatchMenu = false
+                    showOnlineMetadataDialog = true
+                },
+                onRenameFiles = {
+                    showBatchMenu = false
+                    showRenameDialog = true
+                },
+                onFixMetadata = {
+                    showBatchMenu = false
+                    showFixMetadataDialog = true
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 80.dp, end = 16.dp)
+            )
+        } else if (selectedFiles.isEmpty() && canScrollToTop && visibleFiles.isNotEmpty()) {
+            SmallFloatingActionButton(
+                onClick = {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = MaterialTheme.shapes.extraLarge,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(bottom = 80.dp, end = 16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowUp,
+                    contentDescription = stringResource(R.string.back_to_top)
+                )
+            }
+        }
+
+        // Main content with top padding for TopAppBar and bottom padding for bottom nav
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .padding(top = 56.dp, bottom = 80.dp)
         ) {
             if (isDirectoryListLevel) {
                 // Root directory - show TabRow with tabs
@@ -907,7 +916,8 @@ private fun BatchOperationsFAB(
     onExpandChange: (Boolean) -> Unit,
     onOnlineMetadata: () -> Unit,
     onRenameFiles: () -> Unit,
-    onFixMetadata: () -> Unit
+    onFixMetadata: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 45f else 0f,
@@ -919,6 +929,7 @@ private fun BatchOperationsFAB(
     )
 
     Column(
+        modifier = modifier,
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {

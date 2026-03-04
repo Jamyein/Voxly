@@ -1103,26 +1103,26 @@ fun SettingsScreen(
         )
     }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.nav_settings)) },
-                colors = TopAppBarDefaults.topAppBarColors(),
-                windowInsets = WindowInsets(0.dp) 
-            )
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier.fillMaxSize()
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        // TopAppBar
+        TopAppBar(
+            title = { Text(stringResource(R.string.nav_settings)) },
+            colors = TopAppBarDefaults.topAppBarColors(),
+            windowInsets = WindowInsets(0.dp)
+        )
+
+        // Content with top padding for TopAppBar and bottom padding for bottom nav
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 56.dp, bottom = 80.dp)
+                .padding(horizontal = 16.dp)
+                .verticalScroll(rememberScrollState())
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(top = innerPadding.calculateTopPadding())
-                    .padding(horizontal = 16.dp)
-                    .verticalScroll(rememberScrollState())
-                    .align(Alignment.BottomCenter)
-            ) {
             // Appearance Section
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
                 // Theme Segmented Buttons - Single item
@@ -1533,24 +1533,22 @@ fun SettingsScreen(
         )
 
         Spacer(modifier = Modifier.height(16.dp))
+
+        if (showSearchLimitsDialog) {
+            SearchLimitDialog(
+                globalLimit = onlineSearchLimit,
+                musicBrainzLimit = onlineSearchLimitMusicBrainz,
+                itunesLimit = onlineSearchLimitITunes,
+                neteaseLimit = onlineSearchLimitNetease,
+                qqMusicLimit = onlineSearchLimitQQMusic,
+                searchLimitOptions = searchLimitOptions,
+                onDismiss = { showSearchLimitsDialog = false },
+                onGlobalLimitChange = { viewModel.setOnlineSearchLimit(it) },
+                onMusicBrainzLimitChange = { viewModel.setOnlineSearchLimitMusicBrainz(it) },
+                onItunesLimitChange = { viewModel.setOnlineSearchLimitITunes(it) },
+                onNeteaseLimitChange = { viewModel.setOnlineSearchLimitNetease(it) },
+                onQQMusicLimitChange = { viewModel.setOnlineSearchLimitQQMusic(it) }
+            )
         }
     }
-
-    if (showSearchLimitsDialog) {
-        SearchLimitDialog(
-            globalLimit = onlineSearchLimit,
-            musicBrainzLimit = onlineSearchLimitMusicBrainz,
-            itunesLimit = onlineSearchLimitITunes,
-            neteaseLimit = onlineSearchLimitNetease,
-            qqMusicLimit = onlineSearchLimitQQMusic,
-            searchLimitOptions = searchLimitOptions,
-            onDismiss = { showSearchLimitsDialog = false },
-            onGlobalLimitChange = { viewModel.setOnlineSearchLimit(it) },
-            onMusicBrainzLimitChange = { viewModel.setOnlineSearchLimitMusicBrainz(it) },
-            onItunesLimitChange = { viewModel.setOnlineSearchLimitITunes(it) },
-            onNeteaseLimitChange = { viewModel.setOnlineSearchLimitNetease(it) },
-            onQQMusicLimitChange = { viewModel.setOnlineSearchLimitQQMusic(it) }
-        )
-    }
-
 }

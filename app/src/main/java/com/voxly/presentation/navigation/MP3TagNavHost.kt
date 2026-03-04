@@ -3,6 +3,7 @@ package com.voxly.presentation.navigation
 import android.annotation.SuppressLint
 import android.widget.Toast
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
@@ -99,7 +100,7 @@ fun MP3TagNavHost(
     ) { innerPadding ->
         NavHost(
             navController = navController,
-            modifier = Modifier.padding(innerPadding),
+            modifier = Modifier.fillMaxSize(), // No padding - each screen handles its own insets
             startDestination = Screen.FileBrowser.route,
             enterTransition = {
                 val destinations = bottomNavRoutes
