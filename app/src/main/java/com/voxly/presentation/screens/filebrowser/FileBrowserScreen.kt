@@ -488,7 +488,6 @@ fun FileBrowserScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
         ) {
             if (isDirectoryListLevel) {
                 // Root directory - show TabRow with tabs
@@ -1885,7 +1884,7 @@ private fun AudioFileItem(
                 )
                 Text(
                     text = buildString {
-                        append(audioFile.metadata.artist ?: stringResource(R.string.unknown_artist))
+                        append(audioFile.metadata.artist ?: "")
                         audioFile.metadata.album?.let { append(" - $it") }
                     },
                     style = MaterialTheme.typography.bodySmall,
@@ -2716,11 +2715,10 @@ private fun AlbumDetailContent(
     }
 
     // Get album artist (prefer albumArtist field)
-    val unknownAlbumArtist = stringResource(R.string.unknown_album_artist)
-    val albumArtist = remember(album.files, unknownAlbumArtist) {
+    val albumArtist = remember(album.files) {
         album.files.firstOrNull()?.metadata?.albumArtist
             ?: album.artist
-            ?: unknownAlbumArtist
+            ?: ""
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -2880,11 +2878,9 @@ private fun ArtistDetailContent(
     onBackClick: () -> Unit,
     onNavigateToMetadata: (String) -> Unit
 ) {
-    val unknownAlbum = stringResource(R.string.unknown_album)
-
     // Group files by album
     val albumsWithFiles = remember(artist.files) {
-        artist.files.groupBy { it.metadata.album ?: unknownAlbum }
+        artist.files.groupBy { it.metadata.album ?: "" }
             .toList()
             .sortedBy { it.first }
     }
@@ -3063,7 +3059,7 @@ private fun AlbumListItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = album.artist ?: stringResource(R.string.unknown_artist),
+                    text = album.artist ?: "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -3151,7 +3147,7 @@ private fun AlbumGridItem(
                 )
                 Spacer(modifier = Modifier.height(2.dp))
                 Text(
-                    text = album.artist ?: stringResource(R.string.unknown_artist),
+                    text = album.artist ?: "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

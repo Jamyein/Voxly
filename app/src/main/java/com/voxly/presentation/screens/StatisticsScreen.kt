@@ -72,7 +72,6 @@ fun StatisticsScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
         ) {
             when (val state = uiState) {
             is StatisticsUiState.Loading -> {

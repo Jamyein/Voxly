@@ -266,7 +266,8 @@ data class OnlineRelease(
     val recordLabel: String? = null,
     val comment: String? = null,
     val genre: String? = null,
-    val albumArtist: String? = null
+    val albumArtist: String? = null,
+    val lyrics: String? = null
 )
 
 

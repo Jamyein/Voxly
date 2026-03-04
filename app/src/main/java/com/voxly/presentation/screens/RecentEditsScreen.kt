@@ -47,7 +47,6 @@ fun RecentEditsScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
         ) {
             when (val state = uiState) {
                 is RecentEditsUiState.Loading -> {

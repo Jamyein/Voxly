@@ -1637,7 +1637,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             titleMatch && artistMatch
         }
         Timber.d("finalizeRecordingResults: filtered=${filtered.size} recordings")
-        
+
         // 按优先级排序
         val sorted = filtered.sortedWith(
             compareBy<OnlineRecording> { recording ->
@@ -1656,17 +1656,17 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         // 移除括号及其内容进行比较
         val normalizedQuery = queryTitle.removeBracketContent()
         val normalizedResult = resultTitle.removeBracketContent()
-        
+
         // 检查是否包含（不区分大小写）
         if (normalizedResult.contains(normalizedQuery, ignoreCase = true) ||
             normalizedQuery.contains(normalizedResult, ignoreCase = true)) {
             return true
         }
-        
+
         // 简繁体中文兼容
         val simplifiedQuery = normalizedQuery.toSimplifiedChinese()
         val simplifiedResult = normalizedResult.toSimplifiedChinese()
-        
+
         return simplifiedResult.contains(simplifiedQuery) || simplifiedQuery.contains(simplifiedResult)
     }
 

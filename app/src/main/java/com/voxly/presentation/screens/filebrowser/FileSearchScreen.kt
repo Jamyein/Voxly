@@ -300,7 +300,7 @@ private fun SearchResultItem(
                 )
                 Text(
                     text = buildString {
-                        append(audioFile.metadata.artist ?: stringResource(R.string.unknown_artist))
+                        append(audioFile.metadata.artist ?: "")
                         audioFile.metadata.album?.let { append(" - $it") }
                     },
                     style = MaterialTheme.typography.bodySmall,

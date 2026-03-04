@@ -8,20 +8,17 @@ object SearchQueryBuilder {
     
     /**
      * 构建搜索查询字符串
-     * 格式: "title artist" (title 在前，空格分隔)
-     * 
+     * 只使用 title，让 API 进行模糊匹配
+     * artist 作为辅助在过滤阶段使用
+     *
      * @param title 歌曲标题
-     * @param artist 艺术家名称 (可选)
-     * @return 格式化的搜索查询字符串
+     * @param artist 艺术家名称 (可选，仅在过滤阶段使用)
+     * @return 搜索查询字符串
      */
     fun build(title: String, artist: String?): String {
-        return buildString {
-            append(title)
-            if (!artist.isNullOrBlank()) {
-                append(" ")
-                append(artist)
-            }
-        }
+        // 只使用 title，让 API 的模糊搜索能力生效
+        // 例如搜索"以后别做朋"可以返回"以后别做朋友"
+        return title.trim()
     }
     
     /**

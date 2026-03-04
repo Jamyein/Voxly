@@ -3,6 +3,7 @@ package com.voxly.presentation.viewmodel
 import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.repository.AlbumCacheRepository
 import com.voxly.domain.model.AudioFile
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -20,7 +21,8 @@ import javax.inject.Inject
 @HiltViewModel
 class AlbumDetailViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val albumCacheRepository: AlbumCacheRepository
+    private val albumCacheRepository: AlbumCacheRepository,
+    private val audioFileScanner: AudioFileScanner
 ) : ViewModel() {
 
     private val _albumName = MutableStateFlow("")
@@ -46,6 +48,7 @@ class AlbumDetailViewModel @Inject constructor(
 
     /**
      * Load album data from cache by album name and artist.
+     * Year is loaded from file tags (not MediaStore) for accurate results.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
         viewModelScope.launch {
@@ -55,16 +58,19 @@ class AlbumDetailViewModel @Inject constructor(
                 if (albumGroup != null) {
                     _albumName.value = albumGroup.name
                     _albumArtist.value = albumGroup.artist
-                    _albumYear.value = albumGroup.files.firstOrNull()?.metadata?.year
                     _coverPath.value = albumGroup.coverPath
 
                     // Use the AudioFile objects directly from the cached AlbumGroup
                     _files.value = albumGroup.files
 
-                    // Get bitrate and sample rate from first file
+                    // Get bitrate, sample rate, and year from first file
                     albumGroup.files.firstOrNull()?.let { firstFile ->
                         _albumBitrate.value = firstFile.bitrate
                         _albumSampleRate.value = firstFile.sampleRate
+
+                        // Load detailed metadata to get year from file tags (not MediaStore)
+                        val detailedMetadata = audioFileScanner.loadDetailedMetadata(firstFile.path)
+                        _albumYear.value = detailedMetadata?.year
                     }
                 } else {
                     // Album not found in cache - should not happen if caching is done correctly

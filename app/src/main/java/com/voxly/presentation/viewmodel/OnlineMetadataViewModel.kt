@@ -515,7 +515,8 @@ class OnlineMetadataViewModel @Inject constructor(
                 trackNumber = trackNumber,
                 recordLabel = recordLabel,
                 comment = comment,
-                genre = genre
+                genre = genre,
+                lyrics = lyrics
             )
         }
         return OnlineRelease(
@@ -534,7 +535,8 @@ class OnlineMetadataViewModel @Inject constructor(
             trackNumber = trackNumber,
             recordLabel = recordLabel,
             comment = comment,
-            genre = genre
+            genre = genre,
+            lyrics = lyrics
         )
     }
 
@@ -685,7 +687,7 @@ class OnlineMetadataViewModel @Inject constructor(
     fun applyMetadata(): AudioMetadata? {
         val details = _selectedRelease.value
         val candidate = _selectedReleaseCandidate.value
-        val lyrics = getSyncedLyricsForSelected()
+        val asyncLyrics = getSyncedLyricsForSelected()
         val albumArt = _downloadedAlbumArt.value
 
         // 详情存在时使用详情，详情不存在时使用候选，二选一不混合
@@ -701,7 +703,7 @@ class OnlineMetadataViewModel @Inject constructor(
                 totalTracks = details.trackCount,
                 discNumber = details.tracks.firstOrNull()?.discNumber ?: details.discNumber,
                 totalDiscs = details.discCount,
-                lyrics = lyrics?.toLrcFormat(),
+                lyrics = asyncLyrics?.toLrcFormat(),
                 albumArt = albumArt
             )
         } else if (candidate != null) {
@@ -709,7 +711,10 @@ class OnlineMetadataViewModel @Inject constructor(
             val customFields = mutableMapOf<String, String>()
             candidate.recordLabel?.let { customFields["record_label"] = it }
             candidate.comment?.let { customFields["comment"] = it }
-            
+
+            // 优先使用同步获取的歌词（如果有），否则使用异步获取的歌词
+            val lyricsText = candidate.lyrics ?: asyncLyrics?.toLrcFormat()
+
             AudioMetadata(
                 title = candidate.songTitle ?: candidate.title,
                 artist = candidate.artist,
@@ -722,7 +727,7 @@ class OnlineMetadataViewModel @Inject constructor(
                 discNumber = candidate.discNumber,
                 totalDiscs = candidate.discCount,
                 comment = candidate.comment,
-                lyrics = lyrics?.toLrcFormat(),
+                lyrics = lyricsText,
                 albumArt = albumArt,
                 customFields = customFields
             )

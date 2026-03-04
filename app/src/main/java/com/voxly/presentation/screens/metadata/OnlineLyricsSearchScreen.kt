@@ -295,7 +295,6 @@ fun OnlineLyricsSearchScreen(
                                     fetchingItemId = null
                                     if (lyricsText != null) {
                                         onLyricsSelected(lyricsText)
-                                        onNavigateBack()
                                     }
                                 }
                             }

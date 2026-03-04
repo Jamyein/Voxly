@@ -187,7 +187,7 @@ fun AlbumDetailScreen(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = albumArtistState ?: stringResource(R.string.unknown_album_artist),
+                                text = albumArtistState ?: "",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
