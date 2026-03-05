@@ -347,8 +347,9 @@ class TagLibMetadataProcessor @Inject constructor(
             }
         }
 
-        // Read TRACK field (case-insensitive for FLAC/Vorbis Comments compatibility)
-        val trackKey = findKeyIgnoreCase(propertyMap, "TRACK")
+        // Read TRACKNUMBER field (case-insensitive for FLAC/Vorbis Comments compatibility)
+        val trackKey = findKeyIgnoreCase(propertyMap, "TRACKNUMBER")
+            ?: findKeyIgnoreCase(propertyMap, "TRACK") // Fallback to TRACK for older files
         val trackValue = trackKey?.let { propertyMap[it]?.firstOrNull() }
         val (parsedTrack, parsedTotalFromTrack) = parseTrackField(trackValue)
 
@@ -433,8 +434,9 @@ class TagLibMetadataProcessor @Inject constructor(
                 }
             }
 
-            // Read TRACK field (case-insensitive for FLAC/Vorbis Comments compatibility)
-            val trackKey = findKeyIgnoreCase(propertyMap, "TRACK")
+            // Read TRACKNUMBER field (case-insensitive for FLAC/Vorbis Comments compatibility)
+            val trackKey = findKeyIgnoreCase(propertyMap, "TRACKNUMBER")
+                ?: findKeyIgnoreCase(propertyMap, "TRACK") // Fallback to TRACK for older files
             val trackValue = trackKey?.let { propertyMap[it]?.firstOrNull() }
             val (parsedTrack, parsedTotalFromTrack) = parseTrackField(trackValue)
 
@@ -545,7 +547,7 @@ class TagLibMetadataProcessor @Inject constructor(
             metadata.album?.let { properties["ALBUM"] = arrayOf(it) }
             metadata.year?.let { properties["DATE"] = arrayOf(it) }
             metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
-            metadata.trackNumber?.let { properties["TRACK"] = arrayOf(it.toString()) }
+            metadata.trackNumber?.let { properties["TRACKNUMBER"] = arrayOf(it.toString()) }
             metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
             metadata.lyrics?.let { properties["LYRICS"] = arrayOf(it) }
 
@@ -622,7 +624,7 @@ class TagLibMetadataProcessor @Inject constructor(
             metadata.album?.let { properties["ALBUM"] = arrayOf(it) }
             metadata.year?.let { properties["DATE"] = arrayOf(it) }
             metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
-            metadata.trackNumber?.let { properties["TRACK"] = arrayOf(it.toString()) }
+            metadata.trackNumber?.let { properties["TRACKNUMBER"] = arrayOf(it.toString()) }
             metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
             metadata.lyrics?.let { properties["LYRICS"] = arrayOf(it) }
 
@@ -784,7 +786,7 @@ class TagLibMetadataProcessor @Inject constructor(
             metadata.album?.let { properties["ALBUM"] = arrayOf(it) }
             metadata.year?.let { properties["DATE"] = arrayOf(it) }
             metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
-            metadata.trackNumber?.let { properties["TRACK"] = arrayOf(it.toString()) }
+            metadata.trackNumber?.let { properties["TRACKNUMBER"] = arrayOf(it.toString()) }
             metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
             metadata.lyrics?.let { properties["LYRICS"] = arrayOf(it) }
 
