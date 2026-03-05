@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -75,36 +77,39 @@ fun OnlineLyricsSearchScreen(
         viewModel.search(filePath)
     }
 
-    Scaffold(
-        windowInsets = WindowInsets(0.dp),
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.search_online_lyrics)) },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.search(filePath) },
-                        enabled = !isLoading
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Search Again")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(),
-                windowInsets = WindowInsets(0.dp)
-            )
-        }
-    ) { paddingValues ->
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        // TopAppBar
+        TopAppBar(
+            title = { Text(stringResource(R.string.search_online_lyrics)) },
+            navigationIcon = {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back"
+                    )
+                }
+            },
+            actions = {
+                IconButton(
+                    onClick = { viewModel.search(filePath) },
+                    enabled = !isLoading
+                ) {
+                    Icon(Icons.Default.Refresh, contentDescription = "Search Again")
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(),
+            windowInsets = WindowInsets(0.dp)
+        )
+
+        // Content
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(top = 56.dp)
                 .padding(horizontal = 16.dp)
                 .pointerInput(Unit) { }, // Prevent touch events during exit animation
             verticalArrangement = Arrangement.spacedBy(8.dp)

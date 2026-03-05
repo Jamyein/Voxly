@@ -1,18 +1,8 @@
 package com.voxly.presentation.navigation
 
-import android.annotation.SuppressLint
 import android.widget.Toast
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.navigationBars
-import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarDefaults
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -21,10 +11,10 @@ import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -40,7 +30,6 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.components.FlexibleBottomAppBar
-
 import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
 import com.voxly.presentation.screens.filebrowser.FileSearchScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
@@ -55,7 +44,6 @@ import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
 import com.voxly.presentation.screens.album.AlbumDetailScreen
 import com.voxly.presentation.screens.artist.ArtistDetailScreen
-import androidx.compose.material3.NavigationBarItem
 import com.voxly.presentation.theme.ExpressiveAnimations
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.presentation.viewmodel.AppViewModel
@@ -64,7 +52,6 @@ import com.voxly.presentation.viewmodel.AppViewModel
  * Main navigation host for the MP3 Tag Editor app.
  * Implements bottom navigation with Material Design 3 components.
  */
-@SuppressLint("UnusedMaterial3ScaffoldPaddingParameter")
 @Composable
 fun MP3TagNavHost(
     navController: NavHostController = rememberNavController()
@@ -89,18 +76,12 @@ fun MP3TagNavHost(
         }
     }
 
-    Scaffold(
-        bottomBar = {
-            FlexibleBottomAppBar(
-                navController = navController,
-                currentRoute = currentDestination?.route,
-                scrollProgress = scrollProgress
-            )
-        }
-    ) { innerPadding ->
+    // Box layout: content + bottom bar positioned absolutely
+    // This allows the bottom bar to hide without affecting content padding
+    Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            modifier = Modifier.fillMaxSize(), // No padding - each screen handles its own insets
+            modifier = Modifier.fillMaxSize(),
             startDestination = Screen.FileBrowser.route,
             enterTransition = {
                 val destinations = bottomNavRoutes
@@ -163,6 +144,7 @@ fun MP3TagNavHost(
                     onNavigateToArtist = { artistName ->
                         navController.navigate(Screen.ArtistDetail.createRoute(artistName))
                     },
+                    bottomNavScrollProgress = scrollProgress,
                     onBottomBarScrollProgressChange = { progress ->
                         scrollProgress = progress
                     }
@@ -419,6 +401,15 @@ fun MP3TagNavHost(
             }
 
         }
+
+        // Bottom navigation bar positioned absolutely at the bottom
+        // Uses Box alignment instead of Scaffold bottomBar to avoid fixed padding
+        FlexibleBottomAppBar(
+            navController = navController,
+            currentRoute = currentDestination?.route,
+            scrollProgress = scrollProgress,
+            modifier = Modifier.align(Alignment.BottomCenter)
+        )
     }
 }
 

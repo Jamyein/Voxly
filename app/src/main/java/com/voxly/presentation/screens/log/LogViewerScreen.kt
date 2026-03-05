@@ -52,52 +52,75 @@ fun LogViewerScreen(
         uiState.selectedLogFile!!.name
     }
 
-    Scaffold(
-        windowInsets = WindowInsets(0.dp),
-        topBar = {
-            TopAppBar(
-                title = { Text(title) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        // TopAppBar
+        TopAppBar(
+            title = { Text(title) },
+            navigationIcon = {
+                IconButton(onClick = onBack) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                }
+            },
+            actions = {
+                if (uiState.selectedLogFile != null) {
+                    IconButton(onClick = {
+                        val content = viewModel.getCopyableContent()
+                        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                        val clip = ClipData.newPlainText("Voxly Log", content)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(context, R.string.log_viewer_copied, Toast.LENGTH_SHORT).show()
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.ContentCopy,
+                            contentDescription = stringResource(R.string.log_viewer_copy)
+                        )
                     }
-                },
-                actions = {
-                    if (uiState.selectedLogFile != null) {
-                        IconButton(onClick = {
-                            val content = viewModel.getCopyableContent()
-                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-                            val clip = ClipData.newPlainText("Voxly Log", content)
-                            clipboard.setPrimaryClip(clip)
-                            Toast.makeText(context, R.string.log_viewer_copied, Toast.LENGTH_SHORT).show()
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.ContentCopy,
-                                contentDescription = stringResource(R.string.log_viewer_copy)
-                            )
-                        }
-                        IconButton(onClick = {
-                            viewModel.shareLog(context, viewModel.getFilteredLogs().joinToString("\n"))
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Share,
-                                contentDescription = stringResource(R.string.log_viewer_share)
-                            )
-                        }
-                        IconButton(onClick = { showDeleteDialog = true }) {
-                            Icon(
-                                imageVector = Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.log_viewer_delete)
-                            )
-                        }
+                    IconButton(onClick = {
+                        viewModel.shareLog(context, viewModel.getFilteredLogs().joinToString("\n"))
+                    }) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = stringResource(R.string.log_viewer_share)
+                        )
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(),
-                windowInsets = WindowInsets(0.dp)
-            )
-        },
-        floatingActionButton = {
-            if (uiState.selectedLogFile == null && uiState.logFiles.isNotEmpty()) {
+                    IconButton(onClick = { showDeleteDialog = true }) {
+                        Icon(
+                            imageVector = Icons.Default.Delete,
+                            contentDescription = stringResource(R.string.log_viewer_delete)
+                        )
+                    }
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(),
+            windowInsets = WindowInsets(0.dp)
+        )
+
+        // Content
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(top = 56.dp)
+        ) {
+            if (uiState.selectedLogFile == null) {
+                LogFileList(
+                    logFiles = uiState.logFiles,
+                    isLoading = uiState.isLoading,
+                    onFileClick = { viewModel.selectLogFile(it) }
+                )
+            } else {
+                LogContent(
+                    viewModel = viewModel,
+                    listState = listState
+                )
+            }
+        }
+
+        // FAB
+        if (uiState.selectedLogFile == null && uiState.logFiles.isNotEmpty()) {
             FloatingActionButton(
                 onClick = {
                     viewModel.exportLogs(context) { uri ->
@@ -112,29 +135,12 @@ fun LogViewerScreen(
                             Toast.makeText(context, "Failed to export logs", Toast.LENGTH_SHORT).show()
                         }
                     }
-                }
+                },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
             ) {
                 Icon(Icons.Default.Archive, contentDescription = null)
-            }
-            }
-        }
-    ) { innerPadding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-        ) {
-            if (uiState.selectedLogFile == null) {
-                LogFileList(
-                    logFiles = uiState.logFiles,
-                    isLoading = uiState.isLoading,
-                    onFileClick = { viewModel.selectLogFile(it) }
-                )
-            } else {
-                LogContent(
-                    viewModel = viewModel,
-                    listState = listState
-                )
             }
         }
     }

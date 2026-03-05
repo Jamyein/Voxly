@@ -171,28 +171,31 @@ fun MetadataEditorScreen(
         uri?.let { viewModel.reauthorizeAndRetrySave(it, SafGrantType.TREE) }
     }
 
-    Scaffold(
-        windowInsets = WindowInsets(0.dp),
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.edit_metadata)) },
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (hasUnsavedChanges) {
-                            showDiscardDialog = true
-                        } else {
-                            onNavigateBack()
-                        }
-                    }) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_back)
-                        )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.statusBars)
+    ) {
+        // TopAppBar
+        TopAppBar(
+            title = { Text(stringResource(R.string.edit_metadata)) },
+            navigationIcon = {
+                IconButton(onClick = {
+                    if (hasUnsavedChanges) {
+                        showDiscardDialog = true
+                    } else {
+                        onNavigateBack()
                     }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(),
-windowInsets = WindowInsets(0.dp),
-                actions = {
+                }) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(R.string.cd_back)
+                    )
+                }
+            },
+            colors = TopAppBarDefaults.topAppBarColors(),
+            windowInsets = WindowInsets(0.dp),
+            actions = {
                     // Chinese conversion dropdown menu
                     Box {
                         IconButton(onClick = { showConversionMenu = true }) {

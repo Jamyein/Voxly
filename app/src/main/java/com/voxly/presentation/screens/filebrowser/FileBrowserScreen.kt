@@ -111,6 +111,7 @@ fun FileBrowserScreen(
     onNavigateToSearch: (List<AudioFile>) -> Unit = {},
     onNavigateToAlbum: (String, String?) -> Unit = { _, _ -> },
     onNavigateToArtist: (String) -> Unit = {},
+    bottomNavScrollProgress: Float = 0f,
     onBottomBarScrollProgressChange: (Float) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -346,6 +347,11 @@ fun FileBrowserScreen(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.statusBars)
     ) {
+        // Calculate dynamic bottom padding based on scroll progress
+        // When bottom nav hides (progress = 1), bottom padding becomes 0 to fill the space
+        val bottomNavHeight = 80.dp
+        val dynamicBottomPadding = bottomNavHeight * (1f - bottomNavScrollProgress)
+
         // TopBar
         if (selectedFiles.isNotEmpty()) {
             SelectionTopBar(
@@ -450,7 +456,7 @@ fun FileBrowserScreen(
             }
         }
 
-        // FAB
+        // FAB - dynamic bottom padding based on scroll progress
         if (selectedFiles.isEmpty() && !isBatchProcessing) {
             BatchOperationsFAB(
                 expanded = showBatchMenu,
@@ -469,7 +475,7 @@ fun FileBrowserScreen(
                 },
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = 80.dp, end = 16.dp)
+                    .padding(bottom = dynamicBottomPadding, end = 16.dp)
             )
         } else if (selectedFiles.isEmpty() && canScrollToTop && visibleFiles.isNotEmpty()) {
             SmallFloatingActionButton(
@@ -483,7 +489,7 @@ fun FileBrowserScreen(
                 shape = MaterialTheme.shapes.extraLarge,
                 modifier = Modifier
                     .align(Alignment.BottomEnd)
-                    .padding(bottom = 80.dp, end = 16.dp)
+                    .padding(bottom = dynamicBottomPadding, end = 16.dp)
             ) {
                 Icon(
                     imageVector = Icons.Default.KeyboardArrowUp,
@@ -492,11 +498,11 @@ fun FileBrowserScreen(
             }
         }
 
-        // Main content with top padding for TopAppBar and bottom padding for bottom nav
+        // Main content with dynamic padding based on scroll progress
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 56.dp, bottom = 80.dp)
+                .padding(top = 56.dp, bottom = dynamicBottomPadding)
         ) {
             if (isDirectoryListLevel) {
                 // Root directory - show TabRow with tabs
