@@ -76,6 +76,7 @@ fun OnlineLyricsSearchScreen(
     }
 
     Scaffold(
+        windowInsets = WindowInsets(0.dp),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.search_online_lyrics)) },

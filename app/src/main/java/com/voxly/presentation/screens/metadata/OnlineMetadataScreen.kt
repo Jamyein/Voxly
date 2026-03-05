@@ -114,6 +114,7 @@ fun OnlineMetadataScreen(
     }
 
     Scaffold(
+        windowInsets = WindowInsets(0.dp),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.fetch_online_metadata)) },

@@ -172,6 +172,7 @@ fun MetadataEditorScreen(
     }
 
     Scaffold(
+        windowInsets = WindowInsets(0.dp),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_metadata)) },

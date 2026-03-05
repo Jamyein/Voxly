@@ -85,6 +85,7 @@ fun OnlineCoverSearchScreen(
     }
 
     Scaffold(
+        windowInsets = WindowInsets(0.dp),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.fetch_online_cover_art)) },
