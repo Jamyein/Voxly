@@ -5,6 +5,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -111,9 +112,14 @@ fun OnlineLyricsSearchScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
                 .padding(horizontal = 16.dp)
                 .pointerInput(Unit) { }, // Prevent touch events during exit animation
+            contentPadding = PaddingValues(
+                top = innerPadding.calculateTopPadding(),
+                bottom = innerPadding.calculateBottomPadding(),
+                start = 0.dp,
+                end = 0.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Search info card - 使用 Surface 容器 + tertiary 颜色点缀

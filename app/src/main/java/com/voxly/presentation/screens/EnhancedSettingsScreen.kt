@@ -146,7 +146,7 @@ fun EnhancedSettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(16.dp)
         ) {
             // Online Metadata Section

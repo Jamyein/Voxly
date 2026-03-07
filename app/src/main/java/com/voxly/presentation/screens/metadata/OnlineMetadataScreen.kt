@@ -147,7 +147,7 @@ fun OnlineMetadataScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(16.dp)
                 .pointerInput(Unit) { } // Prevent touch events during exit animation
         ) {

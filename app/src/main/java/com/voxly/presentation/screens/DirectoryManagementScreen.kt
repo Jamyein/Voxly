@@ -112,7 +112,7 @@ fun DirectoryManagementScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
         ) {
             if (directories.isEmpty()) {
                 Column(

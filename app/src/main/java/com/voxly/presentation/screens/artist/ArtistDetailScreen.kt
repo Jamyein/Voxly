@@ -122,10 +122,13 @@ fun ArtistDetailScreen(
         }
     ) { innerPadding ->
         LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding),
-            contentPadding = PaddingValues(12.dp),
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(
+                top = 12.dp + innerPadding.calculateTopPadding(),
+                bottom = 12.dp + innerPadding.calculateBottomPadding(),
+                start = 12.dp,
+                end = 12.dp
+            ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             // Header: Circle Avatar + Artist Name
