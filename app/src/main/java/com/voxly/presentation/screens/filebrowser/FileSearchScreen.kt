@@ -96,8 +96,7 @@ fun FileSearchScreen(
                             contentDescription = stringResource(R.string.cd_back)
                         )
                     }
-                },
-                windowInsets = WindowInsets(0.dp)
+                }
             )
         }
     ) { innerPadding ->
