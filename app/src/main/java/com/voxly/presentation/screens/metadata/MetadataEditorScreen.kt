@@ -176,7 +176,6 @@ fun MetadataEditorScreen(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        floatingActionButtonPosition = FabPosition.End,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_metadata)) },
@@ -251,77 +250,31 @@ fun MetadataEditorScreen(
             )
         },
         floatingActionButton = {
-            // 主 FAB 按钮 - 带图标切换动画
-            // 注意：遮罩层移到了 content 区域，避免在 floatingActionButton 槽位中处理
-            FloatingActionButton(
-                onClick = { showActionMenu = !showActionMenu },
-                modifier = Modifier.padding(16.dp)
-            ) {
-                AnimatedContent(
-                    targetState = showActionMenu,
-                    transitionSpec = {
-                        (scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)))
-                            .togetherWith(scaleOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)))
-                    },
-                    label = "fab_icon"
-                ) { isExpanded ->
-                    Icon(
-                        painter = appIconPainter(
-                            if (isExpanded) AppIcon.Close else AppIcon.MoreVert
-                        ),
-                        contentDescription = stringResource(
-                            if (isExpanded) R.string.cd_close else R.string.cd_more_options
-                        )
-                    )
-                }
-            }
-        }
-    ) { innerPadding ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    top = innerPadding.calculateTopPadding(),
-                    bottom = innerPadding.calculateBottomPadding()
-                )
-                .pointerInput(Unit) { } // Prevent touch events during exit animation
-        ) {
-            // Scrim 遮罩层 - 放在 content 区域而非 floatingActionButton 槽位
-            AnimatedVisibility(
-                visible = showActionMenu,
-                enter = fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)),
-                exit = fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable { showActionMenu = false }
-                )
-            }
-            // 悬浮按钮列表 - 从底部滑入动画
-            Box(
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 16.dp, bottom = 88.dp),
-                contentAlignment = Alignment.BottomEnd
-            ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                // 半透明遮罩 - 淡入淡出动画
                 AnimatedVisibility(
                     visible = showActionMenu,
-                    enter = slideInVertically(
-                        initialOffsetY = { it },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)),
-                    exit = slideOutVertically(
-                        targetOffsetY = { it },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMedium
-                        )
-                    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh))
+                    enter = fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)),
+                    exit = fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
                 ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clickable { showActionMenu = false }
+                    )
+                }
+                // 悬浮按钮列表 - 从底部滑入动画
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(end = 16.dp, bottom = 88.dp),
+                    contentAlignment = Alignment.BottomEnd
+                ) {
+                    AnimatedVisibility(
+                        visible = showActionMenu,
+                        enter = ExpressiveAnimations.FabEnter,
+                        exit = ExpressiveAnimations.FabExit
+                    ) {
                         Column(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -420,10 +373,42 @@ fun MetadataEditorScreen(
                         }
                     }
                 }
+                // 主 FAB 按钮 - 带图标切换动画
+                FloatingActionButton(
+                    onClick = { showActionMenu = !showActionMenu },
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(16.dp)
+                ) {
+                    AnimatedContent(
+                        targetState = showActionMenu,
+                        transitionSpec = {
+                            (scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)))
+                                .togetherWith(scaleOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)))
+                        },
+                        label = "fab_icon"
+                    ) { isExpanded ->
+                        Icon(
+                            painter = appIconPainter(
+                                if (isExpanded) AppIcon.Close else AppIcon.MoreVert
+                            ),
+                            contentDescription = stringResource(
+                                if (isExpanded) R.string.cd_close else R.string.cd_more_options
+                            )
+                        )
+                    }
+                }
             }
         }
-    }
-    // Discard changes dialog
+    ) { innerPadding ->
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .pointerInput(Unit) { } // Prevent touch events during exit animation
+        ) {
+            when (val state = uiState) {
+                is MetadataEditorUiState.Loading -> {
                     Box(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
@@ -492,8 +477,7 @@ fun MetadataEditorScreen(
                             currentReplayGainInfo = null
                         },
                         isScanningReplayGain = isScanningReplayGain,
-                        replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo,
-                        bottomPadding = innerPadding.calculateBottomPadding()
+                        replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo
                     )
                 }
                 is MetadataEditorUiState.Error -> {
@@ -915,14 +899,13 @@ private fun MetadataForm(
     onScanReplayGain: () -> Unit = {},
     onClearReplayGain: () -> Unit = {},
     isScanningReplayGain: Boolean = false,
-    replayGainInfo: com.voxly.domain.model.ReplayGainInfo? = null,
-    bottomPadding: androidx.compose.ui.unit.Dp = 0.dp
+    replayGainInfo: com.voxly.domain.model.ReplayGainInfo? = null
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp + bottomPadding)
+            .padding(16.dp)
     ) {
         // Album Art Section
         AlbumArtSection(

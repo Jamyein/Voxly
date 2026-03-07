@@ -46,7 +46,16 @@ import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
 import com.voxly.presentation.screens.album.AlbumDetailScreen
 import com.voxly.presentation.screens.artist.ArtistDetailScreen
 import com.voxly.presentation.theme.ExpressiveAnimations
+import com.voxly.presentation.theme.ExpressiveMotionTokens
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.LinearOutSlowInEasing
 import com.voxly.presentation.viewmodel.AppViewModel
 
 /**
@@ -98,8 +107,27 @@ fun MP3TagNavHost(
                     fromRoute !in destinations && toRoute in destinations -> {
                         ExpressiveAnimations.SharedAxisPopEnter
                     }
-                    // 新页面从右侧滑入 (Shared Axis - 新页面滑入，旧页面轻微向左)
-                    else -> ExpressiveAnimations.SharedAxisEnter
+                    // M3E 规范: 进入动画 = 向上位移 + 缩放(95%->100%) + 渐显, 500ms
+                    else -> {
+                        fadeIn(
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = ExpressiveMotionTokens.M3E_Emphasized_Easing
+                            )
+                        ) + slideInVertically(
+                            initialOffsetY = { it / 15 },
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = ExpressiveMotionTokens.M3E_Emphasized_Easing
+                            )
+                        ) + scaleIn(
+                            initialScale = 0.95f,
+                            animationSpec = tween(
+                                durationMillis = 500,
+                                easing = ExpressiveMotionTokens.M3E_Emphasized_Easing
+                            )
+                        )
+                    }
                 }
             },
             exitTransition = {
@@ -115,8 +143,21 @@ fun MP3TagNavHost(
                     fromRoute in bottomNavRoutes && toRoute !in bottomNavRoutes -> {
                         ExpressiveAnimations.SharedAxisExit
                     }
-                    // 返回时向右滑出
-                    else -> ExpressiveAnimations.SharedAxisPopExit
+                    // M3E 规范: 退出动画 = 缩小(95%) + 渐隐, 250ms
+                    else -> {
+                        fadeOut(
+                            animationSpec = tween(
+                                durationMillis = 250,
+                                easing = LinearOutSlowInEasing
+                            )
+                        ) + scaleOut(
+                            targetScale = 0.95f,
+                            animationSpec = tween(
+                                durationMillis = 250,
+                                easing = LinearOutSlowInEasing
+                            )
+                        )
+                    }
                 }
             },
             popEnterTransition = {

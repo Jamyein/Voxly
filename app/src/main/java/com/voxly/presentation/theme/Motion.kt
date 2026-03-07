@@ -4,6 +4,8 @@ import androidx.compose.animation.core.AnimationSpec
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.LinearOutSlowInEasing
+import androidx.compose.animation.core.PathEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
@@ -29,6 +31,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -124,6 +127,17 @@ object ExpressiveMotionTokens {
     val ExpressiveEasing = CubicBezierEasing(0.3f, 0.0f, 0.0f, 1.0f)
     val StandardEasing = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f)
     val LegacyFastOutSlowIn = FastOutSlowInEasing
+
+    // ===== M3E Emphasized PathEasing =====
+    // Material Design 3 Expressive 强调曲线 - 用于页面过渡动画
+    // 特点：快速启动 → 减速停止，带有轻微的回弹感
+    val M3E_Emphasized_Easing = PathEasing(
+        Path().apply {
+            moveTo(0f, 0f)
+            cubicTo(0.05f, 0f, 0.133f, 0.06f, 0.167f, 0.167f)
+            cubicTo(0.249f, 0.426f, 0.43f, 1f, 1f, 1f)
+        }
+    )
 }
 
 /**
@@ -360,7 +374,45 @@ object ExpressiveAnimations {
 
     /** Shared Axis - 返回时旧页面快速淡出 (简化退出动画以配合 predictive back) */
     val SharedAxisPopExit = fadeOut(animationSpec = tween(durationMillis = ExpressiveMotionTokens.Short2))
-    
+
+    // ===== Navigation Transition Animations =====
+
+    /** 页面进入动画 - 从右侧滑入 (前进) */
+    val SlideInHorizontallyInitialOffsetForward = slideInHorizontally(
+        initialOffsetX = { it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
+            stiffness = ExpressiveMotionTokens.PageTransition.stiffness
+        )
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
+
+    /** 页面退出动画 - 向左滑出 (前进) */
+    val SlideOutHorizontallyInitialOffsetForward = slideOutHorizontally(
+        targetOffsetX = { -it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
+            stiffness = ExpressiveMotionTokens.PageTransition.stiffness
+        )
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
+
+    /** 页面进入动画 - 从左侧滑入 (返回) */
+    val SlideInHorizontallyInitialOffsetBackward = slideInHorizontally(
+        initialOffsetX = { -it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
+            stiffness = ExpressiveMotionTokens.PageTransition.stiffness
+        )
+    ) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
+
+    /** 页面退出动画 - 向右滑出 (返回) */
+    val SlideOutHorizontallyInitialOffsetBackward = slideOutHorizontally(
+        targetOffsetX = { it },
+        animationSpec = spring(
+            dampingRatio = ExpressiveMotionTokens.PageTransition.dampingRatio,
+            stiffness = ExpressiveMotionTokens.PageTransition.stiffness
+        )
+    ) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow))
+
     // ===== Exit Animations =====
     
     /** 列表项退出动画 */
