@@ -45,6 +45,7 @@ import kotlinx.coroutines.withContext
 @Composable
 fun DirectoryContentScreen(
     directoryUri: String,
+    directoryName: String,
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
@@ -54,13 +55,7 @@ fun DirectoryContentScreen(
 
     // Get directory files from the ViewModel
     val directoryFiles by viewModel.directoryFiles.collectAsState()
-    val selectedDirectories by viewModel.selectedDirectories.collectAsState()
     val selectedFiles by viewModel.selectedFiles.collectAsState()
-
-    // Find the directory info
-    val directory = remember(directoryUri, selectedDirectories) {
-        selectedDirectories.firstOrNull { it.uri == directoryUri }
-    }
 
     // Get files for this directory
     val files = remember(directoryUri, directoryFiles) {
@@ -72,11 +67,6 @@ fun DirectoryContentScreen(
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
         }
-    }
-
-    // Get directory name from path
-    val directoryName = remember(directory) {
-        directory?.path?.substringAfterLast("/") ?: directory?.path?.substringAfterLast(":") ?: "Unknown"
     }
 
     // Dialog states

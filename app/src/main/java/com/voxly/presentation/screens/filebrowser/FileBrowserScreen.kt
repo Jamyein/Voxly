@@ -13,6 +13,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -113,7 +114,7 @@ fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel(),
     onNavigateToMetadata: (String) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
-    onNavigateToDirectory: (String) -> Unit,
+    onNavigateToDirectory: (String, String) -> Unit,
     onNavigateToSearch: (List<AudioFile>) -> Unit = {},
     onNavigateToAlbum: (String, String?) -> Unit = { _, _ -> },
     onNavigateToArtist: (String) -> Unit = {},
@@ -1511,7 +1512,7 @@ private fun SelectionTopBar(
 private fun DirectoryOverviewContent(
     directories: List<SelectedDirectory>,
     directoryFiles: Map<String, List<AudioFile>>,
-    onOpenDirectory: (String) -> Unit,
+    onOpenDirectory: (String, String) -> Unit,
     isRefreshing: Boolean,
     onRefresh: () -> Unit
 ) {
@@ -1533,10 +1534,12 @@ private fun DirectoryOverviewContent(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(directories, key = { it.uri }) { directory ->
+                    val directoryName = directory.path.substringAfterLast("/")
+                        .substringAfterLast(":")
                     DirectoryItem(
                         directory = directory,
                         fileCount = directoryFiles[directory.uri]?.size ?: 0,
-                        onClick = { onOpenDirectory(directory.uri) }
+                        onClick = { onOpenDirectory(directory.uri, directoryName) }
                     )
                 }
             }

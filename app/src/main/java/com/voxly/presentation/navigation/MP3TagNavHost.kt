@@ -48,6 +48,7 @@ import com.voxly.presentation.screens.artist.ArtistDetailScreen
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -86,12 +87,14 @@ fun MP3TagNavHost(
         }
     }
 
+    // SharedTransitionLayout for shared element transitions (e.g., cover art morphing)
     // Box layout: content + bottom bar positioned absolutely
     // This allows the bottom bar to hide without affecting content padding
     Box(modifier = Modifier.fillMaxSize()) {
-        NavHost(
-            navController = navController,
-            modifier = Modifier.fillMaxSize(),
+        SharedTransitionLayout {
+            NavHost(
+                navController = navController,
+                modifier = Modifier.fillMaxSize(),
             startDestination = Screen.FileBrowser.route,
             enterTransition = {
                 val destinations = bottomNavRoutes
@@ -177,8 +180,8 @@ fun MP3TagNavHost(
                     onNavigateToReplayGain = { filePaths ->
                         navController.navigate(Screen.ReplayGainScanner.createRoute(filePaths))
                     },
-                    onNavigateToDirectory = { directoryUri ->
-                        navController.navigate(Screen.DirectoryContent.createRoute(directoryUri))
+                    onNavigateToDirectory = { directoryUri, directoryName ->
+                        navController.navigate(Screen.DirectoryContent.createRoute(directoryUri, directoryName))
                     },
                     onNavigateToSearch = { audioFiles ->
                         navController.navigate(Screen.FileSearch.createRoute(audioFiles.map { it.path }))
@@ -199,7 +202,8 @@ fun MP3TagNavHost(
             composable(
                 route = Screen.DirectoryContent.route,
                 arguments = listOf(
-                    navArgument("directoryUri") { type = NavType.StringType }
+                    navArgument("directoryUri") { type = NavType.StringType },
+                    navArgument("directoryName") { type = NavType.StringType }
                 ),
                 enterTransition = {
                     ExpressiveAnimations.SlideInHorizontallyInitialOffsetForward
@@ -216,8 +220,11 @@ fun MP3TagNavHost(
             ) { backStackEntry ->
                 val encodedDirectoryUri = backStackEntry.arguments?.getString("directoryUri") ?: ""
                 val directoryUri = URLDecoder.decode(encodedDirectoryUri, "UTF-8")
+                val encodedDirectoryName = backStackEntry.arguments?.getString("directoryName") ?: ""
+                val directoryName = URLDecoder.decode(encodedDirectoryName, "UTF-8")
                 DirectoryContentScreen(
                     directoryUri = directoryUri,
+                    directoryName = directoryName,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToMetadata = { filePath ->
                         navController.navigate(Screen.MetadataEditor.createRoute(filePath))
@@ -486,6 +493,8 @@ fun MP3TagNavHost(
             }
 
         }
+
+        } // End SharedTransitionLayout
 
         // Bottom navigation bar positioned absolutely at the bottom
         // Uses Box alignment instead of Scaffold bottomBar to avoid fixed padding
