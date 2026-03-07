@@ -11,6 +11,7 @@
     <!-- File Browser -->
     <string name="select_directory">Select Directory</string>
     <string name="no_audio_files">No audio files found</string>
+    <string name="no_audio_files_in_directory">No audio files in this folder</string>
     <string name="file_count">%d files</string>
     <string name="loading">Loading...</string>
 

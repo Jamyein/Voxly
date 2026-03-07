@@ -23,6 +23,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.graphics.Color
@@ -57,7 +58,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.zIndex
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -110,6 +113,7 @@ fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel(),
     onNavigateToMetadata: (String) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
+    onNavigateToDirectory: (String) -> Unit,
     onNavigateToSearch: (List<AudioFile>) -> Unit = {},
     onNavigateToAlbum: (String, String?) -> Unit = { _, _ -> },
     onNavigateToArtist: (String) -> Unit = {},
@@ -136,6 +140,7 @@ fun FileBrowserScreen(
     val artists by viewModel.artists.collectAsState()
     val allAudios by viewModel.allAudios.collectAsState()
     var selectedRootTab by rememberSaveable { mutableStateOf(RootTab.DIRECTORIES) }
+    val isAudioFileView = !isDirectoryListLevel || selectedRootTab == RootTab.ALL
 
     // Navigation state for album/artist detail
     // Note: Cannot use rememberSaveable for AlbumGroup/ArtistGroup as they contain
@@ -467,6 +472,56 @@ fun FileBrowserScreen(
                     }
                 }
             }
+        },
+        floatingActionButton = {
+            // FAB 放在 Scaffold 的 floatingActionButton 槽位，由 Scaffold 自动处理与 NavigationBar 的 16dp 间距
+            // 动态 bottom padding 基于滚动进度
+            if (isAudioFileView && !isBatchProcessing) {
+                BatchOperationsFAB(
+                    expanded = showBatchMenu,
+                    onExpandChange = { showBatchMenu = it },
+                    onOnlineMetadata = {
+                        showBatchMenu = false
+                        showOnlineMetadataDialog = true
+                    },
+                    onUnifiedField = {
+                        showBatchMenu = false
+                        showUnifiedFieldDialog = true
+                    },
+                    onReplaceText = {
+                        showBatchMenu = false
+                        showReplaceTextDialog = true
+                    },
+                    onAutoNumber = {
+                        showBatchMenu = false
+                        showAutoNumberDialog = true
+                    },
+                    onRenameFiles = {
+                        showBatchMenu = false
+                        showRenameDialog = true
+                    },
+                    onFixMetadata = {
+                        showBatchMenu = false
+                        showFixMetadataDialog = true
+                    }
+                )
+            } else if (isAudioFileView && selectedFiles.isEmpty() && canScrollToTop && visibleFiles.isNotEmpty()) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        coroutineScope.launch {
+                            listState.animateScrollToItem(0)
+                        }
+                    },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                    shape = MaterialTheme.shapes.extraLarge
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = stringResource(R.string.back_to_top)
+                    )
+                }
+            }
         }
     ) { innerPadding ->
         // Calculate dynamic bottom padding based on scroll progress
@@ -474,73 +529,30 @@ fun FileBrowserScreen(
         val bottomNavHeight = 80.dp
         val dynamicBottomPadding = bottomNavHeight * (1f - bottomNavScrollProgress)
 
-        // FAB - dynamic bottom padding based on scroll progress
         Box(modifier = Modifier.fillMaxSize()) {
-
-        // FAB - dynamic bottom padding based on scroll progress
-        // Show FAB when not in batch processing mode OR when in batch mode with files selected
-        if (!isBatchProcessing) {
-            BatchOperationsFAB(
-                expanded = showBatchMenu,
-                onExpandChange = { showBatchMenu = it },
-                onOnlineMetadata = {
-                    showBatchMenu = false
-                    showOnlineMetadataDialog = true
-                },
-                onUnifiedField = {
-                    showBatchMenu = false
-                    showUnifiedFieldDialog = true
-                },
-                onReplaceText = {
-                    showBatchMenu = false
-                    showReplaceTextDialog = true
-                },
-                onAutoNumber = {
-                    showBatchMenu = false
-                    showAutoNumberDialog = true
-                },
-                onRenameFiles = {
-                    showBatchMenu = false
-                    showRenameDialog = true
-                },
-                onFixMetadata = {
-                    showBatchMenu = false
-                    showFixMetadataDialog = true
-                },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = dynamicBottomPadding, end = 16.dp)
-            )
-        } else if (selectedFiles.isEmpty() && canScrollToTop && visibleFiles.isNotEmpty()) {
-            SmallFloatingActionButton(
-                onClick = {
-                    coroutineScope.launch {
-                        listState.animateScrollToItem(0)
-                    }
-                },
-                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                shape = MaterialTheme.shapes.extraLarge,
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(bottom = dynamicBottomPadding, end = 16.dp)
+            // Scrim 遮罩层 - 放在 content 区域，点击可关闭菜单
+            AnimatedVisibility(
+                visible = showBatchMenu,
+                enter = fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)),
+                exit = fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
             ) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowUp,
-                    contentDescription = stringResource(R.string.back_to_top)
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .clickable { showBatchMenu = false }
                 )
             }
-        }
 
-        // Main content with innerPadding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    top = innerPadding.calculateTopPadding(),
-                    bottom = dynamicBottomPadding
-                )
-        ) {
+            // Main content with innerPadding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
+            Column(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .zIndex(0f)
+                    .padding(
+                        top = innerPadding.calculateTopPadding(),
+                        bottom = dynamicBottomPadding
+                    )
+            ) {
             if (isDirectoryListLevel) {
                 // Root directory - show TabRow with tabs
                 Column(modifier = Modifier.weight(1f)) {
@@ -595,7 +607,7 @@ fun FileBrowserScreen(
                                 DirectoryOverviewContent(
                                     directories = selectedDirectories,
                                     directoryFiles = directoryFiles,
-                                    onOpenDirectory = viewModel::openDirectory,
+                                    onOpenDirectory = onNavigateToDirectory,
                                     isRefreshing = isRefreshing,
                                     onRefresh = onRefresh
                                 )

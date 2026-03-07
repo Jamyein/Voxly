@@ -32,6 +32,7 @@ import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.components.FlexibleBottomAppBar
 import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
 import com.voxly.presentation.screens.filebrowser.FileSearchScreen
+import com.voxly.presentation.screens.filebrowser.DirectoryContentScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
 import com.voxly.presentation.screens.RecentEditsScreen
 import com.voxly.presentation.screens.ReplayGainScannerScreen
@@ -135,6 +136,9 @@ fun MP3TagNavHost(
                     onNavigateToReplayGain = { filePaths ->
                         navController.navigate(Screen.ReplayGainScanner.createRoute(filePaths))
                     },
+                    onNavigateToDirectory = { directoryUri ->
+                        navController.navigate(Screen.DirectoryContent.createRoute(directoryUri))
+                    },
                     onNavigateToSearch = { audioFiles ->
                         navController.navigate(Screen.FileSearch.createRoute(audioFiles.map { it.path }))
                     },
@@ -147,6 +151,35 @@ fun MP3TagNavHost(
                     bottomNavScrollProgress = scrollProgress,
                     onBottomBarScrollProgressChange = { progress ->
                         scrollProgress = progress
+                    }
+                )
+            }
+
+            composable(
+                route = Screen.DirectoryContent.route,
+                arguments = listOf(
+                    navArgument("directoryUri") { type = NavType.StringType }
+                ),
+                enterTransition = {
+                    ExpressiveAnimations.SlideInHorizontallyInitialOffsetForward
+                },
+                exitTransition = {
+                    ExpressiveAnimations.SlideOutHorizontallyInitialOffsetForward
+                },
+                popEnterTransition = {
+                    ExpressiveAnimations.SlideInHorizontallyInitialOffsetBackward
+                },
+                popExitTransition = {
+                    ExpressiveAnimations.SlideOutHorizontallyInitialOffsetBackward
+                }
+            ) { backStackEntry ->
+                val encodedDirectoryUri = backStackEntry.arguments?.getString("directoryUri") ?: ""
+                val directoryUri = URLDecoder.decode(encodedDirectoryUri, "UTF-8")
+                DirectoryContentScreen(
+                    directoryUri = directoryUri,
+                    onNavigateBack = { navController.popBackStack() },
+                    onNavigateToMetadata = { filePath ->
+                        navController.navigate(Screen.MetadataEditor.createRoute(filePath))
                     }
                 )
             }

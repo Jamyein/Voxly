@@ -8,6 +8,10 @@ sealed class Screen(
     val showBottomBar: Boolean = false
 ) {
     data object FileBrowser : Screen("file_browser", showBottomBar = true)
+    data object DirectoryContent : Screen("directory_content/{directoryUri}", showBottomBar = false) {
+        fun createRoute(directoryUri: String) =
+            "directory_content/${java.net.URLEncoder.encode(directoryUri, "UTF-8")}"
+    }
     data object FileSearch : Screen("file_search/{filePaths}", showBottomBar = false) {
         fun createRoute(filePaths: List<String>) =
             "file_search/${filePaths.joinToString(",") { java.net.URLEncoder.encode(it, "UTF-8") }}"
