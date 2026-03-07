@@ -96,6 +96,38 @@ interface ReplayGainRepository {
     ): Flow<ScanProgress>
 
     /**
+     * Scans audio files grouped by album and calculates both track and album gain.
+     * For ALBUMS mode - groups files by album metadata and calculates album gain
+     * using energy average of all tracks in each album.
+     *
+     * @param filesByAlbum Map of album key to list of file paths in that album
+     * @param scanQuality The quality level for scanning
+     * @param targetLoudness Target loudness in LUFS (default -14.0)
+     * @return Flow emitting scan progress
+     */
+    fun scanReplayGainByAlbum(
+        filesByAlbum: Map<String, List<String>>,
+        scanQuality: ScanQuality = ScanQuality.NORMAL,
+        targetLoudness: Float = -14f
+    ): Flow<ScanProgress>
+
+    /**
+     * Scans audio files with automatic album grouping.
+     * Reads metadata from each file to group by album+artist, then calculates both track and album gain.
+     * For ALBUMS mode - this is the main entry point.
+     *
+     * @param filePaths Flat list of file paths to scan
+     * @param scanQuality The quality level for scanning
+     * @param targetLoudness Target loudness in LUFS (default -14.0)
+     * @return Flow emitting scan progress
+     */
+    fun scanReplayGainWithAlbumGrouping(
+        filePaths: List<String>,
+        scanQuality: ScanQuality = ScanQuality.NORMAL,
+        targetLoudness: Float = -14f
+    ): Flow<ScanProgress>
+
+    /**
      * Applies ReplayGain values to audio files.
      * @param filePaths List of file paths to update
      * @param applyToTrack Whether to apply track gain

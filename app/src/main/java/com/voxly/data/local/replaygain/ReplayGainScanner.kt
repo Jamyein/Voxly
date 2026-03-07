@@ -177,6 +177,273 @@ class ReplayGainScanner @Inject constructor(
     }
 
     /**
+     * Scans audio files with album grouping.
+     * Reads metadata from each file to group by album, then calculates both track and album gain.
+     * For ALBUMS mode - groups files by album+artist metadata and calculates album gain
+     * using energy average of all tracks in each album.
+     *
+     * @param filePaths Flat list of file paths to scan
+     * @param scanQuality Quality level affecting sample rate
+     * @param targetLoudness Target loudness in LUFS (default -14.0)
+     * @return Flow emitting scan progress
+     */
+    fun scanReplayGainWithAlbumGrouping(
+        filePaths: List<String>,
+        scanQuality: ScanQuality,
+        targetLoudness: Float = -14f
+    ): Flow<ScanProgress> = flow {
+        val scanStartedAt = SystemClock.elapsedRealtime()
+        val totalFiles = filePaths.size
+
+        Logger.i(
+            "ReplayGain album grouping started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS",
+            "ReplayGainScanner"
+        )
+
+        // Phase 1: Read metadata and group files by album
+        emit(
+            ScanProgress(
+                currentFile = 0,
+                totalFiles = totalFiles,
+                percentage = 0f,
+                currentFilePath = "Reading metadata...",
+                status = ScanStatus.SCANNING
+            )
+        )
+
+        val filesByAlbum = mutableMapOf<String, MutableList<String>>()
+        var singletonIndex = 0
+
+        for (filePath in filePaths) {
+            try {
+                val metadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
+                // Use album + artist as the grouping key
+                val album = metadata?.album?.trim() ?: ""
+                val artist = metadata?.artist?.trim() ?: ""
+                val albumKey = "${album}_$artist"
+
+                if (album.isEmpty() && artist.isEmpty()) {
+                    // No album info - treat as single track (singleton album)
+                    val singletonKey = "singleton_${singletonIndex++}"
+                    filesByAlbum.getOrPut(singletonKey) { mutableListOf() }.add(filePath)
+                } else if (album.isNotEmpty()) {
+                    // Has album - group by album+artist
+                    filesByAlbum.getOrPut(albumKey) { mutableListOf() }.add(filePath)
+                } else {
+                    // Has artist but no album - group by artist (various artists)
+                    filesByAlbum.getOrPut(albumKey) { mutableListOf() }.add(filePath)
+                }
+            } catch (e: Exception) {
+                // If metadata read fails, treat as single track
+                val singletonKey = "singleton_${singletonIndex++}"
+                filesByAlbum.getOrPut(singletonKey) { mutableListOf() }.add(filePath)
+                Logger.w("Failed to read metadata for grouping: $filePath", "ReplayGainScanner")
+            }
+        }
+
+        val totalAlbums = filesByAlbum.size
+        Logger.i(
+            "Grouped $totalFiles files into $totalAlbums albums",
+            "ReplayGainScanner"
+        )
+
+        // Now delegate to the main album scanning method
+        scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness).collect { progress ->
+            emit(progress)
+        }
+
+        Logger.i(
+            "ReplayGain album grouping finished. elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
+            "ReplayGainScanner"
+        )
+    }
+
+    /**
+     * Scans audio files grouped by album and calculates both track and album gain.
+     * For ALBUMS mode - groups files by album metadata and calculates album gain
+     * using energy average of all tracks in each album.
+     *
+     * @param filesByAlbum Map of album key to list of file paths in that album
+     * @param scanQuality Quality level affecting sample rate
+     * @param targetLoudness Target loudness in LUFS (default -14.0)
+     * @return Flow emitting scan progress
+     */
+    fun scanReplayGainByAlbum(
+        filesByAlbum: Map<String, List<String>>,
+        scanQuality: ScanQuality,
+        targetLoudness: Float = -14f
+    ): Flow<ScanProgress> = flow {
+        val totalAlbums = filesByAlbum.size
+        val totalFiles = filesByAlbum.values.flatten().size
+        var processedFiles = 0
+        var processedAlbums = 0
+        val scanStartedAt = SystemClock.elapsedRealtime()
+
+        Logger.i(
+            "ReplayGain album scan started. albums=$totalAlbums files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS",
+            "ReplayGainScanner"
+        )
+
+        for ((albumKey, albumFiles) in filesByAlbum) {
+            if (!kotlin.coroutines.coroutineContext.isActive) {
+                Logger.w(
+                    "ReplayGain album scan cancelled at album=$albumKey processedAlbums=$processedAlbums",
+                    "ReplayGainScanner"
+                )
+                emit(
+                    ScanProgress(
+                        currentFile = processedFiles,
+                        totalFiles = totalFiles,
+                        percentage = processedFiles.toFloat() / totalFiles,
+                        currentFilePath = "",
+                        status = ScanStatus.CANCELLED
+                    )
+                )
+                return@flow
+            }
+
+            // Skip albums with only one track - no album gain needed
+            if (albumFiles.size <= 1) {
+                Logger.v(
+                    "Skipping album gain for album=$albumKey - only ${albumFiles.size} track(s)",
+                    "ReplayGainScanner"
+                )
+                // Still scan as single track
+                for (filePath in albumFiles) {
+                    emit(
+                        ScanProgress(
+                            currentFile = processedFiles + 1,
+                            totalFiles = totalFiles,
+                            percentage = processedFiles.toFloat() / totalFiles,
+                            currentFilePath = filePath,
+                            status = ScanStatus.SCANNING
+                        )
+                    )
+
+                    try {
+                        val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness)
+                        if (replayGainInfo != null) {
+                            saveReplayGainToFile(filePath, replayGainInfo)
+                        }
+                    } catch (e: Exception) {
+                        Logger.e("Album scan failed for file=$filePath", e, "ReplayGainScanner")
+                    }
+
+                    processedFiles++
+                    emit(
+                        ScanProgress(
+                            currentFile = processedFiles,
+                            totalFiles = totalFiles,
+                            percentage = processedFiles.toFloat() / totalFiles,
+                            currentFilePath = filePath,
+                            status = ScanStatus.COMPLETED
+                        )
+                    )
+                }
+                processedAlbums++
+                continue
+            }
+
+            // First pass: scan all tracks in the album to get track gains
+            val trackGains = mutableListOf<Pair<String, ReplayGainInfo>>()
+
+            for ((index, filePath) in albumFiles.withIndex()) {
+                emit(
+                    ScanProgress(
+                        currentFile = processedFiles + 1,
+                        totalFiles = totalFiles,
+                        percentage = processedFiles.toFloat() / totalFiles,
+                        currentFilePath = filePath,
+                        status = ScanStatus.SCANNING
+                    )
+                )
+
+                try {
+                    val fileStartedAt = SystemClock.elapsedRealtime()
+                    val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness)
+
+                    if (replayGainInfo != null) {
+                        trackGains.add(filePath to replayGainInfo)
+                        Logger.v(
+                            "Track gain calculated file=${File(filePath).name} gain=${replayGainInfo.trackGain} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}",
+                            "ReplayGainScanner"
+                        )
+                    } else {
+                        Logger.w(
+                            "Track gain analysis failed file=${File(filePath).name}",
+                            "ReplayGainScanner"
+                        )
+                    }
+                } catch (e: Exception) {
+                    Logger.e(
+                        "Track scan failed file=${File(filePath).name} reason=${e.message}",
+                        e,
+                        "ReplayGainScanner"
+                    )
+                }
+
+                processedFiles++
+                emit(
+                    ScanProgress(
+                        currentFile = processedFiles,
+                        totalFiles = totalFiles,
+                        percentage = processedFiles.toFloat() / totalFiles,
+                        currentFilePath = filePath,
+                        status = ScanStatus.SCANNING
+                    )
+                )
+
+                delay(50)
+            }
+
+            // Second pass: calculate album gain and save to all files in the album
+            if (trackGains.isNotEmpty()) {
+                val albumGainInfo = calculateAlbumGain(trackGains.map { it.second })
+                Logger.i(
+                    "Album gain calculated album=$albumKey tracks=${trackGains.size} albumGain=${albumGainInfo.albumGain} albumPeak=${albumGainInfo.albumPeak}",
+                    "ReplayGainScanner"
+                )
+
+                // Save album gain to each track
+                for ((filePath, trackInfo) in trackGains) {
+                    try {
+                        // Combine track gain with album gain
+                        val combinedInfo = ReplayGainInfo(
+                            trackGain = trackInfo.trackGain,
+                            trackPeak = trackInfo.trackPeak,
+                            albumGain = albumGainInfo.albumGain,
+                            albumPeak = albumGainInfo.albumPeak
+                        )
+                        saveReplayGainToFile(filePath, combinedInfo)
+                    } catch (e: Exception) {
+                        Logger.e(
+                            "Failed to save album gain for file=$filePath reason=${e.message}",
+                            e,
+                            "ReplayGainScanner"
+                        )
+                    }
+                }
+            }
+
+            processedAlbums++
+        }
+
+        emit(
+            ScanProgress(
+                currentFile = totalFiles,
+                totalFiles = totalFiles,
+                percentage = 1f,
+                currentFilePath = "",
+                status = ScanStatus.COMPLETED
+            )
+        )
+        Logger.i(
+            "ReplayGain album scan finished. albums=$totalAlbums files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
+            "ReplayGainScanner"
+        )
+    }
+
+    /**
      * Analyzes a single audio file and calculates ReplayGain.
      * @param filePath Path to the audio file
      * @param scanQuality Quality level

@@ -297,6 +297,18 @@ class ReplayGainRepositoryImpl @Inject constructor(
         targetLoudness: Float
     ): Flow<ScanProgress> = replayGainScanner.scanReplayGain(filePaths, scanQuality, targetLoudness)
 
+    override fun scanReplayGainByAlbum(
+        filesByAlbum: Map<String, List<String>>,
+        scanQuality: ScanQuality,
+        targetLoudness: Float
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness)
+
+    override fun scanReplayGainWithAlbumGrouping(
+        filePaths: List<String>,
+        scanQuality: ScanQuality,
+        targetLoudness: Float
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainWithAlbumGrouping(filePaths, scanQuality, targetLoudness)
+
     override suspend fun applyReplayGain(
         filePaths: List<String>,
         applyToTrack: Boolean,

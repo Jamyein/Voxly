@@ -8,6 +8,7 @@ import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanMode
 import com.voxly.domain.repository.ScanQuality
+import com.voxly.domain.repository.ScanStatus
 import com.voxly.domain.usecase.BatchAlbumArtUseCase
 import com.voxly.domain.usecase.BatchEditMetadataUseCase
 import com.voxly.domain.usecase.BatchProgress
@@ -146,34 +147,80 @@ class BatchOperationsViewModel @Inject constructor(
             try {
                 // For TRACK_ONLY: scan all files as individual tracks (no album gain)
                 // For SINGLE_ALBUM: scan all selected files as ONE album
-                // For ALBUMS: scan files grouped by album tags (auto-group)
-                
-                val filesToScan = when (scanMode) {
-                    ScanMode.TRACK_ONLY -> _selectedFiles.value
-                    ScanMode.SINGLE_ALBUM -> _selectedFiles.value
-                    ScanMode.ALBUMS -> _selectedFiles.value  // Will be grouped by album in scanner
-                }
-                
-                batchReplayGainUseCase(
-                    filePaths = filesToScan,
-                    scanQuality = scanQuality
-                ).collect { progress ->
-                    _batchProgress.value = BatchProgress(
-                        currentFile = progress.currentFile,
-                        totalFiles = progress.totalFiles,
-                        percentage = progress.percentage,
-                        currentFilePath = progress.currentFilePath,
-                        status = when (progress.status.name) {
-                            "COMPLETED" -> BatchStatus.COMPLETED
-                            else -> BatchStatus.PROCESSING
-                        }
-                    )
+                // For ALBUMS: scan files grouped by album tags (auto-group using album+artist)
 
-                    if (progress.status.name == "COMPLETED") {
-                        // For album modes, album gain is calculated after scanning all files
-                        // The scanner calculates both track and album gain per file
-                        _operationComplete.value = true
-                        _isProcessing.value = false
+                when (scanMode) {
+                    ScanMode.TRACK_ONLY -> {
+                        // Scan as individual tracks - no album gain
+                        batchReplayGainUseCase(
+                            filePaths = _selectedFiles.value,
+                            scanQuality = scanQuality
+                        ).collect { progress ->
+                            _batchProgress.value = BatchProgress(
+                                currentFile = progress.currentFile,
+                                totalFiles = progress.totalFiles,
+                                percentage = progress.percentage,
+                                currentFilePath = progress.currentFilePath,
+                                status = when (progress.status.name) {
+                                    "COMPLETED" -> BatchStatus.COMPLETED
+                                    else -> BatchStatus.PROCESSING
+                                }
+                            )
+
+                            if (progress.status == ScanStatus.COMPLETED) {
+                                _operationComplete.value = true
+                                _isProcessing.value = false
+                            }
+                        }
+                    }
+                    ScanMode.SINGLE_ALBUM -> {
+                        // Treat all selected files as one album
+                        // Create a single album group with all files
+                        val singleAlbumGroup = mapOf("single_album" to _selectedFiles.value)
+                        replayGainRepository.scanReplayGainByAlbum(
+                            filesByAlbum = singleAlbumGroup,
+                            scanQuality = scanQuality
+                        ).collect { progress ->
+                            _batchProgress.value = BatchProgress(
+                                currentFile = progress.currentFile,
+                                totalFiles = progress.totalFiles,
+                                percentage = progress.percentage,
+                                currentFilePath = progress.currentFilePath,
+                                status = when (progress.status.name) {
+                                    "COMPLETED" -> BatchStatus.COMPLETED
+                                    else -> BatchStatus.PROCESSING
+                                }
+                            )
+
+                            if (progress.status == ScanStatus.COMPLETED) {
+                                _operationComplete.value = true
+                                _isProcessing.value = false
+                            }
+                        }
+                    }
+                    ScanMode.ALBUMS -> {
+                        // Auto-group by album metadata (album + artist)
+                        // This reads metadata from each file and groups accordingly
+                        replayGainRepository.scanReplayGainWithAlbumGrouping(
+                            filePaths = _selectedFiles.value,
+                            scanQuality = scanQuality
+                        ).collect { progress ->
+                            _batchProgress.value = BatchProgress(
+                                currentFile = progress.currentFile,
+                                totalFiles = progress.totalFiles,
+                                percentage = progress.percentage,
+                                currentFilePath = progress.currentFilePath,
+                                status = when (progress.status.name) {
+                                    "COMPLETED" -> BatchStatus.COMPLETED
+                                    else -> BatchStatus.PROCESSING
+                                }
+                            )
+
+                            if (progress.status == ScanStatus.COMPLETED) {
+                                _operationComplete.value = true
+                                _isProcessing.value = false
+                            }
+                        }
                     }
                 }
             } catch (e: Exception) {
