@@ -176,6 +176,7 @@ fun MetadataEditorScreen(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        floatingActionButtonPosition = FabPosition.End,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_metadata)) },
@@ -279,7 +280,10 @@ fun MetadataEditorScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
+                .padding(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = innerPadding.calculateBottomPadding()
+                )
                 .pointerInput(Unit) { } // Prevent touch events during exit animation
         ) {
             // Scrim 遮罩层 - 放在 content 区域而非 floatingActionButton 槽位

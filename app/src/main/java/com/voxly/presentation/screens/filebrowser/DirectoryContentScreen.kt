@@ -214,11 +214,33 @@ fun DirectoryContentScreen(
             }
         }
     ) { innerPadding ->
-        if (files.isEmpty()) {
-            EmptyDirectoryContent(
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(innerPadding)
+    ) {
+        // Scrim 遮罩层 - 点击外部收起菜单
+        AnimatedVisibility(
+            visible = showBatchMenu,
+            enter = fadeIn(animationSpec = spring(
+                dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
+                stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
+            )),
+            exit = fadeOut(animationSpec = spring(
+                dampingRatio = ExpressiveMotionTokens.StandardAccelerate.dampingRatio,
+                stiffness = ExpressiveMotionTokens.StandardAccelerate.stiffness
+            ))
+        ) {
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(innerPadding)
+                    .clickable { showBatchMenu = false }
+            )
+        }
+
+        if (files.isEmpty()) {
+            EmptyDirectoryContent(
+                modifier = Modifier.fillMaxSize()
             )
         } else {
             LazyColumn(
@@ -288,7 +310,7 @@ private fun BatchOperationsFAB(
             enter = fadeIn(animationSpec = spring(
                 dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
                 stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
-            )) + expandVertically(animationSpec = spring(
+            )) + expandVertically(expandFrom = Alignment.Bottom, animationSpec = spring(
                 dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
                 stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
             )),
