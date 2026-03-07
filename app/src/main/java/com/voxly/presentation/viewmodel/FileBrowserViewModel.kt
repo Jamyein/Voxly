@@ -162,7 +162,6 @@ class FileBrowserViewModel @Inject constructor(
             syncSelectedDirectoriesFromStorage()
 
                 if (_selectedDirectories.value.isNotEmpty()) {
-                    _isRefreshing.value = false
                     scanSelectedDirectories(_selectedDirectories.value, forceRefresh)
                     return@launch
                 }
@@ -1251,6 +1250,7 @@ class FileBrowserViewModel @Inject constructor(
                 }.awaitAll().toMap()
             }
         }.onSuccess { filesByDirectory ->
+            _isRefreshing.value = false
             _directoryFiles.value = filesByDirectory
             _currentDirectory.value = directories.firstOrNull()?.path
             if (_openedDirectoryUri.value != null && _openedDirectoryUri.value !in filesByDirectory.keys) {
@@ -1268,6 +1268,7 @@ class FileBrowserViewModel @Inject constructor(
             }
             aggregateData()
         }.onFailure { error ->
+            _isRefreshing.value = false
             if (error is CancellationException) {
                 return@onFailure
             }
