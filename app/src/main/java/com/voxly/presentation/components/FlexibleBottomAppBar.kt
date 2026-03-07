@@ -5,8 +5,11 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -84,6 +87,7 @@ fun FlexibleBottomAppBar(
             modifier = modifier
                 .fillMaxWidth()
                 .height(bottomBarHeight) // Fixed height, use translationY for hiding
+                .windowInsetsPadding(WindowInsets.navigationBars) // Add bottom padding for gesture nav
                 .graphicsLayer {
                     translationY = offsetY.toPx()
                     alpha = animatedAlpha
@@ -91,6 +95,7 @@ fun FlexibleBottomAppBar(
         ) {
             NavigationBar(
                 modifier = Modifier.fillMaxWidth(),
+                windowInsets = WindowInsets(0.dp), // Disable insets consumption, handle externally
                 containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
                 tonalElevation = 0.dp
             ) {

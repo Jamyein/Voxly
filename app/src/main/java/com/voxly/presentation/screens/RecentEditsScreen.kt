@@ -7,10 +7,10 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material3.*
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -31,27 +31,40 @@ import java.util.*
 @Composable
 fun RecentEditsScreen(
     onNavigateToMetadata: (String) -> Unit,
-    viewModel: RecentEditsViewModel = hiltViewModel()
+    viewModel: RecentEditsViewModel = hiltViewModel(),
+    bottomNavScrollProgress: Float = 0f,
+    onBottomBarScrollProgressChange: (Float) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.statusBars)
-    ) {
-        // TopAppBar
-        TopAppBar(
-            title = { Text(stringResource(R.string.recent_edits_title)) },
-            colors = TopAppBarDefaults.topAppBarColors(),
-            windowInsets = WindowInsets(0.dp),
-        )
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-        // Content with top padding for TopAppBar and bottom padding for bottom nav
+    Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.recent_edits_title)) },
+                scrollBehavior = scrollBehavior,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        }
+    ) { innerPadding ->
+        // Calculate dynamic bottom padding based on scroll progress
+        val bottomNavHeight = 80.dp
+        val dynamicBottomPadding = bottomNavHeight * (1f - bottomNavScrollProgress)
+
+        // Content with top padding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 56.dp, bottom = 80.dp)
+                .padding(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = dynamicBottomPadding
+                )
         ) {
             when (val state = uiState) {
                 is RecentEditsUiState.Loading -> {

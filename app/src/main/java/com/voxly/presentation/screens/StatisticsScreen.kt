@@ -25,16 +25,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -50,34 +52,48 @@ import com.voxly.presentation.viewmodel.StatisticsViewModel
 fun StatisticsScreen(
     viewModel: StatisticsViewModel = hiltViewModel(),
     onNavigateToSettings: () -> Unit = {},
-    onNavigateToArtist: (String) -> Unit = {}
+    onNavigateToArtist: (String) -> Unit = {},
+    bottomNavScrollProgress: Float = 0f,
+    onBottomBarScrollProgressChange: (Float) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.statusBars)
-    ) {
-        // TopAppBar
-        TopAppBar(
-            title = { Text(stringResource(R.string.statistics_title)) },
-            actions = {
-                IconButton(onClick = onNavigateToSettings) {
-                    Icon(
-                        painter = appIconPainter(AppIcon.Settings),
-                        contentDescription = stringResource(R.string.nav_settings)
-                    )
-                }
-            },
-            windowInsets = WindowInsets(0.dp)
-        )
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
-        // Content with top padding for TopAppBar and bottom padding for bottom nav
+    Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.statistics_title)) },
+                scrollBehavior = scrollBehavior,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                actions = {
+                    IconButton(onClick = onNavigateToSettings) {
+                        Icon(
+                            painter = appIconPainter(AppIcon.Settings),
+                            contentDescription = stringResource(R.string.nav_settings)
+                        )
+                    }
+                }
+            )
+        }
+    ) { innerPadding ->
+        // Calculate dynamic bottom padding based on scroll progress
+        val bottomNavHeight = 80.dp
+        val dynamicBottomPadding = bottomNavHeight * (1f - bottomNavScrollProgress)
+
+        // Content with top padding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 56.dp, bottom = 80.dp)
+                .padding(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = dynamicBottomPadding
+                )
         ) {
             when (val state = uiState) {
             is StatisticsUiState.Loading -> {

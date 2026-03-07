@@ -178,6 +178,10 @@ fun MP3TagNavHost(
                 RecentEditsScreen(
                     onNavigateToMetadata = { filePath ->
                         navController.navigate(Screen.MetadataEditor.createRoute(filePath))
+                    },
+                    bottomNavScrollProgress = scrollProgress,
+                    onBottomBarScrollProgressChange = { progress ->
+                        scrollProgress = progress
                     }
                 )
             }
@@ -189,6 +193,10 @@ fun MP3TagNavHost(
                     },
                     onNavigateToArtist = { artistName ->
                         navController.navigate(Screen.ArtistDetail.createRoute(artistName))
+                    },
+                    bottomNavScrollProgress = scrollProgress,
+                    onBottomBarScrollProgressChange = { progress ->
+                        scrollProgress = progress
                     }
                 )
             }

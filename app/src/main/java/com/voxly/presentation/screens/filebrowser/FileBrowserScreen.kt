@@ -33,6 +33,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
@@ -342,119 +343,130 @@ fun FileBrowserScreen(
     }
 
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.statusBars)
-    ) {
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        topBar = {
+            if (selectedFiles.isNotEmpty()) {
+                SelectionTopBar(
+                    selectedCount = selectedFiles.size,
+                    onSelectAll = { viewModel.selectFilePaths(visibleFiles.map { it.path }) },
+                    onClearSelection = { viewModel.clearSelection() },
+                    onNavigateToReplayGain = {
+                        onNavigateToReplayGain(viewModel.getSelectedFilePaths())
+                    },
+                    onBatchOperations = {
+                        showBatchOperationsMenu = true
+                    }
+                )
+            } else {
+                AnimatedVisibility(
+                    visible = isTopBarVisible,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .animateContentSize(
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                )
+                            )
+                    ) {
+                        if (openedDirectory != null) {
+                            TopAppBar(
+                                title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
+                                scrollBehavior = scrollBehavior,
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                navigationIcon = {
+                                    IconButton(onClick = viewModel::closeOpenedDirectory) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = stringResource(R.string.cd_back)
+                                        )
+                                    }
+                                },
+                                actions = {
+                                    IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Search,
+                                            contentDescription = stringResource(R.string.cd_search)
+                                        )
+                                    }
+                                    IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                                            contentDescription = stringResource(R.string.file_sort_label),
+                                            tint = if (isSortExpanded) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            }
+                                        )
+                                    }
+                                    IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = stringResource(R.string.refresh_files)
+                                        )
+                                    }
+                                }
+                            )
+                        } else {
+                            MediumTopAppBar(
+                                title = { Text(stringResource(R.string.nav_file_browser)) },
+                                scrollBehavior = scrollBehavior,
+                                colors = TopAppBarDefaults.topAppBarColors(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                                ),
+                                actions = {
+                                    IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Search,
+                                            contentDescription = stringResource(R.string.cd_search)
+                                        )
+                                    }
+                                    IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                                            contentDescription = stringResource(R.string.file_sort_label),
+                                            tint = if (isSortExpanded) {
+                                                MaterialTheme.colorScheme.primary
+                                            } else {
+                                                MaterialTheme.colorScheme.onSurface
+                                            }
+                                        )
+                                    }
+                                    IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
+                                        Icon(
+                                            imageVector = Icons.Default.Refresh,
+                                            contentDescription = stringResource(R.string.refresh_files)
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    ) { innerPadding ->
         // Calculate dynamic bottom padding based on scroll progress
         // When bottom nav hides (progress = 1), bottom padding becomes 0 to fill the space
         val bottomNavHeight = 80.dp
         val dynamicBottomPadding = bottomNavHeight * (1f - bottomNavScrollProgress)
 
-        // TopBar
-        if (selectedFiles.isNotEmpty()) {
-            SelectionTopBar(
-                selectedCount = selectedFiles.size,
-                onSelectAll = { viewModel.selectFilePaths(visibleFiles.map { it.path }) },
-                onClearSelection = { viewModel.clearSelection() },
-                onNavigateToReplayGain = {
-                    onNavigateToReplayGain(viewModel.getSelectedFilePaths())
-                },
-                onBatchOperations = {
-                    showBatchOperationsMenu = true
-                }
-            )
-        } else {
-            AnimatedVisibility(
-                visible = isTopBarVisible,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically()
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .animateContentSize(
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessLow
-                            )
-                        )
-                ) {
-                    if (openedDirectory != null) {
-                        TopAppBar(
-                            title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
-                            colors = TopAppBarDefaults.topAppBarColors(),
-                            windowInsets = WindowInsets(0.dp),
-                            navigationIcon = {
-                                IconButton(onClick = viewModel::closeOpenedDirectory) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                        contentDescription = stringResource(R.string.cd_back)
-                                    )
-                                }
-                            },
-                            actions = {
-                                IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = stringResource(R.string.cd_search)
-                                    )
-                                }
-                                IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Sort,
-                                        contentDescription = stringResource(R.string.file_sort_label),
-                                        tint = if (isSortExpanded) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface
-                                        }
-                                    )
-                                }
-                                IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = stringResource(R.string.refresh_files)
-                                    )
-                                }
-                            }
-                        )
-                    } else {
-                        TopAppBar(
-                            title = { Text(stringResource(R.string.nav_file_browser)) },
-                            colors = TopAppBarDefaults.topAppBarColors(),
-                            windowInsets = WindowInsets(0.dp),
-                            actions = {
-                                IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = stringResource(R.string.cd_search)
-                                    )
-                                }
-                                IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Sort,
-                                        contentDescription = stringResource(R.string.file_sort_label),
-                                        tint = if (isSortExpanded) {
-                                            MaterialTheme.colorScheme.primary
-                                        } else {
-                                            MaterialTheme.colorScheme.onSurface
-                                        }
-                                    )
-                                }
-                                IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = stringResource(R.string.refresh_files)
-                                    )
-                                }
-                            }
-                        )
-                    }
-                }
-            }
-        }
+        // FAB - dynamic bottom padding based on scroll progress
+        Box(modifier = Modifier.fillMaxSize()) {
 
         // FAB - dynamic bottom padding based on scroll progress
         if (selectedFiles.isEmpty() && !isBatchProcessing) {
@@ -498,11 +510,14 @@ fun FileBrowserScreen(
             }
         }
 
-        // Main content with dynamic padding based on scroll progress
+        // Main content with innerPadding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 56.dp, bottom = dynamicBottomPadding)
+                .padding(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = dynamicBottomPadding
+                )
         ) {
             if (isDirectoryListLevel) {
                 // Root directory - show TabRow with tabs
@@ -694,8 +709,9 @@ fun FileBrowserScreen(
             }
             }
         }
+        }
     }
-    
+
     // Batch Progress Dialog
     if (showBatchProgress && batchProgress != null) {
         BatchProgressDialog(
@@ -1642,7 +1658,6 @@ private fun SelectionTopBar(
         colors = TopAppBarDefaults.topAppBarColors(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         ),
-        windowInsets = WindowInsets(0.dp),
         actions = {
             TextButton(onClick = onSelectAll) {
                 Text(stringResource(R.string.select_all))

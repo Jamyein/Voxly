@@ -41,6 +41,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.IntOffset
@@ -1103,23 +1104,30 @@ fun SettingsScreen(
         )
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .windowInsetsPadding(WindowInsets.statusBars)
-    ) {
-        // TopAppBar
-        TopAppBar(
-            title = { Text(stringResource(R.string.nav_settings)) },
-            colors = TopAppBarDefaults.topAppBarColors(),
-            windowInsets = WindowInsets(0.dp)
-        )
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.nav_settings)) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                )
+            )
+        }
+    ) { innerPadding ->
+        // Calculate dynamic bottom padding based on scroll progress
+        val bottomNavHeight = 80.dp
+        val bottomNavScrollProgress = 0f
+        val dynamicBottomPadding = bottomNavHeight * (1f - bottomNavScrollProgress)
 
-        // Content with top padding for TopAppBar and bottom padding for bottom nav
+        // Content with top padding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = 56.dp, bottom = 80.dp)
+                .padding(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = dynamicBottomPadding
+                )
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
