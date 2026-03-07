@@ -148,11 +148,6 @@ fun FileBrowserScreen(
     var selectedAlbum by remember { mutableStateOf<AlbumGroup?>(null) }
     var selectedArtist by remember { mutableStateOf<ArtistGroup?>(null) }
 
-    // Batch operation states
-    val isBatchProcessing by viewModel.isBatchProcessing.collectAsState()
-    val batchProgress by viewModel.batchProgress.collectAsState()
-    val batchError by viewModel.batchError.collectAsState()
-
     // Pull-to-refresh state
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
@@ -165,19 +160,9 @@ fun FileBrowserScreen(
     var isSortExpanded by rememberSaveable { mutableStateOf(false) }
 
     // Dialog states
-    var showBatchMenu by remember { mutableStateOf(false) }
-    var showBatchOperationsMenu by remember { mutableStateOf(false) }
-    var showOnlineMetadataDialog by remember { mutableStateOf(false) }
-    var showRenameDialog by remember { mutableStateOf(false) }
-    var showFixMetadataDialog by remember { mutableStateOf(false) }
-    var showUnifiedFieldDialog by remember { mutableStateOf(false) }
-    var showReplaceTextDialog by remember { mutableStateOf(false) }
-    var showAutoNumberDialog by remember { mutableStateOf(false) }
-    var showBatchProgress by remember { mutableStateOf(false) }
     var renameTargetFile by remember { mutableStateOf<AudioFile?>(null) }
     var deleteTargetFile by remember { mutableStateOf<AudioFile?>(null) }
-    var selectedFilesForBatch by remember { mutableStateOf<Set<String>>(emptySet()) }
-    
+
     val visibleFiles = remember(visibleFilesRaw, sortOption) {
         applySort(
             files = visibleFilesRaw,
@@ -285,21 +270,7 @@ fun FileBrowserScreen(
         isTopBarVisible = true
         onBottomBarScrollProgressChange(0f)
     }
-    // Show progress dialog when batch processing starts
-    LaunchedEffect(isBatchProcessing) {
-        if (isBatchProcessing) {
-            showBatchProgress = true
-        }
-    }
-    
-    // Auto-hide progress dialog when complete
-    LaunchedEffect(batchProgress) {
-        if (batchProgress?.status == BatchStatus.COMPLETED) {
-            kotlinx.coroutines.delay(1500)
-            showBatchProgress = false
-        }
-    }
-    
+
     val readPermission = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             Manifest.permission.READ_MEDIA_AUDIO
@@ -369,9 +340,6 @@ fun FileBrowserScreen(
                     onClearSelection = { viewModel.clearSelection() },
                     onNavigateToReplayGain = {
                         onNavigateToReplayGain(viewModel.getSelectedFilePaths())
-                    },
-                    onBatchOperations = {
-                        showBatchOperationsMenu = true
                     }
                 )
             } else {
@@ -474,38 +442,7 @@ fun FileBrowserScreen(
             }
         },
         floatingActionButton = {
-            // FAB 放在 Scaffold 的 floatingActionButton 槽位，由 Scaffold 自动处理与 NavigationBar 的 16dp 间距
-            // 动态 bottom padding 基于滚动进度
-            if (isAudioFileView && !isBatchProcessing) {
-                BatchOperationsFAB(
-                    expanded = showBatchMenu,
-                    onExpandChange = { showBatchMenu = it },
-                    onOnlineMetadata = {
-                        showBatchMenu = false
-                        showOnlineMetadataDialog = true
-                    },
-                    onUnifiedField = {
-                        showBatchMenu = false
-                        showUnifiedFieldDialog = true
-                    },
-                    onReplaceText = {
-                        showBatchMenu = false
-                        showReplaceTextDialog = true
-                    },
-                    onAutoNumber = {
-                        showBatchMenu = false
-                        showAutoNumberDialog = true
-                    },
-                    onRenameFiles = {
-                        showBatchMenu = false
-                        showRenameDialog = true
-                    },
-                    onFixMetadata = {
-                        showBatchMenu = false
-                        showFixMetadataDialog = true
-                    }
-                )
-            } else if (isAudioFileView && selectedFiles.isEmpty() && canScrollToTop && visibleFiles.isNotEmpty()) {
+            if (isAudioFileView && selectedFiles.isEmpty() && canScrollToTop && visibleFiles.isNotEmpty()) {
                 SmallFloatingActionButton(
                     onClick = {
                         coroutineScope.launch {
@@ -530,19 +467,6 @@ fun FileBrowserScreen(
         val dynamicBottomPadding = bottomNavHeight * (1f - bottomNavScrollProgress)
 
         Box(modifier = Modifier.fillMaxSize()) {
-            // Scrim 遮罩层 - 放在 content 区域，点击可关闭菜单
-            AnimatedVisibility(
-                visible = showBatchMenu,
-                enter = fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)),
-                exit = fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
-            ) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .clickable { showBatchMenu = false }
-                )
-            }
-
             // Main content with innerPadding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
             Column(
                 modifier = Modifier
@@ -720,14 +644,8 @@ fun FileBrowserScreen(
                                             onDeleteFile = { audioFile ->
                                                 deleteTargetFile = audioFile
                                             },
-                                            onFetchOnlineMetadata = { audioFile ->
-                                                selectedFilesForBatch = setOf(audioFile.path)
-                                                showOnlineMetadataDialog = true
-                                            },
-                                            onFixMetadata = { audioFile ->
-                                                selectedFilesForBatch = setOf(audioFile.path)
-                                                showFixMetadataDialog = true
-                                            }
+                                            onFetchOnlineMetadata = { _ -> },
+                                            onFixMetadata = { _ -> }
                                         )
                                     }
                                 }
@@ -757,162 +675,6 @@ fun FileBrowserScreen(
             }
         }
         }
-    }
-
-    // Batch Progress Dialog
-    if (showBatchProgress && batchProgress != null) {
-        BatchProgressDialog(
-            progress = batchProgress!!,
-            onDismiss = { 
-                if (batchProgress?.status == BatchStatus.COMPLETED || batchProgress?.status == BatchStatus.CANCELLED) {
-                    showBatchProgress = false
-                    viewModel.resetBatchOperation()
-                }
-            }
-        )
-    }
-    
-    // Error Snackbar
-    if (batchError != null) {
-        LaunchedEffect(batchError) {
-            kotlinx.coroutines.delay(3000)
-            viewModel.clearBatchError()
-        }
-    }
-    
-    // Online Metadata Dialog
-    if (showOnlineMetadataDialog) {
-        BatchOnlineMetadataDialog(
-            targetFilesCount = when {
-                selectedFilesForBatch.isNotEmpty() -> selectedFilesForBatch.size
-                selectedFiles.isNotEmpty() -> selectedFiles.size
-                else -> visibleFiles.size
-            },
-            onDismiss = { 
-                showOnlineMetadataDialog = false
-                selectedFilesForBatch = emptySet()
-            },
-            onConfirm = { options ->
-                val targetFiles = when {
-                    selectedFilesForBatch.isNotEmpty() -> selectedFilesForBatch.toList()
-                    selectedFiles.isNotEmpty() -> selectedFiles.toList()
-                    else -> visibleFiles.map { it.path }
-                }
-                viewModel.batchFetchOnlineMetadata(targetFiles, options)
-                showOnlineMetadataDialog = false
-                selectedFilesForBatch = emptySet()
-            }
-        )
-    }
-    
-    // Rename Dialog
-    if (showRenameDialog) {
-        BatchRenameDialog(
-            targetFilesCount = if (selectedFiles.isEmpty()) visibleFiles.size else selectedFiles.size,
-            onDismiss = { showRenameDialog = false },
-            onConfirm = { pattern, startNumber ->
-                val targetFiles = if (selectedFiles.isEmpty()) {
-                    visibleFiles.map { it.path }
-                } else {
-                    selectedFiles.toList()
-                }
-                viewModel.batchRenameFiles(targetFiles, pattern, startNumber)
-                showRenameDialog = false
-            }
-        )
-    }
-    
-    // Fix Metadata Dialog
-    if (showFixMetadataDialog) {
-        BatchFixMetadataDialog(
-            targetFilesCount = when {
-                selectedFilesForBatch.isNotEmpty() -> selectedFilesForBatch.size
-                selectedFiles.isNotEmpty() -> selectedFiles.size
-                else -> visibleFiles.size
-            },
-            onDismiss = { 
-                showFixMetadataDialog = false
-                selectedFilesForBatch = emptySet()
-            },
-            onConfirm = { options ->
-                val targetFiles = when {
-                    selectedFilesForBatch.isNotEmpty() -> selectedFilesForBatch.toList()
-                    selectedFiles.isNotEmpty() -> selectedFiles.toList()
-                    else -> visibleFiles.map { it.path }
-                }
-                viewModel.batchFixMetadata(targetFiles, options)
-                showFixMetadataDialog = false
-                selectedFilesForBatch = emptySet()
-            }
-        )
-    }
-
-    // Batch Operations Menu Dialog (when files are selected)
-    if (showBatchOperationsMenu) {
-        BatchOperationsMenuDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showBatchOperationsMenu = false },
-            onOnlineMetadata = {
-                showBatchOperationsMenu = false
-                showOnlineMetadataDialog = true
-            },
-            onUnifiedField = {
-                showBatchOperationsMenu = false
-                showUnifiedFieldDialog = true
-            },
-            onReplaceText = {
-                showBatchOperationsMenu = false
-                showReplaceTextDialog = true
-            },
-            onAutoNumber = {
-                showBatchOperationsMenu = false
-                showAutoNumberDialog = true
-            },
-            onRenameFiles = {
-                showBatchOperationsMenu = false
-                showRenameDialog = true
-            },
-            onFixMetadata = {
-                showBatchOperationsMenu = false
-                showFixMetadataDialog = true
-            }
-        )
-    }
-
-    // Unified Field Dialog
-    if (showUnifiedFieldDialog) {
-        UnifiedFieldDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showUnifiedFieldDialog = false },
-            onConfirm = { field, value ->
-                viewModel.batchSetUnifiedField(selectedFiles.toList(), field, value)
-                showUnifiedFieldDialog = false
-            }
-        )
-    }
-
-    // Replace Text Dialog
-    if (showReplaceTextDialog) {
-        ReplaceTextDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showReplaceTextDialog = false },
-            onConfirm = { field, searchText, replaceText, useRegex ->
-                viewModel.batchReplaceText(selectedFiles.toList(), field, searchText, replaceText, useRegex)
-                showReplaceTextDialog = false
-            }
-        )
-    }
-
-    // Auto Number Dialog
-    if (showAutoNumberDialog) {
-        AutoNumberDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showAutoNumberDialog = false },
-            onConfirm = { startNumber, step, totalTracks ->
-                viewModel.batchAutoNumberTracks(selectedFiles.toList(), startNumber, step, totalTracks)
-                showAutoNumberDialog = false
-            }
-        )
     }
 
     if (renameTargetFile != null) {
@@ -1713,8 +1475,7 @@ private fun SelectionTopBar(
     selectedCount: Int,
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
-    onNavigateToReplayGain: () -> Unit,
-    onBatchOperations: () -> Unit
+    onNavigateToReplayGain: () -> Unit
 ) {
     TopAppBar(
         title = { Text(stringResource(R.string.selected_count, selectedCount)) },
@@ -1733,34 +1494,7 @@ private fun SelectionTopBar(
             TextButton(onClick = onSelectAll) {
                 Text(stringResource(R.string.select_all))
             }
-            // Batch Operations Menu
-            Box {
-                var expanded by remember { mutableStateOf(false) }
-                
-                IconButton(onClick = { expanded = true }) {
-                    Icon(
-                        painter = appIconPainter(AppIcon.MoreVert),
-                        contentDescription = stringResource(R.string.batch_operations)
-                    )
-                }
-                
-                DropdownMenu(
-                    expanded = expanded,
-                    onDismissRequest = { expanded = false }
-                ) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.batch_online_metadata)) },
-                        leadingIcon = {
-                            Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = stringResource(R.string.cd_online_metadata))
-                        },
-                        onClick = {
-                            expanded = false
-                            onBatchOperations()
-                        }
-                    )
-                }
-            }
-            
+
             FilledTonalButton(
                 onClick = onNavigateToReplayGain,
                 modifier = Modifier.padding(horizontal = 8.dp)
