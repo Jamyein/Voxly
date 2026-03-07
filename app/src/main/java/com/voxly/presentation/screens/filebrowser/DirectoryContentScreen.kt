@@ -182,7 +182,7 @@ fun DirectoryContentScreen(
                         }
                     }
                 } else {
-                    BatchOperationsFAB(
+                    DirectoryBatchOperationsFAB(
                         expanded = showBatchMenu,
                         onExpandChange = { showBatchMenu = it },
                         onOnlineMetadata = {
@@ -239,7 +239,7 @@ fun DirectoryContentScreen(
         }
 
         if (files.isEmpty()) {
-            EmptyDirectoryContent(
+            DirectoryEmptyContent(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
@@ -270,6 +270,7 @@ fun DirectoryContentScreen(
             }
         }
     }
+    }
 
     // Batch operation dialogs would go here
     // For now, they call viewModel methods directly
@@ -277,9 +278,10 @@ fun DirectoryContentScreen(
 
 /**
  * Batch Operations FAB with expandable menu (Speed Dial style)
+ * for DirectoryContentScreen
  */
 @Composable
-private fun BatchOperationsFAB(
+fun DirectoryBatchOperationsFAB(
     expanded: Boolean,
     onExpandChange: (Boolean) -> Unit,
     onOnlineMetadata: () -> Unit,
@@ -328,42 +330,42 @@ private fun BatchOperationsFAB(
                 modifier = Modifier.padding(bottom = 8.dp)
             ) {
                 // Online Metadata
-                MenuItem(
+                DirectoryMenuItem(
                     label = stringResource(R.string.batch_online_metadata),
                     icon = AppIcon.CloudDownload,
                     onClick = onOnlineMetadata
                 )
 
                 // Unified Field
-                MenuItem(
+                DirectoryMenuItem(
                     label = stringResource(R.string.batch_unified_field),
                     icon = AppIcon.Edit,
                     onClick = onUnifiedField
                 )
 
                 // Replace Text
-                MenuItem(
+                DirectoryMenuItem(
                     label = stringResource(R.string.batch_replace_text),
                     icon = AppIcon.AutoFix,
                     onClick = onReplaceText
                 )
 
                 // Auto Number
-                MenuItem(
+                DirectoryMenuItem(
                     label = stringResource(R.string.batch_auto_number),
                     icon = AppIcon.Schedule,
                     onClick = onAutoNumber
                 )
 
                 // Rename Files
-                MenuItem(
+                DirectoryMenuItem(
                     label = stringResource(R.string.batch_rename_files),
                     icon = AppIcon.Rename,
                     onClick = onRenameFiles
                 )
 
                 // Fix Metadata
-                MenuItem(
+                DirectoryMenuItem(
                     label = stringResource(R.string.batch_fix_metadata),
                     icon = AppIcon.Check,
                     onClick = onFixMetadata
@@ -387,7 +389,7 @@ private fun BatchOperationsFAB(
 }
 
 @Composable
-private fun MenuItem(
+fun DirectoryMenuItem(
     label: String,
     icon: AppIcon,
     onClick: () -> Unit
@@ -428,7 +430,7 @@ private fun MenuItem(
 }
 
 @Composable
-private fun EmptyDirectoryContent(modifier: Modifier = Modifier) {
+fun DirectoryEmptyContent(modifier: Modifier = Modifier) {
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center

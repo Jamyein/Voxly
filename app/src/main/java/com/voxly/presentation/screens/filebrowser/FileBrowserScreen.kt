@@ -742,7 +742,7 @@ fun FileBrowserScreen(
  * Batch Operations FAB with expandable menu (Speed Dial style)
  */
 @Composable
-private fun BatchOperationsFAB(
+fun BatchOperationsFAB(
     expanded: Boolean,
     onExpandChange: (Boolean) -> Unit,
     onOnlineMetadata: () -> Unit,
@@ -850,7 +850,7 @@ private fun BatchOperationsFAB(
 }
 
 @Composable
-private fun MenuItem(
+fun MenuItem(
     label: String,
     icon: AppIcon,
     onClick: () -> Unit
