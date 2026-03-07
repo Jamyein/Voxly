@@ -280,11 +280,12 @@ class SettingsDataStore @Inject constructor(
         }
 
     /**
-     * ReplayGain target loudness preference flow (in LUFS, default -18.0)
+     * ReplayGain target loudness preference flow (in LUFS, default -14.0)
+     * Standard ReplayGain uses -14 LUFS (corresponds to 89 dB SPL)
      */
     val replayGainTargetLoudness: Flow<Float> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[REPLAY_GAIN_TARGET_LOUDNESS] ?: -18f
+            preferences[REPLAY_GAIN_TARGET_LOUDNESS] ?: -14f
         }
 
     /**

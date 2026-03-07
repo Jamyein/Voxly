@@ -39,7 +39,7 @@ fun ReplayGainScannerScreen(
     var scannedCount by remember { mutableIntStateOf(0) }
     var successfulCount by remember { mutableIntStateOf(0) }
     var scanType by remember { mutableStateOf(ScanType.TRACK_ONLY) }
-    var targetLoudness by remember { mutableFloatStateOf(-18f) }
+    var targetLoudness by remember { mutableFloatStateOf(-14f) }
     var scanQuality by remember { mutableStateOf(ScanQuality.NORMAL) }
     val scope = rememberCoroutineScope()
 

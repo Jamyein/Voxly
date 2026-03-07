@@ -36,6 +36,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlin.math.log10
+import kotlin.math.pow
+import kotlin.math.sqrt
 import java.io.File
 import java.net.URLDecoder
 import javax.inject.Inject
@@ -414,33 +417,51 @@ class MetadataEditorViewModel @Inject constructor(
     }
     
     /**
-     * Calculates album gain from multiple scanned files.
+     * Calculates album gain from multiple scanned files using energy average.
+     * Matches foobar2000 ReplayGain album gain calculation:
+     * album_rms = sqrt(mean(track_rms²))
+     *
+     * This prevents loud tracks from dominating the album gain calculation.
      */
     private suspend fun calculateAlbumGainFromScannedFiles(filePaths: List<String>): ReplayGainInfo? {
         if (filePaths.isEmpty()) return null
-        
+
         val trackGains = mutableListOf<ReplayGainInfo>()
-        
+
         for (path in filePaths) {
             val result = replayGainRepository.readReplayGain(path)
             result.getOrNull()?.let { trackGains.add(it) }
         }
-        
+
         if (trackGains.isEmpty()) return null
-        
-        // Calculate album gain from track gains
-        val avgGain = trackGains.map { it.trackGain }.average().toFloat()
+
+        // Convert track gains back to RMS values for energy average
+        // gain_db = 20 * log10(rms / reference)
+        // => rms = reference * 10^(gain_db / 20)
+        // Using reference RMS = 0.0001 (same as ReplayGainScanner)
+        val rmsReference = 0.0001f
+        val trackRmsValues = trackGains.map { trackGain ->
+            rmsReference * 10.0.pow(trackGain.trackGain / 20.0).toFloat()
+        }
+
+        // Energy average: sqrt(mean(rms²))
+        val energyMean = trackRmsValues.map { it * it }.average()
+        val albumRms = sqrt(energyMean).toFloat()
+
+        // Convert back to dB gain
+        val albumGainDb = 20 * log10(albumRms.coerceAtLeast(rmsReference))
+
         val maxPeak = trackGains.maxOfOrNull { it.trackPeak } ?: 0f
-        
-        // Get current file's track gain, or use average if not found
+
+        // Get current file's track gain, or use album gain if not found
         val currentFileResult = replayGainRepository.readReplayGain(filePath)
-        val currentTrackGain = currentFileResult.getOrNull()?.trackGain ?: avgGain
+        val currentTrackGain = currentFileResult.getOrNull()?.trackGain ?: albumGainDb
         val currentTrackPeak = currentFileResult.getOrNull()?.trackPeak ?: maxPeak
-        
+
         return ReplayGainInfo(
             trackGain = currentTrackGain,
             trackPeak = currentTrackPeak,
-            albumGain = avgGain,
+            albumGain = albumGainDb,
             albumPeak = maxPeak
         )
     }
