@@ -180,6 +180,9 @@ fun MP3TagNavHost(
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToMetadata = { filePath ->
                         navController.navigate(Screen.MetadataEditor.createRoute(filePath))
+                    },
+                    onNavigateToReplayGain = { filePaths ->
+                        navController.navigate(Screen.ReplayGainScanner.createRoute(filePaths))
                     }
                 )
             }
