@@ -323,11 +323,15 @@ class MetadataEditorViewModel @Inject constructor(
                 }
                 
                 Logger.i("ReplayGain scan started. mode=${currentScanMode.name} files=${filesToScan.size}", "MetadataEditor")
-                
+
+                // Get target loudness from settings
+                val targetLoudness = settingsDataStore.replayGainTargetLoudness.first()
+
                 // Scan all files
                 replayGainRepository.scanReplayGain(
                     filesToScan,
-                    scanQuality
+                    scanQuality,
+                    targetLoudness
                 ).collect { progress ->
                     when (progress.status) {
                         com.voxly.domain.repository.ScanStatus.COMPLETED -> {

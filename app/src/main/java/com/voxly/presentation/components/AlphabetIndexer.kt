@@ -47,8 +47,8 @@ fun AlphabetIndexer(
     modifier: Modifier = Modifier,
     showAllLetters: Boolean = true
 ) {
-    // Full alphabet A-Z + # for symbols
-    val allLetters = ('A'..'Z').toList() + '#'
+    // Full alphabet: 0 for numbers, A-Z for letters, # for symbols
+    val allLetters = listOf('0') + ('A'..'Z').toList() + '#'
 
     // Available letters (letters that have files)
     val availableLetters = remember(groupedFiles) {
@@ -65,11 +65,12 @@ fun AlphabetIndexer(
     var isTouching by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
-    val letterHeight = with(density) { 20.dp.toPx() }
+    // 缩小字母高度以在屏幕内显示全部字符 (0-9 + A-Z + # = 37个)
+    val letterHeight = with(density) { 12.dp.toPx() }
 
     // Static font sizes for selected/unselected states (no animation for stability)
-    val selectedFontSize = 16.sp
-    val unselectedFontSize = 12.sp
+    val selectedFontSize = 12.sp
+    val unselectedFontSize = 9.sp
 
     Column(
         modifier = modifier
@@ -145,7 +146,7 @@ fun AlphabetIndexer(
                 fontSize = fontSize,
                 fontWeight = fontWeight,
                 color = color,
-                modifier = Modifier.padding(vertical = 1.dp)
+                modifier = Modifier.padding(vertical = 0.dp)
             )
         }
     }
@@ -202,6 +203,12 @@ fun getFirstLetter(name: String): Char {
     if (name.isBlank()) return '#'
 
     val firstChar = name.trimStart().firstOrNull() ?: '#'
+
+    // Digits - map to '0' for indexing
+    if (firstChar.isDigit()) {
+        return '0'
+    }
+
     val upperChar = firstChar.uppercaseChar()
 
     // English letters A-Z
@@ -209,8 +216,8 @@ fun getFirstLetter(name: String): Char {
         return upperChar
     }
 
-    // Digits and symbols
-    if (firstChar.isDigit() || !firstChar.isLetter()) {
+    // Symbols and other characters
+    if (!firstChar.isLetter()) {
         return '#'
     }
 

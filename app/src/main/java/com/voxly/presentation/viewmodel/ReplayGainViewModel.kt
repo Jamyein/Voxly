@@ -2,6 +2,7 @@ package com.voxly.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
@@ -9,6 +10,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -17,7 +19,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class ReplayGainViewModel @Inject constructor(
-    private val replayGainRepository: ReplayGainRepository
+    private val replayGainRepository: ReplayGainRepository,
+    private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
 
     private val _scanProgress = MutableStateFlow<ScanProgress?>(null)
@@ -44,7 +47,10 @@ class ReplayGainViewModel @Inject constructor(
             _error.value = null
 
             try {
-                replayGainRepository.scanReplayGain(filePaths, scanQuality)
+                // Get target loudness from settings
+                val targetLoudness = settingsDataStore.replayGainTargetLoudness.first()
+
+                replayGainRepository.scanReplayGain(filePaths, scanQuality, targetLoudness)
                     .collect { progress ->
                         _scanProgress.value = progress
 

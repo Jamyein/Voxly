@@ -86,11 +86,13 @@ interface ReplayGainRepository {
      * Scans audio files and calculates ReplayGain values.
      * @param filePaths List of file paths to scan
      * @param scanQuality The quality level for scanning (determines max sample rate)
+     * @param targetLoudness Target loudness in LUFS (default -18.0)
      * @return Flow emitting scan progress (0.0 to 1.0)
      */
     fun scanReplayGain(
         filePaths: List<String>,
-        scanQuality: ScanQuality = ScanQuality.NORMAL
+        scanQuality: ScanQuality = ScanQuality.NORMAL,
+        targetLoudness: Float = -18f
     ): Flow<ScanProgress>
 
     /**

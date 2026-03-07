@@ -17,8 +17,10 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
+import com.voxly.domain.model.LibraryRefreshState
 import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
+import com.voxly.domain.usecase.MusicLibraryRefreshManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -51,7 +53,7 @@ class FileBrowserViewModel @Inject constructor(
     private val audioRepository: AudioRepository,
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val settingsDataStore: SettingsDataStore,
-    private val appViewModel: AppViewModel,
+    private val refreshManager: MusicLibraryRefreshManager,
     private val safWriteAccessService: SafWriteAccessService,
     private val albumCacheRepository: AlbumCacheRepository,
     private val artistCacheRepository: ArtistCacheRepository
@@ -105,18 +107,18 @@ class FileBrowserViewModel @Inject constructor(
     private val _batchError = MutableStateFlow<String?>(null)
     val batchError: StateFlow<String?> = _batchError.asStateFlow()
 
+    // Pull-to-refresh state
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private var scanJob: Job? = null
     private var batchJob: Job? = null
     private var cachedGlobalFiles: List<AudioFile>? = null
     private val scrollPositions = mutableMapOf<String, ScrollPosition>()
 
     // Scan filter settings - observe changes to trigger auto-refresh
-    private val whitelistEnabled = settingsDataStore.whitelistEnabled
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-    private val blacklistEnabled = settingsDataStore.blacklistEnabled
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
-    private val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    // Note: Core settings (whitelistEnabled, blacklistEnabled, minDurationFilterEnabled)
+    // are watched by MusicLibraryRefreshManager at app level
     private val minDurationFilterThresholdMs = settingsDataStore.minDurationFilterThresholdMs
         .stateIn(viewModelScope, SharingStarted.Eagerly, 60000)
     private val selectedDirectoryUris = settingsDataStore.selectedDirectoryUris
@@ -125,9 +127,6 @@ class FileBrowserViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     // Track previous settings to detect changes
-    private var lastWhitelistEnabled = false
-    private var lastBlacklistEnabled = false
-    private var lastMinDurationFilterEnabled = false
     private var lastMinDurationFilterThresholdMs = 60000
     private var lastSelectedDirectoryUris = listOf<String>()
     private var lastBlacklistDirectoryUris = listOf<String>()
@@ -135,11 +134,16 @@ class FileBrowserViewModel @Inject constructor(
     init {
         restoreSelectedDirectories()
         observeScanSettingsChanges()
-        // Also listen to app-level refresh events from AppViewModel
+        // Listen to refresh state changes from MusicLibraryRefreshManager
         viewModelScope.launch {
-            appViewModel.libraryRefreshEvent.collect { _ ->
-                Timber.d(TAG, "Received library refresh event from AppViewModel")
-                loadAudioFiles(forceRefresh = true)
+            refreshManager.refreshState.collect { state ->
+                when (state) {
+                    is LibraryRefreshState.Success -> {
+                        Timber.d(TAG, "Library refresh completed, reloading files")
+                        loadAudioFiles(forceRefresh = false)
+                    }
+                    else -> { /* Handle other states if needed */ }
+                }
             }
         }
     }
@@ -150,9 +154,15 @@ class FileBrowserViewModel @Inject constructor(
     fun loadAudioFiles(forceRefresh: Boolean = false) {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
+            // Set pull-to-refresh state
+            if (forceRefresh) {
+                _isRefreshing.value = true
+            }
+
             syncSelectedDirectoriesFromStorage()
 
                 if (_selectedDirectories.value.isNotEmpty()) {
+                    _isRefreshing.value = false
                     scanSelectedDirectories(_selectedDirectories.value, forceRefresh)
                     return@launch
                 }
@@ -193,12 +203,13 @@ class FileBrowserViewModel @Inject constructor(
                 if (forceRefresh || _uiState.value !is FileBrowserUiState.Success) {
                     _uiState.value = FileBrowserUiState.Loading
                 }
-                
-                // No cache available - perform full scan
+
+                // No cache available - perform full scan using refreshManager
                 runCatching {
-                    audioRepository.scanAudioFiles(forceRefresh = forceRefresh).last()
+                    refreshManager.refresh(force = forceRefresh)
                 }
                     .onSuccess { files ->
+                        _isRefreshing.value = false
                         cachedGlobalFiles = files
                         _directoryFiles.value = emptyMap()
                         _uiState.value = if (files.isEmpty()) {
@@ -211,6 +222,7 @@ class FileBrowserViewModel @Inject constructor(
                         }
                     }
                     .onFailure { e ->
+                        _isRefreshing.value = false
                         if (e is CancellationException) return@onFailure
                         Timber.tag(TAG).e( "Global audio scan failed", e)
                         _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
@@ -219,51 +231,19 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     /**
-     * Observes scan settings changes and triggers auto-refresh when relevant settings change.
-     * This includes whitelist mode, blacklist mode, duration filter, and directory changes.
+     * Observes scan settings changes that are specific to FileBrowser and triggers auto-refresh.
+     * Note: Core settings (whitelistEnabled, blacklistEnabled, minDurationFilterEnabled)
+     * are watched by MusicLibraryRefreshManager at app level.
      */
     private fun observeScanSettingsChanges() {
         viewModelScope.launch {
-            // Observe whitelist enabled changes
-            launch {
-                whitelistEnabled.collect { enabled ->
-                    if (lastWhitelistEnabled != enabled) {
-                        lastWhitelistEnabled = enabled
-                        Timber.d(TAG, "Whitelist enabled changed to: $enabled, triggering auto-refresh")
-                        loadAudioFiles(forceRefresh = true)
-                    }
-                }
-            }
-
-            // Observe blacklist enabled changes
-            launch {
-                blacklistEnabled.collect { enabled ->
-                    if (lastBlacklistEnabled != enabled) {
-                        lastBlacklistEnabled = enabled
-                        Timber.d(TAG, "Blacklist enabled changed to: $enabled, triggering auto-refresh")
-                        loadAudioFiles(forceRefresh = true)
-                    }
-                }
-            }
-
-            // Observe min duration filter enabled changes
-            launch {
-                minDurationFilterEnabled.collect { enabled ->
-                    if (lastMinDurationFilterEnabled != enabled) {
-                        lastMinDurationFilterEnabled = enabled
-                        Timber.d(TAG, "Min duration filter enabled changed to: $enabled, triggering auto-refresh")
-                        loadAudioFiles(forceRefresh = true)
-                    }
-                }
-            }
-
             // Observe min duration filter threshold changes
             launch {
                 minDurationFilterThresholdMs.collect { threshold ->
                     if (lastMinDurationFilterThresholdMs != threshold) {
                         lastMinDurationFilterThresholdMs = threshold
                         Timber.d(TAG, "Min duration filter threshold changed to: $threshold, triggering auto-refresh")
-                        loadAudioFiles(forceRefresh = true)
+                        refreshManager.refreshAsync(force = true)
                     }
                 }
             }
@@ -274,7 +254,7 @@ class FileBrowserViewModel @Inject constructor(
                     if (lastSelectedDirectoryUris != uris) {
                         lastSelectedDirectoryUris = uris
                         Timber.d(TAG, "Selected directories changed, triggering auto-refresh")
-                        loadAudioFiles(forceRefresh = true)
+                        refreshManager.refreshAsync(force = true)
                     }
                 }
             }
@@ -285,7 +265,7 @@ class FileBrowserViewModel @Inject constructor(
                     if (lastBlacklistDirectoryUris != uris) {
                         lastBlacklistDirectoryUris = uris
                         Timber.d(TAG, "Blacklist directories changed, triggering auto-refresh")
-                        loadAudioFiles(forceRefresh = true)
+                        refreshManager.refreshAsync(force = true)
                     }
                 }
             }

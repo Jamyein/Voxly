@@ -145,13 +145,15 @@ class BatchReplayGainUseCase @Inject constructor(
      * will be automatically downsampled for optimal performance.
      * @param filePaths List of file paths to scan
      * @param scanQuality Quality level (determines max sample rate for scanning)
+     * @param targetLoudness Target loudness in LUFS (default -18.0)
      * @return Flow emitting scan progress
      */
     operator fun invoke(
         filePaths: List<String>,
-        scanQuality: ScanQuality = ScanQuality.ACCURATE
+        scanQuality: ScanQuality = ScanQuality.ACCURATE,
+        targetLoudness: Float = -18f
     ): Flow<com.voxly.domain.repository.ScanProgress> {
-        return replayGainRepository.scanReplayGain(filePaths, scanQuality)
+        return replayGainRepository.scanReplayGain(filePaths, scanQuality, targetLoudness)
     }
 }
 

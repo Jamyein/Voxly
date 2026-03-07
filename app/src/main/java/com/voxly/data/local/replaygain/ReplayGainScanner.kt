@@ -51,17 +51,19 @@ class ReplayGainScanner @Inject constructor(
      * Scans audio files and calculates ReplayGain values.
      * @param filePaths List of file paths to scan
      * @param scanQuality Quality level affecting sample rate
+     * @param targetLoudness Target loudness in LUFS (default -18.0)
      * @return Flow emitting scan progress
      */
     fun scanReplayGain(
         filePaths: List<String>,
-        scanQuality: ScanQuality
+        scanQuality: ScanQuality,
+        targetLoudness: Float = -18f
     ): Flow<ScanProgress> = flow {
         val totalFiles = filePaths.size
         var processedFiles = 0
         val scanStartedAt = SystemClock.elapsedRealtime()
         Logger.i(
-            "ReplayGain scan started. files=$totalFiles quality=$scanQuality",
+            "ReplayGain scan started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS",
             "ReplayGainScanner"
         )
 
@@ -99,7 +101,7 @@ class ReplayGainScanner @Inject constructor(
                     "Analyzing ReplayGain file=${File(filePath).name} path=$filePath",
                     "ReplayGainScanner"
                 )
-                val replayGainInfo = analyzeAudioFile(filePath, scanQuality)
+                val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness)
 
                 if (replayGainInfo != null) {
                     // Save ReplayGain info to file metadata
@@ -173,11 +175,13 @@ class ReplayGainScanner @Inject constructor(
      * Analyzes a single audio file and calculates ReplayGain.
      * @param filePath Path to the audio file
      * @param scanQuality Quality level
+     * @param targetLoudness Target loudness in LUFS
      * @return ReplayGainInfo or null if analysis fails
      */
     private suspend fun analyzeAudioFile(
         filePath: String,
-        scanQuality: ScanQuality
+        scanQuality: ScanQuality,
+        targetLoudness: Float
     ): ReplayGainInfo? = withContext(Dispatchers.IO) {
         try {
             val file = File(filePath)
@@ -229,9 +233,9 @@ class ReplayGainScanner @Inject constructor(
             val rms = calculateRMSFromStats(stats.sumSquares, stats.sampleCount)
             val peak = stats.peak
 
-            // Calculate gain adjustment needed to reach reference level
+            // Calculate gain adjustment needed to reach target loudness level
             val currentDb = 20 * kotlin.math.log10(rms.coerceAtLeast(RMS_REFERENCE.toFloat()))
-            val gainDb = (REFERENCE_LUFS - currentDb).toFloat()
+            val gainDb = (targetLoudness.toDouble() - currentDb).toFloat()
 
             ReplayGainInfo(
                 trackGain = gainDb,

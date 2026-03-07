@@ -293,8 +293,9 @@ class ReplayGainRepositoryImpl @Inject constructor(
 
     override fun scanReplayGain(
         filePaths: List<String>,
-        scanQuality: ScanQuality
-    ): Flow<ScanProgress> = replayGainScanner.scanReplayGain(filePaths, scanQuality)
+        scanQuality: ScanQuality,
+        targetLoudness: Float
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGain(filePaths, scanQuality, targetLoudness)
 
     override suspend fun applyReplayGain(
         filePaths: List<String>,

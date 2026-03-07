@@ -35,6 +35,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -146,7 +147,15 @@ fun FileBrowserScreen(
     val isBatchProcessing by viewModel.isBatchProcessing.collectAsState()
     val batchProgress by viewModel.batchProgress.collectAsState()
     val batchError by viewModel.batchError.collectAsState()
-    
+
+    // Pull-to-refresh state
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+
+    // Handle pull-to-refresh trigger via onRefresh callback
+    val onRefresh: () -> Unit = {
+        viewModel.loadAudioFiles(forceRefresh = true)
+    }
+
     var sortOption by rememberSaveable { mutableStateOf(FileSortOption.NAME_ASC.name) }
     var isSortExpanded by rememberSaveable { mutableStateOf(false) }
 
@@ -573,7 +582,9 @@ fun FileBrowserScreen(
                                 DirectoryOverviewContent(
                                     directories = selectedDirectories,
                                     directoryFiles = directoryFiles,
-                                    onOpenDirectory = viewModel::openDirectory
+                                    onOpenDirectory = viewModel::openDirectory,
+                                    isRefreshing = isRefreshing,
+                                    onRefresh = onRefresh
                                 )
                             }
                             RootTab.ALBUMS -> {
@@ -582,7 +593,9 @@ fun FileBrowserScreen(
                                     onAlbumClick = { album ->
                                         viewModel.cacheAlbum(album)
                                         onNavigateToAlbum(album.name, album.artist)
-                                    }
+                                    },
+                                    isRefreshing = isRefreshing,
+                                    onRefresh = onRefresh
                                 )
                             }
                             RootTab.ARTISTS -> {
@@ -595,7 +608,9 @@ fun FileBrowserScreen(
                                 } else {
                                     ArtistTabContent(
                                         artists = artists,
-                                        onArtistClick = { artist -> onNavigateToArtist(artist.name) }
+                                        onArtistClick = { artist -> onNavigateToArtist(artist.name) },
+                                        isRefreshing = isRefreshing,
+                                        onRefresh = onRefresh
                                     )
                                 }
                             }
@@ -612,7 +627,9 @@ fun FileBrowserScreen(
                                     },
                                     onFileLongClick = { audioFile ->
                                         viewModel.toggleFileSelection(audioFile.path)
-                                    }
+                                    },
+                                    isRefreshing = isRefreshing,
+                                    onRefresh = onRefresh
                                 )
                             }
                         }
@@ -636,52 +653,58 @@ fun FileBrowserScreen(
                             // Create letter to index mapping for fast navigation
                             val letterToIndex = remember(filesToShow) {
                                 filesToShow.mapIndexed { index, file ->
-                                    getFirstLetter(file.name) to index
+                                    getFirstLetter(file.metadata.getDisplayTitle(file.name)) to index
                                 }.distinctBy { it.first }.toMap()
                             }
 
                             Box(modifier = Modifier.fillMaxSize()) {
-                                Column(
+                                PullToRefreshBox(
+                                    isRefreshing = isRefreshing,
+                                    onRefresh = onRefresh,
                                     modifier = Modifier.fillMaxSize()
                                 ) {
-                                    SortMenu(
-                                        isExpanded = isSortExpanded,
-                                        currentSortOption = FileSortOption.valueOf(sortOption),
-                                        onSortOptionChange = { sortOption = it.name },
-                                        onDismiss = { isSortExpanded = false }
-                                    )
-                                    AudioFileList(
-                                        files = filesToShow,
-                                        listState = listState,
-                                        selectedFiles = selectedFiles,
-                                        onFileClick = { audioFile ->
-                                            if (selectedFiles.isNotEmpty()) {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize()
+                                    ) {
+                                        SortMenu(
+                                            isExpanded = isSortExpanded,
+                                            currentSortOption = FileSortOption.valueOf(sortOption),
+                                            onSortOptionChange = { sortOption = it.name },
+                                            onDismiss = { isSortExpanded = false }
+                                        )
+                                        AudioFileList(
+                                            files = filesToShow,
+                                            listState = listState,
+                                            selectedFiles = selectedFiles,
+                                            onFileClick = { audioFile ->
+                                                if (selectedFiles.isNotEmpty()) {
+                                                    viewModel.toggleFileSelection(audioFile.path)
+                                                } else {
+                                                    onNavigateToMetadata(audioFile.path)
+                                                }
+                                            },
+                                            onFileLongClick = { audioFile ->
                                                 viewModel.toggleFileSelection(audioFile.path)
-                                            } else {
+                                            },
+                                            onEditFileMetadata = { audioFile ->
                                                 onNavigateToMetadata(audioFile.path)
+                                            },
+                                            onRenameFile = { audioFile ->
+                                                renameTargetFile = audioFile
+                                            },
+                                            onDeleteFile = { audioFile ->
+                                                deleteTargetFile = audioFile
+                                            },
+                                            onFetchOnlineMetadata = { audioFile ->
+                                                selectedFilesForBatch = setOf(audioFile.path)
+                                                showOnlineMetadataDialog = true
+                                            },
+                                            onFixMetadata = { audioFile ->
+                                                selectedFilesForBatch = setOf(audioFile.path)
+                                                showFixMetadataDialog = true
                                             }
-                                        },
-                                        onFileLongClick = { audioFile ->
-                                            viewModel.toggleFileSelection(audioFile.path)
-                                        },
-                                        onEditFileMetadata = { audioFile ->
-                                            onNavigateToMetadata(audioFile.path)
-                                        },
-                                        onRenameFile = { audioFile ->
-                                            renameTargetFile = audioFile
-                                        },
-                                        onDeleteFile = { audioFile ->
-                                            deleteTargetFile = audioFile
-                                        },
-                                        onFetchOnlineMetadata = { audioFile ->
-                                            selectedFilesForBatch = setOf(audioFile.path)
-                                            showOnlineMetadataDialog = true
-                                        },
-                                        onFixMetadata = { audioFile ->
-                                            selectedFilesForBatch = setOf(audioFile.path)
-                                            showFixMetadataDialog = true
-                                        }
-                                    )
+                                        )
+                                    }
                                 }
 
                                 // Alphabet indexer sidebar
@@ -696,8 +719,7 @@ fun FileBrowserScreen(
                                     },
                                     modifier = Modifier
                                         .align(Alignment.CenterEnd)
-                                        .fillMaxHeight()
-                                        .padding(top = 80.dp, bottom = 80.dp)
+                                        .padding(top = 80.dp, bottom = 80.dp, end = 4.dp)
                                 )
                             }
                         }
@@ -1706,26 +1728,34 @@ private fun SelectionTopBar(
 private fun DirectoryOverviewContent(
     directories: List<SelectedDirectory>,
     directoryFiles: Map<String, List<AudioFile>>,
-    onOpenDirectory: (String) -> Unit
+    onOpenDirectory: (String) -> Unit,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit
 ) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(R.string.selected_directories_count, directories.size),
-            style = MaterialTheme.typography.labelLarge,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            Text(
+                text = stringResource(R.string.selected_directories_count, directories.size),
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            )
 
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            items(directories, key = { it.uri }) { directory ->
-                DirectoryItem(
-                    directory = directory,
-                    fileCount = directoryFiles[directory.uri]?.size ?: 0,
-                    onClick = { onOpenDirectory(directory.uri) }
-                )
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(directories, key = { it.uri }) { directory ->
+                    DirectoryItem(
+                        directory = directory,
+                        fileCount = directoryFiles[directory.uri]?.size ?: 0,
+                        onClick = { onOpenDirectory(directory.uri) }
+                    )
+                }
             }
         }
     }
@@ -2655,29 +2685,37 @@ private fun AutoNumberDialog(
 @Composable
 private fun AlbumTabContent(
     albums: List<AlbumGroup>,
-    onAlbumClick: (AlbumGroup) -> Unit
+    onAlbumClick: (AlbumGroup) -> Unit,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit
 ) {
-    if (albums.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = stringResource(R.string.no_albums_found),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    } else {
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(albums, key = { it.name }) { album ->
-                AlbumGridItem(
-                    album = album,
-                    onClick = { onAlbumClick(album) }
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (albums.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(R.string.no_albums_found),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        } else {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(albums, key = { it.name }) { album ->
+                    AlbumGridItem(
+                        album = album,
+                        onClick = { onAlbumClick(album) }
+                    )
+                }
             }
         }
     }
@@ -2686,27 +2724,35 @@ private fun AlbumTabContent(
 @Composable
 private fun ArtistTabContent(
     artists: List<ArtistGroup>,
-    onArtistClick: (ArtistGroup) -> Unit
+    onArtistClick: (ArtistGroup) -> Unit,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit
 ) {
-    if (artists.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = stringResource(R.string.no_artists_found),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            items(artists, key = { it.name }) { artist ->
-                ArtistListItem(
-                    artist = artist,
-                    onClick = { onArtistClick(artist) }
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (artists.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(R.string.no_artists_found),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(artists, key = { it.name }) { artist ->
+                    ArtistListItem(
+                        artist = artist,
+                        onClick = { onArtistClick(artist) }
+                    )
+                }
             }
         }
     }
@@ -2994,30 +3040,38 @@ private fun AllAudiosTabContent(
     audios: List<AudioFile>,
     selectedFiles: Set<String>,
     onFileClick: (AudioFile) -> Unit,
-    onFileLongClick: (AudioFile) -> Unit
+    onFileLongClick: (AudioFile) -> Unit,
+    isRefreshing: Boolean,
+    onRefresh: () -> Unit
 ) {
-    if (audios.isEmpty()) {
-        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            Text(
-                text = stringResource(R.string.no_audio_files),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    } else {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            items(audios, key = { it.path }) { audioFile ->
-                val isSelected = audioFile.path in selectedFiles
-                SimpleAudioFileItem(
-                    audioFile = audioFile,
-                    isSelected = isSelected,
-                    onClick = { onFileClick(audioFile) },
-                    onLongClick = { onFileLongClick(audioFile) }
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = onRefresh,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        if (audios.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(R.string.no_audio_files),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+        } else {
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                items(audios, key = { it.path }) { audioFile ->
+                    val isSelected = audioFile.path in selectedFiles
+                    SimpleAudioFileItem(
+                        audioFile = audioFile,
+                        isSelected = isSelected,
+                        onClick = { onFileClick(audioFile) },
+                        onLongClick = { onFileLongClick(audioFile) }
+                    )
+                }
             }
         }
     }

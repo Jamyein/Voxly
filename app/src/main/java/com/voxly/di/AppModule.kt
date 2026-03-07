@@ -5,7 +5,6 @@ import com.voxly.data.remote.NetworkConstants
 import android.content.Context
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
-import com.voxly.presentation.viewmodel.AppViewModel
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.replaygain.ReplayGainScanner
@@ -34,12 +33,16 @@ import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.usecase.BatchAlbumArtUseCase
 import com.voxly.domain.usecase.BatchEditMetadataUseCase
 import com.voxly.domain.usecase.BatchReplayGainUseCase
+import com.voxly.domain.usecase.MusicLibraryRefreshManager
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -262,10 +265,14 @@ object AppModule {
     }
 
     @Provides
-    fun provideAppViewModel(
-        settingsDataStore: SettingsDataStore
-    ): AppViewModel {
-        return AppViewModel(settingsDataStore)
+    @Singleton
+    fun provideMusicLibraryRefreshManager(
+        audioRepository: AudioRepository,
+        settingsDataStore: SettingsDataStore,
+        @ApplicationContext context: Context
+    ): MusicLibraryRefreshManager {
+        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        return MusicLibraryRefreshManager(audioRepository, settingsDataStore, scope)
     }
 }
 
