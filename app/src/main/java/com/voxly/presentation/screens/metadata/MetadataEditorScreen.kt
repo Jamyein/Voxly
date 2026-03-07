@@ -7,10 +7,12 @@ import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -41,6 +43,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -145,6 +148,28 @@ fun MetadataEditorScreen(
         }
     }
 
+    // Predictive back handler for Android 14+ back gesture
+    // Provides visual feedback during back gesture when there are unsaved changes
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    val animatedBackProgress by animateFloatAsState(
+        targetValue = backProgress,
+        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        label = "backProgress"
+    )
+
+    PredictiveBackHandler(enabled = hasUnsavedChanges) { progress ->
+        progress.collect { backEvent ->
+            // Update progress for visual feedback (0.0 to 1.0)
+            backProgress = backEvent.progress
+        }
+        // On back gesture complete
+        if (hasUnsavedChanges) {
+            showDiscardDialog = true
+        } else {
+            onNavigateBack()
+        }
+    }
+
     val galleryPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -175,7 +200,15 @@ fun MetadataEditorScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = Modifier
+            .nestedScroll(scrollBehavior.nestedScrollConnection)
+            .graphicsLayer {
+                // Predictive back gesture visual feedback: scale down slightly
+                val scale = 1f - (animatedBackProgress * 0.05f)
+                scaleX = scale
+                scaleY = scale
+                alpha = 1f - (animatedBackProgress * 0.3f)
+            },
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_metadata)) },
