@@ -478,13 +478,26 @@ fun FileBrowserScreen(
         Box(modifier = Modifier.fillMaxSize()) {
 
         // FAB - dynamic bottom padding based on scroll progress
-        if (selectedFiles.isEmpty() && !isBatchProcessing) {
+        // Show FAB when not in batch processing mode OR when in batch mode with files selected
+        if (!isBatchProcessing) {
             BatchOperationsFAB(
                 expanded = showBatchMenu,
                 onExpandChange = { showBatchMenu = it },
                 onOnlineMetadata = {
                     showBatchMenu = false
                     showOnlineMetadataDialog = true
+                },
+                onUnifiedField = {
+                    showBatchMenu = false
+                    showUnifiedFieldDialog = true
+                },
+                onReplaceText = {
+                    showBatchMenu = false
+                    showReplaceTextDialog = true
+                },
+                onAutoNumber = {
+                    showBatchMenu = false
+                    showAutoNumberDialog = true
                 },
                 onRenameFiles = {
                     showBatchMenu = false
@@ -959,6 +972,9 @@ private fun BatchOperationsFAB(
     expanded: Boolean,
     onExpandChange: (Boolean) -> Unit,
     onOnlineMetadata: () -> Unit,
+    onUnifiedField: () -> Unit,
+    onReplaceText: () -> Unit,
+    onAutoNumber: () -> Unit,
     onRenameFiles: () -> Unit,
     onFixMetadata: () -> Unit,
     modifier: Modifier = Modifier
@@ -1006,18 +1022,39 @@ private fun BatchOperationsFAB(
                     icon = AppIcon.CloudDownload,
                     onClick = onOnlineMetadata
                 )
-                
+
+                // Unified Field
+                MenuItem(
+                    label = stringResource(R.string.batch_unified_field),
+                    icon = AppIcon.Edit,
+                    onClick = onUnifiedField
+                )
+
+                // Replace Text
+                MenuItem(
+                    label = stringResource(R.string.batch_replace_text),
+                    icon = AppIcon.AutoFix,
+                    onClick = onReplaceText
+                )
+
+                // Auto Number
+                MenuItem(
+                    label = stringResource(R.string.batch_auto_number),
+                    icon = AppIcon.Schedule,
+                    onClick = onAutoNumber
+                )
+
                 // Rename Files
                 MenuItem(
                     label = stringResource(R.string.batch_rename_files),
                     icon = AppIcon.Rename,
                     onClick = onRenameFiles
                 )
-                
+
                 // Fix Metadata
                 MenuItem(
                     label = stringResource(R.string.batch_fix_metadata),
-                    icon = AppIcon.AutoFix,
+                    icon = AppIcon.Check,
                     onClick = onFixMetadata
                 )
             }
