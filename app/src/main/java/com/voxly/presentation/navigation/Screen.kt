@@ -14,7 +14,6 @@ sealed class Screen(
     }
     data object RecentEdits : Screen("recent_edits", showBottomBar = true)
     data object Statistics : Screen("statistics", showBottomBar = true)
-    data object BatchOperations : Screen("batch_operations", showBottomBar = false)
     data object Settings : Screen("settings", showBottomBar = true)
     data object ScanDirectorySettings : Screen("scan_directory_settings", showBottomBar = false)
     data object LogViewer : Screen("log_viewer", showBottomBar = false)

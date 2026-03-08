@@ -21,7 +21,6 @@ import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.data.remote.musicbrainz.MusicBrainzApi
 import com.voxly.data.remote.musicbrainz.MusicBrainzRepository
 import com.voxly.data.repository.AudioRepositoryImpl
-import com.voxly.data.repository.DataStoreRecentEditsRepository
 import com.voxly.data.repository.LyricsRepositoryImpl
 import com.voxly.data.repository.ReplayGainRepositoryImpl
 import com.voxly.data.repository.RoomRecentEditsRepository
