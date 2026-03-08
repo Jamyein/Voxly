@@ -459,45 +459,6 @@ fun DirectoryContentScreen(
     }
 }
 
-@Composable
-private fun SingleFileRenameDialog(
-    audioFile: AudioFile,
-    onDismiss: () -> Unit,
-    onConfirm: (String) -> Unit
-) {
-    var newName by remember { mutableStateOf(audioFile.name.substringBeforeLast(".")) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.rename_file)) },
-        text = {
-            OutlinedTextField(
-                value = newName,
-                onValueChange = { newName = it },
-                label = { Text(stringResource(R.string.new_file_name)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-        },
-        confirmButton = {
-            TextButton(
-                onClick = {
-                    val extension = audioFile.name.substringAfterLast(".", "")
-                    val fullName = if (extension.isNotEmpty()) "$newName.$extension" else newName
-                    onConfirm(fullName)
-                }
-            ) {
-                Text(stringResource(R.string.dialog_confirm))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.dialog_cancel))
-            }
-        }
-    )
-}
-
 /**
  * Batch Operations FAB with expandable menu (Speed Dial style)
  * for DirectoryContentScreen
