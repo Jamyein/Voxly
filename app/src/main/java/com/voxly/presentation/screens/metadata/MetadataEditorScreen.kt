@@ -33,6 +33,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
@@ -400,7 +401,7 @@ fun MetadataEditorScreen(
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(top = innerPadding.calculateTopPadding())
         ) {
             when (val state = uiState) {
                 is MetadataEditorUiState.Loading -> {
@@ -433,6 +434,7 @@ fun MetadataEditorScreen(
                     MetadataFormContent(
                         metadata = state.editedMetadata,
                         audioFile = state.audioFile,
+                        bottomPadding = innerPadding.calculateBottomPadding(),
                         onTitleChange = { viewModel.updateMetadataField(MetadataField.TITLE, it) },
                         onArtistChange = { viewModel.updateMetadataField(MetadataField.ARTIST, it) },
                         onAlbumChange = { viewModel.updateMetadataField(MetadataField.ALBUM, it) },
@@ -606,13 +608,14 @@ private fun MetadataFormContent(
     onScanReplayGain: () -> Unit = {},
     onClearReplayGain: () -> Unit = {},
     isScanningReplayGain: Boolean = false,
-    replayGainInfo: ReplayGainInfo? = null
+    replayGainInfo: ReplayGainInfo? = null,
+    bottomPadding: Dp = 0.dp
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp)
+            .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomPadding)
     ) {
         // Album Art Section
         AlbumArtSection(

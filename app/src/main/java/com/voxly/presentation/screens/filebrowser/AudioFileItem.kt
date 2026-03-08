@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
@@ -398,13 +399,19 @@ internal fun AudioFileList(
     onRenameFile: (AudioFile) -> Unit,
     onDeleteFile: (AudioFile) -> Unit,
     onFetchOnlineMetadata: (AudioFile) -> Unit,
-    onFixMetadata: (AudioFile) -> Unit
+    onFixMetadata: (AudioFile) -> Unit,
+    bottomPadding: Dp = 0.dp
 ) {
     val isSelectionMode = selectedFiles.isNotEmpty()
 
     LazyColumn(
         state = listState,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
+        contentPadding = PaddingValues(
+            start = 8.dp,
+            end = 8.dp,
+            top = 4.dp,
+            bottom = 4.dp + bottomPadding
+        )
     ) {
         items(files, key = { it.path }) { audioFile ->
             AudioFileItem(
@@ -436,7 +443,8 @@ internal fun AudioFileListWithIndexer(
     onDeleteFile: (AudioFile) -> Unit,
     onFetchOnlineMetadata: (AudioFile) -> Unit,
     onFixMetadata: (AudioFile) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    bottomPadding: Dp = 0.dp
 ) {
     val coroutineScope = rememberCoroutineScope()
 
@@ -458,7 +466,8 @@ internal fun AudioFileListWithIndexer(
             onRenameFile = onRenameFile,
             onDeleteFile = onDeleteFile,
             onFetchOnlineMetadata = onFetchOnlineMetadata,
-            onFixMetadata = onFixMetadata
+            onFixMetadata = onFixMetadata,
+            bottomPadding = bottomPadding
         )
 
         if (showIndexer) {

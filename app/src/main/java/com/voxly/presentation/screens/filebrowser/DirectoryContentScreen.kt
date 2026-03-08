@@ -289,7 +289,7 @@ fun DirectoryContentScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(innerPadding)
+            .padding(top = innerPadding.calculateTopPadding())
     ) {
         // Scrim 遮罩层 - 点击外部收起菜单
         AnimatedVisibility(
@@ -363,7 +363,8 @@ fun DirectoryContentScreen(
                 onFixMetadata = { audioFile ->
                     currentActionFile = audioFile
                     showSingleFixMetadataDialog = true
-                }
+                },
+                bottomPadding = innerPadding.calculateBottomPadding()
             )
         }
     }
