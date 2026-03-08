@@ -329,17 +329,7 @@ interface CachedAudioFileDao {
         // Insert WHERE clause at the correct position in SQL
         // Order: WHERE -> GROUP BY -> ORDER BY -> LIMIT
         val finalSql = when {
-            // Case 1: Has ORDER BY (with or without GROUP BY)
-            baseSql.uppercase().contains(" ORDER BY ") -> {
-                baseSql.replace(Regex("(?i)( ORDER BY )", RegexOption.IGNORE_CASE),
-                    " WHERE $whereClause$1")
-            }
-            // Case 2: Has GROUP BY but no ORDER BY
-            baseSql.uppercase().contains(" GROUP BY ") -> {
-                baseSql.replace(Regex("(?i)( GROUP BY )", RegexOption.IGNORE_CASE),
-                    " WHERE $whereClause$1")
-            }
-            // Case 3: Has WHERE (simple queries)
+            // Case 1: Has WHERE (append to existing WHERE) - must check this FIRST
             baseSql.uppercase().contains(" WHERE ") -> {
                 // Append to existing WHERE - need to find the position before GROUP BY/ORDER BY/LIMIT
                 val groupByMatch = Regex("(?i) GROUP BY ", RegexOption.IGNORE_CASE).find(baseSql)
@@ -354,6 +344,16 @@ interface CachedAudioFileDao {
                 val before = baseSql.substring(0, insertPos)
                 val after = baseSql.substring(insertPos)
                 "$before AND $whereClause$after"
+            }
+            // Case 2: Has GROUP BY (with or without ORDER BY) - WHERE must come before GROUP BY
+            baseSql.uppercase().contains(" GROUP BY ") -> {
+                baseSql.replace(Regex("(?i)( GROUP BY )", RegexOption.IGNORE_CASE),
+                    " WHERE $whereClause$1")
+            }
+            // Case 3: Has ORDER BY but no GROUP BY
+            baseSql.uppercase().contains(" ORDER BY ") -> {
+                baseSql.replace(Regex("(?i)( ORDER BY )", RegexOption.IGNORE_CASE),
+                    " WHERE $whereClause$1")
             }
             // Case 4: No special clauses
             else -> "$baseSql WHERE $whereClause"
