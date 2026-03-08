@@ -9,21 +9,27 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -38,6 +44,8 @@ import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
+import java.text.Collator
+import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -46,8 +54,9 @@ import kotlinx.coroutines.withContext
 fun DirectoryContentScreen(
     directoryUri: String,
     directoryName: String,
+    initialFiles: List<String> = emptyList(),
     onNavigateBack: () -> Unit,
-    onNavigateToMetadata: (String) -> Unit,
+    onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
     viewModel: FileBrowserViewModel = hiltViewModel()
 ) {
@@ -57,9 +66,21 @@ fun DirectoryContentScreen(
     val directoryFiles by viewModel.directoryFiles.collectAsState()
     val selectedFiles by viewModel.selectedFiles.collectAsState()
 
-    // Get files for this directory
-    val files = remember(directoryUri, directoryFiles) {
-        directoryFiles[directoryUri].orEmpty()
+    // Use initialFiles passed via navigation, fallback to ViewModel data if available
+    val files = remember(directoryUri, directoryFiles, initialFiles) {
+        if (initialFiles.isNotEmpty()) {
+            // Try to match with ViewModel data to get full AudioFile objects
+            initialFiles.mapNotNull { path ->
+                directoryFiles[directoryUri]?.find { it.path == path }
+            }.ifEmpty {
+                // If no match in ViewModel, try to use paths from other directories or create minimal entries
+                initialFiles.mapNotNull { path ->
+                    directoryFiles.values.flatten().find { it.path == path }
+                }
+            }
+        } else {
+            directoryFiles[directoryUri].orEmpty()
+        }
     }
 
     val listState = rememberLazyListState()
@@ -71,14 +92,32 @@ fun DirectoryContentScreen(
 
     // Dialog states
     var showBatchMenu by remember { mutableStateOf(false) }
+
+    // Search and sort states
+    var isSearchActive by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    var isSortExpanded by remember { mutableStateOf(false) }
+    var currentSortOption by remember { mutableStateOf(DirFileSortOption.NAME_ASC) }
+
+    // Apply search and sort to files
+    val displayedFiles = remember(files, searchQuery, currentSortOption) {
+        applySearchAndSort(files, searchQuery, currentSortOption)
+    }
+
     var showOnlineMetadataDialog by remember { mutableStateOf(false) }
     var showRenameDialog by remember { mutableStateOf(false) }
     var showFixMetadataDialog by remember { mutableStateOf(false) }
     var showUnifiedFieldDialog by remember { mutableStateOf(false) }
     var showReplaceTextDialog by remember { mutableStateOf(false) }
     var showAutoNumberDialog by remember { mutableStateOf(false) }
+    var showSingleEditMetadataDialog by remember { mutableStateOf(false) }
+    var showSingleRenameDialog by remember { mutableStateOf(false) }
+    var showSingleDeleteDialog by remember { mutableStateOf(false) }
+    var showSingleOnlineMetadataDialog by remember { mutableStateOf(false) }
+    var showSingleFixMetadataDialog by remember { mutableStateOf(false) }
     var renameTargetFile by remember { mutableStateOf<AudioFile?>(null) }
     var deleteTargetFile by remember { mutableStateOf<AudioFile?>(null) }
+    var currentActionFile by remember { mutableStateOf<AudioFile?>(null) }
 
     val isSelectionMode = selectedFiles.isNotEmpty()
     val isBatchProcessing by viewModel.isBatchProcessing.collectAsState()
@@ -130,9 +169,40 @@ fun DirectoryContentScreen(
                                 }
                             )
                         }
+                    } else {
+                        // Search button
+                        IconButton(onClick = {
+                            isSearchActive = !isSearchActive
+                            if (!isSearchActive) {
+                                searchQuery = ""
+                            }
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.Search,
+                                contentDescription = stringResource(R.string.search)
+                            )
+                        }
+                        // Sort button
+                        Box {
+                            IconButton(onClick = {
+                                isSortExpanded = true
+                            }) {
+                                Icon(
+                                    imageVector = Icons.AutoMirrored.Filled.Sort,
+                                    contentDescription = stringResource(R.string.sort)
+                                )
+                            }
+                            SortMenu(
+                                isExpanded = isSortExpanded,
+                                currentSortOption = currentSortOption,
+                                onSortOptionChange = { option ->
+                                    currentSortOption = option
+                                },
+                                onDismiss = { isSortExpanded = false }
+                            )
+                        }
                     }
-                },
-                windowInsets = WindowInsets(0.dp)
+                }
             )
         },
         floatingActionButton = {
@@ -228,32 +298,84 @@ fun DirectoryContentScreen(
             )
         }
 
+        // Search input field
+        AnimatedVisibility(
+            visible = isSearchActive,
+            enter = expandVertically() + fadeIn(),
+            exit = shrinkVertically() + fadeOut()
+        ) {
+            OutlinedTextField(
+                value = searchQuery,
+                onValueChange = { searchQuery = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                placeholder = { Text(stringResource(R.string.search_files)) },
+                singleLine = true,
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null
+                    )
+                },
+                trailingIcon = {
+                    if (searchQuery.isNotEmpty()) {
+                        IconButton(onClick = { searchQuery = "" }) {
+                            Icon(
+                                imageVector = Icons.Default.Clear,
+                                contentDescription = stringResource(R.string.clear)
+                            )
+                        }
+                    }
+                }
+            )
+        }
+
         if (files.isEmpty()) {
             DirectoryEmptyContent(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
             LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding),
+                modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 state = listState
             ) {
-                items(files, key = { it.path }) { audioFile ->
-                    SimpleAudioFileItem(
+                items(displayedFiles, key = { it.path }) { audioFile ->
+                    AudioFileItem(
                         audioFile = audioFile,
                         isSelected = audioFile.path in selectedFiles,
                         onClick = {
                             if (isSelectionMode) {
                                 viewModel.toggleFileSelection(audioFile.path)
                             } else {
-                                onNavigateToMetadata(audioFile.path)
+                                onNavigateToMetadata(audioFile.path, null)
                             }
                         },
                         onLongClick = {
                             viewModel.toggleFileSelection(audioFile.path)
+                        },
+                        showActions = !isSelectionMode,
+                        onEditMetadata = {
+                            currentActionFile = audioFile
+                            showSingleEditMetadataDialog = true
+                        },
+                        onRename = {
+                            currentActionFile = audioFile
+                            showSingleRenameDialog = true
+                        },
+                        onDelete = {
+                            currentActionFile = audioFile
+                            showSingleDeleteDialog = true
+                        },
+                        onFetchOnlineMetadata = {
+                            currentActionFile = audioFile
+                            showSingleOnlineMetadataDialog = true
+                        },
+                        onFixMetadata = {
+                            currentActionFile = audioFile
+                            showSingleFixMetadataDialog = true
                         }
                     )
                 }
@@ -262,8 +384,133 @@ fun DirectoryContentScreen(
     }
     }
 
-    // Batch operation dialogs would go here
-    // For now, they call viewModel methods directly
+    // Single file action dialogs
+    if (showSingleEditMetadataDialog && currentActionFile != null) {
+        // Navigate to metadata editor
+        LaunchedEffect(currentActionFile) {
+            showSingleEditMetadataDialog = false
+            onNavigateToMetadata(currentActionFile!!.path, null)
+            currentActionFile = null
+        }
+    }
+
+    if (showSingleRenameDialog && currentActionFile != null) {
+        SingleFileRenameDialog(
+            audioFile = currentActionFile!!,
+            onDismiss = {
+                showSingleRenameDialog = false
+                currentActionFile = null
+            },
+            onConfirm = { newName ->
+                viewModel.renameSingleFile(currentActionFile!!.path, newName) { _, _ -> }
+                showSingleRenameDialog = false
+                currentActionFile = null
+            }
+        )
+    }
+
+    if (showSingleDeleteDialog && currentActionFile != null) {
+        AlertDialog(
+            onDismissRequest = {
+                showSingleDeleteDialog = false
+                currentActionFile = null
+            },
+            title = { Text(stringResource(R.string.dialog_confirm_delete)) },
+            text = { Text(stringResource(R.string.dialog_confirm_delete_single_file_message, currentActionFile!!.name)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.deleteSingleFile(currentActionFile!!.path) { _, _ -> }
+                        showSingleDeleteDialog = false
+                        currentActionFile = null
+                    },
+                    colors = ButtonDefaults.textButtonColors(
+                        contentColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text(stringResource(R.string.log_viewer_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    showSingleDeleteDialog = false
+                    currentActionFile = null
+                }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            }
+        )
+    }
+
+    if (showSingleOnlineMetadataDialog && currentActionFile != null) {
+        LaunchedEffect(currentActionFile) {
+            viewModel.batchFetchOnlineMetadata(
+                listOf(currentActionFile!!.path),
+                OnlineMetadataOptions(
+                    overwriteExisting = false,
+                    fetchAlbumArt = true,
+                    fetchLyrics = true
+                )
+            )
+            showSingleOnlineMetadataDialog = false
+            currentActionFile = null
+        }
+    }
+
+    if (showSingleFixMetadataDialog && currentActionFile != null) {
+        LaunchedEffect(currentActionFile) {
+            viewModel.batchFixMetadata(
+                listOf(currentActionFile!!.path),
+                FixMetadataOptions(
+                    autoTitleCase = true,
+                    removeExtraSpaces = true,
+                    fixTrackNumbers = true,
+                    removeEmptyTags = true
+                )
+            )
+            showSingleFixMetadataDialog = false
+            currentActionFile = null
+        }
+    }
+}
+
+@Composable
+private fun SingleFileRenameDialog(
+    audioFile: AudioFile,
+    onDismiss: () -> Unit,
+    onConfirm: (String) -> Unit
+) {
+    var newName by remember { mutableStateOf(audioFile.name.substringBeforeLast(".")) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.rename_file)) },
+        text = {
+            OutlinedTextField(
+                value = newName,
+                onValueChange = { newName = it },
+                label = { Text(stringResource(R.string.new_file_name)) },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = {
+                    val extension = audioFile.name.substringAfterLast(".", "")
+                    val fullName = if (extension.isNotEmpty()) "$newName.$extension" else newName
+                    onConfirm(fullName)
+                }
+            ) {
+                Text(stringResource(R.string.dialog_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_cancel))
+            }
+        }
+    )
 }
 
 /**
@@ -440,4 +687,92 @@ fun DirectoryEmptyContent(modifier: Modifier = Modifier) {
             )
         }
     }
+}
+
+// Chinese collator for proper sorting
+private val chineseCollator = Collator.getInstance(Locale.CHINESE)
+
+// Sort options for directory content
+private enum class DirFileSortOption {
+    NAME_ASC,
+    NAME_DESC,
+    SIZE_DESC,
+    DURATION_DESC
+}
+
+private fun applySearchAndSort(
+    files: List<AudioFile>,
+    query: String,
+    sortOption: DirFileSortOption
+): List<AudioFile> {
+    val normalizedQuery = query.trim().lowercase()
+    val filtered = if (normalizedQuery.isBlank()) {
+        files
+    } else {
+        files.filter { audioFile ->
+            val title = audioFile.metadata.title.orEmpty()
+            val artist = audioFile.metadata.artist.orEmpty()
+            val album = audioFile.metadata.album.orEmpty()
+            listOf(audioFile.name, title, artist, album).any { text ->
+                text.lowercase().contains(normalizedQuery)
+            }
+        }
+    }
+
+    return applySort(filtered, sortOption)
+}
+
+private fun applySort(
+    files: List<AudioFile>,
+    sortOption: DirFileSortOption
+): List<AudioFile> {
+    return when (sortOption) {
+        DirFileSortOption.NAME_ASC -> files.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
+        DirFileSortOption.NAME_DESC -> files.sortedWith(compareByDescending(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
+        DirFileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
+        DirFileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SortMenu(
+    isExpanded: Boolean,
+    currentSortOption: DirFileSortOption,
+    onSortOptionChange: (DirFileSortOption) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        DropdownMenu(
+            expanded = isExpanded,
+            onDismissRequest = onDismiss,
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            DirFileSortOption.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(option.labelResId())) },
+                    leadingIcon = if (option == currentSortOption) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = stringResource(R.string.cd_selected),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else null,
+                    onClick = {
+                        onSortOptionChange(option)
+                        onDismiss()
+                    }
+                )
+            }
+        }
+    }
+}
+
+private fun DirFileSortOption.labelResId(): Int = when (this) {
+    DirFileSortOption.NAME_ASC -> R.string.file_sort_name_asc
+    DirFileSortOption.NAME_DESC -> R.string.file_sort_name_desc
+    DirFileSortOption.SIZE_DESC -> R.string.file_sort_size_desc
+    DirFileSortOption.DURATION_DESC -> R.string.file_sort_duration_desc
 }

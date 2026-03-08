@@ -126,6 +126,10 @@
     <string name="cd_back">Go back</string>
     <string name="cd_close">Close</string>
     <string name="cd_search">Search</string>
+    <string name="search">Search</string>
+    <string name="sort">Sort</string>
+    <string name="clear">Clear</string>
+    <string name="search_files">Search files...</string>
     <string name="cd_expand_menu">Expand menu</string>
     <string name="cd_collapse_menu">Collapse menu</string>
     <string name="cd_save">Save changes</string>
