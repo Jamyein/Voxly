@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
+import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.screens.filebrowser.SimpleAudioFileItem
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.ui.loadLocalAlbumArt
@@ -69,7 +70,7 @@ import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 fun ArtistDetailScreen(
     artistName: String,
     onNavigateBack: () -> Unit,
-    onNavigateToMetadata: (String) -> Unit,
+    onNavigateToMetadata: (String, String?) -> Unit,
     viewModel: ArtistDetailViewModel = hiltViewModel()
 ) {
     // Load artist from cache
@@ -195,7 +196,7 @@ fun ArtistDetailScreen(
                     SimpleAudioFileItem(
                         audioFile = audioFile,
                         isSelected = false,
-                        onClick = { onNavigateToMetadata(audioFile.path) },
+                        onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
                         onLongClick = {}
                     )
                 }
@@ -230,14 +231,11 @@ fun ArtistDetailScreen(
                             val albumName = albumList[page]
                             val albumFiles = albumsGrouped[albumName] ?: emptyList()
                             val albumArtPath = albumCovers[albumName]
-                            val albumArt by produceState<Bitmap?>(initialValue = null, albumArtPath) {
-                                value = albumArtPath?.let { loadLocalAlbumArt(it) }
-                            }
 
                             AlbumCard(
                                 albumName = albumName,
                                 trackCount = albumFiles.size,
-                                albumArt = albumArt,
+                                albumArtPath = albumArtPath,
                                 onClick = { /* Could navigate to album detail */ },
                                 modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
                             )
@@ -260,7 +258,7 @@ fun ArtistDetailScreen(
                         SimpleAudioFileItem(
                             audioFile = audioFile,
                             isSelected = false,
-                            onClick = { onNavigateToMetadata(audioFile.path) },
+                            onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
                             onLongClick = {}
                         )
                     }
@@ -306,7 +304,7 @@ fun ArtistDetailScreen(
 private fun AlbumCard(
     albumName: String,
     trackCount: Int,
-    albumArt: Bitmap?,
+    albumArtPath: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -340,14 +338,13 @@ private fun AlbumCard(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                if (albumArt != null) {
-                    Image(
-                        bitmap = albumArt.asImageBitmap(),
-                        contentDescription = albumName,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
+                AlbumArtImage(
+                    filePath = albumArtPath,
+                    mediaStoreAlbumId = null,
+                    contentDescription = albumName,
+                    size = 140.dp,
+                    modifier = Modifier.fillMaxSize()
+                ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.secondaryContainer

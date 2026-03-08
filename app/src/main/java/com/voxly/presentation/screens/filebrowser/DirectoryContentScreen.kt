@@ -39,15 +39,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveMotionTokens
-import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
 import java.text.Collator
 import java.util.Locale
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -93,9 +92,11 @@ fun DirectoryContentScreen(
     // Dialog states
     var showBatchMenu by remember { mutableStateOf(false) }
 
-    // Search and sort states
-    var isSearchActive by remember { mutableStateOf(false) }
+    // Search states - using BottomSheet
+    var showSearchSheet by remember { mutableStateOf(false) }
+    val searchSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
     var searchQuery by remember { mutableStateOf("") }
+
     var isSortExpanded by remember { mutableStateOf(false) }
     var currentSortOption by remember { mutableStateOf(DirFileSortOption.NAME_ASC) }
 
@@ -170,36 +171,38 @@ fun DirectoryContentScreen(
                             )
                         }
                     } else {
-                        // Search button
-                        IconButton(onClick = {
-                            isSearchActive = !isSearchActive
-                            if (!isSearchActive) {
-                                searchQuery = ""
-                            }
-                        }) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = stringResource(R.string.search)
-                            )
-                        }
-                        // Sort button
-                        Box {
+                        // Search and Sort buttons row
+                        Row(
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            // Search button - opens BottomSheet
                             IconButton(onClick = {
-                                isSortExpanded = true
+                                showSearchSheet = true
                             }) {
                                 Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.Sort,
-                                    contentDescription = stringResource(R.string.sort)
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = stringResource(R.string.search)
                                 )
                             }
-                            SortMenu(
-                                isExpanded = isSortExpanded,
-                                currentSortOption = currentSortOption,
-                                onSortOptionChange = { option ->
-                                    currentSortOption = option
-                                },
-                                onDismiss = { isSortExpanded = false }
-                            )
+                            // Sort button
+                            Box {
+                                IconButton(onClick = {
+                                    isSortExpanded = true
+                                }) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Sort,
+                                        contentDescription = stringResource(R.string.sort)
+                                    )
+                                }
+                                SortMenu(
+                                    isExpanded = isSortExpanded,
+                                    currentSortOption = currentSortOption,
+                                    onSortOptionChange = { option ->
+                                        currentSortOption = option
+                                    },
+                                    onDismiss = { isSortExpanded = false }
+                                )
+                            }
                         }
                     }
                 }
@@ -298,35 +301,17 @@ fun DirectoryContentScreen(
             )
         }
 
-        // Search input field
-        AnimatedVisibility(
-            visible = isSearchActive,
-            enter = expandVertically() + fadeIn(),
-            exit = shrinkVertically() + fadeOut()
-        ) {
-            OutlinedTextField(
-                value = searchQuery,
-                onValueChange = { searchQuery = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp),
-                placeholder = { Text(stringResource(R.string.search_files)) },
-                singleLine = true,
-                leadingIcon = {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = null
-                    )
+        // Search BottomSheet
+        if (showSearchSheet) {
+            SearchBottomSheet(
+                sheetState = searchSheetState,
+                onDismiss = {
+                    showSearchSheet = false
                 },
-                trailingIcon = {
-                    if (searchQuery.isNotEmpty()) {
-                        IconButton(onClick = { searchQuery = "" }) {
-                            Icon(
-                                imageVector = Icons.Default.Clear,
-                                contentDescription = stringResource(R.string.clear)
-                            )
-                        }
-                    }
+                allFiles = files,
+                onFileClick = { audioFile ->
+                    showSearchSheet = false
+                    onNavigateToMetadata(audioFile.path, null)
                 }
             )
         }
@@ -336,50 +321,41 @@ fun DirectoryContentScreen(
                 modifier = Modifier.fillMaxSize()
             )
         } else {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                state = listState
-            ) {
-                items(displayedFiles, key = { it.path }) { audioFile ->
-                    AudioFileItem(
-                        audioFile = audioFile,
-                        isSelected = audioFile.path in selectedFiles,
-                        onClick = {
-                            if (isSelectionMode) {
-                                viewModel.toggleFileSelection(audioFile.path)
-                            } else {
-                                onNavigateToMetadata(audioFile.path, null)
-                            }
-                        },
-                        onLongClick = {
-                            viewModel.toggleFileSelection(audioFile.path)
-                        },
-                        showActions = !isSelectionMode,
-                        onEditMetadata = {
-                            currentActionFile = audioFile
-                            showSingleEditMetadataDialog = true
-                        },
-                        onRename = {
-                            currentActionFile = audioFile
-                            showSingleRenameDialog = true
-                        },
-                        onDelete = {
-                            currentActionFile = audioFile
-                            showSingleDeleteDialog = true
-                        },
-                        onFetchOnlineMetadata = {
-                            currentActionFile = audioFile
-                            showSingleOnlineMetadataDialog = true
-                        },
-                        onFixMetadata = {
-                            currentActionFile = audioFile
-                            showSingleFixMetadataDialog = true
-                        }
-                    )
+            AudioFileListWithIndexer(
+                files = displayedFiles,
+                listState = listState,
+                selectedFiles = selectedFiles,
+                onFileClick = { audioFile ->
+                    if (isSelectionMode) {
+                        viewModel.toggleFileSelection(audioFile.path)
+                    } else {
+                        onNavigateToMetadata(audioFile.path, null)
+                    }
+                },
+                onFileLongClick = { audioFile ->
+                    viewModel.toggleFileSelection(audioFile.path)
+                },
+                onEditFileMetadata = { audioFile ->
+                    currentActionFile = audioFile
+                    showSingleEditMetadataDialog = true
+                },
+                onRenameFile = { audioFile ->
+                    currentActionFile = audioFile
+                    showSingleRenameDialog = true
+                },
+                onDeleteFile = { audioFile ->
+                    currentActionFile = audioFile
+                    showSingleDeleteDialog = true
+                },
+                onFetchOnlineMetadata = { audioFile ->
+                    currentActionFile = audioFile
+                    showSingleOnlineMetadataDialog = true
+                },
+                onFixMetadata = { audioFile ->
+                    currentActionFile = audioFile
+                    showSingleFixMetadataDialog = true
                 }
-            }
+            )
         }
     }
     }
@@ -742,11 +718,10 @@ private fun SortMenu(
     onSortOptionChange: (DirFileSortOption) -> Unit,
     onDismiss: () -> Unit
 ) {
-    Box(modifier = Modifier.fillMaxWidth()) {
+    Box {
         DropdownMenu(
             expanded = isExpanded,
-            onDismissRequest = onDismiss,
-            modifier = Modifier.align(Alignment.TopEnd)
+            onDismissRequest = onDismiss
         ) {
             DirFileSortOption.entries.forEach { option ->
                 DropdownMenuItem(

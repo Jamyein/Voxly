@@ -51,6 +51,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
+import com.voxly.presentation.components.NetworkAlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveAnimations
@@ -76,6 +77,7 @@ fun MetadataEditorScreen(
     onNavigateToOnlineMetadata: () -> Unit,
     onNavigateToOnlineLyricsSearch: () -> Unit,
     onNavigateToOnlineCoverSearch: () -> Unit,
+    coverTag: String? = null,
     pendingOnlineMetadata: com.voxly.domain.model.AudioMetadata? = null,
     onConsumePendingOnlineMetadata: () -> Unit = {},
     pendingOnlineLyrics: String? = null,
@@ -495,6 +497,7 @@ fun MetadataEditorScreen(
                             )
                         },
                         onPickAlbumArt = { showAlbumArtOptions = true },
+                        coverTag = coverTag,
                         onZoomAlbumArt = { showAlbumArtPreview = true },
                         onRotateAlbumArt = {
                             state.editedMetadata.albumArt?.let { bytes ->
@@ -926,6 +929,7 @@ private fun MetadataForm(
     onTrackNumberChange: (String, String) -> Unit,
     onDiscNumberChange: (String, String) -> Unit,
     onPickAlbumArt: () -> Unit,
+    coverTag: String? = null,
     onZoomAlbumArt: () -> Unit,
     onRotateAlbumArt: () -> Unit,
     onRemoveAlbumArt: () -> Unit,
@@ -944,6 +948,7 @@ private fun MetadataForm(
         AlbumArtSection(
             albumArt = metadata.albumArt,
             onPickAlbumArt = onPickAlbumArt,
+            coverTag = coverTag,
             onZoomAlbumArt = onZoomAlbumArt,
             onRotateAlbumArt = onRotateAlbumArt,
             onRemoveAlbumArt = onRemoveAlbumArt
@@ -1336,6 +1341,7 @@ private fun ReplayGainRow(
 private fun AlbumArtSection(
     albumArt: ByteArray?,
     onPickAlbumArt: () -> Unit,
+    coverTag: String? = null,
     onZoomAlbumArt: () -> Unit,
     onRotateAlbumArt: () -> Unit,
     onRemoveAlbumArt: () -> Unit
@@ -1410,17 +1416,11 @@ private fun CoverCandidateThumbnail(
     coverArtUrl: String?,
     modifier: Modifier = Modifier
 ) {
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, key1 = coverArtUrl) {
-        value = loadImageBitmapFromUrl(coverArtUrl)
-    }
-
-    if (bitmap != null) {
-        Image(
-            bitmap = bitmap!!,
-            contentDescription = stringResource(R.string.cd_cover_thumbnail),
-            modifier = modifier
-        )
-    } else {
+    NetworkAlbumArtImage(
+        url = coverArtUrl,
+        contentDescription = stringResource(R.string.cd_cover_thumbnail),
+        modifier = modifier
+    ) {
         Box(
             modifier = modifier,
             contentAlignment = Alignment.Center

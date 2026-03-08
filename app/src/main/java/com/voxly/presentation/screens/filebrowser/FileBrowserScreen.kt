@@ -81,10 +81,9 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.RootTab
 import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
+import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.components.AlphabetIndexer
-import com.voxly.presentation.components.getFirstLetter
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.ui.loadLocalAlbumArt
@@ -112,9 +111,9 @@ private val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply
 @Composable
 fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel(),
-    onNavigateToMetadata: (String) -> Unit,
+    onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
-    onNavigateToDirectory: (String, String) -> Unit,
+    onNavigateToDirectory: (String, String, List<String>) -> Unit,
     onNavigateToSearch: (List<AudioFile>) -> Unit = {},
     onNavigateToAlbum: (String, String?) -> Unit = { _, _ -> },
     onNavigateToArtist: (String) -> Unit = {},
@@ -572,7 +571,7 @@ fun FileBrowserScreen(
                                         if (selectedFiles.isNotEmpty()) {
                                             viewModel.toggleFileSelection(audioFile.path)
                                         } else {
-                                            onNavigateToMetadata(audioFile.path)
+                                            onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
                                         }
                                     },
                                     onFileLongClick = { audioFile ->
@@ -600,13 +599,6 @@ fun FileBrowserScreen(
                         if (filesToShow.isEmpty()) {
                             EmptyContent()
                         } else {
-                            // Create letter to index mapping for fast navigation
-                            val letterToIndex = remember(filesToShow) {
-                                filesToShow.mapIndexed { index, file ->
-                                    getFirstLetter(file.metadata.getDisplayTitle(file.name)) to index
-                                }.distinctBy { it.first }.toMap()
-                            }
-
                             Box(modifier = Modifier.fillMaxSize()) {
                                 PullToRefreshBox(
                                     isRefreshing = isRefreshing,
@@ -622,7 +614,7 @@ fun FileBrowserScreen(
                                             onSortOptionChange = { sortOption = it.name },
                                             onDismiss = { isSortExpanded = false }
                                         )
-                                        AudioFileList(
+                                        AudioFileListWithIndexer(
                                             files = filesToShow,
                                             listState = listState,
                                             selectedFiles = selectedFiles,
@@ -630,14 +622,14 @@ fun FileBrowserScreen(
                                                 if (selectedFiles.isNotEmpty()) {
                                                     viewModel.toggleFileSelection(audioFile.path)
                                                 } else {
-                                                    onNavigateToMetadata(audioFile.path)
+                                                    onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
                                                 }
                                             },
                                             onFileLongClick = { audioFile ->
                                                 viewModel.toggleFileSelection(audioFile.path)
                                             },
                                             onEditFileMetadata = { audioFile ->
-                                                onNavigateToMetadata(audioFile.path)
+                                                onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
                                             },
                                             onRenameFile = { audioFile ->
                                                 renameTargetFile = audioFile
@@ -650,21 +642,6 @@ fun FileBrowserScreen(
                                         )
                                     }
                                 }
-
-                                // Alphabet indexer sidebar
-                                AlphabetIndexer(
-                                    groupedFiles = letterToIndex.mapValues { listOf() },
-                                    onLetterSelected = { letter ->
-                                        letterToIndex[letter]?.let { targetIndex ->
-                                            coroutineScope.launch {
-                                                listState.animateScrollToItem(targetIndex)
-                                            }
-                                        }
-                                    },
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .padding(top = 80.dp, bottom = 80.dp, end = 4.dp)
-                                )
                             }
                         }
                     }
@@ -1380,7 +1357,7 @@ data class FixMetadataOptions(
     val removeEmptyTags: Boolean
 )
 
-private enum class FileSortOption {
+internal enum class FileSortOption {
     NAME_ASC,
     NAME_DESC,
     SIZE_DESC,
@@ -1429,49 +1406,6 @@ private fun applySort(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SortMenu(
-    isExpanded: Boolean,
-    currentSortOption: FileSortOption,
-    onSortOptionChange: (FileSortOption) -> Unit,
-    onDismiss: () -> Unit
-) {
-    Box(modifier = Modifier.fillMaxWidth()) {
-        DropdownMenu(
-            expanded = isExpanded,
-            onDismissRequest = onDismiss,
-            modifier = Modifier.align(Alignment.TopEnd)
-        ) {
-            FileSortOption.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(option.labelResId())) },
-                    leadingIcon = if (option == currentSortOption) {
-                        {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = stringResource(R.string.cd_selected),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    } else null,
-                    onClick = {
-                        onSortOptionChange(option)
-                        onDismiss()
-                    }
-                )
-            }
-        }
-    }
-}
-
-private fun FileSortOption.labelResId(): Int = when (this) {
-    FileSortOption.NAME_ASC -> R.string.file_sort_name_asc
-    FileSortOption.NAME_DESC -> R.string.file_sort_name_desc
-    FileSortOption.SIZE_DESC -> R.string.file_sort_size_desc
-    FileSortOption.DURATION_DESC -> R.string.file_sort_duration_desc
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
 private fun SelectionTopBar(
     selectedCount: Int,
     onSelectAll: () -> Unit,
@@ -1512,7 +1446,7 @@ private fun SelectionTopBar(
 private fun DirectoryOverviewContent(
     directories: List<SelectedDirectory>,
     directoryFiles: Map<String, List<AudioFile>>,
-    onOpenDirectory: (String, String) -> Unit,
+    onOpenDirectory: (String, String, List<String>) -> Unit,
     isRefreshing: Boolean,
     onRefresh: () -> Unit
 ) {
@@ -1536,10 +1470,11 @@ private fun DirectoryOverviewContent(
                 items(directories, key = { it.uri }) { directory ->
                     val directoryName = directory.path.substringAfterLast("/")
                         .substringAfterLast(":")
+                    val files = directoryFiles[directory.uri].orEmpty()
                     DirectoryItem(
                         directory = directory,
-                        fileCount = directoryFiles[directory.uri]?.size ?: 0,
-                        onClick = { onOpenDirectory(directory.uri, directoryName) }
+                        fileCount = files.size,
+                        onClick = { onOpenDirectory(directory.uri, directoryName, files.map { it.path }) }
                     )
                 }
             }
@@ -1614,251 +1549,6 @@ private fun ErrorContent(message: String) {
                 message,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun AudioFileList(
-    files: List<AudioFile>,
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    selectedFiles: Set<String>,
-    onFileClick: (AudioFile) -> Unit,
-    onFileLongClick: (AudioFile) -> Unit,
-    onEditFileMetadata: (AudioFile) -> Unit,
-    onRenameFile: (AudioFile) -> Unit,
-    onDeleteFile: (AudioFile) -> Unit,
-    onFetchOnlineMetadata: (AudioFile) -> Unit,
-    onFixMetadata: (AudioFile) -> Unit
-) {
-    val isSelectionMode = selectedFiles.isNotEmpty()
-
-    LazyColumn(
-        state = listState,
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        items(files, key = { it.path }) { audioFile ->
-            AudioFileItem(
-                audioFile = audioFile,
-                isSelected = audioFile.path in selectedFiles,
-                onClick = { onFileClick(audioFile) },
-                onLongClick = { onFileLongClick(audioFile) },
-                showActions = !isSelectionMode,
-                onEditMetadata = { onEditFileMetadata(audioFile) },
-                onRename = { onRenameFile(audioFile) },
-                onDelete = { onDeleteFile(audioFile) },
-                onFetchOnlineMetadata = { onFetchOnlineMetadata(audioFile) },
-                onFixMetadata = { onFixMetadata(audioFile) }
-            )
-        }
-    }
-}
-
-@Composable
-@OptIn(ExperimentalFoundationApi::class)
-private fun AudioFileItem(
-    audioFile: AudioFile,
-    isSelected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    showActions: Boolean,
-    onEditMetadata: () -> Unit,
-    onRename: () -> Unit,
-    onDelete: () -> Unit,
-    onFetchOnlineMetadata: () -> Unit,
-    onFixMetadata: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val context = LocalContext.current
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        color = Color.Transparent
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 4.dp, top = 14.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Album art display
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(MaterialTheme.shapes.medium),
-                contentAlignment = Alignment.Center
-            ) {
-                val albumArtBitmap by produceState<android.graphics.Bitmap?>(
-                    initialValue = null,
-                    key1 = audioFile.path,
-                    key2 = audioFile.mediaStoreAlbumId
-                ) {
-                    value = withContext(Dispatchers.IO) {
-                        loadLocalAlbumArt(audioFile.path)
-                    }
-                }
-
-                val bitmap = albumArtBitmap
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = stringResource(R.string.cd_album_art),
-                        modifier = Modifier.fillMaxSize()
-                    )
-                } else {
-                    Icon(
-                        painter = appIconPainter(AppIcon.MusicNote),
-                        contentDescription = stringResource(R.string.cd_no_cover),
-                        tint = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = buildString {
-                        append(audioFile.metadata.artist ?: "")
-                        audioFile.metadata.album?.let { append(" - $it") }
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = buildString {
-                        append(audioFile.format)
-                        append(" • ")
-                        append(audioFile.getFormattedDuration())
-                        append(" • ")
-                        append(audioFile.getFormattedSize())
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-
-            if (isSelected) {
-                Icon(
-                    Icons.Default.CheckCircle,
-                    contentDescription = stringResource(R.string.selected),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(8.dp)
-                )
-            } else if (showActions) {
-                FileActionsMenu(
-                    onEditMetadata = onEditMetadata,
-                    onRename = onRename,
-                    onDelete = onDelete,
-                    onFetchOnlineMetadata = onFetchOnlineMetadata,
-                    onFixMetadata = onFixMetadata
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun FileActionsMenu(
-    onEditMetadata: () -> Unit,
-    onRename: () -> Unit,
-    onDelete: () -> Unit,
-    onFetchOnlineMetadata: () -> Unit,
-    onFixMetadata: () -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                painter = appIconPainter(AppIcon.MoreVert),
-                contentDescription = stringResource(R.string.file_item_actions)
-            )
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.edit_metadata)) },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.Edit),
-                        contentDescription = stringResource(R.string.cd_edit_file)
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onEditMetadata()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.fetch_online_metadata)) },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.CloudDownload),
-                        contentDescription = stringResource(R.string.cd_online_metadata)
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onFetchOnlineMetadata()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.fix_metadata)) },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.AutoFix),
-                        contentDescription = stringResource(R.string.cd_batch_fix)
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onFixMetadata()
-                }
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.rename_file)) },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.Rename),
-                        contentDescription = stringResource(R.string.cd_batch_rename)
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onRename()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.log_viewer_delete)) },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.Close),
-                        contentDescription = stringResource(R.string.cd_delete_file),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onDelete()
-                }
             )
         }
     }
@@ -2549,7 +2239,7 @@ private fun ArtistTabContent(
 private fun AlbumDetailContent(
     album: AlbumGroup,
     onBackClick: () -> Unit,
-    onNavigateToMetadata: (String) -> Unit
+    onNavigateToMetadata: (String, String?) -> Unit
 ) {
     // Sort by disc number and track number
     val sortedFiles = remember(album.files) {
@@ -2728,7 +2418,7 @@ private fun AlbumDetailContent(
                 SimpleAudioFileItem(
                     audioFile = audioFile,
                     isSelected = false,
-                    onClick = { onNavigateToMetadata(audioFile.path) },
+                    onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
                     onLongClick = {}
                 )
             }
@@ -2740,7 +2430,7 @@ private fun AlbumDetailContent(
 private fun ArtistDetailContent(
     artist: ArtistGroup,
     onBackClick: () -> Unit,
-    onNavigateToMetadata: (String) -> Unit
+    onNavigateToMetadata: (String, String?) -> Unit
 ) {
     // Group files by album
     val albumsWithFiles = remember(artist.files) {
@@ -2810,7 +2500,7 @@ private fun ArtistDetailContent(
                             SimpleAudioFileItem(
                                 audioFile = audioFile,
                                 isSelected = false,
-                                onClick = { onNavigateToMetadata(audioFile.path) },
+                                onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
                                 onLongClick = {}
                             )
                         }
@@ -2888,25 +2578,15 @@ private fun AlbumListItem(
                     .clip(MaterialTheme.shapes.small),
                 contentAlignment = Alignment.Center
             ) {
-                val albumArtBitmap by produceState<android.graphics.Bitmap?>(
-                    initialValue = null,
-                    key1 = album.coverPath,
-                    key2 = album.files.firstOrNull()?.mediaStoreAlbumId
+                val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    ?: album.files.firstOrNull()
+                AlbumArtImage(
+                    filePath = coverFile?.path,
+                    mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
+                    contentDescription = null,
+                    size = 48.dp,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                        ?: album.files.firstOrNull()
-                    value = coverFile?.let { withContext(Dispatchers.IO) { loadLocalAlbumArt(it.path) } }
-                }
-
-                val bitmap = albumArtBitmap
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         shape = MaterialTheme.shapes.small,
@@ -2969,25 +2649,15 @@ private fun AlbumGridItem(
                     .clip(MaterialTheme.shapes.medium),
                 contentAlignment = Alignment.Center
             ) {
-                val albumArtBitmap by produceState<android.graphics.Bitmap?>(
-                    initialValue = null,
-                    key1 = album.coverPath,
-                    key2 = album.files.firstOrNull()?.mediaStoreAlbumId
+                val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    ?: album.files.firstOrNull()
+                AlbumArtImage(
+                    filePath = coverFile?.path,
+                    mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
+                    contentDescription = null,
+                    size = 200.dp,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                        ?: album.files.firstOrNull()
-                    value = coverFile?.let { withContext(Dispatchers.IO) { loadLocalAlbumArt(it.path) } }
-                }
-
-                val bitmap = albumArtBitmap
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         shape = MaterialTheme.shapes.medium,
@@ -3061,24 +2731,14 @@ private fun ArtistListItem(
                     .clip(MaterialTheme.shapes.extraLarge),
                 contentAlignment = Alignment.Center
             ) {
-                val albumArtBitmap by produceState<android.graphics.Bitmap?>(
-                    initialValue = null,
-                    key1 = artist.coverPath,
-                    key2 = artist.files.size
+                val coverFile = artist.files.randomOrNull()
+                AlbumArtImage(
+                    filePath = coverFile?.path,
+                    mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
+                    contentDescription = null,
+                    size = 48.dp,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    val coverFile = artist.files.randomOrNull()
-                    value = coverFile?.let { withContext(Dispatchers.IO) { loadLocalAlbumArt(it.path) } }
-                }
-
-                val bitmap = albumArtBitmap
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         shape = MaterialTheme.shapes.extraLarge,
@@ -3148,25 +2808,13 @@ fun SimpleAudioFileItem(
                     .clip(MaterialTheme.shapes.extraSmall),
                 contentAlignment = Alignment.Center
             ) {
-                val albumArtBitmap by produceState<android.graphics.Bitmap?>(
-                    initialValue = null,
-                    key1 = audioFile.path,
-                    key2 = audioFile.mediaStoreAlbumId
+                AlbumArtImage(
+                    filePath = audioFile.path,
+                    mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                    contentDescription = null,
+                    size = 40.dp,
+                    modifier = Modifier.fillMaxSize()
                 ) {
-                    value = withContext(Dispatchers.IO) {
-                        loadLocalAlbumArt(audioFile.path)
-                    }
-                }
-
-                val bitmap = albumArtBitmap
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = null,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         shape = MaterialTheme.shapes.extraSmall,

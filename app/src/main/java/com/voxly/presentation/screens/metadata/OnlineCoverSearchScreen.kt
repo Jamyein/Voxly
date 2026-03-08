@@ -61,7 +61,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
-import com.voxly.presentation.ui.loadImageBitmapFromUrl
+import com.voxly.presentation.components.NetworkAlbumArtImage
 import com.voxly.presentation.viewmodel.OnlineCoverSearchViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -388,37 +388,10 @@ private fun CoverThumbnail(
     coverArtUrl: String?,
     modifier: Modifier = Modifier
 ) {
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, key1 = coverArtUrl) {
-        value = loadImageBitmapFromUrl(coverArtUrl)
-    }
-
-    AnimatedVisibility(
-        visible = bitmap != null,
-        enter = fadeIn(
-            animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-            )
-        )
-    ) {
-        bitmap?.let {
-            Image(
-                bitmap = it,
-                contentDescription = "Album cover",
-                modifier = modifier,
-                contentScale = ContentScale.Crop
-            )
-        }
-    }
-
-    AnimatedVisibility(
-        visible = bitmap == null,
-        enter = fadeIn(
-            animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-            )
-        )
+    NetworkAlbumArtImage(
+        url = coverArtUrl,
+        contentDescription = "Album cover",
+        modifier = modifier
     ) {
         Box(
             modifier = modifier,

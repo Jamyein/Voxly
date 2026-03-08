@@ -44,7 +44,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -54,8 +53,8 @@ import com.voxly.R
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineSource
+import com.voxly.presentation.components.NetworkAlbumArtImage
 import com.voxly.presentation.ui.clearSearchResultImageCache
-import com.voxly.presentation.ui.loadImageBitmapFromUrl
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
 import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
 import com.voxly.presentation.viewmodel.SearchProgressState
@@ -422,17 +421,11 @@ private fun ReleaseCover(
     coverArtUrl: String?,
     modifier: Modifier = Modifier
 ) {
-    val bitmap by produceState<ImageBitmap?>(initialValue = null, key1 = coverArtUrl) {
-        value = loadImageBitmapFromUrl(coverArtUrl)
-    }
-
-    if (bitmap != null) {
-        androidx.compose.foundation.Image(
-            bitmap = bitmap!!,
-            contentDescription = "Album cover",
-            modifier = modifier
-        )
-    } else {
+    NetworkAlbumArtImage(
+        url = coverArtUrl,
+        contentDescription = "Album cover",
+        modifier = modifier
+    ) {
         Box(
             modifier = modifier,
             contentAlignment = Alignment.Center

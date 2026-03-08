@@ -31,12 +31,10 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.FileSearchViewModel
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import java.text.Collator
 import java.util.Locale
 
@@ -255,37 +253,19 @@ private fun SearchResultItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             // Album art
-            Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(MaterialTheme.shapes.small),
-                contentAlignment = Alignment.Center
+            AlbumArtImage(
+                filePath = audioFile.path,
+                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                contentDescription = stringResource(R.string.cd_album_art),
+                size = 48.dp,
+                modifier = Modifier.clip(MaterialTheme.shapes.small)
             ) {
-                val albumArtBitmap by produceState<Bitmap?>(
-                    initialValue = null,
-                    key1 = audioFile.path
-                ) {
-                    value = withContext(Dispatchers.IO) {
-                        loadLocalAlbumArt(audioFile.path)
-                    }
-                }
-
-                val bitmap = albumArtBitmap
-                if (bitmap != null) {
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = stringResource(R.string.cd_album_art),
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Icon(
-                        painter = appIconPainter(AppIcon.MusicNote),
-                        contentDescription = stringResource(R.string.cd_no_cover),
-                        tint = MaterialTheme.colorScheme.outline,
-                        modifier = Modifier.size(24.dp)
-                    )
-                }
+                Icon(
+                    painter = appIconPainter(AppIcon.MusicNote),
+                    contentDescription = stringResource(R.string.cd_no_cover),
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(24.dp)
+                )
             }
 
             Spacer(modifier = Modifier.width(12.dp))
