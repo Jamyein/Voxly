@@ -773,10 +773,22 @@ class ReplayGainScanner @Inject constructor(
     fun calculateAlbumGain(trackGains: List<ReplayGainInfo>): ReplayGainInfo {
         if (trackGains.isEmpty()) return ReplayGainInfo()
 
+        // Filter out invalid track gains (NaN, Infinity, or extremely anomalous values)
+        val validTrackGains = trackGains.filter { trackGain ->
+            trackGain.trackGain.isFinite() &&
+            trackGain.trackGain > -100f &&
+            trackGain.trackGain < 100f
+        }
+
+        if (validTrackGains.isEmpty()) {
+            Logger.w("calculateAlbumGain: no valid track gains found", "ReplayGainScanner")
+            return ReplayGainInfo()
+        }
+
         // Convert track gains back to RMS values for energy average
         // gain_db = 20 * log10(rms / reference)
         // => rms = reference * 10^(gain_db / 20)
-        val trackRmsValues = trackGains.map { trackGain ->
+        val trackRmsValues = validTrackGains.map { trackGain ->
             val rmsReference = RMS_REFERENCE.toFloat()
             rmsReference * 10.0.pow(trackGain.trackGain / 20.0).toFloat()
         }
@@ -785,15 +797,20 @@ class ReplayGainScanner @Inject constructor(
         val energyMean = trackRmsValues.map { it * it }.average()
         val albumRms = sqrt(energyMean).toFloat()
 
-        // Convert back to dB gain
-        val albumGainDb = 20 * log10(albumRms.coerceAtLeast(RMS_REFERENCE.toFloat()))
+        // Convert back to dB gain, with proper bounds checking to prevent -80dB anomalies
+        val clampedAlbumRms = albumRms.coerceAtLeast(RMS_REFERENCE.toFloat())
+        val albumGainDb = if (albumRms.isNaN() || albumRms.isInfinite()) {
+            0f
+        } else {
+            (20 * log10(clampedAlbumRms.toDouble())).toFloat()
+        }
 
         // Use the highest peak from all tracks
-        val maxPeak = trackGains.maxOf { it.trackPeak }
+        val maxPeak = validTrackGains.maxOf { it.trackPeak }
 
         return ReplayGainInfo(
-            trackGain = trackGains.first().trackGain,
-            trackPeak = trackGains.first().trackPeak,
+            trackGain = validTrackGains.first().trackGain,
+            trackPeak = validTrackGains.first().trackPeak,
             albumGain = albumGainDb,
             albumPeak = maxPeak
         )
