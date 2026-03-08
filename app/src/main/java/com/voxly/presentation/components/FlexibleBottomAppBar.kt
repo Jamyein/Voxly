@@ -1,72 +1,33 @@
 package com.voxly.presentation.components
 
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarDefaults
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
-import androidx.compose.ui.res.stringResource
 import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.navigation.Screen
 
 /**
- * A flexible bottom app bar that dynamically adjusts its height and opacity based on scroll position.
- *
- * Features:
- * - Smooth height transition based on scroll direction
- * - Opacity fade as it scrolls away
- * - Optimized performance with derivedStateOf
- * - Persists across navigation changes (single instance)
+ * Bottom navigation bar for the app.
+ * Uses Material 3 NavigationBar component.
  */
 @Composable
 fun FlexibleBottomAppBar(
     navController: NavHostController,
     currentRoute: String?,
-    scrollProgress: Float,
     modifier: Modifier = Modifier
 ) {
-    // M3E optimized: use translationY instead of height to avoid re-layout
-    // Calculate offset Y based on scroll progress (0 = visible, 1 = hidden)
-    val bottomBarHeight = 80.dp
-
-    // Animate offsetY using translationY (M3E best practice)
-    val offsetY by animateDpAsState(
-        targetValue = if (scrollProgress > 0.8f) bottomBarHeight else 0.dp,
-        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
-        label = "bottomBarOffset"
-    )
-
-    // Animate alpha changes smoothly with spring physics
-    val animatedAlpha by animateFloatAsState(
-        targetValue = (1f - scrollProgress).coerceIn(0f, 1f),
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMediumLow
-        ),
-        label = "bottomBarAlpha"
-    )
-
     val bottomNavRoutes = listOf(
         Screen.FileBrowser.route,
         Screen.RecentEdits.route,
@@ -76,62 +37,48 @@ fun FlexibleBottomAppBar(
 
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
-    val showBottomBar = currentRoute in bottomNavRoutes
 
-    if (showBottomBar && scrollProgress < 1f) {
-        Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .graphicsLayer {
-                    translationY = offsetY.toPx()
-                    alpha = animatedAlpha
-                }
+    // Only show bottom bar on bottom nav routes
+    if (currentRoute in bottomNavRoutes) {
+        NavigationBar(
+            modifier = modifier.fillMaxWidth(),
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
-            NavigationBar(
-                modifier = Modifier.fillMaxWidth(),
-                // Let NavigationBar handle insets automatically to extend to gesture nav bar
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                tonalElevation = 0.dp
-            ) {
-                bottomNavItems.forEach { item ->
-                    val selected = currentDestination?.hierarchy?.any {
-                        it.route == item.screen.route
-                    } == true
-                    val label = stringResource(item.labelResId)
+            bottomNavItems.forEach { item ->
+                val selected = currentDestination?.hierarchy?.any {
+                    it.route == item.screen.route
+                } == true
+                val label = stringResource(item.labelResId)
 
-                    NavigationBarItem(
-                        selected = selected,
-                        onClick = {
-                            navController.navigate(item.screen.route) {
-                                popUpTo(navController.graph.findStartDestination().id) {
-                                    saveState = true
-                                }
-                                launchSingleTop = true
-                                restoreState = true
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = {
+                        navController.navigate(item.screen.route) {
+                            popUpTo(navController.graph.findStartDestination().id) {
+                                saveState = true
                             }
-                        },
-                        icon = {
-                            androidx.compose.material3.Icon(
-                                imageVector = if (selected) item.selectedIcon.vector else item.unselectedIcon.vector,
-                                contentDescription = label
-                            )
-                        },
-                        label = {
-                            // Only show label when bottom bar is mostly visible (scrollProgress < 0.3)
-                            if (scrollProgress < 0.3f) {
-                                Text(
-                                    text = label,
-                                    maxLines = 1
-                                )
-                            }
-                        },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = MaterialTheme.colorScheme.primary,
-                            selectedTextColor = MaterialTheme.colorScheme.primary,
-                            indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    },
+                    icon = {
+                        androidx.compose.material3.Icon(
+                            imageVector = if (selected) item.selectedIcon.vector else item.unselectedIcon.vector,
+                            contentDescription = label
                         )
+                    },
+                    label = {
+                        Text(
+                            text = label,
+                            maxLines = 1
+                        )
+                    },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                        indicatorColor = MaterialTheme.colorScheme.primaryContainer
                     )
-                }
+                )
             }
         }
     }

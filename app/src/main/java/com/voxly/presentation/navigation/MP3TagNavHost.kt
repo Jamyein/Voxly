@@ -1,17 +1,15 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -73,26 +71,21 @@ fun MP3TagNavHost(
 
     // Determine if bottom bar should be shown based on BottomNavItem routes
     val bottomNavRoutes = BottomNavItem.entries.map { it.screen.route }
-    val showBottomBar = currentDestination?.route in bottomNavRoutes
-
-    // Scroll progress for flexible bottom bar (0 = expanded, 1 = collapsed)
-    var scrollProgress by remember { mutableFloatStateOf(0f) }
-
-    // Reset scroll progress when navigating to non-bottom-nav screens
-    LaunchedEffect(currentDestination?.route) {
-        if (currentDestination?.route !in bottomNavRoutes) {
-            scrollProgress = 0f
-        }
-    }
 
     // SharedTransitionLayout for shared element transitions (e.g., cover art morphing)
-    // Box layout: content + bottom bar positioned absolutely
-    // This allows the bottom bar to hide without affecting content padding
-    Box(modifier = Modifier.fillMaxSize()) {
+    Scaffold(
+        bottomBar = {
+            FlexibleBottomAppBar(
+                navController = navController,
+                currentRoute = currentDestination?.route
+            )
+        }
+    ) { innerPadding ->
         SharedTransitionLayout {
             NavHost(
                 navController = navController,
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxSize(),
             startDestination = Screen.FileBrowser.route,
             enterTransition = {
                 val destinations = bottomNavRoutes
@@ -176,10 +169,6 @@ fun MP3TagNavHost(
                     },
                     onNavigateToArtist = { artistName ->
                         navController.navigate(Screen.ArtistDetail.createRoute(artistName))
-                    },
-                    bottomNavScrollProgress = scrollProgress,
-                    onBottomBarScrollProgressChange = { progress ->
-                        scrollProgress = progress
                     }
                 )
             }
@@ -236,10 +225,6 @@ fun MP3TagNavHost(
                 RecentEditsScreen(
                     onNavigateToMetadata = { filePath, coverTag ->
                         navController.navigate(Screen.MetadataEditor.createRoute(filePath, coverTag))
-                    },
-                    bottomNavScrollProgress = scrollProgress,
-                    onBottomBarScrollProgressChange = { progress ->
-                        scrollProgress = progress
                     }
                 )
             }
@@ -251,10 +236,6 @@ fun MP3TagNavHost(
                     },
                     onNavigateToArtist = { artistName ->
                         navController.navigate(Screen.ArtistDetail.createRoute(artistName))
-                    },
-                    bottomNavScrollProgress = scrollProgress,
-                    onBottomBarScrollProgressChange = { progress ->
-                        scrollProgress = progress
                     }
                 )
             }
@@ -470,17 +451,7 @@ fun MP3TagNavHost(
             }
 
         }
-
         } // End SharedTransitionLayout
-
-        // Bottom navigation bar positioned absolutely at the bottom
-        // Uses Box alignment instead of Scaffold bottomBar to avoid fixed padding
-        FlexibleBottomAppBar(
-            navController = navController,
-            currentRoute = currentDestination?.route,
-            scrollProgress = scrollProgress,
-            modifier = Modifier.align(Alignment.BottomCenter)
-        )
     }
 }
 

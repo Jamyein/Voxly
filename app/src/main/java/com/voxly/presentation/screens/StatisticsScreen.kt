@@ -82,18 +82,12 @@ fun StatisticsScreen(
             )
         }
     ) { innerPadding ->
-        // Calculate dynamic bottom padding based on scroll progress
-        val bottomNavHeight = 80.dp
-        val dynamicBottomPadding = bottomNavHeight * (1f - bottomNavScrollProgress)
 
         // Content with top padding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(
-                    top = innerPadding.calculateTopPadding(),
-                    bottom = dynamicBottomPadding
-                )
+                .padding(innerPadding)
         ) {
             when (val state = uiState) {
             is StatisticsUiState.Loading -> {
