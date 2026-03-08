@@ -1,69 +1,50 @@
 package com.voxly.presentation.screens.metadata
 
-import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.Matrix
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.Crossfade
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.layout.asPaddingValues
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.RotateRight
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.runtime.*
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
-import com.voxly.presentation.components.NetworkAlbumArtImage
+import com.voxly.data.local.saf.SafGrantType
+import com.voxly.domain.model.AudioMetadata
+import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
-import com.voxly.presentation.viewmodel.ConvertibleField
-import com.voxly.data.local.saf.SafGrantType
-import java.io.ByteArrayOutputStream
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import com.voxly.presentation.ui.decodeBitmapFromBytes
-import com.voxly.presentation.ui.loadImageBitmapFromUrl
+import com.voxly.presentation.viewmodel.MetadataField
 
 /**
  * Metadata editor screen for viewing and editing audio file metadata.
@@ -78,7 +59,7 @@ fun MetadataEditorScreen(
     onNavigateToOnlineLyricsSearch: () -> Unit,
     onNavigateToOnlineCoverSearch: () -> Unit,
     coverTag: String? = null,
-    pendingOnlineMetadata: com.voxly.domain.model.AudioMetadata? = null,
+    pendingOnlineMetadata: AudioMetadata? = null,
     onConsumePendingOnlineMetadata: () -> Unit = {},
     pendingOnlineLyrics: String? = null,
     onConsumePendingOnlineLyrics: () -> Unit = {}
@@ -87,29 +68,22 @@ fun MetadataEditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsState()
     val saveResult by viewModel.saveResult.collectAsState()
+
+    // Dialog visibility states
     var showDiscardDialog by remember { mutableStateOf(false) }
-    var exitAfterSave by remember { mutableStateOf(false) }
     var showAlbumArtOptions by remember { mutableStateOf(false) }
     var showAlbumArtPreview by remember { mutableStateOf(false) }
-    var showOnlineLyricsDialog by remember { mutableStateOf(false) }
-    var showOnlineCoverDialog by remember { mutableStateOf(false) }
-    var showConversionMenu by remember { mutableStateOf(false) }
     var showConversionDialog by remember { mutableStateOf(false) }
     var showReauthorizeDialog by remember { mutableStateOf(false) }
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     var showActionMenu by remember { mutableStateOf(false) }
-    val scope = rememberCoroutineScope()
-    
+    var exitAfterSave by remember { mutableStateOf(false) }
+
     // ReplayGain state from ViewModel
     val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsState()
     val pendingReplayGainInfo by viewModel.pendingReplayGainInfo.collectAsState()
-    var currentReplayGainInfo by remember { mutableStateOf<com.voxly.domain.model.ReplayGainInfo?>(null) }
-    val onlineLyricsResults by viewModel.onlineLyricsResults.collectAsState()
-    val isOnlineLyricsLoading by viewModel.isOnlineLyricsLoading.collectAsState()
-    val onlineLyricsError by viewModel.onlineLyricsError.collectAsState()
-    val onlineCoverResults by viewModel.onlineCoverResults.collectAsState()
-    val isOnlineCoverLoading by viewModel.isOnlineCoverLoading.collectAsState()
-    val onlineCoverError by viewModel.onlineCoverError.collectAsState()
+    var currentReplayGainInfo by remember { mutableStateOf<ReplayGainInfo?>(null) }
+
     val coverFetchMessage by viewModel.coverFetchMessage.collectAsState()
 
     LaunchedEffect(coverFetchMessage) {
@@ -128,7 +102,7 @@ fun MetadataEditorScreen(
     // Handle online lyrics result from search screen
     LaunchedEffect(pendingOnlineLyrics) {
         val lyricsText = pendingOnlineLyrics ?: return@LaunchedEffect
-        viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.LYRICS, lyricsText)
+        viewModel.updateMetadataField(MetadataField.LYRICS, lyricsText)
         onConsumePendingOnlineLyrics()
     }
 
@@ -151,7 +125,6 @@ fun MetadataEditorScreen(
     }
 
     // Predictive back handler for Android 14+ back gesture
-    // Provides visual feedback during back gesture when there are unsaved changes
     var backProgress by remember { mutableFloatStateOf(0f) }
     val animatedBackProgress by animateFloatAsState(
         targetValue = backProgress,
@@ -161,10 +134,8 @@ fun MetadataEditorScreen(
 
     PredictiveBackHandler(enabled = hasUnsavedChanges) { progress ->
         progress.collect { backEvent ->
-            // Update progress for visual feedback (0.0 to 1.0)
             backProgress = backEvent.progress
         }
-        // On back gesture complete
         if (hasUnsavedChanges) {
             showDiscardDialog = true
         } else {
@@ -205,7 +176,6 @@ fun MetadataEditorScreen(
         modifier = Modifier
             .nestedScroll(scrollBehavior.nestedScrollConnection)
             .graphicsLayer {
-                // Predictive back gesture visual feedback: scale down slightly
                 val scale = 1f - (animatedBackProgress * 0.05f)
                 scaleX = scale
                 scaleY = scale
@@ -235,35 +205,32 @@ fun MetadataEditorScreen(
                     }
                 },
                 actions = {
-                    // Chinese conversion dropdown menu
                     Box {
-                        IconButton(onClick = { showConversionMenu = true }) {
+                        IconButton(onClick = { /* Show conversion menu */ }) {
                             Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
                         }
                         DropdownMenu(
-                            expanded = showConversionMenu,
-                            onDismissRequest = { showConversionMenu = false }
+                            expanded = false,
+                            onDismissRequest = { }
                         ) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.convert_to_simplified)) },
                                 onClick = {
-                                    showConversionMenu = false
                                     conversionType = ConversionType.TO_SIMPLIFIED
                                     showConversionDialog = true
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Translate, contentDescription = stringResource(R.string.convert_to_simplified))
+                                    Icon(Icons.Default.Translate, contentDescription = null)
                                 }
                             )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.convert_to_traditional)) },
                                 onClick = {
-                                    showConversionMenu = false
                                     conversionType = ConversionType.TO_TRADITIONAL
                                     showConversionDialog = true
                                 },
                                 leadingIcon = {
-                                    Icon(Icons.Default.Translate, contentDescription = stringResource(R.string.convert_to_traditional))
+                                    Icon(Icons.Default.Translate, contentDescription = null)
                                 }
                             )
                         }
@@ -286,7 +253,6 @@ fun MetadataEditorScreen(
         },
         floatingActionButton = {
             Box(modifier = Modifier.fillMaxSize()) {
-                // 半透明遮罩 - 淡入淡出动画
                 AnimatedVisibility(
                     visible = showActionMenu,
                     enter = fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)),
@@ -298,7 +264,6 @@ fun MetadataEditorScreen(
                             .clickable { showActionMenu = false }
                     )
                 }
-                // 悬浮按钮列表 - 从底部滑入动画
                 Box(
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
@@ -314,7 +279,6 @@ fun MetadataEditorScreen(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
-                            // 在线获取歌词
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.End
@@ -344,7 +308,6 @@ fun MetadataEditorScreen(
                                     )
                                 }
                             }
-                            // 获取在线元数据
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.End
@@ -374,7 +337,6 @@ fun MetadataEditorScreen(
                                     )
                                 }
                             }
-                            // 保存
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.End
@@ -408,7 +370,6 @@ fun MetadataEditorScreen(
                         }
                     }
                 }
-                // 主 FAB 按钮 - 带图标切换动画
                 FloatingActionButton(
                     onClick = { showActionMenu = !showActionMenu },
                     modifier = Modifier
@@ -440,7 +401,6 @@ fun MetadataEditorScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .pointerInput(Unit) { } // Prevent touch events during exit animation
         ) {
             when (val state = uiState) {
                 is MetadataEditorUiState.Loading -> {
@@ -464,37 +424,30 @@ fun MetadataEditorScreen(
                     }
                 }
                 is MetadataEditorUiState.Success -> {
-                    // Load ReplayGain info from audio file on first load
                     LaunchedEffect(state.audioFile.path) {
                         if (currentReplayGainInfo == null && pendingReplayGainInfo == null) {
                             currentReplayGainInfo = state.audioFile.replayGainInfo
                         }
                     }
-                    
-                    MetadataForm(
+
+                    MetadataFormContent(
                         metadata = state.editedMetadata,
                         audioFile = state.audioFile,
-                        onTitleChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.TITLE, it) },
-                        onArtistChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.ARTIST, it) },
-                        onAlbumChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.ALBUM, it) },
-                        onAlbumArtistChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.ALBUM_ARTIST, it) },
-                        onYearChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.YEAR, it) },
-                        onGenreChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.GENRE, it) },
-                        onComposerChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.COMPOSER, it) },
-                        onLyricistChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.LYRICIST, it) },
-                        onCommentChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.COMMENT, it) },
-                        onLyricsChange = { viewModel.updateMetadataField(com.voxly.presentation.viewmodel.MetadataField.LYRICS, it) },
+                        onTitleChange = { viewModel.updateMetadataField(MetadataField.TITLE, it) },
+                        onArtistChange = { viewModel.updateMetadataField(MetadataField.ARTIST, it) },
+                        onAlbumChange = { viewModel.updateMetadataField(MetadataField.ALBUM, it) },
+                        onAlbumArtistChange = { viewModel.updateMetadataField(MetadataField.ALBUM_ARTIST, it) },
+                        onYearChange = { viewModel.updateMetadataField(MetadataField.YEAR, it) },
+                        onGenreChange = { viewModel.updateMetadataField(MetadataField.GENRE, it) },
+                        onComposerChange = { viewModel.updateMetadataField(MetadataField.COMPOSER, it) },
+                        onLyricistChange = { viewModel.updateMetadataField(MetadataField.LYRICIST, it) },
+                        onCommentChange = { viewModel.updateMetadataField(MetadataField.COMMENT, it) },
+                        onLyricsChange = { viewModel.updateMetadataField(MetadataField.LYRICS, it) },
                         onTrackNumberChange = { track, total ->
-                            viewModel.updateTrackNumber(
-                                track.toIntOrNull(),
-                                total.toIntOrNull()
-                            )
+                            viewModel.updateTrackNumber(track.toIntOrNull(), total.toIntOrNull())
                         },
                         onDiscNumberChange = { disc, total ->
-                            viewModel.updateDiscNumber(
-                                disc.toIntOrNull(),
-                                total.toIntOrNull()
-                            )
+                            viewModel.updateDiscNumber(disc.toIntOrNull(), total.toIntOrNull())
                         },
                         onPickAlbumArt = { showAlbumArtOptions = true },
                         coverTag = coverTag,
@@ -505,9 +458,7 @@ fun MetadataEditorScreen(
                             }
                         },
                         onRemoveAlbumArt = { viewModel.updateAlbumArt(null) },
-                        onScanReplayGain = {
-                            viewModel.scanReplayGain()
-                        },
+                        onScanReplayGain = { viewModel.scanReplayGain() },
                         onClearReplayGain = {
                             viewModel.clearReplayGainInfo()
                             currentReplayGainInfo = null
@@ -539,363 +490,79 @@ fun MetadataEditorScreen(
         }
     }
 
-    // Discard changes dialog
+    // Dialogs
     if (showDiscardDialog) {
-        AlertDialog(
-            onDismissRequest = { showDiscardDialog = false },
-            shape = MaterialTheme.shapes.large,
-            title = { Text(stringResource(R.string.dialog_unsaved_changes)) },
-            text = { Text(stringResource(R.string.dialog_discard_changes_message)) },
-            confirmButton = {
-                TextButton(onClick = {
-                    showDiscardDialog = false
-                    exitAfterSave = true
-                    viewModel.saveMetadata()
-                }) {
-                    Text(stringResource(R.string.dialog_save))
-                }
+        DiscardChangesDialog(
+            onDismiss = { showDiscardDialog = false },
+            onSave = {
+                showDiscardDialog = false
+                exitAfterSave = true
+                viewModel.saveMetadata()
             },
-            dismissButton = {
-                TextButton(onClick = {
-                    showDiscardDialog = false
-                    viewModel.discardChanges()
-                    onNavigateBack()
-                }) {
-                    Text(stringResource(R.string.dialog_discard))
-                }
+            onDiscard = {
+                showDiscardDialog = false
+                viewModel.discardChanges()
+                onNavigateBack()
             }
         )
     }
 
     if (showReauthorizeDialog) {
-        AlertDialog(
-            onDismissRequest = { showReauthorizeDialog = false },
-            shape = MaterialTheme.shapes.large,
-            title = { Text("Write permission required") },
-            text = {
-                Text("Select the current file or its parent directory to restore SAF write access.")
+        ReauthorizeDialog(
+            onDismiss = { showReauthorizeDialog = false },
+            onSelectDirectory = {
+                showReauthorizeDialog = false
+                reauthorizeDirectoryLauncher.launch(null)
             },
-            confirmButton = {
-                TextButton(onClick = {
-                    showReauthorizeDialog = false
-                    reauthorizeDirectoryLauncher.launch(null)
-                }) {
-                    Text("Select directory")
-                }
-            },
-            dismissButton = {
-                Row {
-                    TextButton(onClick = {
-                        showReauthorizeDialog = false
-                        reauthorizeFileLauncher.launch(arrayOf("audio/*", "*/*"))
-                    }) {
-                        Text("Select file")
-                    }
-                    TextButton(onClick = { showReauthorizeDialog = false }) {
-                        Text(stringResource(R.string.dialog_cancel))
-                    }
-                }
+            onSelectFile = {
+                showReauthorizeDialog = false
+                reauthorizeFileLauncher.launch(arrayOf("audio/*", "*/*"))
             }
         )
     }
 
     if (showAlbumArtOptions) {
         val hasAlbumArt = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt != null
-        
-        ModalBottomSheet(
-            onDismissRequest = { showAlbumArtOptions = false },
-            shape = MaterialTheme.shapes.large,
-            sheetState = rememberModalBottomSheetState()
-        ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 32.dp)
-            ) {
-                VerticalDragHandle(
-                    modifier = Modifier
-                        .align(Alignment.CenterHorizontally)
-                        .padding(vertical = 12.dp)
-                )
-
-                Text(
-                    text = stringResource(R.string.album_art_picker_title),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 16.dp)
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.select_album_art)) },
-                    leadingContent = {
-                        Icon(
-                            Icons.Default.PhotoLibrary,
-                            contentDescription = stringResource(R.string.cd_select_album_art)
-                        )
-                    },
-                    modifier = Modifier.clickable {
-                        showAlbumArtOptions = false
-                        galleryPickerLauncher.launch("image/*")
-                    }
-                )
-
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.take_photo)) },
-                    leadingContent = {
-                        Icon(
-                            Icons.Default.CameraAlt,
-                            contentDescription = stringResource(R.string.cd_take_photo)
-                        )
-                    },
-                    modifier = Modifier.clickable {
-                        showAlbumArtOptions = false
-                        cameraLauncher.launch(null)
-                    }
-                )
-
-                ListItem(
-                    headlineContent = { Text(stringResource(R.string.fetch_online_cover_art)) },
-                    leadingContent = {
-                        Icon(
-                            Icons.Default.CloudDownload,
-                            contentDescription = stringResource(R.string.cd_fetch_online_cover)
-                        )
-                    },
-                    modifier = Modifier.clickable {
-                        showAlbumArtOptions = false
-                        onNavigateToOnlineCoverSearch()
-                    }
-                )
-
-                // 只有存在封面时才显示以下选项
-                if (hasAlbumArt) {
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.album_art_view)) },
-                        leadingContent = {
-                            Icon(
-                                Icons.Default.ZoomIn,
-                                contentDescription = stringResource(R.string.cd_zoom_album_art)
-                            )
-                        },
-                        modifier = Modifier.clickable {
-                            showAlbumArtOptions = false
-                            showAlbumArtPreview = true
-                        }
-                    )
-
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.album_art_rotate)) },
-                        leadingContent = {
-                            Icon(
-                                Icons.AutoMirrored.Filled.RotateRight,
-                                contentDescription = stringResource(R.string.cd_rotate_album_art)
-                            )
-                        },
-                        modifier = Modifier.clickable {
-                            showAlbumArtOptions = false
-                            (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt?.let { bytes ->
-                                rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
-                            }
-                        }
-                    )
-
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.remove_album_art)) },
-                        leadingContent = {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.cd_remove_album_art)
-                            )
-                        },
-                        modifier = Modifier.clickable {
-                            showAlbumArtOptions = false
-                            viewModel.updateAlbumArt(null)
-                        }
-                    )
+        AlbumArtOptionsSheet(
+            hasAlbumArt = hasAlbumArt,
+            onDismiss = { showAlbumArtOptions = false },
+            onPickFromGallery = {
+                showAlbumArtOptions = false
+                galleryPickerLauncher.launch("image/*")
+            },
+            onTakePhoto = {
+                showAlbumArtOptions = false
+                cameraLauncher.launch(null)
+            },
+            onFetchOnline = {
+                showAlbumArtOptions = false
+                onNavigateToOnlineCoverSearch()
+            },
+            onViewArt = {
+                showAlbumArtOptions = false
+                showAlbumArtPreview = true
+            },
+            onRotateArt = {
+                showAlbumArtOptions = false
+                (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt?.let { bytes ->
+                    rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
                 }
+            },
+            onRemoveArt = {
+                showAlbumArtOptions = false
+                viewModel.updateAlbumArt(null)
             }
-        }
+        )
     }
 
     if (showAlbumArtPreview) {
         val previewBytes = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt
-        if (previewBytes != null) {
-            AlertDialog(
-                onDismissRequest = { showAlbumArtPreview = false },
-                shape = MaterialTheme.shapes.large,
-                title = { Text(stringResource(R.string.metadata_album_art)) },
-                text = {
-                    val preview = remember(previewBytes) { decodeAlbumArtPreview(previewBytes, 2048) }
-                    if (preview != null) {
-                        Image(
-                            bitmap = preview.asImageBitmap(),
-                            contentDescription = stringResource(R.string.cd_album_art),
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                    } else {
-                        Text(stringResource(R.string.no_album_art))
-                    }
-                },
-                confirmButton = {
-                    TextButton(onClick = { showAlbumArtPreview = false }) {
-                        Text(stringResource(R.string.dialog_close))
-                    }
-                }
-            )
-        }
-    }
-
-    if (showOnlineLyricsDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showOnlineLyricsDialog = false
-                viewModel.clearOnlineLyricsResults()
-            },
-            shape = MaterialTheme.shapes.large,
-            title = { Text(stringResource(R.string.search_online_lyrics)) },
-            text = {
-                when {
-                    isOnlineLyricsLoading -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(180.dp),
-                            contentAlignment = Alignment.Center
-                        ) { CircularProgressIndicator() }
-                    }
-                    !onlineLyricsError.isNullOrBlank() -> {
-                        Text(
-                            text = onlineLyricsError.orEmpty(),
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                    onlineLyricsResults.isEmpty() -> {
-                        Text(stringResource(R.string.error_no_results))
-                    }
-                    else -> {
-                        LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                            items(onlineLyricsResults) { item ->
-                                ListItem(
-                                    headlineContent = { Text(item.trackName) },
-                                    supportingContent = {
-                                        Text("${item.artistName} • ${item.albumName ?: "-"} • ${item.source}")
-                                    },
-                                    trailingContent = {
-                                        if (item.hasSyncedLyrics) {
-                                            Text("LRC", color = MaterialTheme.colorScheme.primary)
-                                        }
-                                    },
-                                    modifier = Modifier.clickable {
-                                        viewModel.applyOnlineLyrics(item)
-                                        showOnlineLyricsDialog = false
-                                        viewModel.clearOnlineLyricsResults()
-                                    }
-                                )
-                                Spacer(modifier = Modifier.height(4.dp))
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        viewModel.searchOnlineLyrics()
-                    }
-                ) {
-                    Text(stringResource(R.string.fetch_online_metadata))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showOnlineLyricsDialog = false
-                        viewModel.clearOnlineLyricsResults()
-                    }
-                ) {
-                    Text(stringResource(R.string.dialog_cancel))
-                }
-            }
+        AlbumArtPreviewDialog(
+            albumArt = previewBytes,
+            onDismiss = { showAlbumArtPreview = false }
         )
     }
 
-    if (showOnlineCoverDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showOnlineCoverDialog = false
-                viewModel.clearOnlineCoverResults()
-            },
-            shape = MaterialTheme.shapes.large,
-            title = { Text(stringResource(R.string.fetch_online_cover_art)) },
-            text = {
-                when {
-                    isOnlineCoverLoading -> {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(180.dp),
-                            contentAlignment = Alignment.Center
-                        ) { CircularProgressIndicator() }
-                    }
-                    !onlineCoverError.isNullOrBlank() -> {
-                        Text(
-                            text = onlineCoverError.orEmpty(),
-                            color = MaterialTheme.colorScheme.error
-                        )
-                    }
-                    onlineCoverResults.isEmpty() -> {
-                        Text(stringResource(R.string.error_no_results))
-                    }
-                    else -> {
-                        LazyColumn(modifier = Modifier.heightIn(max = 360.dp)) {
-                            items(onlineCoverResults) { item ->
-                        ListItem(
-                            leadingContent = {
-                                CoverCandidateThumbnail(
-                                    coverArtUrl = item.coverArtUrl,
-                                    modifier = Modifier.size(56.dp)
-                                )
-                            },
-                            headlineContent = { Text(item.title) },
-                            supportingContent = {
-                                Text("${item.artist} • ${item.source}")
-                            },
-                            modifier = Modifier.clickable {
-                                viewModel.applyOnlineCover(item)
-                                showOnlineCoverDialog = false
-                                viewModel.clearOnlineCoverResults()
-                            }
-                        )
-                                Spacer(modifier = Modifier.height(4.dp))
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = { viewModel.searchOnlineCoverCandidates() }
-                ) {
-                    Text(stringResource(R.string.retry))
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = {
-                        showOnlineCoverDialog = false
-                        viewModel.clearOnlineCoverResults()
-                    }
-                ) {
-                    Text(stringResource(R.string.dialog_cancel))
-                }
-            }
-        )
-    }
-
-    // Chinese conversion dialog
     if (showConversionDialog) {
         ConversionDialog(
             conversionType = conversionType,
@@ -912,9 +579,12 @@ fun MetadataEditorScreen(
     }
 }
 
+/**
+ * Main metadata form content.
+ */
 @Composable
-private fun MetadataForm(
-    metadata: com.voxly.domain.model.AudioMetadata,
+private fun MetadataFormContent(
+    metadata: AudioMetadata,
     audioFile: com.voxly.domain.model.AudioFile,
     onTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
@@ -936,7 +606,7 @@ private fun MetadataForm(
     onScanReplayGain: () -> Unit = {},
     onClearReplayGain: () -> Unit = {},
     isScanningReplayGain: Boolean = false,
-    replayGainInfo: com.voxly.domain.model.ReplayGainInfo? = null
+    replayGainInfo: ReplayGainInfo? = null
 ) {
     Column(
         modifier = Modifier
@@ -1130,455 +800,4 @@ private fun MetadataForm(
             onClear = onClearReplayGain
         )
     }
-}
-
-@Composable
-private fun SectionTitle(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(vertical = 8.dp)
-    )
-}
-
-@Composable
-private fun FileInfoRow(label: String, value: String) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium
-        )
-    }
-}
-
-@Composable
-private fun ReplayGainSection(
-    replayGainInfo: com.voxly.domain.model.ReplayGainInfo?,
-    isScanning: Boolean,
-    onScan: () -> Unit,
-    onClear: () -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            // Header - clickable to expand/collapse
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { expanded = !expanded },
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        painter = appIconPainter(AppIcon.Equalizer),
-                        contentDescription = stringResource(R.string.replay_gain_section_title),
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    Text(
-                        text = stringResource(R.string.replay_gain_section_title),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                }
-                Icon(
-                    imageVector = if (expanded) Icons.Default.ExpandLess else Icons.Default.ExpandMore,
-                    contentDescription = if (expanded) stringResource(R.string.collapse) else stringResource(R.string.expand)
-                )
-            }
-            
-            // Expanded content
-            if (expanded) {
-                Spacer(modifier = Modifier.height(12.dp))
-                
-                if (isScanning) {
-                    // Scanning state
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(24.dp),
-                            strokeWidth = 2.dp
-                        )
-                        Spacer(modifier = Modifier.width(12.dp))
-                        Text(
-                            text = stringResource(R.string.replay_gain_scanning),
-                            style = MaterialTheme.typography.bodyMedium
-                        )
-                    }
-                } else if (replayGainInfo != null) {
-                    // Display existing ReplayGain values
-                    ReplayGainRow(
-                        label = stringResource(R.string.replay_gain_track),
-                        value = replayGainInfo.getFormattedTrackGain()
-                    )
-                    ReplayGainRow(
-                        label = stringResource(R.string.replay_gain_peak),
-                        value = replayGainInfo.getFormattedTrackPeak()
-                    )
-                    replayGainInfo.albumGain?.let { albumGain ->
-                        ReplayGainRow(
-                            label = stringResource(R.string.replay_gain_album),
-                            value = String.format("%.2f dB", albumGain)
-                        )
-                    }
-                    replayGainInfo.albumPeak?.let { albumPeak ->
-                        ReplayGainRow(
-                            label = stringResource(R.string.replay_gain_album_peak),
-                            value = String.format("%.4f", albumPeak)
-                        )
-                    }
-                    
-                    Spacer(modifier = Modifier.height(12.dp))
-                    
-                    // Action buttons
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = onScan,
-                            modifier = Modifier.weight(1f),
-                            shape = MaterialTheme.shapes.extraLarge
-                        ) {
-                            Icon(
-                                Icons.Default.Refresh,
-                                contentDescription = stringResource(R.string.cd_rescan_replay_gain)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(stringResource(R.string.replay_gain_rescan))
-                        }
-                        OutlinedButton(
-                            onClick = onClear,
-                            modifier = Modifier.weight(1f),
-                            shape = MaterialTheme.shapes.extraLarge
-                        ) {
-                            Icon(
-                                Icons.Default.Delete,
-                                contentDescription = stringResource(R.string.cd_clear_replay_gain)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text(stringResource(R.string.replay_gain_clear))
-                        }
-                    }
-                } else {
-                    // No ReplayGain info
-                    Text(
-                        text = stringResource(R.string.replay_gain_no_info),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Button(
-                        onClick = onScan,
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.extraLarge
-                    ) {
-                        Icon(
-                            Icons.Default.Equalizer,
-                            contentDescription = stringResource(R.string.cd_scan_replay_gain)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.replay_gain_scan))
-                    }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun ReplayGainRow(
-    label: String,
-    value: String
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-    }
-}
-
-@Composable
-private fun AlbumArtSection(
-    albumArt: ByteArray?,
-    onPickAlbumArt: () -> Unit,
-    coverTag: String? = null,
-    onZoomAlbumArt: () -> Unit,
-    onRotateAlbumArt: () -> Unit,
-    onRemoveAlbumArt: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(1f)
-            .clickable(onClick = onPickAlbumArt),
-        shape = MaterialTheme.shapes.extraLarge
-    ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            // Use Crossfade for smooth album art transitions
-            Crossfade(
-                targetState = albumArt != null,
-                label = "album_art_crossfade"
-            ) { hasArt ->
-                if (hasArt && albumArt != null) {
-                    val bitmap = remember(albumArt.contentHashCode()) {
-                        decodeAlbumArtPreview(albumArt)
-                    }
-                    if (bitmap != null) {
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = stringResource(R.string.cd_album_art),
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        EmptyAlbumArtContent()
-                    }
-                } else {
-                    EmptyAlbumArtContent()
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun EmptyAlbumArtContent() {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(16.dp)
-    ) {
-        Icon(
-            painter = appIconPainter(AppIcon.MusicNote),
-            contentDescription = stringResource(R.string.cd_album_art),
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.outline
-        )
-        Spacer(modifier = Modifier.height(8.dp))
-        Text(
-            text = stringResource(R.string.tap_to_add_album_art),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-private fun decodeAlbumArtPreview(
-    bytes: ByteArray,
-    targetSizePx: Int = 1024
-): android.graphics.Bitmap? {
-    return decodeBitmapFromBytes(bytes, targetSizePx)
-}
-
-@Composable
-private fun CoverCandidateThumbnail(
-    coverArtUrl: String?,
-    modifier: Modifier = Modifier
-) {
-    NetworkAlbumArtImage(
-        url = coverArtUrl,
-        contentDescription = stringResource(R.string.cd_cover_thumbnail),
-        modifier = modifier
-    ) {
-        Box(
-            modifier = modifier,
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Image,
-                contentDescription = stringResource(R.string.cd_no_cover),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-private fun readBytesFromUri(context: Context, uri: Uri): ByteArray? {
-    return runCatching {
-        context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-    }.getOrNull()
-}
-
-private fun bitmapToJpegBytes(bitmap: Bitmap, quality: Int = 92): ByteArray? {
-    return runCatching {
-        val output = ByteArrayOutputStream()
-        bitmap.compress(Bitmap.CompressFormat.JPEG, quality.coerceIn(10, 100), output)
-        output.toByteArray()
-    }.getOrNull()
-}
-
-private fun rotateJpegBytes(bytes: ByteArray, degrees: Float): ByteArray? {
-    return runCatching {
-        val src = decodeBitmapFromBytes(bytes)
-            ?: throw IllegalArgumentException("Invalid image bytes")
-        val matrix = Matrix().apply { postRotate(degrees) }
-        val rotated = Bitmap.createBitmap(src, 0, 0, src.width, src.height, matrix, true)
-        bitmapToJpegBytes(rotated) ?: throw IllegalStateException("Failed to encode rotated image")
-    }.getOrNull()
-}
-
-/**
- * Conversion type for Chinese character conversion.
- */
-private enum class ConversionType {
-    TO_SIMPLIFIED,
-    TO_TRADITIONAL
-}
-
-/**
- * Dialog for selecting metadata fields to convert.
- */
-@Composable
-private fun ConversionDialog(
-    conversionType: ConversionType,
-    onDismiss: () -> Unit,
-    onConfirm: (Set<ConvertibleField>) -> Unit
-) {
-    var selectedFields by remember { 
-        mutableStateOf(
-            setOf(
-                ConvertibleField.TITLE,
-                ConvertibleField.ARTIST,
-                ConvertibleField.ALBUM,
-                ConvertibleField.ALBUM_ARTIST,
-                ConvertibleField.GENRE,
-                ConvertibleField.COMPOSER,
-                ConvertibleField.LYRICIST,
-                ConvertibleField.COMMENT,
-                ConvertibleField.LYRICS
-            )
-        )
-    }
-
-    val title = if (conversionType == ConversionType.TO_SIMPLIFIED) {
-        stringResource(R.string.convert_to_simplified)
-    } else {
-        stringResource(R.string.convert_to_traditional)
-    }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        shape = MaterialTheme.shapes.large,
-        title = { Text(title) },
-        text = {
-            Column {
-                Text(
-                    text = stringResource(R.string.select_fields_to_convert),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                
-                // Select All / Deselect All
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(
-                        onClick = {
-                            selectedFields = ConvertibleField.entries.toSet()
-                        }
-                    ) {
-                        Text(stringResource(R.string.select_all))
-                    }
-                    TextButton(
-                        onClick = {
-                            selectedFields = emptySet()
-                        }
-                    ) {
-                        Text(stringResource(R.string.deselect_all))
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                LazyColumn(
-                    modifier = Modifier.heightIn(max = 320.dp)
-                ) {
-                    items(ConvertibleField.entries.toList()) { field ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    selectedFields = if (field in selectedFields) {
-                                        selectedFields - field
-                                    } else {
-                                        selectedFields + field
-                                    }
-                                }
-                                .padding(vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Checkbox(
-                                checked = field in selectedFields,
-                                onCheckedChange = { checked ->
-                                    selectedFields = if (checked) {
-                                        selectedFields + field
-                                    } else {
-                                        selectedFields - field
-                                    }
-                                }
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(field.displayName)
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = { onConfirm(selectedFields) },
-                enabled = selectedFields.isNotEmpty()
-            ) {
-                Text(stringResource(R.string.dialog_save))
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text(stringResource(R.string.dialog_cancel))
-            }
-        }
-    )
 }
