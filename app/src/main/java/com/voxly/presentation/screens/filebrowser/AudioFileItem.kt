@@ -8,6 +8,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -29,6 +30,133 @@ import kotlinx.coroutines.launch
 
 @Composable
 internal fun AudioFileItem(
+    audioFile: AudioFile,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    showActions: Boolean,
+    onEditMetadata: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onFetchOnlineMetadata: () -> Unit,
+    onFixMetadata: () -> Unit,
+    compactMode: Boolean = false,
+    modifier: Modifier = Modifier
+) {
+    if (compactMode) {
+        CompactAudioFileItem(
+            audioFile = audioFile,
+            isSelected = isSelected,
+            onClick = onClick,
+            modifier = modifier
+        )
+    } else {
+        FullAudioFileItem(
+            audioFile = audioFile,
+            isSelected = isSelected,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            showActions = showActions,
+            onEditMetadata = onEditMetadata,
+            onRename = onRename,
+            onDelete = onDelete,
+            onFetchOnlineMetadata = onFetchOnlineMetadata,
+            onFixMetadata = onFixMetadata,
+            modifier = modifier
+        )
+    }
+}
+
+@Composable
+private fun CompactAudioFileItem(
+    audioFile: AudioFile,
+    isSelected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.small,
+        colors = CardDefaults.cardColors(
+            containerColor = if (isSelected) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surface
+            }
+        ),
+        onClick = onClick
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(MaterialTheme.shapes.extraSmall),
+                contentAlignment = Alignment.Center
+            ) {
+                AlbumArtImage(
+                    filePath = audioFile.path,
+                    mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                    contentDescription = null,
+                    size = 40.dp,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Surface(
+                        modifier = Modifier.fillMaxSize(),
+                        shape = MaterialTheme.shapes.extraSmall,
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.MusicNote,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.width(8.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = audioFile.metadata.album ?: "",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Text(
+                text = audioFile.getFormattedDuration(),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline
+            )
+            if (isSelected) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = stringResource(R.string.cd_selected),
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun FullAudioFileItem(
     audioFile: AudioFile,
     isSelected: Boolean,
     onClick: () -> Unit,

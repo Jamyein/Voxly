@@ -57,7 +57,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.screens.filebrowser.SimpleAudioFileItem
+import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
@@ -193,11 +193,18 @@ fun ArtistDetailScreen(
                 }
 
                 items(singles, key = { "single_${it.path}" }) { audioFile ->
-                    SimpleAudioFileItem(
+                    AudioFileItem(
                         audioFile = audioFile,
                         isSelected = false,
                         onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
-                        onLongClick = {}
+                        onLongClick = {},
+                        showActions = false,
+                        onEditMetadata = {},
+                        onRename = {},
+                        onDelete = {},
+                        onFetchOnlineMetadata = {},
+                        onFixMetadata = {},
+                        compactMode = true
                     )
                 }
             }
@@ -255,11 +262,18 @@ fun ArtistDetailScreen(
                     }
 
                     items(albumFiles.take(3), key = { "album_${albumName}_${it.path}" }) { audioFile ->
-                        SimpleAudioFileItem(
+                        AudioFileItem(
                             audioFile = audioFile,
                             isSelected = false,
                             onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
-                            onLongClick = {}
+                            onLongClick = {},
+                            showActions = false,
+                            onEditMetadata = {},
+                            onRename = {},
+                            onDelete = {},
+                            onFetchOnlineMetadata = {},
+                            onFixMetadata = {},
+                            compactMode = true
                         )
                     }
 

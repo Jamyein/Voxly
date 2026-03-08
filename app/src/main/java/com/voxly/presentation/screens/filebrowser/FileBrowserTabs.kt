@@ -308,11 +308,18 @@ internal fun AlbumDetailContent(
 
             // Song list
             items(sortedFiles, key = { it.path }) { audioFile ->
-                SimpleAudioFileItem(
+                AudioFileItem(
                     audioFile = audioFile,
                     isSelected = false,
                     onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
-                    onLongClick = {}
+                    onLongClick = {},
+                    showActions = false,
+                    onEditMetadata = {},
+                    onRename = {},
+                    onDelete = {},
+                    onFetchOnlineMetadata = {},
+                    onFixMetadata = {},
+                    compactMode = true
                 )
             }
         }
@@ -390,11 +397,18 @@ internal fun ArtistDetailContent(
                         )
                         // Songs in album
                         files.sortedBy { it.metadata.trackNumber ?: 0 }.forEach { audioFile ->
-                            SimpleAudioFileItem(
+                            AudioFileItem(
                                 audioFile = audioFile,
                                 isSelected = false,
                                 onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
-                                onLongClick = {}
+                                onLongClick = {},
+                                showActions = false,
+                                onEditMetadata = {},
+                                onRename = {},
+                                onDelete = {},
+                                onFetchOnlineMetadata = {},
+                                onFixMetadata = {},
+                                compactMode = true
                             )
                         }
                     }
@@ -434,11 +448,18 @@ internal fun AllAudiosTabContent(
             ) {
                 items(audios, key = { it.path }) { audioFile ->
                     val isSelected = audioFile.path in selectedFiles
-                    SimpleAudioFileItem(
+                    AudioFileItem(
                         audioFile = audioFile,
                         isSelected = isSelected,
                         onClick = { onFileClick(audioFile) },
-                        onLongClick = { onFileLongClick(audioFile) }
+                        onLongClick = { onFileLongClick(audioFile) },
+                        showActions = false,
+                        onEditMetadata = {},
+                        onRename = {},
+                        onDelete = {},
+                        onFetchOnlineMetadata = {},
+                        onFixMetadata = {},
+                        compactMode = true
                     )
                 }
             }
