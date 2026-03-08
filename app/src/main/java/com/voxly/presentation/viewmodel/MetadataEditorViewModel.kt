@@ -26,6 +26,7 @@ import com.voxly.domain.repository.OnlineSource
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.repository.ScanMode
+import com.voxly.domain.usecase.UnifiedScanManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +73,7 @@ class MetadataEditorViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
+    private val unifiedScanManager: UnifiedScanManager,
     savedStateHandle: SavedStateHandle
 ) : ViewModel() {
 
@@ -542,6 +544,9 @@ class MetadataEditorViewModel @Inject constructor(
                         "Save metadata success file=$filePath replayGainSuccess=$replayGainSuccess elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
                         "MetadataEditor"
                     )
+
+                    // Sync file to cache so FileBrowser gets updated data
+                    unifiedScanManager.syncFile(filePath)
                 },
                 onFailure = { error ->
                     Logger.e(

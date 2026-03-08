@@ -33,7 +33,8 @@ import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.usecase.BatchAlbumArtUseCase
 import com.voxly.domain.usecase.BatchEditMetadataUseCase
 import com.voxly.domain.usecase.BatchReplayGainUseCase
-import com.voxly.domain.usecase.MusicLibraryRefreshManager
+import com.voxly.domain.usecase.UnifiedScanManager
+import com.voxly.domain.usecase.UnifiedScanManagerImpl
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -266,13 +267,13 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideMusicLibraryRefreshManager(
-        audioRepository: AudioRepository,
+    fun provideUnifiedScanManager(
+        audioFileScanner: AudioFileScanner,
         settingsDataStore: SettingsDataStore,
         @ApplicationContext context: Context
-    ): MusicLibraryRefreshManager {
+    ): UnifiedScanManager {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-        return MusicLibraryRefreshManager(audioRepository, settingsDataStore, scope)
+        return UnifiedScanManagerImpl(audioFileScanner, settingsDataStore, scope)
     }
 }
 

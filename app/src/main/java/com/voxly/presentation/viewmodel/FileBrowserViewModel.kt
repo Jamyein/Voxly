@@ -17,10 +17,12 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
-import com.voxly.domain.model.LibraryRefreshState
 import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
-import com.voxly.domain.usecase.MusicLibraryRefreshManager
+import com.voxly.domain.usecase.ScanResult
+import com.voxly.domain.usecase.ScanState
+import com.voxly.domain.usecase.ScanTarget
+import com.voxly.domain.usecase.UnifiedScanManager
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -51,9 +53,10 @@ import javax.inject.Inject
 class FileBrowserViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val audioRepository: AudioRepository,
+    private val audioFileScanner: com.voxly.data.local.AudioFileScanner,
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val settingsDataStore: SettingsDataStore,
-    private val refreshManager: MusicLibraryRefreshManager,
+    private val unifiedScanManager: UnifiedScanManager,
     private val safWriteAccessService: SafWriteAccessService,
     private val albumCacheRepository: AlbumCacheRepository,
     private val artistCacheRepository: ArtistCacheRepository
@@ -133,14 +136,19 @@ class FileBrowserViewModel @Inject constructor(
 
     init {
         restoreSelectedDirectories()
-        observeScanSettingsChanges()
-        // Listen to refresh state changes from MusicLibraryRefreshManager
+        // Start unified scan manager settings watching
+        unifiedScanManager.startWatchingSettings()
+
+        // Listen to scan state changes from UnifiedScanManager
         viewModelScope.launch {
-            refreshManager.refreshState.collect { state ->
+            unifiedScanManager.scanState.collect { state ->
                 when (state) {
-                    is LibraryRefreshState.Success -> {
-                        Timber.d(TAG, "Library refresh completed, reloading files")
+                    is ScanState.Success -> {
+                        Timber.d(TAG, "Scan completed, reloading files")
                         loadAudioFiles(forceRefresh = false)
+                    }
+                    is ScanState.Error -> {
+                        Timber.tag(TAG).e("Scan error: ${state.message}")
                     }
                     else -> { /* Handle other states if needed */ }
                 }
@@ -168,8 +176,8 @@ class FileBrowserViewModel @Inject constructor(
 
                 // Check cache BEFORE setting Loading state to avoid flash
                 // Check database cache first (persisted, survives app restart)
-                if (!forceRefresh && audioRepository.hasCachedData()) {
-                    val cachedFiles = audioRepository.getCachedAudioFiles().first()
+                if (!forceRefresh && audioFileScanner.hasCachedData()) {
+                    val cachedFiles = audioFileScanner.getCachedAudioFiles().first()
                     if (cachedFiles.isNotEmpty()) {
                         cachedGlobalFiles = cachedFiles
                         _directoryFiles.value = emptyMap()
@@ -203,36 +211,44 @@ class FileBrowserViewModel @Inject constructor(
                     _uiState.value = FileBrowserUiState.Loading
                 }
 
-                // No cache available - perform full scan using refreshManager
-                runCatching {
-                    refreshManager.refresh(force = forceRefresh)
+                // No cache available - perform full scan using unifiedScanManager
+                val scanTarget = if (_selectedDirectories.value.isNotEmpty()) {
+                    ScanTarget.Directories(_selectedDirectories.value.map { it.path })
+                } else {
+                    ScanTarget.Global
                 }
-                    .onSuccess { files ->
+
+                val result = unifiedScanManager.scan(target = scanTarget, force = forceRefresh)
+                when (result) {
+                    is ScanResult.Success -> {
                         _isRefreshing.value = false
-                        cachedGlobalFiles = files
+                        cachedGlobalFiles = result.files
                         _directoryFiles.value = emptyMap()
-                        _uiState.value = if (files.isEmpty()) {
+                        _uiState.value = if (result.files.isEmpty()) {
                             FileBrowserUiState.Empty
                         } else {
                             FileBrowserUiState.Success(
-                                files = files,
+                                files = result.files,
                                 selectedCount = _selectedFiles.value.size
                             )
                         }
                     }
-                    .onFailure { e ->
+                    is ScanResult.Error -> {
                         _isRefreshing.value = false
-                        if (e is CancellationException) return@onFailure
-                        Timber.tag(TAG).e( "Global audio scan failed", e)
-                        _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
+                        Timber.tag(TAG).e("Global audio scan failed: ${result.message}")
+                        _uiState.value = FileBrowserUiState.Error(result.message)
                     }
+                    is ScanResult.Cancelled -> {
+                        _isRefreshing.value = false
+                    }
+                }
         }
     }
 
     /**
      * Observes scan settings changes that are specific to FileBrowser and triggers auto-refresh.
      * Note: Core settings (whitelistEnabled, blacklistEnabled, minDurationFilterEnabled)
-     * are watched by MusicLibraryRefreshManager at app level.
+     * are watched by UnifiedScanManager at app level.
      */
     private fun observeScanSettingsChanges() {
         viewModelScope.launch {
@@ -242,7 +258,7 @@ class FileBrowserViewModel @Inject constructor(
                     if (lastMinDurationFilterThresholdMs != threshold) {
                         lastMinDurationFilterThresholdMs = threshold
                         Timber.d(TAG, "Min duration filter threshold changed to: $threshold, triggering auto-refresh")
-                        refreshManager.refreshAsync(force = true)
+                        unifiedScanManager.scanAsync(target = ScanTarget.Global, force = true)
                     }
                 }
             }
@@ -253,7 +269,7 @@ class FileBrowserViewModel @Inject constructor(
                     if (lastSelectedDirectoryUris != uris) {
                         lastSelectedDirectoryUris = uris
                         Timber.d(TAG, "Selected directories changed, triggering auto-refresh")
-                        refreshManager.refreshAsync(force = true)
+                        unifiedScanManager.scanAsync(target = ScanTarget.Global, force = true)
                     }
                 }
             }
@@ -264,7 +280,7 @@ class FileBrowserViewModel @Inject constructor(
                     if (lastBlacklistDirectoryUris != uris) {
                         lastBlacklistDirectoryUris = uris
                         Timber.d(TAG, "Blacklist directories changed, triggering auto-refresh")
-                        refreshManager.refreshAsync(force = true)
+                        unifiedScanManager.scanAsync(target = ScanTarget.Global, force = true)
                     }
                 }
             }
@@ -1223,31 +1239,32 @@ class FileBrowserViewModel @Inject constructor(
         if (forceRefresh || _uiState.value !is FileBrowserUiState.Success) {
             _uiState.value = FileBrowserUiState.Loading
         }
+
+        val previousDirectoryFiles = _directoryFiles.value
+
         runCatching {
-            val previousDirectoryFiles = _directoryFiles.value
-            coroutineScope {
-                directories.map { directory ->
-                    async {
-                        val filesForDirectory = when {
-                            directory.path.isBlank() -> emptyList()
-                            !forceRefresh && previousDirectoryFiles.containsKey(directory.uri) -> {
-                                // Use previously scanned files for this directory if available
-                                previousDirectoryFiles[directory.uri].orEmpty()
-                            }
-                            else -> {
-                                // Always scan the directory to ensure we get all files,
-                                // including files from newly added directories that aren't in cache yet.
-                                // This fixes the issue where duplicate-filename files across
-                                // directories wouldn't show up without manual refresh.
-                                audioRepository.scanAudioFiles(
-                                    directoryPath = directory.path,
-                                    forceRefresh = forceRefresh
-                                ).last()
-                            }
-                        }.distinctBy { it.path }
-                        directory.uri to filesForDirectory
+            val paths = directories.map { it.path }.filter { it.isNotBlank() }
+            if (paths.isEmpty()) {
+                emptyMap()
+            } else {
+                // Use unifiedScanManager to scan directories
+                val result = unifiedScanManager.scan(
+                    target = ScanTarget.Directories(paths),
+                    force = forceRefresh
+                )
+                when (result) {
+                    is ScanResult.Success -> {
+                        // Group files by directory URI
+                        val filesByDir = mutableMapOf<String, List<AudioFile>>()
+                        directories.forEach { dir ->
+                            val dirFiles = result.files.filter { it.path.startsWith(dir.path) }
+                            filesByDir[dir.uri] = dirFiles
+                        }
+                        filesByDir
                     }
-                }.awaitAll().toMap()
+                    is ScanResult.Error -> throw IllegalStateException(result.message)
+                    is ScanResult.Cancelled -> emptyMap()
+                }
             }
         }.onSuccess { filesByDirectory ->
             _isRefreshing.value = false

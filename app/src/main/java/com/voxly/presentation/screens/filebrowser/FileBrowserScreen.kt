@@ -2749,10 +2749,8 @@ private fun ArtistListItem(
                     .clip(MaterialTheme.shapes.extraLarge),
                 contentAlignment = Alignment.Center
             ) {
-                val coverFile = artist.files.randomOrNull()
                 AlbumArtImage(
-                    filePath = coverFile?.path,
-                    mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
+                    filePath = artist.coverPath,
                     contentDescription = null,
                     size = 48.dp,
                     modifier = Modifier.fillMaxSize()
