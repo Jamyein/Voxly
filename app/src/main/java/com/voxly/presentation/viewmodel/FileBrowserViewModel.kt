@@ -136,16 +136,19 @@ class FileBrowserViewModel @Inject constructor(
 
     init {
         restoreSelectedDirectories()
-        // Start unified scan manager settings watching
-        unifiedScanManager.startWatchingSettings()
+        // Note: unifiedScanManager.startWatchingSettings() is called in AppViewModel
+        // to avoid duplicate watching
 
         // Listen to scan state changes from UnifiedScanManager
+        // Note: We don't call loadAudioFiles here because the scan results are already
+        // handled in the scan() call itself - calling loadAudioFiles would cause
+        // a loop (scan completes -> loadAudioFiles -> scan again -> ...)
         viewModelScope.launch {
             unifiedScanManager.scanState.collect { state ->
                 when (state) {
                     is ScanState.Success -> {
-                        Timber.d(TAG, "Scan completed, reloading files")
-                        loadAudioFiles(forceRefresh = false)
+                        Timber.d(TAG, "Scan completed")
+                        // Data is already loaded in scan() result, no need to reload
                     }
                     is ScanState.Error -> {
                         Timber.tag(TAG).e("Scan error: ${state.message}")

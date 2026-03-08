@@ -40,6 +40,9 @@ class UnifiedScanManagerImpl @Inject constructor(
         private const val TAG = "UnifiedScanManager"
     }
 
+    // Flag to prevent duplicate settings watching
+    private var isWatchingSettings = false
+
     private val _scanState = MutableStateFlow<ScanState>(ScanState.Idle)
     override val scanState: StateFlow<ScanState> = _scanState.asStateFlow()
 
@@ -141,6 +144,13 @@ class UnifiedScanManagerImpl @Inject constructor(
     }
 
     override fun startWatchingSettings() {
+        // Prevent duplicate watching
+        if (isWatchingSettings) {
+            Timber.d(TAG, "Settings watching already active, skipping duplicate start")
+            return
+        }
+        isWatchingSettings = true
+
         val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled
             .stateIn(scope, SharingStarted.Eagerly, false)
         val whitelistEnabled = settingsDataStore.whitelistEnabled
