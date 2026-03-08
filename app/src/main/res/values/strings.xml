@@ -177,6 +177,7 @@
     <string name="file_search_title">Search Files</string>
     <string name="file_search_results_count">%d results</string>
     <string name="file_search_empty">No matching files found</string>
+    <string name="search_tip">Enter keywords to search</string>
     <string name="file_sort_label">Sort</string>
     <string name="file_sort_name_asc">Name (A-Z)</string>
     <string name="file_sort_name_desc">Name (Z-A)</string>

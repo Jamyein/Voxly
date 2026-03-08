@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 fun ReplayGainScannerScreen(
     filePaths: List<String>,
     onNavigateBack: () -> Unit,
-    onNavigateToMetadata: (String) -> Unit
+    onNavigateToMetadata: (String, String?) -> Unit
 ) {
     var isScanning by remember { mutableStateOf(false) }
     var showSettingsSheet by remember { mutableStateOf(false) }

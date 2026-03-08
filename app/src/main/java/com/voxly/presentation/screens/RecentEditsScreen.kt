@@ -30,7 +30,7 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecentEditsScreen(
-    onNavigateToMetadata: (String) -> Unit,
+    onNavigateToMetadata: (String, String?) -> Unit,
     viewModel: RecentEditsViewModel = hiltViewModel(),
     bottomNavScrollProgress: Float = 0f,
     onBottomBarScrollProgressChange: (Float) -> Unit = {}
@@ -94,7 +94,7 @@ fun RecentEditsScreen(
 @Composable
 private fun RecentEditsList(
     edits: List<RecentEdit>,
-    onItemClick: (String) -> Unit
+    onItemClick: (String, String?) -> Unit
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -104,7 +104,7 @@ private fun RecentEditsList(
         items(edits, key = { it.filePath + it.timestamp }) { edit ->
             RecentEditItem(
                 edit = edit,
-                onClick = { onItemClick(edit.filePath) }
+                onClick = { onItemClick(edit.filePath, "cover_${edit.filePath.hashCode()}") }
             )
         }
     }

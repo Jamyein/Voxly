@@ -8,9 +8,9 @@ sealed class Screen(
     val showBottomBar: Boolean = false
 ) {
     data object FileBrowser : Screen("file_browser", showBottomBar = true)
-    data object DirectoryContent : Screen("directory_content/{directoryUri}/{directoryName}", showBottomBar = false) {
-        fun createRoute(directoryUri: String, directoryName: String) =
-            "directory_content/${java.net.URLEncoder.encode(directoryUri, "UTF-8")}/${java.net.URLEncoder.encode(directoryName, "UTF-8")}"
+    data object DirectoryContent : Screen("directory_content/{directoryUri}/{directoryName}?filePaths={filePaths}", showBottomBar = false) {
+        fun createRoute(directoryUri: String, directoryName: String, filePaths: List<String> = emptyList()) =
+            "directory_content/${java.net.URLEncoder.encode(directoryUri, "UTF-8")}/${java.net.URLEncoder.encode(directoryName, "UTF-8")}?filePaths=${filePaths.joinToString(",") { java.net.URLEncoder.encode(it, "UTF-8") }}"
     }
     data object FileSearch : Screen("file_search/{filePaths}", showBottomBar = false) {
         fun createRoute(filePaths: List<String>) =
@@ -22,8 +22,9 @@ sealed class Screen(
     data object Settings : Screen("settings", showBottomBar = true)
     data object ScanDirectorySettings : Screen("scan_directory_settings", showBottomBar = false)
     data object LogViewer : Screen("log_viewer", showBottomBar = false)
-    data object MetadataEditor : Screen("metadata_editor/{filePath}", showBottomBar = false) {
-        fun createRoute(filePath: String) = "metadata_editor/${java.net.URLEncoder.encode(filePath, "UTF-8")}"
+    data object MetadataEditor : Screen("metadata_editor/{filePath}/{coverTag}", showBottomBar = false) {
+        fun createRoute(filePath: String, coverTag: String? = null) =
+            "metadata_editor/${java.net.URLEncoder.encode(filePath, "UTF-8")}/${coverTag ?: ""}"
     }
     data object ReplayGainScanner : Screen("replay_gain_scanner/{filePaths}", showBottomBar = false) {
         fun createRoute(filePaths: List<String>) =

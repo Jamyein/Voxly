@@ -38,6 +38,7 @@ fun AlbumArtSection(
     albumArt: ByteArray?,
     onPickAlbumArt: () -> Unit,
     modifier: Modifier = Modifier,
+    coverTag: String? = null,
     onZoomAlbumArt: (() -> Unit)? = null,
     onRotateAlbumArt: (() -> Unit)? = null,
     onRemoveAlbumArt: (() -> Unit)? = null
@@ -58,6 +59,7 @@ fun AlbumArtSection(
                     decodeAlbumArtPreview(albumArt)
                 }
                 if (bitmap != null) {
+                    // Note: coverTag is kept for potential future SharedElement transitions
                     Image(
                         bitmap = bitmap.asImageBitmap(),
                         contentDescription = stringResource(R.string.cd_album_art),

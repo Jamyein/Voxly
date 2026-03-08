@@ -37,8 +37,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 28
         targetSdk = 36
-        versionCode = 16
-        versionName = "0.5.1"
+        versionCode = 18
+        versionName = "0.5.3"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -160,18 +160,20 @@ dependencies {
     // Chinese conversion (ICU4J)
 
     // Compose BOM (用于其他 Compose 依赖)
-    implementation(platform("androidx.compose:compose-bom:2026.02.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.02.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
+    // 使用 Kotlin 2.3.10 配合 Compose alpha 版本
+    implementation("androidx.compose.animation:animation:1.11.0-alpha06")
     // Material3 Alpha 版本 - 覆盖 BOM 中的稳定版以使用最新特性
-    implementation("androidx.compose.material3:material3:1.5.0-alpha14")
-    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha14")
-    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha14")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha15")
+    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha15")
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha15")
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
-    
+
     // Google Fonts - Variable Font支持 (使用Compose BOM中的版本)
     implementation("androidx.compose.ui:ui-text-google-fonts")
     implementation("androidx.appcompat:appcompat:1.7.1")
@@ -184,8 +186,8 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.10.0")
 
     // Hilt Dependency Injection
-    implementation("com.google.dagger:hilt-android:2.59.1")
-    ksp("com.google.dagger:hilt-android-compiler:2.59.1")
+    implementation("com.google.dagger:hilt-android:2.59.2")
+    ksp("com.google.dagger:hilt-android-compiler:2.59.2")
     implementation("androidx.hilt:hilt-navigation-compose:1.3.0")
 
     // Coroutines
@@ -198,11 +200,11 @@ dependencies {
 
     // Networking for MusicBrainz API
     // Note: Retrofit 2.9.0 + OkHttp 4.12.0 is the stable combination
-    implementation("com.squareup.retrofit2:retrofit:2.9.0")
-    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
-    implementation("com.squareup.retrofit2:converter-scalars:2.9.0")
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation("com.squareup.retrofit2:retrofit:3.0.0")
+    implementation("com.squareup.retrofit2:converter-gson:3.0.0")
+    implementation("com.squareup.retrofit2:converter-scalars:3.0.0")
+    implementation("com.squareup.okhttp3:okhttp:5.3.2")
+    implementation("com.squareup.okhttp3:logging-interceptor:5.3.2")
 
     // DataStore Preferences
     implementation("androidx.datastore:datastore-preferences:1.2.0")
@@ -211,7 +213,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.13.2")
 
     // Kotlinx Serialization for type-safe serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.8.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
 
     // Retrofit Kotlinx Serialization Converter
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
@@ -232,7 +234,7 @@ dependencies {
 
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2026.02.00"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.02.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     // Keep preview tooling out of runtime APK.

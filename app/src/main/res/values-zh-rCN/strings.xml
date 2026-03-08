@@ -107,6 +107,7 @@
     <string name="loading_audio_files">正在加载音频文件...</string>
     <string name="import_audio_files_or_select_folder">导入音频文件或选择文件夹</string>
     <string name="file_search_hint">搜索文件、艺术家、专辑...</string>
+    <string name="search_tip">输入关键词进行搜索</string>
     <string name="file_sort_label">排序</string>
     <string name="file_sort_name_asc">名称 (A-Z)</string>
     <string name="file_sort_name_desc">名称 (Z-A)</string>

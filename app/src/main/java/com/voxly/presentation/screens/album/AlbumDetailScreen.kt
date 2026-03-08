@@ -62,7 +62,7 @@ fun AlbumDetailScreen(
     albumName: String,
     albumArtist: String?,
     onNavigateBack: () -> Unit,
-    onNavigateToMetadata: (String) -> Unit
+    onNavigateToMetadata: (String, String?) -> Unit
 ) {
     val viewModel: AlbumDetailViewModel = hiltViewModel()
 
@@ -278,7 +278,7 @@ fun AlbumDetailScreen(
                         SettingsItemCard(position = position) {
                             TrackListItem(
                                 audioFile = audioFile,
-                                onClick = { onNavigateToMetadata(audioFile.path) }
+                                onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") }
                             )
                         }
                     }

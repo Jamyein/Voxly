@@ -82,6 +82,7 @@ import com.voxly.domain.model.RootTab
 import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveMotionTokens
@@ -162,6 +163,10 @@ fun FileBrowserScreen(
     // Dialog states
     var renameTargetFile by remember { mutableStateOf<AudioFile?>(null) }
     var deleteTargetFile by remember { mutableStateOf<AudioFile?>(null) }
+
+    // Search bottom sheet state
+    var showSearchSheet by remember { mutableStateOf(false) }
+    val searchSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
     val visibleFiles = remember(visibleFilesRaw, sortOption) {
         applySort(
@@ -376,7 +381,7 @@ fun FileBrowserScreen(
                                     }
                                 },
                                 actions = {
-                                    IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
+                                    IconButton(onClick = { showSearchSheet = true }) {
                                         Icon(
                                             imageVector = Icons.Default.Search,
                                             contentDescription = stringResource(R.string.cd_search)
@@ -411,7 +416,7 @@ fun FileBrowserScreen(
                                     titleContentColor = MaterialTheme.colorScheme.onSurface
                                 ),
                                 actions = {
-                                    IconButton(onClick = { onNavigateToSearch(visibleFilesRaw) }) {
+                                    IconButton(onClick = { showSearchSheet = true }) {
                                         Icon(
                                             imageVector = Icons.Default.Search,
                                             contentDescription = stringResource(R.string.cd_search)
@@ -711,6 +716,19 @@ fun FileBrowserScreen(
                 TextButton(onClick = { deleteTargetFile = null }) {
                     Text(stringResource(R.string.dialog_cancel))
                 }
+            }
+        )
+    }
+
+    // Search bottom sheet
+    if (showSearchSheet) {
+        SearchBottomSheet(
+            sheetState = searchSheetState,
+            onDismiss = { showSearchSheet = false },
+            allFiles = visibleFilesRaw,
+            onFileClick = { audioFile ->
+                showSearchSheet = false
+                onNavigateToMetadata(audioFile.path, null)
             }
         )
     }

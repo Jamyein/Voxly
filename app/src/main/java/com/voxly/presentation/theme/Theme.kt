@@ -37,6 +37,10 @@ import com.voxly.presentation.theme.ExpressiveTintThemeLight
 import com.voxly.presentation.theme.GradientColorsProvider
 import com.voxly.presentation.theme.TintThemeProvider
 
+// Material 3 Motion
+import androidx.compose.material3.MotionScheme
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+
 // Material Design 3 Color Schemes (Fallback for older Android)
 private val LightColorScheme = lightColorScheme(
     primary = Color(0xFF6750A4),
@@ -107,11 +111,14 @@ private val DarkColorScheme = darkColorScheme(
  * - GradientColors: For gradient backgrounds
  * - BackgroundTheme: For unified background handling
  * - TintTheme: For icon and component tints
+ * - MotionScheme: For official MD3 motion animations
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MP3TagTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    motionScheme: MotionScheme = MotionScheme.expressive(),
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -162,6 +169,7 @@ fun MP3TagTheme(
             colorScheme = colorScheme,
             typography = Typography,
             shapes = Shapes,  // Use MD3 Expressive shapes
+            motionScheme = motionScheme,
             content = content
         )
     }
@@ -170,15 +178,18 @@ fun MP3TagTheme(
 /**
  * Alias for MP3TagTheme for backward compatibility
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun VoxlyTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
+    motionScheme: MotionScheme = MotionScheme.expressive(),
     content: @Composable () -> Unit
 ) {
     MP3TagTheme(
         darkTheme = darkTheme,
         dynamicColor = dynamicColor,
+        motionScheme = motionScheme,
         content = content
     )
 }

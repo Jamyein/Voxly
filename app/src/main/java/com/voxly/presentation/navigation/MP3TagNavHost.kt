@@ -56,7 +56,6 @@ import androidx.compose.animation.scaleOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.core.tween
-import androidx.compose.animation.core.LinearOutSlowInEasing
 import com.voxly.presentation.viewmodel.AppViewModel
 
 /**
@@ -118,7 +117,7 @@ fun MP3TagNavHost(
                                 easing = ExpressiveMotionTokens.M3E_Emphasized_Easing
                             )
                         ) + slideInVertically(
-                            initialOffsetY = { it / 15 },
+                            initialOffsetY = { it / 10 },
                             animationSpec = tween(
                                 durationMillis = 500,
                                 easing = ExpressiveMotionTokens.M3E_Emphasized_Easing
@@ -146,20 +145,9 @@ fun MP3TagNavHost(
                     fromRoute in bottomNavRoutes && toRoute !in bottomNavRoutes -> {
                         ExpressiveAnimations.SharedAxisExit
                     }
-                    // M3E 规范: 退出动画 = 缩小(95%) + 渐隐, 250ms
+                    // M3E 规范: 退出动画 = 缩小(95%) + 渐隐, 300ms, EmphasizedAccelerate
                     else -> {
-                        fadeOut(
-                            animationSpec = tween(
-                                durationMillis = 250,
-                                easing = LinearOutSlowInEasing
-                            )
-                        ) + scaleOut(
-                            targetScale = 0.95f,
-                            animationSpec = tween(
-                                durationMillis = 250,
-                                easing = LinearOutSlowInEasing
-                            )
-                        )
+                        ExpressiveAnimations.M3E_PageExit
                     }
                 }
             },
@@ -168,24 +156,22 @@ fun MP3TagNavHost(
                 ExpressiveAnimations.SharedAxisPopEnter
             },
             popExitTransition = {
-                // 返回时向右滑出 (Shared Axis)
-                ExpressiveAnimations.SharedAxisPopExit
+                // M3E 规范: Pop Exit = slideOutVertically + fadeOut + scaleOut(0.95f), 300ms
+                ExpressiveAnimations.M3E_PopExit
             }
         ) {
             composable(Screen.FileBrowser.route) {
                 FileBrowserScreen(
-                    onNavigateToMetadata = { filePath ->
-                        navController.navigate(Screen.MetadataEditor.createRoute(filePath))
+                    onNavigateToMetadata = { filePath, coverTag ->
+                        navController.navigate(Screen.MetadataEditor.createRoute(filePath, coverTag))
                     },
                     onNavigateToReplayGain = { filePaths ->
                         navController.navigate(Screen.ReplayGainScanner.createRoute(filePaths))
                     },
-                    onNavigateToDirectory = { directoryUri, directoryName ->
-                        navController.navigate(Screen.DirectoryContent.createRoute(directoryUri, directoryName))
+                    onNavigateToDirectory = { directoryUri, directoryName, filePaths ->
+                        navController.navigate(Screen.DirectoryContent.createRoute(directoryUri, directoryName, filePaths))
                     },
-                    onNavigateToSearch = { audioFiles ->
-                        navController.navigate(Screen.FileSearch.createRoute(audioFiles.map { it.path }))
-                    },
+                    onNavigateToSearch = {},
                     onNavigateToAlbum = { albumName, albumArtist ->
                         navController.navigate(Screen.AlbumDetail.createRoute(albumName, albumArtist))
                     },
@@ -203,7 +189,12 @@ fun MP3TagNavHost(
                 route = Screen.DirectoryContent.route,
                 arguments = listOf(
                     navArgument("directoryUri") { type = NavType.StringType },
-                    navArgument("directoryName") { type = NavType.StringType }
+                    navArgument("directoryName") { type = NavType.StringType },
+                    navArgument("filePaths") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = ""
+                    }
                 ),
                 enterTransition = {
                     ExpressiveAnimations.SlideInHorizontallyInitialOffsetForward
@@ -222,12 +213,19 @@ fun MP3TagNavHost(
                 val directoryUri = URLDecoder.decode(encodedDirectoryUri, "UTF-8")
                 val encodedDirectoryName = backStackEntry.arguments?.getString("directoryName") ?: ""
                 val directoryName = URLDecoder.decode(encodedDirectoryName, "UTF-8")
+                val encodedFilePaths = backStackEntry.arguments?.getString("filePaths") ?: ""
+                val initialFiles = if (encodedFilePaths.isNotBlank()) {
+                    encodedFilePaths.split(",").map { URLDecoder.decode(it, "UTF-8") }
+                } else {
+                    emptyList()
+                }
                 DirectoryContentScreen(
                     directoryUri = directoryUri,
                     directoryName = directoryName,
+                    initialFiles = initialFiles,
                     onNavigateBack = { navController.popBackStack() },
-                    onNavigateToMetadata = { filePath ->
-                        navController.navigate(Screen.MetadataEditor.createRoute(filePath))
+                    onNavigateToMetadata = { filePath, coverTag ->
+                        navController.navigate(Screen.MetadataEditor.createRoute(filePath, coverTag))
                     },
                     onNavigateToReplayGain = { filePaths ->
                         navController.navigate(Screen.ReplayGainScanner.createRoute(filePaths))
@@ -260,8 +258,8 @@ fun MP3TagNavHost(
 
             composable(Screen.RecentEdits.route) {
                 RecentEditsScreen(
-                    onNavigateToMetadata = { filePath ->
-                        navController.navigate(Screen.MetadataEditor.createRoute(filePath))
+                    onNavigateToMetadata = { filePath, coverTag ->
+                        navController.navigate(Screen.MetadataEditor.createRoute(filePath, coverTag))
                     },
                     bottomNavScrollProgress = scrollProgress,
                     onBottomBarScrollProgressChange = { progress ->
@@ -335,11 +333,13 @@ fun MP3TagNavHost(
             composable(
                 route = Screen.MetadataEditor.route,
                 arguments = listOf(
-                    navArgument("filePath") { type = NavType.StringType }
+                    navArgument("filePath") { type = NavType.StringType },
+                    navArgument("coverTag") { type = NavType.StringType }
                 )
             ) { backStackEntry ->
                 val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
                 val filePath = URLDecoder.decode(encodedPath, "UTF-8")
+                val coverTag = backStackEntry.arguments?.getString("coverTag")?.takeIf { it.isNotEmpty() }
                 val pendingOnlineMetadata by backStackEntry.savedStateHandle
                     .getStateFlow<AudioMetadata?>("online_metadata_result", null)
                     .collectAsState()
@@ -348,6 +348,7 @@ fun MP3TagNavHost(
                     .collectAsState()
                 MetadataEditorScreen(
                     filePath = filePath,
+                    coverTag = coverTag,
                     onNavigateBack = { navController.popBackStack() },
                     onNavigateToOnlineMetadata = {
                         navController.navigate(Screen.OnlineMetadata.createRoute(filePath))
@@ -380,8 +381,8 @@ fun MP3TagNavHost(
                 ReplayGainScannerScreen(
                     filePaths = filePaths,
                     onNavigateBack = { navController.popBackStack() },
-                    onNavigateToMetadata = { filePath ->
-                        navController.navigate(Screen.MetadataEditor.createRoute(filePath)) {
+                    onNavigateToMetadata = { filePath, coverTag ->
+                        navController.navigate(Screen.MetadataEditor.createRoute(filePath, coverTag)) {
                             popUpTo(Screen.FileBrowser.route)
                         }
                     }
@@ -467,8 +468,8 @@ fun MP3TagNavHost(
                     albumName = albumName,
                     albumArtist = albumArtist,
                     onNavigateBack = { navController.popBackStack() },
-                    onNavigateToMetadata = { filePath ->
-                        navController.navigate(Screen.MetadataEditor.createRoute(filePath))
+                    onNavigateToMetadata = { filePath, coverTag ->
+                        navController.navigate(Screen.MetadataEditor.createRoute(filePath, coverTag))
                     }
                 )
             }
@@ -486,8 +487,8 @@ fun MP3TagNavHost(
                 ArtistDetailScreen(
                     artistName = artistName,
                     onNavigateBack = { navController.popBackStack() },
-                    onNavigateToMetadata = { filePath ->
-                        navController.navigate(Screen.MetadataEditor.createRoute(filePath))
+                    onNavigateToMetadata = { filePath, coverTag ->
+                        navController.navigate(Screen.MetadataEditor.createRoute(filePath, coverTag))
                     }
                 )
             }
