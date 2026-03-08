@@ -12,10 +12,6 @@ sealed class Screen(
         fun createRoute(directoryUri: String, directoryName: String, filePaths: List<String> = emptyList()) =
             "directory_content/${java.net.URLEncoder.encode(directoryUri, "UTF-8")}/${java.net.URLEncoder.encode(directoryName, "UTF-8")}?filePaths=${filePaths.joinToString(",") { java.net.URLEncoder.encode(it, "UTF-8") }}"
     }
-    data object FileSearch : Screen("file_search/{filePaths}", showBottomBar = false) {
-        fun createRoute(filePaths: List<String>) =
-            "file_search/${filePaths.joinToString(",") { java.net.URLEncoder.encode(it, "UTF-8") }}"
-    }
     data object RecentEdits : Screen("recent_edits", showBottomBar = true)
     data object Statistics : Screen("statistics", showBottomBar = true)
     data object BatchOperations : Screen("batch_operations", showBottomBar = false)

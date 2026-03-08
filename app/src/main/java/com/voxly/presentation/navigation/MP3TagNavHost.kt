@@ -31,7 +31,6 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.components.FlexibleBottomAppBar
 import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
-import com.voxly.presentation.screens.filebrowser.FileSearchScreen
 import com.voxly.presentation.screens.filebrowser.DirectoryContentScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
 import com.voxly.presentation.screens.RecentEditsScreen
@@ -229,29 +228,6 @@ fun MP3TagNavHost(
                     },
                     onNavigateToReplayGain = { filePaths ->
                         navController.navigate(Screen.ReplayGainScanner.createRoute(filePaths))
-                    }
-                )
-            }
-
-            composable(
-                route = Screen.FileSearch.route,
-                arguments = listOf(
-                    navArgument("filePaths") { type = NavType.StringType }
-                )
-            ) { backStackEntry ->
-                val encodedPaths = backStackEntry.arguments?.getString("filePaths") ?: ""
-                val filePaths = if (encodedPaths.isNotBlank()) {
-                    encodedPaths.split(",").map { URLDecoder.decode(it, "UTF-8") }
-                } else {
-                    emptyList()
-                }
-                FileSearchScreen(
-                    filePaths = filePaths,
-                    onNavigateBack = { navController.popBackStack() },
-                    onFileSelected = { filePath ->
-                        navController.navigate(Screen.MetadataEditor.createRoute(filePath)) {
-                            popUpTo(Screen.FileBrowser.route)
-                        }
                     }
                 )
             }

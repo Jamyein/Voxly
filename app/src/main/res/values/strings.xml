@@ -174,8 +174,6 @@
     <string name="loading_audio_files">Loading audio files...</string>
     <string name="import_audio_files_or_select_folder">Import audio files or select a folder</string>
     <string name="file_search_hint">Search files, artist, album...</string>
-    <string name="file_search_title">Search Files</string>
-    <string name="file_search_results_count">%d results</string>
     <string name="file_search_empty">No matching files found</string>
     <string name="search_tip">Enter keywords to search</string>
     <string name="file_sort_label">Sort</string>
