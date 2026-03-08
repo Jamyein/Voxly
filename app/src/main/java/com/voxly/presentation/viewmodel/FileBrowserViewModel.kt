@@ -1191,7 +1191,9 @@ class FileBrowserViewModel @Inject constructor(
             .filter { it.metadata.artist?.isNotBlank() == true }
             .groupBy { it.metadata.artist!! }
             .map { (artistName, files) ->
-                val coverFile = files.randomOrNull()
+                // 固定选择封面：优先选择有专辑封面的文件，否则使用第一个文件
+                val coverFile = files.firstOrNull { it.metadata.album?.isNotBlank() == true }
+                    ?: files.firstOrNull()
                 ArtistGroup(
                     name = artistName,
                     albums = files.mapNotNull { it.metadata.album }.distinct().sorted(),
