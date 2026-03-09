@@ -24,6 +24,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -46,6 +47,8 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
+import com.voxly.presentation.screens.filebrowser.FixMetadataOptions
+import com.voxly.presentation.screens.filebrowser.OnlineMetadataOptions
 import java.text.Collator
 import java.util.Locale
 
@@ -470,6 +473,202 @@ fun DirectoryContentScreen(
             showSingleFixMetadataDialog = false
             currentActionFile = null
         }
+    }
+
+    // Batch operations dialogs
+    val targetFiles = if (isSelectionMode) selectedFiles else files.map { it.path }.toSet()
+    val targetFilesCount = targetFiles.size
+
+    if (showOnlineMetadataDialog) {
+        BatchOnlineMetadataDialog(
+            targetFilesCount = targetFilesCount,
+            onDismiss = { showOnlineMetadataDialog = false },
+            onConfirm = { options ->
+                viewModel.batchFetchOnlineMetadata(targetFiles.toList(), options)
+                showOnlineMetadataDialog = false
+            }
+        )
+    }
+
+    if (showRenameDialog) {
+        BatchRenameDialog(
+            targetFilesCount = targetFilesCount,
+            onDismiss = { showRenameDialog = false },
+            onConfirm = { pattern, startNumber ->
+                viewModel.batchRenameFiles(targetFiles.toList(), pattern, startNumber)
+                showRenameDialog = false
+            }
+        )
+    }
+
+    if (showFixMetadataDialog) {
+        BatchFixMetadataDialog(
+            targetFilesCount = targetFilesCount,
+            onDismiss = { showFixMetadataDialog = false },
+            onConfirm = { options ->
+                viewModel.batchFixMetadata(targetFiles.toList(), options)
+                showFixMetadataDialog = false
+            }
+        )
+    }
+
+    if (showUnifiedFieldDialog) {
+        var field by remember { mutableStateOf("artist") }
+        var fieldValue by remember { mutableStateOf("") }
+
+        AlertDialog(
+            onDismissRequest = { showUnifiedFieldDialog = false },
+            title = { Text(stringResource(R.string.batch_unified_field)) },
+            text = {
+                Column {
+                    Text(
+                        text = stringResource(R.string.batch_target_files, targetFilesCount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    OutlinedTextField(
+                        value = field,
+                        onValueChange = { field = it },
+                        label = { Text(stringResource(R.string.select_field)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = fieldValue,
+                        onValueChange = { fieldValue = it },
+                        label = { Text(stringResource(R.string.field_value)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.batchSetUnifiedField(targetFiles.toList(), field, fieldValue)
+                        showUnifiedFieldDialog = false
+                    }
+                ) {
+                    Text(stringResource(R.string.dialog_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showUnifiedFieldDialog = false }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            }
+        )
+    }
+
+    if (showReplaceTextDialog) {
+        var field by remember { mutableStateOf("title") }
+        var searchText by remember { mutableStateOf("") }
+        var replaceText by remember { mutableStateOf("") }
+        var useRegex by remember { mutableStateOf(false) }
+
+        AlertDialog(
+            onDismissRequest = { showReplaceTextDialog = false },
+            title = { Text(stringResource(R.string.batch_replace_text)) },
+            text = {
+                Column {
+                    Text(
+                        text = stringResource(R.string.batch_target_files, targetFilesCount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    OutlinedTextField(
+                        value = field,
+                        onValueChange = { field = it },
+                        label = { Text(stringResource(R.string.select_field)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = searchText,
+                        onValueChange = { searchText = it },
+                        label = { Text(stringResource(R.string.search_text)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = replaceText,
+                        onValueChange = { replaceText = it },
+                        label = { Text(stringResource(R.string.replace_text)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.batchReplaceText(
+                            targetFiles.toList(),
+                            field,
+                            searchText,
+                            replaceText,
+                            useRegex
+                        )
+                        showReplaceTextDialog = false
+                    }
+                ) {
+                    Text(stringResource(R.string.dialog_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReplaceTextDialog = false }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            }
+        )
+    }
+
+    if (showAutoNumberDialog) {
+        var startNumber by remember { mutableIntStateOf(1) }
+        var step by remember { mutableIntStateOf(1) }
+
+        AlertDialog(
+            onDismissRequest = { showAutoNumberDialog = false },
+            title = { Text(stringResource(R.string.batch_auto_number)) },
+            text = {
+                Column {
+                    Text(
+                        text = stringResource(R.string.batch_target_files, targetFilesCount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(bottom = 16.dp)
+                    )
+                    OutlinedTextField(
+                        value = startNumber.toString(),
+                        onValueChange = { startNumber = it.toIntOrNull() ?: 1 },
+                        label = { Text(stringResource(R.string.start_number)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = step.toString(),
+                        onValueChange = { step = it.toIntOrNull() ?: 1 },
+                        label = { Text(stringResource(R.string.step)) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.batchAutoNumberTracks(targetFiles.toList(), startNumber, step, null)
+                        showAutoNumberDialog = false
+                    }
+                ) {
+                    Text(stringResource(R.string.dialog_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAutoNumberDialog = false }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            }
+        )
     }
 }
 
