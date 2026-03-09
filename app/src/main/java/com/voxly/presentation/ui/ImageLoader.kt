@@ -224,9 +224,13 @@ fun loadLocalAlbumArt(filePath: String): Bitmap? {
     if (bitmap != null) {
         localCacheLock.lock()
         try {
+            // Remove oldest entries if at capacity - don't recycle immediately,
+            // just remove from map. Let GC handle the actual memory release.
+            // This prevents crashes when old bitmaps are still referenced by Compose.
             while (localAlbumArtCache.size >= MAX_LOCAL_CACHE_SIZE) {
-                val oldestKey = localAlbumArtCache.keys.first()
-                localAlbumArtCache.remove(oldestKey)?.recycle()
+                localAlbumArtCache.keys.firstOrNull()?.let { key ->
+                    localAlbumArtCache.remove(key)
+                }
             }
             localAlbumArtCache[filePath] = bitmap
         } finally {
@@ -344,11 +348,13 @@ fun preloadLocalAlbumArts(filePaths: List<String>) {
 /**
  * Clears the local album art cache.
  * Call this when the app needs to free memory.
+ * Note: We don't call recycle() here to avoid crashes if bitmaps are still
+ * referenced by Compose. The bitmaps will be garbage collected naturally.
  */
 fun clearLocalAlbumArtCache() {
     localCacheLock.lock()
     try {
-        localAlbumArtCache.values.forEach { it.recycle() }
+        // Just clear the map references, let GC handle memory
         localAlbumArtCache.clear()
     } finally {
         localCacheLock.unlock()
@@ -390,9 +396,11 @@ fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
 
     // Cache the result
     if (bitmap != null) {
+        // Don't recycle immediately on eviction - let GC handle memory.
+        // This prevents crashes when old bitmaps are still referenced by Compose.
         while (mediaStoreAlbumCache.size >= MAX_MEDIASTORE_CACHE_SIZE) {
             mediaStoreAlbumCache.keys.firstOrNull()?.let { key ->
-                mediaStoreAlbumCache.remove(key)?.recycle()
+                mediaStoreAlbumCache.remove(key)
             }
         }
         mediaStoreAlbumCache[cacheKey] = bitmap
@@ -403,8 +411,9 @@ fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
 
 /**
  * Clears the MediaStore album art cache.
+ * Note: We don't call recycle() here to avoid crashes if bitmaps are still
+ * referenced by Compose. The bitmaps will be garbage collected naturally.
  */
 fun clearMediaStoreAlbumCache() {
-    mediaStoreAlbumCache.values.forEach { it.recycle() }
     mediaStoreAlbumCache.clear()
 }
