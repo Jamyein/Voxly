@@ -9,7 +9,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -39,6 +43,34 @@ internal fun SingleFileRenameDialog(
     onConfirm: (String) -> Unit
 ) {
     var newName by remember(audioFile.path) { mutableStateOf(audioFile.name.substringBeforeLast(".")) }
+    var expanded by remember { mutableStateOf(false) }
+
+    // Pattern options (empty string means direct input)
+    val patterns = listOf(
+        "" to stringResource(R.string.rename_direct_input),
+        "{artist} - {title}" to stringResource(R.string.pattern_artist_title),
+        "{title}" to stringResource(R.string.pattern_title),
+        "{track}. {title}" to stringResource(R.string.pattern_track_title),
+        "{artist} - {album} - {track}. {title}" to stringResource(R.string.pattern_full)
+    )
+
+    // Find current selected pattern or direct input
+    val currentPattern = patterns.find { it.first == newName }?.first ?: ""
+    var selectedPattern by remember { mutableStateOf(currentPattern) }
+
+    // Generate preview based on metadata
+    val metadata = audioFile.metadata
+    val previewName = if (selectedPattern.isNotEmpty()) {
+        selectedPattern
+            .replace("{title}", metadata.title ?: audioFile.name.substringBeforeLast("."))
+            .replace("{artist}", metadata.artist ?: "Unknown")
+            .replace("{album}", metadata.album ?: "Unknown")
+            .replace("{track}", (metadata.trackNumber ?: 1).toString().padStart(2, '0'))
+            .replace("{track00}", (metadata.trackNumber ?: 1).toString().padStart(2, '0'))
+            .replace("{track000}", (metadata.trackNumber ?: 1).toString().padStart(3, '0'))
+    } else {
+        newName
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -52,13 +84,78 @@ internal fun SingleFileRenameDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 Spacer(modifier = Modifier.height(12.dp))
+
+                // Pattern selector dropdown
+                ExposedDropdownMenuBox(
+                    expanded = expanded,
+                    onExpandedChange = { expanded = it }
+                ) {
+                    OutlinedTextField(
+                        value = patterns.find { it.first == selectedPattern }?.second ?: patterns[0].second,
+                        onValueChange = {},
+                        readOnly = true,
+                        label = { Text(stringResource(R.string.rename_pattern)) },
+                        trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expanded) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                    )
+
+                    ExposedDropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        patterns.forEach { (pat, label) ->
+                            DropdownMenuItem(
+                                text = { Text(label) },
+                                onClick = {
+                                    selectedPattern = pat
+                                    if (pat.isNotEmpty()) {
+                                        newName = pat
+                                    }
+                                    expanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                // File name input (only show when not using pattern or allow editing)
                 OutlinedTextField(
                     value = newName,
-                    onValueChange = { newName = it },
+                    onValueChange = {
+                        newName = it
+                        // Clear pattern selection if user edits manually
+                        if (patterns.none { p -> p.first == it }) {
+                            selectedPattern = ""
+                        }
+                    },
                     label = { Text(stringResource(R.string.new_file_name)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
+
+                // Preview
+                if (previewName.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.number_preview, "$previewName.${audioFile.name.substringAfterLast(".", "")}"),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+
+                // Help text for pattern
+                if (selectedPattern.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = stringResource(R.string.rename_pattern_help),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
             }
         },
         confirmButton = {

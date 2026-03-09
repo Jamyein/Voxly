@@ -257,6 +257,7 @@
     <!-- Batch Rename Options -->
     <string name="batch_rename_title">Batch Rename Files</string>
     <string name="rename_pattern">Naming Pattern</string>
+    <string name="rename_direct_input">Direct Input</string>
     <string name="start_number">Start Number</string>
     <string name="rename_pattern_help">Available tags: {title}, {artist}, {album}, {track}</string>
     <string name="pattern_artist_title">Artist - Title</string>

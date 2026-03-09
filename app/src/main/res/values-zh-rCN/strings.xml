@@ -179,6 +179,7 @@
     <!-- Batch Rename Options -->
     <string name="batch_rename_title">批量修改文件名</string>
     <string name="rename_pattern">命名模式</string>
+    <string name="rename_direct_input">直接输入</string>
     <string name="start_number">起始编号</string>
     <string name="rename_pattern_help">可用标签: {title}, {artist}, {album}, {track}</string>
     <string name="pattern_artist_title">艺术家 - 标题</string>

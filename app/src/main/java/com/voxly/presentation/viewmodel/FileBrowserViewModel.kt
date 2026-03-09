@@ -449,7 +449,22 @@ class FileBrowserViewModel @Inject constructor(
                 runCatching {
                     val file = File(filePath)
 
-                    val sanitizedName = targetName.trim()
+                    // Check if targetName contains pattern placeholders
+                    var processedName = targetName
+                    if (targetName.contains(Regex("\\{.*\\}"))) {
+                        // Read metadata for pattern substitution
+                        val metadata = audioRepository.readMetadata(filePath).getOrNull()
+
+                        processedName = targetName
+                            .replace("{title}", metadata?.title ?: file.nameWithoutExtension)
+                            .replace("{artist}", metadata?.artist ?: "Unknown")
+                            .replace("{album}", metadata?.album ?: "Unknown")
+                            .replace("{track}", (metadata?.trackNumber ?: 1).toString().padStart(2, '0'))
+                            .replace("{track00}", (metadata?.trackNumber ?: 1).toString().padStart(2, '0'))
+                            .replace("{track000}", (metadata?.trackNumber ?: 1).toString().padStart(3, '0'))
+                    }
+
+                    val sanitizedName = processedName.trim()
                         .replace(Regex("[\\\\/:*?\"<>|]"), "_")
                     if (sanitizedName.isBlank()) {
                         return@runCatching false to "File name cannot be empty"
