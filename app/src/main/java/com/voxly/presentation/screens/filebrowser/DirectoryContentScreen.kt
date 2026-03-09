@@ -219,38 +219,51 @@ fun DirectoryContentScreen(
         },
         floatingActionButton = {
             if (!isBatchProcessing && files.isNotEmpty()) {
-                if (isSelectionMode || canScrollToTop) {
-                    // Show selection actions when in selection mode
+                if (canScrollToTop) {
+                    // Show scroll to top FAB when can scroll
                     Row(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        if (isSelectionMode) {
-                            SmallFloatingActionButton(
-                                onClick = {
-                                    showBatchMenu = true
-                                },
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Add,
-                                    contentDescription = stringResource(R.string.batch_operations)
-                                )
+                        // Always show the batch operations FAB
+                        DirectoryBatchOperationsFAB(
+                            expanded = showBatchMenu,
+                            onExpandChange = { showBatchMenu = it },
+                            onOnlineMetadata = {
+                                showBatchMenu = false
+                                showOnlineMetadataDialog = true
+                            },
+                            onUnifiedField = {
+                                showBatchMenu = false
+                                showUnifiedFieldDialog = true
+                            },
+                            onReplaceText = {
+                                showBatchMenu = false
+                                showReplaceTextDialog = true
+                            },
+                            onAutoNumber = {
+                                showBatchMenu = false
+                                showAutoNumberDialog = true
+                            },
+                            onRenameFiles = {
+                                showBatchMenu = false
+                                showRenameDialog = true
+                            },
+                            onFixMetadata = {
+                                showBatchMenu = false
+                                showFixMetadataDialog = true
                             }
-                        }
-                        if (canScrollToTop) {
-                            SmallFloatingActionButton(
-                                onClick = {
-                                    // Scroll to top
-                                },
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowUp,
-                                    contentDescription = stringResource(R.string.back_to_top)
-                                )
-                            }
+                        )
+                        SmallFloatingActionButton(
+                            onClick = {
+                                // Scroll to top
+                            },
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.KeyboardArrowUp,
+                                contentDescription = stringResource(R.string.back_to_top)
+                            )
                         }
                     }
                 } else {
@@ -581,9 +594,7 @@ fun DirectoryMenuItem(
     Row(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.End,
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp)
+        modifier = Modifier.padding(horizontal = 8.dp)
     ) {
         // Label
         Surface(

@@ -498,7 +498,6 @@ fun MetadataEditorScreen(
             onDismiss = { showDiscardDialog = false },
             onSave = {
                 showDiscardDialog = false
-                exitAfterSave = true
                 viewModel.saveMetadata()
             },
             onDiscard = {
