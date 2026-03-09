@@ -30,6 +30,7 @@ import java.util.*
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RecentEditsScreen(
+    outerPadding: PaddingValues = PaddingValues(),
     onNavigateToMetadata: (String, String?) -> Unit,
     viewModel: RecentEditsViewModel = hiltViewModel(),
     bottomNavScrollProgress: Float = 0f,
@@ -53,17 +54,12 @@ fun RecentEditsScreen(
             )
         }
     ) { innerPadding ->
-        // Calculate dynamic bottom padding based on scroll progress
-        val bottomNavHeight = 80.dp
-        val dynamicBottomPadding = bottomNavHeight * (1f - bottomNavScrollProgress)
-
-        // Content with top padding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(
                     top = innerPadding.calculateTopPadding(),
-                    bottom = dynamicBottomPadding
+                    bottom = outerPadding.calculateBottomPadding()
                 )
         ) {
             when (val state = uiState) {

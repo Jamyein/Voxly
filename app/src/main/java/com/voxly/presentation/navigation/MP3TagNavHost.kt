@@ -1,6 +1,15 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
+import androidx.compose.animation.SharedTransitionLayout
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
@@ -13,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
@@ -25,35 +35,26 @@ import androidx.navigation.navArgument
 import com.voxly.R
 import com.voxly.core.util.LogManager
 import com.voxly.domain.model.AudioMetadata
+import com.voxly.presentation.components.FlexibleBottomAppBar
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.components.FlexibleBottomAppBar
-import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
-import com.voxly.presentation.screens.filebrowser.DirectoryContentScreen
-import com.voxly.presentation.screens.metadata.MetadataEditorScreen
 import com.voxly.presentation.screens.RecentEditsScreen
 import com.voxly.presentation.screens.ReplayGainScannerScreen
 import com.voxly.presentation.screens.SettingsScreen
 import com.voxly.presentation.screens.StatisticsScreen
-import com.voxly.presentation.screens.log.LogViewerScreen
-import java.net.URLDecoder
-import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
-import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
-import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
 import com.voxly.presentation.screens.album.AlbumDetailScreen
 import com.voxly.presentation.screens.artist.ArtistDetailScreen
+import com.voxly.presentation.screens.filebrowser.DirectoryContentScreen
+import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
+import com.voxly.presentation.screens.log.LogViewerScreen
+import com.voxly.presentation.screens.metadata.MetadataEditorScreen
+import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
+import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
+import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.ExpressiveMotionTokens
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.tween
 import com.voxly.presentation.viewmodel.AppViewModel
+import java.net.URLDecoder
 
 /**
  * Main navigation host for the MP3 Tag Editor app.
@@ -80,12 +81,11 @@ fun MP3TagNavHost(
                 currentRoute = currentDestination?.route
             )
         }
-    ) { innerPadding ->
+    ) { outerPadding ->
         SharedTransitionLayout {
             NavHost(
                 navController = navController,
-                modifier = Modifier
-                    .fillMaxSize(),
+                modifier = Modifier.fillMaxSize(),
             startDestination = Screen.FileBrowser.route,
             enterTransition = {
                 val destinations = bottomNavRoutes
@@ -154,6 +154,7 @@ fun MP3TagNavHost(
         ) {
             composable(Screen.FileBrowser.route) {
                 FileBrowserScreen(
+                    outerPadding = outerPadding,
                     onNavigateToMetadata = { filePath, coverTag ->
                         navController.navigate(Screen.MetadataEditor.createRoute(filePath, coverTag))
                     },
@@ -223,6 +224,7 @@ fun MP3TagNavHost(
 
             composable(Screen.RecentEdits.route) {
                 RecentEditsScreen(
+                    outerPadding = outerPadding,
                     onNavigateToMetadata = { filePath, coverTag ->
                         navController.navigate(Screen.MetadataEditor.createRoute(filePath, coverTag))
                     }
@@ -231,6 +233,7 @@ fun MP3TagNavHost(
 
             composable(Screen.Statistics.route) {
                 StatisticsScreen(
+                    outerPadding = outerPadding,
                     onNavigateToSettings = {
                         navController.navigate(Screen.Settings.route)
                     },
@@ -243,6 +246,7 @@ fun MP3TagNavHost(
             composable(Screen.Settings.route) {
                 val context = LocalContext.current
                 SettingsScreen(
+                    outerPadding = outerPadding,
                     onNavigateToLogViewer = {
                         navController.navigate(Screen.LogViewer.route)
                     },
@@ -334,11 +338,11 @@ fun MP3TagNavHost(
                 )
             ) { backStackEntry ->
                 val encodedPaths = backStackEntry.arguments?.getString("filePaths") ?: ""
-                val filePaths = encodedPaths.split(",").map { URLDecoder.decode(it, "UTF-8") }
+                val filePaths: List<String> = encodedPaths.split(",").map { URLDecoder.decode(it, "UTF-8") }
                 ReplayGainScannerScreen(
                     filePaths = filePaths,
                     onNavigateBack = { navController.popBackStack() },
-                    onNavigateToMetadata = { filePath, coverTag ->
+                    onNavigateToMetadata = { filePath: String, coverTag: String? ->
                         navController.navigate(Screen.MetadataEditor.createRoute(filePath, coverTag)) {
                             popUpTo(Screen.FileBrowser.route)
                         }

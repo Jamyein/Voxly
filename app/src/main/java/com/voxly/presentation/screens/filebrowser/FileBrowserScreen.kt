@@ -23,6 +23,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.pager.HorizontalPager
@@ -111,6 +112,7 @@ private val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileBrowserScreen(
+    outerPadding: PaddingValues = PaddingValues(),
     viewModel: FileBrowserViewModel = hiltViewModel(),
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
@@ -466,20 +468,15 @@ fun FileBrowserScreen(
             }
         }
     ) { innerPadding ->
-        // Calculate dynamic bottom padding based on scroll progress
-        // When bottom nav hides (progress = 1), bottom padding becomes 0 to fill the space
-        val bottomNavHeight = 80.dp
-        val dynamicBottomPadding = bottomNavHeight * (1f - bottomNavScrollProgress)
-
         Box(modifier = Modifier.fillMaxSize()) {
-            // Main content with innerPadding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
+            // Main content with innerPadding from Scaffold and outerPadding from bottom nav
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .zIndex(0f)
                     .padding(
                         top = innerPadding.calculateTopPadding(),
-                        bottom = dynamicBottomPadding
+                        bottom = outerPadding.calculateBottomPadding()
                     )
             ) {
             if (isDirectoryListLevel) {

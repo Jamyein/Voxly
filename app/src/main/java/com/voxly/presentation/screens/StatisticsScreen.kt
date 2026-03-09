@@ -50,6 +50,7 @@ import com.voxly.presentation.viewmodel.StatisticsViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun StatisticsScreen(
+    outerPadding: PaddingValues = PaddingValues(),
     viewModel: StatisticsViewModel = hiltViewModel(),
     onNavigateToSettings: () -> Unit = {},
     onNavigateToArtist: (String) -> Unit = {},
@@ -82,12 +83,13 @@ fun StatisticsScreen(
             )
         }
     ) { innerPadding ->
-
-        // Content with top padding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = outerPadding.calculateBottomPadding()
+                )
         ) {
             when (val state = uiState) {
             is StatisticsUiState.Loading -> {

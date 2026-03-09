@@ -1005,6 +1005,7 @@ fun SearchLimitOption.displayLabel(): String {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
+    outerPadding: PaddingValues = PaddingValues(),
     onNavigateToDirectoryManagement: () -> Unit = {},
     onNavigateToScanDirectorySettings: () -> Unit = {},
     onNavigateToLogViewer: () -> Unit = {},
@@ -1115,12 +1116,13 @@ fun SettingsScreen(
             )
         }
     ) { innerPadding ->
-
-        // Content with top padding from Scaffold and dynamic bottom padding for scroll-to-hide bottom nav
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(innerPadding)
+                .padding(
+                    top = innerPadding.calculateTopPadding(),
+                    bottom = outerPadding.calculateBottomPadding()
+                )
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
