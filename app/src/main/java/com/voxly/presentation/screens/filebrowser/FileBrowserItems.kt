@@ -201,8 +201,15 @@ internal fun AlbumGridItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
+                val albumYear = album.files
+                    .firstOrNull { it.metadata.year?.isNotBlank() == true }
+                    ?.metadata?.year
                 Text(
-                    text = stringResource(R.string.track_count, album.files.size),
+                    text = if (albumYear != null) {
+                        "$albumYear • ${stringResource(R.string.track_count, album.files.size)}"
+                    } else {
+                        stringResource(R.string.track_count, album.files.size)
+                    },
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.outline
                 )
