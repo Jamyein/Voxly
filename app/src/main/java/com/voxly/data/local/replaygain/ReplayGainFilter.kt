@@ -47,9 +47,10 @@ object ReplayGainFilter {
     /**
      * Processes audio samples through the Yulewalk filter.
      * Uses Direct Form II transposed structure for IIR filtering.
+     * Each channel is processed independently (matches foobar2000 behavior).
      *
      * @param samples Input samples (mono or interleaved stereo)
-     * @param channelCount Number of channels (for stereo, process interleaved)
+     * @param channelCount Number of channels (for stereo, process each channel separately)
      * @return Filtered samples
      */
     fun processYulewalk(samples: FloatArray, channelCount: Int): FloatArray {
@@ -61,19 +62,22 @@ object ReplayGainFilter {
         val numB = order + 1  // 11
         val numA = order + 1  // 11
 
-        // State variables for Direct Form II Transposed
-        val state = DoubleArray(order + 1)
+        // State variables for each channel (maintain independence between channels)
+        val state = DoubleArray((order + 1) * channelCount)
 
         // Process each sample
         for (i in samples.indices) {
+            val channel = i % channelCount
+            val stateOffset = channel * (order + 1)
+
             val input = samples[i].toDouble()
 
             // Accumulate feedforward part
-            var outputSample = coeffs[numA] * input + state[0]
+            var outputSample = coeffs[numA] * input + state[stateOffset]
 
-            // Shift state
+            // Shift state for this channel
             for (j in 0 until order) {
-                state[j] = coeffs[numA + j + 1] * input - coeffs[j + 1] * outputSample + state[j + 1]
+                state[stateOffset + j] = coeffs[numA + j + 1] * input - coeffs[j + 1] * outputSample + state[stateOffset + j + 1]
             }
 
             output[i] = outputSample.toFloat()
@@ -84,6 +88,7 @@ object ReplayGainFilter {
 
     /**
      * Processes audio samples through the Butterworth highpass filter.
+     * Each channel is processed independently (matches foobar2000 behavior).
      *
      * @param samples Input samples (mono or interleaved stereo)
      * @param channelCount Number of channels
@@ -96,16 +101,17 @@ object ReplayGainFilter {
         // 2nd order filter: 3 b coefficients and 3 a coefficients
         val order = 2
 
-        // State for each channel (to maintain continuity across blocks)
-        val state = DoubleArray(order * channelCount)
+        // State for each channel: (order + 1) states per channel for Direct Form II Transposed
+        val state = DoubleArray((order + 1) * channelCount)
 
         for (i in samples.indices) {
             val channel = i % channelCount
-            val stateOffset = channel * order
+            val stateOffset = channel * (order + 1)
 
             val input = samples[i].toDouble()
 
             // Direct Form II Transposed implementation
+            // coeffs: [a0, a1, a2, b0, b1, b2] where a0=1
             var outputSample = coeffs[3] * input + state[stateOffset]
 
             // Update state for this channel

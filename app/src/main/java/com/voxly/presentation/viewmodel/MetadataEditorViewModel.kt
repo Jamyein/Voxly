@@ -437,21 +437,31 @@ class MetadataEditorViewModel @Inject constructor(
 
         if (trackGains.isEmpty()) return null
 
+        // Reference loudness: -14 dB = 10^(-14/20) ≈ 0.1995
+        // This must match ReplayGainScanner.REFERENCE_LUFS
+        val referenceLufs = -14.0
+        val rmsReference = 0.1995262314968879
+
         // Convert track gains back to RMS values for energy average
-        // gain_db = 20 * log10(rms / reference)
-        // => rms = reference * 10^(gain_db / 20)
-        // Using reference RMS = 0.0001 (same as ReplayGainScanner)
-        val rmsReference = 0.0001f
+        // track_gain = target - measured
+        // measured = target - track_gain
+        // measured_db = 20 * log10(rms / reference)
+        // => rms = reference * 10^(measured_db / 20)
+        // => rms = reference * 10^((target - track_gain) / 20)
         val trackRmsValues = trackGains.map { trackGain ->
-            rmsReference * 10.0.pow(trackGain.trackGain / 20.0).toFloat()
+            rmsReference * 10.0.pow((referenceLufs - trackGain.trackGain) / 20.0)
         }
 
         // Energy average: sqrt(mean(rms²))
         val energyMean = trackRmsValues.map { it * it }.average()
-        val albumRms = sqrt(energyMean).toFloat()
+        val albumRmsLinear = sqrt(energyMean)
 
-        // Convert back to dB gain
-        val albumGainDb = 20 * log10(albumRms.coerceAtLeast(rmsReference))
+        // Convert back to dB gain: album_gain = target - 20 * log10(album_rms / reference)
+        val albumGainDb = if (albumRmsLinear > 0) {
+            (referenceLufs - 20 * log10(albumRmsLinear / rmsReference)).toFloat()
+        } else {
+            0f
+        }
 
         val maxPeak = trackGains.maxOfOrNull { it.trackPeak } ?: 0f
 

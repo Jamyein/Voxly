@@ -38,12 +38,18 @@ class ReplayGainScanner @Inject constructor(
 ) {
 
     companion object {
-        // Reference loudness level (standard ReplayGain uses -14 LUFS, corresponds to 89 dB SPL)
-        // This matches foobar2000's default reference level
+        // Reference loudness level
+        // foobar2000 Classic ReplayGain: -14 dB RMS relative to full-scale sinusoid = 89 dB SPL
+        // This is the standard ReplayGain reference level
         const val REFERENCE_LUFS = -14.0
-        const val RMS_REFERENCE = 0.0001 // Reference RMS for calculations
 
-        // Block duration for 95th percentile RMS calculation (50ms blocks as per ReplayGain spec)
+        // RMS reference for gain calculation
+        // Full-scale sinusoid = 1.0
+        // -14 dB relative to full-scale = 10^(-14/20) ≈ 0.1995
+        const val RMS_REFERENCE = 0.1995262314968879
+
+        // Block duration for 95th percentile RMS calculation
+        // foobar2000 uses 50ms blocks as per ReplayGain 1.0 spec
         const val BLOCK_DURATION_MS = 50
 
         // Number of samples to process per chunk (for progress updates)
@@ -502,18 +508,30 @@ class ReplayGainScanner @Inject constructor(
                 return@withContext null
             }
 
-            // Calculate 95th percentile RMS from block RMS values (matches foobar2000 ReplayGain)
+            // Calculate 95th percentile RMS from block RMS values
+            // foobar2000 uses 95th percentile for better human perception matching
             val blockRmsValues = stats.blockRmsValues
             val rms = if (blockRmsValues.isNotEmpty()) {
                 calculate95thPercentileRms(blockRmsValues)
             } else {
-                calculateRMSFromStats(stats.sumSquares, stats.sampleCount)
+                // Fallback: calculate from mean square if block calculation failed
+                sqrt(stats.sumSquares / stats.sampleCount).toFloat()
             }
-            val peak = stats.peak
+            val peak = stats.peak // Peak from UNFILTERED audio (foobar2000 behavior)
 
             // Calculate gain adjustment needed to reach target loudness level
-            val currentDb = 20 * log10(rms.coerceAtLeast(RMS_REFERENCE.toFloat()))
-            val gainDb = (targetLoudness.toDouble() - currentDb).toFloat()
+            // Formula: gain_db = target_loudness - measured_loudness
+            // where measured_loudness = 20 * log10(rms / reference)
+            // and target_loudness = REFERENCE_LUFS = -14 dB
+            //
+            // Note: We use a very small floor to prevent log10(0) = -Infinity
+            val measuredDb = 20 * log10(rms.toDouble().coerceAtLeast(1e-10))
+            val gainDb = (targetLoudness.toDouble() - measuredDb).toFloat()
+
+            Logger.v(
+                "ReplayGain result: file=${file.name} rms=${rms} measuredDb=${measuredDb} gainDb=${gainDb} peak=${peak}",
+                "ReplayGainScanner"
+            )
 
             ReplayGainInfo(
                 trackGain = gainDb,
@@ -563,6 +581,15 @@ class ReplayGainScanner @Inject constructor(
         val blockRmsValues: List<Float> = emptyList()
     )
 
+    /**
+     * Decodes audio file and collects statistics for ReplayGain calculation.
+     *
+     * foobar2000 ReplayGain implementation:
+     * - Peak: Calculated from UNFILTERED original audio (for clipping prevention)
+     * - RMS/Loudness: Calculated from FILTERED audio (psychoacoustically compensated)
+     * - Block size: 50ms
+     * - Percentile: 95th percentile
+     */
     private fun decodeAndAccumulateStats(
         extractor: MediaExtractor,
         format: MediaFormat,
@@ -580,13 +607,7 @@ class ReplayGainScanner @Inject constructor(
             var outputDone = false
 
             var sampleCount = 0L
-            var sumSquares = 0.0
             var peak = 0f
-
-            // For 95th percentile RMS calculation: collect RMS of each 50ms block
-            val blockRmsValues = mutableListOf<Float>()
-            var blockSampleCount = 0L
-            var blockSumSquares = 0.0
 
             // Calculate samples per block based on target sample rate and block duration
             val samplesPerBlock = (targetSampleRate * BLOCK_DURATION_MS) / 1000
@@ -595,7 +616,7 @@ class ReplayGainScanner @Inject constructor(
             var lastSeenTimestampUs = Long.MIN_VALUE
             var acceptSample = true
 
-            // Buffer to collect samples for filter processing
+            // Buffer to collect raw samples for filter processing
             val sampleBuffer = mutableListOf<Float>()
 
             while (!outputDone) {
@@ -648,21 +669,17 @@ class ReplayGainScanner @Inject constructor(
                             if (acceptSample) {
                                 val shortBuffer = outputBuffer.asShortBuffer()
                                 while (shortBuffer.hasRemaining()) {
+                                    // Normalize to -1.0 to 1.0 range
                                     val sample = shortBuffer.get().toInt().toFloat() / 32768.0f
+
+                                    // Calculate PEAK from UNFILTERED audio (foobar2000 behavior)
+                                    // This is used for clipping prevention
                                     val absSample = kotlin.math.abs(sample)
                                     if (absSample > peak) peak = absSample
+
+                                    // Store sample for later filtering
                                     sampleBuffer.add(sample)
                                     sampleCount++
-                                    blockSampleCount++
-                                    blockSumSquares += sample.toDouble().pow(2.0)
-
-                                    // Calculate block RMS when we have enough samples
-                                    if (blockSampleCount >= samplesPerBlock) {
-                                        val blockRms = sqrt(blockSumSquares / blockSampleCount).toFloat()
-                                        blockRmsValues.add(blockRms)
-                                        blockSampleCount = 0L
-                                        blockSumSquares = 0.0
-                                    }
                                 }
                             }
                         }
@@ -687,57 +704,51 @@ class ReplayGainScanner @Inject constructor(
                 }
             }
 
-            // Process remaining samples in the last block
-            if (blockSampleCount > 0) {
-                val blockRms = sqrt(blockSumSquares / blockSampleCount).toFloat()
-                blockRmsValues.add(blockRms)
-            }
-
-            // Apply psychoacoustic filters to all samples and recalculate with filtered audio
-            val filteredStats = if (sampleBuffer.isNotEmpty()) {
+            // Apply psychoacoustic filters and calculate RMS from filtered audio
+            return if (sampleBuffer.isNotEmpty()) {
                 val samplesArray = sampleBuffer.toFloatArray()
 
                 // Process through Yulewalk + Butterworth filters
+                // This matches foobar2000's analysis chain
                 val filteredSamples = ReplayGainFilter.processFilters(samplesArray, channelCount)
 
-                // Recalculate RMS from filtered samples
-                var filteredSumSquares = 0.0
-                var filteredPeak = 0f
-                var filteredBlockCount = 0L
-                var filteredBlockSumSquares = 0.0
-                val filteredBlockRmsValues = mutableListOf<Float>()
+                // Calculate RMS from FILTERED samples only (for loudness measurement)
+                val blockRmsValues = mutableListOf<Float>()
+                var blockSumSquares = 0.0
+                var blockSampleCount = 0L
 
                 for (sample in filteredSamples) {
-                    val absSample = kotlin.math.abs(sample)
-                    if (absSample > filteredPeak) filteredPeak = absSample
-                    filteredSumSquares += sample.toDouble().pow(2.0)
-                    filteredBlockCount++
-                    filteredBlockSumSquares += sample.toDouble().pow(2.0)
+                    blockSumSquares += sample.toDouble().pow(2.0)
+                    blockSampleCount++
 
-                    if (filteredBlockCount >= samplesPerBlock) {
-                        val blockRms = sqrt(filteredBlockSumSquares / filteredBlockCount).toFloat()
-                        filteredBlockRmsValues.add(blockRms)
-                        filteredBlockCount = 0L
-                        filteredBlockSumSquares = 0.0
+                    if (blockSampleCount >= samplesPerBlock) {
+                        val blockRms = sqrt(blockSumSquares / blockSampleCount).toFloat()
+                        blockRmsValues.add(blockRms)
+                        blockSampleCount = 0L
+                        blockSumSquares = 0.0
                     }
                 }
 
-                if (filteredBlockCount > 0) {
-                    val blockRms = sqrt(filteredBlockSumSquares / filteredBlockCount).toFloat()
-                    filteredBlockRmsValues.add(blockRms)
+                // Process remaining samples in the last block
+                if (blockSampleCount > 0) {
+                    val blockRms = sqrt(blockSumSquares / blockSampleCount).toFloat()
+                    blockRmsValues.add(blockRms)
                 }
 
+                // Calculate total sum of squares for fallback
+                val totalSumSquares = filteredSamples.sumOf { it.toDouble().pow(2.0) }
+
+                // Return filtered RMS values but KEEP original peak (unfiltered)
+                // This matches foobar2000: peak from original, RMS from filtered
                 SampleStats(
                     sampleCount = filteredSamples.size.toLong(),
-                    sumSquares = filteredSumSquares,
-                    peak = filteredPeak.coerceAtLeast(peak), // Use higher of the two peaks
-                    blockRmsValues = filteredBlockRmsValues
+                    sumSquares = totalSumSquares, // For fallback RMS calculation
+                    peak = peak, // Use UNFILTERED peak (foobar2000 behavior)
+                    blockRmsValues = blockRmsValues
                 )
             } else {
-                SampleStats(sampleCount, sumSquares, peak, blockRmsValues)
+                SampleStats(sampleCount, 0.0, peak, emptyList())
             }
-
-            return filteredStats
         } finally {
             try {
                 codec.stop()
@@ -771,6 +782,8 @@ class ReplayGainScanner @Inject constructor(
      * @return Album gain info with album gain and peak
      */
     fun calculateAlbumGain(trackGains: List<ReplayGainInfo>): ReplayGainInfo {
+        Logger.i("calculateAlbumGain: input trackGains count=${trackGains.size} gains=${trackGains.map { it.trackGain }}", "ReplayGainScanner")
+
         if (trackGains.isEmpty()) return ReplayGainInfo()
 
         // Filter out invalid track gains (NaN, Infinity, or extremely anomalous values)
@@ -780,30 +793,48 @@ class ReplayGainScanner @Inject constructor(
             trackGain.trackGain < 100f
         }
 
+        Logger.i("calculateAlbumGain: valid trackGains count=${validTrackGains.size}", "ReplayGainScanner")
+
         if (validTrackGains.isEmpty()) {
             Logger.w("calculateAlbumGain: no valid track gains found", "ReplayGainScanner")
             return ReplayGainInfo()
         }
 
-        // Convert track gains back to RMS values for energy average
-        // gain_db = 20 * log10(rms / reference)
-        // => rms = reference * 10^(gain_db / 20)
+        // Convert track gains back to linear RMS values
+        // track_gain = target_loudness - measured_loudness
+        // measured_loudness = target_loudness - track_gain
+        // measured_loudness_db = 20 * log10(rms / reference)
+        // => rms = reference * 10^(measured_loudness_db / 20)
+        // => rms = reference * 10^((target_loudness - track_gain) / 20)
         val trackRmsValues = validTrackGains.map { trackGain ->
-            val rmsReference = RMS_REFERENCE.toFloat()
-            rmsReference * 10.0.pow(trackGain.trackGain / 20.0).toFloat()
+            val linear = RMS_REFERENCE * 10.0.pow((REFERENCE_LUFS - trackGain.trackGain) / 20.0)
+            // Clamp to valid range to prevent extreme values
+            linear.coerceIn(1e-10, 10.0)
         }
+
+        Logger.v(
+            "Album calculation: trackGains=${validTrackGains.map { it.trackGain }} trackRmsValues=$trackRmsValues",
+            "ReplayGainScanner"
+        )
 
         // Energy average: sqrt(mean(rms²))
+        // This matches foobar2000's album gain calculation
         val energyMean = trackRmsValues.map { it * it }.average()
-        val albumRms = sqrt(energyMean).toFloat()
+        val albumRmsLinear = sqrt(energyMean).coerceIn(1e-10, 10.0)
 
-        // Convert back to dB gain, with proper bounds checking to prevent -80dB anomalies
-        val clampedAlbumRms = albumRms.coerceAtLeast(RMS_REFERENCE.toFloat())
-        val albumGainDb = if (albumRms.isNaN() || albumRms.isInfinite()) {
+        // Convert back to dB gain: album_gain = target - 20 * log10(album_rms / reference)
+        val albumGainDb = if (albumRmsLinear.isNaN() || albumRmsLinear.isInfinite() || albumRmsLinear <= 0) {
+            Logger.w("calculateAlbumGain: invalid albumRmsLinear=$albumRmsLinear, using 0", "ReplayGainScanner")
             0f
         } else {
-            (20 * log10(clampedAlbumRms.toDouble())).toFloat()
+            val albumGain = REFERENCE_LUFS - (20 * log10(albumRmsLinear / RMS_REFERENCE))
+            albumGain.toFloat()
         }
+
+        Logger.v(
+            "Album gain calculated: trackCount=${validTrackGains.size} albumGainDb=$albumGainDb albumRmsLinear=$albumRmsLinear",
+            "ReplayGainScanner"
+        )
 
         // Use the highest peak from all tracks
         val maxPeak = validTrackGains.maxOf { it.trackPeak }
