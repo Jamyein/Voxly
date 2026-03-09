@@ -69,6 +69,7 @@ fun MetadataEditorScreen(
     val uiState by viewModel.uiState.collectAsState()
     val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsState()
     val saveResult by viewModel.saveResult.collectAsState()
+    val modifiedFields by viewModel.modifiedFields.collectAsState()
 
     // Dialog visibility states
     var showDiscardDialog by remember { mutableStateOf(false) }
@@ -435,6 +436,7 @@ fun MetadataEditorScreen(
                         metadata = state.editedMetadata,
                         audioFile = state.audioFile,
                         bottomPadding = innerPadding.calculateBottomPadding(),
+                        modifiedFields = modifiedFields,
                         onTitleChange = { viewModel.updateMetadataField(MetadataField.TITLE, it) },
                         onArtistChange = { viewModel.updateMetadataField(MetadataField.ARTIST, it) },
                         onAlbumChange = { viewModel.updateMetadataField(MetadataField.ALBUM, it) },
@@ -581,12 +583,26 @@ fun MetadataEditorScreen(
 }
 
 /**
+ * Generates a field label with modified indicator if the field is in the modified set.
+ */
+@Composable
+private fun fieldLabel(field: MetadataField, baseLabelResId: Int, modifiedFields: Set<MetadataField>): String {
+    val baseLabel = stringResource(baseLabelResId)
+    return if (field in modifiedFields) {
+        baseLabel + stringResource(R.string.field_modified)
+    } else {
+        baseLabel
+    }
+}
+
+/**
  * Main metadata form content.
  */
 @Composable
 private fun MetadataFormContent(
     metadata: AudioMetadata,
     audioFile: com.voxly.domain.model.AudioFile,
+    modifiedFields: Set<MetadataField>,
     onTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
     onAlbumChange: (String) -> Unit,
@@ -634,7 +650,7 @@ private fun MetadataFormContent(
         OutlinedTextField(
             value = metadata.title ?: "",
             onValueChange = onTitleChange,
-            label = { Text(stringResource(R.string.metadata_title)) },
+            label = { Text(fieldLabel(MetadataField.TITLE, R.string.metadata_title, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = MaterialTheme.shapes.extraLarge
@@ -645,7 +661,7 @@ private fun MetadataFormContent(
         OutlinedTextField(
             value = metadata.artist ?: "",
             onValueChange = onArtistChange,
-            label = { Text(stringResource(R.string.metadata_artist)) },
+            label = { Text(fieldLabel(MetadataField.ARTIST, R.string.metadata_artist, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = MaterialTheme.shapes.extraLarge
@@ -656,7 +672,7 @@ private fun MetadataFormContent(
         OutlinedTextField(
             value = metadata.album ?: "",
             onValueChange = onAlbumChange,
-            label = { Text(stringResource(R.string.metadata_album)) },
+            label = { Text(fieldLabel(MetadataField.ALBUM, R.string.metadata_album, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = MaterialTheme.shapes.extraLarge
@@ -667,7 +683,7 @@ private fun MetadataFormContent(
         OutlinedTextField(
             value = metadata.albumArtist ?: "",
             onValueChange = onAlbumArtistChange,
-            label = { Text(stringResource(R.string.metadata_album_artist)) },
+            label = { Text(fieldLabel(MetadataField.ALBUM_ARTIST, R.string.metadata_album_artist, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = MaterialTheme.shapes.extraLarge
@@ -711,7 +727,7 @@ private fun MetadataFormContent(
             OutlinedTextField(
                 value = metadata.year ?: "",
                 onValueChange = onYearChange,
-                label = { Text(stringResource(R.string.metadata_year)) },
+                label = { Text(fieldLabel(MetadataField.YEAR, R.string.metadata_year, modifiedFields)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -723,7 +739,7 @@ private fun MetadataFormContent(
             OutlinedTextField(
                 value = metadata.genre ?: "",
                 onValueChange = onGenreChange,
-                label = { Text(stringResource(R.string.metadata_genre)) },
+                label = { Text(fieldLabel(MetadataField.GENRE, R.string.metadata_genre, modifiedFields)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
                 shape = MaterialTheme.shapes.extraLarge
@@ -735,7 +751,7 @@ private fun MetadataFormContent(
         OutlinedTextField(
             value = metadata.composer ?: "",
             onValueChange = onComposerChange,
-            label = { Text(stringResource(R.string.metadata_composer)) },
+            label = { Text(fieldLabel(MetadataField.COMPOSER, R.string.metadata_composer, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = MaterialTheme.shapes.extraLarge
@@ -746,7 +762,7 @@ private fun MetadataFormContent(
         OutlinedTextField(
             value = metadata.lyricist ?: "",
             onValueChange = onLyricistChange,
-            label = { Text(stringResource(R.string.metadata_lyricist)) },
+            label = { Text(fieldLabel(MetadataField.LYRICIST, R.string.metadata_lyricist, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
             shape = MaterialTheme.shapes.extraLarge
@@ -757,7 +773,7 @@ private fun MetadataFormContent(
         OutlinedTextField(
             value = metadata.comment ?: "",
             onValueChange = onCommentChange,
-            label = { Text(stringResource(R.string.metadata_comment)) },
+            label = { Text(fieldLabel(MetadataField.COMMENT, R.string.metadata_comment, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
             shape = MaterialTheme.shapes.extraLarge
@@ -774,7 +790,7 @@ private fun MetadataFormContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 140.dp),
-            label = { Text(stringResource(R.string.edit_lyrics)) },
+            label = { Text(fieldLabel(MetadataField.LYRICS, R.string.edit_lyrics, modifiedFields)) },
             placeholder = { Text(stringResource(R.string.no_lyrics_added)) },
             minLines = 6,
             shape = MaterialTheme.shapes.extraLarge

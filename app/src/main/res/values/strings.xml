@@ -45,6 +45,7 @@
     <string name="metadata_isrc">ISRC</string>
     <string name="metadata_copyright">Copyright</string>
     <string name="metadata_lyrics">Lyrics</string>
+    <string name="field_modified"> (modified)</string>
     <string name="metadata_album_art">Album Art</string>
     <string name="metadata_bitrate">Bitrate</string>
     <string name="metadata_sample_rate">Sample Rate</string>

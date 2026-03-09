@@ -106,6 +106,9 @@ class MetadataEditorViewModel @Inject constructor(
     private val _hasUnsavedChanges = MutableStateFlow(false)
     val hasUnsavedChanges: StateFlow<Boolean> = _hasUnsavedChanges.asStateFlow()
 
+    private val _modifiedFields = MutableStateFlow<Set<MetadataField>>(emptySet())
+    val modifiedFields: StateFlow<Set<MetadataField>> = _modifiedFields.asStateFlow()
+
     private val _saveResult = MutableStateFlow<SaveResult?>(null)
     val saveResult: StateFlow<SaveResult?> = _saveResult.asStateFlow()
 
@@ -208,6 +211,7 @@ class MetadataEditorViewModel @Inject constructor(
 
         _editedMetadata.value = updatedMetadata
         _hasUnsavedChanges.value = true
+        _modifiedFields.value = _modifiedFields.value + field
 
         // Update UI state
         val currentState = _uiState.value
@@ -517,6 +521,7 @@ class MetadataEditorViewModel @Inject constructor(
                     }
                     
                     _hasUnsavedChanges.value = false
+                    _modifiedFields.value = emptySet()
                     _saveResult.value = SaveResult.Success
 
                     // Add to recent edits history
@@ -601,6 +606,7 @@ class MetadataEditorViewModel @Inject constructor(
                 _editedMetadata.value = originalMetadata
                 _originalMetadata = originalMetadata
                 _hasUnsavedChanges.value = false
+                _modifiedFields.value = emptySet()
                 val currentState = _uiState.value
                 if (currentState is MetadataEditorUiState.Success) {
                     _uiState.value = currentState.copy(editedMetadata = originalMetadata)

@@ -30,6 +30,7 @@
     <string name="metadata_isrc">ISRC</string>
     <string name="metadata_copyright">版权</string>
     <string name="metadata_lyrics">歌词</string>
+    <string name="field_modified">（已修改）</string>
     <string name="metadata_album_art">专辑封面</string>
     <string name="metadata_bitrate">比特率</string>
     <string name="metadata_sample_rate">采样率</string>
