@@ -157,9 +157,9 @@ class LyricsRepositoryImpl @Inject constructor(
                         lyrics = lyricsText
                     )
 
-                val result = metadataProcessor.updateMetadata(normalizedPath, updatedMetadata)
+                val metadataUpdateResult = metadataProcessor.updateMetadata(normalizedPath, updatedMetadata)
                     .recover { metadataProcessor.updateMetadata(filePath, updatedMetadata) }
-                if (result.isFailure) {
+                if (metadataUpdateResult.isFailure) {
                     return@withContext Result.failure(LyricsException("Failed to save lyrics"))
                 }
 
@@ -194,9 +194,9 @@ class LyricsRepositoryImpl @Inject constructor(
                 val updatedMetadata = existingMetadata?.copy(lyrics = "")
                     ?: return@withContext Result.failure(LyricsException("Cannot read file metadata"))
 
-                val result = metadataProcessor.updateMetadata(normalizedPath, updatedMetadata)
+                val metadataUpdateResult = metadataProcessor.updateMetadata(normalizedPath, updatedMetadata)
                     .recover { metadataProcessor.updateMetadata(filePath, updatedMetadata) }
-                if (result.isFailure) {
+                if (metadataUpdateResult.isFailure) {
                     return@withContext Result.failure(LyricsException("Failed to remove lyrics"))
                 }
 
@@ -304,15 +304,15 @@ class LyricsRepositoryImpl @Inject constructor(
         if (settings.enableNetease) {
             launch {
                 try {
-                    val result = searchFromNetEase(normalizedTrackName, normalizedArtistName)
-                    applyLimit(result.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
+                    val netEaseSearchResult = searchFromNetEase(normalizedTrackName, normalizedArtistName)
+                    applyLimit(netEaseSearchResult.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
                         trySend(LyricsSourceResult.Result(lyrics, "NetEase"))
                     }
-                    if (result.isFailure) {
+                    if (netEaseSearchResult.isFailure) {
                         trySend(
                             LyricsSourceResult.Error(
                                 "NetEase",
-                                result.exceptionOrNull()?.message ?: "Failed"
+                                netEaseSearchResult.exceptionOrNull()?.message ?: "Failed"
                             )
                         )
                     }
@@ -327,15 +327,15 @@ class LyricsRepositoryImpl @Inject constructor(
         if (settings.enableQQMusic) {
             launch {
                 try {
-                    val result = searchFromQQMusic(normalizedTrackName, normalizedArtistName)
-                    applyLimit(result.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
+                    val qqMusicSearchResult = searchFromQQMusic(normalizedTrackName, normalizedArtistName)
+                    applyLimit(qqMusicSearchResult.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
                         trySend(LyricsSourceResult.Result(lyrics, "QQ Music"))
                     }
-                    if (result.isFailure) {
+                    if (qqMusicSearchResult.isFailure) {
                         trySend(
                             LyricsSourceResult.Error(
                                 "QQ Music",
-                                result.exceptionOrNull()?.message ?: "Failed"
+                                qqMusicSearchResult.exceptionOrNull()?.message ?: "Failed"
                             )
                         )
                     }

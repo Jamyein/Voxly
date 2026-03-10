@@ -63,9 +63,9 @@ class LyricsEditorViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = LyricsEditorUiState.Loading
 
-            val result = lyricsRepository.readLyrics(filePath)
+            val lyricsReadResult = lyricsRepository.readLyrics(filePath)
 
-            result.fold(
+            lyricsReadResult.fold(
                 onSuccess = { lyrics ->
                     _lyrics.value = lyrics
                     _editedLyricsText.value = lyrics?.getPlainText() ?: ""
@@ -115,9 +115,9 @@ class LyricsEditorViewModel @Inject constructor(
                 Lyrics.createUnsynced(_editedLyricsText.value)
             }
 
-            val result = lyricsRepository.saveLyrics(filePath, lyricsToSave)
+            val lyricsSaveResult = lyricsRepository.saveLyrics(filePath, lyricsToSave)
 
-            result.fold(
+            lyricsSaveResult.fold(
                 onSuccess = {
                     _lyrics.value = lyricsToSave
                     _hasChanges.value = false
@@ -137,9 +137,9 @@ class LyricsEditorViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = LyricsEditorUiState.Saving
 
-            val result = lyricsRepository.removeLyrics(filePath)
+            val lyricsRemoveResult = lyricsRepository.removeLyrics(filePath)
 
-            result.fold(
+            lyricsRemoveResult.fold(
                 onSuccess = {
                     _lyrics.value = null
                     _editedLyricsText.value = ""
@@ -161,12 +161,12 @@ class LyricsEditorViewModel @Inject constructor(
             _isSearching.value = true
             _showOnlineSearch.value = true
 
-            val result = lyricsRepository.searchOnlineLyrics(
+            val lyricsSearchResult = lyricsRepository.searchOnlineLyrics(
                 trackName = trackName,
                 artistName = artistName
             )
 
-            result.fold(
+            lyricsSearchResult.fold(
                 onSuccess = { results ->
                     _onlineSearchResults.value = results
                 },
@@ -186,9 +186,9 @@ class LyricsEditorViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = LyricsEditorUiState.Loading
 
-            val result = lyricsRepository.getOnlineLyrics(resultItem)
+            val onlineLyricsResult = lyricsRepository.getOnlineLyrics(resultItem)
 
-            result.fold(
+            onlineLyricsResult.fold(
                 onSuccess = { lyrics ->
                     _lyrics.value = lyrics
                     _editedLyricsText.value = lyrics.getPlainText()

@@ -159,9 +159,9 @@ class MetadataEditorViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.value = MetadataEditorUiState.Loading
 
-            val result = audioRepository.getAudioFile(filePath)
+            val audioFileResult = audioRepository.getAudioFile(filePath)
 
-            result.fold(
+            audioFileResult.fold(
                 onSuccess = { audioFile ->
                     _editedMetadata.value = audioFile.metadata
                     
@@ -346,8 +346,8 @@ class MetadataEditorViewModel @Inject constructor(
                     when (progress.status) {
                         com.voxly.domain.repository.ScanStatus.COMPLETED -> {
                             // Read the scanned ReplayGain info for current file
-                            val result = replayGainRepository.readReplayGain(filePath)
-                            result.getOrNull()?.let { info ->
+                            val replayGainReadResult = replayGainRepository.readReplayGain(filePath)
+                            replayGainReadResult.getOrNull()?.let { info ->
                                 // For album modes (SINGLE_ALBUM, ALBUMS), always calculate album gain
                                 val finalInfo = if (currentScanMode != ScanMode.TRACK_ONLY) {
                                     calculateAlbumGainFromScannedFiles(filesToScan)
@@ -436,8 +436,8 @@ class MetadataEditorViewModel @Inject constructor(
         val trackGains = mutableListOf<ReplayGainInfo>()
 
         for (path in filePaths) {
-            val result = replayGainRepository.readReplayGain(path)
-            result.getOrNull()?.let { trackGains.add(it) }
+            val replayGainResult = replayGainRepository.readReplayGain(path)
+            replayGainResult.getOrNull()?.let { trackGains.add(it) }
         }
 
         if (trackGains.isEmpty()) return null
@@ -602,8 +602,8 @@ class MetadataEditorViewModel @Inject constructor(
      */
     fun discardChanges() {
         viewModelScope.launch {
-            val result = audioRepository.readMetadata(filePath)
-            result.onSuccess { originalMetadata ->
+            val metadataReadResult = audioRepository.readMetadata(filePath)
+            metadataReadResult.onSuccess { originalMetadata ->
                 _editedMetadata.value = originalMetadata
                 _originalMetadata = originalMetadata
                 _hasUnsavedChanges.value = false
@@ -743,8 +743,8 @@ class MetadataEditorViewModel @Inject constructor(
 
             _onlineCoverResults.value = emptyList()
             try {
-                val result = aggregatedOnlineMetadataRepository.searchByTrackForCover(title, artist)
-                result.fold(
+                val coverSearchResult = aggregatedOnlineMetadataRepository.searchByTrackForCover(title, artist)
+                coverSearchResult.fold(
                     onSuccess = { recordings ->
                         recordings.forEach { recording ->
                             val newResults = _coverSearchState.value.results + recording
