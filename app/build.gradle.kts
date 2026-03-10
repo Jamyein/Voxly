@@ -226,6 +226,9 @@ dependencies {
     // Timber for logging
     implementation("com.jakewharton.timber:timber:5.0.1")
 
+    // Palette for color extraction from album art
+    implementation("androidx.palette:palette-ktx:1.0.0")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")

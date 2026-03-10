@@ -517,6 +517,40 @@
     <string name="no_whitelist_directories">No whitelist directories added</string>
     <string name="no_blacklist_directories">No blacklist directories added</string>
 
+    <!-- Lyrics Poster -->
+    <string name="share_lyrics_poster">Share Lyrics Poster</string>
+    <string name="lyrics_poster_preview">Lyrics Poster Preview</string>
+    <string name="select_color_theme">Select Color Theme</string>
+    <string name="color_dominant">Dominant</string>
+    <string name="color_vibrant">Vibrant</string>
+    <string name="color_light_vibrant">Light</string>
+    <string name="color_dark_vibrant">Dark</string>
+    <string name="color_muted">Muted</string>
+    <string name="color_light_muted">Light Muted</string>
+    <string name="color_custom">Custom</string>
+    <string name="share_poster">Share Poster</string>
+    <string name="cd_poster_preview">Lyrics poster preview</string>
+    <string name="cd_share_poster">Share lyrics poster</string>
+    <string name="no_lyrics_for_poster">No lyrics available for poster</string>
+
+    <!-- Lyrics Poster Enhancements -->
+    <string name="select_lyrics">Select Lyrics</string>
+    <string name="lyrics_range">Lyrics Range</string>
+    <string name="lyrics_start_line">Start Line</string>
+    <string name="lyrics_end_line">End Line</string>
+    <string name="text_color">Text Color</string>
+    <string name="font_size">Font Size</string>
+    <string name="small">Small</string>
+    <string name="medium">Medium</string>
+    <string name="large">Large</string>
+    <string name="lines_count">%1$d lines</string>
+    <string name="line_number">Line %1$d</string>
+    <string name="select_lyrics_for_poster">Select Lyrics</string>
+    <string name="selected_lines_count">Selected %1$d of %2$d lines</string>
+    <string name="no_lyrics_available">No lyrics available</string>
+    <string name="confirm_selection">Confirm</string>
+    <string name="cancel">Cancel</string>
+
     <!-- Chinese Conversion -->
     <string name="convert_to_simplified">繁体转简体</string>
     <string name="convert_to_traditional">简体转繁体</string>

@@ -42,6 +42,8 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.components.lyricsposter.LyricsPosterPreviewSheet
+import com.voxly.presentation.components.lyricsposter.LyricsSelectorBottomSheet
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
@@ -80,6 +82,10 @@ fun MetadataEditorScreen(
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     var showActionMenu by remember { mutableStateOf(false) }
     var exitAfterSave by remember { mutableStateOf(false) }
+    var showLyricsPosterPreview by remember { mutableStateOf(false) }
+    var showLyricsSelector by remember { mutableStateOf(false) }
+    var selectedLyricsIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
+    var selectedLyricsText by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // ReplayGain state from ViewModel
     val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsState()
@@ -281,6 +287,41 @@ fun MetadataEditorScreen(
                             horizontalAlignment = Alignment.End,
                             verticalArrangement = Arrangement.spacedBy(16.dp)
                         ) {
+                            // Lyrics Selection FAB (only show if there are lyrics)
+                            val hasLyrics = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.lyrics?.isNotBlank() == true
+                            if (hasLyrics) {
+                                // Select Lyrics option
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.End
+                                ) {
+                                    Surface(
+                                        color = MaterialTheme.colorScheme.surface,
+                                        shape = MaterialTheme.shapes.small,
+                                        shadowElevation = 2.dp
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.select_lyrics_for_poster),
+                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                    }
+                                    Spacer(modifier = Modifier.width(12.dp))
+                                    FloatingActionButton(
+                                        onClick = {
+                                            showActionMenu = false
+                                            selectedLyricsIndices = emptySet()
+                                            showLyricsSelector = true
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Lyrics,
+                                            contentDescription = stringResource(R.string.select_lyrics_for_poster)
+                                        )
+                                    }
+                                }
+                            }
                             Row(
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.End
@@ -579,6 +620,50 @@ fun MetadataEditorScreen(
                 showConversionDialog = false
             }
         )
+    }
+
+    // Lyrics Poster Preview Sheet
+    if (showLyricsPosterPreview) {
+        val successState = uiState as? MetadataEditorUiState.Success
+        if (successState != null) {
+            LyricsPosterPreviewSheet(
+                title = successState.editedMetadata.getDisplayTitle(successState.audioFile.name),
+                artist = successState.editedMetadata.artist ?: "",
+                album = successState.editedMetadata.album ?: "",
+                lyricsText = successState.editedMetadata.lyrics ?: "",
+                albumArtBytes = successState.editedMetadata.albumArt,
+                preSelectedLyrics = selectedLyricsText,
+                onDismiss = {
+                    selectedLyricsIndices = emptySet()
+                    selectedLyricsText = emptyList()
+                    showLyricsPosterPreview = false
+                },
+                onShare = { bitmap ->
+                    // Share is handled in the sheet
+                }
+            )
+        }
+    }
+
+    // Lyrics Selector Sheet
+    if (showLyricsSelector) {
+        val successState = uiState as? MetadataEditorUiState.Success
+        if (successState != null) {
+            LyricsSelectorBottomSheet(
+                lyricsText = successState.editedMetadata.lyrics ?: "",
+                onDismiss = {
+                    selectedLyricsIndices = emptySet()
+                    selectedLyricsText = emptyList()
+                    showLyricsSelector = false
+                },
+                onConfirm = { selectedLines ->
+                    selectedLyricsIndices = selectedLines.keys
+                    selectedLyricsText = selectedLines.values.toList()
+                    showLyricsSelector = false
+                    showLyricsPosterPreview = true
+                }
+            )
+        }
     }
 }
 
