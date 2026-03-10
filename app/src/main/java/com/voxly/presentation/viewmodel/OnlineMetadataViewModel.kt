@@ -17,6 +17,7 @@ import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
 import com.voxly.presentation.ui.getCoverArtBytes
 import com.voxly.presentation.ui.loadImageBytesFromUrl
+import com.voxly.core.util.Constants
 import com.voxly.presentation.ui.prefetchCoverArtBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -567,7 +568,7 @@ class OnlineMetadataViewModel @Inject constructor(
             if (!release.coverArtUrl.isNullOrBlank()) {
                 try {
                     // 优先从缓存获取，如果没有则下载，最多等待5秒
-                    val cover = kotlinx.coroutines.withTimeoutOrNull(5000L) {
+                    val cover = kotlinx.coroutines.withTimeoutOrNull(Constants.COVER_ART_TIMEOUT_MS) {
                         getCoverArtBytes(release.coverArtUrl)
                     }
                     if (cover != null) {
@@ -600,7 +601,7 @@ class OnlineMetadataViewModel @Inject constructor(
                         val coverUrl = details.coverArtUrl ?: release.coverArtUrl
                         if (!coverUrl.isNullOrBlank() && !coverDownloaded) {
                             try {
-                                val cover = kotlinx.coroutines.withTimeoutOrNull(5000L) {
+                                val cover = kotlinx.coroutines.withTimeoutOrNull(Constants.COVER_ART_TIMEOUT_MS) {
                                     getCoverArtBytes(coverUrl)
                                 }
                                 if (cover != null) {
@@ -620,7 +621,7 @@ class OnlineMetadataViewModel @Inject constructor(
                         // 即使获取详情失败，也尝试获取候选的封面图（如果尚未下载）
                         if (!release.coverArtUrl.isNullOrBlank() && !coverDownloaded) {
                             try {
-                                val cover = kotlinx.coroutines.withTimeoutOrNull(5000L) {
+                                val cover = kotlinx.coroutines.withTimeoutOrNull(Constants.COVER_ART_TIMEOUT_MS) {
                                     getCoverArtBytes(release.coverArtUrl)
                                 }
                                 _downloadedAlbumArt.value = cover

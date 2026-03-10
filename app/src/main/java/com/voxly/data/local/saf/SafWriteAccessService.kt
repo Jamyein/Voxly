@@ -10,6 +10,7 @@ import timber.log.Timber
 import java.io.File
 import java.text.Normalizer
 import javax.inject.Inject
+import com.voxly.core.util.PathUtils
 import javax.inject.Singleton
 
 enum class SafGrantType {
@@ -58,7 +59,7 @@ class SafWriteAccessService @Inject constructor(
     }
 
     fun findBestWriteGrant(filePath: String): SafGrantMatch? {
-        val normalizedFilePath = normalizeFilePath(filePath)
+        val normalizedFilePath = PathUtils.normalizeFilePath(filePath)
         val permissions = context.contentResolver.persistedUriPermissions
             .filter { it.isReadPermission && it.isWritePermission }
 
@@ -73,7 +74,7 @@ class SafWriteAccessService @Inject constructor(
                 SafGrantType.DOCUMENT -> mapDocumentUriToPath(permission.uri)
             } ?: return@mapNotNull null
 
-            val normalizedBasePath = normalizeFilePath(basePath)
+            val normalizedBasePath = PathUtils.normalizeFilePath(basePath)
             val matchLength = calculateMatchLength(normalizedFilePath, normalizedBasePath)
             if (matchLength < 0) {
                 return@mapNotNull null
@@ -102,8 +103,8 @@ class SafWriteAccessService @Inject constructor(
                 findDocumentUriInTree(permission.uri, relativePath)
             }
             SafGrantType.DOCUMENT -> {
-                val docPath = mapDocumentUriToPath(permission.uri)?.let(::normalizeFilePath) ?: return null
-                val normalizedFilePath = normalizeFilePath(filePath)
+                val docPath = mapDocumentUriToPath(permission.uri)?.let { PathUtils.normalizeFilePath(it) } ?: return null
+                val normalizedFilePath = PathUtils.normalizeFilePath(filePath)
                 if (normalizedFilePath == docPath) permission.uri else null
             }
             null -> null
@@ -112,8 +113,8 @@ class SafWriteAccessService @Inject constructor(
 
     fun getRelativePath(filePath: String, permission: android.content.UriPermission): String {
         val treePath = mapTreeUriToPath(permission.uri) ?: return File(filePath).name
-        val normalizedFilePath = normalizeFilePath(filePath)
-        val normalizedTreePath = normalizeFilePath(treePath)
+        val normalizedFilePath = PathUtils.normalizeFilePath(filePath)
+        val normalizedTreePath = PathUtils.normalizeFilePath(treePath)
         return if (normalizedFilePath.startsWith("$normalizedTreePath/")) {
             normalizedFilePath.removePrefix("$normalizedTreePath/")
         } else {
@@ -168,7 +169,7 @@ class SafWriteAccessService @Inject constructor(
 
     private fun mapDocumentIdToPath(documentId: String): String? {
         if (documentId.startsWith("raw:")) {
-            return normalizeFilePath(documentId.removePrefix("raw:"))
+            return PathUtils.normalizeFilePath(documentId.removePrefix("raw:"))
         }
 
         val parts = documentId.split(":", limit = 2)
@@ -190,7 +191,7 @@ class SafWriteAccessService @Inject constructor(
             else -> null
         }
 
-        return path?.let(::normalizeFilePath)
+        return path?.let { PathUtils.normalizeFilePath(it) }
     }
 
     private fun detectGrantType(uri: Uri): SafGrantType? {

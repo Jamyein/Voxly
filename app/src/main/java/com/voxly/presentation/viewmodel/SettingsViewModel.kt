@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import com.voxly.core.util.Constants
 import javax.inject.Inject
 import com.voxly.domain.model.DataSourceConfig
 import com.voxly.domain.model.DataSourceType
@@ -247,7 +248,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = 60000
+            initialValue = Constants.MIN_DURATION_FILTER_THRESHOLD_MS.toInt()
         )
 
     /**

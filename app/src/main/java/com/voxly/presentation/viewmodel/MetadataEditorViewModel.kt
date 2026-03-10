@@ -7,6 +7,7 @@ import android.provider.MediaStore
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.core.util.Constants
 import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafGrantType
@@ -443,8 +444,8 @@ class MetadataEditorViewModel @Inject constructor(
 
         // Reference loudness: -14 dB = 10^(-14/20) ≈ 0.1995
         // This must match ReplayGainScanner.REFERENCE_LUFS
-        val referenceLufs = -14.0
-        val rmsReference = 0.1995262314968879
+        val referenceLufs = Constants.REPLAYGAIN_REFERENCE_LOUDNESS_LUFS
+        val rmsReference = Constants.REPLAYGAIN_RMS_REFERENCE
 
         // Convert track gains back to RMS values for energy average
         // track_gain = target - measured

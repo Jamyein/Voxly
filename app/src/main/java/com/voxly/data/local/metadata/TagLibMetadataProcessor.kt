@@ -20,6 +20,8 @@ import timber.log.Timber
 import java.io.File
 import java.text.Normalizer
 import javax.inject.Inject
+import com.voxly.core.util.Constants
+import com.voxly.core.util.PathUtils
 import javax.inject.Singleton
 
 // Common base directories for path normalization
@@ -89,47 +91,6 @@ class TagLibMetadataProcessor @Inject constructor(
         val durationMs: Long
     )
 
-    /**
-     * Normalizes a file path to handle common path issues.
-     * - Removes duplicate slashes
-     * - Removes trailing slashes
-     * - Resolves canonical path when possible
-     */
-    private fun normalizeFilePath(filePath: String): String {
-        return try {
-            // 1. Replace backslashes with forward slashes
-            var normalized = filePath.replace('\\', '/')
-
-            // 2. Remove duplicate slashes
-            normalized = normalized.replace(Regex("//+"), "/")
-
-            // 3. Remove trailing slash
-            normalized = normalized.trimEnd('/')
-
-            // 4. Normalize Unicode (NFC form) - same as findDocumentUriInTree
-            normalized = Normalizer.normalize(normalized, Normalizer.Form.NFC)
-
-            // 5. Handle URL-encoded characters if present
-            normalized = try {
-                java.net.URLDecoder.decode(normalized, "UTF-8")
-            } catch (e: Exception) {
-                normalized
-            }
-
-            // 6. Try to get canonical path for proper path resolution (only if file exists)
-            val file = File(normalized)
-            if (file.exists()) {
-                val canonical = file.canonicalPath
-                // Apply normalization again after canonical resolution
-                return Normalizer.normalize(canonical.replace('\\', '/'), Normalizer.Form.NFC)
-            }
-
-            normalized
-        } catch (e: Exception) {
-            // If anything fails, return cleaned original path
-            filePath.replace('\\', '/').replace(Regex("//+"), "/").trimEnd('/')
-        }
-    }
 
     /**
      * Detects the MIME type of an image from its byte data.
@@ -173,7 +134,7 @@ class TagLibMetadataProcessor @Inject constructor(
     ): AudioMetadata? = withContext(Dispatchers.IO) {
         try {
             // Normalize the file path first
-            val normalizedPath = normalizeFilePath(filePath)
+            val normalizedPath = PathUtils.normalizeFilePath(filePath)
             val file = File(normalizedPath)
             
             if (!file.exists()) {
@@ -512,7 +473,7 @@ class TagLibMetadataProcessor @Inject constructor(
     private fun updateMetadataDirect(filePath: String, metadata: AudioMetadata): Result<Unit> {
         return try {
             // Normalize the file path first
-            val normalizedPath = normalizeFilePath(filePath)
+            val normalizedPath = PathUtils.normalizeFilePath(filePath)
             var file = File(normalizedPath)
             
             if (!file.exists()) {
@@ -847,7 +808,7 @@ class TagLibMetadataProcessor @Inject constructor(
                     ?: throw IllegalStateException("Unable to open output stream for target document")
                 stream.use { output ->
                     tempFile.inputStream().use { input ->
-                        val buffer = ByteArray(8192)
+                        val buffer = ByteArray(Constants.FILE_BUFFER_SIZE)
                         var bytesRead: Int
                         while (input.read(buffer).also { bytesRead = it } != -1) {
                             output.write(buffer, 0, bytesRead)
@@ -907,7 +868,7 @@ class TagLibMetadataProcessor @Inject constructor(
 
             outputStream.use { output ->
                 tempFile.inputStream().use { input ->
-                    val buffer = ByteArray(8192)
+                    val buffer = ByteArray(Constants.FILE_BUFFER_SIZE)
                     var bytesRead: Int
                     while (input.read(buffer).also { bytesRead = it } != -1) {
                         output.write(buffer, 0, bytesRead)
@@ -941,7 +902,7 @@ class TagLibMetadataProcessor @Inject constructor(
     suspend fun extractAlbumArt(filePath: String): ByteArray? = withContext(Dispatchers.IO) {
         try {
             // Normalize the file path first
-            val normalizedPath = normalizeFilePath(filePath)
+            val normalizedPath = PathUtils.normalizeFilePath(filePath)
             var file = File(normalizedPath)
             
             if (!file.exists()) {
@@ -987,7 +948,7 @@ class TagLibMetadataProcessor @Inject constructor(
     suspend fun readAudioInfo(filePath: String): AudioInfo? = withContext(Dispatchers.IO) {
         try {
             // Normalize the file path first
-            val normalizedPath = normalizeFilePath(filePath)
+            val normalizedPath = PathUtils.normalizeFilePath(filePath)
             var file = File(normalizedPath)
             
             if (!file.exists()) {
@@ -1085,7 +1046,7 @@ class TagLibMetadataProcessor @Inject constructor(
      */
     private fun findValidPermission(filePath: String): android.content.UriPermission? {
         // Step 1: Normalize the file path
-        val normalizedFilePath = normalizeFilePath(filePath)
+        val normalizedFilePath = PathUtils.normalizeFilePath(filePath)
         Timber.d(TAG, "findValidPermission: original path: $filePath")
         Timber.d(TAG, "findValidPermission: normalized path: $normalizedFilePath")
 
@@ -1102,7 +1063,7 @@ class TagLibMetadataProcessor @Inject constructor(
             }
 
             // Step 2: Normalize tree path the same way
-            val normalizedTreePath = normalizeFilePath(treePath)
+            val normalizedTreePath = PathUtils.normalizeFilePath(treePath)
             Timber.d(TAG, "findValidPermission: checking permission tree: $normalizedTreePath")
 
             // Step 3: Try multiple matching strategies
@@ -1138,8 +1099,8 @@ class TagLibMetadataProcessor @Inject constructor(
      */
     private fun getRelativePath(filePath: String, permission: android.content.UriPermission): String {
         val treePath = mapTreeUriToPath(permission.uri) ?: return filePath
-        val normalizedFilePath = normalizeFilePath(filePath)
-        val normalizedTreePath = normalizeFilePath(treePath)
+        val normalizedFilePath = PathUtils.normalizeFilePath(filePath)
+        val normalizedTreePath = PathUtils.normalizeFilePath(treePath)
         return if (normalizedFilePath.startsWith("$normalizedTreePath/")) {
             normalizedFilePath.removePrefix("$normalizedTreePath/")
         } else {
@@ -1171,7 +1132,7 @@ class TagLibMetadataProcessor @Inject constructor(
         }
 
         // Apply normalization to ensure consistent path format
-        return normalizeFilePath(path)
+        return PathUtils.normalizeFilePath(path)
     }
 
     private fun queryMediaStoreUriByPath(filePath: String): Uri? {
