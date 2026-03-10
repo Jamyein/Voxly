@@ -91,4 +91,11 @@ class MusicCacheDatabaseProvider @Inject constructor(
             newInstance
         }
     }
+
+    /**
+     * Clear all data from the database
+     */
+    suspend fun clearAllData() {
+        getDatabase().clearAllTables()
+    }
 }

@@ -79,6 +79,10 @@ class SettingsDataStore @Inject constructor(
         val PROXY_TYPE = stringPreferencesKey("proxy_type")
         val PROXY_HOST = stringPreferencesKey("proxy_host")
         val PROXY_PORT = intPreferencesKey("proxy_port")
+
+        // Install tracking for detecting fresh installs
+        val INSTALL_ID = stringPreferencesKey("install_id")
+        val LAST_APP_VERSION = intPreferencesKey("last_app_version")
     }
 
     /**
@@ -916,6 +920,62 @@ class SettingsDataStore @Inject constructor(
     suspend fun setProxyPort(port: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[PROXY_PORT] = port.coerceIn(0, 65535)
+        }
+    }
+
+    // ==================== Install Tracking ====================
+
+    /**
+     * Get install ID flow
+     */
+    val installId: Flow<String?> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[INSTALL_ID]
+        }
+
+    /**
+     * Get last app version flow
+     */
+    val lastAppVersion: Flow<Int?> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[LAST_APP_VERSION]
+        }
+
+    /**
+     * Save install ID (generated on first launch)
+     */
+    suspend fun setInstallId(id: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[INSTALL_ID] = id
+        }
+    }
+
+    /**
+     * Save last app version
+     */
+    suspend fun setLastAppVersion(version: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LAST_APP_VERSION] = version
+        }
+    }
+
+    /**
+     * Check if this is a fresh install (no install ID stored)
+     */
+    suspend fun isFreshInstall(): Boolean {
+        var fresh = false
+        context.settingsDataStore.data.collect { preferences ->
+            fresh = preferences[INSTALL_ID] == null
+        }
+        return fresh
+    }
+
+    /**
+     * Clear all settings (used for fresh install after reinstall)
+     */
+    suspend fun clearAllSettings() {
+        context.settingsDataStore.edit { preferences ->
+            preferences.clear()
         }
     }
 }
