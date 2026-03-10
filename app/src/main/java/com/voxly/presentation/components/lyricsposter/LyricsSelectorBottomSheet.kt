@@ -42,7 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
-import com.voxly.domain.model.Lyrics.Companion.parseLrc
+import com.voxly.domain.model.Lyrics.Companion.parseToLines
 
 /**
  * Maximum number of lyrics lines that can be selected.
@@ -64,7 +64,7 @@ fun LyricsSelectorBottomSheet(
 
     // Parse lyrics to get all available lines
     val allLyricsLines = remember(lyricsText) {
-        parseLyricsForSelection(lyricsText)
+        parseToLines(lyricsText)
     }
 
     // Selected lines state - Map of index to lyrics text
@@ -222,25 +222,5 @@ private fun updateSelectedLines(
     } else {
         // Already at max, do nothing
         selectedLines
-    }
-}
-
-/**
- * Parses lyrics text and returns plain text lines for selection.
- */
-private fun parseLyricsForSelection(lyricsText: String): List<String> {
-    if (lyricsText.isBlank()) {
-        return emptyList()
-    }
-
-    return try {
-        val lyrics = parseLrc(lyricsText)
-        if (lyrics.isSynced && lyrics.syncedLines.isNotEmpty()) {
-            lyrics.syncedLines.map { it.text }.filter { it.isNotBlank() }
-        } else {
-            lyricsText.lines().filter { it.isNotBlank() }
-        }
-    } catch (e: Exception) {
-        lyricsText.lines().filter { it.isNotBlank() }
     }
 }

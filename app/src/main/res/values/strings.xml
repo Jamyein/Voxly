@@ -539,6 +539,7 @@
     <string name="lyrics_start_line">Start Line</string>
     <string name="lyrics_end_line">End Line</string>
     <string name="text_color">Text Color</string>
+    <string name="auto">Auto</string>
     <string name="font_size">Font Size</string>
     <string name="small">Small</string>
     <string name="medium">Medium</string>

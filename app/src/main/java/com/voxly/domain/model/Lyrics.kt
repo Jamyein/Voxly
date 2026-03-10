@@ -111,6 +111,27 @@ data class Lyrics(
                 syncedLines = emptyList()
             )
         }
+
+        /**
+         * Parses lyrics text and returns plain text lines.
+         * @param lyricsText Raw lyrics text (LRC format or plain text)
+         * @return List of non-blank text lines
+         */
+        fun parseToLines(lyricsText: String): List<String> {
+            if (lyricsText.isBlank()) {
+                return emptyList()
+            }
+            return try {
+                val lyrics = parseLrc(lyricsText)
+                if (lyrics.isSynced && lyrics.syncedLines.isNotEmpty()) {
+                    lyrics.syncedLines.map { it.text }.filter { it.isNotBlank() }
+                } else {
+                    lyricsText.lines().filter { it.isNotBlank() }
+                }
+            } catch (e: Exception) {
+                lyricsText.lines().filter { it.isNotBlank() }
+            }
+        }
     }
 }
 

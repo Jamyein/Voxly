@@ -11,16 +11,24 @@ import androidx.palette.graphics.Palette
 object ColorExtractor {
 
     /**
+     * Extracts Palette from bitmap with caching.
+     */
+    private fun extractPalette(bitmap: Bitmap): Palette? {
+        return try {
+            Palette.from(bitmap).generate()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
      * Extracts the dominant color from a bitmap.
      * Falls back to a default color if extraction fails.
      */
     fun extractDominantColor(bitmap: Bitmap): Color {
-        return try {
-            val palette = Palette.from(bitmap).generate()
-            palette.getDominantColor(DEFAULT_COLOR.toArgb()).let { Color(it) }
-        } catch (e: Exception) {
-            DEFAULT_COLOR
-        }
+        val palette = extractPalette(bitmap)
+        return palette?.getDominantColor(DEFAULT_COLOR.toArgb())?.let { Color(it) }
+            ?: DEFAULT_COLOR
     }
 
     /**
@@ -28,14 +36,11 @@ object ColorExtractor {
      * Falls back to dominant color if no vibrant color is found.
      */
     fun extractVibrantColor(bitmap: Bitmap): Color {
-        return try {
-            val palette = Palette.from(bitmap).generate()
-            palette.getVibrantColor(
-                palette.getDominantColor(DEFAULT_COLOR.toArgb())
-            ).let { Color(it) }
-        } catch (e: Exception) {
-            DEFAULT_COLOR
-        }
+        val palette = extractPalette(bitmap)
+        return palette?.getVibrantColor(
+            palette.getDominantColor(DEFAULT_COLOR.toArgb())
+        )?.let { Color(it) }
+            ?: DEFAULT_COLOR
     }
 
     /**
@@ -43,14 +48,11 @@ object ColorExtractor {
      * Useful for creating lighter backgrounds.
      */
     fun extractLightVibrantColor(bitmap: Bitmap): Color {
-        return try {
-            val palette = Palette.from(bitmap).generate()
-            palette.getLightVibrantColor(
-                palette.getDominantColor(DEFAULT_COLOR.toArgb())
-            ).let { Color(it) }
-        } catch (e: Exception) {
-            DEFAULT_COLOR
-        }
+        val palette = extractPalette(bitmap)
+        return palette?.getLightVibrantColor(
+            palette.getDominantColor(DEFAULT_COLOR.toArgb())
+        )?.let { Color(it) }
+            ?: DEFAULT_COLOR
     }
 
     /**
@@ -58,14 +60,11 @@ object ColorExtractor {
      * Useful for creating darker backgrounds.
      */
     fun extractDarkVibrantColor(bitmap: Bitmap): Color {
-        return try {
-            val palette = Palette.from(bitmap).generate()
-            palette.getDarkVibrantColor(
-                palette.getDominantColor(DEFAULT_COLOR.toArgb())
-            ).let { Color(it) }
-        } catch (e: Exception) {
-            DEFAULT_COLOR
-        }
+        val palette = extractPalette(bitmap)
+        return palette?.getDarkVibrantColor(
+            palette.getDominantColor(DEFAULT_COLOR.toArgb())
+        )?.let { Color(it) }
+            ?: DEFAULT_COLOR
     }
 
     /**
@@ -73,12 +72,9 @@ object ColorExtractor {
      * Good for subtle backgrounds.
      */
     fun extractMutedColor(bitmap: Bitmap): Color {
-        return try {
-            val palette = Palette.from(bitmap).generate()
-            palette.getMutedColor(DEFAULT_COLOR.toArgb()).let { Color(it) }
-        } catch (e: Exception) {
-            DEFAULT_COLOR
-        }
+        val palette = extractPalette(bitmap)
+        return palette?.getMutedColor(DEFAULT_COLOR.toArgb())?.let { Color(it) }
+            ?: DEFAULT_COLOR
     }
 
     /**
@@ -86,12 +82,9 @@ object ColorExtractor {
      * Good for creating light backgrounds.
      */
     fun extractLightMutedColor(bitmap: Bitmap): Color {
-        return try {
-            val palette = Palette.from(bitmap).generate()
-            palette.getLightMutedColor(DEFAULT_COLOR.toArgb()).let { Color(it) }
-        } catch (e: Exception) {
-            DEFAULT_COLOR
-        }
+        val palette = extractPalette(bitmap)
+        return palette?.getLightMutedColor(DEFAULT_COLOR.toArgb())?.let { Color(it) }
+            ?: DEFAULT_COLOR
     }
 
     /**

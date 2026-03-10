@@ -28,13 +28,11 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -53,10 +51,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
-import com.voxly.domain.model.Lyrics.Companion.parseLrc
+import com.voxly.domain.model.Lyrics.Companion.parseToLines
 import kotlinx.coroutines.launch
 
 /**
@@ -99,9 +96,9 @@ fun LyricsPosterPreviewSheet(
         }
     }
 
-    // Parse lyrics to get total line count
-    val totalLyricLines = remember(lyricsText) {
-        parseLyricsForRange(lyricsText).size
+    // Parse lyrics - single source of truth
+    val allLyricsLines = remember(lyricsText) {
+        parseToLines(lyricsText)
     }
 
     // State
@@ -119,11 +116,6 @@ fun LyricsPosterPreviewSheet(
         if (preSelectedLyrics.isNotEmpty()) {
             selectedLyricsForPoster = preSelectedLyrics
         }
-    }
-
-    // Get all lyrics for button check
-    val allLyricsLines = remember(lyricsText) {
-        parseLyricsForRange(lyricsText)
     }
 
     // Generate poster when parameters change
@@ -147,7 +139,7 @@ fun LyricsPosterPreviewSheet(
 
     // Generate poster when any parameter changes
     LaunchedEffect(title, artist, album, lyricsText, albumArtBitmap, backgroundColor, selectedTextColor, selectedLyricsForPoster, fontSizeScale) {
-        if (totalLyricLines > 0) {
+        if (allLyricsLines.isNotEmpty()) {
             generatedPoster = LyricsPosterGenerator.generatePoster(
                 title = title,
                 artist = artist,
@@ -313,7 +305,7 @@ fun LyricsPosterPreviewSheet(
                             modifier = Modifier.padding(horizontal = 12.dp)
                         ) {
                             Text(
-                                text = "Auto",
+                                text = stringResource(R.string.auto),
                                 style = MaterialTheme.typography.labelLarge
                             )
                         }
@@ -407,26 +399,6 @@ fun LyricsPosterPreviewSheet(
                 Text(stringResource(R.string.share_poster))
             }
         }
-    }
-}
-
-/**
- * Parses lyrics text and returns plain text lines for range selection.
- */
-private fun parseLyricsForRange(lyricsText: String): List<String> {
-    if (lyricsText.isBlank()) {
-        return listOf("No lyrics available")
-    }
-
-    return try {
-        val lyrics = parseLrc(lyricsText)
-        if (lyrics.isSynced && lyrics.syncedLines.isNotEmpty()) {
-            lyrics.syncedLines.map { it.text }.filter { it.isNotBlank() }
-        } else {
-            lyricsText.lines().filter { it.isNotBlank() }
-        }
-    } catch (e: Exception) {
-        lyricsText.lines().filter { it.isNotBlank() }
     }
 }
 

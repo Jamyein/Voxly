@@ -8,7 +8,7 @@ import android.graphics.Rect
 import android.graphics.Typeface
 import androidx.compose.ui.graphics.toArgb
 import com.voxly.domain.model.Lyrics
-import com.voxly.domain.model.Lyrics.Companion.parseLrc
+import com.voxly.domain.model.Lyrics.Companion.parseToLines
 
 /**
  * Generates lyrics poster images.
@@ -121,7 +121,7 @@ object LyricsPosterGenerator {
         canvas.drawLine(infoX, dividerY, POSTER_WIDTH - PADDING, dividerY, dividerPaint)
 
         // Parse lyrics (handle LRC format)
-        val allLyrics = parseLyrics(lyricsText)
+        val allLyrics = parseToLines(lyricsText)
         // Use selected lyrics text directly if provided, otherwise use indices or default to first 12 lines
         val lyricsLines = when {
             selectedLyrics.isNotEmpty() -> selectedLyrics.take(12)
@@ -262,26 +262,5 @@ object LyricsPosterGenerator {
         }
 
         return lines.ifEmpty { listOf("") }
-    }
-
-    /**
-     * Parses lyrics text and returns plain text lines.
-     */
-    private fun parseLyrics(lyricsText: String): List<String> {
-        if (lyricsText.isBlank()) {
-            return listOf("No lyrics available")
-        }
-
-        return try {
-            // Try parsing as LRC format
-            val lyrics = parseLrc(lyricsText)
-            if (lyrics.isSynced && lyrics.syncedLines.isNotEmpty()) {
-                lyrics.syncedLines.map { it.text }.filter { it.isNotBlank() }
-            } else {
-                lyricsText.lines().filter { it.isNotBlank() }
-            }
-        } catch (e: Exception) {
-            lyricsText.lines().filter { it.isNotBlank() }
-        }
     }
 }
