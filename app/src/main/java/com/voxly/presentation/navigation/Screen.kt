@@ -34,6 +34,22 @@ sealed class Screen(
     data object OnlineCoverSearch : Screen("online_cover_search/{filePath}", showBottomBar = false) {
         fun createRoute(filePath: String) = "online_cover_search/${java.net.URLEncoder.encode(filePath, "UTF-8")}"
     }
+    data object LyricsSelector : Screen(
+        "lyrics_selector/{filePath}?title={title}&artist={artist}&album={album}",
+        showBottomBar = false
+    ) {
+        fun createRoute(
+            filePath: String,
+            title: String = "",
+            artist: String = "",
+            album: String = ""
+        ): String {
+            return "lyrics_selector/${java.net.URLEncoder.encode(filePath, "UTF-8")}" +
+                "?title=${java.net.URLEncoder.encode(title, "UTF-8")}" +
+                "&artist=${java.net.URLEncoder.encode(artist, "UTF-8")}" +
+                "&album=${java.net.URLEncoder.encode(album, "UTF-8")}"
+        }
+    }
     data object AlbumDetail : Screen("album_detail/{albumName}/{albumArtist}", showBottomBar = false) {
         fun createRoute(albumName: String, albumArtist: String?) =
             "album_detail/${java.net.URLEncoder.encode(albumName, "UTF-8")}/${java.net.URLEncoder.encode(albumArtist ?: "", "UTF-8")}"

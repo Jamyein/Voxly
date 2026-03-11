@@ -320,16 +320,12 @@ fun MP3TagNavHost(
                     onNavigateToOnlineCoverSearch = {
                         navController.navigate(Screen.OnlineCoverSearch.createRoute(filePath))
                     },
-                    onNavigateToLyricsSelector = { lyricsText, title, artist, album, albumArtBytes ->
-                        val albumArtBase64 = albumArtBytes?.let {
-                            android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP)
-                        } ?: ""
+                    onNavigateToLyricsSelector = { _, title, artist, album, _ ->
                         navController.navigate(Screen.LyricsSelector.createRoute(
                             filePath = filePath,
                             title = title,
                             artist = artist,
-                            album = album,
-                            lyricsText = lyricsText
+                            album = album
                         ))
                     },
                     pendingOnlineMetadata = pendingOnlineMetadata,
@@ -442,37 +438,22 @@ fun MP3TagNavHost(
                         type = NavType.StringType
                         nullable = true
                         defaultValue = ""
-                    },
-                    navArgument("albumArtBase64") {
-                        type = NavType.StringType
-                        nullable = true
-                        defaultValue = ""
                     }
                 )
             ) { backStackEntry ->
                 val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
                 val filePath = URLDecoder.decode(encodedPath, "UTF-8")
-                // Read lyricsText from SavedStateHandle instead of URL parameter
-                val lyricsText = backStackEntry.savedStateHandle.get<String>("lyrics_text") ?: ""
                 val encodedTitle = backStackEntry.arguments?.getString("title") ?: ""
                 val title = URLDecoder.decode(encodedTitle, "UTF-8")
                 val encodedArtist = backStackEntry.arguments?.getString("artist") ?: ""
                 val artist = URLDecoder.decode(encodedArtist, "UTF-8")
                 val encodedAlbum = backStackEntry.arguments?.getString("album") ?: ""
                 val album = URLDecoder.decode(encodedAlbum, "UTF-8")
-                // Read albumArtBase64 from SavedStateHandle instead of URL parameter
-                val encodedAlbumArt = backStackEntry.savedStateHandle.get<String>("album_art_base64") ?: ""
-                val albumArtBytes = if (encodedAlbumArt.isNotEmpty()) {
-                    android.util.Base64.decode(encodedAlbumArt, android.util.Base64.NO_WRAP)
-                } else null
 
                 LyricsSelectorScreen(
-                    filePath = filePath,
-                    lyricsText = lyricsText,
                     title = title,
                     artist = artist,
                     album = album,
-                    albumArtBytes = albumArtBytes,
                     onNavigateBack = { navController.popBackStack() },
                     onDismiss = {
                         // Clear selected lyrics and go back
