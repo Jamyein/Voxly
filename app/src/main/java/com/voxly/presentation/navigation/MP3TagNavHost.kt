@@ -1,7 +1,6 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
-import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -51,6 +50,7 @@ import com.voxly.presentation.screens.metadata.MetadataEditorScreen
 import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
+import com.voxly.presentation.screens.metadata.LyricsSelectorScreen
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.viewmodel.AppViewModel
@@ -82,8 +82,7 @@ fun MP3TagNavHost(
             )
         }
     ) { outerPadding ->
-        SharedTransitionLayout {
-            NavHost(
+        NavHost(
                 navController = navController,
                 modifier = Modifier.fillMaxSize(),
             startDestination = Screen.FileBrowser.route,
@@ -307,6 +306,7 @@ fun MP3TagNavHost(
                 val pendingOnlineLyrics by backStackEntry.savedStateHandle
                     .getStateFlow<String?>("online_lyrics_result", null)
                     .collectAsState()
+
                 MetadataEditorScreen(
                     filePath = filePath,
                     coverTag = coverTag,
@@ -319,6 +319,18 @@ fun MP3TagNavHost(
                     },
                     onNavigateToOnlineCoverSearch = {
                         navController.navigate(Screen.OnlineCoverSearch.createRoute(filePath))
+                    },
+                    onNavigateToLyricsSelector = { lyricsText, title, artist, album, albumArtBytes ->
+                        val albumArtBase64 = albumArtBytes?.let {
+                            android.util.Base64.encodeToString(it, android.util.Base64.NO_WRAP)
+                        } ?: ""
+                        navController.navigate(Screen.LyricsSelector.createRoute(
+                            filePath = filePath,
+                            title = title,
+                            artist = artist,
+                            album = album,
+                            lyricsText = lyricsText
+                        ))
                     },
                     pendingOnlineMetadata = pendingOnlineMetadata,
                     onConsumePendingOnlineMetadata = {
@@ -411,6 +423,64 @@ fun MP3TagNavHost(
                 )
             }
 
+            // Lyrics selector screen
+            composable(
+                route = Screen.LyricsSelector.route,
+                arguments = listOf(
+                    navArgument("filePath") { type = NavType.StringType },
+                    navArgument("title") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = ""
+                    },
+                    navArgument("artist") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = ""
+                    },
+                    navArgument("album") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = ""
+                    },
+                    navArgument("albumArtBase64") {
+                        type = NavType.StringType
+                        nullable = true
+                        defaultValue = ""
+                    }
+                )
+            ) { backStackEntry ->
+                val encodedPath = backStackEntry.arguments?.getString("filePath") ?: ""
+                val filePath = URLDecoder.decode(encodedPath, "UTF-8")
+                // Read lyricsText from SavedStateHandle instead of URL parameter
+                val lyricsText = backStackEntry.savedStateHandle.get<String>("lyrics_text") ?: ""
+                val encodedTitle = backStackEntry.arguments?.getString("title") ?: ""
+                val title = URLDecoder.decode(encodedTitle, "UTF-8")
+                val encodedArtist = backStackEntry.arguments?.getString("artist") ?: ""
+                val artist = URLDecoder.decode(encodedArtist, "UTF-8")
+                val encodedAlbum = backStackEntry.arguments?.getString("album") ?: ""
+                val album = URLDecoder.decode(encodedAlbum, "UTF-8")
+                // Read albumArtBase64 from SavedStateHandle instead of URL parameter
+                val encodedAlbumArt = backStackEntry.savedStateHandle.get<String>("album_art_base64") ?: ""
+                val albumArtBytes = if (encodedAlbumArt.isNotEmpty()) {
+                    android.util.Base64.decode(encodedAlbumArt, android.util.Base64.NO_WRAP)
+                } else null
+
+                LyricsSelectorScreen(
+                    filePath = filePath,
+                    lyricsText = lyricsText,
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    albumArtBytes = albumArtBytes,
+                    onNavigateBack = { navController.popBackStack() },
+                    onDismiss = {
+                        // Clear selected lyrics and go back
+                        navController.popBackStack()
+                    }
+                )
+            }
+
             // Album detail screen
             composable(
                 route = Screen.AlbumDetail.route,
@@ -453,9 +523,7 @@ fun MP3TagNavHost(
                     }
                 )
             }
-
         }
-        } // End SharedTransitionLayout
     }
 }
 

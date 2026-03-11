@@ -9,14 +9,20 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.presentation.navigation.MP3TagNavHost
 import com.voxly.presentation.theme.MP3TagTheme
 import com.voxly.presentation.viewmodel.SettingsViewModel
+import com.voxly.presentation.viewmodel.SplashViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -28,12 +34,28 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
         )
 
         setContent {
+            // Install splash screen inside setContent to access ViewModel
+            val splashScreen = remember { installSplashScreen() }
+            var isReady by remember { mutableStateOf(false) }
+
+            val splashViewModel: SplashViewModel = hiltViewModel()
+            val isInitialized by splashViewModel.isInitialized.collectAsState()
+
+            // Keep splash screen visible while initializing
+            LaunchedEffect(isInitialized) {
+                if (isInitialized) {
+                    isReady = true
+                }
+            }
+            splashScreen.setKeepOnScreenCondition { !isReady }
+
             val settingsViewModel: SettingsViewModel = hiltViewModel()
             val dynamicColors by settingsViewModel.dynamicColors.collectAsState()
             val themeMode by settingsViewModel.themeMode.collectAsState()

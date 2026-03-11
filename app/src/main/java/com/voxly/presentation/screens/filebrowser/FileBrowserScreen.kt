@@ -170,12 +170,14 @@ fun FileBrowserScreen(
     var showSearchSheet by remember { mutableStateOf(false) }
     val searchSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val visibleFiles = remember(visibleFilesRaw, sortOption) {
-        applySort(
-            files = visibleFilesRaw,
-            sortOption = FileSortOption.valueOf(sortOption)
-        )
-    }
+    val visibleFiles = remember(visibleFilesRaw) {
+        derivedStateOf {
+            applySort(
+                files = visibleFilesRaw,
+                sortOption = FileSortOption.valueOf(sortOption)
+            )
+        }
+    }.value
     val currentListKey = openedDirectoryUri ?: "__global__"
     val initialScrollPosition = remember(currentListKey) {
         viewModel.getScrollPosition(currentListKey)
@@ -296,17 +298,17 @@ fun FileBrowserScreen(
         hasReadPermission = granted
     }
 
-    LaunchedEffect(hasReadPermission) {
-        if (hasReadPermission) {
-            viewModel.loadAudioFiles()
-        } else if (!hasReadPermission) {
-            readPermissionLauncher.launch(readPermission)
-        }
-    }
     LaunchedEffect(hasReadPermission, lifecycleOwner) {
-        if (!hasReadPermission) return@LaunchedEffect
+        if (!hasReadPermission) {
+            readPermissionLauncher.launch(readPermission)
+            return@LaunchedEffect
+        }
+
+        // Initial load when permission is granted
+        viewModel.loadAudioFiles()
+
+        // Refresh on resume with incremental scanning
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            // 改用增量扫描，只检测变化的文件，避免全量刷新
             viewModel.loadAudioFiles(forceRefresh = false)
         }
     }
