@@ -6,16 +6,12 @@ import com.voxly.core.util.FileLoggingTree
 import com.voxly.core.util.LogManager
 import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
-import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import timber.log.Timber
-import java.util.UUID
-import javax.inject.Inject
 
 /**
  * Application class for MP3 Tag Editor.
@@ -25,58 +21,12 @@ import javax.inject.Inject
 class MP3TagApplication : Application() {
 
     private lateinit var fileLoggingTree: FileLoggingTree
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
-
-    @Inject
-    lateinit var databaseProvider: MusicCacheDatabaseProvider
+    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     override fun onCreate() {
         super.onCreate()
 
-        checkAndCleanupOnReinstall()
         initLogging()
-    }
-
-    /**
-     * Check if app was reinstalled (fresh install after uninstall)
-     * and clean up old data if needed.
-     */
-    private fun checkAndCleanupOnReinstall() {
-        appScope.launch {
-            try {
-                val settings = SettingsDataStore(this@MP3TagApplication)
-                val storedInstallId = settings.installId.first()
-                val storedVersion = settings.lastAppVersion.first()
-                val currentVersion = BuildConfig.VERSION_CODE
-
-                // Check if this is a fresh install (no stored install ID)
-                // or if the app version has changed (update scenario)
-                val isFreshInstall = storedInstallId == null
-                val isVersionChanged = storedVersion != null && storedVersion != currentVersion
-
-                if (isFreshInstall || isVersionChanged) {
-                    Timber.i("Detected ${if (isFreshInstall) "fresh install" else "version change"} - cleaning up old data")
-
-                    // Clear database cache
-                    databaseProvider.clearAllData()
-
-                    // Clear all settings
-                    settings.clearAllSettings()
-
-                    // Generate new install ID
-                    val newInstallId = UUID.randomUUID().toString()
-                    settings.setInstallId(newInstallId)
-                    settings.setLastAppVersion(currentVersion)
-
-                    Timber.i("Cleanup completed - new install ID: $newInstallId, version: $currentVersion")
-                } else {
-                    // Just update the version for tracking
-                    settings.setLastAppVersion(currentVersion)
-                }
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to check/cleanup on reinstall")
-            }
-        }
     }
 
     private fun initLogging() {
