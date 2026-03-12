@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -30,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -57,15 +60,14 @@ import com.voxly.domain.model.Lyrics.Companion.parseToLines
 import kotlinx.coroutines.launch
 
 /**
- * Color theme options for the poster.
+ * Color theme options for poster - matching Rush's CardColors enum
+ * MUTED: 柔和颜色 (muted swatch)
+ * VIBRANT: 鲜艳颜色 (vibrant swatch)
+ * CUSTOM: 用户自定义颜色
  */
 enum class PosterColorTheme {
-    DOMINANT,
-    VIBRANT,
-    LIGHT_VIBRANT,
-    DARK_VIBRANT,
     MUTED,
-    LIGHT_MUTED,
+    VIBRANT,
     CUSTOM
 }
 
@@ -102,43 +104,45 @@ fun LyricsPosterPreviewSheet(
     }
 
     // State
-    var selectedTheme by remember { mutableStateOf(PosterColorTheme.DOMINANT) }
+    var selectedTheme by remember { mutableStateOf(PosterColorTheme.VIBRANT) }
     var customColor by remember { mutableStateOf(ColorExtractor.colorOptions.first()) }
-    var selectedTextColor by remember { mutableStateOf<Color?>(null) }
-    var selectedLyricsForPoster by remember {
-        mutableStateOf(preSelectedLyrics)
-    }
     var fontSizeScale by remember { mutableFloatStateOf(1.0f) }
     var generatedPoster by remember { mutableStateOf<Bitmap?>(null) }
 
-    // Update selected lyrics when pre-selected lyrics change
-    LaunchedEffect(preSelectedLyrics) {
-        if (preSelectedLyrics.isNotEmpty()) {
-            selectedLyricsForPoster = preSelectedLyrics
-        }
+    // Directly use preSelectedLyrics for poster generation
+    val selectedLyricsForPoster = preSelectedLyrics
+
+    // Extract colors from album art - Rush's approach
+    val extractedColors = remember(selectedTheme, albumArtBitmap) {
+        if (albumArtBitmap != null && selectedTheme != PosterColorTheme.CUSTOM) {
+            ColorExtractor.extractColors(albumArtBitmap)
+        } else null
     }
 
-    // Generate poster when parameters change
-    val backgroundColor = remember(selectedTheme, customColor, albumArtBitmap) {
+    // Get background and content colors based on selected theme - Rush's approach
+    val backgroundColor = remember(selectedTheme, customColor, extractedColors) {
         when (selectedTheme) {
-            PosterColorTheme.DOMINANT -> albumArtBitmap?.let { ColorExtractor.extractDominantColor(it) }
+            PosterColorTheme.MUTED -> extractedColors?.backgroundMuted?.let { Color(it) }
                 ?: ColorExtractor.colorOptions.first()
-            PosterColorTheme.VIBRANT -> albumArtBitmap?.let { ColorExtractor.extractVibrantColor(it) }
-                ?: ColorExtractor.colorOptions.first()
-            PosterColorTheme.LIGHT_VIBRANT -> albumArtBitmap?.let { ColorExtractor.extractLightVibrantColor(it) }
-                ?: ColorExtractor.colorOptions.first()
-            PosterColorTheme.DARK_VIBRANT -> albumArtBitmap?.let { ColorExtractor.extractDarkVibrantColor(it) }
-                ?: ColorExtractor.colorOptions.first()
-            PosterColorTheme.MUTED -> albumArtBitmap?.let { ColorExtractor.extractMutedColor(it) }
-                ?: ColorExtractor.colorOptions.first()
-            PosterColorTheme.LIGHT_MUTED -> albumArtBitmap?.let { ColorExtractor.extractLightMutedColor(it) }
+            PosterColorTheme.VIBRANT -> extractedColors?.backgroundDominant?.let { Color(it) }
                 ?: ColorExtractor.colorOptions.first()
             PosterColorTheme.CUSTOM -> customColor
         }
     }
 
+    // Get content (text) color for contrast
+    val contentColor = remember(selectedTheme, extractedColors) {
+        when (selectedTheme) {
+            PosterColorTheme.MUTED -> extractedColors?.contentMuted?.let { Color(it) }
+                ?: Color.White
+            PosterColorTheme.VIBRANT -> extractedColors?.contentDominant?.let { Color(it) }
+                ?: Color.White
+            PosterColorTheme.CUSTOM -> ColorExtractor.getContrastingTextColor(customColor)
+        }
+    }
+
     // Generate poster when any parameter changes
-    LaunchedEffect(title, artist, album, lyricsText, albumArtBitmap, backgroundColor, selectedTextColor, selectedLyricsForPoster, fontSizeScale) {
+    LaunchedEffect(title, artist, album, lyricsText, albumArtBitmap, backgroundColor, contentColor, preSelectedLyrics, fontSizeScale) {
         if (allLyricsLines.isNotEmpty()) {
             generatedPoster = LyricsPosterGenerator.generatePoster(
                 title = title,
@@ -147,7 +151,7 @@ fun LyricsPosterPreviewSheet(
                 lyricsText = lyricsText,
                 albumArtBitmap = albumArtBitmap,
                 backgroundColor = backgroundColor,
-                textColor = selectedTextColor,
+                contentColor = contentColor,
                 selectedLyrics = selectedLyricsForPoster,
                 fontSizeScale = fontSizeScale
             )
@@ -155,33 +159,27 @@ fun LyricsPosterPreviewSheet(
     }
 
     // Get localized strings outside LazyRow
-    val colorDominant = stringResource(R.string.color_dominant)
-    val colorVibrant = stringResource(R.string.color_vibrant)
-    val colorLightVibrant = stringResource(R.string.color_light_vibrant)
-    val colorDarkVibrant = stringResource(R.string.color_dark_vibrant)
-    val colorMuted = stringResource(R.string.color_muted)
-    val colorLightMuted = stringResource(R.string.color_light_muted)
+    val colorMuted = stringResource(R.string.color_soft)     // 柔和
+    val colorVibrant = stringResource(R.string.color_vivid) // 鲜艳
     val colorCustom = stringResource(R.string.color_custom)
 
     val themes = listOf(
-        PosterColorTheme.DOMINANT to colorDominant,
-        PosterColorTheme.VIBRANT to colorVibrant,
-        PosterColorTheme.LIGHT_VIBRANT to colorLightVibrant,
-        PosterColorTheme.DARK_VIBRANT to colorDarkVibrant,
         PosterColorTheme.MUTED to colorMuted,
-        PosterColorTheme.LIGHT_MUTED to colorLightMuted,
+        PosterColorTheme.VIBRANT to colorVibrant,
     )
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface
+        modifier = Modifier.fillMaxHeight(),
+        containerColor = MaterialTheme.colorScheme.surface,
+        dragHandle = { BottomSheetDefaults.DragHandle() }
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 32.dp),
+                .fillMaxHeight()
+                .padding(horizontal = 16.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Title
@@ -193,210 +191,167 @@ fun LyricsPosterPreviewSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Preview
-            generatedPoster?.let { poster ->
-                Image(
-                    bitmap = poster.asImageBitmap(),
-                    contentDescription = stringResource(R.string.cd_poster_preview),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(250.dp)
-                        .clip(MaterialTheme.shapes.large),
-                    contentScale = ContentScale.Crop
+            // Preview - swipe up to expand to full screen
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 9f)
+                    .clip(MaterialTheme.shapes.large)
+                    .background(MaterialTheme.colorScheme.surfaceVariant),
+                contentAlignment = Alignment.Center
+            ) {
+                generatedPoster?.let { poster ->
+                    Image(
+                        bitmap = poster.asImageBitmap(),
+                        contentDescription = stringResource(R.string.cd_poster_preview),
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(MaterialTheme.shapes.large),
+                        contentScale = ContentScale.Fit
+                    )
+                } ?: Text(
+                    text = stringResource(R.string.generating_poster),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Color theme selector
-            Text(
-                text = stringResource(R.string.select_color_theme),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Theme options
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp)
+            // Scrollable content - wrapped in Box with weight(1f) to fill available space
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
             ) {
-                items(themes) { (theme, label) ->
-                    ColorThemeChip(
-                        label = label,
-                        isSelected = selectedTheme == theme,
-                        onClick = { selectedTheme = theme }
-                    )
-                }
-
-                // Custom color option
-                item {
-                    ColorThemeChip(
-                        label = colorCustom,
-                        isSelected = selectedTheme == PosterColorTheme.CUSTOM,
-                        onClick = { selectedTheme = PosterColorTheme.CUSTOM }
-                    )
-                }
-            }
-
-            // Custom color picker
-            if (selectedTheme == PosterColorTheme.CUSTOM) {
-                Spacer(modifier = Modifier.height(12.dp))
-                LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    items(ColorExtractor.colorOptions) { color ->
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(CircleShape)
-                                .background(color)
-                                .border(
-                                    width = if (customColor == color) 3.dp else 0.dp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    shape = CircleShape
-                                )
-                                .clickable { customColor = color },
-                            contentAlignment = Alignment.Center
+                    // Color theme selector
+                    Text(
+                        text = stringResource(R.string.select_color_theme),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Theme options
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
+                        items(themes) { (theme, label) ->
+                            ColorThemeChip(
+                                label = label,
+                                isSelected = selectedTheme == theme,
+                                onClick = { selectedTheme = theme }
+                            )
+                        }
+
+                        // Custom color option
+                        item {
+                            ColorThemeChip(
+                                label = colorCustom,
+                                isSelected = selectedTheme == PosterColorTheme.CUSTOM,
+                                onClick = { selectedTheme = PosterColorTheme.CUSTOM }
+                            )
+                        }
+                    }
+
+                    // Custom color picker
+                    if (selectedTheme == PosterColorTheme.CUSTOM) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp)
                         ) {
-                            if (customColor == color) {
-                                Icon(
-                                    Icons.Default.Check,
-                                    contentDescription = null,
-                                    tint = ColorExtractor.getContrastingTextColor(color),
-                                    modifier = Modifier.size(20.dp)
-                                )
+                            items(ColorExtractor.colorOptions) { color ->
+                                Box(
+                                    modifier = Modifier
+                                        .size(40.dp)
+                                        .clip(CircleShape)
+                                        .background(color)
+                                        .border(
+                                            width = if (customColor == color) 3.dp else 0.dp,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            shape = CircleShape
+                                        )
+                                        .clickable { customColor = color },
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    if (customColor == color) {
+                                        Icon(
+                                            Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = ColorExtractor.getContrastingTextColor(color),
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
                     }
-                }
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(16.dp))
 
-            // Text color selector
-            Text(
-                text = stringResource(R.string.text_color),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.fillMaxWidth()
-            )
+                    // Font size selector
+                    Text(
+                        text = stringResource(R.string.font_size),
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.fillMaxWidth()
+                    )
 
-            Spacer(modifier = Modifier.height(8.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-            LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                contentPadding = PaddingValues(horizontal = 4.dp)
-            ) {
-                // Auto option
-                item {
-                    Surface(
-                        onClick = { selectedTextColor = null },
-                        shape = MaterialTheme.shapes.medium,
-                        color = if (selectedTextColor == null)
-                            MaterialTheme.colorScheme.primaryContainer
-                        else
-                            MaterialTheme.colorScheme.surfaceVariant,
-                        modifier = Modifier.height(40.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            contentAlignment = Alignment.Center,
-                            modifier = Modifier.padding(horizontal = 12.dp)
-                        ) {
-                            Text(
-                                text = stringResource(R.string.auto),
-                                style = MaterialTheme.typography.labelLarge
-                            )
-                        }
+                        Text(
+                            text = stringResource(R.string.small),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Slider(
+                            value = fontSizeScale,
+                            onValueChange = { fontSizeScale = it },
+                            valueRange = 0.7f..1.5f,
+                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                        )
+                        Text(
+                            text = stringResource(R.string.large),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                }
 
-                items(ColorExtractor.textColorOptions) { color ->
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(color)
-                            .border(
-                                width = if (selectedTextColor == color) 3.dp else 1.dp,
-                                color = if (selectedTextColor == color)
-                                    MaterialTheme.colorScheme.primary
-                                else
-                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                shape = CircleShape
-                            )
-                            .clickable { selectedTextColor = color },
-                        contentAlignment = Alignment.Center
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Share button
+                    Button(
+                        onClick = {
+                            generatedPoster?.let { poster ->
+                                scope.launch {
+                                    LyricsPosterShare.sharePoster(context, poster, title)
+                                    onDismiss()
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = generatedPoster != null && allLyricsLines.isNotEmpty()
                     ) {
-                        if (selectedTextColor == color) {
-                            Icon(
-                                Icons.Default.Check,
-                                contentDescription = null,
-                                tint = ColorExtractor.getContrastingTextColor(color),
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.share_poster))
                     }
                 }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Font size selector
-            Text(
-                text = stringResource(R.string.font_size),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = stringResource(R.string.small),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Slider(
-                    value = fontSizeScale,
-                    onValueChange = { fontSizeScale = it },
-                    valueRange = 0.7f..1.5f,
-                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                )
-                Text(
-                    text = stringResource(R.string.large),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // Share button
-            Button(
-                onClick = {
-                    generatedPoster?.let { poster ->
-                        scope.launch {
-                            LyricsPosterShare.sharePoster(context, poster, title)
-                            onDismiss()
-                        }
-                    }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                enabled = generatedPoster != null && allLyricsLines.isNotEmpty()
-            ) {
-                Icon(
-                    Icons.Default.Share,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text(stringResource(R.string.share_poster))
             }
         }
     }

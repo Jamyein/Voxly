@@ -43,7 +43,6 @@ import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.components.lyricsposter.LyricsPosterPreviewSheet
-import com.voxly.presentation.components.lyricsposter.LyricsSelectorBottomSheet
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
@@ -61,11 +60,12 @@ fun MetadataEditorScreen(
     onNavigateToOnlineMetadata: () -> Unit,
     onNavigateToOnlineLyricsSearch: () -> Unit,
     onNavigateToOnlineCoverSearch: () -> Unit,
+    onNavigateToLyricsSelector: (lyricsText: String, title: String, artist: String, album: String, albumArtBytes: ByteArray?) -> Unit,
     coverTag: String? = null,
     pendingOnlineMetadata: AudioMetadata? = null,
     onConsumePendingOnlineMetadata: () -> Unit = {},
     pendingOnlineLyrics: String? = null,
-    onConsumePendingOnlineLyrics: () -> Unit = {}
+    onConsumePendingOnlineLyrics: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
@@ -83,7 +83,6 @@ fun MetadataEditorScreen(
     var showActionMenu by remember { mutableStateOf(false) }
     var exitAfterSave by remember { mutableStateOf(false) }
     var showLyricsPosterPreview by remember { mutableStateOf(false) }
-    var showLyricsSelector by remember { mutableStateOf(false) }
     var selectedLyricsIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
     var selectedLyricsText by remember { mutableStateOf<List<String>>(emptyList()) }
 
@@ -310,8 +309,16 @@ fun MetadataEditorScreen(
                                     FloatingActionButton(
                                         onClick = {
                                             showActionMenu = false
-                                            selectedLyricsIndices = emptySet()
-                                            showLyricsSelector = true
+                                            val successState = uiState as? MetadataEditorUiState.Success
+                                            val metadata = successState?.editedMetadata
+                                            val audioFile = successState?.audioFile
+                                            onNavigateToLyricsSelector(
+                                                metadata?.lyrics ?: "",
+                                                metadata?.getDisplayTitle(audioFile?.name ?: "") ?: "",
+                                                metadata?.artist ?: "",
+                                                metadata?.album ?: "",
+                                                metadata?.albumArt
+                                            )
                                         },
                                         containerColor = MaterialTheme.colorScheme.tertiaryContainer
                                     ) {
@@ -640,27 +647,6 @@ fun MetadataEditorScreen(
                 },
                 onShare = { bitmap ->
                     // Share is handled in the sheet
-                }
-            )
-        }
-    }
-
-    // Lyrics Selector Sheet
-    if (showLyricsSelector) {
-        val successState = uiState as? MetadataEditorUiState.Success
-        if (successState != null) {
-            LyricsSelectorBottomSheet(
-                lyricsText = successState.editedMetadata.lyrics ?: "",
-                onDismiss = {
-                    selectedLyricsIndices = emptySet()
-                    selectedLyricsText = emptyList()
-                    showLyricsSelector = false
-                },
-                onConfirm = { selectedLines ->
-                    selectedLyricsIndices = selectedLines.keys
-                    selectedLyricsText = selectedLines.values.toList()
-                    showLyricsSelector = false
-                    showLyricsPosterPreview = true
                 }
             )
         }

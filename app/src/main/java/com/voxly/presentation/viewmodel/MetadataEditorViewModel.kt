@@ -1,6 +1,5 @@
 package com.voxly.presentation.viewmodel
 
-import android.content.ContentResolver
 import android.net.Uri
 import android.os.SystemClock
 import android.provider.MediaStore
@@ -15,7 +14,6 @@ import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.data.repository.LyricsRepositoryImpl
 import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
-import com.voxly.data.repository.OnlineSourceResult
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
@@ -196,29 +194,22 @@ class MetadataEditorViewModel @Inject constructor(
             "Metadata field update file=$filePath field=$field valueLength=${value.length}",
             "MetadataEditor"
         )
+        val nonBlankValue = value.takeIf { it.isNotBlank() }
         val updatedMetadata = when (field) {
-            MetadataField.TITLE -> currentMetadata.copy(title = value.takeIf { it.isNotBlank() })
-            MetadataField.ARTIST -> currentMetadata.copy(artist = value.takeIf { it.isNotBlank() })
-            MetadataField.ALBUM -> currentMetadata.copy(album = value.takeIf { it.isNotBlank() })
-            MetadataField.ALBUM_ARTIST -> currentMetadata.copy(albumArtist = value.takeIf { it.isNotBlank() })
-            MetadataField.YEAR -> currentMetadata.copy(year = value.takeIf { it.isNotBlank() })
-            MetadataField.GENRE -> currentMetadata.copy(genre = value.takeIf { it.isNotBlank() })
-            MetadataField.COMPOSER -> currentMetadata.copy(composer = value.takeIf { it.isNotBlank() })
-            MetadataField.LYRICIST -> currentMetadata.copy(lyricist = value.takeIf { it.isNotBlank() })
-            MetadataField.CONDUCTOR -> currentMetadata.copy(conductor = value.takeIf { it.isNotBlank() })
-            MetadataField.COMMENT -> currentMetadata.copy(comment = value.takeIf { it.isNotBlank() })
+            MetadataField.TITLE -> currentMetadata.copy(title = nonBlankValue)
+            MetadataField.ARTIST -> currentMetadata.copy(artist = nonBlankValue)
+            MetadataField.ALBUM -> currentMetadata.copy(album = nonBlankValue)
+            MetadataField.ALBUM_ARTIST -> currentMetadata.copy(albumArtist = nonBlankValue)
+            MetadataField.YEAR -> currentMetadata.copy(year = nonBlankValue)
+            MetadataField.GENRE -> currentMetadata.copy(genre = nonBlankValue)
+            MetadataField.COMPOSER -> currentMetadata.copy(composer = nonBlankValue)
+            MetadataField.LYRICIST -> currentMetadata.copy(lyricist = nonBlankValue)
+            MetadataField.CONDUCTOR -> currentMetadata.copy(conductor = nonBlankValue)
+            MetadataField.COMMENT -> currentMetadata.copy(comment = nonBlankValue)
             MetadataField.LYRICS -> currentMetadata.copy(lyrics = value)
         }
 
-        _editedMetadata.value = updatedMetadata
-        _hasUnsavedChanges.value = true
-        _modifiedFields.value = _modifiedFields.value + field
-
-        // Update UI state
-        val currentState = _uiState.value
-        if (currentState is MetadataEditorUiState.Success) {
-            _uiState.value = currentState.copy(editedMetadata = updatedMetadata)
-        }
+        setEditedMetadata(updatedMetadata, modifiedField = field)
     }
 
     /**
@@ -233,13 +224,7 @@ class MetadataEditorViewModel @Inject constructor(
             totalTracks = totalTracks
         )
 
-        _editedMetadata.value = updatedMetadata
-        _hasUnsavedChanges.value = true
-
-        val currentState = _uiState.value
-        if (currentState is MetadataEditorUiState.Success) {
-            _uiState.value = currentState.copy(editedMetadata = updatedMetadata)
-        }
+        setEditedMetadata(updatedMetadata)
     }
 
     /**
@@ -254,13 +239,7 @@ class MetadataEditorViewModel @Inject constructor(
             totalDiscs = totalDiscs
         )
 
-        _editedMetadata.value = updatedMetadata
-        _hasUnsavedChanges.value = true
-
-        val currentState = _uiState.value
-        if (currentState is MetadataEditorUiState.Success) {
-            _uiState.value = currentState.copy(editedMetadata = updatedMetadata)
-        }
+        setEditedMetadata(updatedMetadata)
     }
 
     /**
@@ -271,8 +250,15 @@ class MetadataEditorViewModel @Inject constructor(
         val currentMetadata = _editedMetadata.value ?: return
         val updatedMetadata = currentMetadata.copy(albumArt = albumArtBytes)
 
+        setEditedMetadata(updatedMetadata)
+    }
+
+    private fun setEditedMetadata(updatedMetadata: AudioMetadata, modifiedField: MetadataField? = null) {
         _editedMetadata.value = updatedMetadata
         _hasUnsavedChanges.value = true
+        if (modifiedField != null) {
+            _modifiedFields.value = _modifiedFields.value + modifiedField
+        }
 
         val currentState = _uiState.value
         if (currentState is MetadataEditorUiState.Success) {
@@ -597,8 +583,8 @@ class MetadataEditorViewModel @Inject constructor(
         }
     }
 
-/**
- * Resets all changes and reloads the original metadata.
+    /**
+     * Resets all changes and reloads the original metadata.
      */
     fun discardChanges() {
         viewModelScope.launch {
@@ -682,13 +668,7 @@ class MetadataEditorViewModel @Inject constructor(
             }
         }
         
-        _editedMetadata.value = updatedMetadata
-        _hasUnsavedChanges.value = true
-        
-        val currentState = _uiState.value
-        if (currentState is MetadataEditorUiState.Success) {
-            _uiState.value = currentState.copy(editedMetadata = updatedMetadata)
-        }
+        setEditedMetadata(updatedMetadata)
     }
 
     private fun toSimplifiedChinese(text: String): String {
@@ -948,29 +928,7 @@ class MetadataEditorViewModel @Inject constructor(
             albumArt = metadata.albumArt ?: currentMetadata.albumArt
         )
 
-        _editedMetadata.value = updatedMetadata
-        _hasUnsavedChanges.value = true
-
-        val currentState = _uiState.value
-        if (currentState is MetadataEditorUiState.Success) {
-            _uiState.value = currentState.copy(editedMetadata = updatedMetadata)
-        }
-    }
-
-    private fun metadataToStorageState(metadata: AudioMetadata): AudioMetadata {
-        // Return a copy that represents the saved state
-        return metadata.copy()
-    }
-
-    private fun AudioMetadata.withCustomField(key: String, value: String): AudioMetadata {
-        val normalized = value.trim()
-        val updated = customFields.toMutableMap()
-        if (normalized.isBlank()) {
-            updated.remove(key)
-        } else {
-            updated[key] = normalized
-        }
-        return copy(customFields = updated)
+        setEditedMetadata(updatedMetadata)
     }
 
     private fun decodeNavArg(value: String?): String {

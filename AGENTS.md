@@ -1,6 +1,6 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-02-22
+**Generated:** 2026-03-11
 **Commit:** 69bea87
 **Branch:** main
 
@@ -28,30 +28,132 @@ app/src/main/java/com/voxly/
 | ReplayGain | `data/local/replaygain/` |
 | UI screens | `presentation/screens/` |
 | ViewModels | `presentation/viewmodel/` |
+| Lyrics poster | `presentation/components/lyricsposter/` |
 
-## CONVENTIONS (THIS PROJECT)
-- Package: `com.voxly` (NOT com.mp3tag.android)
-- DI: Hilt with `@HiltViewModel`
-- Navigation: Jetpack Navigation Compose
-- State: ViewModel + StateFlow
-- Tests: JUnit 4 + MockK + Turbine
+---
+
+## COMMANDS
+
+### Build & Run
+```bash
+./gradlew build           # Debug build
+./gradlew assembleDist    # Distribution build (requires signing)
+./gradlew assembleDebug   # Debug APK only
+./gradlew assembleRelease # Release APK (requires signing)
+```
+
+### Testing
+```bash
+./gradlew test                    # Run all unit tests
+./gradlew test --tests "com.voxly.data.local.metadata.TagLibMetadataProcessorTest"  # Single test class
+./gradlew test --tests "com.voxly.data.local.metadata.TagLibMetadataProcessorTest.isFormatSupported*"  # Single test method
+./gradlew test --tests "*Test"    # Run all test classes matching pattern
+./gradlew connectedAndroidTest    # Run Android instrumentation tests
+```
+
+### Linting
+```bash
+./gradlew lint                    # Run lint analysis
+./gradlew lintRelease             # Lint release build
+./gradlew ktlintCheck             # Check Kotlin style (if configured)
+```
+
+### Development
+```bash
+./gradlew clean                   # Clean build artifacts
+./gradlew dependencyUpdates       # Check for dependency updates
+./gradlew dependencies           # Show project dependencies
+```
+
+---
+
+## CODE STYLE GUIDELINES
+
+### Kotlin Conventions
+- **Package**: `com.voxly` (NOT com.mp3tag.android)
+- **DI**: Hilt with `@HiltViewModel`
+- **Navigation**: Jetpack Navigation Compose
+- **State**: ViewModel + StateFlow
+- **Tests**: JUnit 4 + MockK + Turbine
+
+### Import Order (Official Kotlin Style)
+1. Android imports (`android.*`)
+2. Kotlin standard library (`kotlin.*`)
+3. Third-party libraries (`com.*`, `io.*`, `org.*`)
+4. Project imports (`com.voxly.*`)
+5. Java imports (`java.*`, `javax.*`)
+
+Example:
+```kotlin
+package com.voxly.presentation.viewmodel
+
+import android.content.Context
+import android.net.Uri
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.voxly.core.util.Logger
+import com.voxly.data.repository.XxxRepository
+import com.voxly.domain.model.AudioFile
+import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import javax.inject.Inject
+```
+
+### Naming Conventions
+- **Classes**: PascalCase (`MetadataEditorViewModel`, `AudioFileScanner`)
+- **Functions**: camelCase (`readMetadata`, `isFormatSupported`)
+- **Constants**: UPPER_SNAKE_CASE (`MAX_SEARCH_RESULTS`, `TAG`)
+- **Private properties**: camelCase with `_` prefix for backing fields (`_state`, `_items`)
+- **ViewModel state**: `_camelCaseStateFlow` for mutable, `camelCaseStateFlow` for immutable
+
+### Types & Null Safety
+- **Prefer** `StateFlow<T>` over `LiveData<T>` for UI state
+- **Prefer** `val` over `var` - use `var` only when mutation is necessary
+- **Use** nullable types (`T?`) explicitly - avoid `!!` operator
+- **Use** `by lazy` for expensive initialization
+- **Use** `object` for singletons
+
+### Error Handling
+- **Use** Result wrapper for operations that can fail:
+  ```kotlin
+  sealed class Result<out T> {
+      data class Success<T>(val data: T) : Result<T>()
+      data class Error(val exception: Throwable) : Result<Nothing>()
+  }
+  ```
+- **Never** use empty catch blocks (`catch(e) {}`)
+- **Use** Timber for logging (`Timber.tag(TAG).d(...)`)
+- **Never** suppress errors with `@Suppress` unless absolutely necessary
+
+### Compose Guidelines
+- **Always** use `@Composable` annotation for composable functions
+- **Use** `remember` and `rememberSaveable` for state that survives recomposition
+- **Use** `derivedStateOf` for expensive computations
+- **Avoid** rapidly toggling UI state - use debounce for user input
+- **Use** `ExpressiveScaffold` and `ExpressiveTopAppBar` for consistent insets handling
+
+### Threading
+- **Use** `viewModelScope` for ViewModel coroutines
+- **Use** `Dispatchers.IO` for file I/O and network operations
+- **Use** `Dispatchers.Main` for UI updates
+- **Prefer** `withContext()` for explicit dispatcher switching
+
+---
 
 ## ANTI-PATTERNS (THIS PROJECT)
-- NEVER produce unsigned APKs (`build.gradle.kts`)
-- NEVER use MediaStore for sampleRate/channels (always read from file)
-- NEVER toggle UI state rapidly (debounce required)
+- **NEVER** produce unsigned APKs (`build.gradle.kts`)
+- **NEVER** use MediaStore for sampleRate/channels (always read from file)
+- **NEVER** toggle UI state rapidly (debounce required)
+- **NEVER** use `as any` or `@ts-ignore` to suppress errors
+- **NEVER** use empty catch blocks
+
+---
 
 ## UNIQUE STYLES
 - Multi-source metadata: 5 APIs (Wangy, Tengx, MusicBrainz, iTunes, LRCLib)
 - Custom crypto for Wangy API (`data/remote/wangy/crypto/`)
 - Room database for music library caching
-
-## COMMANDS
-```bash
-./gradlew build           # Debug build
-./gradlew assembleDist    # Distribution build
-./gradlew test            # Run unit tests
-```
+- MD3-style lyrics poster color extraction with tonal palette generation
 
 ---
 
@@ -67,37 +169,6 @@ app/src/main/java/com/voxly/
 8. 不要每完成一个todo进行一次build测试，在所有todo完成后才进行一次build测试。
 
 ---
-
-## TopAppBar WindowInsets 处理方案 (2026-02-23)
-
-**问题**: 使用 `enableEdgeToEdge()` 后，顶栏内文字按钮被状态栏覆盖，或出现大片空白
-
-**解决方案**:
-
-1. **ExpressiveScaffold**: 禁用 Scaffold 默认的 `contentWindowInsets`
-   ```kotlin
-   Scaffold(
-       contentWindowInsets = WindowInsets(0, 0, 0, 0),  // 禁用默认 insets
-       ...
-   )
-   ```
-
-2. **ExpressiveTopAppBar** (所有变体): 使用 `windowInsets` 参数
-   ```kotlin
-   TopAppBar(
-       windowInsets = WindowInsets.statusBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top),
-       ...
-   )
-   ```
-
-**原理**:
-- `WindowInsets.statusBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)` 只应用顶部和水平 insets，不影响内容区域
-- 禁用 Scaffold 默认 insets 避免 TopAppBar 和内容区域同时争用空间
-
-**涉及文件**:
-- `presentation/components/ExpressiveScaffold.kt`
-- `presentation/components/ExpressiveTopAppBar.kt`
-
 
 ## 外部文件加载
 

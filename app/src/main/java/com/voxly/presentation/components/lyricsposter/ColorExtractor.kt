@@ -4,14 +4,39 @@ import android.graphics.Bitmap
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.palette.graphics.Palette
+import kotlin.math.max
+import kotlin.math.min
+import kotlin.math.pow
 
 /**
- * Extracts colors from album artwork for lyrics poster background.
+ * Simplified color extraction for lyrics poster background.
+ * Provides MUTED (柔和) and VIBRANT (鲜艳) color options from album artwork.
+ * Uses Android Palette API for color extraction.
  */
 object ColorExtractor {
 
     /**
-     * Extracts Palette from bitmap with caching.
+     * Extracted colors from album artwork
+     * Similar to Rush's ExtractedColors data class
+     */
+    data class ExtractedColors(
+        val backgroundDominant: Int = Color.DarkGray.toArgb(),    // 鲜艳背景色 (Vibrant)
+        val contentDominant: Int = 0xFFFFFF,                     // 鲜艳文字色
+        val backgroundMuted: Int = Color.DarkGray.toArgb(),       // 柔和背景色 (Muted)
+        val contentMuted: Int = 0xFFFFFF                          // 柔和文字色
+    )
+
+    /**
+     * Color theme options for poster - matching Rush's CardColors enum
+     */
+    enum class PosterColorTheme {
+        MUTED,    // 柔和 - 使用 muted 颜色
+        VIBRANT,  // 鲜艳 - 使用 vibrant 颜色
+        CUSTOM    // 自定义 - 用户选择颜色
+    }
+
+    /**
+     * Extracts Palette from bitmap - simplified version similar to Rush
      */
     private fun extractPalette(bitmap: Bitmap): Palette? {
         return try {
@@ -22,8 +47,51 @@ object ColorExtractor {
     }
 
     /**
+     * Extracts colors from album artwork - Rush's approach
+     * Returns both vibrant and muted color sets with content colors for text contrast
+     */
+    fun extractColors(bitmap: Bitmap): ExtractedColors {
+        val palette = extractPalette(bitmap)
+
+        return palette?.let { p ->
+            ExtractedColors(
+                // Vibrant colors (鲜艳)
+                backgroundDominant = Color(
+                    p.vibrantSwatch?.rgb
+                        ?: p.lightVibrantSwatch?.rgb
+                        ?: p.darkVibrantSwatch?.rgb
+                        ?: p.dominantSwatch?.rgb
+                        ?: Color.DarkGray.toArgb()
+                ).copy(alpha = 1f).toArgb(),
+
+                contentDominant = Color(
+                    p.vibrantSwatch?.bodyTextColor
+                        ?: p.lightVibrantSwatch?.bodyTextColor
+                        ?: p.darkVibrantSwatch?.bodyTextColor
+                        ?: p.dominantSwatch?.bodyTextColor
+                        ?: Color.White.toArgb()
+                ).copy(alpha = 1f).toArgb(),
+
+                // Muted colors (柔和) - 调换顺序，优先使用 lightMutedSwatch 以获得更柔和的效果
+                backgroundMuted = Color(
+                    p.mutedSwatch?.rgb
+                        ?: p.lightMutedSwatch?.rgb   // 调换顺序：lightMuted 在前
+                        ?: p.darkMutedSwatch?.rgb
+                        ?: Color.DarkGray.toArgb()
+                ).copy(alpha = 1f).toArgb(),
+
+                contentMuted = Color(
+                    p.mutedSwatch?.bodyTextColor
+                        ?: p.lightMutedSwatch?.bodyTextColor   // 调换顺序：lightMuted 在前
+                        ?: p.darkMutedSwatch?.bodyTextColor
+                        ?: Color.White.toArgb()
+                ).copy(alpha = 1f).toArgb()
+            )
+        } ?: ExtractedColors()
+    }
+
+    /**
      * Extracts the dominant color from a bitmap.
-     * Falls back to a default color if extraction fails.
      */
     fun extractDominantColor(bitmap: Bitmap): Color {
         val palette = extractPalette(bitmap)
@@ -32,95 +100,10 @@ object ColorExtractor {
     }
 
     /**
-     * Extracts a vibrant color from a bitmap.
-     * Falls back to dominant color if no vibrant color is found.
-     */
-    fun extractVibrantColor(bitmap: Bitmap): Color {
-        val palette = extractPalette(bitmap)
-        return palette?.getVibrantColor(
-            palette.getDominantColor(DEFAULT_COLOR.toArgb())
-        )?.let { Color(it) }
-            ?: DEFAULT_COLOR
-    }
-
-    /**
-     * Extracts a light vibrant color from a bitmap.
-     * Useful for creating lighter backgrounds.
-     */
-    fun extractLightVibrantColor(bitmap: Bitmap): Color {
-        val palette = extractPalette(bitmap)
-        return palette?.getLightVibrantColor(
-            palette.getDominantColor(DEFAULT_COLOR.toArgb())
-        )?.let { Color(it) }
-            ?: DEFAULT_COLOR
-    }
-
-    /**
-     * Extracts a dark vibrant color from a bitmap.
-     * Useful for creating darker backgrounds.
-     */
-    fun extractDarkVibrantColor(bitmap: Bitmap): Color {
-        val palette = extractPalette(bitmap)
-        return palette?.getDarkVibrantColor(
-            palette.getDominantColor(DEFAULT_COLOR.toArgb())
-        )?.let { Color(it) }
-            ?: DEFAULT_COLOR
-    }
-
-    /**
-     * Extracts a muted color from a bitmap.
-     * Good for subtle backgrounds.
-     */
-    fun extractMutedColor(bitmap: Bitmap): Color {
-        val palette = extractPalette(bitmap)
-        return palette?.getMutedColor(DEFAULT_COLOR.toArgb())?.let { Color(it) }
-            ?: DEFAULT_COLOR
-    }
-
-    /**
-     * Extracts a light muted color from a bitmap.
-     * Good for creating light backgrounds.
-     */
-    fun extractLightMutedColor(bitmap: Bitmap): Color {
-        val palette = extractPalette(bitmap)
-        return palette?.getLightMutedColor(DEFAULT_COLOR.toArgb())?.let { Color(it) }
-            ?: DEFAULT_COLOR
-    }
-
-    /**
      * Determines if a color is dark (for contrast calculations).
      */
     fun isDarkColor(color: Color): Boolean {
-        val red = color.red
-        val green = color.green
-        val blue = color.blue
-        // Using luminance formula
-        return (0.299 * red + 0.587 * green + 0.114 * blue) < 0.5
-    }
-
-    /**
-     * Adjusts a color for better background contrast.
-     * If the background is dark, returns a lighter version of the color.
-     * If the background is light, returns a darker version.
-     */
-    fun adjustColorForBackground(baseColor: Color, isDark: Boolean): Color {
-        return if (isDark) {
-            // Lighten the color for dark backgrounds
-            Color(
-                red = (baseColor.red + 0.3f).coerceAtMost(1f),
-                green = (baseColor.green + 0.3f).coerceAtMost(1f),
-                blue = (baseColor.blue + 0.3f).coerceAtMost(1f),
-                alpha = baseColor.alpha
-            )
-        } else {
-            // Darken the color for light backgrounds
-            Color(
-                red = (baseColor.red - 0.3f).coerceAtLeast(0f),
-                green = (baseColor.green - 0.3f).coerceAtLeast(0f),
-                blue = (baseColor.blue - 0.3f).coerceAtLeast(0f),
-                alpha = baseColor.alpha
-            )
-        }
+        return getLightness(color) < 0.5f
     }
 
     /**
@@ -132,6 +115,37 @@ object ColorExtractor {
         } else {
             Color.Black
         }
+    }
+
+    /**
+     * Calculates the contrast ratio between two colors using WCAG 2.1 formula.
+     * @return Contrast ratio (1-21)
+     */
+    fun calculateContrastRatio(foreground: Color, background: Color): Float {
+        val l1 = getRelativeLuminance(foreground)
+        val l2 = getRelativeLuminance(background)
+        val lighter = maxOf(l1, l2)
+        val darker = minOf(l1, l2)
+        return (lighter + 0.05f) / (darker + 0.05f)
+    }
+
+    /**
+     * Gets the relative luminance of a color (WCAG 2.1).
+     */
+    private fun getRelativeLuminance(color: Color): Float {
+        val r = if (color.red <= 0.03928f) color.red / 12.92f else ((color.red + 0.055f) / 1.055f).let { (it.toDouble()).pow(2.4).toFloat() }
+        val g = if (color.green <= 0.03928f) color.green / 12.92f else ((color.green + 0.055f) / 1.055f).let { (it.toDouble()).pow(2.4).toFloat() }
+        val b = if (color.blue <= 0.03928f) color.blue / 12.92f else ((color.blue + 0.055f) / 1.055f).let { (it.toDouble()).pow(2.4).toFloat() }
+        return 0.2126f * r + 0.7152f * g + 0.0722f * b
+    }
+
+    /**
+     * Gets the lightness component of a color (0-1).
+     */
+    private fun getLightness(color: Color): Float {
+        val max = maxOf(color.red, color.green, color.blue)
+        val min = minOf(color.red, color.green, color.blue)
+        return (max + min) / 2f
     }
 
     /**

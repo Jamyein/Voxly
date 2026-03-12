@@ -15,11 +15,13 @@ import com.voxly.domain.model.Lyrics.Companion.parseToLines
  */
 object LyricsPosterGenerator {
 
-    private const val POSTER_WIDTH = 1080
-    private const val POSTER_HEIGHT = 1920
-    private const val PADDING = 60f
-    private const val COVER_SIZE = 200
-    private const val MARGIN_BOTTOM = 120f
+    private const val MIN_POSTER_WIDTH = 720   // Minimum width
+    private const val MAX_POSTER_WIDTH = 1440  // Maximum width limit
+    private const val MIN_POSTER_HEIGHT = 1920  // 16:9 minimum
+    private const val PADDING = 80f
+    private const val COVER_SIZE = 440
+    private const val MARGIN_BOTTOM = 100f
+    private const val INFO_SECTION_WIDTH = 900f  // Width reserved for title/artist/album
 
     /**
      * Generates a lyrics poster bitmap.
@@ -30,7 +32,7 @@ object LyricsPosterGenerator {
      * @param lyricsText Raw lyrics text (can be LRC format or plain text)
      * @param albumArtBitmap Optional album art bitmap
      * @param backgroundColor Background color
-     * @param textColor Custom text color (null for auto-detect)
+     * @param contentColor Optional content (text) color. If null, auto-calculated from background for contrast
      * @param selectedLyrics List of selected lyric text for poster (preferred over indices)
      * @param selectedLyricIndices List of selected lyric indices for non-contiguous multi-line selection (fallback)
      * @param fontSizeScale Font size scale factor (1.0 = default)
@@ -43,12 +45,57 @@ object LyricsPosterGenerator {
         lyricsText: String,
         albumArtBitmap: Bitmap?,
         backgroundColor: androidx.compose.ui.graphics.Color,
-        textColor: androidx.compose.ui.graphics.Color? = null,
+        contentColor: androidx.compose.ui.graphics.Color? = null,
         selectedLyrics: List<String> = emptyList(),
         selectedLyricIndices: List<Int> = emptyList(),
         fontSizeScale: Float = 1.0f
     ): Bitmap {
-        val bitmap = Bitmap.createBitmap(POSTER_WIDTH, POSTER_HEIGHT, Bitmap.Config.ARGB_8888)
+        // Parse lyrics first to calculate dynamic height
+        val allLyrics = parseToLines(lyricsText)
+        val lyricsLines = when {
+            selectedLyrics.isNotEmpty() -> selectedLyrics.take(12)
+            selectedLyricIndices.isNotEmpty() -> selectedLyricIndices.mapNotNull { allLyrics.getOrNull(it) }.take(12)
+            else -> allLyrics.take(12)
+        }
+
+        // Calculate dynamic width based on content
+        val baseFontSize = 84f * fontSizeScale
+
+        // Estimate the widest line in lyrics for width calculation
+        val widthEstimatePaint = Paint().apply { textSize = baseFontSize }
+        val maxLyricsWidth = lyricsLines.maxOfOrNull { line ->
+            breakTextToLines(line, widthEstimatePaint, 10000f).maxOf { wrapped ->
+                widthEstimatePaint.measureText(wrapped)
+            }
+        } ?: 0f
+
+        // Calculate minimum required width
+        val infoAreaWidth = if (albumArtBitmap != null) COVER_SIZE + 32f + INFO_SECTION_WIDTH else INFO_SECTION_WIDTH
+        val minRequiredWidth = PADDING + maxOf(infoAreaWidth, maxLyricsWidth) + PADDING
+
+        // Dynamic width: between MIN and MAX, with some padding for safety
+        val posterWidth = maxOf(minRequiredWidth.toInt(), MIN_POSTER_WIDTH).coerceAtMost(MAX_POSTER_WIDTH)
+        val maxWidth = posterWidth - (PADDING * 2)
+
+        val lineHeight = (128f * fontSizeScale)
+
+        // Estimate lyrics wrapped lines count
+        val tempPaint = Paint().apply { textSize = baseFontSize }
+        val totalLyricsWrappedLines = lyricsLines.sumOf { line ->
+            breakTextToLines(line, tempPaint, maxWidth).size
+        }
+
+        // Calculate required height
+        val coverAreaHeight = PADDING + COVER_SIZE + 80f  // Cover + padding
+        val infoAreaHeight = 300f  // Title/artist/album area
+        val dividerAreaHeight = 80f  // Spacing between info and lyrics
+        val lyricsAreaHeight = totalLyricsWrappedLines * lineHeight
+        val bottomAreaHeight = MARGIN_BOTTOM + 60f  // Voxly text spacing
+
+        val requiredHeight = coverAreaHeight + infoAreaHeight + dividerAreaHeight + lyricsAreaHeight + bottomAreaHeight
+        val posterHeight = maxOf(MIN_POSTER_HEIGHT, requiredHeight.toInt())
+
+        val bitmap = Bitmap.createBitmap(posterWidth, posterHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
         // Draw background
@@ -56,15 +103,19 @@ object LyricsPosterGenerator {
             color = backgroundColor.toArgb()
             style = Paint.Style.FILL
         }
-        canvas.drawRect(0f, 0f, POSTER_WIDTH.toFloat(), POSTER_HEIGHT.toFloat(), bgPaint)
+        canvas.drawRect(0f, 0f, posterWidth.toFloat(), posterHeight.toFloat(), bgPaint)
 
-        // Calculate text color based on background or use custom color
+        // Calculate text color: use provided contentColor or auto-calculate for contrast
+        val providedContentColor = contentColor?.toArgb()
         val isDarkBackground = ColorExtractor.isDarkColor(backgroundColor)
-        val defaultTextColor = if (isDarkBackground) Color.WHITE else Color.BLACK
-        val effectiveTextColor = textColor?.toArgb() ?: defaultTextColor
-        val secondaryTextColor = if (isDarkBackground) Color.argb(180, 255, 255, 255) else Color.argb(180, 0, 0, 0)
+        val defaultTextColor = providedContentColor
+            ?: if (isDarkBackground) Color.WHITE else Color.BLACK
+        val secondaryTextColor = providedContentColor?.let { Color.argb(180, Color.red(it), Color.green(it), Color.blue(it)) }
+            ?: if (isDarkBackground) Color.argb(180, 255, 255, 255) else Color.argb(180, 0, 0, 0)
 
-        // Draw album art in corner if available
+        // ===== LAYOUT: Horizontal 16:9 =====
+
+        // Draw album art on the LEFT side (vertical layout: top)
         if (albumArtBitmap != null) {
             val scaledCover = Bitmap.createScaledBitmap(albumArtBitmap, COVER_SIZE, COVER_SIZE, true)
             val coverPaint = Paint().apply {
@@ -73,112 +124,94 @@ object LyricsPosterGenerator {
             canvas.drawBitmap(scaledCover, PADDING, PADDING, coverPaint)
         }
 
-        // Draw song info
+        // Draw song info to the RIGHT of cover (horizontal layout)
         val titlePaint = Paint().apply {
-            color = effectiveTextColor
-            textSize = 56f
+            color = defaultTextColor
+            textSize = 104f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
         }
 
         val artistPaint = Paint().apply {
             color = secondaryTextColor
-            textSize = 36f
+            textSize = 68f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
         }
 
         val albumPaint = Paint().apply {
             color = secondaryTextColor
-            textSize = 28f
+            textSize = 52f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
         }
 
-        val infoX = if (albumArtBitmap != null) PADDING + COVER_SIZE + 24f else PADDING
-        val titleY = PADDING + 60f
+        // Info starts to the right of cover
+        val infoX = if (albumArtBitmap != null) PADDING + COVER_SIZE + 64f else PADDING
+        val titleY = PADDING + 100f
 
         // Draw title
-        canvas.drawText(breakText(title.take(30), titlePaint, POSTER_WIDTH - infoX - PADDING), infoX, titleY, titlePaint)
+        canvas.drawText(breakText(title.take(40), titlePaint, INFO_SECTION_WIDTH), infoX, titleY, titlePaint)
 
         // Draw artist
-        var artistY = titleY + 50f
-        canvas.drawText(breakText(artist.take(40), artistPaint, POSTER_WIDTH - infoX - PADDING), infoX, artistY, artistPaint)
+        var artistY = titleY + 112f
+        canvas.drawText(breakText(artist.take(50), artistPaint, INFO_SECTION_WIDTH), infoX, artistY, artistPaint)
 
         // Draw album if available
-        var albumY = artistY + 40f
+        var albumY = artistY + 84f
         if (album.isNotBlank()) {
-            canvas.drawText(breakText(album.take(50), albumPaint, POSTER_WIDTH - infoX - PADDING), infoX, albumY, albumPaint)
-            albumY += 36f
+            canvas.drawText(breakText(album.take(60), albumPaint, INFO_SECTION_WIDTH), infoX, albumY, albumPaint)
+            albumY += 68f
         } else {
             albumY = artistY
         }
 
-        // Draw divider
-        val dividerPaint = Paint().apply {
-            color = secondaryTextColor
-            strokeWidth = 2f
-        }
-        val dividerY = albumY + 20f
-        canvas.drawLine(infoX, dividerY, POSTER_WIDTH - PADDING, dividerY, dividerPaint)
-
-        // Parse lyrics (handle LRC format)
-        val allLyrics = parseToLines(lyricsText)
-        // Use selected lyrics text directly if provided, otherwise use indices or default to first 12 lines
-        val lyricsLines = when {
-            selectedLyrics.isNotEmpty() -> selectedLyrics.take(12)
-            selectedLyricIndices.isNotEmpty() -> selectedLyricIndices.mapNotNull { allLyrics.getOrNull(it) }.take(12)
-            else -> allLyrics.take(12)
-        }
-
-        // Draw lyrics with font size scaling
-        val baseFontSize = 42f * fontSizeScale
-        val highlightFontSize = 48f * fontSizeScale
-        val lineHeight = (64f * fontSizeScale)
+        // Draw lyrics below the song info
+        val highlightFontSize = 104f * fontSizeScale
 
         val lyricsPaint = Paint().apply {
-            color = effectiveTextColor
+            color = defaultTextColor
             textSize = baseFontSize
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
             letterSpacing = 0.05f
         }
 
-        val lyricsStartY = dividerY + 60f
-        val maxWidth = POSTER_WIDTH - (PADDING * 2)
+        val coverRowBottom = maxOf(if (albumArtBitmap != null) PADDING + COVER_SIZE else 0f, albumY + 40f)
+        val lyricsStartY = coverRowBottom + 40f
 
         lyricsLines.forEachIndexed { index, line ->
             // Split long lines into multiple lines
             val wrappedLines = breakTextToLines(line, lyricsPaint, maxWidth)
             wrappedLines.forEachIndexed { wrapIndex, wrappedLine ->
                 val lineY = lyricsStartY + ((index + wrapIndex) * lineHeight)
-                if (lineY < POSTER_HEIGHT - MARGIN_BOTTOM - 100f) {
+                if (lineY < posterHeight - MARGIN_BOTTOM) {
                     // Highlight first line of first lyric
                     if (index == 0 && wrapIndex == 0) {
                         lyricsPaint.textSize = highlightFontSize
                         lyricsPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                     } else {
                         lyricsPaint.textSize = baseFontSize
-                        lyricsPaint.typeface = Typeface.DEFAULT
+                        lyricsPaint.typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
                     }
                     canvas.drawText(wrappedLine, PADDING, lineY, lyricsPaint)
                 }
             }
         }
 
-        // Draw bottom divider
-        val bottomDividerY = POSTER_HEIGHT - MARGIN_BOTTOM - 40f
-        canvas.drawLine(PADDING, bottomDividerY, POSTER_WIDTH - PADDING, bottomDividerY, dividerPaint)
-
-        // Draw bottom info
+        // Draw bottom info (Voxly watermark)
         val bottomPaint = Paint().apply {
             color = secondaryTextColor
-            textSize = 28f
+            textSize = 56f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
         }
         val bottomText = "Voxly"
         val bottomTextWidth = bottomPaint.measureText(bottomText)
         canvas.drawText(
             bottomText,
-            (POSTER_WIDTH - bottomTextWidth) / 2,
-            POSTER_HEIGHT - 60f,
+            (posterWidth - bottomTextWidth) / 2,
+            posterHeight - 50f,
             bottomPaint
         )
 

@@ -3,7 +3,6 @@ package com.voxly.data.repository
 import android.content.Context
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
-
 import com.voxly.data.remote.tengx.TengxRepository
 import com.voxly.data.remote.wangy.WangyRepository
 import com.voxly.domain.model.AudioMetadata
@@ -13,6 +12,7 @@ import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineLyricsResult
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.coroutineScope
@@ -21,8 +21,8 @@ import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 import timber.log.Timber
+import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -42,6 +42,8 @@ class LyricsRepositoryImpl @Inject constructor(
     private val wangyRepository: WangyRepository,
     private val tengxRepository: TengxRepository
 ) : LyricsRepository {
+
+    private val multipleSlashesRegex = Regex("//+")
 
     sealed class LyricsSourceResult {
         data class Result(
@@ -73,20 +75,11 @@ class LyricsRepositoryImpl @Inject constructor(
     override suspend fun readLyrics(filePath: String): Result<Lyrics?> =
         withContext(Dispatchers.IO) {
             try {
-                // Normalize path before checking - handle common path issues
-                val normalizedPath = filePath
-                    .replace(Regex("//+"), "/")
-                    .trimEnd('/')
-                
-                val file = File(normalizedPath)
-                if (!file.exists()) {
-                    // Try the original path as well - metadata processor will try path resolution
-                    val originalFile = File(filePath)
-                    if (!originalFile.exists()) {
-                        return@withContext Result.failure(
-                            LyricsException("File not found: $filePath. The file may have been moved or deleted.")
-                        )
-                    }
+                val normalizedPath = normalizeFilePath(filePath)
+                if (!File(normalizedPath).exists() && !File(filePath).exists()) {
+                    return@withContext Result.failure(
+                        LyricsException("File not found: $filePath. The file may have been moved or deleted.")
+                    )
                 }
 
                 // Use TagLibMetadataProcessor to read lyrics - it handles path resolution internally
@@ -122,20 +115,11 @@ class LyricsRepositoryImpl @Inject constructor(
     override suspend fun saveLyrics(filePath: String, lyrics: Lyrics): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
-                // Normalize path before checking - handle common path issues
-                val normalizedPath = filePath
-                    .replace(Regex("//+"), "/")
-                    .trimEnd('/')
-                
-                val file = File(normalizedPath)
-                if (!file.exists()) {
-                    // Try the original path - metadata processor will try path resolution
-                    val originalFile = File(filePath)
-                    if (!originalFile.exists()) {
-                        return@withContext Result.failure(
-                            LyricsException("File not accessible: $filePath. The file may have been moved or deleted.")
-                        )
-                    }
+                val normalizedPath = normalizeFilePath(filePath)
+                if (!File(normalizedPath).exists() && !File(filePath).exists()) {
+                    return@withContext Result.failure(
+                        LyricsException("File not accessible: $filePath. The file may have been moved or deleted.")
+                    )
                 }
 
                 // Save lyrics as USLT (Unsynchronized Lyrics)
@@ -150,7 +134,7 @@ class LyricsRepositoryImpl @Inject constructor(
                 val existingMetadata = metadataProcessor.readMetadata(normalizedPath, includeAlbumArt = false)
                     ?: metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
                 val updatedMetadata = existingMetadata?.copy(lyrics = lyricsText)
-                    ?: com.voxly.domain.model.AudioMetadata(
+                    ?: AudioMetadata(
                         title = null,
                         artist = null,
                         album = null,
@@ -172,20 +156,11 @@ class LyricsRepositoryImpl @Inject constructor(
     override suspend fun removeLyrics(filePath: String): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
-                // Normalize path before checking - handle common path issues
-                val normalizedPath = filePath
-                    .replace(Regex("//+"), "/")
-                    .trimEnd('/')
-                
-                val file = File(normalizedPath)
-                if (!file.exists()) {
-                    // Try the original path - metadata processor will try path resolution
-                    val originalFile = File(filePath)
-                    if (!originalFile.exists()) {
-                        return@withContext Result.failure(
-                            LyricsException("File not accessible: $filePath. The file may have been moved or deleted.")
-                        )
-                    }
+                val normalizedPath = normalizeFilePath(filePath)
+                if (!File(normalizedPath).exists() && !File(filePath).exists()) {
+                    return@withContext Result.failure(
+                        LyricsException("File not accessible: $filePath. The file may have been moved or deleted.")
+                    )
                 }
 
                 // Use metadataProcessor to remove lyrics field by setting it to empty
@@ -226,27 +201,19 @@ class LyricsRepositoryImpl @Inject constructor(
 
             when (preferredSource) {
                 LyricsSource.NETEASE -> {
-                    if (settings.enableNetease) {
-                        searchFromNetEase(normalizedTrackName, normalizedArtistName)
-                            .map { applyLimit(it, settings.searchLimit) }
-                            // 失败时返回空列表而不是错误
-                            .getOrElse { emptyList() }
-                            .let { Result.success(it) }
-                    } else {
-                        Result.success(emptyList())
-                    }
+                    if (!settings.enableNetease) return@withContext Result.success(emptyList())
+                    val results = searchFromNetEase(normalizedTrackName, normalizedArtistName)
+                        .getOrElse { emptyList() }
+                    Result.success(applyLimit(results, settings.searchLimit))
                 }
+
                 LyricsSource.QQ_MUSIC -> {
-                    if (settings.enableQQMusic) {
-                        searchFromQQMusic(normalizedTrackName, normalizedArtistName)
-                            .map { applyLimit(it, settings.searchLimit) }
-                            // 失败时返回空列表而不是错误
-                            .getOrElse { emptyList() }
-                            .let { Result.success(it) }
-                    } else {
-                        Result.success(emptyList())
-                    }
+                    if (!settings.enableQQMusic) return@withContext Result.success(emptyList())
+                    val results = searchFromQQMusic(normalizedTrackName, normalizedArtistName)
+                        .getOrElse { emptyList() }
+                    Result.success(applyLimit(results, settings.searchLimit))
                 }
+
                 LyricsSource.ALL -> searchFromAllSources(
                     trackName = normalizedTrackName,
                     artistName = normalizedArtistName,
@@ -372,37 +339,30 @@ class LyricsRepositoryImpl @Inject constructor(
             val songs = response?.result?.songs ?: emptyList()
             Timber.d("NetEase lyrics search success: found ${songs.size} songs for '$trackName'")
 
-            // 并发获取每首歌的详情（包括完整歌手和专辑信息）
             val results = songs.map { song ->
-                coroutineScope {
-                    // 并发获取歌曲详情
-                    val detailJob = async { wangyRepository.getSongDetail(song.id) }
-                    val detailResult = detailJob.await()
-                    
-                    // 从详情中获取完整的歌手和专辑信息，如果详情失败则使用搜索结果
-                    val songDetail = detailResult.getOrNull()
-                    val detailArtists = songDetail?.songs?.firstOrNull()?.ar
-                    val detailAlbum = songDetail?.songs?.firstOrNull()?.al
-                    val artistName = detailArtists?.firstOrNull()?.name
-                        ?: song.artists.firstOrNull()?.name
-                        ?: ""
-                    val albumName = detailAlbum?.name
-                        ?: song.album?.name
-                    
-                    OnlineLyricsResult(
-                        id = song.id,
-                        trackName = song.name,
-                        artistName = artistName,
-                        albumName = albumName,
-                        duration = song.duration.toDouble() / 1000.0,
-                        hasSyncedLyrics = true,
-                        hasPlainLyrics = true,
-                        isInstrumental = false,
-                        source = "NetEase",
-                        sourceKey = song.id.toString(),
-                        preview = null
-                    )
-                }
+                val detailResult = wangyRepository.getSongDetail(song.id)
+
+                // 从详情中获取完整的歌手和专辑信息，如果详情失败则使用搜索结果
+                val firstDetailSong = detailResult.getOrNull()?.songs?.firstOrNull()
+                val resolvedArtistName = firstDetailSong?.ar?.firstOrNull()?.name
+                    ?: song.artists.firstOrNull()?.name
+                    ?: ""
+                val resolvedAlbumName = firstDetailSong?.al?.name
+                    ?: song.album?.name
+
+                OnlineLyricsResult(
+                    id = song.id,
+                    trackName = song.name,
+                    artistName = resolvedArtistName,
+                    albumName = resolvedAlbumName,
+                    duration = song.duration.toDouble() / 1000.0,
+                    hasSyncedLyrics = true,
+                    hasPlainLyrics = true,
+                    isInstrumental = false,
+                    source = "NetEase",
+                    sourceKey = song.id.toString(),
+                    preview = null
+                )
             }
             Result.success(results)
         } else {
@@ -431,8 +391,8 @@ class LyricsRepositoryImpl @Inject constructor(
         return if (searchResult.isSuccess) {
             val response = searchResult.getOrNull()
             Timber.d("QQ Music search response: code=${response?.code}, data=${response?.data != null}, song=${response?.data?.song != null}")
-            
-            val songs = response?.data?.song?.list ?: emptyList()
+
+            val songs = response?.data?.song?.list.orEmpty()
             Timber.d("QQ Music lyrics search found ${songs.size} songs for '$keywords'")
             
             if (songs.isEmpty()) {
@@ -449,7 +409,7 @@ class LyricsRepositoryImpl @Inject constructor(
                 OnlineLyricsResult(
                     id = song.id,
                     trackName = song.name,
-                    artistName = song.singer.joinToString(", ") { it.name }.ifBlank { "" },
+                    artistName = song.singer.joinToString(", ") { it.name },
                     albumName = song.album?.name,
                     duration = song.interval.toDouble(),
                     hasSyncedLyrics = true,
@@ -479,15 +439,25 @@ class LyricsRepositoryImpl @Inject constructor(
         albumName: String?,
         settings: LyricsSourceSettings
     ): Result<List<OnlineLyricsResult>> = coroutineScope {
-        val neteaseDeferred = if (settings.enableNetease) {
-            async { runCatching { searchFromNetEase(trackName, artistName).getOrNull() } }
-        } else null
-        val qqMusicDeferred = if (settings.enableQQMusic) {
-            async { runCatching { searchFromQQMusic(trackName, artistName).getOrNull() } }
-        } else null
+        val neteaseDeferred: Deferred<List<OnlineLyricsResult>>? = if (settings.enableNetease) {
+            async {
+                runCatching { searchFromNetEase(trackName, artistName).getOrNull().orEmpty() }
+                    .getOrDefault(emptyList())
+            }
+        } else {
+            null
+        }
+        val qqMusicDeferred: Deferred<List<OnlineLyricsResult>>? = if (settings.enableQQMusic) {
+            async {
+                runCatching { searchFromQQMusic(trackName, artistName).getOrNull().orEmpty() }
+                    .getOrDefault(emptyList())
+            }
+        } else {
+            null
+        }
 
-        val neteaseResults = applyLimit(neteaseDeferred?.await()?.getOrNull() ?: emptyList(), settings.searchLimit)
-        val qqMusicResults = applyLimit(qqMusicDeferred?.await()?.getOrNull() ?: emptyList(), settings.searchLimit)
+        val neteaseResults = applyLimit(neteaseDeferred?.await().orEmpty(), settings.searchLimit)
+        val qqMusicResults = applyLimit(qqMusicDeferred?.await().orEmpty(), settings.searchLimit)
 
         // Merge all results
         val allResults = mutableListOf<OnlineLyricsResult>()
@@ -498,12 +468,9 @@ class LyricsRepositoryImpl @Inject constructor(
         val sortedResults = allResults.sortedWith(compareBy<OnlineLyricsResult> {
             sourcePriorityIndex(it.source, settings.priority)
         }.thenByDescending {
-            if (it.hasSyncedLyrics) 2 else 0
+            it.hasSyncedLyrics
         }.thenByDescending {
-            if (artistName != null &&
-                (it.artistName.contains(artistName, ignoreCase = true) ||
-                 artistName.contains(it.artistName, ignoreCase = true))
-            ) 1 else 0
+            isArtistMatch(it.artistName, artistName)
         })
 
         Result.success(sortedResults)
@@ -614,9 +581,8 @@ class LyricsRepositoryImpl @Inject constructor(
         }
 
     private suspend fun resolveQQSongMid(songId: Long): String? {
-        val detailResult = tengxRepository.getSongDetail(listOf(songId))
-        if (!detailResult.isSuccess) return null
-        return detailResult.getOrNull()
+        return tengxRepository.getSongDetail(listOf(songId))
+            .getOrNull()
             ?.data
             ?.track
             ?.firstOrNull()
@@ -694,5 +660,17 @@ class LyricsRepositoryImpl @Inject constructor(
         }
         val idx = priority.indexOf(key)
         return if (idx >= 0) idx else Int.MAX_VALUE
+    }
+
+    private fun normalizeFilePath(filePath: String): String {
+        return filePath
+            .replace(multipleSlashesRegex, "/")
+            .trimEnd('/')
+    }
+
+    private fun isArtistMatch(resultArtistName: String, targetArtistName: String?): Boolean {
+        if (targetArtistName.isNullOrBlank()) return false
+        return resultArtistName.contains(targetArtistName, ignoreCase = true) ||
+            targetArtistName.contains(resultArtistName, ignoreCase = true)
     }
 }

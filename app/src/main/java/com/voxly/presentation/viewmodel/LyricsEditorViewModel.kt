@@ -4,6 +4,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.domain.model.Lyrics
+import com.voxly.domain.model.SyncedLyricLine
 import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineLyricsResult
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -104,13 +105,8 @@ class LyricsEditorViewModel @Inject constructor(
             _uiState.value = LyricsEditorUiState.Saving
 
             val lyricsToSave = if (_isSynced.value) {
-                // Try to parse as LRC format
-                try {
-                    Lyrics.parseLrc(_editedLyricsText.value)
-                } catch (e: Exception) {
-                    // If parsing fails, save as unsynced
-                    Lyrics.createUnsynced(_editedLyricsText.value)
-                }
+                runCatching { Lyrics.parseLrc(_editedLyricsText.value) }
+                    .getOrElse { Lyrics.createUnsynced(_editedLyricsText.value) }
             } else {
                 Lyrics.createUnsynced(_editedLyricsText.value)
             }
@@ -220,7 +216,7 @@ class LyricsEditorViewModel @Inject constructor(
         val lrcLines = lines.mapIndexed { index, line ->
             // Simple auto-format: add sequential timestamps
             val timeMs = index * 5000L // 5 seconds per line
-            val timestamp = com.voxly.domain.model.SyncedLyricLine.formatTimestamp(timeMs)
+            val timestamp = SyncedLyricLine.formatTimestamp(timeMs)
             "$timestamp$line"
         }
         _editedLyricsText.value = lrcLines.joinToString("\n")

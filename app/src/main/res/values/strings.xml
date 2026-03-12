@@ -520,13 +520,10 @@
     <!-- Lyrics Poster -->
     <string name="share_lyrics_poster">Share Lyrics Poster</string>
     <string name="lyrics_poster_preview">Lyrics Poster Preview</string>
+    <string name="generating_poster">Generating poster…</string>
     <string name="select_color_theme">Select Color Theme</string>
-    <string name="color_dominant">Dominant</string>
-    <string name="color_vibrant">Vibrant</string>
-    <string name="color_light_vibrant">Light</string>
-    <string name="color_dark_vibrant">Dark</string>
-    <string name="color_muted">Muted</string>
-    <string name="color_light_muted">Light Muted</string>
+    <string name="color_vivid">Vivid</string>
+    <string name="color_soft">Soft</string>
     <string name="color_custom">Custom</string>
     <string name="share_poster">Share Poster</string>
     <string name="cd_poster_preview">Lyrics poster preview</string>
