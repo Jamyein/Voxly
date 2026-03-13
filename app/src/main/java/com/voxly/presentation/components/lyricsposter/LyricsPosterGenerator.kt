@@ -3,8 +3,11 @@ package com.voxly.presentation.components.lyricsposter
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.LinearGradient
 import android.graphics.Paint
 import android.graphics.Rect
+import android.graphics.RectF
+import android.graphics.Shader
 import android.graphics.Typeface
 import androidx.compose.ui.graphics.toArgb
 import com.voxly.domain.model.Lyrics
@@ -28,40 +31,57 @@ object LyricsPosterGenerator {
     private const val REFERENCE_PORTRAIT_WIDTH = 720f
     private const val REFERENCE_PORTRAIT_HEIGHT = 1280f
 
-    // Size constraints
-    private const val PADDING = 80f
-    private const val COVER_SIZE = 440
-    private const val MARGIN_BOTTOM = 100f
-    private const val INFO_SECTION_WIDTH = 900f
+    // ===== Spotify 风格布局配置 =====
+    // 封面尺寸 (像素值，基于 1080x1920 画布)
+    private object SpotifyLayout {
+        const val PORTRAIT_COVER_SIZE = 480f   // 160dp * 3
+        const val LANDSCAPE_COVER_SIZE = 540f  // 180dp * 3
+        const val COVER_CORNER_RADIUS = 48f    // 16dp * 3
 
-    // Typography scale constants
+        // 位置参数 (基于 1080x1920 画布)
+        const val PORTRAIT_TITLE_TOP = 120f    // 40dp * 3
+        const val PORTRAIT_TITLE_ARTIST_GAP = 12f // 4dp * 3
+        const val PORTRAIT_COVER_BOTTOM = 180f  // 60dp * 3
+        const val PORTRAIT_LYRICS_TOP_RATIO = 0.20f // 歌词起始位置 (画布高度百分比)
+
+        const val LANDSCAPE_COVER_LEFT = 72f   // 24dp * 3
+        const val LANDSCAPE_LYRICS_LEFT = 720f // 240dp * 3
+        const val LANDSCAPE_TITLE_TOP = 120f
+        const val LANDSCAPE_TITLE_ARTIST_GAP = 12f
+
+        const val WATERMARK_BOTTOM = 180f     // 60dp * 3
+    }
+
+    // Typography scale constants (Spotify 风格 - 更大的歌词字体)
     private object Typography {
-        const val PORTRAIT_TITLE_SIZE = 104f
-        const val PORTRAIT_ARTIST_SIZE = 68f
-        const val PORTRAIT_ALBUM_SIZE = 52f
-        const val PORTRAIT_BASE_FONT_SIZE = 84f
-        const val PORTRAIT_LINE_HEIGHT = 128f
+        // 竖屏
+        const val PORTRAIT_TITLE_SIZE = 48f    // 16sp * 3
+        const val PORTRAIT_ARTIST_SIZE = 36f   // 12sp * 3
+        const val PORTRAIT_BASE_FONT_SIZE = 96f // 32sp * 3
+        const val PORTRAIT_LINE_HEIGHT = 140f  // 行高
 
-        const val LANDSCAPE_TITLE_SIZE = 72f
-        const val LANDSCAPE_ARTIST_SIZE = 48f
-        const val LANDSCAPE_ALBUM_SIZE = 36f
-        const val LANDSCAPE_BASE_FONT_SIZE = 64f
+        // 横屏
+        const val LANDSCAPE_TITLE_SIZE = 48f
+        const val LANDSCAPE_ARTIST_SIZE = 36f
+        const val LANDSCAPE_BASE_FONT_SIZE = 66f // 22sp * 3
         const val LANDSCAPE_LINE_HEIGHT = 96f
 
-        const val WATERMARK_SIZE = 56f
+        const val WATERMARK_SIZE = 36f
         const val HIGHLIGHT_SCALE = 1.0f
     }
 
-    // Layout spacing constants
+    // Layout spacing constants (简化版，用于兼容性)
     private object Spacing {
+        const val PADDING = 80f
+        const val COVER_SIZE = 440
+        const val MARGIN_BOTTOM = 100f
+        const val INFO_SECTION_WIDTH = 900f
+
         const val COVER_INFO_GAP = 64f
         const val TITLE_TOP_OFFSET = 100f
         const val TITLE_ARTIST_GAP = 112f
         const val ARTIST_ALBUM_GAP = 84f
         const val ALBUM_LYRICS_GAP = 40f
-        const val COVER_AREA_EXTRA = 80f
-        const val DIVIDER_AREA = 80f
-        const val BOTTOM_EXTRA = 60f
 
         const val LANDSCAPE_COVER_SIZE = 280
         const val LANDSCAPE_CONTENT_GAP = 64f
@@ -116,10 +136,10 @@ object LyricsPosterGenerator {
         selectedLyricIndices: List<Int> = emptyList(),
         fontSizeScale: Float = 1.0f,
         orientation: PosterOrientation = PosterOrientation.PORTRAIT,
-        highlightedLineIndex: Int = 0,  // P4: Default to highlight first line
-        lyricsAlignment: TextAlignment = TextAlignment.LEFT  // P5: Default to left alignment
+        highlightedLineIndex: Int = 0,
+        lyricsAlignment: TextAlignment = TextAlignment.LEFT
     ): Bitmap {
-        // Parse lyrics first to calculate dynamic height
+        // 1. 解析歌词
         val allLyrics = parseToLines(lyricsText)
         val lyricsLines = when {
             selectedLyrics.isNotEmpty() -> selectedLyrics.take(12)
@@ -127,246 +147,308 @@ object LyricsPosterGenerator {
             else -> allLyrics.take(12)
         }
 
-        // Calculate dimensions based on orientation
-        val baseFontSize = when (orientation) {
-            PosterOrientation.PORTRAIT -> Typography.PORTRAIT_BASE_FONT_SIZE * fontSizeScale
-            PosterOrientation.LANDSCAPE -> Typography.LANDSCAPE_BASE_FONT_SIZE * fontSizeScale
-        }
-
-        val lineHeight = when (orientation) {
-            PosterOrientation.PORTRAIT -> Typography.PORTRAIT_LINE_HEIGHT * fontSizeScale
-            PosterOrientation.LANDSCAPE -> Typography.LANDSCAPE_LINE_HEIGHT * fontSizeScale
-        }
-
-        // P0: Create paint objects early for dynamic height calculation
-        val titleSize = when (orientation) {
-            PosterOrientation.PORTRAIT -> Typography.PORTRAIT_TITLE_SIZE
-            PosterOrientation.LANDSCAPE -> Typography.LANDSCAPE_TITLE_SIZE
-        }
-        val artistSize = when (orientation) {
-            PosterOrientation.PORTRAIT -> Typography.PORTRAIT_ARTIST_SIZE
-            PosterOrientation.LANDSCAPE -> Typography.LANDSCAPE_ARTIST_SIZE
-        }
-        val albumSize = when (orientation) {
-            PosterOrientation.PORTRAIT -> Typography.PORTRAIT_ALBUM_SIZE
-            PosterOrientation.LANDSCAPE -> Typography.LANDSCAPE_ALBUM_SIZE
-        }
-
-        // Use fixed output size based on orientation
+        // 2. 计算画布尺寸
         val (posterWidth, posterHeight) = when (orientation) {
             PosterOrientation.PORTRAIT -> OutputDimensions.PORTRAIT_WIDTH to OutputDimensions.PORTRAIT_HEIGHT
             PosterOrientation.LANDSCAPE -> OutputDimensions.LANDSCAPE_WIDTH to OutputDimensions.LANDSCAPE_HEIGHT
         }
 
-        // Calculate content scale factor based on fixed output size vs reference design
-        val contentScaleFactor = when (orientation) {
-            PosterOrientation.PORTRAIT -> posterWidth / REFERENCE_PORTRAIT_WIDTH
-            PosterOrientation.LANDSCAPE -> {
-                // For landscape, use the smaller scale to fit content
-                minOf(
-                    posterWidth / REFERENCE_PORTRAIT_WIDTH,
-                    posterHeight / REFERENCE_PORTRAIT_HEIGHT
-                )
-            }
-        }
-
-        // Apply content scale factor to all size parameters
-        val scaledBaseFontSize = baseFontSize * contentScaleFactor
-        val scaledLineHeight = lineHeight * contentScaleFactor
-
+        // 3. 创建画布
         val bitmap = Bitmap.createBitmap(posterWidth, posterHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        // Draw background
-        val bgPaint = Paint().apply {
-            color = backgroundColor.toArgb()
-            style = Paint.Style.FILL
-        }
-        canvas.drawRect(0f, 0f, posterWidth.toFloat(), posterHeight.toFloat(), bgPaint)
-
-        // Calculate text color: use provided contentColor or auto-calculate for contrast
-        val providedContentColor = contentColor?.toArgb()
-        val isDarkBackground = ColorExtractor.isDarkColor(backgroundColor)
-        val defaultTextColor = providedContentColor
-            ?: if (isDarkBackground) Color.WHITE else Color.BLACK
-        val secondaryTextColor = providedContentColor?.let { Color.argb(180, Color.red(it), Color.green(it), Color.blue(it)) }
-            ?: if (isDarkBackground) Color.argb(180, 255, 255, 255) else Color.argb(180, 0, 0, 0)
-
-        // P6: Add shadow color for text visibility
-        val shadowColor = Color.argb(30, 0, 0, 0)
-
-        // Define paint objects based on orientation
-        val scaledTitleSize = titleSize * contentScaleFactor
-        val scaledArtistSize = artistSize * contentScaleFactor
-        val scaledAlbumSize = albumSize * contentScaleFactor
-
-        val highlightSize = when (orientation) {
-            PosterOrientation.PORTRAIT -> Typography.PORTRAIT_TITLE_SIZE * fontSizeScale * contentScaleFactor
-            PosterOrientation.LANDSCAPE -> Typography.LANDSCAPE_TITLE_SIZE * fontSizeScale * contentScaleFactor
-        }
-
-        // P1: Create paint objects with subpixel anti-aliasing
-        val titlePaintRender = Paint().apply {
-            color = defaultTextColor
-            textSize = scaledTitleSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            isAntiAlias = true
-            isSubpixelText = true  // P1: Subpixel anti-aliasing for clearer text
-            setShadowLayer(2f, 0f, 1f, shadowColor)  // P6: Subtle shadow for depth
-        }
-
-        val artistPaintRender = Paint().apply {
-            color = secondaryTextColor
-            textSize = scaledArtistSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            isAntiAlias = true
-            isSubpixelText = true  // P1: Subpixel anti-aliasing
-            setShadowLayer(2f, 0f, 1f, shadowColor)  // P6: Subtle shadow
-        }
-
-        val albumPaintRender = Paint().apply {
-            color = secondaryTextColor
-            textSize = scaledAlbumSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            isAntiAlias = true
-            isSubpixelText = true  // P1: Subpixel anti-aliasing
-            setShadowLayer(2f, 0f, 1f, shadowColor)  // P6: Subtle shadow
-        }
-
-        val lyricsPaintRender = Paint().apply {
-            color = defaultTextColor
-            textSize = scaledBaseFontSize
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            isAntiAlias = true
-            isSubpixelText = true  // P1: Subpixel anti-aliasing
-            letterSpacing = 0.05f
-            setShadowLayer(2f, 0f, 1f, shadowColor)  // P6: Subtle shadow for lyrics
-        }
-
-        if (orientation == PosterOrientation.PORTRAIT) {
-            // ===== PORTRAIT LAYOUT (竖向) =====
-
-            // Draw album art at top
-            if (albumArtBitmap != null) {
-                // P2: FilterBitmap = true uses bilinear sampling for high-quality scaling
-                val scaledCover = Bitmap.createScaledBitmap(albumArtBitmap, COVER_SIZE, COVER_SIZE, true)
-                val coverPaint = Paint().apply {
-                    isAntiAlias = true
-                }
-                canvas.drawBitmap(scaledCover, PADDING, PADDING, coverPaint)
-            }
-
-            // Draw song info to the right of cover
-            val infoX = if (albumArtBitmap != null) PADDING + COVER_SIZE + Spacing.COVER_INFO_GAP else PADDING
-            val titleY = PADDING + Spacing.TITLE_TOP_OFFSET
-
-            canvas.drawText(breakText(title.take(40), titlePaintRender, INFO_SECTION_WIDTH), infoX, titleY, titlePaintRender)
-
-            var artistY = titleY + Spacing.TITLE_ARTIST_GAP
-            canvas.drawText(breakText(artist.take(50), artistPaintRender, INFO_SECTION_WIDTH), infoX, artistY, artistPaintRender)
-
-            var albumY = artistY + Spacing.ARTIST_ALBUM_GAP
-            if (album.isNotBlank()) {
-                canvas.drawText(breakText(album.take(60), albumPaintRender, INFO_SECTION_WIDTH), infoX, albumY, albumPaintRender)
-                albumY += Spacing.ARTIST_ALBUM_GAP - 16f
-            } else {
-                albumY = artistY
-            }
-
-            // Draw lyrics below
-            val coverRowBottom = maxOf(if (albumArtBitmap != null) PADDING + COVER_SIZE else 0f, albumY + Spacing.ALBUM_LYRICS_GAP)
-            val lyricsStartY = coverRowBottom + Spacing.ALBUM_LYRICS_GAP
-
-            lyricsLines.forEachIndexed { index, line ->
-                val wrappedLines = breakTextToLines(line, lyricsPaintRender, posterWidth.toFloat() - PADDING * 2)
-                wrappedLines.forEachIndexed { wrapIndex, wrappedLine ->
-                    val lineY = lyricsStartY + ((index + wrapIndex) * scaledLineHeight)
-                    if (lineY < posterHeight - MARGIN_BOTTOM) {
-                        // P4: Check if this line should be highlighted
-                        val isHighlighted = index == highlightedLineIndex
-                        lyricsPaintRender.textSize = if (isHighlighted) highlightSize else scaledBaseFontSize
-                        // P5: Apply text alignment
-                        val textX = when (lyricsAlignment) {
-                            TextAlignment.LEFT -> PADDING
-                            TextAlignment.CENTER -> (posterWidth - lyricsPaintRender.measureText(wrappedLine)) / 2
-                            TextAlignment.RIGHT -> posterWidth - PADDING - lyricsPaintRender.measureText(wrappedLine)
-                        }
-                        canvas.drawText(wrappedLine, textX, lineY, lyricsPaintRender)
-                    }
-                }
-            }
+        // 4. 绘制背景 (有封面时使用氛围背景，无封面时使用纯色)
+        if (albumArtBitmap != null) {
+            drawSpotifyBackground(canvas, albumArtBitmap, posterWidth, posterHeight, orientation)
         } else {
-            // ===== LANDSCAPE LAYOUT (横向) =====
-
-            val coverSizeLandscape = Spacing.LANDSCAPE_COVER_SIZE
-            val contentStartX = PADDING + coverSizeLandscape + Spacing.LANDSCAPE_CONTENT_GAP
-            val contentWidth = posterWidth.toFloat() - contentStartX - PADDING
-
-            // Draw album art on the left
-            if (albumArtBitmap != null) {
-                // P2: FilterBitmap = true uses bilinear sampling for high-quality scaling
-                val scaledCover = Bitmap.createScaledBitmap(albumArtBitmap, coverSizeLandscape, coverSizeLandscape, true)
-                val coverPaint = Paint().apply {
-                    isAntiAlias = true
-                }
-                canvas.drawBitmap(scaledCover, PADDING, (posterHeight - coverSizeLandscape).toFloat() / 2, coverPaint)
+            // 无封面时使用纯色背景
+            val bgPaint = Paint().apply {
+                color = backgroundColor.toArgb()
+                style = Paint.Style.FILL
             }
+            canvas.drawRect(0f, 0f, posterWidth.toFloat(), posterHeight.toFloat(), bgPaint)
+        }
 
-            // Draw title/artist at top right
-            val titleY = PADDING + Spacing.LANDSCAPE_TITLE_TOP
-            canvas.drawText(breakText(title.take(50), titlePaintRender, contentWidth), contentStartX, titleY, titlePaintRender)
+        // 5. 文字颜色 (Spotify 风格：白色为主)
+        val defaultTextColor = Color.WHITE
+        val secondaryTextColor = Color.argb(153, 255, 255, 255) // 60% 白色
 
-            var artistY = titleY + titleSize + Spacing.LANDSCAPE_TITLE_ARTIST_GAP
-            canvas.drawText(breakText(artist.take(60), artistPaintRender, contentWidth), contentStartX, artistY, artistPaintRender)
+        // 6. 绘制标题和艺术家 (竖屏顶部居中，横屏左侧)
+        when (orientation) {
+            PosterOrientation.PORTRAIT -> drawPortraitTitleArtist(canvas, title, artist, posterWidth)
+            PosterOrientation.LANDSCAPE -> drawLandscapeTitleArtist(canvas, title, artist)
+        }
 
-            val lyricsStartY: Float
-            if (album.isNotBlank()) {
-                artistY += artistSize + Spacing.LANDSCAPE_ARTIST_ALBUM_GAP
-                canvas.drawText(breakText(album.take(70), albumPaintRender, contentWidth), contentStartX, artistY, albumPaintRender)
-                lyricsStartY = artistY + Spacing.LANDSCAPE_ALBUM_LYRICS_GAP
-            } else {
-                lyricsStartY = artistY + Spacing.LANDSCAPE_ALBUM_LYRICS_GAP
+        // 7. 绘制歌词
+        val coverSize = when (orientation) {
+            PosterOrientation.PORTRAIT -> SpotifyLayout.PORTRAIT_COVER_SIZE
+            PosterOrientation.LANDSCAPE -> SpotifyLayout.LANDSCAPE_COVER_SIZE
+        }
+        when (orientation) {
+            PosterOrientation.PORTRAIT -> drawPortraitLyrics(canvas, lyricsLines, posterWidth, posterHeight, coverSize, fontSizeScale)
+            PosterOrientation.LANDSCAPE -> drawLandscapeLyrics(canvas, lyricsLines, posterWidth, posterHeight, fontSizeScale)
+        }
+
+        // 8. 绘制封面
+        if (albumArtBitmap != null) {
+            drawSpotifyCover(canvas, albumArtBitmap, posterWidth, posterHeight, orientation, coverSize)
+        }
+
+        // 9. 绘制水印
+        drawWatermark(canvas, posterWidth, posterHeight, secondaryTextColor)
+
+        return bitmap
+    }
+
+    // ===== Spotify 风格绘制函数 =====
+
+    /**
+     * 绘制 Spotify 风格氛围背景
+     * - 使用封面图片模糊作为背景
+     * - 添加渐变遮罩
+     */
+    private fun drawSpotifyBackground(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        posterWidth: Int,
+        posterHeight: Int,
+        orientation: PosterOrientation
+    ) {
+        // 1. 绘制模糊背景 (使用原始封面缩小后放大)
+        val scaledBg = createBlurredBackground(bitmap, posterWidth, posterHeight)
+        canvas.drawBitmap(scaledBg, 0f, 0f, null)
+
+        // 2. 绘制渐变遮罩
+        drawGradientOverlay(canvas, posterWidth, posterHeight, orientation)
+    }
+
+    /**
+     * 创建模糊背景图片 (性能优化：缩小-放大策略)
+     */
+    private fun createBlurredBackground(
+        source: Bitmap,
+        targetWidth: Int,
+        targetHeight: Int
+    ): Bitmap {
+        // 缩小到 1/10 以提高模糊性能
+        val smallWidth = targetWidth / 10
+        val smallHeight = targetHeight / 10
+        val small = Bitmap.createScaledBitmap(source, smallWidth, smallHeight, true)
+
+        // 放大回目标尺寸 (双线性插值自动应用)
+        return Bitmap.createScaledBitmap(small, targetWidth, targetHeight, true)
+    }
+
+    /**
+     * 绘制渐变遮罩
+     */
+    private fun drawGradientOverlay(
+        canvas: Canvas,
+        width: Int,
+        height: Int,
+        orientation: PosterOrientation
+    ) {
+        val paint = Paint()
+        val shader = when (orientation) {
+            PosterOrientation.PORTRAIT -> LinearGradient(
+                0f, 0f, 0f, height.toFloat(),
+                intArrayOf(
+                    Color.argb(102, 0, 0, 0),    // 40% 黑色
+                    Color.argb(25, 0, 0, 0),     // 10% 黑色
+                    Color.argb(25, 0, 0, 0),     // 10% 黑色
+                    Color.argb(128, 0, 0, 0),    // 50% 黑色
+                    Color.argb(204, 0, 0, 0)     // 80% 黑色
+                ),
+                floatArrayOf(0f, 0.3f, 0.5f, 0.85f, 1f),
+                Shader.TileMode.CLAMP
+            )
+            PosterOrientation.LANDSCAPE -> LinearGradient(
+                0f, 0f, width.toFloat(), 0f,
+                intArrayOf(
+                    Color.argb(153, 0, 0, 0),    // 60% 黑色
+                    Color.argb(51, 0, 0, 0),     // 20% 黑色
+                    Color.argb(25, 0, 0, 0)      // 10% 黑色
+                ),
+                floatArrayOf(0f, 0.3f, 1f),
+                Shader.TileMode.CLAMP
+            )
+        }
+        paint.shader = shader
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+    }
+
+    /**
+     * 绘制 Spotify 风格封面
+     */
+    private fun drawSpotifyCover(
+        canvas: Canvas,
+        bitmap: Bitmap,
+        posterWidth: Int,
+        posterHeight: Int,
+        orientation: PosterOrientation,
+        coverSize: Float
+    ) {
+        // 计算封面位置
+        val (x, y) = when (orientation) {
+            PosterOrientation.PORTRAIT -> {
+                val left = (posterWidth - coverSize) / 2
+                val top = posterHeight - coverSize - SpotifyLayout.PORTRAIT_COVER_BOTTOM
+                left to top
             }
-
-            // Draw lyrics below title/artist
-            lyricsLines.forEachIndexed { index, line ->
-                val wrappedLines = breakTextToLines(line, lyricsPaintRender, contentWidth)
-                wrappedLines.forEachIndexed { wrapIndex, wrappedLine ->
-                    val lineY = lyricsStartY + ((index + wrapIndex) * scaledLineHeight)
-                    if (lineY < posterHeight - MARGIN_BOTTOM) {
-                        // P4: Check if this line should be highlighted
-                        val isHighlighted = index == highlightedLineIndex
-                        lyricsPaintRender.textSize = if (isHighlighted) highlightSize else scaledBaseFontSize
-                        // P5: Apply text alignment
-                        val textX = when (lyricsAlignment) {
-                            TextAlignment.LEFT -> contentStartX
-                            TextAlignment.CENTER -> contentStartX + (contentWidth - lyricsPaintRender.measureText(wrappedLine)) / 2
-                            TextAlignment.RIGHT -> contentStartX + contentWidth - lyricsPaintRender.measureText(wrappedLine)
-                        }
-                        canvas.drawText(wrappedLine, textX, lineY, lyricsPaintRender)
-                    }
-                }
+            PosterOrientation.LANDSCAPE -> {
+                val left = SpotifyLayout.LANDSCAPE_COVER_LEFT
+                val top = (posterHeight - coverSize) / 2
+                left to top
             }
         }
 
-        // Draw bottom info (Voxly watermark)
-        val bottomPaint = Paint().apply {
-            color = secondaryTextColor
+        // 绘制封面阴影
+        val shadowPaint = Paint().apply {
+            color = Color.TRANSPARENT
+            setShadowLayer(60f, 0f, 20f, Color.argb(204, 0, 0, 0))
+        }
+        val destRect = RectF(x, y, x + coverSize, y + coverSize)
+        canvas.drawRoundRect(destRect, SpotifyLayout.COVER_CORNER_RADIUS, SpotifyLayout.COVER_CORNER_RADIUS, shadowPaint)
+
+        // 绘制封面
+        val scaledCover = Bitmap.createScaledBitmap(bitmap, coverSize.toInt(), coverSize.toInt(), true)
+        canvas.drawBitmap(scaledCover, x, y, Paint().apply { isAntiAlias = true })
+    }
+
+    /**
+     * 绘制竖屏标题和艺术家
+     */
+    private fun drawPortraitTitleArtist(canvas: Canvas, title: String, artist: String, posterWidth: Int) {
+        val titlePaint = Paint().apply {
+            color = Color.WHITE
+            textSize = Typography.PORTRAIT_TITLE_SIZE
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+        }
+        val artistPaint = Paint().apply {
+            color = Color.argb(153, 255, 255, 255)
+            textSize = Typography.PORTRAIT_ARTIST_SIZE
+            isAntiAlias = true
+        }
+
+        val centerX = posterWidth / 2f
+        val titleY = SpotifyLayout.PORTRAIT_TITLE_TOP
+
+        // 标题居中
+        val titleWidth = titlePaint.measureText(title)
+        canvas.drawText(title, centerX - titleWidth / 2, titleY, titlePaint)
+
+        // 艺术家居中
+        val artistY = titleY + SpotifyLayout.PORTRAIT_TITLE_ARTIST_GAP
+        val artistWidth = artistPaint.measureText(artist)
+        canvas.drawText(artist, centerX - artistWidth / 2, artistY, artistPaint)
+    }
+
+    /**
+     * 绘制横屏标题和艺术家
+     */
+    private fun drawLandscapeTitleArtist(canvas: Canvas, title: String, artist: String) {
+        val titlePaint = Paint().apply {
+            color = Color.WHITE
+            textSize = Typography.LANDSCAPE_TITLE_SIZE
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+        }
+        val artistPaint = Paint().apply {
+            color = Color.argb(153, 255, 255, 255)
+            textSize = Typography.LANDSCAPE_ARTIST_SIZE
+            isAntiAlias = true
+        }
+
+        val titleY = SpotifyLayout.LANDSCAPE_TITLE_TOP
+        canvas.drawText(title, SpotifyLayout.LANDSCAPE_COVER_LEFT + SpotifyLayout.LANDSCAPE_COVER_SIZE + 192, titleY, titlePaint)
+
+        val artistY = titleY + Typography.LANDSCAPE_TITLE_SIZE + SpotifyLayout.LANDSCAPE_TITLE_ARTIST_GAP
+        canvas.drawText(artist, SpotifyLayout.LANDSCAPE_COVER_LEFT + SpotifyLayout.LANDSCAPE_COVER_SIZE + 192, artistY, artistPaint)
+    }
+
+    /**
+     * 绘制竖屏歌词
+     */
+    private fun drawPortraitLyrics(
+        canvas: Canvas,
+        lyricsLines: List<String>,
+        posterWidth: Int,
+        posterHeight: Int,
+        coverSize: Float,
+        fontSizeScale: Float
+    ) {
+        val lyricsPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = Typography.PORTRAIT_BASE_FONT_SIZE * fontSizeScale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+            letterSpacing = 0.02f
+        }
+
+        // 歌词区域起始 Y (画布高度的 20% 处开始)
+        val lyricsStartY = posterHeight * SpotifyLayout.PORTRAIT_LYRICS_TOP_RATIO
+        val lineHeight = Typography.PORTRAIT_LINE_HEIGHT * fontSizeScale
+        val centerX = posterWidth / 2f
+
+        lyricsLines.forEachIndexed { index, line ->
+            val lineY = lyricsStartY + (index * lineHeight)
+            // 避免与封面重叠
+            if (lineY < posterHeight - coverSize - 200) {
+                val textWidth = lyricsPaint.measureText(line)
+                canvas.drawText(line, centerX - textWidth / 2, lineY, lyricsPaint)
+            }
+        }
+    }
+
+    /**
+     * 绘制横屏歌词
+     */
+    private fun drawLandscapeLyrics(
+        canvas: Canvas,
+        lyricsLines: List<String>,
+        posterWidth: Int,
+        posterHeight: Int,
+        fontSizeScale: Float
+    ) {
+        val lyricsPaint = Paint().apply {
+            color = Color.WHITE
+            textSize = Typography.LANDSCAPE_BASE_FONT_SIZE * fontSizeScale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+            letterSpacing = 0.02f
+        }
+
+        val lyricsStartX = SpotifyLayout.LANDSCAPE_LYRICS_LEFT
+        val centerY = posterHeight / 2f
+        val lineHeight = Typography.LANDSCAPE_LINE_HEIGHT * fontSizeScale
+
+        lyricsLines.forEachIndexed { index, line ->
+            val lineY = centerY + (index * lineHeight) - ((lyricsLines.size - 1) * lineHeight) / 2
+            if (lineY > 0 && lineY < posterHeight - 100) {
+                canvas.drawText(line, lyricsStartX, lineY, lyricsPaint)
+            }
+        }
+    }
+
+    /**
+     * 绘制水印
+     */
+    private fun drawWatermark(canvas: Canvas, posterWidth: Int, posterHeight: Int, color: Int) {
+        val paint = Paint().apply {
+            this.color = color
             textSize = Typography.WATERMARK_SIZE
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
-            isSubpixelText = true  // P1: Subpixel anti-aliasing for watermark
         }
-        val bottomText = "Voxly"
-        val bottomTextWidth = bottomPaint.measureText(bottomText)
+        val text = "Voxly"
+        val textWidth = paint.measureText(text)
         canvas.drawText(
-            bottomText,
-            (posterWidth - bottomTextWidth) / 2,
-            posterHeight - Spacing.WATERMARK_BOTTOM_OFFSET,
-            bottomPaint
+            text,
+            (posterWidth - textWidth) / 2,
+            posterHeight - SpotifyLayout.WATERMARK_BOTTOM,
+            paint
         )
-
-        return bitmap
     }
 
     /**
