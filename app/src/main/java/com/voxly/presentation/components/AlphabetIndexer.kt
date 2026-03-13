@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -73,7 +74,7 @@ fun AlphabetIndexer(
 
     BoxWithConstraints(
         modifier = modifier,
-        contentAlignment = Alignment.Center
+        contentAlignment = Alignment.CenterEnd
     ) {
         val density = LocalDensity.current
         val containerHeightPx = with(density) { maxHeight.toPx() }
@@ -142,9 +143,9 @@ fun AlphabetIndexer(
                 }
         ) {
             Column(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier.fillMaxHeight(),
                 verticalArrangement = Arrangement.SpaceEvenly,
-                horizontalAlignment = Alignment.CenterHorizontally
+                horizontalAlignment = Alignment.End
             ) {
                 displayLetters.forEachIndexed { index, letter ->
                     val isAvailable = letter in availableLetters
