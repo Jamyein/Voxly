@@ -93,6 +93,7 @@
     <string name="dialog_discard">丢弃</string>
     <string name="dialog_cancel">取消</string>
     <string name="dialog_ok">确定</string>
+    <string name="dialog_confirm">确认</string>
 
     <!-- Content Descriptions -->
     <string name="cd_album_art">专辑封面</string>
@@ -455,5 +456,11 @@
     <string name="settings_proxy_host_placeholder">输入代理主机地址</string>
     <string name="settings_proxy_port">代理端口</string>
     <string name="settings_proxy_port_placeholder">输入代理端口</string>
+
+    <!-- Artist Separator -->
+    <string name="artist_separator">艺术家分隔符</string>
+    <string name="artist_separator_summary">分割多艺术家字段以便正确分类</string>
+    <string name="artist_separators">分隔符</string>
+    <string name="artist_separators_summary">用于分割艺术家名称的字符，默认 &amp; \\</string>
 
 </resources>

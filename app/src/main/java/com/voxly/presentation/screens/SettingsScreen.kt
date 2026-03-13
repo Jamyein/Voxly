@@ -1085,6 +1085,7 @@ fun SettingsScreen(
     var showLyricsSourceDialog by remember { mutableStateOf(false) }
     var showCoverSourceDialog by remember { mutableStateOf(false) }
     var showSearchLimitsDialog by remember { mutableStateOf(false) }
+    var showSeparatorDialog by remember { mutableStateOf(false) }
 
     val searchLimitOptions = remember {
         listOf(
@@ -1237,6 +1238,72 @@ fun SettingsScreen(
                         onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) }
                     )
                 }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Artist Separator Section
+            var separatorText by remember { mutableStateOf(viewModel.artistSeparators.value) }
+
+            LaunchedEffect(viewModel.artistSeparators.value) {
+                separatorText = viewModel.artistSeparators.value
+            }
+
+            SettingsSection(title = stringResource(R.string.artist_separator)) {
+                // First item
+                SettingsItemCard(position = CardPosition.FIRST) {
+                    SettingsSwitch(
+                        title = stringResource(R.string.artist_separator),
+                        subtitle = stringResource(R.string.artist_separator_summary),
+                        checked = viewModel.artistSeparatorEnabled.value,
+                        onCheckedChange = { viewModel.setArtistSeparatorEnabled(it) }
+                    )
+                }
+
+                // Last item - only show if enabled
+                if (viewModel.artistSeparatorEnabled.value) {
+                    SettingsItemCard(position = CardPosition.LAST) {
+                        ListItem(
+                            headlineContent = { Text(stringResource(R.string.artist_separators)) },
+                            supportingContent = { Text(separatorText.ifBlank { "& \\" }) },
+                            modifier = Modifier.clickable {
+                                separatorText = viewModel.artistSeparators.value
+                                showSeparatorDialog = true
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Separator dialog
+            if (showSeparatorDialog) {
+                AlertDialog(
+                    onDismissRequest = { showSeparatorDialog = false },
+                    shape = MaterialTheme.shapes.large,
+                    title = { Text(stringResource(R.string.artist_separators)) },
+                    text = {
+                        OutlinedTextField(
+                            value = separatorText,
+                            onValueChange = { separatorText = it },
+                            label = { Text(stringResource(R.string.artist_separators)) },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            viewModel.setArtistSeparators(separatorText)
+                            showSeparatorDialog = false
+                        }) {
+                            Text(stringResource(R.string.dialog_confirm))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showSeparatorDialog = false }) {
+                            Text(stringResource(R.string.dialog_cancel))
+                        }
+                    }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))

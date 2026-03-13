@@ -581,6 +581,26 @@ class SettingsViewModel @Inject constructor(
         )
 
     /**
+     * Artist separator enabled state
+     */
+    val artistSeparatorEnabled: StateFlow<Boolean> = settingsDataStore.artistSeparatorEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = true
+        )
+
+    /**
+     * Artist separators state
+     */
+    val artistSeparators: StateFlow<String> = settingsDataStore.artistSeparators
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = "&\\"
+        )
+
+    /**
      * Set proxy enabled preference
      */
     fun setProxyEnabled(enabled: Boolean) {
@@ -613,6 +633,24 @@ class SettingsViewModel @Inject constructor(
     fun setProxyPort(port: Int) {
         viewModelScope.launch {
             settingsDataStore.setProxyPort(port)
+        }
+    }
+
+    /**
+     * Set artist separator enabled preference
+     */
+    fun setArtistSeparatorEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setArtistSeparatorEnabled(enabled)
+        }
+    }
+
+    /**
+     * Set artist separators preference
+     */
+    fun setArtistSeparators(separators: String) {
+        viewModelScope.launch {
+            settingsDataStore.setArtistSeparators(separators)
         }
     }
 }

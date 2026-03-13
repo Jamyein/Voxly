@@ -592,5 +592,10 @@
     <string name="settings_proxy_port">Proxy Port</string>
     <string name="settings_proxy_port_placeholder">Enter proxy port</string>
 
+    <!-- Artist Separator -->
+    <string name="artist_separator">Artist Separator</string>
+    <string name="artist_separator_summary">Split multi-artist fields for proper categorization</string>
+    <string name="artist_separators">Separators</string>
+    <string name="artist_separators_summary">Characters used to split artist names, default &amp; \\</string>
 
 </resources>
