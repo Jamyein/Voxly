@@ -847,7 +847,9 @@ fun DirectoryEmptyContent(modifier: Modifier = Modifier) {
 }
 
 // Chinese collator for proper sorting
-private val chineseCollator = Collator.getInstance(Locale.CHINESE)
+private val chineseCollator = Collator.getInstance(Locale.CHINA).apply {
+    strength = Collator.PRIMARY
+}
 
 // Sort options for directory content
 private enum class DirFileSortOption {
