@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 
 /**
@@ -138,6 +139,18 @@ object ExpressiveAnimations {
         stiffness = 700f
     )
 
+    // ===== Spring 动画 - 滑动动画 (IntOffset 类型) =====
+    // slideInVertically/slideOutVertically 需要 IntOffset 类型的 AnimationSpec
+    private val EmphasizedEnterSpringSlide = spring<IntOffset>(
+        dampingRatio = 0.72f,
+        stiffness = 600f
+    )
+
+    private val EmphasizedExitSpringSlide = spring<IntOffset>(
+        dampingRatio = 0.72f,
+        stiffness = 700f
+    )
+
     // ===== Spring 动画 - 底部导航 =====
     val BottomNavEnter = fadeIn(
         animationSpec = EmphasizedEnterSpring
@@ -154,14 +167,10 @@ object ExpressiveAnimations {
     )
 
     // ===== Spring 动画 - 层级页面 =====
-    // 注意: slideInVertically/slideOutVertically 需要 IntOffset 类型的 AnimationSpec
-    // 因此使用 tween 配合 M3E Emphasized Easing，fadeIn/scaleIn 使用 Spring
+    // slideInVertically/slideOutVertically 使用 IntOffset 类型的 Spring
     val PageEnterM3E = slideInVertically(
         initialOffsetY = { it / 10 },
-        animationSpec = tween(
-            durationMillis = SpringEmphasizedEnterDuration,
-            easing = ExpressiveMotionTokens.M3E_Emphasized_Easing
-        )
+        animationSpec = EmphasizedEnterSpringSlide
     ) + fadeIn(
         animationSpec = EmphasizedEnterSpring
     ) + scaleIn(
@@ -185,10 +194,7 @@ object ExpressiveAnimations {
 
     val PagePopExitM3E = slideOutVertically(
         targetOffsetY = { it / 10 },
-        animationSpec = tween(
-            durationMillis = SpringEmphasizedExitDuration,
-            easing = ExpressiveMotionTokens.M3E_Emphasized_Accelerate
-        )
+        animationSpec = EmphasizedExitSpringSlide
     ) + fadeOut(
         animationSpec = EmphasizedExitSpring
     ) + scaleOut(

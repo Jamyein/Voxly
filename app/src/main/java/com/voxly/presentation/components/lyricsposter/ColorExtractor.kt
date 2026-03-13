@@ -72,17 +72,17 @@ object ColorExtractor {
                         ?: Color.White.toArgb()
                 ).copy(alpha = 1f).toArgb(),
 
-                // Muted colors (柔和) - 调换顺序，优先使用 lightMutedSwatch 以获得更柔和的效果
+                // Muted colors (柔和) - 优先使用 lightMutedSwatch 以获得更柔和、更亮的效果
                 backgroundMuted = Color(
-                    p.mutedSwatch?.rgb
-                        ?: p.lightMutedSwatch?.rgb   // 调换顺序：lightMuted 在前
+                    p.lightMutedSwatch?.rgb   // 优先使用 lightMuted
+                        ?: p.mutedSwatch?.rgb
                         ?: p.darkMutedSwatch?.rgb
                         ?: Color.DarkGray.toArgb()
                 ).copy(alpha = 1f).toArgb(),
 
                 contentMuted = Color(
-                    p.mutedSwatch?.bodyTextColor
-                        ?: p.lightMutedSwatch?.bodyTextColor   // 调换顺序：lightMuted 在前
+                    p.lightMutedSwatch?.bodyTextColor   // 优先使用 lightMuted
+                        ?: p.mutedSwatch?.bodyTextColor
                         ?: p.darkMutedSwatch?.bodyTextColor
                         ?: Color.White.toArgb()
                 ).copy(alpha = 1f).toArgb()
