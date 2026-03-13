@@ -23,6 +23,9 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
@@ -196,6 +199,22 @@ object ExpressiveAnimations {
         targetOffsetY = { it / 10 },
         animationSpec = EmphasizedExitSpringSlide
     ) + fadeOut(
+        animationSpec = EmphasizedExitSpring
+    ) + scaleOut(
+        targetScale = 0.95f,
+        animationSpec = EmphasizedExitSpring
+    )
+
+    // ===== Navigation 3 动画 - 使用 EnterTransition/ExitTransition =====
+    // Navigation 3 使用 togetherWith 连接进入和退出动画
+    val BottomNavEnterM3E: EnterTransition = fadeIn(
+        animationSpec = EmphasizedEnterSpring
+    ) + scaleIn(
+        initialScale = 0.95f,
+        animationSpec = EmphasizedEnterSpring
+    )
+
+    val BottomNavExitM3E: ExitTransition = fadeOut(
         animationSpec = EmphasizedExitSpring
     ) + scaleOut(
         targetScale = 0.95f,
