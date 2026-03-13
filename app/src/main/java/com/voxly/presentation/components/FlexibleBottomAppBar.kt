@@ -7,69 +7,60 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
-import androidx.navigation.NavDestination.Companion.hierarchy
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavHostController
-import androidx.navigation.compose.currentBackStackEntryAsState
-import com.voxly.R
+import androidx.navigation3.runtime.NavKey
 import com.voxly.presentation.icons.AppIcon
-import com.voxly.presentation.navigation.Screen
+import com.voxly.presentation.navigation.FileBrowser
+import com.voxly.presentation.navigation.RecentEdits
+import com.voxly.presentation.navigation.Settings
+import com.voxly.presentation.navigation.Statistics
 
 /**
- * Bottom navigation bar for the app.
+ * Bottom navigation bar for the app using Navigation3.
  * Uses Material 3 NavigationBar component.
  */
 @Composable
 fun FlexibleBottomAppBar(
-    navController: NavHostController,
-    currentRoute: String?,
+    backStack: MutableList<NavKey>,
+    currentKey: NavKey,
     modifier: Modifier = Modifier
 ) {
-    val bottomNavRoutes = listOf(
-        Screen.FileBrowser.route,
-        Screen.RecentEdits.route,
-        Screen.Statistics.route,
-        Screen.Settings.route
-    )
-
-    val navBackStackEntry by navController.currentBackStackEntryAsState()
-    val currentDestination = navBackStackEntry?.destination
+    // Bottom navigation keys
+    val bottomNavKeys = remember {
+        listOf(FileBrowser, RecentEdits, Statistics, Settings)
+    }
 
     // Only show bottom bar on bottom nav routes
-    if (currentRoute in bottomNavRoutes) {
+    if (currentKey in bottomNavKeys) {
         NavigationBar(
             modifier = modifier.fillMaxWidth(),
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ) {
             bottomNavItems.forEach { item ->
-                val selected = currentDestination?.hierarchy?.any {
-                    it.route == item.screen.route
-                } == true
-                val label = stringResource(item.labelResId)
+                val selected = currentKey == item.key
 
                 NavigationBarItem(
                     selected = selected,
                     onClick = {
-                        navController.navigate(item.screen.route) {
-                            popUpTo(navController.graph.findStartDestination().id) {
-                                saveState = true
+                        if (!selected) {
+                            // Find index of current bottom nav item and replace
+                            val currentIndex = backStack.indexOfFirst { it in bottomNavKeys }
+                            if (currentIndex >= 0) {
+                                // Replace the current bottom nav item
+                                backStack[currentIndex] = item.key
                             }
-                            launchSingleTop = true
-                            restoreState = true
                         }
                     },
                     icon = {
                         androidx.compose.material3.Icon(
                             imageVector = if (selected) item.selectedIcon.vector else item.unselectedIcon.vector,
-                            contentDescription = label
+                            contentDescription = item.label
                         )
                     },
                     label = {
                         Text(
-                            text = label,
+                            text = item.label,
                             maxLines = 1
                         )
                     },
@@ -88,8 +79,8 @@ fun FlexibleBottomAppBar(
  * Data class representing a bottom navigation item with icons.
  */
 data class FlexibleBottomNavItem(
-    val screen: Screen,
-    val labelResId: Int,
+    val key: NavKey,
+    val label: String,
     val selectedIcon: AppIcon,
     val unselectedIcon: AppIcon
 )
@@ -99,26 +90,26 @@ data class FlexibleBottomNavItem(
  */
 private val bottomNavItems = listOf(
     FlexibleBottomNavItem(
-        screen = Screen.FileBrowser,
-        labelResId = R.string.nav_file_browser,
+        key = FileBrowser,
+        label = "Files",
         selectedIcon = AppIcon.Folder,
         unselectedIcon = AppIcon.FolderOutlined
     ),
     FlexibleBottomNavItem(
-        screen = Screen.RecentEdits,
-        labelResId = R.string.nav_recent_edits,
+        key = RecentEdits,
+        label = "Recent",
         selectedIcon = AppIcon.History,
         unselectedIcon = AppIcon.HistoryOutlined
     ),
     FlexibleBottomNavItem(
-        screen = Screen.Statistics,
-        labelResId = R.string.nav_statistics,
+        key = Statistics,
+        label = "Statistics",
         selectedIcon = AppIcon.BarChart,
         unselectedIcon = AppIcon.BarChart
     ),
     FlexibleBottomNavItem(
-        screen = Screen.Settings,
-        labelResId = R.string.nav_settings,
+        key = Settings,
+        label = "Settings",
         selectedIcon = AppIcon.Settings,
         unselectedIcon = AppIcon.SettingsOutlined
     )
