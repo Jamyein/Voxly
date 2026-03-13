@@ -122,6 +122,72 @@ object ExpressiveAnimations {
     private val EmphasizedAccelerateEasing = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
     private val StandardEasing = CubicBezierEasing(0.4f, 0f, 0.2f, 1.0f)
 
+    // ===== Spring 动画参数 - 用户选择 B 方案 (Enter 350ms, Exit 250ms) =====
+    private const val SpringEmphasizedEnterDuration = 350
+    private const val SpringEmphasizedExitDuration = 250
+
+    // Enter 弹簧：强调型，轻微弹性，更高刚度实现快速响应
+    private val EmphasizedEnterSpring = spring<Float>(
+        dampingRatio = 0.72f,
+        stiffness = 600f
+    )
+
+    // Exit 弹簧：更硬，更快退出
+    private val EmphasizedExitSpring = spring<Float>(
+        dampingRatio = 0.72f,
+        stiffness = 700f
+    )
+
+    // ===== Spring 动画 - 底部导航 =====
+    val BottomNavEnter = fadeIn(
+        animationSpec = EmphasizedEnterSpring
+    ) + scaleIn(
+        initialScale = 0.95f,
+        animationSpec = EmphasizedEnterSpring
+    )
+
+    val BottomNavExit = fadeOut(
+        animationSpec = EmphasizedExitSpring
+    ) + scaleOut(
+        targetScale = 0.95f,
+        animationSpec = EmphasizedExitSpring
+    )
+
+    // ===== Spring 动画 - 层级页面 =====
+    val PageEnterM3E = slideInVertically(
+        initialOffsetY = { it / 10 },
+        animationSpec = EmphasizedEnterSpring
+    ) + fadeIn(
+        animationSpec = EmphasizedEnterSpring
+    ) + scaleIn(
+        initialScale = 0.95f,
+        animationSpec = EmphasizedEnterSpring
+    )
+
+    val PageExitM3E = scaleOut(
+        targetScale = 0.95f,
+        animationSpec = EmphasizedExitSpring
+    ) + fadeOut(
+        animationSpec = EmphasizedExitSpring
+    )
+
+    val PagePopEnterM3E = scaleIn(
+        initialScale = 0.95f,
+        animationSpec = EmphasizedEnterSpring
+    ) + fadeIn(
+        animationSpec = EmphasizedEnterSpring
+    )
+
+    val PagePopExitM3E = slideOutVertically(
+        targetOffsetY = { it / 10 },
+        animationSpec = EmphasizedExitSpring
+    ) + fadeOut(
+        animationSpec = EmphasizedExitSpring
+    ) + scaleOut(
+        targetScale = 0.95f,
+        animationSpec = EmphasizedExitSpring
+    )
+
     // ===== Enter Animations =====
 
     val ListItemEnter = slideInVertically(
