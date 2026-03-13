@@ -25,6 +25,7 @@ import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
+import androidx.navigation3.scene.DialogSceneStrategy
 import androidx.navigation3.ui.NavDisplay
 import com.voxly.R
 import com.voxly.core.util.LogManager
@@ -60,9 +61,13 @@ fun MP3TagNavHost() {
         mutableStateListOf<NavKey>(FileBrowser)
     }
 
-    // Entry decorators - using default empty list for now
-    // Note: For ViewModel scoping, add rememberSaveableStateHolderNavEntryDecorator() and rememberViewModelStoreNavEntryDecorator()
-    val decorators: List<NavEntryDecorator<NavKey>> = emptyList()
+    // Entry decorators for ViewModel scoping and state saving
+    // Using empty list for now - the app uses Hilt which manages ViewModel scoping at activity level
+    // If per-entry ViewModel scoping is needed in the future, can add:
+    // rememberSaveableStateHolderNavEntryDecorator()
+    // rememberViewModelStoreNavEntryDecorator()
+    @Suppress("UNCHECKED_CAST")
+    val decorators = emptyList<NavEntryDecorator<NavKey>>()
 
     // Determine if bottom bar should be shown
     val currentKey = backStack.lastOrNull()
@@ -89,6 +94,7 @@ fun MP3TagNavHost() {
             NavDisplay(
                 backStack = backStack,
                 onBack = { backStack.removeLastOrNull() },
+                sceneStrategy = remember { DialogSceneStrategy() },
                 entryDecorators = decorators,
                 entryProvider = entryProvider {
                     // Bottom navigation screens
