@@ -2,6 +2,9 @@ package com.voxly.presentation.components.lyricsposter
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -29,6 +32,8 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -71,6 +76,16 @@ enum class PosterColorTheme {
     CUSTOM
 }
 
+/**
+ * Aspect ratio options for poster preview
+ * AUTO: Follow poster's actual aspect ratio
+ * RATIO_16_9: Fixed 16:9 aspect ratio (letterboxed if needed)
+ */
+enum class PosterAspectRatio {
+    AUTO,
+    RATIO_16_9
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LyricsPosterPreviewSheet(
@@ -107,6 +122,8 @@ fun LyricsPosterPreviewSheet(
     var selectedTheme by remember { mutableStateOf(PosterColorTheme.VIBRANT) }
     var customColor by remember { mutableStateOf(ColorExtractor.colorOptions.first()) }
     var fontSizeScale by remember { mutableFloatStateOf(1.0f) }
+    var aspectRatioMode by remember { mutableStateOf(PosterAspectRatio.AUTO) }
+    var posterOrientation by remember { mutableStateOf(LyricsPosterGenerator.PosterOrientation.PORTRAIT) }
     var generatedPoster by remember { mutableStateOf<Bitmap?>(null) }
 
     // Directly use preSelectedLyrics for poster generation
@@ -120,7 +137,7 @@ fun LyricsPosterPreviewSheet(
     }
 
     // Get background and content colors based on selected theme - Rush's approach
-    val backgroundColor = remember(selectedTheme, customColor, extractedColors) {
+    val targetBackgroundColor = remember(selectedTheme, customColor, extractedColors) {
         when (selectedTheme) {
             PosterColorTheme.MUTED -> extractedColors?.backgroundMuted?.let { Color(it) }
                 ?: ColorExtractor.colorOptions.first()
@@ -130,8 +147,18 @@ fun LyricsPosterPreviewSheet(
         }
     }
 
+    // Animate background color with spring animation (M3E style)
+    val backgroundColor by animateColorAsState(
+        targetValue = targetBackgroundColor,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "background_color"
+    )
+
     // Get content (text) color for contrast
-    val contentColor = remember(selectedTheme, extractedColors) {
+    val targetContentColor = remember(selectedTheme, extractedColors) {
         when (selectedTheme) {
             PosterColorTheme.MUTED -> extractedColors?.contentMuted?.let { Color(it) }
                 ?: Color.White
@@ -141,8 +168,18 @@ fun LyricsPosterPreviewSheet(
         }
     }
 
+    // Animate content color with spring animation
+    val contentColor by animateColorAsState(
+        targetValue = targetContentColor,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
+        ),
+        label = "content_color"
+    )
+
     // Generate poster when any parameter changes
-    LaunchedEffect(title, artist, album, lyricsText, albumArtBitmap, backgroundColor, contentColor, preSelectedLyrics, fontSizeScale) {
+    LaunchedEffect(title, artist, album, lyricsText, albumArtBitmap, backgroundColor, contentColor, preSelectedLyrics, fontSizeScale, posterOrientation) {
         if (allLyricsLines.isNotEmpty()) {
             generatedPoster = LyricsPosterGenerator.generatePoster(
                 title = title,
@@ -153,7 +190,8 @@ fun LyricsPosterPreviewSheet(
                 backgroundColor = backgroundColor,
                 contentColor = contentColor,
                 selectedLyrics = selectedLyricsForPoster,
-                fontSizeScale = fontSizeScale
+                fontSizeScale = fontSizeScale,
+                orientation = posterOrientation
             )
         }
     }
@@ -162,11 +200,25 @@ fun LyricsPosterPreviewSheet(
     val colorMuted = stringResource(R.string.color_soft)     // 柔和
     val colorVibrant = stringResource(R.string.color_vivid) // 鲜艳
     val colorCustom = stringResource(R.string.color_custom)
+    val ratioAuto = stringResource(R.string.aspect_ratio_auto)
+    val ratio169 = stringResource(R.string.aspect_ratio_16_9)
 
     val themes = listOf(
         PosterColorTheme.MUTED to colorMuted,
         PosterColorTheme.VIBRANT to colorVibrant,
     )
+
+    // Calculate poster aspect ratio based on orientation
+    val posterAspectRatio = when (posterOrientation) {
+        LyricsPosterGenerator.PosterOrientation.PORTRAIT -> 9f / 16f
+        LyricsPosterGenerator.PosterOrientation.LANDSCAPE -> 16f / 9f
+    }
+
+    // Preview aspect ratio based on selected mode
+    val previewAspectRatio = when (aspectRatioMode) {
+        PosterAspectRatio.AUTO -> posterAspectRatio
+        PosterAspectRatio.RATIO_16_9 -> 16f / 9f
+    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -191,12 +243,12 @@ fun LyricsPosterPreviewSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Preview - swipe up to expand to full screen
+            // Preview with dynamic aspect ratio
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .aspectRatio(16f / 9f)
-                    .clip(MaterialTheme.shapes.large)
+                    .aspectRatio(previewAspectRatio)
+                    .clip(MaterialTheme.shapes.extraLarge)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
                 contentAlignment = Alignment.Center
             ) {
@@ -206,7 +258,7 @@ fun LyricsPosterPreviewSheet(
                         contentDescription = stringResource(R.string.cd_poster_preview),
                         modifier = Modifier
                             .fillMaxSize()
-                            .clip(MaterialTheme.shapes.large),
+                            .clip(MaterialTheme.shapes.extraLarge),
                         contentScale = ContentScale.Fit
                     )
                 } ?: Text(
@@ -214,6 +266,90 @@ fun LyricsPosterPreviewSheet(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Aspect ratio selector
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.aspect_ratio),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        FilterChip(
+                            selected = aspectRatioMode == PosterAspectRatio.AUTO,
+                            onClick = { aspectRatioMode = PosterAspectRatio.AUTO },
+                            label = { Text(ratioAuto) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = aspectRatioMode == PosterAspectRatio.RATIO_16_9,
+                            onClick = { aspectRatioMode = PosterAspectRatio.RATIO_16_9 },
+                            label = { Text(ratio169) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // Orientation selector (Portrait / Landscape)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.orientation),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        FilterChip(
+                            selected = posterOrientation == LyricsPosterGenerator.PosterOrientation.PORTRAIT,
+                            onClick = { posterOrientation = LyricsPosterGenerator.PosterOrientation.PORTRAIT },
+                            label = { Text(stringResource(R.string.portrait)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = posterOrientation == LyricsPosterGenerator.PosterOrientation.LANDSCAPE,
+                            onClick = { posterOrientation = LyricsPosterGenerator.PosterOrientation.LANDSCAPE },
+                            label = { Text(stringResource(R.string.landscape)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -228,66 +364,75 @@ fun LyricsPosterPreviewSheet(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    // Color theme selector
-                    Text(
-                        text = stringResource(R.string.select_color_theme),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    // Theme options
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    // Color theme selector - wrapped in Surface container
+                    Surface(
+                        modifier = Modifier.fillMaxWidth(),
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shape = MaterialTheme.shapes.medium
                     ) {
-                        items(themes) { (theme, label) ->
-                            ColorThemeChip(
-                                label = label,
-                                isSelected = selectedTheme == theme,
-                                onClick = { selectedTheme = theme }
-                            )
-                        }
-
-                        // Custom color option
-                        item {
-                            ColorThemeChip(
-                                label = colorCustom,
-                                isSelected = selectedTheme == PosterColorTheme.CUSTOM,
-                                onClick = { selectedTheme = PosterColorTheme.CUSTOM }
-                            )
-                        }
-                    }
-
-                    // Custom color picker
-                    if (selectedTheme == PosterColorTheme.CUSTOM) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        Column(
+                            modifier = Modifier.padding(16.dp)
                         ) {
-                            items(ColorExtractor.colorOptions) { color ->
-                                Box(
-                                    modifier = Modifier
-                                        .size(40.dp)
-                                        .clip(CircleShape)
-                                        .background(color)
-                                        .border(
-                                            width = if (customColor == color) 3.dp else 0.dp,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            shape = CircleShape
-                                        )
-                                        .clickable { customColor = color },
-                                    contentAlignment = Alignment.Center
+                            Text(
+                                text = stringResource(R.string.select_color_theme),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            // Theme options
+                            LazyRow(
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp)
+                            ) {
+                                items(themes) { (theme, label) ->
+                                    ColorThemeChip(
+                                        label = label,
+                                        isSelected = selectedTheme == theme,
+                                        onClick = { selectedTheme = theme }
+                                    )
+                                }
+
+                                // Custom color option
+                                item {
+                                    ColorThemeChip(
+                                        label = colorCustom,
+                                        isSelected = selectedTheme == PosterColorTheme.CUSTOM,
+                                        onClick = { selectedTheme = PosterColorTheme.CUSTOM }
+                                    )
+                                }
+                            }
+
+                            // Custom color picker
+                            if (selectedTheme == PosterColorTheme.CUSTOM) {
+                                Spacer(modifier = Modifier.height(12.dp))
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 4.dp)
                                 ) {
-                                    if (customColor == color) {
-                                        Icon(
-                                            Icons.Default.Check,
-                                            contentDescription = null,
-                                            tint = ColorExtractor.getContrastingTextColor(color),
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                    items(ColorExtractor.colorOptions) { color ->
+                                        Box(
+                                            modifier = Modifier
+                                                .size(40.dp)
+                                                .clip(CircleShape)
+                                                .background(color)
+                                                .border(
+                                                    width = if (customColor == color) 3.dp else 0.dp,
+                                                    color = MaterialTheme.colorScheme.primary,
+                                                    shape = CircleShape
+                                                )
+                                                .clickable { customColor = color },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            if (customColor == color) {
+                                                Icon(
+                                                    Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = ColorExtractor.getContrastingTextColor(color),
+                                                    modifier = Modifier.size(20.dp)
+                                                )
+                                            }
+                                        }
                                     }
                                 }
                             }
@@ -296,36 +441,45 @@ fun LyricsPosterPreviewSheet(
 
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    // Font size selector
-                    Text(
-                        text = stringResource(R.string.font_size),
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Spacer(modifier = Modifier.height(8.dp))
-
-                    Row(
+                    // Font size selector - wrapped in Surface container
+                    Surface(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                        color = MaterialTheme.colorScheme.surfaceContainerLow,
+                        shape = MaterialTheme.shapes.medium
                     ) {
-                        Text(
-                            text = stringResource(R.string.small),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Slider(
-                            value = fontSizeScale,
-                            onValueChange = { fontSizeScale = it },
-                            valueRange = 0.7f..1.5f,
-                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                        )
-                        Text(
-                            text = stringResource(R.string.large),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Column(
+                            modifier = Modifier.padding(16.dp)
+                        ) {
+                            Text(
+                                text = stringResource(R.string.font_size),
+                                style = MaterialTheme.typography.titleMedium
+                            )
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.small),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Slider(
+                                    value = fontSizeScale,
+                                    onValueChange = { fontSizeScale = it },
+                                    valueRange = 0.7f..1.5f,
+                                    modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                                )
+                                Text(
+                                    text = stringResource(R.string.large),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
