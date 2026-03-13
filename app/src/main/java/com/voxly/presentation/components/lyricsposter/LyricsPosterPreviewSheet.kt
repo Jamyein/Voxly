@@ -439,16 +439,14 @@ fun LyricsPosterPreviewSheet(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Scrollable content - wrapped in Box with weight(1f) to fill available space
-            Box(
+            // Scrollable content - using LazyColumn for scrollability
+            LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
+                item {
                     // Color theme selector - wrapped in Surface container
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -523,9 +521,9 @@ fun LyricsPosterPreviewSheet(
                             }
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-
+                item {
                     // Font size selector - wrapped in Surface container
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -566,9 +564,9 @@ fun LyricsPosterPreviewSheet(
                             }
                         }
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(24.dp))
-
+                item {
                     // Style-specific settings
                     when (posterStyle) {
                         PosterStyle.RUSHED -> {
@@ -703,9 +701,9 @@ fun LyricsPosterPreviewSheet(
                         }
                         else -> {}
                     }
+                }
 
-                    Spacer(modifier = Modifier.height(24.dp))
-
+                item {
                     // Share button
                     Button(
                         onClick = {
