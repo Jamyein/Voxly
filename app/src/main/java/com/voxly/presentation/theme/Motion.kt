@@ -154,9 +154,14 @@ object ExpressiveAnimations {
     )
 
     // ===== Spring 动画 - 层级页面 =====
+    // 注意: slideInVertically/slideOutVertically 需要 IntOffset 类型的 AnimationSpec
+    // 因此使用 tween 配合 M3E Emphasized Easing，fadeIn/scaleIn 使用 Spring
     val PageEnterM3E = slideInVertically(
         initialOffsetY = { it / 10 },
-        animationSpec = EmphasizedEnterSpring
+        animationSpec = tween(
+            durationMillis = SpringEmphasizedEnterDuration,
+            easing = ExpressiveMotionTokens.M3E_Emphasized_Easing
+        )
     ) + fadeIn(
         animationSpec = EmphasizedEnterSpring
     ) + scaleIn(
@@ -180,7 +185,10 @@ object ExpressiveAnimations {
 
     val PagePopExitM3E = slideOutVertically(
         targetOffsetY = { it / 10 },
-        animationSpec = EmphasizedExitSpring
+        animationSpec = tween(
+            durationMillis = SpringEmphasizedExitDuration,
+            easing = ExpressiveMotionTokens.M3E_Emphasized_Accelerate
+        )
     ) + fadeOut(
         animationSpec = EmphasizedExitSpring
     ) + scaleOut(
