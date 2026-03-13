@@ -555,6 +555,25 @@
     <string name="confirm_selection">Confirm</string>
     <string name="cancel">Cancel</string>
 
+    <!-- 歌词海报风格 -->
+    <string name="poster_style">风格</string>
+    <string name="style_spotify">Spotify</string>
+    <string name="style_rushed">Rush</string>
+    <string name="style_minimal">极简</string>
+    <string name="style_artistic">艺术</string>
+
+    <!-- 风格特定设置 -->
+    <string name="card_corner_radius">卡片圆角</string>
+    <string name="show_watermark">显示水印</string>
+    <string name="gradient_direction">渐变方向</string>
+    <string name="vertical">垂直</string>
+    <string name="horizontal">水平</string>
+    <string name="diagonal">对角</string>
+    <string name="color_scheme">配色方案</string>
+    <string name="purple">紫色</string>
+    <string name="pink">粉红</string>
+    <string name="blue">蓝色</string>
+
     <!-- Chinese Conversion -->
     <string name="convert_to_simplified">繁体转简体</string>
     <string name="convert_to_traditional">简体转繁体</string>

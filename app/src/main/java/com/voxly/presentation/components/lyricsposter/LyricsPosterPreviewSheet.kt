@@ -40,6 +40,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
@@ -126,6 +127,12 @@ fun LyricsPosterPreviewSheet(
     var posterOrientation by remember { mutableStateOf(LyricsPosterGenerator.PosterOrientation.PORTRAIT) }
     var generatedPoster by remember { mutableStateOf<Bitmap?>(null) }
 
+    // Style state
+    var posterStyle by remember { mutableStateOf(PosterStyle.SPOTIFY) }
+    var posterConfig by remember {
+        mutableStateOf(PosterConfig(style = PosterStyle.SPOTIFY))
+    }
+
     // Directly use preSelectedLyrics for poster generation
     val selectedLyricsForPoster = preSelectedLyrics
 
@@ -179,7 +186,7 @@ fun LyricsPosterPreviewSheet(
     )
 
     // Generate poster when any parameter changes
-    LaunchedEffect(title, artist, album, lyricsText, albumArtBitmap, backgroundColor, contentColor, preSelectedLyrics, fontSizeScale, posterOrientation) {
+    LaunchedEffect(title, artist, album, lyricsText, albumArtBitmap, backgroundColor, contentColor, preSelectedLyrics, fontSizeScale, posterOrientation, posterStyle, posterConfig) {
         if (allLyricsLines.isNotEmpty()) {
             generatedPoster = LyricsPosterGenerator.generatePoster(
                 title = title,
@@ -191,7 +198,9 @@ fun LyricsPosterPreviewSheet(
                 contentColor = contentColor,
                 selectedLyrics = selectedLyricsForPoster,
                 fontSizeScale = fontSizeScale,
-                orientation = posterOrientation
+                orientation = posterOrientation,
+                style = posterStyle,
+                config = posterConfig
             )
         }
     }
@@ -266,6 +275,82 @@ fun LyricsPosterPreviewSheet(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // Style selector
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.poster_style),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    item {
+                        FilterChip(
+                            selected = posterStyle == PosterStyle.SPOTIFY,
+                            onClick = {
+                                posterStyle = PosterStyle.SPOTIFY
+                                posterConfig = posterConfig.copy(style = PosterStyle.SPOTIFY)
+                            },
+                            label = { Text(stringResource(R.string.style_spotify)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = posterStyle == PosterStyle.RUSHED,
+                            onClick = {
+                                posterStyle = PosterStyle.RUSHED
+                                posterConfig = posterConfig.copy(style = PosterStyle.RUSHED)
+                            },
+                            label = { Text(stringResource(R.string.style_rushed)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = posterStyle == PosterStyle.MINIMAL,
+                            onClick = {
+                                posterStyle = PosterStyle.MINIMAL
+                                posterConfig = posterConfig.copy(style = PosterStyle.MINIMAL)
+                            },
+                            label = { Text(stringResource(R.string.style_minimal)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                    item {
+                        FilterChip(
+                            selected = posterStyle == PosterStyle.ARTISTIC,
+                            onClick = {
+                                posterStyle = PosterStyle.ARTISTIC
+                                posterConfig = posterConfig.copy(style = PosterStyle.ARTISTIC)
+                            },
+                            label = { Text(stringResource(R.string.style_artistic)) },
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        )
+                    }
+                }
             }
 
             Spacer(modifier = Modifier.height(12.dp))
@@ -480,6 +565,143 @@ fun LyricsPosterPreviewSheet(
                                 )
                             }
                         }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Style-specific settings
+                    when (posterStyle) {
+                        PosterStyle.RUSHED -> {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.card_corner_radius),
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(stringResource(R.string.small), style = MaterialTheme.typography.bodySmall)
+                                        Slider(
+                                            value = posterConfig.cardCornerRadius,
+                                            onValueChange = { posterConfig = posterConfig.copy(cardCornerRadius = it) },
+                                            valueRange = 8f..32f,
+                                            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+                                        )
+                                        Text(stringResource(R.string.large), style = MaterialTheme.typography.bodySmall)
+                                    }
+                                }
+                            }
+                        }
+                        PosterStyle.MINIMAL -> {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = stringResource(R.string.show_watermark),
+                                            style = MaterialTheme.typography.titleMedium
+                                        )
+                                        Switch(
+                                            checked = posterConfig.showWatermark,
+                                            onCheckedChange = { posterConfig = posterConfig.copy(showWatermark = it) }
+                                        )
+                                    }
+
+                                    Spacer(modifier = Modifier.height(16.dp))
+
+                                    Text(
+                                        text = stringResource(R.string.gradient_direction),
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        item {
+                                            FilterChip(
+                                                selected = posterConfig.gradientDirection == GradientDirection.VERTICAL,
+                                                onClick = { posterConfig = posterConfig.copy(gradientDirection = GradientDirection.VERTICAL) },
+                                                label = { Text(stringResource(R.string.vertical)) }
+                                            )
+                                        }
+                                        item {
+                                            FilterChip(
+                                                selected = posterConfig.gradientDirection == GradientDirection.HORIZONTAL,
+                                                onClick = { posterConfig = posterConfig.copy(gradientDirection = GradientDirection.HORIZONTAL) },
+                                                label = { Text(stringResource(R.string.horizontal)) }
+                                            )
+                                        }
+                                        item {
+                                            FilterChip(
+                                                selected = posterConfig.gradientDirection == GradientDirection.DIAGONAL,
+                                                onClick = { posterConfig = posterConfig.copy(gradientDirection = GradientDirection.DIAGONAL) },
+                                                label = { Text(stringResource(R.string.diagonal)) }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        PosterStyle.ARTISTIC -> {
+                            Surface(
+                                modifier = Modifier.fillMaxWidth(),
+                                color = MaterialTheme.colorScheme.surfaceContainerLow,
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Column(modifier = Modifier.padding(16.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.color_scheme),
+                                        style = MaterialTheme.typography.titleMedium
+                                    )
+                                    Spacer(modifier = Modifier.height(8.dp))
+                                    LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                                        item {
+                                            FilterChip(
+                                                selected = posterConfig.artisticColorScheme == ArtisticColorScheme.PURPLE,
+                                                onClick = { posterConfig = posterConfig.copy(artisticColorScheme = ArtisticColorScheme.PURPLE) },
+                                                label = { Text(stringResource(R.string.purple)) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer
+                                                )
+                                            )
+                                        }
+                                        item {
+                                            FilterChip(
+                                                selected = posterConfig.artisticColorScheme == ArtisticColorScheme.PINK,
+                                                onClick = { posterConfig = posterConfig.copy(artisticColorScheme = ArtisticColorScheme.PINK) },
+                                                label = { Text(stringResource(R.string.pink)) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
+                                                )
+                                            )
+                                        }
+                                        item {
+                                            FilterChip(
+                                                selected = posterConfig.artisticColorScheme == ArtisticColorScheme.BLUE,
+                                                onClick = { posterConfig = posterConfig.copy(artisticColorScheme = ArtisticColorScheme.BLUE) },
+                                                label = { Text(stringResource(R.string.blue)) },
+                                                colors = FilterChipDefaults.filterChipColors(
+                                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
+                                                )
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else -> {}
                     }
 
                     Spacer(modifier = Modifier.height(24.dp))
