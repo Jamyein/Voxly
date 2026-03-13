@@ -93,6 +93,40 @@ object LyricsPosterGenerator {
         const val WATERMARK_BOTTOM_OFFSET = 50f
     }
 
+    // ===== Rush 风格布局配置 =====
+    private object RushLayout {
+        const val PORTRAIT_COVER_SIZE = 240f   // 封面较小
+        const val PORTRAIT_COVER_LEFT = 48f    // 左下角
+        const val PORTRAIT_COVER_BOTTOM = 48f
+        const val PORTRAIT_LYRICS_BOTTOM = 180f  // 歌词距离底部
+
+        const val LANDSCAPE_COVER_SIZE = 180f
+        const val LANDSCAPE_COVER_LEFT = 48f
+        const val LANDSCAPE_LYRICS_LEFT = 280f
+
+        const val CARD_PADDING_H = 24f
+        const val CARD_PADDING_V = 12f
+        const val CARD_GAP = 16f
+    }
+
+    // ===== 极简暗黑风格配置 =====
+    private object MinimalLayout {
+        val GRADIENT_COLORS = listOf(
+            intArrayOf(0xFF0D0D0D.toInt(), 0xFF1A1A2E.toInt(), 0xFF16213E.toInt())
+        )
+        const val WATERMARK_SIZE = 36f
+    }
+
+    // ===== 艺术几何风格配置 =====
+    private object ArtisticLayout {
+        val PURPLE_GRADIENT = intArrayOf(0xFF1E1E2E.toInt(), 0xFF2D1B4E.toInt(), 0xFF1A1A2E.toInt())
+        val PINK_GRADIENT = intArrayOf(0xFF1E1E2E.toInt(), 0xFF4A1942.toInt(), 0xFF1A1A2E.toInt())
+        val BLUE_GRADIENT = intArrayOf(0xFF1E1E2E.toInt(), 0xFF1B3A4B.toInt(), 0xFF1A1A2E.toInt())
+
+        const val ORB_SIZE = 200f
+        const val ORB_OPACITY = 0.6f
+    }
+
     // P5: Text alignment options
     enum class TextAlignment {
         LEFT, CENTER, RIGHT
@@ -122,6 +156,8 @@ object LyricsPosterGenerator {
      * @param orientation Poster orientation (PORTRAIT or LANDSCAPE)
      * @param highlightedLineIndex Index of the line to highlight (-1 for no highlight, 0 for first line)
      * @param lyricsAlignment Text alignment for lyrics (LEFT, CENTER, RIGHT)
+     * @param style Poster style (SPOTIFY, RUSHED, MINIMAL, ARTISTIC)
+     * @param config Poster configuration for style-specific settings
      * @return Generated poster bitmap
      */
     fun generatePoster(
@@ -137,7 +173,9 @@ object LyricsPosterGenerator {
         fontSizeScale: Float = 1.0f,
         orientation: PosterOrientation = PosterOrientation.PORTRAIT,
         highlightedLineIndex: Int = 0,
-        lyricsAlignment: TextAlignment = TextAlignment.LEFT
+        lyricsAlignment: TextAlignment = TextAlignment.LEFT,
+        style: PosterStyle = PosterStyle.SPOTIFY,
+        config: PosterConfig = PosterConfig()
     ): Bitmap {
         // 1. 解析歌词
         val allLyrics = parseToLines(lyricsText)
@@ -157,45 +195,25 @@ object LyricsPosterGenerator {
         val bitmap = Bitmap.createBitmap(posterWidth, posterHeight, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)
 
-        // 4. 绘制背景 (有封面时使用氛围背景，无封面时使用纯色)
-        if (albumArtBitmap != null) {
-            drawSpotifyBackground(canvas, albumArtBitmap, posterWidth, posterHeight, orientation)
-        } else {
-            // 无封面时使用纯色背景
-            val bgPaint = Paint().apply {
-                color = backgroundColor.toArgb()
-                style = Paint.Style.FILL
-            }
-            canvas.drawRect(0f, 0f, posterWidth.toFloat(), posterHeight.toFloat(), bgPaint)
+        // 4. 根据风格绘制
+        when (style) {
+            PosterStyle.SPOTIFY -> drawSpotifyStyle(
+                canvas, title, artist, albumArtBitmap, lyricsLines,
+                posterWidth, posterHeight, orientation, fontSizeScale, backgroundColor
+            )
+            PosterStyle.RUSHED -> drawRushedStyle(
+                canvas, title, artist, albumArtBitmap, lyricsLines,
+                posterWidth, posterHeight, orientation, backgroundColor, config
+            )
+            PosterStyle.MINIMAL -> drawMinimalStyle(
+                canvas, title, artist, lyricsLines,
+                posterWidth, posterHeight, orientation, fontSizeScale, config
+            )
+            PosterStyle.ARTISTIC -> drawArtisticStyle(
+                canvas, title, artist, lyricsLines,
+                posterWidth, posterHeight, orientation, fontSizeScale, config
+            )
         }
-
-        // 5. 文字颜色 (Spotify 风格：白色为主)
-        val defaultTextColor = Color.WHITE
-        val secondaryTextColor = Color.argb(153, 255, 255, 255) // 60% 白色
-
-        // 6. 绘制标题和艺术家 (竖屏顶部居中，横屏左侧)
-        when (orientation) {
-            PosterOrientation.PORTRAIT -> drawPortraitTitleArtist(canvas, title, artist, posterWidth)
-            PosterOrientation.LANDSCAPE -> drawLandscapeTitleArtist(canvas, title, artist)
-        }
-
-        // 7. 绘制歌词
-        val coverSize = when (orientation) {
-            PosterOrientation.PORTRAIT -> SpotifyLayout.PORTRAIT_COVER_SIZE
-            PosterOrientation.LANDSCAPE -> SpotifyLayout.LANDSCAPE_COVER_SIZE
-        }
-        when (orientation) {
-            PosterOrientation.PORTRAIT -> drawPortraitLyrics(canvas, lyricsLines, posterWidth, posterHeight, coverSize, fontSizeScale)
-            PosterOrientation.LANDSCAPE -> drawLandscapeLyrics(canvas, lyricsLines, posterWidth, posterHeight, fontSizeScale)
-        }
-
-        // 8. 绘制封面
-        if (albumArtBitmap != null) {
-            drawSpotifyCover(canvas, albumArtBitmap, posterWidth, posterHeight, orientation, coverSize)
-        }
-
-        // 9. 绘制水印
-        drawWatermark(canvas, posterWidth, posterHeight, secondaryTextColor)
 
         return bitmap
     }
@@ -693,6 +711,388 @@ object LyricsPosterGenerator {
             posterHeight - SpotifyLayout.WATERMARK_BOTTOM,
             paint
         )
+    }
+
+    // ===== Spotify 风格绘制入口 =====
+    private fun drawSpotifyStyle(
+        canvas: Canvas,
+        title: String,
+        artist: String,
+        albumArtBitmap: Bitmap?,
+        lyricsLines: List<String>,
+        posterWidth: Int,
+        posterHeight: Int,
+        orientation: PosterOrientation,
+        fontSizeScale: Float,
+        backgroundColor: androidx.compose.ui.graphics.Color
+    ) {
+        // 绘制背景 (有封面时使用氛围背景，无封面时使用纯色)
+        if (albumArtBitmap != null) {
+            drawSpotifyBackground(canvas, albumArtBitmap, posterWidth, posterHeight, orientation)
+        } else {
+            val bgPaint = Paint().apply {
+                color = backgroundColor.toArgb()
+                style = Paint.Style.FILL
+            }
+            canvas.drawRect(0f, 0f, posterWidth.toFloat(), posterHeight.toFloat(), bgPaint)
+        }
+
+        // 文字颜色
+        val defaultTextColor = Color.WHITE
+        val secondaryTextColor = Color.argb(153, 255, 255, 255)
+
+        // 绘制标题和艺术家
+        when (orientation) {
+            PosterOrientation.PORTRAIT -> drawPortraitTitleArtist(canvas, title, artist, posterWidth)
+            PosterOrientation.LANDSCAPE -> drawLandscapeTitleArtist(canvas, title, artist)
+        }
+
+        // 绘制歌词
+        val coverSize = when (orientation) {
+            PosterOrientation.PORTRAIT -> SpotifyLayout.PORTRAIT_COVER_SIZE
+            PosterOrientation.LANDSCAPE -> SpotifyLayout.LANDSCAPE_COVER_SIZE
+        }
+        when (orientation) {
+            PosterOrientation.PORTRAIT -> drawPortraitLyrics(canvas, lyricsLines, posterWidth, posterHeight, coverSize, fontSizeScale)
+            PosterOrientation.LANDSCAPE -> drawLandscapeLyrics(canvas, lyricsLines, posterWidth, posterHeight, fontSizeScale)
+        }
+
+        // 绘制封面
+        if (albumArtBitmap != null) {
+            drawSpotifyCover(canvas, albumArtBitmap, posterWidth, posterHeight, orientation, coverSize)
+        }
+
+        // 绘制水印
+        drawWatermark(canvas, posterWidth, posterHeight, secondaryTextColor)
+    }
+
+    // ===== Rush 风格绘制函数 =====
+
+    private fun drawRushedStyle(
+        canvas: Canvas,
+        title: String,
+        artist: String,
+        albumArtBitmap: Bitmap?,
+        lyricsLines: List<String>,
+        posterWidth: Int,
+        posterHeight: Int,
+        orientation: PosterOrientation,
+        backgroundColor: androidx.compose.ui.graphics.Color,
+        config: PosterConfig
+    ) {
+        // 1. 绘制背景（封面或纯色）
+        if (albumArtBitmap != null) {
+            drawRushedBackground(canvas, albumArtBitmap, posterWidth, posterHeight)
+        } else {
+            val bgPaint = Paint().apply {
+                color = backgroundColor.toArgb()
+                style = Paint.Style.FILL
+            }
+            canvas.drawRect(0f, 0f, posterWidth.toFloat(), posterHeight.toFloat(), bgPaint)
+        }
+
+        // 2. 绘制半透明遮罩
+        val scrimPaint = Paint().apply {
+            color = android.graphics.Color.argb(204, 0, 0, 0)
+            style = Paint.Style.FILL
+        }
+        canvas.drawRect(0f, 0f, posterWidth.toFloat(), posterHeight.toFloat(), scrimPaint)
+
+        // 3. 绘制歌词卡片（底部）
+        drawRushedLyricsCards(canvas, lyricsLines, posterWidth, posterHeight, orientation, config)
+
+        // 4. 绘制封面（左下角）
+        if (albumArtBitmap != null) {
+            drawRushedCover(canvas, albumArtBitmap, posterWidth, posterHeight, orientation)
+        }
+
+        // 5. 绘制标题艺术家
+        drawRushedTitleArtist(canvas, title, artist, posterWidth, posterHeight, orientation)
+    }
+
+    private fun drawRushedBackground(canvas: Canvas, bitmap: Bitmap, width: Int, height: Int) {
+        val scaled = Bitmap.createScaledBitmap(bitmap, width, height, true)
+        canvas.drawBitmap(scaled, 0f, 0f, null)
+    }
+
+    private fun drawRushedLyricsCards(canvas: Canvas, lyricsLines: List<String>, width: Int, height: Int, orientation: PosterOrientation, config: PosterConfig) {
+        val cardPaint = Paint().apply {
+            color = android.graphics.Color.argb(204, 30, 30, 30)
+            style = Paint.Style.FILL
+        }
+
+        val textPaint = Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = Typography.PORTRAIT_BASE_FONT_SIZE * 0.7f * config.fontSizeScale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+        }
+
+        val (startX, startY) = when (orientation) {
+            PosterOrientation.PORTRAIT -> RushLayout.CARD_PADDING_H to (height - RushLayout.PORTRAIT_LYRICS_BOTTOM - lyricsLines.size * 60f)
+            PosterOrientation.LANDSCAPE -> RushLayout.LANDSCAPE_LYRICS_LEFT to (height / 2f - lyricsLines.size * 30f)
+        }
+
+        lyricsLines.forEachIndexed { index, line ->
+            val y = startY + index * (textPaint.textSize + RushLayout.CARD_GAP)
+
+            val textWidth = textPaint.measureText(line)
+            val cardRect = RectF(
+                startX - RushLayout.CARD_PADDING_H,
+                y - textPaint.textSize - RushLayout.CARD_PADDING_V,
+                startX + textWidth + RushLayout.CARD_PADDING_H,
+                y + RushLayout.CARD_PADDING_V
+            )
+            canvas.drawRoundRect(cardRect, config.cardCornerRadius, config.cardCornerRadius, cardPaint)
+
+            canvas.drawText(line, startX, y, textPaint)
+        }
+    }
+
+    private fun drawRushedCover(canvas: Canvas, bitmap: Bitmap, width: Int, height: Int, orientation: PosterOrientation) {
+        val coverSize = when (orientation) {
+            PosterOrientation.PORTRAIT -> RushLayout.PORTRAIT_COVER_SIZE
+            PosterOrientation.LANDSCAPE -> RushLayout.LANDSCAPE_COVER_SIZE
+        }
+
+        val (x, y) = when (orientation) {
+            PosterOrientation.PORTRAIT -> RushLayout.PORTRAIT_COVER_LEFT to (height - coverSize - RushLayout.PORTRAIT_COVER_BOTTOM)
+            PosterOrientation.LANDSCAPE -> RushLayout.LANDSCAPE_COVER_LEFT to ((height - coverSize) / 2)
+        }
+
+        val scaled = Bitmap.createScaledBitmap(bitmap, coverSize.toInt(), coverSize.toInt(), true)
+        canvas.drawBitmap(scaled, x, y, Paint().apply { isAntiAlias = true })
+    }
+
+    private fun drawRushedTitleArtist(canvas: Canvas, title: String, artist: String, width: Int, height: Int, orientation: PosterOrientation) {
+        val titlePaint = Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = Typography.PORTRAIT_TITLE_SIZE * 0.8f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+        }
+        val artistPaint = Paint().apply {
+            color = android.graphics.Color.argb(178, 255, 255, 255)
+            textSize = Typography.PORTRAIT_ARTIST_SIZE * 0.8f
+            isAntiAlias = true
+        }
+
+        val (titleX, titleY) = when (orientation) {
+            PosterOrientation.PORTRAIT -> RushLayout.PORTRAIT_COVER_SIZE + RushLayout.PORTRAIT_COVER_LEFT + 24f to (height - RushLayout.PORTRAIT_COVER_BOTTOM - 80f)
+            PosterOrientation.LANDSCAPE -> RushLayout.LANDSCAPE_COVER_LEFT + RushLayout.LANDSCAPE_COVER_SIZE + 24f to (height / 2f + 60f)
+        }
+
+        canvas.drawText(title, titleX, titleY, titlePaint)
+        canvas.drawText(artist, titleX, titleY + titlePaint.textSize + 8f, artistPaint)
+    }
+
+    // ===== 极简暗黑风格绘制函数 =====
+
+    private fun drawMinimalStyle(
+        canvas: Canvas,
+        title: String,
+        artist: String,
+        lyricsLines: List<String>,
+        posterWidth: Int,
+        posterHeight: Int,
+        orientation: PosterOrientation,
+        fontSizeScale: Float,
+        config: PosterConfig
+    ) {
+        // 1. 绘制渐变背景
+        drawMinimalGradientBackground(canvas, posterWidth, posterHeight, config)
+
+        // 2. 绘制标题
+        val titlePaint = Paint().apply {
+            color = android.graphics.Color.argb(102, 255, 255, 255)
+            textSize = Typography.PORTRAIT_TITLE_SIZE * 0.6f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+        }
+        val artistPaint = Paint().apply {
+            color = android.graphics.Color.argb(76, 255, 255, 255)
+            textSize = Typography.PORTRAIT_ARTIST_SIZE * 0.6f
+            isAntiAlias = true
+        }
+
+        val titleY = when (orientation) {
+            PosterOrientation.PORTRAIT -> posterHeight * 0.08f
+            PosterOrientation.LANDSCAPE -> posterHeight * 0.15f
+        }
+
+        canvas.drawText(title, posterWidth / 2f - titlePaint.measureText(title) / 2, titleY, titlePaint)
+        canvas.drawText(artist, posterWidth / 2f - artistPaint.measureText(artist) / 2, titleY + 30f, artistPaint)
+
+        // 3. 绘制大字歌词
+        val lyricsPaint = Paint().apply {
+            color = android.graphics.Color.WHITE
+            textSize = Typography.PORTRAIT_BASE_FONT_SIZE * 1.2f * fontSizeScale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+            letterSpacing = 0.04f
+        }
+
+        val (centerX, startY) = when (orientation) {
+            PosterOrientation.PORTRAIT -> posterWidth / 2f to posterHeight * 0.2f
+            PosterOrientation.LANDSCAPE -> posterWidth / 2f to posterHeight * 0.3f
+        }
+        val lineHeight = Typography.PORTRAIT_LINE_HEIGHT * 1.3f * fontSizeScale
+
+        lyricsLines.forEachIndexed { index, line ->
+            val y = startY + index * lineHeight
+            if (y < posterHeight * 0.85f) {
+                val textWidth = lyricsPaint.measureText(line)
+                canvas.drawText(line, centerX - textWidth / 2, y, lyricsPaint)
+            }
+        }
+
+        // 4. 绘制水印
+        if (config.showWatermark) {
+            val watermarkPaint = Paint().apply {
+                color = android.graphics.Color.argb(128, 255, 255, 255)
+                textSize = MinimalLayout.WATERMARK_SIZE
+                typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+                isAntiAlias = true
+            }
+            val watermark = "VOXLY"
+            canvas.drawText(
+                watermark,
+                posterWidth / 2f - watermarkPaint.measureText(watermark) / 2,
+                posterHeight - 60f,
+                watermarkPaint
+            )
+        }
+    }
+
+    private fun drawMinimalGradientBackground(canvas: Canvas, width: Int, height: Int, config: PosterConfig) {
+        val colors = MinimalLayout.GRADIENT_COLORS[0]
+        val (startX, startY, endX, endY) = when (config.gradientDirection) {
+            GradientDirection.VERTICAL -> floatArrayOf(0f, 0f, 0f, height.toFloat())
+            GradientDirection.HORIZONTAL -> floatArrayOf(0f, 0f, width.toFloat(), 0f)
+            GradientDirection.DIAGONAL -> floatArrayOf(0f, 0f, width.toFloat(), height.toFloat())
+        }
+
+        val paint = Paint().apply {
+            shader = LinearGradient(
+                startX, startY, endX, endY,
+                colors,
+                floatArrayOf(0f, 0.5f, 1f),
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
+    }
+
+    // ===== 艺术几何风格绘制函数 =====
+
+    private fun drawArtisticStyle(
+        canvas: Canvas,
+        title: String,
+        artist: String,
+        lyricsLines: List<String>,
+        posterWidth: Int,
+        posterHeight: Int,
+        orientation: PosterOrientation,
+        fontSizeScale: Float,
+        config: PosterConfig
+    ) {
+        // 1. 绘制渐变背景
+        val colors = when (config.artisticColorScheme) {
+            ArtisticColorScheme.PURPLE -> ArtisticLayout.PURPLE_GRADIENT
+            ArtisticColorScheme.PINK -> ArtisticLayout.PINK_GRADIENT
+            ArtisticColorScheme.BLUE -> ArtisticLayout.BLUE_GRADIENT
+        }
+
+        val bgPaint = Paint().apply {
+            shader = LinearGradient(
+                0f, 0f, posterWidth.toFloat(), posterHeight.toFloat(),
+                colors,
+                floatArrayOf(0f, 0.5f, 1f),
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawRect(0f, 0f, posterWidth.toFloat(), posterHeight.toFloat(), bgPaint)
+
+        // 2. 绘制几何装饰圆形
+        drawArtisticOrbs(canvas, posterWidth, posterHeight, config.artisticColorScheme)
+
+        // 3. 绘制歌词（带阴影效果）
+        drawArtisticLyrics(canvas, lyricsLines, posterWidth, posterHeight, orientation, fontSizeScale)
+
+        // 4. 绘制标题艺术家
+        val titlePaint = Paint().apply {
+            color = android.graphics.Color.argb(128, 255, 255, 255)
+            textSize = Typography.PORTRAIT_TITLE_SIZE * 0.7f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+        }
+
+        val titleY = posterHeight * 0.08f
+        canvas.drawText(title, posterWidth / 2f - titlePaint.measureText(title) / 2, titleY, titlePaint)
+    }
+
+    private fun drawArtisticOrbs(canvas: Canvas, width: Int, height: Int, colorScheme: ArtisticColorScheme) {
+        val orbColor1 = when (colorScheme) {
+            ArtisticColorScheme.PURPLE -> android.graphics.Color.argb(153, 99, 102, 241)
+            ArtisticColorScheme.PINK -> android.graphics.Color.argb(153, 236, 72, 153)
+            ArtisticColorScheme.BLUE -> android.graphics.Color.argb(153, 59, 130, 200)
+        }
+        val orbColor2 = when (colorScheme) {
+            ArtisticColorScheme.PURPLE -> android.graphics.Color.argb(128, 139, 92, 246)
+            ArtisticColorScheme.PINK -> android.graphics.Color.argb(128, 244, 144, 182)
+            ArtisticColorScheme.BLUE -> android.graphics.Color.argb(128, 100, 180, 220)
+        }
+
+        // 顶部右侧大光晕
+        val orbPaint1 = Paint().apply {
+            shader = android.graphics.RadialGradient(
+                width * 0.8f, height * 0.2f, ArtisticLayout.ORB_SIZE,
+                orbColor1, android.graphics.Color.TRANSPARENT,
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawCircle(width * 0.8f, height * 0.2f, ArtisticLayout.ORB_SIZE, orbPaint1)
+
+        // 底部左侧光晕
+        val orbPaint2 = Paint().apply {
+            shader = android.graphics.RadialGradient(
+                width * 0.2f, height * 0.8f, ArtisticLayout.ORB_SIZE * 0.75f,
+                orbColor2, android.graphics.Color.TRANSPARENT,
+                Shader.TileMode.CLAMP
+            )
+        }
+        canvas.drawCircle(width * 0.2f, height * 0.8f, ArtisticLayout.ORB_SIZE * 0.75f, orbPaint2)
+    }
+
+    private fun drawArtisticLyrics(canvas: Canvas, lyricsLines: List<String>, width: Int, height: Int, orientation: PosterOrientation, fontSizeScale: Float) {
+        val lyricsPaint = Paint().apply {
+            textSize = Typography.PORTRAIT_BASE_FONT_SIZE * fontSizeScale
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            isAntiAlias = true
+            letterSpacing = 0.03f
+        }
+
+        val (centerX, startY) = when (orientation) {
+            PosterOrientation.PORTRAIT -> width / 2f to height * 0.25f
+            PosterOrientation.LANDSCAPE -> width / 2f to height * 0.35f
+        }
+        val lineHeight = Typography.PORTRAIT_LINE_HEIGHT * 1.2f * fontSizeScale
+
+        lyricsLines.forEachIndexed { index, line ->
+            val y = startY + index * lineHeight
+            if (y < height * 0.9f) {
+                val textWidth = lyricsPaint.measureText(line)
+
+                // 底层 - 阴影效果
+                val shadowPaint = Paint(lyricsPaint).apply {
+                    color = android.graphics.Color.argb(76, 0, 0, 0)
+                }
+                canvas.drawText(line, centerX - textWidth / 2 + 2f, y + 2f, shadowPaint)
+
+                // 顶层 - 白色
+                canvas.drawText(line, centerX - textWidth / 2, y, lyricsPaint)
+            }
+        }
     }
 
     /**
