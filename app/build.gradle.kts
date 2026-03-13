@@ -179,8 +179,10 @@ dependencies {
     implementation("androidx.compose.ui:ui-text-google-fonts")
     implementation("androidx.appcompat:appcompat:1.7.1")
 
-    // Navigation
-    implementation("androidx.navigation:navigation-compose:2.9.7")
+    // Navigation 3 - 使用新的导航架构解决退出页面点击穿透问题
+    implementation("androidx.navigation3:navigation3-runtime:1.0.0")
+    implementation("androidx.navigation3:navigation3-ui:1.0.0")
+    implementation("androidx.lifecycle:lifecycle-viewmodel-navigation3:2.10.0")
 
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")
