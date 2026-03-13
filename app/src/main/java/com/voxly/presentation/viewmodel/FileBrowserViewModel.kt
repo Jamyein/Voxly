@@ -93,6 +93,12 @@ class FileBrowserViewModel @Inject constructor(
     private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
     val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
 
+    val artistSeparatorEnabled: StateFlow<Boolean> = settingsDataStore.artistSeparatorEnabled
+        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+
+    val artistSeparators: StateFlow<String> = settingsDataStore.artistSeparators
+        .stateIn(viewModelScope, SharingStarted.Eagerly, "&\\")
+
     /**
      * Cache an album to the repository for instant loading in AlbumDetailScreen.
      */
@@ -1175,6 +1181,25 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     /**
+     * Split artist string by separators
+     * @param artist The artist string to split
+     * @param separators String containing separator characters (e.g., "&\")
+     * @return List of split artist names (empty strings filtered out)
+     */
+    private fun splitArtist(artist: String, separators: String): List<String> {
+        if (artist.isBlank()) return emptyList()
+        if (separators.isBlank()) return listOf(artist)
+
+        val separatorChars = separators.toCharArray().filter { it.isWhitespace().not() }
+        if (separatorChars.isEmpty()) return listOf(artist)
+
+        val regex = separatorChars.joinToString("|") { Regex.escape(it.toString()) }
+        return artist.split(Regex(regex))
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+    }
+
+    /**
      * Aggregates audio files into albums and artists groups.
      */
     private fun aggregateData() {
@@ -1202,26 +1227,44 @@ class FileBrowserViewModel @Inject constructor(
         _albums.value = albumsMap
 
         // Aggregate artists
-        val artistsMap = allFiles
-            .filter { it.metadata.artist?.isNotBlank() == true }
-            .groupBy { it.metadata.artist!! }
-            .map { (artistName, files) ->
-                // 固定选择封面：优先选择有专辑封面的文件，否则使用第一个文件
-                val coverFile = files.firstOrNull { it.metadata.album?.isNotBlank() == true }
-                    ?: files.firstOrNull()
-                ArtistGroup(
-                    name = artistName,
-                    albums = files.mapNotNull { it.metadata.album }.distinct().sorted(),
-                    files = files.sortedBy { it.metadata.album },
-                    coverPath = coverFile?.path
-                )
-            }
-            .sortedBy { it.name.lowercase() }
+        val isSeparatorEnabled = artistSeparatorEnabled.value
+        val customSeparators = artistSeparators.value
 
-        _artists.value = artistsMap
+        val artistsMap = mutableMapOf<String, MutableList<AudioFile>>()
+
+        allFiles
+            .filter { it.metadata.artist?.isNotBlank() == true }
+            .forEach { file ->
+                val artistField = file.metadata.artist!!
+
+                if (isSeparatorEnabled && customSeparators.isNotBlank()) {
+                    // Split artist field
+                    val splitArtists = splitArtist(artistField, customSeparators)
+                    splitArtists.forEach { artistName ->
+                        artistsMap.getOrPut(artistName) { mutableListOf() }.add(file)
+                    }
+                } else {
+                    // No splitting, use original artist field
+                    artistsMap.getOrPut(artistField) { mutableListOf() }.add(file)
+                }
+            }
+
+        val artistsList = artistsMap.map { (artistName, files) ->
+            // 固定选择封面：优先选择有专辑封面的文件，否则使用第一个文件
+            val coverFile = files.firstOrNull { it.metadata.album?.isNotBlank() == true }
+                ?: files.firstOrNull()
+            ArtistGroup(
+                name = artistName,
+                albums = files.mapNotNull { it.metadata.album }.distinct().sorted(),
+                files = files.sortedBy { it.metadata.album },
+                coverPath = coverFile?.path
+            )
+        }.sortedBy { it.name.lowercase() }
+
+        _artists.value = artistsList
 
         // Cache artists for detail screen
-        artistsMap.forEach { artist ->
+        artistsList.forEach { artist ->
             val repoArtist = RepoArtistGroup(
                 name = artist.name,
                 files = artist.files,
