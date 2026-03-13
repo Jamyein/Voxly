@@ -79,6 +79,9 @@ class SettingsDataStore @Inject constructor(
         val PROXY_TYPE = stringPreferencesKey("proxy_type")
         val PROXY_HOST = stringPreferencesKey("proxy_host")
         val PROXY_PORT = intPreferencesKey("proxy_port")
+        // Artist separator settings
+        val ARTIST_SEPARATOR_ENABLED = booleanPreferencesKey("artist_separator_enabled")
+        val ARTIST_SEPARATORS = stringPreferencesKey("artist_separators")
     }
 
     /**
@@ -884,6 +887,22 @@ class SettingsDataStore @Inject constructor(
         }
 
     /**
+     * Artist separator enabled preference flow
+     */
+    val artistSeparatorEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[ARTIST_SEPARATOR_ENABLED] ?: true
+        }
+
+    /**
+     * Artist custom separators preference flow
+     */
+    val artistSeparators: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[ARTIST_SEPARATORS] ?: "&\\"
+        }
+
+    /**
      * Save proxy enabled preference
      */
     suspend fun setProxyEnabled(enabled: Boolean) {
@@ -916,6 +935,24 @@ class SettingsDataStore @Inject constructor(
     suspend fun setProxyPort(port: Int) {
         context.settingsDataStore.edit { preferences ->
             preferences[PROXY_PORT] = port.coerceIn(0, 65535)
+        }
+    }
+
+    /**
+     * Save artist separator enabled preference
+     */
+    suspend fun setArtistSeparatorEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ARTIST_SEPARATOR_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Save artist separators preference
+     */
+    suspend fun setArtistSeparators(separators: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ARTIST_SEPARATORS] = separators.ifBlank { "&\\" }
         }
     }
 }
