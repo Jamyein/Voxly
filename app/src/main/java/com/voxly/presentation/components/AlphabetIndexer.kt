@@ -65,8 +65,9 @@ fun AlphabetIndexer(
     var isTouching by remember { mutableStateOf(false) }
 
     val density = LocalDensity.current
-    // 缩小字母高度以在屏幕内显示全部字符 (0-9 + A-Z + # = 37个)
-    val letterHeight = with(density) { 12.dp.toPx() }
+    // 缩小字母高度以在屏幕内显示全部字符 (0-9 + A-Z + # = 38个)
+    // 使用 8dp 确保全部能在大多数手机屏幕内显示 (38 * 8 = 304dp)
+    val letterHeight = with(density) { 8.dp.toPx() }
 
     // Static font sizes for selected/unselected states (no animation for stability)
     val selectedFontSize = 12.sp
@@ -227,17 +228,15 @@ fun getFirstLetter(name: String): Char {
 
 /**
  * Gets the pinyin initial for a Chinese character.
+ * Uses a reference list sorted by pinyin order and binary search to find the correct initial.
  */
 private fun getChinesePinyinInitial(char: Char): Char {
-    // Use Collator with Chinese locale to get pinyin sorting
-    val collator = Collator.getInstance(Locale.CHINA)
-
-    // Convert character to a string for comparison
+    // Convert character to string for comparison
     val charString = char.toString()
 
-    // Get the pinyin initial by comparing with Chinese character ranges
-    // This is a simplified approach - we compare the first letter of pinyin
-    val pinyinInitials = listOf(
+    // Reference characters sorted by pinyin order (using Collator)
+    // Each entry: (pinyin initial, reference character in that group)
+    val pinyinReference = listOf(
         'A' to "啊",
         'B' to "八",
         'C' to "嚓",
@@ -263,9 +262,13 @@ private fun getChinesePinyinInitial(char: Char): Char {
         'Z' to "扎"
     )
 
-    // Find the first pinyin initial where the character comes before the reference in Collator order
-    for ((initial, reference) in pinyinInitials) {
-        if (collator.compare(charString, reference) < 0) {
+    // Use Collator with Chinese locale for pinyin-aware comparison
+    val collator = Collator.getInstance(Locale.CHINA)
+    collator.strength = Collator.PRIMARY  // Only compare base characters, ignore diacritics
+
+    // Find the first group where our character comes before (or equals) the reference character
+    for ((initial, reference) in pinyinReference) {
+        if (collator.compare(charString, reference) <= 0) {
             return initial
         }
     }
