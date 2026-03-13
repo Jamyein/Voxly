@@ -1,13 +1,6 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -52,7 +45,6 @@ import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 import com.voxly.presentation.screens.metadata.LyricsSelectorScreen
 import com.voxly.presentation.theme.ExpressiveAnimations
-import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.viewmodel.AppViewModel
 import java.net.URLDecoder
 
@@ -92,34 +84,17 @@ fun MP3TagNavHost(
                 val toRoute = targetState.destination.route
 
                 when {
-                    // 底部导航主页间使用滑动+淡入 (更有表现力)
+                    // 底部导航主页间使用 Fade Through + Scale
                     fromRoute in destinations && toRoute in destinations -> {
-                        ExpressiveAnimations.BottomNavSlideEnter
+                        ExpressiveAnimations.BottomNavEnter
                     }
-                    // 从非主页返回时从左侧滑入 (Shared Axis)
+                    // 从非主页返回时使用 Pop Enter
                     fromRoute !in destinations && toRoute in destinations -> {
-                        ExpressiveAnimations.SharedAxisPopEnter
+                        ExpressiveAnimations.PagePopEnterM3E
                     }
-                    // M3E 规范: 进入动画 = 向上位移 + 缩放(95%->100%) + 渐显, 500ms
+                    // M3E 规范: 进入动画 = 向上位移 + 缩放(95%->100%) + 渐显, Spring
                     else -> {
-                        fadeIn(
-                            animationSpec = tween(
-                                durationMillis = 500,
-                                easing = ExpressiveMotionTokens.M3E_Emphasized_Easing
-                            )
-                        ) + slideInVertically(
-                            initialOffsetY = { it / 10 },
-                            animationSpec = tween(
-                                durationMillis = 500,
-                                easing = ExpressiveMotionTokens.M3E_Emphasized_Easing
-                            )
-                        ) + scaleIn(
-                            initialScale = 0.95f,
-                            animationSpec = tween(
-                                durationMillis = 500,
-                                easing = ExpressiveMotionTokens.M3E_Emphasized_Easing
-                            )
-                        )
+                        ExpressiveAnimations.PageEnterM3E
                     }
                 }
             },
@@ -128,27 +103,25 @@ fun MP3TagNavHost(
                 val toRoute = targetState.destination.route
 
                 when {
-                    // 主页间切换使用向下滑出
+                    // 主页间切换使用 Fade Through + Scale
                     fromRoute in bottomNavRoutes && toRoute in bottomNavRoutes -> {
-                        ExpressiveAnimations.BottomNavSlideExit
+                        ExpressiveAnimations.BottomNavExit
                     }
-                    // 进入子页面时旧页面向左轻微移动 (Shared Axis)
+                    // 进入子页面时旧页面缩小并变暗
                     fromRoute in bottomNavRoutes && toRoute !in bottomNavRoutes -> {
-                        ExpressiveAnimations.SharedAxisExit
+                        ExpressiveAnimations.PageExitM3E
                     }
-                    // M3E 规范: 退出动画 = 缩小(95%) + 渐隐, 300ms, EmphasizedAccelerate
+                    // 其他退出使用 M3E Pop Exit
                     else -> {
-                        ExpressiveAnimations.M3E_PageExit
+                        ExpressiveAnimations.PageExitM3E
                     }
                 }
             },
             popEnterTransition = {
-                // 返回时从左侧进入 (Shared Axis)
-                ExpressiveAnimations.SharedAxisPopEnter
+                ExpressiveAnimations.PagePopEnterM3E
             },
             popExitTransition = {
-                // M3E 规范: Pop Exit = slideOutVertically + fadeOut + scaleOut(0.95f), 300ms
-                ExpressiveAnimations.M3E_PopExit
+                ExpressiveAnimations.PagePopExitM3E
             }
         ) {
             composable(Screen.FileBrowser.route) {
