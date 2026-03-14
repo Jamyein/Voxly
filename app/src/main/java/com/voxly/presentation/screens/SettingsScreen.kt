@@ -81,16 +81,16 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.BuildConfig
 import com.voxly.R
 import com.voxly.core.util.LogManager
-import com.voxly.presentation.components.ConnectedButtonGroupSettingsRow
-import com.voxly.presentation.components.ConnectedButtonGroupSettingsRowCompact
-import com.voxly.presentation.components.ConnectedButtonGroupVerticalSettingsRow
-import com.voxly.presentation.components.ConnectedIconOnlyButtonGroupSettingsRow
+import com.voxly.presentation.components.ConnectedButtonGroupRow
+import com.voxly.presentation.components.ConnectedButtonGroupRowCompact
+import com.voxly.presentation.components.ConnectedButtonGroupVerticalRow
+import com.voxly.presentation.components.ConnectedIconOnlyButtonGroupRow
 import com.voxly.presentation.components.SegmentedOption
-import com.voxly.presentation.components.SegmentedSettingsClickableRow
-import com.voxly.presentation.components.SegmentedSettingsInfoRow
-import com.voxly.presentation.components.SegmentedSettingsSegmentedButton
-import com.voxly.presentation.components.SegmentedSettingsSegmentedButtonRow
-import com.voxly.presentation.components.SegmentedSettingsSwitchRow
+import com.voxly.presentation.components.SegmentedClickableRow
+import com.voxly.presentation.components.SegmentedInfoRow
+import com.voxly.presentation.components.SegmentedButton
+import com.voxly.presentation.components.SegmentedButtonRow
+import com.voxly.presentation.components.SegmentedSwitchRow
 import com.voxly.presentation.components.SettingsSection
 import com.voxly.presentation.viewmodel.SettingsViewModel
 import com.voxly.domain.model.DataSourceConfig
@@ -1137,7 +1137,7 @@ fun SettingsScreen(
         ) {
             // Appearance Section
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-                ConnectedIconOnlyButtonGroupSettingsRow(
+                ConnectedIconOnlyButtonGroupRow(
                     title = stringResource(R.string.settings_theme),
                     options = listOf(
                         SegmentedOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
@@ -1152,7 +1152,7 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                SegmentedSettingsSwitchRow(
+                SegmentedSwitchRow(
                     title = stringResource(R.string.settings_dynamic_color),
                     subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
                     checked = dynamicColors,
@@ -1166,7 +1166,7 @@ fun SettingsScreen(
 
             // Language Section
             SettingsSection(title = stringResource(R.string.settings_section_language)) {
-                SegmentedSettingsClickableRow(
+                SegmentedClickableRow(
                     title = stringResource(R.string.settings_language),
                     subtitle = stringResource(currentLanguageOption.labelResId),
                     trailingContent = {
@@ -1216,7 +1216,7 @@ fun SettingsScreen(
 
             // Scanning Section
             SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
-                ConnectedIconOnlyButtonGroupSettingsRow(
+                ConnectedIconOnlyButtonGroupRow(
                     title = stringResource(R.string.settings_scan_mode),
                     options = scanModeOptions.map { option ->
                         SegmentedOption(
@@ -1237,7 +1237,7 @@ fun SettingsScreen(
 
                 Spacer(modifier = Modifier.height(8.dp))
 
-                SegmentedSettingsSwitchRow(
+                SegmentedSwitchRow(
                     title = stringResource(R.string.settings_min_duration_filter),
                     subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
                     checked = minDurationFilterEnabled,
@@ -1257,7 +1257,7 @@ fun SettingsScreen(
             }
 
             SettingsSection(title = stringResource(R.string.artist_separator)) {
-                SegmentedSettingsSwitchRow(
+                SegmentedSwitchRow(
                     title = stringResource(R.string.artist_separator),
                     subtitle = stringResource(R.string.artist_separator_summary),
                     checked = viewModel.artistSeparatorEnabled.value,
@@ -1270,7 +1270,7 @@ fun SettingsScreen(
                 if (viewModel.artistSeparatorEnabled.value) {
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    SegmentedSettingsClickableRow(
+                    SegmentedClickableRow(
                         title = stringResource(R.string.artist_separators),
                         subtitle = separatorText.ifBlank { "& \\" },
                         onClick = {
@@ -1317,7 +1317,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             SettingsSection(title = stringResource(R.string.settings_scan_directory_settings)) {
-                SegmentedSettingsClickableRow(
+                SegmentedClickableRow(
                     title = stringResource(R.string.settings_scan_directory_settings),
                     subtitle = stringResource(R.string.settings_scan_directory_settings_subtitle),
                     onClick = { onNavigateToScanDirectorySettings() },
@@ -1330,7 +1330,7 @@ fun SettingsScreen(
 
             SettingsSection(title = stringResource(R.string.settings_section_online_metadata)) {
                 // Metadata source
-                SegmentedSettingsClickableRow(
+                SegmentedClickableRow(
                     title = stringResource(R.string.settings_source_group_metadata),
                     subtitle = stringResource(R.string.settings_source_group_metadata_subtitle),
                     onClick = { showMetadataSourceDialog = true },
@@ -1338,7 +1338,7 @@ fun SettingsScreen(
                     count = 4
                 )
                 // Lyrics source
-                SegmentedSettingsClickableRow(
+                SegmentedClickableRow(
                     title = stringResource(R.string.settings_source_group_lyrics),
                     subtitle = stringResource(R.string.settings_source_group_lyrics_subtitle),
                     onClick = { showLyricsSourceDialog = true },
@@ -1346,7 +1346,7 @@ fun SettingsScreen(
                     count = 4
                 )
                 // Cover source
-                SegmentedSettingsClickableRow(
+                SegmentedClickableRow(
                     title = stringResource(R.string.settings_source_group_cover),
                     subtitle = stringResource(R.string.settings_source_group_cover_subtitle),
                     onClick = { showCoverSourceDialog = true },
@@ -1354,7 +1354,7 @@ fun SettingsScreen(
                     count = 4
                 )
                 // Search limits - global limit with connected button group
-                ConnectedButtonGroupSettingsRow(
+                ConnectedButtonGroupRow(
                     title = stringResource(R.string.settings_online_search_limit),
                     options = searchLimitSegmentedOptions,
                     selectedValue = onlineSearchLimit,
@@ -1369,7 +1369,7 @@ fun SettingsScreen(
             // Logging Section
             SettingsSection(title = stringResource(R.string.settings_section_logging)) {
                 // Logging enabled switch
-                SegmentedSettingsSwitchRow(
+                SegmentedSwitchRow(
                     title = stringResource(R.string.settings_logging_enabled),
                     subtitle = stringResource(R.string.settings_logging_enabled_subtitle),
                     checked = loggingEnabled,
@@ -1381,7 +1381,7 @@ fun SettingsScreen(
                     count = 7
                 )
                 // File logging switch
-                SegmentedSettingsSwitchRow(
+                SegmentedSwitchRow(
                     title = stringResource(R.string.settings_logging_file),
                     subtitle = stringResource(R.string.settings_logging_file_subtitle),
                     checked = fileLoggingEnabled,
@@ -1393,7 +1393,7 @@ fun SettingsScreen(
                     count = 7
                 )
                 // Console logging switch
-                SegmentedSettingsSwitchRow(
+                SegmentedSwitchRow(
                     title = stringResource(R.string.settings_logging_console),
                     subtitle = stringResource(R.string.settings_logging_console_subtitle),
                     checked = consoleLoggingEnabled,
@@ -1405,7 +1405,7 @@ fun SettingsScreen(
                     count = 7
                 )
                 // Crash reporting switch
-                SegmentedSettingsSwitchRow(
+                SegmentedSwitchRow(
                     title = stringResource(R.string.settings_logging_crash),
                     subtitle = stringResource(R.string.settings_logging_crash_subtitle),
                     checked = crashReportingEnabled,
@@ -1417,14 +1417,14 @@ fun SettingsScreen(
                     count = 7
                 )
                 // Log size info
-                SegmentedSettingsInfoRow(
+                SegmentedInfoRow(
                     title = stringResource(R.string.settings_logging_size),
                     value = LogManager.formatLogSize(LogManager.getLogDirectorySize()),
                     index = 4,
                     count = 7
                 )
                 // View logs
-                SegmentedSettingsClickableRow(
+                SegmentedClickableRow(
                     title = stringResource(R.string.settings_logging_view),
                     subtitle = stringResource(R.string.settings_logging_view_subtitle),
                     onClick = { onNavigateToLogViewer() },
@@ -1432,7 +1432,7 @@ fun SettingsScreen(
                     count = 7
                 )
                 // Export logs
-                SegmentedSettingsClickableRow(
+                SegmentedClickableRow(
                     title = stringResource(R.string.settings_logging_export),
                     subtitle = stringResource(R.string.settings_logging_export_subtitle),
                     onClick = { onExportLogs() },
@@ -1440,7 +1440,7 @@ fun SettingsScreen(
                     count = 7
                 )
                 // Cleanup logs
-                SegmentedSettingsClickableRow(
+                SegmentedClickableRow(
                     title = stringResource(R.string.settings_logging_cleanup),
                     subtitle = stringResource(R.string.settings_logging_cleanup_subtitle),
                     onClick = { onCleanupLogs() },
@@ -1461,7 +1461,7 @@ fun SettingsScreen(
             )
             
             SettingsSection(title = stringResource(R.string.replay_gain_settings)) {
-                ConnectedButtonGroupVerticalSettingsRow(
+                ConnectedButtonGroupVerticalRow(
                     title = stringResource(R.string.replay_gain_target_loudness),
                     subtitle = stringResource(R.string.replay_gain_default_loudness),
                     options = replayGainOptions,
@@ -1476,13 +1476,13 @@ fun SettingsScreen(
 
             // About Section
             SettingsSection(title = stringResource(R.string.settings_section_about)) {
-                SegmentedSettingsInfoRow(
+                SegmentedInfoRow(
                     title = stringResource(R.string.settings_version_label),
                     value = BuildConfig.VERSION_NAME,
                     index = 0,
                     count = 2
                 )
-                SegmentedSettingsInfoRow(
+                SegmentedInfoRow(
                     title = stringResource(R.string.settings_developer_label),
                     value = stringResource(R.string.settings_developer_value),
                     index = 1,

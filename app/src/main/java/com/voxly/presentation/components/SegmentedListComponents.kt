@@ -46,7 +46,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 /**
- * Option data class for segmented settings components.
+ * Option data class for segmented list components.
  */
 data class SegmentedOption<T>(
     val value: T,
@@ -56,7 +56,7 @@ data class SegmentedOption<T>(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SegmentedSettingsSwitchRow(
+fun SegmentedSwitchRow(
     title: String,
     subtitle: String? = null,
     checked: Boolean,
@@ -98,7 +98,7 @@ fun SegmentedSettingsSwitchRow(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun <T> SegmentedSettingsSegmentedButtonRow(
+fun <T> SegmentedButtonRow(
     title: String,
     subtitle: String? = null,
     options: List<SegmentedOption<T>>,
@@ -108,7 +108,7 @@ fun <T> SegmentedSettingsSegmentedButtonRow(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    SegmentedSettingsSegmentedButtonImpl(
+    SegmentedButtonImpl(
         title = title,
         subtitle = subtitle,
         options = options,
@@ -124,7 +124,7 @@ fun <T> SegmentedSettingsSegmentedButtonRow(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SegmentedSettingsInfoRow(
+fun SegmentedInfoRow(
     title: String,
     value: String,
     index: Int = 0,
@@ -151,7 +151,7 @@ fun SegmentedSettingsInfoRow(
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun SegmentedSettingsClickableRow(
+fun SegmentedClickableRow(
     title: String,
     subtitle: String? = null,
     trailingContent: @Composable (() -> Unit)? = null,
@@ -185,12 +185,12 @@ fun SegmentedSettingsClickableRow(
 }
 
 /**
- * Settings row with segmented button group for selecting one option.
+ * Segmented row with segmented button group for selecting one option.
  * Uses SingleChoiceSegmentedButtonRow with SegmentedButton for M3E Expressive style.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun <T> SegmentedSettingsSegmentedButton(
+fun <T> SegmentedButton(
     title: String,
     subtitle: String? = null,
     options: List<SegmentedOption<T>>,
@@ -200,7 +200,7 @@ fun <T> SegmentedSettingsSegmentedButton(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    SegmentedSettingsSegmentedButtonImpl(
+    SegmentedButtonImpl(
         title = title,
         subtitle = subtitle,
         options = options,
@@ -216,7 +216,7 @@ fun <T> SegmentedSettingsSegmentedButton(
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun <T> SegmentedSettingsSegmentedButtonImpl(
+private fun <T> SegmentedButtonImpl(
     title: String,
     subtitle: String?,
     options: List<SegmentedOption<T>>,
@@ -283,13 +283,13 @@ private fun <T> SegmentedSettingsSegmentedButtonImpl(
 
 
 /**
- * Settings row with connected button group for selecting one option.
+ * Segmented row with connected button group for selecting one option.
  * Uses ButtonGroup with ToggleButton for M3E Expressive Connected style.
  * Features weight animation for expressive feel.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun <T> ConnectedButtonGroupSettingsRow(
+fun <T> ConnectedButtonGroupRow(
     title: String,
     subtitle: String? = null,
     options: List<SegmentedOption<T>>,
@@ -371,11 +371,11 @@ fun <T> ConnectedButtonGroupSettingsRow(
 }
 
 /**
- * Settings row with compact connected button group - no spacing between buttons.
+ * Segmented row with compact connected button group - no spacing between buttons.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun <T> ConnectedButtonGroupSettingsRowCompact(
+fun <T> ConnectedButtonGroupRowCompact(
     title: String,
     subtitle: String? = null,
     options: List<SegmentedOption<T>>,
@@ -447,12 +447,12 @@ fun <T> ConnectedButtonGroupSettingsRowCompact(
 }
 
 /**
- * Settings row with vertical layout - title on top, buttons below.
+ * Segmented row with vertical layout - title on top, buttons below.
  * For settings like ReplayGain with longer option labels.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun <T> ConnectedButtonGroupVerticalSettingsRow(
+fun <T> ConnectedButtonGroupVerticalRow(
     title: String,
     subtitle: String? = null,
     options: List<SegmentedOption<T>>,
@@ -537,12 +537,12 @@ fun <T> ConnectedButtonGroupVerticalSettingsRow(
 }
 
 /**
- * Settings row with icon-only connected button group.
+ * Segmented row with icon-only connected button group.
  * Shows only icons with tooltips for each option.
  */
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-fun <T> ConnectedIconOnlyButtonGroupSettingsRow(
+fun <T> ConnectedIconOnlyButtonGroupRow(
     title: String,
     subtitle: String? = null,
     options: List<SegmentedOption<T>>,
