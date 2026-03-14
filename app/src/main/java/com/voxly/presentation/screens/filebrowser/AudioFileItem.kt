@@ -393,6 +393,7 @@ internal fun AudioFileList(
     files: List<AudioFile>,
     listState: androidx.compose.foundation.lazy.LazyListState,
     selectedFiles: Set<String>,
+    modifier: Modifier = Modifier,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
     onEditFileMetadata: (AudioFile) -> Unit,
@@ -405,6 +406,7 @@ internal fun AudioFileList(
     val isSelectionMode = selectedFiles.isNotEmpty()
 
     LazyColumn(
+        modifier = modifier,
         state = listState,
         contentPadding = PaddingValues(
             start = 8.dp,
@@ -435,6 +437,7 @@ internal fun AudioFileListWithIndexer(
     files: List<AudioFile>,
     listState: LazyListState,
     selectedFiles: Set<String>,
+    modifier: Modifier = Modifier,
     showIndexer: Boolean = true,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
@@ -443,7 +446,6 @@ internal fun AudioFileListWithIndexer(
     onDeleteFile: (AudioFile) -> Unit,
     onFetchOnlineMetadata: (AudioFile) -> Unit,
     onFixMetadata: (AudioFile) -> Unit,
-    modifier: Modifier = Modifier,
     bottomPadding: Dp = 0.dp
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -455,11 +457,12 @@ internal fun AudioFileListWithIndexer(
         }.distinctBy { it.first }.toMap()
     }
 
-    Box(modifier = modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize()) {
         AudioFileList(
             files = files,
             listState = listState,
             selectedFiles = selectedFiles,
+            modifier = modifier,
             onFileClick = onFileClick,
             onFileLongClick = onFileLongClick,
             onEditFileMetadata = onEditFileMetadata,

@@ -1,20 +1,16 @@
 package com.voxly.presentation.screens.filebrowser
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.FloatingToolbarScrollBehavior
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -24,13 +20,13 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 
 /**
- * Batch Operations FloatingToolbar using M3 HorizontalFloatingToolbar (without FAB)
- * Expands automatically when entering selection mode
+ * Batch Operations FloatingToolbar using official M3 HorizontalFloatingToolbar API
+ * Uses FloatingToolbarScrollBehavior for scroll-to-hide animation
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BatchOperationsToolbar(
-    isSelectionMode: Boolean,
+    scrollBehavior: FloatingToolbarScrollBehavior,
     modifier: Modifier = Modifier,
     onOnlineMetadata: () -> Unit,
     onUnifiedField: () -> Unit,
@@ -39,15 +35,13 @@ fun BatchOperationsToolbar(
     onRenameFiles: () -> Unit,
     onFixMetadata: () -> Unit
 ) {
-    // Only show toolbar in selection mode - auto expand
-    if (!isSelectionMode) return
-
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
     ) {
         HorizontalFloatingToolbar(
-            expanded = true, // Always expanded in selection mode
+            expanded = true,
+            scrollBehavior = scrollBehavior,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 8.dp),

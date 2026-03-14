@@ -54,7 +54,7 @@ import com.voxly.presentation.viewmodel.MetadataField
 /**
  * Metadata editor screen for viewing and editing audio file metadata.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MetadataEditorScreen(
     filePath: String,
@@ -181,6 +181,11 @@ fun MetadataEditorScreen(
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
+    // FloatingToolbar scroll behavior using official M3E API
+    val floatingToolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
+        exitDirection = FloatingToolbarExitDirection.Bottom
+    )
+
     Scaffold(
         modifier = Modifier
             .nestedScroll(scrollBehavior.nestedScrollConnection)
@@ -249,9 +254,8 @@ fun MetadataEditorScreen(
                         enabled = hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving
                     ) {
                         if (uiState is MetadataEditorUiState.Saving) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(16.dp),
-                                strokeWidth = 2.dp
+                            LoadingIndicator(
+                                modifier = Modifier.size(16.dp)
                             )
                         } else {
                             Icon(Icons.Default.Save, contentDescription = stringResource(R.string.dialog_save))
@@ -273,7 +277,7 @@ fun MetadataEditorScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentAlignment = Alignment.Center
                     ) {
-                        CircularProgressIndicator()
+                        LoadingIndicator()
                     }
                 }
                 is MetadataEditorUiState.Saving -> {
@@ -282,7 +286,7 @@ fun MetadataEditorScreen(
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            CircularProgressIndicator()
+                            LoadingIndicator()
                             Spacer(modifier = Modifier.height(16.dp))
                             Text(stringResource(R.string.saving_metadata))
                         }
@@ -297,10 +301,15 @@ fun MetadataEditorScreen(
 
                     // Box with FloatingToolbar at bottom
                     Box(modifier = Modifier.fillMaxSize()) {
+                        // Create scroll state for FloatingToolbarScrollBehavior
+                        val scrollState = rememberScrollState()
+
                         MetadataFormContent(
                             metadata = state.editedMetadata,
                             audioFile = state.audioFile,
                             bottomPadding = innerPadding.calculateBottomPadding() + 80.dp, // Extra space for toolbar
+                            scrollState = scrollState,
+                            nestedScrollModifier = Modifier.nestedScroll(floatingToolbarScrollBehavior),
                             modifiedFields = modifiedFields,
                             onTitleChange = { viewModel.updateMetadataField(MetadataField.TITLE, it) },
                             onArtistChange = { viewModel.updateMetadataField(MetadataField.ARTIST, it) },
@@ -340,6 +349,7 @@ fun MetadataEditorScreen(
                         @OptIn(ExperimentalMaterial3ExpressiveApi::class)
                         HorizontalFloatingToolbar(
                             expanded = true,
+                            scrollBehavior = floatingToolbarScrollBehavior,
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(bottom = innerPadding.calculateBottomPadding() + 8.dp),
@@ -581,12 +591,15 @@ private fun MetadataFormContent(
     onClearReplayGain: () -> Unit = {},
     isScanningReplayGain: Boolean = false,
     replayGainInfo: ReplayGainInfo? = null,
-    bottomPadding: Dp = 0.dp
+    bottomPadding: Dp = 0.dp,
+    scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
+    nestedScrollModifier: Modifier = Modifier
 ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
+            .then(nestedScrollModifier)
+            .verticalScroll(scrollState)
             .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomPadding)
     ) {
         // Album Art Section

@@ -25,6 +25,10 @@ import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.FloatingToolbarExitDirection
+import androidx.compose.material3.FloatingToolbarScrollBehavior
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -52,7 +56,7 @@ import com.voxly.presentation.screens.filebrowser.OnlineMetadataOptions
 import java.text.Collator
 import java.util.Locale
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DirectoryContentScreen(
     directoryUri: String,
@@ -88,6 +92,12 @@ fun DirectoryContentScreen(
 
     val listState = rememberLazyListState()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
+    // FloatingToolbar scroll behavior using official M3E API
+    val floatingToolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
+        exitDirection = FloatingToolbarExitDirection.Bottom
+    )
+
     val canScrollToTop by remember {
         derivedStateOf {
             listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
@@ -264,6 +274,7 @@ fun DirectoryContentScreen(
             AudioFileListWithIndexer(
                 files = displayedFiles,
                 listState = listState,
+                modifier = Modifier.nestedScroll(floatingToolbarScrollBehavior),
                 selectedFiles = selectedFiles,
                 onFileClick = { audioFile ->
                     if (isSelectionMode) {
@@ -302,7 +313,7 @@ fun DirectoryContentScreen(
         // FloatingToolbar for batch operations - only show in selection mode
         if (!isBatchProcessing && files.isNotEmpty() && isSelectionMode) {
             BatchOperationsToolbar(
-                isSelectionMode = isSelectionMode,
+                scrollBehavior = floatingToolbarScrollBehavior,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
                     .padding(bottom = 8.dp),
