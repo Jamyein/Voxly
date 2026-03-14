@@ -1,8 +1,8 @@
 package com.voxly.presentation.components
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -10,13 +10,10 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.size
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -29,7 +26,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -44,6 +40,10 @@ import kotlin.math.roundToInt
 /**
  * Alphabet indexer sidebar for quick navigation through a sorted list.
  * Supports both English letters and Chinese pinyin initials.
+ *
+ * IMPORTANT: This component should be positioned at the right edge of the screen
+ * using parent Box with align(Alignment.CenterEnd). It should NOT fill the full
+ * height of the parent, but should use wrapContentHeight() instead.
  */
 @Composable
 fun AlphabetIndexer(
@@ -69,42 +69,44 @@ fun AlphabetIndexer(
     var touchOffsetY by remember { mutableFloatStateOf(0f) }
     var isTouching by remember { mutableStateOf(false) }
 
-    // Static font sizes for selected/unselected states (no animation for stability)
-    val selectedFontSize = 12.sp
-    val unselectedFontSize = 9.sp
+    // Fixed dimensions for the sidebar
+    val sidebarWidth = 20.dp
+    val letterSpacing = 2.dp
 
-    // Fixed letter height - will be calculated based on available height at runtime
-    val letterHeight = remember { mutableFloatStateOf(0f) }
+    // Static font sizes
+    val selectedFontSize = 11.sp
+    val unselectedFontSize = 8.sp
+
+    // Calculate expected height based on letter count
+    val expectedHeight = remember(displayLetters.size) {
+        (displayLetters.size * 16).dp // Approximate height per letter
+    }
 
     Box(
         modifier = modifier
-            .fillMaxHeight()
-            .padding(start = 4.dp)
+            .size(width = sidebarWidth, height = expectedHeight)
+            .padding(start = 2.dp)
             .pointerInput(displayLetters) {
                 detectDragGestures(
                     onDragStart = { offset ->
                         isTouching = true
                         touchOffsetY = offset.y
-                        if (letterHeight.floatValue > 0) {
-                            val index = (touchOffsetY / letterHeight.floatValue).toInt()
-                                .coerceIn(0, displayLetters.lastIndex)
-                            selectedLetter = displayLetters.getOrNull(index)
-                            if (selectedLetter != null && (!showAllLetters || selectedLetter in availableLetters)) {
-                                onLetterSelected(selectedLetter!!)
-                            }
+                        val index = (touchOffsetY / (size.height.toFloat() / displayLetters.size)).toInt()
+                            .coerceIn(0, displayLetters.lastIndex)
+                        selectedLetter = displayLetters.getOrNull(index)
+                        if (selectedLetter != null && (!showAllLetters || selectedLetter in availableLetters)) {
+                            onLetterSelected(selectedLetter!!)
                         }
                     },
                     onDrag = { change, _ ->
                         touchOffsetY = change.position.y
-                        if (letterHeight.floatValue > 0) {
-                            val index = (touchOffsetY / letterHeight.floatValue).toInt()
-                                .coerceIn(0, displayLetters.lastIndex)
-                            val newLetter = displayLetters.getOrNull(index)
-                            if (newLetter != selectedLetter) {
-                                selectedLetter = newLetter
-                                if (newLetter != null && (!showAllLetters || newLetter in availableLetters)) {
-                                    onLetterSelected(newLetter)
-                                }
+                        val index = (touchOffsetY / (size.height.toFloat() / displayLetters.size)).toInt()
+                            .coerceIn(0, displayLetters.lastIndex)
+                        val newLetter = displayLetters.getOrNull(index)
+                        if (newLetter != selectedLetter) {
+                            selectedLetter = newLetter
+                            if (newLetter != null && (!showAllLetters || newLetter in availableLetters)) {
+                                onLetterSelected(newLetter)
                             }
                         }
                     },
@@ -121,49 +123,43 @@ fun AlphabetIndexer(
             .pointerInput(displayLetters) {
                 detectTapGestures(
                     onTap = { offset ->
-                        if (letterHeight.floatValue > 0) {
-                            val index = (offset.y / letterHeight.floatValue).toInt()
-                                .coerceIn(0, displayLetters.lastIndex)
-                            val tappedLetter = displayLetters.getOrNull(index)
-                            if (tappedLetter != null && tappedLetter in availableLetters) {
-                                selectedLetter = tappedLetter
-                                onLetterSelected(tappedLetter)
-                            }
+                        val index = (offset.y / (size.height.toFloat() / displayLetters.size)).toInt()
+                            .coerceIn(0, displayLetters.lastIndex)
+                        val tappedLetter = displayLetters.getOrNull(index)
+                        if (tappedLetter != null && tappedLetter in availableLetters) {
+                            selectedLetter = tappedLetter
+                            onLetterSelected(tappedLetter)
                         }
                     }
                 )
             }
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .onSizeChanged { size: androidx.compose.ui.unit.IntSize ->
-                    if (displayLetters.isNotEmpty() && size.height > 0) {
-                        letterHeight.floatValue = size.height.toFloat() / displayLetters.size
-                    }
-                },
-            verticalArrangement = Arrangement.SpaceEvenly,
+            modifier = Modifier.fillMaxHeight(),
+            verticalArrangement = Arrangement.SpaceBetween,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            displayLetters.forEachIndexed { index, letter ->
+            displayLetters.forEach { letter ->
                 val isAvailable = letter in availableLetters
                 val isSelected = selectedLetter == letter
 
-                // Static styles without animation - direct conditional assignment
                 val fontSize = if (isSelected) selectedFontSize else unselectedFontSize
-                val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                val color = when {
-                    isSelected -> MaterialTheme.colorScheme.primary
-                    !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                    else -> MaterialTheme.colorScheme.onSurfaceVariant
-                }
+                val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                val color by animateColorAsState(
+                    targetValue = when {
+                        isSelected -> MaterialTheme.colorScheme.primary
+                        !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                        else -> MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    label = "letter_color"
+                )
 
                 Text(
                     text = letter.uppercase(),
                     fontSize = fontSize,
                     fontWeight = fontWeight,
                     color = color,
-                    modifier = Modifier
+                    modifier = Modifier.padding(vertical = letterSpacing)
                 )
             }
         }
@@ -175,17 +171,17 @@ fun AlphabetIndexer(
             modifier = Modifier
                 .offset {
                     IntOffset(
-                        x = -60,
-                        y = (touchOffsetY - 40.dp.toPx()).roundToInt()
+                        x = -56,
+                        y = (touchOffsetY - 24.dp.toPx()).roundToInt()
                     )
                 }
-                .size(48.dp)
-                .clip(RoundedCornerShape(12.dp))
+                .size(40.dp)
+                .clip(RoundedCornerShape(8.dp))
                 .background(MaterialTheme.colorScheme.primaryContainer),
             contentAlignment = Alignment.Center
         ) {
             val previewScale by animateDpAsState(
-                targetValue = 24.dp,
+                targetValue = 20.dp,
                 animationSpec = spring(
                     dampingRatio = Spring.DampingRatioMediumBouncy,
                     stiffness = Spring.StiffnessLow
