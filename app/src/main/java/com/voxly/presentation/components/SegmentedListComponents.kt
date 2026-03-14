@@ -798,7 +798,7 @@ fun AudioFileStandardRow(
                 onLongClick = onLongClick
             ),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
+        color = MaterialTheme.colorScheme.surface
     ) {
         Row(
             modifier = Modifier
@@ -987,7 +987,7 @@ fun AudioFileStandardRowWithMenu(
                 onLongClick = onLongClick
             ),
         shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
+        color = MaterialTheme.colorScheme.surface
     ) {
         Row(
             modifier = Modifier
