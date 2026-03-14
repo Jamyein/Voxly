@@ -82,3 +82,4 @@ local.properties
 /.ui-design
 /CLAUDE.md
 /docs
+*.html
