@@ -14,8 +14,8 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SegmentedButton
@@ -46,34 +46,48 @@ data class SegmentedOption<T>(
     val label: String? = null
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SegmentedSettingsSwitchRow(
     title: String,
     subtitle: String? = null,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
+    index: Int = 0,
+    count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    ListItem(
-        headlineContent = { Text(text = title) },
-        supportingContent = subtitle?.let { { Text(text = it) } },
+    SegmentedListItem(
+        checked = checked,
+        onCheckedChange = onCheckedChange,
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+        leadingContent = {
+            Column {
+                Text(text = title)
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
         trailingContent = {
             Switch(
                 checked = checked,
                 onCheckedChange = onCheckedChange
             )
         },
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
-        colors = ListItemDefaults.colors(
+        modifier = modifier.fillMaxWidth(),
+        colors = ListItemDefaults.segmentedColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        ),
+        content = {}
     )
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun <T> SegmentedSettingsSegmentedButtonRow(
     title: String,
@@ -81,21 +95,35 @@ fun <T> SegmentedSettingsSegmentedButtonRow(
     options: List<SegmentedOption<T>>,
     selectedValue: T,
     onSelected: (T) -> Unit,
+    index: Int = 0,
+    count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    ListItem(
-        headlineContent = { Text(text = title) },
-        supportingContent = subtitle?.let { { Text(text = it) } },
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+        leadingContent = {
+            Column {
+                Text(text = title)
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
         trailingContent = {
             SingleChoiceSegmentedButtonRow(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                options.forEachIndexed { index, option ->
+                options.forEachIndexed { btnIndex, option ->
                     SegmentedButton(
                         selected = option.value == selectedValue,
                         onClick = { onSelected(option.value) },
                         shape = SegmentedButtonDefaults.itemShape(
-                            index = index,
+                            index = btnIndex,
                             count = options.size
                         ),
                         icon = {
@@ -114,144 +142,140 @@ fun <T> SegmentedSettingsSegmentedButtonRow(
             }
         },
         modifier = modifier.fillMaxWidth(),
-        colors = ListItemDefaults.colors(
+        colors = ListItemDefaults.segmentedColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        ),
+        content = {}
     )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SegmentedSettingsInfoRow(
     title: String,
     value: String,
+    index: Int = 0,
+    count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    ListItem(
-        headlineContent = {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+        leadingContent = {
             Text(
                 text = title,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         },
         trailingContent = { Text(text = value) },
-        colors = ListItemDefaults.colors(
+        colors = ListItemDefaults.segmentedColors(
             containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
         ),
-        modifier = modifier.fillMaxWidth()
+        modifier = modifier.fillMaxWidth(),
+        content = {}
     )
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun SegmentedSettingsClickableRow(
     title: String,
     subtitle: String? = null,
     trailingContent: @Composable (() -> Unit)? = null,
     onClick: () -> Unit,
+    index: Int = 0,
+    count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    ListItem(
-        headlineContent = { Text(text = title) },
-        supportingContent = subtitle?.let { { Text(text = it) } },
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+        leadingContent = {
+            Column {
+                Text(text = title)
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
         trailingContent = trailingContent,
-        modifier = modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        colors = ListItemDefaults.colors(
+        modifier = modifier.fillMaxWidth(),
+        colors = ListItemDefaults.segmentedColors(
             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        )
+        ),
+        content = {}
     )
 }
 
 /**
  * Settings row with segmented button group for selecting one option.
- * This version uses ToggleButton with connected shapes for a segmented appearance.
+ * Uses SingleChoiceSegmentedButtonRow with SegmentedButton for M3E Expressive style.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun <T> SegmentedSettingsSegmentedButton(
     title: String,
+    subtitle: String? = null,
     options: List<SegmentedOption<T>>,
     selectedValue: T,
     onSelected: (T) -> Unit,
+    index: Int = 0,
+    count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    val mediumHeight = 40.dp
-    val mediumWeight = 64.dp
-
-    Column(modifier = modifier.fillMaxWidth()) {
-        // Title row
-        ListItem(
-            headlineContent = {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+        leadingContent = {
+            Column {
                 Text(
                     text = title,
                     style = MaterialTheme.typography.bodyLarge
                 )
-            },
-            colors = ListItemDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-            ),
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        // Segmented buttons row
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
-        ) {
-            options.forEachIndexed { index, option ->
-                val tooltipState = rememberTooltipState()
-                val isSelected = option.value == selectedValue
-
-                Box {
-                    TooltipBox(
-                        positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                            positioning = TooltipAnchorPosition.Above
+                subtitle?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        },
+        trailingContent = {
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                options.forEachIndexed { btnIndex, option ->
+                    SegmentedButton(
+                        selected = option.value == selectedValue,
+                        onClick = { onSelected(option.value) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = btnIndex,
+                            count = options.size
                         ),
-                        tooltip = {
-                            PlainTooltip {
-                                Text(option.label ?: "")
-                            }
-                        },
-                        state = tooltipState
-                    ) {
-                        ToggleButton(
-                            checked = isSelected,
-                            onCheckedChange = { checked ->
-                                if (checked) onSelected(option.value)
-                            },
-                            modifier = Modifier
-                                .width(mediumWeight)
-                                .height(mediumHeight)
-                                .semantics { role = Role.RadioButton },
-                            shapes = when (index) {
-                                0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                                options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                            },
-                            contentPadding = androidx.compose.foundation.layout.PaddingValues(2.dp)
-                        ) {
-                            if (option.icon != null) {
+                        icon = {
+                            option.icon?.let { icon ->
                                 Icon(
-                                    imageVector = option.icon,
+                                    imageVector = icon,
                                     contentDescription = option.label,
-                                    tint = if (isSelected) {
-                                        MaterialTheme.colorScheme.onSecondaryContainer
-                                    } else {
-                                        MaterialTheme.colorScheme.onSurfaceVariant
-                                    }
-                                )
-                            } else {
-                                Text(
-                                    text = option.label ?: "",
-                                    style = MaterialTheme.typography.labelLarge
+                                    modifier = Modifier.size(18.dp)
                                 )
                             }
                         }
+                    ) {
+                        Text(option.label ?: "")
                     }
                 }
             }
-        }
-    }
+        },
+        modifier = modifier.fillMaxWidth(),
+        colors = ListItemDefaults.segmentedColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        ),
+        content = {}
+    )
 }
