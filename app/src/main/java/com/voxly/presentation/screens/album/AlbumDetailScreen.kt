@@ -2,6 +2,7 @@ package com.voxly.presentation.screens.album
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +24,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItem
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Scaffold
@@ -46,10 +49,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.CardPosition
-import com.voxly.presentation.components.SettingsItemCard
 import com.voxly.presentation.components.SettingsSection
-import com.voxly.presentation.components.TrackListItem
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 
@@ -268,19 +268,37 @@ fun AlbumDetailScreen(
                     title = "Disc $discNumber"
                 ) {
                     discFiles.forEachIndexed { index, audioFile ->
-                        val position = when {
-                            discFiles.size == 1 -> CardPosition.SINGLE
-                            index == 0 -> CardPosition.FIRST
-                            index == discFiles.lastIndex -> CardPosition.LAST
-                            else -> CardPosition.MIDDLE
-                        }
-
-                        SettingsItemCard(position = position) {
-                            TrackListItem(
-                                audioFile = audioFile,
-                                onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") }
+                        ListItem(
+                            headlineContent = {
+                                Text(
+                                    text = audioFile.metadata.trackNumber?.toString() ?: "-",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.width(32.dp)
+                                )
+                            },
+                            supportingContent = {
+                                Column {
+                                    Text(
+                                        text = audioFile.metadata.getDisplayTitle(audioFile.name),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        maxLines = 1
+                                    )
+                                    Text(
+                                        text = "${audioFile.format.uppercase()} • ${audioFile.getFormattedDuration()}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
+                            colors = ListItemDefaults.colors(
+                                containerColor = MaterialTheme.colorScheme.surface
                             )
-                        }
+                        )
                     }
                 }
 
