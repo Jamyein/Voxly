@@ -9,14 +9,14 @@ import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -73,102 +73,98 @@ fun AlphabetIndexer(
     val selectedFontSize = 12.sp
     val unselectedFontSize = 9.sp
 
-    BoxWithConstraints(
+    // Fixed letter height - will be calculated based on available height at runtime
+    val letterHeight = remember { mutableFloatStateOf(0f) }
+
+    Box(
         modifier = modifier
-    ) {
-        val density = LocalDensity.current
-        val containerHeightPx = with(density) { maxHeight.toPx() }
-
-        // Calculate letter height based on actual container height
-        val letterHeight = if (displayLetters.isNotEmpty()) {
-            containerHeightPx / displayLetters.size
-        } else {
-            8f
-        }
-
-        // Measure actual container height after layout
-        Box(
-            modifier = Modifier
-                .padding(start = 4.dp)
-                .height(maxHeight)
-                .wrapContentWidth()
-                .pointerInput(displayLetters) {
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            isTouching = true
-                            touchOffsetY = offset.y
-                            val index = (touchOffsetY / letterHeight).toInt()
+            .fillMaxHeight()
+            .padding(start = 4.dp)
+            .pointerInput(displayLetters) {
+                detectDragGestures(
+                    onDragStart = { offset ->
+                        isTouching = true
+                        touchOffsetY = offset.y
+                        if (letterHeight.floatValue > 0) {
+                            val index = (touchOffsetY / letterHeight.floatValue).toInt()
                                 .coerceIn(0, displayLetters.lastIndex)
                             selectedLetter = displayLetters.getOrNull(index)
-                            // Only trigger callback if letter has files (or showAllLetters is false)
                             if (selectedLetter != null && (!showAllLetters || selectedLetter in availableLetters)) {
                                 onLetterSelected(selectedLetter!!)
                             }
-                        },
-                        onDrag = { change, _ ->
-                            touchOffsetY = change.position.y
-                            val index = (touchOffsetY / letterHeight).toInt()
+                        }
+                    },
+                    onDrag = { change, _ ->
+                        touchOffsetY = change.position.y
+                        if (letterHeight.floatValue > 0) {
+                            val index = (touchOffsetY / letterHeight.floatValue).toInt()
                                 .coerceIn(0, displayLetters.lastIndex)
                             val newLetter = displayLetters.getOrNull(index)
                             if (newLetter != selectedLetter) {
                                 selectedLetter = newLetter
-                                // Only trigger callback if letter has files (or showAllLetters is false)
                                 if (newLetter != null && (!showAllLetters || newLetter in availableLetters)) {
                                     onLetterSelected(newLetter)
                                 }
                             }
-                        },
-                        onDragEnd = {
-                            isTouching = false
-                            selectedLetter = null
-                        },
-                        onDragCancel = {
-                            isTouching = false
-                            selectedLetter = null
                         }
-                    )
-                }
-                .pointerInput(displayLetters) {
-                    detectTapGestures(
-                        onTap = { offset ->
-                            val index = (offset.y / letterHeight).toInt()
+                    },
+                    onDragEnd = {
+                        isTouching = false
+                        selectedLetter = null
+                    },
+                    onDragCancel = {
+                        isTouching = false
+                        selectedLetter = null
+                    }
+                )
+            }
+            .pointerInput(displayLetters) {
+                detectTapGestures(
+                    onTap = { offset ->
+                        if (letterHeight.floatValue > 0) {
+                            val index = (offset.y / letterHeight.floatValue).toInt()
                                 .coerceIn(0, displayLetters.lastIndex)
                             val tappedLetter = displayLetters.getOrNull(index)
-                            // Only trigger callback if letter has files
                             if (tappedLetter != null && tappedLetter in availableLetters) {
                                 selectedLetter = tappedLetter
                                 onLetterSelected(tappedLetter)
                             }
                         }
-                    )
-                }
-        ) {
-            Column(
-                modifier = Modifier.fillMaxSize(),
-                verticalArrangement = Arrangement.SpaceEvenly,
-                horizontalAlignment = Alignment.CenterHorizontally
-            ) {
-                displayLetters.forEachIndexed { index, letter ->
-                    val isAvailable = letter in availableLetters
-                    val isSelected = selectedLetter == letter
-
-                    // Static styles without animation - direct conditional assignment
-                    val fontSize = if (isSelected) selectedFontSize else unselectedFontSize
-                    val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
-                    val color = when {
-                        isSelected -> MaterialTheme.colorScheme.primary
-                        !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
                     }
+                )
+            }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .onSizeChanged { size: androidx.compose.ui.unit.IntSize ->
+                    if (displayLetters.isNotEmpty() && size.height > 0) {
+                        letterHeight.floatValue = size.height.toFloat() / displayLetters.size
+                    }
+                },
+            verticalArrangement = Arrangement.SpaceEvenly,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            displayLetters.forEachIndexed { index, letter ->
+                val isAvailable = letter in availableLetters
+                val isSelected = selectedLetter == letter
 
-                    Text(
-                        text = letter.uppercase(),
-                        fontSize = fontSize,
-                        fontWeight = fontWeight,
-                        color = color,
-                        modifier = Modifier
-                    )
+                // Static styles without animation - direct conditional assignment
+                val fontSize = if (isSelected) selectedFontSize else unselectedFontSize
+                val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium
+                val color = when {
+                    isSelected -> MaterialTheme.colorScheme.primary
+                    !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.3f)
+                    else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
+
+                Text(
+                    text = letter.uppercase(),
+                    fontSize = fontSize,
+                    fontWeight = fontWeight,
+                    color = color,
+                    modifier = Modifier
+                )
             }
         }
     }
