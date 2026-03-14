@@ -25,6 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -80,7 +83,6 @@ fun MetadataEditorScreen(
     var showConversionDialog by remember { mutableStateOf(false) }
     var showReauthorizeDialog by remember { mutableStateOf(false) }
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
-    var showActionMenu by remember { mutableStateOf(false) }
     var exitAfterSave by remember { mutableStateOf(false) }
     var showLyricsPosterPreview by remember { mutableStateOf(false) }
     var selectedLyricsIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
@@ -259,188 +261,77 @@ fun MetadataEditorScreen(
             )
         },
         floatingActionButton = {
-            Box(modifier = Modifier.fillMaxSize()) {
-                AnimatedVisibility(
-                    visible = showActionMenu,
-                    enter = fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)),
-                    exit = fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .clickable { showActionMenu = false }
-                    )
-                }
-                Box(
+            // Use HorizontalFloatingToolbar without FAB - always visible
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                HorizontalFloatingToolbar(
+                    expanded = true,
                     modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(end = 16.dp, bottom = 88.dp),
-                    contentAlignment = Alignment.BottomEnd
+                        .align(Alignment.BottomCenter)
+                        .padding(bottom = 8.dp),
+                    colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
                 ) {
-                    AnimatedVisibility(
-                        visible = showActionMenu,
-                        enter = ExpressiveAnimations.FabEnter,
-                        exit = ExpressiveAnimations.FabExit
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
+                    // Lyrics Selection (only show if there are lyrics)
+                    val hasLyrics = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.lyrics?.isNotBlank() == true
+                    if (hasLyrics) {
+                        SmallFloatingActionButton(
+                            onClick = {
+                                val successState = uiState as? MetadataEditorUiState.Success
+                                val metadata = successState?.editedMetadata
+                                val audioFile = successState?.audioFile
+                                onNavigateToLyricsSelector(
+                                    metadata?.lyrics ?: "",
+                                    metadata?.getDisplayTitle(audioFile?.name ?: "") ?: "",
+                                    metadata?.artist ?: "",
+                                    metadata?.album ?: "",
+                                    metadata?.albumArt
+                                )
+                            },
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
                         ) {
-                            // Lyrics Selection FAB (only show if there are lyrics)
-                            val hasLyrics = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.lyrics?.isNotBlank() == true
-                            if (hasLyrics) {
-                                // Select Lyrics option
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.End
-                                ) {
-                                    Surface(
-                                        color = MaterialTheme.colorScheme.surface,
-                                        shape = MaterialTheme.shapes.small,
-                                        shadowElevation = 2.dp
-                                    ) {
-                                        Text(
-                                            text = stringResource(R.string.select_lyrics_for_poster),
-                                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.width(12.dp))
-                                    FloatingActionButton(
-                                        onClick = {
-                                            showActionMenu = false
-                                            val successState = uiState as? MetadataEditorUiState.Success
-                                            val metadata = successState?.editedMetadata
-                                            val audioFile = successState?.audioFile
-                                            onNavigateToLyricsSelector(
-                                                metadata?.lyrics ?: "",
-                                                metadata?.getDisplayTitle(audioFile?.name ?: "") ?: "",
-                                                metadata?.artist ?: "",
-                                                metadata?.album ?: "",
-                                                metadata?.albumArt
-                                            )
-                                        },
-                                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Lyrics,
-                                            contentDescription = stringResource(R.string.select_lyrics_for_poster)
-                                        )
-                                    }
-                                }
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shape = MaterialTheme.shapes.small,
-                                    shadowElevation = 2.dp
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.search_online_lyrics),
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                FloatingActionButton(
-                                    onClick = {
-                                        showActionMenu = false
-                                        onNavigateToOnlineLyricsSearch()
-                                    },
-                                    containerColor = MaterialTheme.colorScheme.secondaryContainer
-                                ) {
-                                    Icon(
-                                        painter = appIconPainter(AppIcon.MusicNote),
-                                        contentDescription = stringResource(R.string.cd_online_lyrics)
-                                    )
-                                }
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shape = MaterialTheme.shapes.small,
-                                    shadowElevation = 2.dp
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.fetch_online_metadata),
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                FloatingActionButton(
-                                    onClick = {
-                                        showActionMenu = false
-                                        onNavigateToOnlineMetadata()
-                                    },
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                                ) {
-                                    Icon(
-                                        painter = appIconPainter(AppIcon.CloudDownload),
-                                        contentDescription = stringResource(R.string.cd_online_metadata)
-                                    )
-                                }
-                            }
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.End
-                            ) {
-                                Surface(
-                                    color = MaterialTheme.colorScheme.surface,
-                                    shape = MaterialTheme.shapes.small,
-                                    shadowElevation = 2.dp
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.dialog_save),
-                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                                        style = MaterialTheme.typography.bodyMedium
-                                    )
-                                }
-                                Spacer(modifier = Modifier.width(12.dp))
-                                FloatingActionButton(
-                                    onClick = {
-                                        showActionMenu = false
-                                        if (hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving) {
-                                            viewModel.saveMetadata()
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        Icons.Default.Save,
-                                        contentDescription = stringResource(R.string.cd_save)
-                                    )
-                                }
-                            }
+                            Icon(
+                                Icons.Default.Lyrics,
+                                contentDescription = stringResource(R.string.select_lyrics_for_poster)
+                            )
                         }
                     }
-                }
-                FloatingActionButton(
-                    onClick = { showActionMenu = !showActionMenu },
-                    modifier = Modifier
-                        .align(Alignment.BottomEnd)
-                        .padding(16.dp)
-                ) {
-                    AnimatedContent(
-                        targetState = showActionMenu,
-                        transitionSpec = {
-                            (scaleIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeIn(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)))
-                                .togetherWith(scaleOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)) + fadeOut(animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium)))
-                        },
-                        label = "fab_icon"
-                    ) { isExpanded ->
+
+                    // Search Online Lyrics
+                    SmallFloatingActionButton(
+                        onClick = { onNavigateToOnlineLyricsSearch() },
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer
+                    ) {
                         Icon(
-                            painter = appIconPainter(
-                                if (isExpanded) AppIcon.Close else AppIcon.MoreVert
-                            ),
-                            contentDescription = stringResource(
-                                if (isExpanded) R.string.cd_close else R.string.cd_more_options
-                            )
+                            painter = appIconPainter(AppIcon.MusicNote),
+                            contentDescription = stringResource(R.string.cd_online_lyrics)
+                        )
+                    }
+
+                    // Fetch Online Metadata
+                    SmallFloatingActionButton(
+                        onClick = { onNavigateToOnlineMetadata() },
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                    ) {
+                        Icon(
+                            painter = appIconPainter(AppIcon.CloudDownload),
+                            contentDescription = stringResource(R.string.cd_online_metadata)
+                        )
+                    }
+
+                    // Save
+                    SmallFloatingActionButton(
+                        onClick = {
+                            if (hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving) {
+                                viewModel.saveMetadata()
+                            }
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Save,
+                            contentDescription = stringResource(R.string.cd_save)
                         )
                     }
                 }
