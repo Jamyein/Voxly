@@ -81,8 +81,12 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.BuildConfig
 import com.voxly.R
 import com.voxly.core.util.LogManager
-import com.voxly.presentation.components.CardPosition
-import com.voxly.presentation.components.SettingsItemCard
+import com.voxly.presentation.components.SegmentedOption
+import com.voxly.presentation.components.SegmentedSettingsClickableRow
+import com.voxly.presentation.components.SegmentedSettingsInfoRow
+import com.voxly.presentation.components.SegmentedSettingsSegmentedButton
+import com.voxly.presentation.components.SegmentedSettingsSegmentedButtonRow
+import com.voxly.presentation.components.SegmentedSettingsSwitchRow
 import com.voxly.presentation.components.SettingsSection
 import com.voxly.presentation.viewmodel.SettingsViewModel
 import com.voxly.domain.model.DataSourceConfig
@@ -571,29 +575,6 @@ fun DraggableSourcePriorityDialog(
 // SettingsSection is imported from com.voxly.presentation.components
 
 @Composable
-fun SettingsSwitch(
-    title: String,
-    subtitle: String,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
-) {
-    ListItem(
-        headlineContent = { Text(text = title) },
-        supportingContent = { Text(text = subtitle) },
-        trailingContent = {
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
-            )
-        },
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
-    )
-}
-
-@Composable
 fun SettingsSlider(
     title: String,
     subtitle: String,
@@ -650,6 +631,7 @@ fun SettingsInfoRow(title: String, value: String) {
     )
 }
 
+// SettingsSubmenuRow - Kept for potential future use
 @Composable
 fun SettingsSubmenuRow(
     title: String,
@@ -1129,115 +1111,106 @@ fun SettingsScreen(
         ) {
             // Appearance Section
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-                // Theme Segmented Buttons - Single item
-                SettingsItemCard(position = CardPosition.FIRST) {
-                    ListItem(
-                        headlineContent = {
-                            Text(
-                                text = stringResource(R.string.settings_theme),
-                            )
-                        },
-                        trailingContent = {
-                            ConnectedIconButtonGroup(
-                                options = listOf(ConnectedIconOption(
-                                        "system",
-                                        Icons.Default.BrightnessAuto,
-                                        stringResource(R.string.settings_theme_system)
-                                    ), ConnectedIconOption(
-                                        "light",
-                                        Icons.Default.LightMode,
-                                        stringResource(R.string.settings_theme_light)
-                                    ), ConnectedIconOption(
-                                        "dark",
-                                        Icons.Default.DarkMode,
-                                        stringResource(R.string.settings_theme_dark)
-                                    )),
-                                selectedValue = themeMode,
-                                onSelected = viewModel::setThemeMode
-                            )
-                        },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
-                    )
-                }
+                SegmentedSettingsSegmentedButton(
+                    title = stringResource(R.string.settings_theme),
+                    options = listOf(
+                        SegmentedOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
+                        SegmentedOption("light", Icons.Default.LightMode, stringResource(R.string.settings_theme_light)),
+                        SegmentedOption("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
+                    ),
+                    selectedValue = themeMode,
+                    onSelected = viewModel::setThemeMode
+                )
 
-                // SettingsSwitch - Last item
-                SettingsItemCard(position = CardPosition.LAST) {
-                    SettingsSwitch(
-                        title = stringResource(R.string.settings_dynamic_color),
-                        subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
-                        checked = dynamicColors,
-                        onCheckedChange = { viewModel.setDynamicColors(it) }
-                    )
-                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                SegmentedSettingsSwitchRow(
+                    title = stringResource(R.string.settings_dynamic_color),
+                    subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
+                    checked = dynamicColors,
+                    onCheckedChange = { viewModel.setDynamicColors(it) }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // Language Section
             SettingsSection(title = stringResource(R.string.settings_section_language)) {
-                // Single item - use SINGLE position
-                SettingsItemCard(position = CardPosition.SINGLE) {
-                    SettingsDropdownRow(
-                        title = stringResource(R.string.settings_language),
-                        subtitle = stringResource(R.string.settings_language_subtitle),
-                        selectedLabel = stringResource(currentLanguageOption.labelResId),
-                        expanded = languageExpanded,
-                        onExpandedChange = { languageExpanded = it }
-                    ) {
-                        languageOptions.forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(stringResource(option.labelResId)) },
-                                onClick = {
-                                    viewModel.setLanguage(option.languageTag)
-                                    languageExpanded = false
-                                    activity?.recreate()
-                                }
+                ListItem(
+                    headlineContent = { Text(text = stringResource(R.string.settings_language)) },
+                    supportingContent = { Text(text = stringResource(currentLanguageOption.labelResId)) },
+                    trailingContent = {
+                        ExposedDropdownMenuBox(
+                            expanded = languageExpanded,
+                            onExpandedChange = { languageExpanded = it }
+                        ) {
+                            OutlinedTextField(
+                                value = stringResource(currentLanguageOption.labelResId),
+                                onValueChange = {},
+                                readOnly = true,
+                                singleLine = true,
+                                textStyle = MaterialTheme.typography.bodyMedium,
+                                trailingIcon = {
+                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = languageExpanded)
+                                },
+                                modifier = Modifier
+                                    .width(156.dp)
+                                    .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
                             )
+
+                            ExposedDropdownMenu(
+                                expanded = languageExpanded,
+                                onDismissRequest = { languageExpanded = false }
+                            ) {
+                                languageOptions.forEach { option ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(option.labelResId)) },
+                                        onClick = {
+                                            viewModel.setLanguage(option.languageTag)
+                                            languageExpanded = false
+                                            activity?.recreate()
+                                        }
+                                    )
+                                }
+                            }
                         }
-                    }
-                }
+                    },
+                    colors = ListItemDefaults.colors(
+                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // Scanning Section
             SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
-                // Scan Mode Segmented Buttons - Single item
-                SettingsItemCard(position = CardPosition.FIRST) {
-                    ListItem(
-                        headlineContent = {
-                            Text(text = stringResource(R.string.settings_scan_mode),)
-                        },
-                        trailingContent = {
-                            ConnectedIconButtonGroup(
-                                options = scanModeOptions.map { option ->
-                                    ConnectedIconOption(
-                                        value = option.value,
-                                        icon = when (option.value) {
-                                            "TRACK_ONLY" -> Icons.Default.MusicNote
-                                            "SINGLE_ALBUM" -> Icons.Default.Album
-                                            else -> Icons.Default.LibraryMusic
-                                        },
-                                        tooltip = stringResource(option.labelResId)
-                                    )
-                                },
-                                selectedValue = scanMode,
-                                onSelected = viewModel::setScanMode
-                            )
-                        },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
-                    )
-                }
+                SegmentedSettingsSegmentedButton(
+                    title = stringResource(R.string.settings_scan_mode),
+                    options = scanModeOptions.map { option ->
+                        SegmentedOption(
+                            value = option.value,
+                            icon = when (option.value) {
+                                "TRACK_ONLY" -> Icons.Default.MusicNote
+                                "SINGLE_ALBUM" -> Icons.Default.Album
+                                else -> Icons.Default.LibraryMusic
+                            },
+                            label = stringResource(option.labelResId)
+                        )
+                    },
+                    selectedValue = scanMode,
+                    onSelected = viewModel::setScanMode
+                )
 
-                // SettingsSwitch - Last item
-                SettingsItemCard(position = CardPosition.LAST) {
-                    SettingsSwitch(
-                        title = stringResource(R.string.settings_min_duration_filter),
-                        subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
-                        checked = minDurationFilterEnabled,
-                        onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) }
-                    )
-                }
+                Spacer(modifier = Modifier.height(8.dp))
+
+                SegmentedSettingsSwitchRow(
+                    title = stringResource(R.string.settings_min_duration_filter),
+                    subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
+                    checked = minDurationFilterEnabled,
+                    onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1250,28 +1223,25 @@ fun SettingsScreen(
             }
 
             SettingsSection(title = stringResource(R.string.artist_separator)) {
-                // First item
-                SettingsItemCard(position = CardPosition.FIRST) {
-                    SettingsSwitch(
-                        title = stringResource(R.string.artist_separator),
-                        subtitle = stringResource(R.string.artist_separator_summary),
-                        checked = viewModel.artistSeparatorEnabled.value,
-                        onCheckedChange = { viewModel.setArtistSeparatorEnabled(it) }
-                    )
-                }
+                SegmentedSettingsSwitchRow(
+                    title = stringResource(R.string.artist_separator),
+                    subtitle = stringResource(R.string.artist_separator_summary),
+                    checked = viewModel.artistSeparatorEnabled.value,
+                    onCheckedChange = { viewModel.setArtistSeparatorEnabled(it) }
+                )
 
                 // Last item - only show if enabled
                 if (viewModel.artistSeparatorEnabled.value) {
-                    SettingsItemCard(position = CardPosition.LAST) {
-                        ListItem(
-                            headlineContent = { Text(stringResource(R.string.artist_separators)) },
-                            supportingContent = { Text(separatorText.ifBlank { "& \\" }) },
-                            modifier = Modifier.clickable {
-                                separatorText = viewModel.artistSeparators.value
-                                showSeparatorDialog = true
-                            }
-                        )
-                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    SegmentedSettingsClickableRow(
+                        title = stringResource(R.string.artist_separators),
+                        subtitle = separatorText.ifBlank { "& \\" },
+                        onClick = {
+                            separatorText = viewModel.artistSeparators.value
+                            showSeparatorDialog = true
+                        }
+                    )
                 }
             }
 
@@ -1309,135 +1279,109 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(16.dp))
 
             SettingsSection(title = stringResource(R.string.settings_scan_directory_settings)) {
-                // Single item - use SINGLE position
-                SettingsItemCard(position = CardPosition.SINGLE) {
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.settings_scan_directory_settings)) },
-                        supportingContent = { Text(stringResource(R.string.settings_scan_directory_settings_subtitle)) },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
-                        modifier = Modifier.clickable { onNavigateToScanDirectorySettings() }
-                    )
-                }
+                SegmentedSettingsClickableRow(
+                    title = stringResource(R.string.settings_scan_directory_settings),
+                    subtitle = stringResource(R.string.settings_scan_directory_settings_subtitle),
+                    onClick = { onNavigateToScanDirectorySettings() }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             SettingsSection(title = stringResource(R.string.settings_section_online_metadata)) {
-                // First item
-                SettingsItemCard(position = CardPosition.FIRST) {
-                    SettingsSubmenuRow(
-                        title = stringResource(R.string.settings_source_group_metadata),
-                        subtitle = stringResource(R.string.settings_source_group_metadata_subtitle),
-                        onClick = { showMetadataSourceDialog = true }
-                    )
-                }
-                // Middle items
-                SettingsItemCard(position = CardPosition.MIDDLE) {
-                    SettingsSubmenuRow(
-                        title = stringResource(R.string.settings_source_group_lyrics),
-                        subtitle = stringResource(R.string.settings_source_group_lyrics_subtitle),
-                        onClick = { showLyricsSourceDialog = true }
-                    )
-                }
-                SettingsItemCard(position = CardPosition.MIDDLE) {
-                    SettingsSubmenuRow(
-                        title = stringResource(R.string.settings_source_group_cover),
-                        subtitle = stringResource(R.string.settings_source_group_cover_subtitle),
-                        onClick = { showCoverSourceDialog = true }
-                    )
-                }
-                // Last item
-                SettingsItemCard(position = CardPosition.LAST) {
-                    SettingsSubmenuRow(
-                        title = stringResource(R.string.settings_online_search_limits_submenu),
-                        subtitle = stringResource(R.string.settings_online_search_limits_submenu_subtitle),
-                        onClick = { showSearchLimitsDialog = true }
-                    )
-                }
+                // Metadata source
+                SegmentedSettingsClickableRow(
+                    title = stringResource(R.string.settings_source_group_metadata),
+                    subtitle = stringResource(R.string.settings_source_group_metadata_subtitle),
+                    onClick = { showMetadataSourceDialog = true }
+                )
+                // Lyrics source
+                SegmentedSettingsClickableRow(
+                    title = stringResource(R.string.settings_source_group_lyrics),
+                    subtitle = stringResource(R.string.settings_source_group_lyrics_subtitle),
+                    onClick = { showLyricsSourceDialog = true }
+                )
+                // Cover source
+                SegmentedSettingsClickableRow(
+                    title = stringResource(R.string.settings_source_group_cover),
+                    subtitle = stringResource(R.string.settings_source_group_cover_subtitle),
+                    onClick = { showCoverSourceDialog = true }
+                )
+                // Search limits
+                SegmentedSettingsClickableRow(
+                    title = stringResource(R.string.settings_online_search_limits_submenu),
+                    subtitle = stringResource(R.string.settings_online_search_limits_submenu_subtitle),
+                    onClick = { showSearchLimitsDialog = true }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // Logging Section
             SettingsSection(title = stringResource(R.string.settings_section_logging)) {
-                // First item
-                SettingsItemCard(position = CardPosition.FIRST) {
-                    SettingsSwitch(
-                        title = stringResource(R.string.settings_logging_enabled),
-                        subtitle = stringResource(R.string.settings_logging_enabled_subtitle),
-                        checked = loggingEnabled,
-                        onCheckedChange = {
-                            LogManager.isLoggingEnabled = it
-                            viewModel.setLoggingEnabled(it)
-                        }
-                    )
-                }
-                // Middle items
-                SettingsItemCard(position = CardPosition.MIDDLE) {
-                    SettingsSwitch(
-                        title = stringResource(R.string.settings_logging_file),
-                        subtitle = stringResource(R.string.settings_logging_file_subtitle),
-                        checked = fileLoggingEnabled,
-                        onCheckedChange = {
-                            LogManager.isFileLoggingEnabled = it
-                            viewModel.setFileLoggingEnabled(it)
-                        }
-                    )
-                }
-                SettingsItemCard(position = CardPosition.MIDDLE) {
-                    SettingsSwitch(
-                        title = stringResource(R.string.settings_logging_console),
-                        subtitle = stringResource(R.string.settings_logging_console_subtitle),
-                        checked = consoleLoggingEnabled,
-                        onCheckedChange = {
-                            LogManager.isConsoleLoggingEnabled = it
-                            viewModel.setConsoleLoggingEnabled(it)
-                        }
-                    )
-                }
-                SettingsItemCard(position = CardPosition.MIDDLE) {
-                    SettingsSwitch(
-                        title = stringResource(R.string.settings_logging_crash),
-                        subtitle = stringResource(R.string.settings_logging_crash_subtitle),
-                        checked = crashReportingEnabled,
-                        onCheckedChange = {
-                            LogManager.isCrashReportingEnabled = it
-                            viewModel.setCrashReportingEnabled(it)
-                        }
-                    )
-                }
-                SettingsItemCard(position = CardPosition.MIDDLE) {
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.settings_logging_size)) },
-                        supportingContent = { Text(LogManager.formatLogSize(LogManager.getLogDirectorySize())) },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f))
-                    )
-                }
-                SettingsItemCard(position = CardPosition.MIDDLE) {
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.settings_logging_view)) },
-                        supportingContent = { Text(stringResource(R.string.settings_logging_view_subtitle)) },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
-                        modifier = Modifier.clickable { onNavigateToLogViewer() }
-                    )
-                }
-                SettingsItemCard(position = CardPosition.MIDDLE) {
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.settings_logging_export)) },
-                        supportingContent = { Text(stringResource(R.string.settings_logging_export_subtitle)) },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
-                        modifier = Modifier.clickable { onExportLogs() }
-                    )
-                }
-                // Last item
-                SettingsItemCard(position = CardPosition.LAST) {
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.settings_logging_cleanup)) },
-                        supportingContent = { Text(stringResource(R.string.settings_logging_cleanup_subtitle)) },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
-                        modifier = Modifier.clickable { onCleanupLogs() }
-                    )
-                }
+                // Logging enabled switch
+                SegmentedSettingsSwitchRow(
+                    title = stringResource(R.string.settings_logging_enabled),
+                    subtitle = stringResource(R.string.settings_logging_enabled_subtitle),
+                    checked = loggingEnabled,
+                    onCheckedChange = {
+                        LogManager.isLoggingEnabled = it
+                        viewModel.setLoggingEnabled(it)
+                    }
+                )
+                // File logging switch
+                SegmentedSettingsSwitchRow(
+                    title = stringResource(R.string.settings_logging_file),
+                    subtitle = stringResource(R.string.settings_logging_file_subtitle),
+                    checked = fileLoggingEnabled,
+                    onCheckedChange = {
+                        LogManager.isFileLoggingEnabled = it
+                        viewModel.setFileLoggingEnabled(it)
+                    }
+                )
+                // Console logging switch
+                SegmentedSettingsSwitchRow(
+                    title = stringResource(R.string.settings_logging_console),
+                    subtitle = stringResource(R.string.settings_logging_console_subtitle),
+                    checked = consoleLoggingEnabled,
+                    onCheckedChange = {
+                        LogManager.isConsoleLoggingEnabled = it
+                        viewModel.setConsoleLoggingEnabled(it)
+                    }
+                )
+                // Crash reporting switch
+                SegmentedSettingsSwitchRow(
+                    title = stringResource(R.string.settings_logging_crash),
+                    subtitle = stringResource(R.string.settings_logging_crash_subtitle),
+                    checked = crashReportingEnabled,
+                    onCheckedChange = {
+                        LogManager.isCrashReportingEnabled = it
+                        viewModel.setCrashReportingEnabled(it)
+                    }
+                )
+                // Log size info
+                SegmentedSettingsInfoRow(
+                    title = stringResource(R.string.settings_logging_size),
+                    value = LogManager.formatLogSize(LogManager.getLogDirectorySize())
+                )
+                // View logs
+                SegmentedSettingsClickableRow(
+                    title = stringResource(R.string.settings_logging_view),
+                    subtitle = stringResource(R.string.settings_logging_view_subtitle),
+                    onClick = { onNavigateToLogViewer() }
+                )
+                // Export logs
+                SegmentedSettingsClickableRow(
+                    title = stringResource(R.string.settings_logging_export),
+                    subtitle = stringResource(R.string.settings_logging_export_subtitle),
+                    onClick = { onExportLogs() }
+                )
+                // Cleanup logs
+                SegmentedSettingsClickableRow(
+                    title = stringResource(R.string.settings_logging_cleanup),
+                    subtitle = stringResource(R.string.settings_logging_cleanup_subtitle),
+                    onClick = { onCleanupLogs() }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -1445,97 +1389,34 @@ fun SettingsScreen(
             // ReplayGain Section
             // ReplayGain target loudness preset values
             val replayGainOptions = listOf(
-                -23f to "EBU R128 (-23 LUFS)",
-                -18f to "Streaming (-18 LUFS)",
-                -16f to "CD Standard (-16 LUFS)",
-                -14f to "Loud (-14 LUFS)"
+                SegmentedOption(value = -23f, label = "EBU R128"),
+                SegmentedOption(value = -18f, label = "Streaming"),
+                SegmentedOption(value = -16f, label = "CD"),
+                SegmentedOption(value = -14f, label = "Loud")
             )
-            var replayGainExpanded by remember { mutableStateOf(false) }
-            var showReplayGainDialog by remember { mutableStateOf(false) }
             
             SettingsSection(title = stringResource(R.string.replay_gain_settings)) {
-                // Single item - use SINGLE position
-                SettingsItemCard(position = CardPosition.SINGLE) {
-                    ListItem(
-                        headlineContent = { Text(stringResource(R.string.replay_gain_target_loudness)) },
-                        supportingContent = {
-                            Text(stringResource(R.string.replay_gain_default_loudness))
-                        },
-                        trailingContent = {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = String.format("%.0f LUFS", replayGainTargetLoudness),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                Icon(
-                                    imageVector = if (replayGainExpanded) Icons.Filled.KeyboardArrowUp else Icons.Filled.KeyboardArrowDown,
-                                    contentDescription = if (replayGainExpanded) "Collapse" else "Expand",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        },
-                        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)),
-                        modifier = Modifier.clickable { showReplayGainDialog = true }
-                    )
-                }
-
-                // ReplayGain target loudness selection dialog
-                if (showReplayGainDialog) {
-                    AlertDialog(
-                        onDismissRequest = { showReplayGainDialog = false },
-                        shape = MaterialTheme.shapes.large,
-                        title = { Text(stringResource(R.string.replay_gain_target_loudness)) },
-                        text = {
-                            Column {
-                                replayGainOptions.forEach { (value, label) ->
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .clickable {
-                                                viewModel.setReplayGainTargetLoudness(value)
-                                                showReplayGainDialog = false
-                                            }
-                                            .padding(vertical = 12.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        RadioButton(
-                                            selected = replayGainTargetLoudness == value,
-                                            onClick = {
-                                                viewModel.setReplayGainTargetLoudness(value)
-                                                showReplayGainDialog = false
-                                            }
-                                        )
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(label)
-                                    }
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(onClick = { showReplayGainDialog = false }) {
-                                Text(stringResource(R.string.dialog_cancel))
-                            }
-                        }
-                    )
-                }
+                SegmentedSettingsSegmentedButtonRow(
+                    title = stringResource(R.string.replay_gain_target_loudness),
+                    subtitle = stringResource(R.string.replay_gain_default_loudness),
+                    options = replayGainOptions,
+                    selectedValue = replayGainTargetLoudness,
+                    onSelected = { viewModel.setReplayGainTargetLoudness(it) }
+                )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
             // About Section
             SettingsSection(title = stringResource(R.string.settings_section_about)) {
-                // First item
-                SettingsItemCard(position = CardPosition.FIRST) {
-                    SettingsInfoRow(title = stringResource(R.string.settings_version_label), value = BuildConfig.VERSION_NAME)
-                }
-                // Last item
-                SettingsItemCard(position = CardPosition.LAST) {
-                    SettingsInfoRow(title = stringResource(R.string.settings_developer_label), value = stringResource(R.string.settings_developer_value))
-                }
+                SegmentedSettingsInfoRow(
+                    title = stringResource(R.string.settings_version_label),
+                    value = BuildConfig.VERSION_NAME
+                )
+                SegmentedSettingsInfoRow(
+                    title = stringResource(R.string.settings_developer_label),
+                    value = stringResource(R.string.settings_developer_value)
+                )
             }
         }
     }
