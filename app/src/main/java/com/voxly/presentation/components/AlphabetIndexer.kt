@@ -74,8 +74,7 @@ fun AlphabetIndexer(
     val unselectedFontSize = 9.sp
 
     BoxWithConstraints(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
+        modifier = modifier
     ) {
         val density = LocalDensity.current
         val containerHeightPx = with(density) { maxHeight.toPx() }
@@ -90,7 +89,7 @@ fun AlphabetIndexer(
         // Measure actual container height after layout
         Box(
             modifier = Modifier
-                .padding(horizontal = 4.dp)
+                .padding(start = 4.dp)
                 .height(maxHeight)
                 .wrapContentWidth()
                 .pointerInput(displayLetters) {
