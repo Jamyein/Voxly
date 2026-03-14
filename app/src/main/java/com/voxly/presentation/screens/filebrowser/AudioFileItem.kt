@@ -476,7 +476,8 @@ internal fun AudioFileListWithIndexer(
                 onLetterSelected = { letter ->
                     letterToIndex[letter]?.let { targetIndex ->
                         coroutineScope.launch {
-                            listState.animateScrollToItem(targetIndex)
+                            // Use scrollToItem (instant) instead of animateScrollToItem for better performance
+                            listState.scrollToItem(targetIndex)
                         }
                     }
                 },

@@ -4,9 +4,10 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectDragGestures
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -41,10 +42,12 @@ import kotlin.math.roundToInt
  * Alphabet indexer sidebar for quick navigation through a sorted list.
  * Supports both English letters and Chinese pinyin initials.
  *
- * IMPORTANT: This component should be positioned at the right edge of the screen
- * using parent Box with align(Alignment.CenterEnd). It should NOT fill the full
- * height of the parent, but should use wrapContentHeight() instead.
+ * Implementation follows 字母侧边栏.md specification:
+ * - Uses awaitEachGesture + awaitFirstDown for gesture detection
+ * - Uses Column for letter layout
+ * - Uses native ICU for Chinese pinyin (API 29+)
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AlphabetIndexer(
     groupedFiles: Map<Char, List<AudioFile>>,
@@ -79,7 +82,7 @@ fun AlphabetIndexer(
 
     // Calculate expected height based on letter count
     val expectedHeight = remember(displayLetters.size) {
-        (displayLetters.size * 16).dp // Approximate height per letter
+        (displayLetters.size * 16).dp
     }
 
     Box(
@@ -87,51 +90,41 @@ fun AlphabetIndexer(
             .size(width = sidebarWidth, height = expectedHeight)
             .padding(start = 2.dp)
             .pointerInput(displayLetters) {
-                detectDragGestures(
-                    onDragStart = { offset ->
-                        isTouching = true
-                        touchOffsetY = offset.y
-                        val index = (touchOffsetY / (size.height.toFloat() / displayLetters.size)).toInt()
+                awaitEachGesture {
+                    val down = awaitFirstDown()
+                    var isDragging = true
+
+                    while (isDragging) {
+                        val event = awaitPointerEvent()
+                        val y = event.changes.first().position.y
+
+                        // Calculate which letter index based on Y position
+                        val index = ((y / size.height) * displayLetters.size)
+                            .toInt()
                             .coerceIn(0, displayLetters.lastIndex)
-                        selectedLetter = displayLetters.getOrNull(index)
-                        if (selectedLetter != null && (!showAllLetters || selectedLetter in availableLetters)) {
-                            onLetterSelected(selectedLetter!!)
-                        }
-                    },
-                    onDrag = { change, _ ->
-                        touchOffsetY = change.position.y
-                        val index = (touchOffsetY / (size.height.toFloat() / displayLetters.size)).toInt()
-                            .coerceIn(0, displayLetters.lastIndex)
-                        val newLetter = displayLetters.getOrNull(index)
-                        if (newLetter != selectedLetter) {
-                            selectedLetter = newLetter
-                            if (newLetter != null && (!showAllLetters || newLetter in availableLetters)) {
-                                onLetterSelected(newLetter)
+
+                        val letter = displayLetters.getOrNull(index)
+
+                        // Update state and trigger callback
+                        if (letter != null && letter != selectedLetter) {
+                            touchOffsetY = y
+                            selectedLetter = letter
+                            isTouching = true
+
+                            // Only trigger callback if letter has files (or showAllLetters is false)
+                            if (!showAllLetters || letter in availableLetters) {
+                                onLetterSelected(letter)
                             }
                         }
-                    },
-                    onDragEnd = {
-                        isTouching = false
-                        selectedLetter = null
-                    },
-                    onDragCancel = {
-                        isTouching = false
-                        selectedLetter = null
-                    }
-                )
-            }
-            .pointerInput(displayLetters) {
-                detectTapGestures(
-                    onTap = { offset ->
-                        val index = (offset.y / (size.height.toFloat() / displayLetters.size)).toInt()
-                            .coerceIn(0, displayLetters.lastIndex)
-                        val tappedLetter = displayLetters.getOrNull(index)
-                        if (tappedLetter != null && tappedLetter in availableLetters) {
-                            selectedLetter = tappedLetter
-                            onLetterSelected(tappedLetter)
+
+                        // Check if gesture ended
+                        if (!event.changes.any { it.pressed }) {
+                            isDragging = false
+                            isTouching = false
+                            selectedLetter = null
                         }
                     }
-                )
+                }
             }
     ) {
         Column(
@@ -209,6 +202,8 @@ fun groupFilesByFirstLetter(files: List<AudioFile>): Map<Char, List<AudioFile>> 
 
 /**
  * Gets the first letter of a filename, supporting both English and Chinese.
+ * Uses native ICU Transliterator for Chinese pinyin (API 29+).
+ *
  * - English: Returns uppercase first character
  * - Chinese: Returns pinyin initial (A-Z)
  * - Others: Returns '#' for symbols/numbers
@@ -217,6 +212,11 @@ fun getFirstLetter(name: String): Char {
     if (name.isBlank()) return '#'
 
     val firstChar = name.trimStart().firstOrNull() ?: '#'
+
+    // If already ASCII letter, return uppercase
+    if (firstChar.isLetter() && firstChar.code in 0..127) {
+        return firstChar.uppercaseChar()
+    }
 
     // Digits - map to '0' for indexing
     if (firstChar.isDigit()) {
@@ -235,63 +235,65 @@ fun getFirstLetter(name: String): Char {
         return '#'
     }
 
-    // Chinese characters - use Collator to get pinyin
+    // Chinese characters - use native ICU Transliterator (API 29+)
     return getChinesePinyinInitial(firstChar)
 }
 
 /**
- * Gets the pinyin initial for a Chinese character.
- * Uses a reference list sorted by pinyin order and binary search to find the correct initial.
+ * Gets pinyin initial for a Chinese character using native ICU Transliterator.
+ * Falls back to Collator-based approach if API < 29.
  */
 private fun getChinesePinyinInitial(char: Char): Char {
-    // Convert character to string for comparison
     val charString = char.toString()
 
-    // Reference characters sorted by pinyin order (using Collator)
-    // Each entry: (pinyin initial, reference character in that group)
+    // Try native ICU Transliterator first (API 29+)
+    return try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            val transliterator = android.icu.text.Transliterator.getInstance("Han-Latin; Latin-Ascii; Any-Upper")
+            val pinyin = transliterator.transliterate(charString)
+            if (pinyin.isNotEmpty() && pinyin.first().isLetter()) {
+                pinyin.first().uppercaseChar()
+            } else {
+                fallbackPinyin(char)
+            }
+        } else {
+            fallbackPinyin(char)
+        }
+    } catch (e: Exception) {
+        fallbackPinyin(char)
+    }
+}
+
+/**
+ * Fallback pinyin lookup using Collator (for API < 29).
+ */
+private fun fallbackPinyin(char: Char): Char {
+    val charString = char.toString()
+
+    // Reference characters sorted by pinyin order
     val pinyinReference = listOf(
-        'A' to "啊",
-        'B' to "八",
-        'C' to "嚓",
-        'D' to "大",
-        'E' to "额",
-        'F' to "发",
-        'G' to "嘎",
-        'H' to "哈",
-        'J' to "鸡",
-        'K' to "咖",
-        'L' to "拉",
-        'M' to "妈",
-        'N' to "那",
-        'O' to "哦",
-        'P' to "七",
-        'Q' to "七",
-        'R' to "日",
-        'S' to "撒",
-        'T' to "他",
-        'W' to "娃",
-        'X' to "西",
-        'Y' to "呀",
-        'Z' to "扎"
+        'A' to "啊", 'B' to "八", 'C' to "嚓", 'D' to "大",
+        'E' to "额", 'F' to "发", 'G' to "嘎", 'H' to "哈",
+        'J' to "鸡", 'K' to "咖", 'L' to "拉", 'M' to "妈",
+        'N' to "那", 'O' to "哦", 'P' to "七", 'Q' to "七",
+        'R' to "日", 'S' to "撒", 'T' to "他", 'W' to "娃",
+        'X' to "西", 'Y' to "呀", 'Z' to "扎"
     )
 
-    // Use Collator with Chinese locale for pinyin-aware comparison
     val collator = Collator.getInstance(Locale.CHINA)
-    collator.strength = Collator.PRIMARY  // Only compare base characters, ignore diacritics
+    collator.strength = Collator.PRIMARY
 
-    // Find the first group where our character comes before (or equals) the reference character
     for ((initial, reference) in pinyinReference) {
         if (collator.compare(charString, reference) <= 0) {
             return initial
         }
     }
 
-    return 'Z' // Default to Z if not found
+    return 'Z'
 }
 
 /**
  * Creates a flat list of items with section headers for LazyColumn.
- * Returns pairs of (isHeader: Boolean, data: Any)
  */
 fun createSectionedItems(
     groupedFiles: Map<Char, List<AudioFile>>
