@@ -260,83 +260,7 @@ fun MetadataEditorScreen(
                 }
             )
         },
-        floatingActionButton = {
-            // Use HorizontalFloatingToolbar without FAB - always visible
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.BottomCenter
-            ) {
-                @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                HorizontalFloatingToolbar(
-                    expanded = true,
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .padding(bottom = 8.dp),
-                    colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
-                ) {
-                    // Lyrics Selection (only show if there are lyrics)
-                    val hasLyrics = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.lyrics?.isNotBlank() == true
-                    if (hasLyrics) {
-                        SmallFloatingActionButton(
-                            onClick = {
-                                val successState = uiState as? MetadataEditorUiState.Success
-                                val metadata = successState?.editedMetadata
-                                val audioFile = successState?.audioFile
-                                onNavigateToLyricsSelector(
-                                    metadata?.lyrics ?: "",
-                                    metadata?.getDisplayTitle(audioFile?.name ?: "") ?: "",
-                                    metadata?.artist ?: "",
-                                    metadata?.album ?: "",
-                                    metadata?.albumArt
-                                )
-                            },
-                            containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                        ) {
-                            Icon(
-                                Icons.Default.Lyrics,
-                                contentDescription = stringResource(R.string.select_lyrics_for_poster)
-                            )
-                        }
-                    }
-
-                    // Search Online Lyrics
-                    SmallFloatingActionButton(
-                        onClick = { onNavigateToOnlineLyricsSearch() },
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Icon(
-                            painter = appIconPainter(AppIcon.MusicNote),
-                            contentDescription = stringResource(R.string.cd_online_lyrics)
-                        )
-                    }
-
-                    // Fetch Online Metadata
-                    SmallFloatingActionButton(
-                        onClick = { onNavigateToOnlineMetadata() },
-                        containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                    ) {
-                        Icon(
-                            painter = appIconPainter(AppIcon.CloudDownload),
-                            contentDescription = stringResource(R.string.cd_online_metadata)
-                        )
-                    }
-
-                    // Save
-                    SmallFloatingActionButton(
-                        onClick = {
-                            if (hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving) {
-                                viewModel.saveMetadata()
-                            }
-                        }
-                    ) {
-                        Icon(
-                            Icons.Default.Save,
-                            contentDescription = stringResource(R.string.cd_save)
-                        )
-                    }
-                }
-            }
-        }
+        floatingActionButton = {}
     ) { innerPadding ->
         Box(
             modifier = Modifier
@@ -371,44 +295,115 @@ fun MetadataEditorScreen(
                         }
                     }
 
-                    MetadataFormContent(
-                        metadata = state.editedMetadata,
-                        audioFile = state.audioFile,
-                        bottomPadding = innerPadding.calculateBottomPadding(),
-                        modifiedFields = modifiedFields,
-                        onTitleChange = { viewModel.updateMetadataField(MetadataField.TITLE, it) },
-                        onArtistChange = { viewModel.updateMetadataField(MetadataField.ARTIST, it) },
-                        onAlbumChange = { viewModel.updateMetadataField(MetadataField.ALBUM, it) },
-                        onAlbumArtistChange = { viewModel.updateMetadataField(MetadataField.ALBUM_ARTIST, it) },
-                        onYearChange = { viewModel.updateMetadataField(MetadataField.YEAR, it) },
-                        onGenreChange = { viewModel.updateMetadataField(MetadataField.GENRE, it) },
-                        onComposerChange = { viewModel.updateMetadataField(MetadataField.COMPOSER, it) },
-                        onLyricistChange = { viewModel.updateMetadataField(MetadataField.LYRICIST, it) },
-                        onCommentChange = { viewModel.updateMetadataField(MetadataField.COMMENT, it) },
-                        onLyricsChange = { viewModel.updateMetadataField(MetadataField.LYRICS, it) },
-                        onTrackNumberChange = { track, total ->
-                            viewModel.updateTrackNumber(track.toIntOrNull(), total.toIntOrNull())
-                        },
-                        onDiscNumberChange = { disc, total ->
-                            viewModel.updateDiscNumber(disc.toIntOrNull(), total.toIntOrNull())
-                        },
-                        onPickAlbumArt = { showAlbumArtOptions = true },
-                        coverTag = coverTag,
-                        onZoomAlbumArt = { showAlbumArtPreview = true },
-                        onRotateAlbumArt = {
-                            state.editedMetadata.albumArt?.let { bytes ->
-                                rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
+                    // Box with FloatingToolbar at bottom
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        MetadataFormContent(
+                            metadata = state.editedMetadata,
+                            audioFile = state.audioFile,
+                            bottomPadding = innerPadding.calculateBottomPadding() + 80.dp, // Extra space for toolbar
+                            modifiedFields = modifiedFields,
+                            onTitleChange = { viewModel.updateMetadataField(MetadataField.TITLE, it) },
+                            onArtistChange = { viewModel.updateMetadataField(MetadataField.ARTIST, it) },
+                            onAlbumChange = { viewModel.updateMetadataField(MetadataField.ALBUM, it) },
+                            onAlbumArtistChange = { viewModel.updateMetadataField(MetadataField.ALBUM_ARTIST, it) },
+                            onYearChange = { viewModel.updateMetadataField(MetadataField.YEAR, it) },
+                            onGenreChange = { viewModel.updateMetadataField(MetadataField.GENRE, it) },
+                            onComposerChange = { viewModel.updateMetadataField(MetadataField.COMPOSER, it) },
+                            onLyricistChange = { viewModel.updateMetadataField(MetadataField.LYRICIST, it) },
+                            onCommentChange = { viewModel.updateMetadataField(MetadataField.COMMENT, it) },
+                            onLyricsChange = { viewModel.updateMetadataField(MetadataField.LYRICS, it) },
+                            onTrackNumberChange = { track, total ->
+                                viewModel.updateTrackNumber(track.toIntOrNull(), total.toIntOrNull())
+                            },
+                            onDiscNumberChange = { disc, total ->
+                                viewModel.updateDiscNumber(disc.toIntOrNull(), total.toIntOrNull())
+                            },
+                            onPickAlbumArt = { showAlbumArtOptions = true },
+                            coverTag = coverTag,
+                            onZoomAlbumArt = { showAlbumArtPreview = true },
+                            onRotateAlbumArt = {
+                                state.editedMetadata.albumArt?.let { bytes ->
+                                    rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
+                                }
+                            },
+                            onRemoveAlbumArt = { viewModel.updateAlbumArt(null) },
+                            onScanReplayGain = { viewModel.scanReplayGain() },
+                            onClearReplayGain = {
+                                viewModel.clearReplayGainInfo()
+                                currentReplayGainInfo = null
+                            },
+                            isScanningReplayGain = isScanningReplayGain,
+                            replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo
+                        )
+
+                        // FloatingToolbar at bottom, above content
+                        @OptIn(ExperimentalMaterial3ExpressiveApi::class)
+                        HorizontalFloatingToolbar(
+                            expanded = true,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = innerPadding.calculateBottomPadding() + 8.dp),
+                            colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
+                        ) {
+                            // Lyrics Selection (only show if there are lyrics)
+                            val hasLyrics = state.editedMetadata.lyrics?.isNotBlank() == true
+                            if (hasLyrics) {
+                                SmallFloatingActionButton(
+                                    onClick = {
+                                        onNavigateToLyricsSelector(
+                                            state.editedMetadata.lyrics ?: "",
+                                            state.editedMetadata.getDisplayTitle(state.audioFile.name ?: "") ?: "",
+                                            state.editedMetadata.artist ?: "",
+                                            state.editedMetadata.album ?: "",
+                                            state.editedMetadata.albumArt
+                                        )
+                                    },
+                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                                ) {
+                                    Icon(
+                                        Icons.Default.Lyrics,
+                                        contentDescription = stringResource(R.string.select_lyrics_for_poster)
+                                    )
+                                }
                             }
-                        },
-                        onRemoveAlbumArt = { viewModel.updateAlbumArt(null) },
-                        onScanReplayGain = { viewModel.scanReplayGain() },
-                        onClearReplayGain = {
-                            viewModel.clearReplayGainInfo()
-                            currentReplayGainInfo = null
-                        },
-                        isScanningReplayGain = isScanningReplayGain,
-                        replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo
-                    )
+
+                            // Search Online Lyrics
+                            SmallFloatingActionButton(
+                                onClick = { onNavigateToOnlineLyricsSearch() },
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer
+                            ) {
+                                Icon(
+                                    painter = appIconPainter(AppIcon.MusicNote),
+                                    contentDescription = stringResource(R.string.cd_online_lyrics)
+                                )
+                            }
+
+                            // Fetch Online Metadata
+                            SmallFloatingActionButton(
+                                onClick = { onNavigateToOnlineMetadata() },
+                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
+                            ) {
+                                Icon(
+                                    painter = appIconPainter(AppIcon.CloudDownload),
+                                    contentDescription = stringResource(R.string.cd_online_metadata)
+                                )
+                            }
+
+                            // Save
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    if (hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving) {
+                                        viewModel.saveMetadata()
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    Icons.Default.Save,
+                                    contentDescription = stringResource(R.string.cd_save)
+                                )
+                            }
+                        }
+                    }
                 }
                 is MetadataEditorUiState.Error -> {
                     Box(
