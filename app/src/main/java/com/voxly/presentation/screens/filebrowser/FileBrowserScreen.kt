@@ -497,8 +497,8 @@ fun FileBrowserScreen(
                         }
                     }
 
-                    // TabRow at root level
-                    TabRow(
+                    // Primary TabRow at root level (M3E specification: 48dp height, 1dp divider inside, 3dp rounded indicator)
+                    PrimaryTabRow(
                         selectedTabIndex = selectedRootTab.ordinal,
                         modifier = Modifier.fillMaxWidth()
                     ) {
