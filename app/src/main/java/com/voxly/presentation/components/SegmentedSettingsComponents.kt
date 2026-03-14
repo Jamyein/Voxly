@@ -99,53 +99,17 @@ fun <T> SegmentedSettingsSegmentedButtonRow(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = {
-            Column {
-                Text(text = title)
-                subtitle?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        },
-        trailingContent = {
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                options.forEachIndexed { btnIndex, option ->
-                    SegmentedButton(
-                        selected = option.value == selectedValue,
-                        onClick = { onSelected(option.value) },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = btnIndex,
-                            count = options.size
-                        ),
-                        icon = {
-                            option.icon?.let { icon ->
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    ) {
-                        Text(option.label ?: "")
-                    }
-                }
-            }
-        },
-        modifier = modifier.fillMaxWidth(),
-        colors = ListItemDefaults.segmentedColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        content = {}
+    SegmentedSettingsSegmentedButtonImpl(
+        title = title,
+        subtitle = subtitle,
+        options = options,
+        selectedValue = selectedValue,
+        onSelected = onSelected,
+        index = index,
+        count = count,
+        modifier = modifier,
+        titleStyle = null,
+        iconContentDescription = null
     )
 }
 
@@ -169,7 +133,7 @@ fun SegmentedSettingsInfoRow(
         },
         trailingContent = { Text(text = value) },
         colors = ListItemDefaults.segmentedColors(
-            containerColor = MaterialTheme.colorScheme.tertiaryContainer.copy(alpha = 0.7f)
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
         ),
         modifier = modifier.fillMaxWidth(),
         content = {}
@@ -227,6 +191,34 @@ fun <T> SegmentedSettingsSegmentedButton(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
+    SegmentedSettingsSegmentedButtonImpl(
+        title = title,
+        subtitle = subtitle,
+        options = options,
+        selectedValue = selectedValue,
+        onSelected = onSelected,
+        index = index,
+        count = count,
+        modifier = modifier,
+        titleStyle = MaterialTheme.typography.bodyLarge,
+        iconContentDescription = { it.label ?: "" }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun <T> SegmentedSettingsSegmentedButtonImpl(
+    title: String,
+    subtitle: String?,
+    options: List<SegmentedOption<T>>,
+    selectedValue: T,
+    onSelected: (T) -> Unit,
+    index: Int,
+    count: Int,
+    modifier: Modifier,
+    titleStyle: androidx.compose.ui.text.TextStyle?,
+    iconContentDescription: ((SegmentedOption<T>) -> String)?
+) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
@@ -234,7 +226,7 @@ fun <T> SegmentedSettingsSegmentedButton(
             Column {
                 Text(
                     text = title,
-                    style = MaterialTheme.typography.bodyLarge
+                    style = titleStyle ?: MaterialTheme.typography.bodyLarge
                 )
                 subtitle?.let {
                     Text(
@@ -261,7 +253,7 @@ fun <T> SegmentedSettingsSegmentedButton(
                             option.icon?.let { icon ->
                                 Icon(
                                     imageVector = icon,
-                                    contentDescription = option.label,
+                                    contentDescription = iconContentDescription?.invoke(option),
                                     modifier = Modifier.size(18.dp)
                                 )
                             }
