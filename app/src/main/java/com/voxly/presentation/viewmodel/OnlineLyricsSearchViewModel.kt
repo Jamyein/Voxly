@@ -1,6 +1,5 @@
 package com.voxly.presentation.viewmodel
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.repository.LyricsRepositoryImpl
@@ -8,8 +7,12 @@ import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineLyricsResult
+import com.voxly.presentation.navigation.OnlineLyricsSearch
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.MutableStateFlow
 import timber.log.Timber
 import kotlinx.coroutines.flow.StateFlow
@@ -18,20 +21,19 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
-import javax.inject.Inject
 
 /**
  * ViewModel for online lyrics search screen.
  */
-@HiltViewModel
-class OnlineLyricsSearchViewModel @Inject constructor(
+@HiltViewModel(assistedFactory = OnlineLyricsSearchViewModel.Factory::class)
+class OnlineLyricsSearchViewModel @AssistedInject constructor(
+    @Assisted val navKey: OnlineLyricsSearch,
     @ApplicationContext private val context: android.content.Context,
     private val audioRepository: AudioRepository,
-    private val lyricsRepository: LyricsRepository,
-    savedStateHandle: SavedStateHandle
+    private val lyricsRepository: LyricsRepository
 ) : ViewModel() {
 
-    private val filePath: String = decodeNavArg(savedStateHandle.get<String>("filePath"))
+    private val filePath: String = navKey.filePath
 
     // Search query info (exposed for UI)
     private val _searchTitle = MutableStateFlow("")
@@ -188,13 +190,8 @@ class OnlineLyricsSearchViewModel @Inject constructor(
         _errorMessage.value = null
     }
 
-    private fun decodeNavArg(arg: String?): String {
-        return arg?.let {
-            try {
-                java.net.URLDecoder.decode(it, "UTF-8")
-            } catch (e: Exception) {
-                it
-            }
-        } ?: ""
+    @AssistedFactory
+    interface Factory {
+        fun create(navKey: OnlineLyricsSearch): OnlineLyricsSearchViewModel
     }
 }

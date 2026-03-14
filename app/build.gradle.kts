@@ -183,6 +183,9 @@ dependencies {
     implementation("androidx.navigation3:navigation3-runtime:1.0.0")
     implementation("androidx.navigation3:navigation3-ui:1.0.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-navigation3:2.10.0")
+    // Navigation3 Scene Strategies (BottomSheet, ListDetail)
+    implementation("androidx.compose.material3.adaptive:adaptive-navigation3:1.3.0-alpha03")
+    implementation("androidx.window:window:1.3.0")
 
     // Lifecycle
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.10.0")

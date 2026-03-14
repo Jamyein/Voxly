@@ -11,11 +11,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
-import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.wrapContentWidth
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -74,7 +75,7 @@ fun AlphabetIndexer(
 
     BoxWithConstraints(
         modifier = modifier,
-        contentAlignment = Alignment.CenterEnd
+        contentAlignment = Alignment.Center
     ) {
         val density = LocalDensity.current
         val containerHeightPx = with(density) { maxHeight.toPx() }
@@ -90,7 +91,8 @@ fun AlphabetIndexer(
         Box(
             modifier = Modifier
                 .padding(horizontal = 4.dp)
-                .size(maxWidth, maxHeight)
+                .height(maxHeight)
+                .wrapContentWidth()
                 .pointerInput(displayLetters) {
                     detectDragGestures(
                         onDragStart = { offset ->
@@ -143,9 +145,9 @@ fun AlphabetIndexer(
                 }
         ) {
             Column(
-                modifier = Modifier.fillMaxHeight(),
+                modifier = Modifier.fillMaxSize(),
                 verticalArrangement = Arrangement.SpaceEvenly,
-                horizontalAlignment = Alignment.End
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 displayLetters.forEachIndexed { index, letter ->
                     val isAvailable = letter in availableLetters

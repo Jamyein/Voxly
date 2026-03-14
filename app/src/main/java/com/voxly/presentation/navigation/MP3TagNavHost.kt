@@ -13,19 +13,20 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.rememberSaveableStateHolderNavEntryDecorator
 import androidx.navigation3.scene.DialogSceneStrategy
+import androidx.navigation3.scene.SceneStrategy
 import androidx.navigation3.ui.NavDisplay
 import com.voxly.R
 import com.voxly.core.util.LogManager
@@ -45,7 +46,15 @@ import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 import com.voxly.presentation.screens.metadata.LyricsSelectorScreen
 import com.voxly.presentation.theme.ExpressiveAnimations
+import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.AppViewModel
+import com.voxly.presentation.viewmodel.ArtistDetailViewModel
+import com.voxly.presentation.viewmodel.LyricsSelectorViewModel
+import com.voxly.presentation.viewmodel.MetadataEditorViewModel
+import com.voxly.presentation.viewmodel.OnlineCoverSearchViewModel
+import com.voxly.presentation.viewmodel.OnlineLyricsSearchViewModel
+import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
+import com.voxly.presentation.viewmodel.ReplayGainViewModel
 
 /**
  * Main navigation host for the MP3 Tag Editor app using Navigation3.
@@ -56,18 +65,22 @@ fun MP3TagNavHost() {
     val context = LocalContext.current
     val appViewModel: AppViewModel = hiltViewModel()
 
-    // Create back stack using mutableStateListOf with explicit NavKey type
-    val backStack: MutableList<NavKey> = remember {
-        mutableStateListOf<NavKey>(FileBrowser)
+    // Create back stack using mutableStateListOf<Any> (matches nav3-recipes approach)
+    // The NavKey objects are still used, but the list type is Any for compatibility
+    val backStack: MutableList<Any> = remember {
+        mutableStateListOf<Any>(FileBrowser)
     }
 
     // Entry decorators for ViewModel scoping and state saving
-    // Using empty list for now - the app uses Hilt which manages ViewModel scoping at activity level
-    // If per-entry ViewModel scoping is needed in the future, can add:
-    // rememberSaveableStateHolderNavEntryDecorator()
-    // rememberViewModelStoreNavEntryDecorator()
     @Suppress("UNCHECKED_CAST")
-    val decorators = emptyList<NavEntryDecorator<NavKey>>()
+    val decorators: List<NavEntryDecorator<Any>> = listOf(
+        rememberSaveableStateHolderNavEntryDecorator(),
+        rememberViewModelStoreNavEntryDecorator()
+    )
+
+    // Scene strategies for dialog support
+    @Suppress("UNCHECKED_CAST")
+    val sceneStrategy: SceneStrategy<Any> = remember { DialogSceneStrategy<Any>() }
 
     // Determine if bottom bar should be shown
     val currentKey = backStack.lastOrNull()
@@ -78,23 +91,22 @@ fun MP3TagNavHost() {
 
     Scaffold(
         bottomBar = {
-            if (showBottomBar && currentKey != null) {
+            if (showBottomBar) {
+                @Suppress("UNCHECKED_CAST")
                 FlexibleBottomAppBar(
-                    backStack = backStack,
-                    currentKey = currentKey
+                    backStack = backStack as MutableList<NavKey>,
+                    currentKey = currentKey as NavKey
                 )
             }
         }
     ) { outerPadding ->
         Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(outerPadding)
+            modifier = Modifier.fillMaxSize()
         ) {
             NavDisplay(
                 backStack = backStack,
                 onBack = { backStack.removeLastOrNull() },
-                sceneStrategy = remember { DialogSceneStrategy() },
+                sceneStrategy = sceneStrategy,
                 entryDecorators = decorators,
                 entryProvider = entryProvider {
                     // Bottom navigation screens
@@ -193,8 +205,12 @@ fun MP3TagNavHost() {
                     }
 
                     entry<MetadataEditor> { key ->
+                        val viewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
+                            creationCallback = { factory -> factory.create(key) }
+                        )
                         MetadataEditorScreen(
                             filePath = key.filePath,
+                            viewModel = viewModel,
                             coverTag = key.coverTag.takeIf { it.isNotEmpty() },
                             onNavigateBack = { backStack.removeLastOrNull() },
                             onNavigateToOnlineMetadata = {
@@ -222,6 +238,9 @@ fun MP3TagNavHost() {
                     }
 
                     entry<ReplayGainScanner> { key ->
+                        val viewModel = hiltViewModel<ReplayGainViewModel, ReplayGainViewModel.Factory>(
+                            creationCallback = { factory -> factory.create(key) }
+                        )
                         ReplayGainScannerScreen(
                             filePaths = key.filePaths,
                             onNavigateBack = { backStack.removeLastOrNull() },
@@ -234,6 +253,9 @@ fun MP3TagNavHost() {
                     }
 
                     entry<OnlineMetadata> { key ->
+                        val viewModel = hiltViewModel<OnlineMetadataViewModel, OnlineMetadataViewModel.Factory>(
+                            creationCallback = { factory -> factory.create(key) }
+                        )
                         OnlineMetadataScreen(
                             filePath = key.filePath,
                             onNavigateBack = { backStack.removeLastOrNull() },
@@ -244,6 +266,9 @@ fun MP3TagNavHost() {
                     }
 
                     entry<OnlineLyricsSearch> { key ->
+                        val viewModel = hiltViewModel<OnlineLyricsSearchViewModel, OnlineLyricsSearchViewModel.Factory>(
+                            creationCallback = { factory -> factory.create(key) }
+                        )
                         OnlineLyricsSearchScreen(
                             filePath = key.filePath,
                             onNavigateBack = { backStack.removeLastOrNull() },
@@ -254,6 +279,9 @@ fun MP3TagNavHost() {
                     }
 
                     entry<OnlineCoverSearch> { key ->
+                        val viewModel = hiltViewModel<OnlineCoverSearchViewModel, OnlineCoverSearchViewModel.Factory>(
+                            creationCallback = { factory -> factory.create(key) }
+                        )
                         OnlineCoverSearchScreen(
                             filePath = key.filePath,
                             onNavigateBack = { backStack.removeLastOrNull() },
@@ -264,6 +292,9 @@ fun MP3TagNavHost() {
                     }
 
                     entry<LyricsSelector> { key ->
+                        val viewModel = hiltViewModel<LyricsSelectorViewModel, LyricsSelectorViewModel.Factory>(
+                            creationCallback = { factory -> factory.create(key) }
+                        )
                         LyricsSelectorScreen(
                             title = key.title,
                             artist = key.artist,
@@ -276,6 +307,9 @@ fun MP3TagNavHost() {
                     }
 
                     entry<AlbumDetail> { key ->
+                        val viewModel = hiltViewModel<AlbumDetailViewModel, AlbumDetailViewModel.Factory>(
+                            creationCallback = { factory -> factory.create(key) }
+                        )
                         AlbumDetailScreen(
                             albumName = key.albumName,
                             albumArtist = key.albumArtist.takeIf { it.isNotEmpty() },
@@ -287,6 +321,9 @@ fun MP3TagNavHost() {
                     }
 
                     entry<ArtistDetail> { key ->
+                        val viewModel = hiltViewModel<ArtistDetailViewModel, ArtistDetailViewModel.Factory>(
+                            creationCallback = { factory -> factory.create(key) }
+                        )
                         ArtistDetailScreen(
                             artistName = key.artistName,
                             onNavigateBack = { backStack.removeLastOrNull() },

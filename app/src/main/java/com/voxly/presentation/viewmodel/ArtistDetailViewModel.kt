@@ -7,22 +7,26 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.repository.ArtistCacheRepository
 import com.voxly.data.repository.ArtistGroup
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.navigation.ArtistDetail
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import javax.inject.Inject
 
 /**
  * ViewModel for ArtistDetailScreen.
  * Loads artist data from memory cache or database.
  */
-@HiltViewModel
-class ArtistDetailViewModel @Inject constructor(
+@HiltViewModel(assistedFactory = ArtistDetailViewModel.Factory::class)
+class ArtistDetailViewModel @AssistedInject constructor(
+    @Assisted val navKey: ArtistDetail,
     @ApplicationContext private val context: Context,
     private val artistCacheRepository: ArtistCacheRepository
 ) : ViewModel() {
@@ -44,6 +48,10 @@ class ArtistDetailViewModel @Inject constructor(
 
     private val _albumCovers = MutableStateFlow<Map<String, String?>>(emptyMap())
     val albumCovers: StateFlow<Map<String, String?>> = _albumCovers.asStateFlow()
+
+    init {
+        loadArtist(navKey.artistName)
+    }
 
     /**
      * Load artist data by artist name.
@@ -141,5 +149,10 @@ class ArtistDetailViewModel @Inject constructor(
         } else {
             String.format("%d:%02d", minutes, seconds)
         }
+    }
+
+    @AssistedFactory
+    interface Factory {
+        fun create(navKey: ArtistDetail): ArtistDetailViewModel
     }
 }

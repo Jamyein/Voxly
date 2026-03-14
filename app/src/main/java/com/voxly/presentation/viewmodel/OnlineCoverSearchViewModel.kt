@@ -1,36 +1,38 @@
 package com.voxly.presentation.viewmodel
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
+import com.voxly.presentation.navigation.OnlineCoverSearch
 import com.voxly.presentation.ui.getCoverArtBytes
 import com.voxly.presentation.ui.prefetchCoverArtBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.io.File
-import javax.inject.Inject
 
 /**
  * ViewModel for online cover search screen.
  */
-@HiltViewModel
-class OnlineCoverSearchViewModel @Inject constructor(
+@HiltViewModel(assistedFactory = OnlineCoverSearchViewModel.Factory::class)
+class OnlineCoverSearchViewModel @AssistedInject constructor(
+    @Assisted val navKey: OnlineCoverSearch,
     @ApplicationContext private val context: android.content.Context,
     private val audioRepository: AudioRepository,
-    private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository,
-    savedStateHandle: SavedStateHandle
+    private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository
 ) : ViewModel() {
 
-    private val filePath: String = decodeNavArg(savedStateHandle.get<String>("filePath"))
+    private val filePath: String = navKey.filePath
 
     // Search query info (exposed for UI)
     private val _searchTitle = MutableStateFlow("")
@@ -237,13 +239,8 @@ class OnlineCoverSearchViewModel @Inject constructor(
         _errorMessage.value = null
     }
 
-    private fun decodeNavArg(arg: String?): String {
-        return arg?.let {
-            try {
-                java.net.URLDecoder.decode(it, "UTF-8")
-            } catch (e: Exception) {
-                it
-            }
-        } ?: ""
+    @AssistedFactory
+    interface Factory {
+        fun create(navKey: OnlineCoverSearch): OnlineCoverSearchViewModel
     }
 }

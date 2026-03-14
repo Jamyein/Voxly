@@ -1,30 +1,31 @@
 package com.voxly.presentation.viewmodel
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
+import com.voxly.presentation.navigation.LyricsSelector
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.net.URLDecoder
-import javax.inject.Inject
 
 /**
  * ViewModel for LyricsSelectorScreen.
  * Loads lyrics and album art from file path.
  */
-@HiltViewModel
-class LyricsSelectorViewModel @Inject constructor(
+@HiltViewModel(assistedFactory = LyricsSelectorViewModel.Factory::class)
+class LyricsSelectorViewModel @AssistedInject constructor(
+    @Assisted val navKey: LyricsSelector,
     private val lyricsRepository: LyricsRepository,
-    private val audioRepository: AudioRepository,
-    savedStateHandle: SavedStateHandle
+    private val audioRepository: AudioRepository
 ) : ViewModel() {
 
-    private val filePath: String = decodeNavArg(savedStateHandle.get<String>("filePath"))
+    private val filePath: String = navKey.filePath
 
     private val _lyricsText = MutableStateFlow("")
     val lyricsText: StateFlow<String> = _lyricsText.asStateFlow()
@@ -71,9 +72,8 @@ class LyricsSelectorViewModel @Inject constructor(
         }
     }
 
-    private fun decodeNavArg(value: String?): String {
-        val raw = value ?: return ""
-        if (!raw.contains('%') && !raw.contains('+')) return raw
-        return runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
+    @AssistedFactory
+    interface Factory {
+        fun create(navKey: LyricsSelector): LyricsSelectorViewModel
     }
 }

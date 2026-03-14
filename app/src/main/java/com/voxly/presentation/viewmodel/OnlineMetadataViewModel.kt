@@ -1,6 +1,5 @@
 package com.voxly.presentation.viewmodel
 
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
@@ -15,11 +14,15 @@ import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
+import com.voxly.presentation.navigation.OnlineMetadata
 import com.voxly.presentation.ui.getCoverArtBytes
 import com.voxly.presentation.ui.loadImageBytesFromUrl
 import com.voxly.core.util.Constants
 import com.voxly.presentation.ui.prefetchCoverArtBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -39,19 +42,18 @@ import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.io.File
 import java.net.URLDecoder
-import javax.inject.Inject
 
 @OptIn(FlowPreview::class)
-@HiltViewModel
-class OnlineMetadataViewModel @Inject constructor(
+@HiltViewModel(assistedFactory = OnlineMetadataViewModel.Factory::class)
+class OnlineMetadataViewModel @AssistedInject constructor(
+    @Assisted val navKey: OnlineMetadata,
     private val audioRepository: AudioRepository,
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val lyricsRepository: LyricsRepository,
-    private val settingsDataStore: SettingsDataStore,
-    savedStateHandle: SavedStateHandle
+    private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
 
-    private val filePath: String = decodeNavArg(savedStateHandle.get<String>("filePath"))
+    private val filePath: String = navKey.filePath
 
     private val _uiState = MutableStateFlow<OnlineMetadataUiState>(OnlineMetadataUiState.Idle)
     val uiState: StateFlow<OnlineMetadataUiState> = _uiState.asStateFlow()
@@ -778,6 +780,11 @@ class OnlineMetadataViewModel @Inject constructor(
             .replace(Regex("\\s+"), " ")
             .trim()
         return cleaned.takeIf { it.length >= 2 }
+    }
+
+    @AssistedFactory
+    interface Factory {
+        fun create(navKey: OnlineMetadata): OnlineMetadataViewModel
     }
 }
 

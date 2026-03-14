@@ -3,7 +3,6 @@ package com.voxly.presentation.viewmodel
 import android.net.Uri
 import android.os.SystemClock
 import android.provider.MediaStore
-import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.core.util.Constants
@@ -26,8 +25,12 @@ import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.repository.ScanMode
 import com.voxly.domain.usecase.UnifiedScanManager
+import com.voxly.presentation.navigation.MetadataEditor
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -62,8 +65,9 @@ enum class ConvertibleField(val displayName: String) {
  * ViewModel for the metadata editor screen.
  * Handles loading, editing, and saving audio file metadata.
  */
-@HiltViewModel
-class MetadataEditorViewModel @Inject constructor(
+@HiltViewModel(assistedFactory = MetadataEditorViewModel.Factory::class)
+class MetadataEditorViewModel @AssistedInject constructor(
+    @Assisted val navKey: MetadataEditor,
     @ApplicationContext private val context: android.content.Context,
     private val audioRepository: AudioRepository,
     private val replayGainRepository: ReplayGainRepository,
@@ -72,13 +76,13 @@ class MetadataEditorViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
-    private val unifiedScanManager: UnifiedScanManager,
-    savedStateHandle: SavedStateHandle
+    private val unifiedScanManager: UnifiedScanManager
 ) : ViewModel() {
 
     private val TAG = "MetadataEditorVM"
 
-    private val filePath: String = decodeNavArg(savedStateHandle.get<String>("filePath"))
+    // Get filePath from NavKey instead of SavedStateHandle
+    private val filePath: String = navKey.filePath
 
     // Scan mode setting
     private val _scanMode = MutableStateFlow(ScanMode.TRACK_ONLY)
@@ -931,10 +935,9 @@ class MetadataEditorViewModel @Inject constructor(
         setEditedMetadata(updatedMetadata)
     }
 
-    private fun decodeNavArg(value: String?): String {
-        val raw = value ?: return ""
-        if (!raw.contains('%') && !raw.contains('+')) return raw
-        return runCatching { URLDecoder.decode(raw, "UTF-8") }.getOrDefault(raw)
+    @AssistedFactory
+    interface Factory {
+        fun create(navKey: MetadataEditor): MetadataEditorViewModel
     }
 }
 

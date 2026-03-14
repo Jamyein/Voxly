@@ -6,20 +6,24 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.repository.AlbumCacheRepository
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.navigation.AlbumDetail
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * ViewModel for AlbumDetailScreen.
  * Loads album data from memory cache.
  */
-@HiltViewModel
-class AlbumDetailViewModel @Inject constructor(
+@HiltViewModel(assistedFactory = AlbumDetailViewModel.Factory::class)
+class AlbumDetailViewModel @AssistedInject constructor(
+    @Assisted val navKey: AlbumDetail,
     @ApplicationContext private val context: Context,
     private val albumCacheRepository: AlbumCacheRepository,
     private val audioFileScanner: AudioFileScanner
@@ -45,6 +49,11 @@ class AlbumDetailViewModel @Inject constructor(
 
     private val _files = MutableStateFlow<List<AudioFile>>(emptyList())
     val files: StateFlow<List<AudioFile>> = _files.asStateFlow()
+
+    init {
+        // Load album data from navKey on init
+        loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
+    }
 
     /**
      * Load album data from cache by album name and artist.
@@ -81,5 +90,10 @@ class AlbumDetailViewModel @Inject constructor(
                 e.printStackTrace()
             }
         }
+    }
+
+    @AssistedFactory
+    interface Factory {
+        fun create(navKey: AlbumDetail): AlbumDetailViewModel
     }
 }

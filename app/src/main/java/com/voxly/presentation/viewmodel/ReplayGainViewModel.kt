@@ -6,19 +6,23 @@ import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
+import com.voxly.presentation.navigation.ReplayGainScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.assisted.Assisted
+import dagger.assisted.AssistedFactory
+import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import javax.inject.Inject
 
 /**
  * ViewModel for ReplayGain scanning screen.
  */
-@HiltViewModel
-class ReplayGainViewModel @Inject constructor(
+@HiltViewModel(assistedFactory = ReplayGainViewModel.Factory::class)
+class ReplayGainViewModel @AssistedInject constructor(
+    @Assisted val navKey: ReplayGainScanner,
     private val replayGainRepository: ReplayGainRepository,
     private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
@@ -34,6 +38,13 @@ class ReplayGainViewModel @Inject constructor(
 
     private val _error = MutableStateFlow<String?>(null)
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    init {
+        // Auto-start scan with navKey filePaths
+        if (navKey.filePaths.isNotEmpty()) {
+            startScan(navKey.filePaths)
+        }
+    }
 
     /**
      * Starts scanning files for ReplayGain.
@@ -93,5 +104,10 @@ class ReplayGainViewModel @Inject constructor(
         _scanComplete.value = false
         _error.value = null
         _isScanning.value = false
+    }
+
+    @AssistedFactory
+    interface Factory {
+        fun create(navKey: ReplayGainScanner): ReplayGainViewModel
     }
 }
