@@ -537,7 +537,8 @@ fun FileBrowserScreen(
                                     directoryFiles = directoryFiles,
                                     onOpenDirectory = onNavigateToDirectory,
                                     isRefreshing = isRefreshing,
-                                    onRefresh = onRefresh
+                                    onRefresh = onRefresh,
+                                    bottomPadding = outerPadding.calculateBottomPadding()
                                 )
                             }
                             RootTab.ALBUMS -> {

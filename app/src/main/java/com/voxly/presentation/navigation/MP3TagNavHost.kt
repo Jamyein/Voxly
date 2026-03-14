@@ -112,7 +112,7 @@ fun MP3TagNavHost() {
                     // Bottom navigation screens
                     entry<FileBrowser> {
                         FileBrowserScreen(
-                            outerPadding = PaddingValues(),
+                            outerPadding = outerPadding,
                             onNavigateToMetadata = { filePath, coverTag ->
                                 backStack.add(MetadataEditor(filePath, coverTag ?: ""))
                             },
@@ -134,7 +134,7 @@ fun MP3TagNavHost() {
 
                     entry<RecentEdits> {
                         RecentEditsScreen(
-                            outerPadding = PaddingValues(),
+                            outerPadding = outerPadding,
                             onNavigateToMetadata = { filePath, coverTag ->
                                 backStack.add(MetadataEditor(filePath, coverTag ?: ""))
                             }
@@ -143,7 +143,7 @@ fun MP3TagNavHost() {
 
                     entry<Statistics> {
                         StatisticsScreen(
-                            outerPadding = PaddingValues(),
+                            outerPadding = outerPadding,
                             onNavigateToSettings = {
                                 backStack.add(Settings)
                             },
@@ -155,7 +155,7 @@ fun MP3TagNavHost() {
 
                     entry<Settings> {
                         SettingsScreen(
-                            outerPadding = PaddingValues(),
+                            outerPadding = outerPadding,
                             onNavigateToLogViewer = {
                                 backStack.add(LogViewer)
                             },

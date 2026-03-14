@@ -1602,8 +1602,6 @@ fun SettingsScreen(
             }
         )
 
-        Spacer(modifier = Modifier.height(16.dp))
-
         if (showSearchLimitsDialog) {
             SearchLimitDialog(
                 globalLimit = onlineSearchLimit,

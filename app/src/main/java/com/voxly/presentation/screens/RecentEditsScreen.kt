@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
@@ -79,7 +80,8 @@ fun RecentEditsScreen(
                 is RecentEditsUiState.Success -> {
                     RecentEditsList(
                         edits = state.edits,
-                        onItemClick = onNavigateToMetadata
+                        onItemClick = onNavigateToMetadata,
+                        bottomPadding = outerPadding.calculateBottomPadding()
                     )
                 }
             }
@@ -90,11 +92,15 @@ fun RecentEditsScreen(
 @Composable
 private fun RecentEditsList(
     edits: List<RecentEdit>,
-    onItemClick: (String, String?) -> Unit
+    onItemClick: (String, String?) -> Unit,
+    bottomPadding: Dp = 0.dp
 ) {
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(vertical = 8.dp),
+        contentPadding = PaddingValues(
+            top = 8.dp,
+            bottom = 8.dp + bottomPadding
+        ),
         verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         items(edits, key = { it.filePath + it.timestamp }) { edit ->

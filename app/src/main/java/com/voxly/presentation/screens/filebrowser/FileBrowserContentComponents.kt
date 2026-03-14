@@ -13,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
@@ -70,7 +71,8 @@ fun DirectoryOverviewContent(
     directoryFiles: Map<String, List<AudioFile>>,
     onOpenDirectory: (String, String, List<String>) -> Unit,
     isRefreshing: Boolean,
-    onRefresh: () -> Unit
+    onRefresh: () -> Unit,
+    bottomPadding: Dp = 0.dp
 ) {
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -86,7 +88,12 @@ fun DirectoryOverviewContent(
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                contentPadding = PaddingValues(
+                    start = 12.dp,
+                    end = 12.dp,
+                    top = 8.dp,
+                    bottom = 8.dp + bottomPadding
+                ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 items(directories, key = { it.uri }) { directory ->

@@ -39,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
@@ -108,7 +109,8 @@ fun StatisticsScreen(
             is StatisticsUiState.Success -> {
                 StatisticsContent(
                     state = state,
-                    onNavigateToArtist = onNavigateToArtist
+                    onNavigateToArtist = onNavigateToArtist,
+                    bottomPadding = outerPadding.calculateBottomPadding()
                 )
             }
         }
@@ -120,11 +122,17 @@ fun StatisticsScreen(
 private fun StatisticsContent(
     state: StatisticsUiState.Success,
     modifier: Modifier = Modifier,
-    onNavigateToArtist: (String) -> Unit = {}
+    onNavigateToArtist: (String) -> Unit = {},
+    bottomPadding: Dp = 0.dp
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = 16.dp,
+            bottom = 16.dp + bottomPadding
+        ),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
