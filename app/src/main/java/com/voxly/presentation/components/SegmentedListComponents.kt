@@ -772,3 +772,101 @@ fun StandardClickableRowWithMenu(
         )
     }
 }
+
+// ============ Audio File Standard Components ============
+
+/**
+ * Standard audio file list item (full mode).
+ * Uses M3E Standard ListItem.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun AudioFileStandardRow(
+    audioFile: AudioFile,
+    isSelected: Boolean = false,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Album art display
+            AlbumArtImage(
+                filePath = audioFile.path,
+                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                contentDescription = null,
+                size = 64.dp,
+                modifier = Modifier.clip(MaterialTheme.shapes.medium)
+            ) {
+                Icon(
+                    painter = appIconPainter(AppIcon.MusicNote),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = buildString {
+                        val artist = audioFile.metadata.artist
+                        val album = audioFile.metadata.album
+                        if (artist != null && album != null) {
+                            append("$artist - $album")
+                        } else if (artist != null) {
+                            append(artist)
+                        } else if (album != null) {
+                            append(album)
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = buildString {
+                        append(audioFile.format)
+                        append(" • ")
+                        append(audioFile.getFormattedDuration())
+                        append(" • ")
+                        append(audioFile.getFormattedSize())
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(8.dp)
+                )
+            }
+        }
+    }
+}
