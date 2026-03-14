@@ -539,8 +539,6 @@
     <string name="auto">Auto</string>
     <string name="font_size">Font Size</string>
     <string name="aspect_ratio">比例</string>
-    <string name="aspect_ratio_auto">自适应</string>
-    <string name="aspect_ratio_16_9">16:9</string>
     <string name="orientation">方向</string>
     <string name="portrait">竖向</string>
     <string name="landscape">横向</string>

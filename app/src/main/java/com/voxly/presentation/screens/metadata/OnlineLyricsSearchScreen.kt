@@ -25,8 +25,9 @@ import androidx.compose.material.icons.filled.Refresh
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Surface
@@ -54,7 +55,7 @@ import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.presentation.viewmodel.OnlineLyricsSearchViewModel
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun OnlineLyricsSearchScreen(
     filePath: String,
@@ -211,9 +212,7 @@ fun OnlineLyricsSearchScreen(
                                 .height(120.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            CircularProgressIndicator(
-                                color = MaterialTheme.colorScheme.primary
-                            )
+                            LoadingIndicator()
                         }
                     }
                 }
@@ -320,6 +319,7 @@ fun OnlineLyricsSearchScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun LyricsResultItem(
     item: OnlineLyricsResult,
@@ -354,10 +354,8 @@ private fun LyricsResultItem(
                 )
                 // Loading indicator
                 if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.height(20.dp).padding(start = 8.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
+                    LoadingIndicator(
+                        modifier = Modifier.height(20.dp).padding(start = 8.dp)
                     )
                 }
                 // LRC 标签使用 tertiary 颜色

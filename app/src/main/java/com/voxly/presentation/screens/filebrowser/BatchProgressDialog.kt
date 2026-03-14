@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -21,6 +22,7 @@ import com.voxly.presentation.icons.appIconPainter
 /**
  * Batch progress dialog showing operation progress.
  */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BatchProgressDialog(
     progress: BatchProgress,
@@ -47,9 +49,8 @@ fun BatchProgressDialog(
                 // Icon/Progress indicator
                 when (progress.status) {
                     BatchStatus.PROCESSING -> {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(48.dp),
-                            strokeWidth = 4.dp
+                        LoadingIndicator(
+                            modifier = Modifier.size(48.dp)
                         )
                     }
                     BatchStatus.COMPLETED -> {
