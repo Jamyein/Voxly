@@ -68,14 +68,22 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import kotlinx.coroutines.launch
 
-/**
- * Option data class for segmented list components.
- */
-data class SegmentedOption<T>(
-    val value: T,
-    val icon: ImageVector? = null,
-    val label: String? = null
-)
+// ============ Helper Composable & Data ============
+
+@Composable
+private fun TitleSubtitleContent(
+    title: String,
+    subtitle: String?,
+    titleStyle: androidx.compose.ui.text.TextStyle = MaterialTheme.typography.bodyLarge,
+    modifier: Modifier = Modifier
+) = Column(modifier = modifier) {
+    Text(text = title, style = titleStyle)
+    subtitle?.let {
+        Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+data class SegmentedOption<T>(val value: T, val icon: ImageVector? = null, val label: String? = null)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -87,38 +95,16 @@ fun SegmentedSwitchRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) {
-    // Use unchecked state to keep list item color/shape unchanged when switch is enabled
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        SegmentedListItem(
-            checked = false,
-            onCheckedChange = onCheckedChange,
-            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = {
-            Column {
-                Text(text = title)
-                subtitle?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        },
-        trailingContent = {
-            Switch(
-                checked = checked,
-                onCheckedChange = onCheckedChange
-            )
-        },
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    SegmentedListItem(
+        checked = false,
+        onCheckedChange = onCheckedChange,
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        leadingContent = { TitleSubtitleContent(title, subtitle) },
+        trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
         modifier = modifier.fillMaxWidth(),
         content = {}
     )
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -155,25 +141,15 @@ fun SegmentedInfoRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        SegmentedListItem(
-            onClick = {},
-            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-            leadingContent = {
-                Text(
-                    text = title,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            },
-            trailingContent = { Text(text = value) },
-            modifier = modifier.fillMaxWidth(),
-            content = {}
-        )
-    }
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        leadingContent = { Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+        trailingContent = { Text(value) },
+        modifier = modifier.fillMaxWidth(),
+        content = {}
+    )
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -186,31 +162,15 @@ fun SegmentedClickableRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        SegmentedListItem(
-            onClick = onClick,
-            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-            leadingContent = {
-                Column {
-                    Text(text = title)
-                    subtitle?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            trailingContent = trailingContent,
-            modifier = modifier.fillMaxWidth(),
-            content = {}
-        )
-    }
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    SegmentedListItem(
+        onClick = onClick,
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        leadingContent = { TitleSubtitleContent(title, subtitle) },
+        trailingContent = trailingContent,
+        modifier = modifier.fillMaxWidth(),
+        content = {}
+    )
 }
 
 /**
@@ -256,60 +216,30 @@ private fun <T> SegmentedButtonImpl(
     modifier: Modifier,
     titleStyle: androidx.compose.ui.text.TextStyle?,
     iconContentDescription: ((SegmentedOption<T>) -> String)?
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        SegmentedListItem(
-            onClick = {},
-            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-            leadingContent = {
-                Column {
-                    Text(
-                        text = title,
-                        style = titleStyle ?: MaterialTheme.typography.bodyLarge
-                    )
-                    subtitle?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            trailingContent = {
-                SingleChoiceSegmentedButtonRow(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    options.forEachIndexed { btnIndex, option ->
-                        SegmentedButton(
-                            selected = option.value == selectedValue,
-                            onClick = { onSelected(option.value) },
-                            shape = SegmentedButtonDefaults.itemShape(
-                                index = btnIndex,
-                                count = options.size
-                            ),
-                            icon = {
-                                option.icon?.let { icon ->
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = iconContentDescription?.invoke(option),
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                }
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        leadingContent = { TitleSubtitleContent(title, subtitle, titleStyle ?: MaterialTheme.typography.bodyLarge) },
+        trailingContent = {
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                options.forEachIndexed { btnIndex, option ->
+                    SegmentedButton(
+                        selected = option.value == selectedValue,
+                        onClick = { onSelected(option.value) },
+                        shape = SegmentedButtonDefaults.itemShape(btnIndex, options.size),
+                        icon = {
+                            option.icon?.let { icon ->
+                                Icon(icon, iconContentDescription?.invoke(option), Modifier.size(18.dp))
                             }
-                        ) {
-                            Text(option.label ?: "")
                         }
-                    }
+                    ) { Text(option.label ?: "") }
                 }
-            },
-            modifier = modifier.fillMaxWidth(),
-            content = {}
-        )
-    }
+            }
+        },
+        modifier = modifier.fillMaxWidth(),
+        content = {}
+    )
 }
 
 
@@ -329,78 +259,43 @@ fun <T> ConnectedButtonGroupRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        SegmentedListItem(
-            onClick = {},
-            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-            leadingContent = {
-                Column(modifier = Modifier.widthIn(max = 100.dp)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    subtitle?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = 100.dp)) },
+        trailingContent = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                ButtonGroup {
+                    options.forEachIndexed { btnIndex, option ->
+                        val isSelected = option.value == selectedValue
+                        val weight by animateFloatAsState(
+                            targetValue = if (isSelected) 1.3f else 1.0f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                            label = "weight_anim"
                         )
-                    }
-                }
-            },
-            trailingContent = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    ButtonGroup {
-                        options.forEachIndexed { btnIndex, option ->
-                            val isSelected = option.value == selectedValue
-                            val weight by animateFloatAsState(
-                                targetValue = if (isSelected) 1.3f else 1.0f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                ),
-                                label = "weight_anim"
-                            )
-                            val shapes = when {
-                                options.size == 1 -> ToggleButtonDefaults.shapes()
-                                btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                                btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                            }
-                            ToggleButton(
-                                checked = isSelected,
-                                onCheckedChange = { if (it) onSelected(option.value) },
-                                modifier = Modifier.weight(weight),
-                                shapes = shapes
-                            ) {
-                                option.icon?.let { icon ->
-                                    Icon(
-                                        imageVector = icon,
-                                        contentDescription = option.label,
-                                        modifier = Modifier.size(18.dp)
-                                    )
-                                    Spacer(modifier = Modifier.width(4.dp))
-                                }
-                                Text(
-                                    text = option.label ?: "",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                            }
+                        val shapes = when {
+                            options.size == 1 -> ToggleButtonDefaults.shapes()
+                            btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                        }
+                        ToggleButton(
+                            checked = isSelected,
+                            onCheckedChange = { if (it) onSelected(option.value) },
+                            modifier = Modifier.weight(weight),
+                            shapes = shapes
+                        ) {
+                            option.icon?.let { Icon(it, option.label, Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)) }
+                            Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
                         }
                     }
                 }
-            },
-            modifier = modifier.fillMaxWidth(),
-            content = {}
-        )
-    }
+            }
+        },
+        modifier = modifier.fillMaxWidth(),
+        content = {}
+    )
 }
 
 /**
@@ -417,68 +312,35 @@ fun <T> ConnectedButtonGroupRowCompact(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        SegmentedListItem(
-            onClick = {},
-            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-            leadingContent = {
-                Column(modifier = Modifier.widthIn(max = 100.dp)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    subtitle?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = 100.dp)) },
+        trailingContent = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                options.forEachIndexed { btnIndex, option ->
+                    val isSelected = option.value == selectedValue
+                    val shapes = when {
+                        options.size == 1 -> ToggleButtonDefaults.shapes()
+                        btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                    }
+                    ToggleButton(
+                        checked = isSelected,
+                        onCheckedChange = { if (it) onSelected(option.value) },
+                        shapes = shapes
+                    ) {
+                        option.icon?.let { Icon(it, option.label, Modifier.size(16.dp)) }
+                        option.label?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
                     }
                 }
-            },
-            trailingContent = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    options.forEachIndexed { btnIndex, option ->
-                        val isSelected = option.value == selectedValue
-                        val shapes = when {
-                            options.size == 1 -> ToggleButtonDefaults.shapes()
-                            btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        }
-                        ToggleButton(
-                            checked = isSelected,
-                            onCheckedChange = { if (it) onSelected(option.value) },
-                            shapes = shapes
-                        ) {
-                            option.icon?.let { icon ->
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = option.label,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                            option.label?.let { label ->
-                                Text(
-                                    text = label,
-                                    style = MaterialTheme.typography.labelSmall
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            modifier = modifier.fillMaxWidth(),
-            content = {}
-        )
-    }
+            }
+        },
+        modifier = modifier.fillMaxWidth(),
+        content = {}
+    )
 }
 
 /**
@@ -496,70 +358,31 @@ fun <T> ConnectedButtonGroupVerticalRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) {
-    Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Column {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleMedium
+) = Surface(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        TitleSubtitleContent(title, subtitle, MaterialTheme.typography.titleMedium)
+        ButtonGroup(modifier = Modifier.fillMaxWidth()) {
+            options.forEachIndexed { btnIndex, option ->
+                val isSelected = option.value == selectedValue
+                val weight by animateFloatAsState(
+                    targetValue = if (isSelected) 1.3f else 1.0f,
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                    label = "weight_anim"
                 )
-                subtitle?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                val buttonShapes = when {
+                    options.size == 1 -> ToggleButtonDefaults.shapes()
+                    btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                    btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
                 }
-            }
-
-            ButtonGroup(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                options.forEachIndexed { btnIndex, option ->
-                    val isSelected = option.value == selectedValue
-                    val weight by animateFloatAsState(
-                        targetValue = if (isSelected) 1.3f else 1.0f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        ),
-                        label = "weight_anim"
-                    )
-                    val buttonShapes = when {
-                        options.size == 1 -> ToggleButtonDefaults.shapes()
-                        btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                    }
-                    ToggleButton(
-                        checked = isSelected,
-                        onCheckedChange = { if (it) onSelected(option.value) },
-                        modifier = Modifier.weight(weight),
-                        shapes = buttonShapes
-                    ) {
-                        option.icon?.let { icon ->
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = option.label,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                        }
-                        Text(
-                            text = option.label ?: "",
-                            style = MaterialTheme.typography.labelMedium
-                        )
-                    }
+                ToggleButton(
+                    checked = isSelected,
+                    onCheckedChange = { if (it) onSelected(option.value) },
+                    modifier = Modifier.weight(weight),
+                    shapes = buttonShapes
+                ) {
+                    option.icon?.let { Icon(it, option.label, Modifier.size(16.dp)); Spacer(Modifier.width(4.dp)) }
+                    Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
                 }
             }
         }
@@ -581,90 +404,51 @@ fun <T> ConnectedIconOnlyButtonGroupRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        SegmentedListItem(
-            onClick = {},
-            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-            leadingContent = {
-                Column(modifier = Modifier.widthIn(max = 100.dp)) {
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    subtitle?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    SegmentedListItem(
+        onClick = {},
+        shapes = ListItemDefaults.segmentedShapes(index, count),
+        leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = 100.dp)) },
+        trailingContent = {
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                ButtonGroup {
+                    options.forEachIndexed { btnIndex, option ->
+                        val tooltipState = rememberTooltipState()
+                        val isSelected = option.value == selectedValue
+                        val weight by animateFloatAsState(
+                            targetValue = if (isSelected) 1.3f else 1.0f,
+                            animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                            label = "weight_anim"
                         )
-                    }
-                }
-            },
-            trailingContent = {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    ButtonGroup {
-                        options.forEachIndexed { btnIndex, option ->
-                            val tooltipState = rememberTooltipState()
-                            val isSelected = option.value == selectedValue
-                            val weight by animateFloatAsState(
-                                targetValue = if (isSelected) 1.3f else 1.0f,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                ),
-                                label = "weight_anim"
-                            )
-                            val shapes = when {
-                                options.size == 1 -> ToggleButtonDefaults.shapes()
-                                btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                                btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                            }
-                            Box {
-                                TooltipBox(
-                                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                                        positioning = TooltipAnchorPosition.Above
-                                    ),
-                                    tooltip = {
-                                        PlainTooltip {
-                                            Text(option.label ?: "")
-                                        }
-                                    },
-                                    state = tooltipState
+                        val shapes = when {
+                            options.size == 1 -> ToggleButtonDefaults.shapes()
+                            btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                        }
+                        Box {
+                            TooltipBox(
+                                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
+                                tooltip = { PlainTooltip { Text(option.label ?: "") } },
+                                state = tooltipState
+                            ) {
+                                ToggleButton(
+                                    checked = isSelected,
+                                    onCheckedChange = { if (it) onSelected(option.value) },
+                                    modifier = Modifier.weight(weight).height(40.dp),
+                                    shapes = shapes
                                 ) {
-                                    ToggleButton(
-                                        checked = isSelected,
-                                        onCheckedChange = { if (it) onSelected(option.value) },
-                                        modifier = Modifier
-                                            .weight(weight)
-                                            .height(40.dp),
-                                        shapes = shapes
-                                    ) {
-                                        option.icon?.let { icon ->
-                                            Icon(
-                                                imageVector = icon,
-                                                contentDescription = option.label,
-                                                modifier = Modifier.size(22.dp)
-                                            )
-                                        }
-                                    }
+                                    option.icon?.let { Icon(it, option.label, Modifier.size(22.dp)) }
                                 }
                             }
                         }
                     }
                 }
-            },
-            modifier = modifier.fillMaxWidth(),
-            content = {}
-        )
-    }
+            }
+        },
+        modifier = modifier.fillMaxWidth(),
+        content = {}
+    )
 }
 
 // ============ Standard List Components (non-segmented) ============
@@ -684,22 +468,18 @@ fun StandardListItem(
     overlineContent: @Composable (() -> Unit)? = null,
     supportingContent: @Composable (() -> Unit)? = null,
     content: @Composable () -> Unit
-) {
-    ListItem(
-        onClick = onClick,
-        modifier = modifier,
-        enabled = enabled,
-        leadingContent = leadingContent,
-        trailingContent = trailingContent,
-        overlineContent = overlineContent,
-        supportingContent = supportingContent,
-        content = content
-    )
-}
+) = ListItem(
+    onClick = onClick,
+    modifier = modifier,
+    enabled = enabled,
+    leadingContent = leadingContent,
+    trailingContent = trailingContent,
+    overlineContent = overlineContent,
+    supportingContent = supportingContent,
+    content = content
+)
 
-/**
- * Standard clickable row - clickable list item without selection.
- */
+/** Standard clickable row - clickable list item without selection. */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun StandardClickableRow(
@@ -709,31 +489,15 @@ fun StandardClickableRow(
     trailingContent: @Composable (() -> Unit)? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        ListItem(
-            onClick = onClick,
-            colors = ListItemDefaults.colors(),
-            leadingContent = leadingContent ?: {
-                Column {
-                    Text(text = title)
-                    subtitle?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            trailingContent = trailingContent,
-            modifier = modifier.fillMaxWidth(),
-            content = {}
-        )
-    }
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    ListItem(
+        onClick = onClick,
+        colors = ListItemDefaults.colors(),
+        leadingContent = leadingContent ?: { TitleSubtitleContent(title, subtitle) },
+        trailingContent = trailingContent,
+        modifier = modifier.fillMaxWidth(),
+        content = {}
+    )
 }
 
 /**
@@ -748,31 +512,15 @@ fun StandardClickableRowWithMenu(
     menuContent: @Composable () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) {
-    Surface(
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        ListItem(
-            onClick = onClick,
-            colors = ListItemDefaults.colors(),
-            leadingContent = leadingContent ?: {
-                Column {
-                    Text(text = title)
-                    subtitle?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            },
-            trailingContent = menuContent,
-            modifier = modifier.fillMaxWidth(),
-            content = {}
-        )
-    }
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+    ListItem(
+        onClick = onClick,
+        colors = ListItemDefaults.colors(),
+        leadingContent = leadingContent ?: { TitleSubtitleContent(title, subtitle) },
+        trailingContent = menuContent,
+        modifier = modifier.fillMaxWidth(),
+        content = {}
+    )
 }
 
 // ============ Audio File Standard Components ============
@@ -789,87 +537,34 @@ fun AudioFileStandardRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
+) = Surface(
+    modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    shape = MaterialTheme.shapes.large,
+    color = MaterialTheme.colorScheme.surface
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
+    Row(modifier = Modifier.fillMaxWidth().padding(12.dp, 12.dp, 8.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        AlbumArtImage(
+            filePath = audioFile.path,
+            mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+            contentDescription = null,
+            size = 64.dp,
+            modifier = Modifier.clip(MaterialTheme.shapes.medium)
         ) {
-            // Album art display
-            AlbumArtImage(
-                filePath = audioFile.path,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
-                contentDescription = null,
-                size = 64.dp,
-                modifier = Modifier.clip(MaterialTheme.shapes.medium)
-            ) {
-                Icon(
-                    painter = appIconPainter(AppIcon.MusicNote),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = buildString {
-                        val artist = audioFile.metadata.artist
-                        val album = audioFile.metadata.album
-                        if (artist != null && album != null) {
-                            append("$artist - $album")
-                        } else if (artist != null) {
-                            append(artist)
-                        } else if (album != null) {
-                            append(album)
-                        }
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = buildString {
-                        append(audioFile.format)
-                        append(" • ")
-                        append(audioFile.getFormattedDuration())
-                        append(" • ")
-                        append(audioFile.getFormattedSize())
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(8.dp)
-                )
-            }
+            Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(24.dp))
         }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                buildString {
+                    val artist = audioFile.metadata.artist; val album = audioFile.metadata.album
+                    when { artist != null && album != null -> append("$artist - $album"); artist != null -> append(artist); album != null -> append(album) }
+                },
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+            Text("${audioFile.format} • ${audioFile.getFormattedDuration()} • ${audioFile.getFormattedSize()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+        }
+        if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(8.dp))
     }
 }
 
@@ -886,76 +581,33 @@ private fun AudioFileActionsMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                painter = appIconPainter(AppIcon.MoreVert),
-                contentDescription = null
-            )
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
+        IconButton({ expanded = true }) { Icon(appIconPainter(AppIcon.MoreVert), null) }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
                 text = { Text("Edit Metadata") },
-                leadingIcon = {
-                    Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = null)
-                },
-                onClick = {
-                    expanded = false
-                    onEditMetadata()
-                }
+                leadingIcon = { Icon(appIconPainter(AppIcon.Edit), null) },
+                onClick = { expanded = false; onEditMetadata() }
             )
             DropdownMenuItem(
                 text = { Text("Fetch Online Metadata") },
-                leadingIcon = {
-                    Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = null)
-                },
-                onClick = {
-                    expanded = false
-                    onFetchOnlineMetadata()
-                }
+                leadingIcon = { Icon(appIconPainter(AppIcon.CloudDownload), null) },
+                onClick = { expanded = false; onFetchOnlineMetadata() }
             )
             DropdownMenuItem(
                 text = { Text("Fix Metadata") },
-                leadingIcon = {
-                    Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = null)
-                },
-                onClick = {
-                    expanded = false
-                    onFixMetadata()
-                }
+                leadingIcon = { Icon(appIconPainter(AppIcon.AutoFix), null) },
+                onClick = { expanded = false; onFixMetadata() }
             )
-            // Use Surface instead of HorizontalDivider (M3E rule: No dividers)
-            Surface(
-                modifier = Modifier.padding(vertical = 4.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
-            ) {
-                Spacer(modifier = Modifier.height(1.dp))
-            }
+            Surface(modifier = Modifier.padding(vertical = 4.dp), color = MaterialTheme.colorScheme.outlineVariant) { Spacer(Modifier.height(1.dp)) }
             DropdownMenuItem(
                 text = { Text("Rename") },
-                leadingIcon = {
-                    Icon(painter = appIconPainter(AppIcon.Rename), contentDescription = null)
-                },
-                onClick = {
-                    expanded = false
-                    onRename()
-                }
+                leadingIcon = { Icon(appIconPainter(AppIcon.Rename), null) },
+                onClick = { expanded = false; onRename() }
             )
             DropdownMenuItem(
                 text = { Text("Delete") },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.Close),
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onDelete()
-                }
+                leadingIcon = { Icon(appIconPainter(AppIcon.Close), null, tint = MaterialTheme.colorScheme.error) },
+                onClick = { expanded = false; onDelete() }
             )
         }
     }
@@ -978,95 +630,26 @@ fun AudioFileStandardRowWithMenu(
     onFetchOnlineMetadata: () -> Unit,
     onFixMetadata: () -> Unit,
     modifier: Modifier = Modifier
+) = Surface(
+    modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    shape = MaterialTheme.shapes.large,
+    color = MaterialTheme.colorScheme.surface
 ) {
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Album art display
-            AlbumArtImage(
-                filePath = audioFile.path,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
-                contentDescription = null,
-                size = 64.dp,
-                modifier = Modifier.clip(MaterialTheme.shapes.medium)
-            ) {
-                Icon(
-                    painter = appIconPainter(AppIcon.MusicNote),
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = buildString {
-                        val artist = audioFile.metadata.artist
-                        val album = audioFile.metadata.album
-                        if (artist != null && album != null) {
-                            append("$artist - $album")
-                        } else if (artist != null) {
-                            append(artist)
-                        } else if (album != null) {
-                            append(album)
-                        }
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = buildString {
-                        append(audioFile.format)
-                        append(" • ")
-                        append(audioFile.getFormattedDuration())
-                        append(" • ")
-                        append(audioFile.getFormattedSize())
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-
-            if (isSelected) {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(8.dp)
-                )
-            } else {
-                AudioFileActionsMenu(
-                    onEditMetadata = onEditMetadata,
-                    onRename = onRename,
-                    onDelete = onDelete,
-                    onFetchOnlineMetadata = onFetchOnlineMetadata,
-                    onFixMetadata = onFixMetadata
-                )
-            }
+    Row(modifier = Modifier.fillMaxWidth().padding(12.dp, 12.dp, 8.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = 64.dp, modifier = Modifier.clip(MaterialTheme.shapes.medium)) {
+            Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(24.dp))
         }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                buildString { val a = audioFile.metadata.artist; val b = audioFile.metadata.album; when { a != null && b != null -> append("$a - $b"); a != null -> append(a); b != null -> append(b) } },
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+            Text("${audioFile.format} • ${audioFile.getFormattedDuration()} • ${audioFile.getFormattedSize()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+        }
+        if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(8.dp))
+        else AudioFileActionsMenu(onEditMetadata, onRename, onDelete, onFetchOnlineMetadata, onFixMetadata)
     }
 }
 
@@ -1081,84 +664,26 @@ fun AudioFileStandardRowCompact(
     isSelected: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
+) = Card(
+    modifier = modifier.fillMaxWidth(),
+    shape = MaterialTheme.shapes.small,
+    colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface),
+    onClick = onClick
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.small,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(MaterialTheme.shapes.extraSmall),
-                contentAlignment = Alignment.Center
-            ) {
-                AlbumArtImage(
-                    filePath = audioFile.path,
-                    mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
-                    contentDescription = null,
-                    size = 40.dp,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = MaterialTheme.shapes.extraSmall,
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
+    Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(modifier = Modifier.size(40.dp).clip(MaterialTheme.shapes.extraSmall), contentAlignment = Alignment.Center) {
+            AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = 40.dp, modifier = Modifier.fillMaxSize()) {
+                Surface(modifier = Modifier.fillMaxSize(), shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.surfaceVariant) {
+                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
                 }
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = audioFile.metadata.album ?: "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Text(
-                text = audioFile.getFormattedDuration(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline
-            )
-            if (isSelected) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
         }
+        Spacer(Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(audioFile.metadata.album ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        Text(audioFile.getFormattedDuration(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+        if (isSelected) { Spacer(Modifier.width(8.dp)); Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(16.dp)) }
     }
 }
