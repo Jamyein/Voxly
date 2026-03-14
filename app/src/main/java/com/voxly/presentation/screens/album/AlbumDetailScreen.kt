@@ -22,10 +22,12 @@ import androidx.compose.material.icons.filled.Album
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.Scaffold
@@ -49,14 +51,13 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.SettingsSection
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 
 /**
  * Album detail screen showing album info and track list.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun AlbumDetailScreen(
     albumName: String,
@@ -263,13 +264,30 @@ fun AlbumDetailScreen(
                 val discNumber = sortedDiscNumbers[discIndex]
                 val discFiles = groupedFiles[discNumber] ?: return@items
 
-                // Always show disc title
-                SettingsSection(
-                    title = "Disc $discNumber"
+                // Disc 标题
+                Text(
+                    text = "Disc $discNumber",
+                    style = MaterialTheme.typography.titleSmall,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+
+                // 歌曲列表 - 使用 SegmentedListItem 实现分段效果
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
                     discFiles.forEachIndexed { index, audioFile ->
-                        ListItem(
-                            headlineContent = {
+                        SegmentedListItem(
+                            onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
+                            shapes = ListItemDefaults.segmentedShapes(
+                                index = index,
+                                count = discFiles.size
+                            ),
+                            colors = ListItemDefaults.segmentedColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                            ),
+                            leadingContent = {
                                 Text(
                                     text = audioFile.metadata.trackNumber?.toString() ?: "-",
                                     style = MaterialTheme.typography.titleMedium,
@@ -292,12 +310,8 @@ fun AlbumDetailScreen(
                                     )
                                 }
                             },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
-                            colors = ListItemDefaults.colors(
-                                containerColor = MaterialTheme.colorScheme.surface
-                            )
+                            modifier = Modifier.fillMaxWidth(),
+                            content = {}
                         )
                     }
                 }

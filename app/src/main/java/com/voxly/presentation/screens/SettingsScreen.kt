@@ -81,6 +81,10 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.BuildConfig
 import com.voxly.R
 import com.voxly.core.util.LogManager
+import com.voxly.presentation.components.ConnectedButtonGroupSettingsRow
+import com.voxly.presentation.components.ConnectedButtonGroupSettingsRowCompact
+import com.voxly.presentation.components.ConnectedButtonGroupVerticalSettingsRow
+import com.voxly.presentation.components.ConnectedIconOnlyButtonGroupSettingsRow
 import com.voxly.presentation.components.SegmentedOption
 import com.voxly.presentation.components.SegmentedSettingsClickableRow
 import com.voxly.presentation.components.SegmentedSettingsInfoRow
@@ -186,14 +190,25 @@ private fun <T> ConnectedIconButtonGroup(
     modifier: Modifier = Modifier
 ) {
     val mediumHeight = 40.dp
-    val mediumWeight = 64.dp
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
+    val baseWeight = 1.0f
+    val selectedWeight = 1.5f
+
+    ButtonGroup(
+        modifier = modifier
     ) {
         options.forEachIndexed { index, option ->
             val tooltipState = rememberTooltipState()
             val isSelected = option.value == selectedValue
+
+            // M3E 动态权重要换动画
+            val animatedWeight by animateFloatAsState(
+                targetValue = if (isSelected) selectedWeight else baseWeight,
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                    stiffness = Spring.StiffnessMediumLow
+                ),
+                label = "weight_anim"
+            )
 
             Box {
                 TooltipBox(
@@ -211,7 +226,7 @@ private fun <T> ConnectedIconButtonGroup(
                             if (checked) onSelected(option.value)
                         },
                         modifier = Modifier
-                            .width(mediumWeight)
+                            .weight(animatedWeight)
                             .height(mediumHeight)
                             .semantics { role = Role.RadioButton },
                         shapes = when (index) {
@@ -1080,6 +1095,17 @@ fun SettingsScreen(
     val currentSearchLimit = searchLimitOptions.firstOrNull { it.value == onlineSearchLimit }
         ?: searchLimitOptions[1]
 
+    // Convert SearchLimitOption to SegmentedOption for ConnectedButtonGroup
+    // Note: displayLabel() is @Composable so we use a simple label here
+    val searchLimitSegmentedOptions = remember(searchLimitOptions) {
+        searchLimitOptions.map { option ->
+            SegmentedOption(
+                value = option.value,
+                label = if (option.value == 0) "∞" else option.value.toString()
+            )
+        }
+    }
+
     val scanModeOptions = remember {
         listOf(
             ScanModeOption("TRACK_ONLY", R.string.settings_scan_mode_track_only),
@@ -1111,7 +1137,7 @@ fun SettingsScreen(
         ) {
             // Appearance Section
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-                SegmentedSettingsSegmentedButton(
+                ConnectedIconOnlyButtonGroupSettingsRow(
                     title = stringResource(R.string.settings_theme),
                     options = listOf(
                         SegmentedOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
@@ -1119,7 +1145,9 @@ fun SettingsScreen(
                         SegmentedOption("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
                     ),
                     selectedValue = themeMode,
-                    onSelected = viewModel::setThemeMode
+                    onSelected = viewModel::setThemeMode,
+                    index = 0,
+                    count = 2
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1128,7 +1156,9 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_dynamic_color),
                     subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
                     checked = dynamicColors,
-                    onCheckedChange = { viewModel.setDynamicColors(it) }
+                    onCheckedChange = { viewModel.setDynamicColors(it) },
+                    index = 1,
+                    count = 2
                 )
             }
 
@@ -1136,9 +1166,9 @@ fun SettingsScreen(
 
             // Language Section
             SettingsSection(title = stringResource(R.string.settings_section_language)) {
-                ListItem(
-                    headlineContent = { Text(text = stringResource(R.string.settings_language)) },
-                    supportingContent = { Text(text = stringResource(currentLanguageOption.labelResId)) },
+                SegmentedSettingsClickableRow(
+                    title = stringResource(R.string.settings_language),
+                    subtitle = stringResource(currentLanguageOption.labelResId),
                     trailingContent = {
                         ExposedDropdownMenuBox(
                             expanded = languageExpanded,
@@ -1175,9 +1205,9 @@ fun SettingsScreen(
                             }
                         }
                     },
-                    colors = ListItemDefaults.colors(
-                        containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
-                    ),
+                    onClick = { },
+                    index = 0,
+                    count = 1,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
@@ -1186,7 +1216,7 @@ fun SettingsScreen(
 
             // Scanning Section
             SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
-                SegmentedSettingsSegmentedButton(
+                ConnectedIconOnlyButtonGroupSettingsRow(
                     title = stringResource(R.string.settings_scan_mode),
                     options = scanModeOptions.map { option ->
                         SegmentedOption(
@@ -1200,7 +1230,9 @@ fun SettingsScreen(
                         )
                     },
                     selectedValue = scanMode,
-                    onSelected = viewModel::setScanMode
+                    onSelected = viewModel::setScanMode,
+                    index = 0,
+                    count = 2
                 )
 
                 Spacer(modifier = Modifier.height(8.dp))
@@ -1209,7 +1241,9 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_min_duration_filter),
                     subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
                     checked = minDurationFilterEnabled,
-                    onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) }
+                    onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) },
+                    index = 1,
+                    count = 2
                 )
             }
 
@@ -1227,7 +1261,9 @@ fun SettingsScreen(
                     title = stringResource(R.string.artist_separator),
                     subtitle = stringResource(R.string.artist_separator_summary),
                     checked = viewModel.artistSeparatorEnabled.value,
-                    onCheckedChange = { viewModel.setArtistSeparatorEnabled(it) }
+                    onCheckedChange = { viewModel.setArtistSeparatorEnabled(it) },
+                    index = 0,
+                    count = if (viewModel.artistSeparatorEnabled.value) 2 else 1
                 )
 
                 // Last item - only show if enabled
@@ -1240,7 +1276,9 @@ fun SettingsScreen(
                         onClick = {
                             separatorText = viewModel.artistSeparators.value
                             showSeparatorDialog = true
-                        }
+                        },
+                        index = 1,
+                        count = 2
                     )
                 }
             }
@@ -1282,7 +1320,9 @@ fun SettingsScreen(
                 SegmentedSettingsClickableRow(
                     title = stringResource(R.string.settings_scan_directory_settings),
                     subtitle = stringResource(R.string.settings_scan_directory_settings_subtitle),
-                    onClick = { onNavigateToScanDirectorySettings() }
+                    onClick = { onNavigateToScanDirectorySettings() },
+                    index = 0,
+                    count = 1
                 )
             }
 
@@ -1293,25 +1333,34 @@ fun SettingsScreen(
                 SegmentedSettingsClickableRow(
                     title = stringResource(R.string.settings_source_group_metadata),
                     subtitle = stringResource(R.string.settings_source_group_metadata_subtitle),
-                    onClick = { showMetadataSourceDialog = true }
+                    onClick = { showMetadataSourceDialog = true },
+                    index = 0,
+                    count = 4
                 )
                 // Lyrics source
                 SegmentedSettingsClickableRow(
                     title = stringResource(R.string.settings_source_group_lyrics),
                     subtitle = stringResource(R.string.settings_source_group_lyrics_subtitle),
-                    onClick = { showLyricsSourceDialog = true }
+                    onClick = { showLyricsSourceDialog = true },
+                    index = 1,
+                    count = 4
                 )
                 // Cover source
                 SegmentedSettingsClickableRow(
                     title = stringResource(R.string.settings_source_group_cover),
                     subtitle = stringResource(R.string.settings_source_group_cover_subtitle),
-                    onClick = { showCoverSourceDialog = true }
+                    onClick = { showCoverSourceDialog = true },
+                    index = 2,
+                    count = 4
                 )
-                // Search limits
-                SegmentedSettingsClickableRow(
-                    title = stringResource(R.string.settings_online_search_limits_submenu),
-                    subtitle = stringResource(R.string.settings_online_search_limits_submenu_subtitle),
-                    onClick = { showSearchLimitsDialog = true }
+                // Search limits - global limit with connected button group
+                ConnectedButtonGroupSettingsRow(
+                    title = stringResource(R.string.settings_online_search_limit),
+                    options = searchLimitSegmentedOptions,
+                    selectedValue = onlineSearchLimit,
+                    onSelected = { viewModel.setOnlineSearchLimit(it) },
+                    index = 3,
+                    count = 4
                 )
             }
 
@@ -1327,7 +1376,9 @@ fun SettingsScreen(
                     onCheckedChange = {
                         LogManager.isLoggingEnabled = it
                         viewModel.setLoggingEnabled(it)
-                    }
+                    },
+                    index = 0,
+                    count = 7
                 )
                 // File logging switch
                 SegmentedSettingsSwitchRow(
@@ -1337,7 +1388,9 @@ fun SettingsScreen(
                     onCheckedChange = {
                         LogManager.isFileLoggingEnabled = it
                         viewModel.setFileLoggingEnabled(it)
-                    }
+                    },
+                    index = 1,
+                    count = 7
                 )
                 // Console logging switch
                 SegmentedSettingsSwitchRow(
@@ -1347,7 +1400,9 @@ fun SettingsScreen(
                     onCheckedChange = {
                         LogManager.isConsoleLoggingEnabled = it
                         viewModel.setConsoleLoggingEnabled(it)
-                    }
+                    },
+                    index = 2,
+                    count = 7
                 )
                 // Crash reporting switch
                 SegmentedSettingsSwitchRow(
@@ -1357,30 +1412,40 @@ fun SettingsScreen(
                     onCheckedChange = {
                         LogManager.isCrashReportingEnabled = it
                         viewModel.setCrashReportingEnabled(it)
-                    }
+                    },
+                    index = 3,
+                    count = 7
                 )
                 // Log size info
                 SegmentedSettingsInfoRow(
                     title = stringResource(R.string.settings_logging_size),
-                    value = LogManager.formatLogSize(LogManager.getLogDirectorySize())
+                    value = LogManager.formatLogSize(LogManager.getLogDirectorySize()),
+                    index = 4,
+                    count = 7
                 )
                 // View logs
                 SegmentedSettingsClickableRow(
                     title = stringResource(R.string.settings_logging_view),
                     subtitle = stringResource(R.string.settings_logging_view_subtitle),
-                    onClick = { onNavigateToLogViewer() }
+                    onClick = { onNavigateToLogViewer() },
+                    index = 5,
+                    count = 7
                 )
                 // Export logs
                 SegmentedSettingsClickableRow(
                     title = stringResource(R.string.settings_logging_export),
                     subtitle = stringResource(R.string.settings_logging_export_subtitle),
-                    onClick = { onExportLogs() }
+                    onClick = { onExportLogs() },
+                    index = 6,
+                    count = 7
                 )
                 // Cleanup logs
                 SegmentedSettingsClickableRow(
                     title = stringResource(R.string.settings_logging_cleanup),
                     subtitle = stringResource(R.string.settings_logging_cleanup_subtitle),
-                    onClick = { onCleanupLogs() }
+                    onClick = { onCleanupLogs() },
+                    index = 7,
+                    count = 7
                 )
             }
 
@@ -1396,12 +1461,14 @@ fun SettingsScreen(
             )
             
             SettingsSection(title = stringResource(R.string.replay_gain_settings)) {
-                SegmentedSettingsSegmentedButtonRow(
+                ConnectedButtonGroupVerticalSettingsRow(
                     title = stringResource(R.string.replay_gain_target_loudness),
                     subtitle = stringResource(R.string.replay_gain_default_loudness),
                     options = replayGainOptions,
                     selectedValue = replayGainTargetLoudness,
-                    onSelected = { viewModel.setReplayGainTargetLoudness(it) }
+                    onSelected = { viewModel.setReplayGainTargetLoudness(it) },
+                    index = 0,
+                    count = 1
                 )
             }
 
@@ -1411,11 +1478,15 @@ fun SettingsScreen(
             SettingsSection(title = stringResource(R.string.settings_section_about)) {
                 SegmentedSettingsInfoRow(
                     title = stringResource(R.string.settings_version_label),
-                    value = BuildConfig.VERSION_NAME
+                    value = BuildConfig.VERSION_NAME,
+                    index = 0,
+                    count = 2
                 )
                 SegmentedSettingsInfoRow(
                     title = stringResource(R.string.settings_developer_label),
-                    value = stringResource(R.string.settings_developer_value)
+                    value = stringResource(R.string.settings_developer_value),
+                    index = 1,
+                    count = 2
                 )
             }
         }
