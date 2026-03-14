@@ -69,3 +69,14 @@
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 -keepclassmembers class kotlinx.coroutines.** { volatile <fields>; }
+
+# ========================================
+# Kotlin Data Classes - 防止 R8 优化导致 nullable 字段访问异常
+# ========================================
+# 保留 domain model data classes 的完整结构
+-keep class com.voxly.domain.model.** { *; }
+
+# 特别保留 AudioMetadata 的 year 字段访问
+-keepclassmembers class com.voxly.domain.model.AudioMetadata {
+    public java.lang.String year;
+}

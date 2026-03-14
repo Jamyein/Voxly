@@ -201,9 +201,8 @@ internal fun AlbumGridItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                val albumYear = album.files
-                    .firstOrNull { it.metadata.year?.isNotBlank() == true }
-                    ?.metadata?.year
+                // 直接取第一个文件的年份，与专辑详情保持一致，避免 R8 优化导致的行为差异
+                val albumYear = album.files.firstOrNull()?.metadata?.year
                 Text(
                     text = if (albumYear != null) {
                         "$albumYear • ${stringResource(R.string.track_count, album.files.size)}"
