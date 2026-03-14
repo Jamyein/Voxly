@@ -870,3 +870,200 @@ fun AudioFileStandardRow(
         }
     }
 }
+
+/**
+ * Actions menu for audio file items (three dots menu).
+ */
+@Composable
+private fun AudioFileActionsMenu(
+    onEditMetadata: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onFetchOnlineMetadata: () -> Unit,
+    onFixMetadata: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                painter = appIconPainter(AppIcon.MoreVert),
+                contentDescription = null
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            DropdownMenuItem(
+                text = { Text("Edit Metadata") },
+                leadingIcon = {
+                    Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = null)
+                },
+                onClick = {
+                    expanded = false
+                    onEditMetadata()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Fetch Online Metadata") },
+                leadingIcon = {
+                    Icon(painter = appIconPainter(AppIcon.CloudDownload), contentDescription = null)
+                },
+                onClick = {
+                    expanded = false
+                    onFetchOnlineMetadata()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Fix Metadata") },
+                leadingIcon = {
+                    Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = null)
+                },
+                onClick = {
+                    expanded = false
+                    onFixMetadata()
+                }
+            )
+            // Use Surface instead of HorizontalDivider (M3E rule: No dividers)
+            Surface(
+                modifier = Modifier.padding(vertical = 4.dp),
+                color = MaterialTheme.colorScheme.outlineVariant
+            ) {
+                Spacer(modifier = Modifier.height(1.dp))
+            }
+            DropdownMenuItem(
+                text = { Text("Rename") },
+                leadingIcon = {
+                    Icon(painter = appIconPainter(AppIcon.Rename), contentDescription = null)
+                },
+                onClick = {
+                    expanded = false
+                    onRename()
+                }
+            )
+            DropdownMenuItem(
+                text = { Text("Delete") },
+                leadingIcon = {
+                    Icon(
+                        painter = appIconPainter(AppIcon.Close),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                },
+                onClick = {
+                    expanded = false
+                    onDelete()
+                }
+            )
+        }
+    }
+}
+
+/**
+ * Standard audio file list item with actions menu (full mode).
+ * Uses M3E Standard ListItem with three-dot menu.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun AudioFileStandardRowWithMenu(
+    audioFile: AudioFile,
+    isSelected: Boolean = false,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
+    onEditMetadata: () -> Unit,
+    onRename: () -> Unit,
+    onDelete: () -> Unit,
+    onFetchOnlineMetadata: () -> Unit,
+    onFixMetadata: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick
+            ),
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Album art display
+            AlbumArtImage(
+                filePath = audioFile.path,
+                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                contentDescription = null,
+                size = 64.dp,
+                modifier = Modifier.clip(MaterialTheme.shapes.medium)
+            ) {
+                Icon(
+                    painter = appIconPainter(AppIcon.MusicNote),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.outline,
+                    modifier = Modifier.size(24.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(10.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = buildString {
+                        val artist = audioFile.metadata.artist
+                        val album = audioFile.metadata.album
+                        if (artist != null && album != null) {
+                            append("$artist - $album")
+                        } else if (artist != null) {
+                            append(artist)
+                        } else if (album != null) {
+                            append(album)
+                        }
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Text(
+                    text = buildString {
+                        append(audioFile.format)
+                        append(" • ")
+                        append(audioFile.getFormattedDuration())
+                        append(" • ")
+                        append(audioFile.getFormattedSize())
+                    },
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.outline
+                )
+            }
+
+            if (isSelected) {
+                Icon(
+                    imageVector = Icons.Default.CheckCircle,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(8.dp)
+                )
+            } else {
+                AudioFileActionsMenu(
+                    onEditMetadata = onEditMetadata,
+                    onRename = onRename,
+                    onDelete = onDelete,
+                    onFetchOnlineMetadata = onFetchOnlineMetadata,
+                    onFixMetadata = onFixMetadata
+                )
+            }
+        }
+    }
+}
