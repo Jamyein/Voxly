@@ -1150,8 +1150,6 @@ fun SettingsScreen(
                     count = 2
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
                 SegmentedSwitchRow(
                     title = stringResource(R.string.settings_dynamic_color),
                     subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
@@ -1235,8 +1233,6 @@ fun SettingsScreen(
                     count = 2
                 )
 
-                Spacer(modifier = Modifier.height(8.dp))
-
                 SegmentedSwitchRow(
                     title = stringResource(R.string.settings_min_duration_filter),
                     subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
@@ -1268,8 +1264,6 @@ fun SettingsScreen(
 
                 // Last item - only show if enabled
                 if (viewModel.artistSeparatorEnabled.value) {
-                    Spacer(modifier = Modifier.height(8.dp))
-
                     SegmentedClickableRow(
                         title = stringResource(R.string.artist_separators),
                         subtitle = separatorText.ifBlank { "& \\" },
@@ -1454,10 +1448,10 @@ fun SettingsScreen(
             // ReplayGain Section
             // ReplayGain target loudness preset values
             val replayGainOptions = listOf(
-                SegmentedOption(value = -23f, label = "EBU R128"),
-                SegmentedOption(value = -18f, label = "Streaming"),
-                SegmentedOption(value = -16f, label = "CD"),
-                SegmentedOption(value = -14f, label = "Loud")
+                SegmentedOption(value = -23f, label = "EBU R128\n-23 dB"),
+                SegmentedOption(value = -18f, label = "Streaming\n-18 dB"),
+                SegmentedOption(value = -16f, label = "CD\n-16 dB"),
+                SegmentedOption(value = -14f, label = "Loud\n-14 dB")
             )
             
             SettingsSection(title = stringResource(R.string.replay_gain_settings)) {

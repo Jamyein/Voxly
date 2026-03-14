@@ -22,6 +22,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.SegmentedListItem
+import androidx.compose.material3.Surface
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SegmentedButton
@@ -66,10 +67,14 @@ fun SegmentedSwitchRow(
     modifier: Modifier = Modifier
 ) {
     // Use unchecked state to keep list item color/shape unchanged when switch is enabled
-    SegmentedListItem(
-        checked = false,
-        onCheckedChange = onCheckedChange,
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        SegmentedListItem(
+            checked = false,
+            onCheckedChange = onCheckedChange,
+            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
         leadingContent = {
             Column {
                 Text(text = title)
@@ -89,11 +94,9 @@ fun SegmentedSwitchRow(
             )
         },
         modifier = modifier.fillMaxWidth(),
-        colors = ListItemDefaults.segmentedColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
         content = {}
     )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -131,22 +134,24 @@ fun SegmentedInfoRow(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = {
-            Text(
-                text = title,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        },
-        trailingContent = { Text(text = value) },
-        colors = ListItemDefaults.segmentedColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        modifier = modifier.fillMaxWidth(),
-        content = {}
-    )
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        SegmentedListItem(
+            onClick = {},
+            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+            leadingContent = {
+                Text(
+                    text = title,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            trailingContent = { Text(text = value) },
+            modifier = modifier.fillMaxWidth(),
+            content = {}
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
@@ -160,28 +165,30 @@ fun SegmentedClickableRow(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    SegmentedListItem(
-        onClick = onClick,
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = {
-            Column {
-                Text(text = title)
-                subtitle?.let {
-                    Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        SegmentedListItem(
+            onClick = onClick,
+            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+            leadingContent = {
+                Column {
+                    Text(text = title)
+                    subtitle?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
-            }
-        },
-        trailingContent = trailingContent,
-        modifier = modifier.fillMaxWidth(),
-        colors = ListItemDefaults.segmentedColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        content = {}
-    )
+            },
+            trailingContent = trailingContent,
+            modifier = modifier.fillMaxWidth(),
+            content = {}
+        )
+    }
 }
 
 /**
@@ -228,57 +235,59 @@ private fun <T> SegmentedButtonImpl(
     titleStyle: androidx.compose.ui.text.TextStyle?,
     iconContentDescription: ((SegmentedOption<T>) -> String)?
 ) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = {
-            Column {
-                Text(
-                    text = title,
-                    style = titleStyle ?: MaterialTheme.typography.bodyLarge
-                )
-                subtitle?.let {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        SegmentedListItem(
+            onClick = {},
+            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+            leadingContent = {
+                Column {
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = title,
+                        style = titleStyle ?: MaterialTheme.typography.bodyLarge
                     )
-                }
-            }
-        },
-        trailingContent = {
-            SingleChoiceSegmentedButtonRow(
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                options.forEachIndexed { btnIndex, option ->
-                    SegmentedButton(
-                        selected = option.value == selectedValue,
-                        onClick = { onSelected(option.value) },
-                        shape = SegmentedButtonDefaults.itemShape(
-                            index = btnIndex,
-                            count = options.size
-                        ),
-                        icon = {
-                            option.icon?.let { icon ->
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = iconContentDescription?.invoke(option),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    ) {
-                        Text(option.label ?: "")
+                    subtitle?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
-            }
-        },
-        modifier = modifier.fillMaxWidth(),
-        colors = ListItemDefaults.segmentedColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        content = {}
-    )
+            },
+            trailingContent = {
+                SingleChoiceSegmentedButtonRow(
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    options.forEachIndexed { btnIndex, option ->
+                        SegmentedButton(
+                            selected = option.value == selectedValue,
+                            onClick = { onSelected(option.value) },
+                            shape = SegmentedButtonDefaults.itemShape(
+                                index = btnIndex,
+                                count = options.size
+                            ),
+                            icon = {
+                                option.icon?.let { icon ->
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = iconContentDescription?.invoke(option),
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        ) {
+                            Text(option.label ?: "")
+                        }
+                    }
+                }
+            },
+            modifier = modifier.fillMaxWidth(),
+            content = {}
+        )
+    }
 }
 
 
@@ -299,75 +308,77 @@ fun <T> ConnectedButtonGroupRow(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = {
-            Column(modifier = Modifier.widthIn(max = 100.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                subtitle?.let {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        SegmentedListItem(
+            onClick = {},
+            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+            leadingContent = {
+                Column(modifier = Modifier.widthIn(max = 100.dp)) {
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = title,
+                        style = MaterialTheme.typography.bodyLarge
                     )
-                }
-            }
-        },
-        trailingContent = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                ButtonGroup {
-                    options.forEachIndexed { btnIndex, option ->
-                        val isSelected = option.value == selectedValue
-                        val weight by animateFloatAsState(
-                            targetValue = if (isSelected) 1.3f else 1.0f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessLow
-                            ),
-                            label = "weight_anim"
+                    subtitle?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        val shapes = when {
-                            options.size == 1 -> ToggleButtonDefaults.shapes()
-                            btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        }
-                        ToggleButton(
-                            checked = isSelected,
-                            onCheckedChange = { if (it) onSelected(option.value) },
-                            modifier = Modifier.weight(weight),
-                            shapes = shapes
-                        ) {
-                            option.icon?.let { icon ->
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = option.label,
-                                    modifier = Modifier.size(18.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                            }
-                            Text(
-                                text = option.label ?: "",
-                                style = MaterialTheme.typography.labelMedium
+                    }
+                }
+            },
+            trailingContent = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    ButtonGroup {
+                        options.forEachIndexed { btnIndex, option ->
+                            val isSelected = option.value == selectedValue
+                            val weight by animateFloatAsState(
+                                targetValue = if (isSelected) 1.3f else 1.0f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
+                                ),
+                                label = "weight_anim"
                             )
+                            val shapes = when {
+                                options.size == 1 -> ToggleButtonDefaults.shapes()
+                                btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                            }
+                            ToggleButton(
+                                checked = isSelected,
+                                onCheckedChange = { if (it) onSelected(option.value) },
+                                modifier = Modifier.weight(weight),
+                                shapes = shapes
+                            ) {
+                                option.icon?.let { icon ->
+                                    Icon(
+                                        imageVector = icon,
+                                        contentDescription = option.label,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                }
+                                Text(
+                                    text = option.label ?: "",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            }
                         }
                     }
                 }
-            }
-        },
-        modifier = modifier.fillMaxWidth(),
-        colors = ListItemDefaults.segmentedColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        content = {}
-    )
+            },
+            modifier = modifier.fillMaxWidth(),
+            content = {}
+        )
+    }
 }
 
 /**
@@ -385,65 +396,67 @@ fun <T> ConnectedButtonGroupRowCompact(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = {
-            Column(modifier = Modifier.widthIn(max = 100.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                subtitle?.let {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        SegmentedListItem(
+            onClick = {},
+            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+            leadingContent = {
+                Column(modifier = Modifier.widthIn(max = 100.dp)) {
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = title,
+                        style = MaterialTheme.typography.bodyLarge
                     )
-                }
-            }
-        },
-        trailingContent = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                options.forEachIndexed { btnIndex, option ->
-                    val isSelected = option.value == selectedValue
-                    val shapes = when {
-                        options.size == 1 -> ToggleButtonDefaults.shapes()
-                        btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                        btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                    }
-                    ToggleButton(
-                        checked = isSelected,
-                        onCheckedChange = { if (it) onSelected(option.value) },
-                        shapes = shapes
-                    ) {
-                        option.icon?.let { icon ->
-                            Icon(
-                                imageVector = icon,
-                                contentDescription = option.label,
-                                modifier = Modifier.size(16.dp)
-                            )
-                        }
-                        option.label?.let { label ->
-                            Text(
-                                text = label,
-                                style = MaterialTheme.typography.labelSmall
-                            )
-                        }
+                    subtitle?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 }
-            }
-        },
-        modifier = modifier.fillMaxWidth(),
-        colors = ListItemDefaults.segmentedColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        content = {}
-    )
+            },
+            trailingContent = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    options.forEachIndexed { btnIndex, option ->
+                        val isSelected = option.value == selectedValue
+                        val shapes = when {
+                            options.size == 1 -> ToggleButtonDefaults.shapes()
+                            btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                            btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                        }
+                        ToggleButton(
+                            checked = isSelected,
+                            onCheckedChange = { if (it) onSelected(option.value) },
+                            shapes = shapes
+                        ) {
+                            option.icon?.let { icon ->
+                                Icon(
+                                    imageVector = icon,
+                                    contentDescription = option.label,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                            option.label?.let { label ->
+                                Text(
+                                    text = label,
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            modifier = modifier.fillMaxWidth(),
+            content = {}
+        )
+    }
 }
 
 /**
@@ -462,10 +475,17 @@ fun <T> ConnectedButtonGroupVerticalRow(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
             Column {
                 Text(
                     text = title,
@@ -479,61 +499,49 @@ fun <T> ConnectedButtonGroupVerticalRow(
                     )
                 }
             }
-        },
-        modifier = modifier.fillMaxWidth(),
-        colors = ListItemDefaults.segmentedColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        content = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+
+            ButtonGroup(
+                modifier = Modifier.fillMaxWidth()
             ) {
-                ButtonGroup(
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    options.forEachIndexed { btnIndex, option ->
-                        val isSelected = option.value == selectedValue
-                        val weight by animateFloatAsState(
-                            targetValue = if (isSelected) 1.3f else 1.0f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessLow
-                            ),
-                            label = "weight_anim"
-                        )
-                        val shapes = when {
-                            options.size == 1 -> ToggleButtonDefaults.shapes()
-                            btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        }
-                        ToggleButton(
-                            checked = isSelected,
-                            onCheckedChange = { if (it) onSelected(option.value) },
-                            modifier = Modifier.weight(weight),
-                            shapes = shapes
-                        ) {
-                            option.icon?.let { icon ->
-                                Icon(
-                                    imageVector = icon,
-                                    contentDescription = option.label,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                            }
-                            Text(
-                                text = option.label ?: "",
-                                style = MaterialTheme.typography.labelMedium
+                options.forEachIndexed { btnIndex, option ->
+                    val isSelected = option.value == selectedValue
+                    val weight by animateFloatAsState(
+                        targetValue = if (isSelected) 1.3f else 1.0f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        ),
+                        label = "weight_anim"
+                    )
+                    val buttonShapes = when {
+                        options.size == 1 -> ToggleButtonDefaults.shapes()
+                        btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                    }
+                    ToggleButton(
+                        checked = isSelected,
+                        onCheckedChange = { if (it) onSelected(option.value) },
+                        modifier = Modifier.weight(weight),
+                        shapes = buttonShapes
+                    ) {
+                        option.icon?.let { icon ->
+                            Icon(
+                                imageVector = icon,
+                                contentDescription = option.label,
+                                modifier = Modifier.size(16.dp)
                             )
+                            Spacer(modifier = Modifier.width(4.dp))
                         }
+                        Text(
+                            text = option.label ?: "",
+                            style = MaterialTheme.typography.labelMedium
+                        )
                     }
                 }
             }
         }
-    )
+    }
 }
 
 /**
@@ -552,85 +560,87 @@ fun <T> ConnectedIconOnlyButtonGroupRow(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
-        leadingContent = {
-            Column(modifier = Modifier.widthIn(max = 100.dp)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                subtitle?.let {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        SegmentedListItem(
+            onClick = {},
+            shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
+            leadingContent = {
+                Column(modifier = Modifier.widthIn(max = 100.dp)) {
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = title,
+                        style = MaterialTheme.typography.bodyLarge
                     )
-                }
-            }
-        },
-        trailingContent = {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End
-            ) {
-                ButtonGroup {
-                    options.forEachIndexed { btnIndex, option ->
-                        val tooltipState = rememberTooltipState()
-                        val isSelected = option.value == selectedValue
-                        val weight by animateFloatAsState(
-                            targetValue = if (isSelected) 1.3f else 1.0f,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioMediumBouncy,
-                                stiffness = Spring.StiffnessLow
-                            ),
-                            label = "weight_anim"
+                    subtitle?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        val shapes = when {
-                            options.size == 1 -> ToggleButtonDefaults.shapes()
-                            btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        }
-                        Box {
-                            TooltipBox(
-                                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
-                                    positioning = TooltipAnchorPosition.Above
+                    }
+                }
+            },
+            trailingContent = {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    ButtonGroup {
+                        options.forEachIndexed { btnIndex, option ->
+                            val tooltipState = rememberTooltipState()
+                            val isSelected = option.value == selectedValue
+                            val weight by animateFloatAsState(
+                                targetValue = if (isSelected) 1.3f else 1.0f,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioMediumBouncy,
+                                    stiffness = Spring.StiffnessLow
                                 ),
-                                tooltip = {
-                                    PlainTooltip {
-                                        Text(option.label ?: "")
-                                    }
-                                },
-                                state = tooltipState
-                            ) {
-                                ToggleButton(
-                                    checked = isSelected,
-                                    onCheckedChange = { if (it) onSelected(option.value) },
-                                    modifier = Modifier
-                                        .weight(weight)
-                                        .height(40.dp),
-                                    shapes = shapes
+                                label = "weight_anim"
+                            )
+                            val shapes = when {
+                                options.size == 1 -> ToggleButtonDefaults.shapes()
+                                btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                            }
+                            Box {
+                                TooltipBox(
+                                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(
+                                        positioning = TooltipAnchorPosition.Above
+                                    ),
+                                    tooltip = {
+                                        PlainTooltip {
+                                            Text(option.label ?: "")
+                                        }
+                                    },
+                                    state = tooltipState
                                 ) {
-                                    option.icon?.let { icon ->
-                                        Icon(
-                                            imageVector = icon,
-                                            contentDescription = option.label,
-                                            modifier = Modifier.size(22.dp)
-                                        )
+                                    ToggleButton(
+                                        checked = isSelected,
+                                        onCheckedChange = { if (it) onSelected(option.value) },
+                                        modifier = Modifier
+                                            .weight(weight)
+                                            .height(40.dp),
+                                        shapes = shapes
+                                    ) {
+                                        option.icon?.let { icon ->
+                                            Icon(
+                                                imageVector = icon,
+                                                contentDescription = option.label,
+                                                modifier = Modifier.size(22.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-            }
-        },
-        modifier = modifier.fillMaxWidth(),
-        colors = ListItemDefaults.segmentedColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-        ),
-        content = {}
-    )
+            },
+            modifier = modifier.fillMaxWidth(),
+            content = {}
+        )
+    }
 }
