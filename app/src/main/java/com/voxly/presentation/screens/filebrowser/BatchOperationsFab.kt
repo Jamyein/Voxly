@@ -4,27 +4,25 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.expandVertically
+import androidx.compose.animation.expandHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.foundation.clickable
+import androidx.compose.animation.shrinkHorizontally
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.rotate
@@ -34,22 +32,33 @@ import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveMotionTokens
+import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 
 /**
- * Batch Operations FAB with expandable menu (Speed Dial style)
+ * Batch Operations FloatingToolbar for selection mode
+ * Mimics M3 FloatingToolbar behavior with expand/collapse animation
  */
 @Composable
-fun BatchOperationsFAB(
-    expanded: Boolean,
-    onExpandChange: (Boolean) -> Unit,
+fun BatchOperationsToolbar(
+    isSelectionMode: Boolean,
+    modifier: Modifier = Modifier,
     onOnlineMetadata: () -> Unit,
     onUnifiedField: () -> Unit,
     onReplaceText: () -> Unit,
     onAutoNumber: () -> Unit,
     onRenameFiles: () -> Unit,
-    onFixMetadata: () -> Unit,
-    modifier: Modifier = Modifier
+    onFixMetadata: () -> Unit
 ) {
+    var expanded by remember(isSelectionMode) { mutableStateOf(isSelectionMode) }
+
+    // Sync expanded state with selection mode
+    LaunchedEffect(isSelectionMode) {
+        expanded = isSelectionMode
+    }
+
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 45f else 0f,
         animationSpec = spring(
@@ -59,132 +68,120 @@ fun BatchOperationsFAB(
         label = "fab_rotation"
     )
 
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+    Box(
+        modifier = modifier.fillMaxWidth(),
+        contentAlignment = Alignment.BottomCenter
     ) {
-        // Menu items
-        AnimatedVisibility(
-            visible = expanded,
-            enter = fadeIn(animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
-                stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
-            )) + expandVertically(animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
-                stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
-            )),
-            exit = fadeOut(animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.StandardAccelerate.dampingRatio,
-                stiffness = ExpressiveMotionTokens.StandardAccelerate.stiffness
-            )) + shrinkVertically(animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.StandardAccelerate.dampingRatio,
-                stiffness = ExpressiveMotionTokens.StandardAccelerate.stiffness
-            ))
+        Surface(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 8.dp),
+            shape = MaterialTheme.shapes.extraLarge,
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            tonalElevation = 3.dp
         ) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier = Modifier.padding(bottom = 8.dp)
+            Row(
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                // Online Metadata
-                MenuItem(
-                    label = stringResource(R.string.batch_online_metadata),
-                    icon = AppIcon.CloudDownload,
-                    onClick = onOnlineMetadata
-                )
+                // Toolbar content - only visible when expanded
+                AnimatedVisibility(
+                    visible = expanded,
+                    enter = fadeIn(animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
+                    )) + expandHorizontally(animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
+                    )),
+                    exit = fadeOut(animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.StandardAccelerate.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.StandardAccelerate.stiffness
+                    )) + shrinkHorizontally(animationSpec = spring(
+                        dampingRatio = ExpressiveMotionTokens.StandardAccelerate.dampingRatio,
+                        stiffness = ExpressiveMotionTokens.StandardAccelerate.stiffness
+                    ))
+                ) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        // Online Metadata
+                        ToolbarAction(
+                            label = stringResource(R.string.batch_online_metadata),
+                            icon = AppIcon.CloudDownload,
+                            onClick = onOnlineMetadata
+                        )
 
-                // Unified Field
-                MenuItem(
-                    label = stringResource(R.string.batch_unified_field),
-                    icon = AppIcon.Edit,
-                    onClick = onUnifiedField
-                )
+                        // Unified Field
+                        ToolbarAction(
+                            label = stringResource(R.string.batch_unified_field),
+                            icon = AppIcon.Edit,
+                            onClick = onUnifiedField
+                        )
 
-                // Replace Text
-                MenuItem(
-                    label = stringResource(R.string.batch_replace_text),
-                    icon = AppIcon.AutoFix,
-                    onClick = onReplaceText
-                )
+                        // Replace Text
+                        ToolbarAction(
+                            label = stringResource(R.string.batch_replace_text),
+                            icon = AppIcon.AutoFix,
+                            onClick = onReplaceText
+                        )
 
-                // Auto Number
-                MenuItem(
-                    label = stringResource(R.string.batch_auto_number),
-                    icon = AppIcon.Schedule,
-                    onClick = onAutoNumber
-                )
+                        // Auto Number
+                        ToolbarAction(
+                            label = stringResource(R.string.batch_auto_number),
+                            icon = AppIcon.Schedule,
+                            onClick = onAutoNumber
+                        )
 
-                // Rename Files
-                MenuItem(
-                    label = stringResource(R.string.batch_rename_files),
-                    icon = AppIcon.Rename,
-                    onClick = onRenameFiles
-                )
+                        // Rename Files
+                        ToolbarAction(
+                            label = stringResource(R.string.batch_rename_files),
+                            icon = AppIcon.Rename,
+                            onClick = onRenameFiles
+                        )
 
-                // Fix Metadata
-                MenuItem(
-                    label = stringResource(R.string.fix_metadata),
-                    icon = AppIcon.AutoFix,
-                    onClick = onFixMetadata
-                )
+                        // Fix Metadata
+                        ToolbarAction(
+                            label = stringResource(R.string.fix_metadata),
+                            icon = AppIcon.AutoFix,
+                            onClick = onFixMetadata
+                        )
+                    }
+                }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                // Main FAB to toggle expansion
+                FloatingActionButton(
+                    onClick = { expanded = !expanded },
+                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Add,
+                        contentDescription = stringResource(R.string.batch_operations),
+                        modifier = Modifier.rotate(rotation)
+                    )
+                }
             }
-        }
-
-        // Main FAB
-        FloatingActionButton(
-            onClick = { onExpandChange(!expanded) },
-            containerColor = MaterialTheme.colorScheme.primaryContainer,
-            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = stringResource(R.string.batch_operations),
-                modifier = Modifier.rotate(rotation)
-            )
         }
     }
 }
 
 @Composable
-fun MenuItem(
+private fun ToolbarAction(
     label: String,
     icon: AppIcon,
     onClick: () -> Unit
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.End,
-        modifier = Modifier
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp)
+    SmallFloatingActionButton(
+        onClick = onClick,
+        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
     ) {
-        // Label
-        Surface(
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            shape = MaterialTheme.shapes.extraSmall,
-            modifier = Modifier.padding(end = 12.dp)
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-
-        // Icon
-        SmallFloatingActionButton(
-            onClick = onClick,
-            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-        ) {
-            Icon(
-                painter = appIconPainter(icon),
-                contentDescription = label
-            )
-        }
+        Icon(
+            painter = appIconPainter(icon),
+            contentDescription = label
+        )
     }
 }
