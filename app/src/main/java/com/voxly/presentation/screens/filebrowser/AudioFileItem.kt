@@ -24,6 +24,9 @@ import com.voxly.R
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlphabetIndexer
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.AudioFileStandardRow
+import com.voxly.presentation.components.AudioFileStandardRowCompact
+import com.voxly.presentation.components.AudioFileStandardRowWithMenu
 import com.voxly.presentation.components.getFirstLetter
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
@@ -75,85 +78,12 @@ private fun CompactAudioFileItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.small,
-        colors = CardDefaults.cardColors(
-            containerColor = if (isSelected) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.surface
-            }
-        ),
-        onClick = onClick
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(40.dp)
-                    .clip(MaterialTheme.shapes.extraSmall),
-                contentAlignment = Alignment.Center
-            ) {
-                AlbumArtImage(
-                    filePath = audioFile.path,
-                    mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
-                    contentDescription = null,
-                    size = 40.dp,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = MaterialTheme.shapes.extraSmall,
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.MusicNote,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.width(8.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = audioFile.metadata.album ?: "",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Text(
-                text = audioFile.getFormattedDuration(),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline
-            )
-            if (isSelected) {
-                Spacer(modifier = Modifier.width(8.dp))
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = stringResource(R.string.cd_selected),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
-        }
-    }
+    AudioFileStandardRowCompact(
+        audioFile = audioFile,
+        isSelected = isSelected,
+        onClick = onClick,
+        modifier = modifier
+    )
 }
 
 @Composable
@@ -170,87 +100,27 @@ private fun FullAudioFileItem(
     onFixMetadata: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val context = LocalContext.current
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .combinedClickable(
-                onClick = onClick,
-                onLongClick = onLongClick
-            ),
-        color = Color.Transparent
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 12.dp, end = 4.dp, top = 14.dp, bottom = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Album art display
-            AlbumArtImage(
-                filePath = audioFile.path,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
-                contentDescription = stringResource(R.string.cd_album_art),
-                size = 64.dp,
-                modifier = Modifier.clip(MaterialTheme.shapes.medium)
-            ) {
-                Icon(
-                    painter = appIconPainter(AppIcon.MusicNote),
-                    contentDescription = stringResource(R.string.cd_no_cover),
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Spacer(modifier = Modifier.width(10.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = buildString {
-                        append(audioFile.metadata.artist ?: "")
-                        audioFile.metadata.album?.let { append(" - $it") }
-                    },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    text = buildString {
-                        append(audioFile.format)
-                        append(" • ")
-                        append(audioFile.getFormattedDuration())
-                        append(" • ")
-                        append(audioFile.getFormattedSize())
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
-            }
-
-            if (isSelected) {
-                Icon(
-                    Icons.Default.CheckCircle,
-                    contentDescription = stringResource(R.string.selected),
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(8.dp)
-                )
-            } else if (showActions) {
-                FileActionsMenu(
-                    onEditMetadata = onEditMetadata,
-                    onRename = onRename,
-                    onDelete = onDelete,
-                    onFetchOnlineMetadata = onFetchOnlineMetadata,
-                    onFixMetadata = onFixMetadata
-                )
-            }
-        }
+    if (showActions) {
+        AudioFileStandardRowWithMenu(
+            audioFile = audioFile,
+            isSelected = isSelected,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            onEditMetadata = onEditMetadata,
+            onRename = onRename,
+            onDelete = onDelete,
+            onFetchOnlineMetadata = onFetchOnlineMetadata,
+            onFixMetadata = onFixMetadata,
+            modifier = modifier
+        )
+    } else {
+        AudioFileStandardRow(
+            audioFile = audioFile,
+            isSelected = isSelected,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            modifier = modifier
+        )
     }
 }
 
