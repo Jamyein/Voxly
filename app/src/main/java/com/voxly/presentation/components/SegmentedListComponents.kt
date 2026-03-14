@@ -20,6 +20,7 @@ import androidx.compose.material3.ButtonGroupDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
@@ -639,6 +640,114 @@ fun <T> ConnectedIconOnlyButtonGroupRow(
                     }
                 }
             },
+            modifier = modifier.fillMaxWidth(),
+            content = {}
+        )
+    }
+}
+
+// ============ Standard List Components (non-segmented) ============
+
+/**
+ * Standard list item with click action.
+ * Uses ListItem with default shapes (not segmented).
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun StandardListItem(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    leadingContent: @Composable (() -> Unit)? = null,
+    trailingContent: @Composable (() -> Unit)? = null,
+    overlineContent: @Composable (() -> Unit)? = null,
+    supportingContent: @Composable (() -> Unit)? = null,
+    content: @Composable () -> Unit
+) {
+    ListItem(
+        onClick = onClick,
+        modifier = modifier,
+        enabled = enabled,
+        leadingContent = leadingContent,
+        trailingContent = trailingContent,
+        overlineContent = overlineContent,
+        supportingContent = supportingContent,
+        content = content
+    )
+}
+
+/**
+ * Standard clickable row - clickable list item without selection.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun StandardClickableRow(
+    title: String,
+    subtitle: String? = null,
+    leadingContent: @Composable (() -> Unit)? = null,
+    trailingContent: @Composable (() -> Unit)? = null,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        ListItem(
+            onClick = onClick,
+            colors = ListItemDefaults.colors(),
+            leadingContent = leadingContent ?: {
+                Column {
+                    Text(text = title)
+                    subtitle?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            trailingContent = trailingContent,
+            modifier = modifier.fillMaxWidth(),
+            content = {}
+        )
+    }
+}
+
+/**
+ * Standard clickable row with more (three dots) menu button.
+ */
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+fun StandardClickableRowWithMenu(
+    title: String,
+    subtitle: String? = null,
+    leadingContent: @Composable (() -> Unit)? = null,
+    menuContent: @Composable () -> Unit,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        shape = MaterialTheme.shapes.large,
+        color = MaterialTheme.colorScheme.surfaceContainerLow
+    ) {
+        ListItem(
+            onClick = onClick,
+            colors = ListItemDefaults.colors(),
+            leadingContent = leadingContent ?: {
+                Column {
+                    Text(text = title)
+                    subtitle?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            },
+            trailingContent = menuContent,
             modifier = modifier.fillMaxWidth(),
             content = {}
         )
