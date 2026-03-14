@@ -95,7 +95,6 @@ fun DirectoryContentScreen(
     }
 
     // Dialog states
-    var showBatchMenu by remember { mutableStateOf(false) }
 
     // Search states - using BottomSheet
     var showSearchSheet by remember { mutableStateOf(false) }
@@ -221,82 +220,17 @@ fun DirectoryContentScreen(
             )
         },
         floatingActionButton = {
-            if (!isBatchProcessing && files.isNotEmpty()) {
-                if (canScrollToTop) {
-                    // Show scroll to top FAB when can scroll
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        // Always show the batch operations FAB
-                        DirectoryBatchOperationsFAB(
-                            expanded = showBatchMenu,
-                            onExpandChange = { showBatchMenu = it },
-                            onOnlineMetadata = {
-                                showBatchMenu = false
-                                showOnlineMetadataDialog = true
-                            },
-                            onUnifiedField = {
-                                showBatchMenu = false
-                                showUnifiedFieldDialog = true
-                            },
-                            onReplaceText = {
-                                showBatchMenu = false
-                                showReplaceTextDialog = true
-                            },
-                            onAutoNumber = {
-                                showBatchMenu = false
-                                showAutoNumberDialog = true
-                            },
-                            onRenameFiles = {
-                                showBatchMenu = false
-                                showRenameDialog = true
-                            },
-                            onFixMetadata = {
-                                showBatchMenu = false
-                                showFixMetadataDialog = true
-                            }
-                        )
-                        SmallFloatingActionButton(
-                            onClick = {
-                                // Scroll to top
-                            },
-                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.KeyboardArrowUp,
-                                contentDescription = stringResource(R.string.back_to_top)
-                            )
-                        }
-                    }
-                } else {
-                    DirectoryBatchOperationsFAB(
-                        expanded = showBatchMenu,
-                        onExpandChange = { showBatchMenu = it },
-                        onOnlineMetadata = {
-                            showBatchMenu = false
-                            showOnlineMetadataDialog = true
-                        },
-                        onUnifiedField = {
-                            showBatchMenu = false
-                            showUnifiedFieldDialog = true
-                        },
-                        onReplaceText = {
-                            showBatchMenu = false
-                            showReplaceTextDialog = true
-                        },
-                        onAutoNumber = {
-                            showBatchMenu = false
-                            showAutoNumberDialog = true
-                        },
-                        onRenameFiles = {
-                            showBatchMenu = false
-                            showRenameDialog = true
-                        },
-                        onFixMetadata = {
-                            showBatchMenu = false
-                            showFixMetadataDialog = true
-                        }
+            if (!isBatchProcessing && files.isNotEmpty() && canScrollToTop) {
+                SmallFloatingActionButton(
+                    onClick = {
+                        // Scroll to top
+                    },
+                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.KeyboardArrowUp,
+                        contentDescription = stringResource(R.string.back_to_top)
                     )
                 }
             }
@@ -305,27 +239,8 @@ fun DirectoryContentScreen(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .padding(top = innerPadding.calculateTopPadding())
+            .padding(innerPadding)
     ) {
-        // Scrim 遮罩层 - 点击外部收起菜单
-        AnimatedVisibility(
-            visible = showBatchMenu,
-            enter = fadeIn(animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
-                stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
-            )),
-            exit = fadeOut(animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.StandardAccelerate.dampingRatio,
-                stiffness = ExpressiveMotionTokens.StandardAccelerate.stiffness
-            ))
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clickable { showBatchMenu = false }
-            )
-        }
-
         // Search BottomSheet
         if (showSearchSheet) {
             SearchBottomSheet(
@@ -380,7 +295,35 @@ fun DirectoryContentScreen(
                     currentActionFile = audioFile
                     showSingleFixMetadataDialog = true
                 },
-                bottomPadding = innerPadding.calculateBottomPadding()
+                bottomPadding = 80.dp
+            )
+        }
+
+        // FloatingToolbar for batch operations
+        if (!isBatchProcessing && files.isNotEmpty()) {
+            BatchOperationsToolbar(
+                isSelectionMode = isSelectionMode,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 8.dp),
+                onOnlineMetadata = {
+                    showOnlineMetadataDialog = true
+                },
+                onUnifiedField = {
+                    showUnifiedFieldDialog = true
+                },
+                onReplaceText = {
+                    showReplaceTextDialog = true
+                },
+                onAutoNumber = {
+                    showAutoNumberDialog = true
+                },
+                onRenameFiles = {
+                    showRenameDialog = true
+                },
+                onFixMetadata = {
+                    showFixMetadataDialog = true
+                }
             )
         }
     }
