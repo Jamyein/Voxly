@@ -124,6 +124,18 @@ class SafWriteAccessService @Inject constructor(
 
     fun isPermissionValid(permission: android.content.UriPermission, filePath: String): Boolean {
         return try {
+            // TreeUri permissions cover the entire directory tree - trust them unconditionally
+            // because newly added files may not have been granted explicit permissions yet
+            // but will work when actually accessed due to tree-level grant
+            val grantType = detectGrantType(permission.uri)
+            if (grantType == SafGrantType.TREE) {
+                // For TREE permissions, verify the file can be resolved within the tree
+                // but don't try to open it (that would fail for newly added external files)
+                val resolvedUri = resolveDocumentUri(filePath, permission)
+                return resolvedUri != null
+            }
+
+            // For DOCUMENT permissions, verify by attempting to open the file
             val targetDocUri = resolveDocumentUri(filePath, permission) ?: return false
             context.contentResolver.openFileDescriptor(targetDocUri, "rw")?.use { true } ?: false
         } catch (e: SecurityException) {
