@@ -65,8 +65,9 @@ fun SegmentedSettingsSwitchRow(
     count: Int = 1,
     modifier: Modifier = Modifier
 ) {
+    // Use unchecked state to keep list item color/shape unchanged when switch is enabled
     SegmentedListItem(
-        checked = checked,
+        checked = false,
         onCheckedChange = onCheckedChange,
         shapes = ListItemDefaults.segmentedShapes(index = index, count = count),
         leadingContent = {
