@@ -299,8 +299,8 @@ fun DirectoryContentScreen(
             )
         }
 
-        // FloatingToolbar for batch operations
-        if (!isBatchProcessing && files.isNotEmpty()) {
+        // FloatingToolbar for batch operations - only show in selection mode
+        if (!isBatchProcessing && files.isNotEmpty() && isSelectionMode) {
             BatchOperationsToolbar(
                 isSelectionMode = isSelectionMode,
                 modifier = Modifier
