@@ -45,6 +45,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,6 +56,7 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineSource
 import com.voxly.presentation.components.NetworkAlbumArtImage
+import com.voxly.presentation.theme.MaterialShapes
 import com.voxly.presentation.ui.clearSearchResultImageCache
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
 import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
@@ -427,7 +429,7 @@ private fun ReleaseCover(
     NetworkAlbumArtImage(
         url = coverArtUrl,
         contentDescription = "Album cover",
-        modifier = modifier
+        modifier = modifier.clip(MaterialShapes.SoftBurst)
     ) {
         Box(
             modifier = modifier,
