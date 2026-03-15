@@ -55,6 +55,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,6 +64,7 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.MaterialShapes
+import androidx.compose.material3.toShape
 import kotlinx.coroutines.launch
 
 // ============ Helper Functions ============
@@ -94,7 +96,7 @@ fun SegmentedSwitchRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
     SegmentedListItem(
         checked = false,
         onCheckedChange = onCheckedChange,
@@ -140,7 +142,7 @@ fun SegmentedInfoRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -161,7 +163,7 @@ fun SegmentedClickableRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
     SegmentedListItem(
         onClick = onClick,
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -215,7 +217,7 @@ private fun <T> SegmentedButtonImpl(
     modifier: Modifier,
     titleStyle: androidx.compose.ui.text.TextStyle?,
     iconContentDescription: ((SegmentedOption<T>) -> String)?
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -258,7 +260,7 @@ fun <T> ConnectedButtonGroupRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -311,7 +313,7 @@ fun <T> ConnectedButtonGroupRowCompact(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -357,7 +359,7 @@ fun <T> ConnectedButtonGroupVerticalRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+) = Surface(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TitleSubtitleContent(title, subtitle, MaterialTheme.typography.titleMedium)
         ButtonGroup(modifier = Modifier.fillMaxWidth()) {
@@ -403,7 +405,7 @@ fun <T> ConnectedIconOnlyButtonGroupRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -488,7 +490,7 @@ fun StandardClickableRow(
     trailingContent: @Composable (() -> Unit)? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
     ListItem(
         onClick = onClick,
         colors = ListItemDefaults.colors(),
@@ -511,7 +513,7 @@ fun StandardClickableRowWithMenu(
     menuContent: @Composable () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainerLow) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
     ListItem(
         onClick = onClick,
         colors = ListItemDefaults.colors(),
@@ -547,7 +549,7 @@ fun AudioFileStandardRow(
             mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
             contentDescription = null,
             size = 64.dp,
-            modifier = Modifier.clip(MaterialShapes.Cookie9Sided)
+            modifier = Modifier.clip(MaterialShapes.Cookie9Sided.toShape())
         ) {
             Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(24.dp))
         }
@@ -635,7 +637,7 @@ fun AudioFileStandardRowWithMenu(
     color = MaterialTheme.colorScheme.surface
 ) {
     Row(modifier = Modifier.fillMaxWidth().padding(12.dp, 12.dp, 8.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = 64.dp, modifier = Modifier.clip(MaterialShapes.Cookie9Sided)) {
+        AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = 64.dp, modifier = Modifier.clip(MaterialShapes.Cookie9Sided.toShape())) {
             Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(10.dp))
@@ -670,9 +672,9 @@ fun AudioFileStandardRowCompact(
     onClick = onClick
 ) {
     Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(40.dp).clip(MaterialShapes.Cookie9Sided), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(40.dp).clip(MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
             AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = 40.dp, modifier = Modifier.fillMaxSize()) {
-                Surface(modifier = Modifier.fillMaxSize(), shape = MaterialShapes.Cookie9Sided, color = MaterialTheme.colorScheme.surfaceVariant) {
+                Surface(modifier = Modifier.fillMaxSize(), shape = MaterialShapes.Cookie9Sided.toShape(), color = MaterialTheme.colorScheme.surfaceVariant) {
                     Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
                 }
             }

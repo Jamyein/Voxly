@@ -425,7 +425,7 @@ fun DraggableSourcePriorityDialog(
                             containerColor = if (isDragging)
                                 MaterialTheme.colorScheme.primaryContainer
                             else
-                                MaterialTheme.colorScheme.surfaceContainerLow
+                                MaterialTheme.colorScheme.primaryContainer
                         ),
                         elevation = CardDefaults.cardElevation(
                             defaultElevation = animatedElevation,
@@ -600,7 +600,7 @@ fun SettingsSlider(
                     color = MaterialTheme.colorScheme.primary
                 )
             },
-            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer)
         )
         Slider(
             value = value,
@@ -625,7 +625,7 @@ fun SettingsInfoRow(title: String, value: String) {
             )
         },
         trailingContent = { Text(text = value) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     )
 }
 
@@ -645,7 +645,7 @@ fun SettingsSubmenuRow(
         modifier = Modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     )
 }
 
@@ -694,7 +694,7 @@ fun SettingsDropdownRow(
                 )
             }
         },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     )
 }
 
@@ -761,7 +761,7 @@ fun PerSourceSearchLimitRow(
                 )
             }
         },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer)
     )
 }
 

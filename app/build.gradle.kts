@@ -99,7 +99,8 @@ android {
         jvmToolchain(17)
         compilerOptions {
             freeCompilerArgs.addAll(
-                "-Xannotation-default-target=param-property"
+                "-Xannotation-default-target=param-property",
+                "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi"
             )
         }
     }
@@ -170,6 +171,8 @@ dependencies {
     implementation("androidx.compose.animation:animation:1.11.0-alpha06")
     // Material3 Alpha 版本 - 覆盖 BOM 中的稳定版以使用最新特性
     implementation("androidx.compose.material3:material3:1.5.0-alpha15")
+    // Material Design 3 Expressive - RoundedPolygon 形状支持
+    implementation("androidx.graphics:graphics-shapes:1.0.1")
     implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha15")
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha15")
     implementation("androidx.compose.material:material-icons-core")

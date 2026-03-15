@@ -29,6 +29,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import com.voxly.presentation.theme.MaterialShapes
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.toShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -218,6 +220,7 @@ internal fun AlbumGridItem(
     }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun ArtistListItem(
     artist: ArtistGroup,
@@ -240,7 +243,7 @@ internal fun ArtistListItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(MaterialShapes.Sunny),
+                    .clip(MaterialShapes.Sunny.toShape()),
                 contentAlignment = Alignment.Center
             ) {
                 AlbumArtImage(
@@ -251,7 +254,7 @@ internal fun ArtistListItem(
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
-                        shape = MaterialShapes.Sunny,
+                        shape = MaterialShapes.Sunny.toShape(),
                         color = MaterialTheme.colorScheme.secondaryContainer
                     ) {
                         Box(contentAlignment = Alignment.Center) {

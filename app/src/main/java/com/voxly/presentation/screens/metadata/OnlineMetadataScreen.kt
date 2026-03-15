@@ -57,6 +57,7 @@ import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineSource
 import com.voxly.presentation.components.NetworkAlbumArtImage
 import com.voxly.presentation.theme.MaterialShapes
+import androidx.compose.material3.toShape
 import com.voxly.presentation.ui.clearSearchResultImageCache
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
 import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
@@ -429,7 +430,7 @@ private fun ReleaseCover(
     NetworkAlbumArtImage(
         url = coverArtUrl,
         contentDescription = "Album cover",
-        modifier = modifier.clip(MaterialShapes.SoftBurst)
+        modifier = modifier.clip(MaterialShapes.SoftBurst.toShape())
     ) {
         Box(
             modifier = modifier,

@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.MaterialShapes
+import androidx.compose.material3.toShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Surface
@@ -332,7 +333,7 @@ private fun CoverThumbnail(
     NetworkAlbumArtImage(
         url = coverArtUrl,
         contentDescription = "Album cover",
-        modifier = modifier.clip(MaterialShapes.SoftBurst)
+        modifier = modifier.clip(MaterialShapes.SoftBurst.toShape())
     ) {
         Box(
             modifier = modifier,

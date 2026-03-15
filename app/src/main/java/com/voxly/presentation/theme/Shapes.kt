@@ -1,10 +1,16 @@
+@file:OptIn(ExperimentalMaterial3ExpressiveApi::class)
+
 package com.voxly.presentation.theme
 
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.Shapes
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.graphics.Shape
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.unit.dp
+import androidx.graphics.shapes.RoundedPolygon
 
 /**
  * Material Design 3 Expressive Shapes
@@ -107,25 +113,21 @@ private val Int.percent: androidx.compose.ui.unit.Dp
  * - Cookie9Sided: 9边形 (饼干形状)
  * - SoftBurst: 星形/爆炸形
  *
- * 注意: 由于 RoundedPolygonShape 在当前库中不可用,
- * 使用 RoundedCornerShape 作为替代
+ * 返回 RoundedPolygon，需要在 @Composable 上下文中调用 .toShape() 转换为 Shape
  */
 object MaterialShapes {
     /**
-     * Sunny: 12边形，模拟太阳形状
-     * 使用圆形作为近似
+     * Sunny: 12边形，太阳形状
      */
-    val Sunny: Shape = CircleShape
+    val Sunny: RoundedPolygon = androidx.compose.material3.MaterialShapes.Sunny
 
     /**
-     * Cookie9Sided: 9边形，模拟饼干形状
-     * 使用圆角矩形作为近似
+     * Cookie9Sided: 9边形，饼干形状
      */
-    val Cookie9Sided: Shape = RoundedCornerShape(24.dp)
+    val Cookie9Sided: RoundedPolygon = androidx.compose.material3.MaterialShapes.Cookie9Sided
 
     /**
      * SoftBurst: 星形/爆炸形状
-     * 使用 ExtraRounded 作为近似
      */
-    val SoftBurst: Shape = ExpressiveShapes.ExtraRounded
+    val SoftBurst: RoundedPolygon = androidx.compose.material3.MaterialShapes.SoftBurst
 }
