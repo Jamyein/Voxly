@@ -176,6 +176,11 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                 searcher.collect { result ->
                     when (result) {
                         is OnlineSourceResult.ReleaseResult -> {
+                            // Track that this source has started
+                            _searchState.update { state ->
+                                state.copy(startedSources = state.startedSources + result.source)
+                            }
+
                             // Prefetch cover art bytes in background (fire-and-forget)
                             result.release.coverArtUrl?.let { prefetchCoverArtBytes(it) }
 
@@ -192,6 +197,11 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                         }
 
                         is OnlineSourceResult.RecordingResult -> {
+                            // Track that this source has started
+                            _searchState.update { state ->
+                                state.copy(startedSources = state.startedSources + result.source)
+                            }
+
                             // Prefetch cover art bytes in background (fire-and-forget)
                             result.recording.coverArtUrl?.let { prefetchCoverArtBytes(it) }
 
@@ -206,7 +216,10 @@ class OnlineMetadataViewModel @AssistedInject constructor(
 
                         is OnlineSourceResult.SourceCompleted -> {
                             _searchState.update { state ->
-                                state.copy(completedSources = state.completedSources + result.source)
+                                state.copy(
+                                    completedSources = state.completedSources + result.source,
+                                    startedSources = state.startedSources + result.source
+                                )
                             }
                             publishLegacySearchState()
                         }
@@ -214,7 +227,8 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                         is OnlineSourceResult.Error -> {
                             _searchState.update { state ->
                                 state.copy(
-                                    errorSources = state.errorSources + (result.source to result.message)
+                                    errorSources = state.errorSources + (result.source to result.message),
+                                    startedSources = state.startedSources + result.source
                                 )
                             }
                             publishLegacySearchState()
@@ -222,7 +236,13 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                     }
                 }
 
-                if (isSearchOutdated(searchId)) return@launch
+                // 检查搜索是否已过时（用户触发了新搜索）
+                if (isSearchOutdated(searchId)) {
+                    // 标记搜索已完成，避免 UI 卡在搜索状态
+                    _searchState.update { it.copy(isSearching = false, isLyricsSearching = false) }
+                    publishLegacySearchState()
+                    return@launch
+                }
 
                 _searchState.update { it.copy(isSearching = false, isLyricsSearching = true) }
                 publishLegacySearchState()
@@ -805,6 +825,7 @@ data class SearchProgressState(
     val results: List<OnlineRelease> = emptyList(),
     val completedSources: Set<OnlineSource> = emptySet(),
     val errorSources: Map<OnlineSource, String> = emptyMap(),
+    val startedSources: Set<OnlineSource> = emptySet(),  // 实际开始搜索的源
     val isSearching: Boolean = false,
     val isLyricsSearching: Boolean = false,
     val hasAnyResults: Boolean = false

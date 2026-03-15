@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -21,6 +22,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -39,6 +42,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -115,31 +119,67 @@ fun OnlineMetadataScreen(
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.fetch_online_metadata)) },
-                scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_back)
+            Column {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.fetch_online_metadata)) },
+                    scrollBehavior = scrollBehavior,
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.surface,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.cd_back)
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(
+                            onClick = { viewModel.autoSearch() },
+                            enabled = !isLoading
+                        ) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Search Again")
+                        }
+                    }
+                )
+                // Progress indicator at TopAppBar bottom edge
+                // 使用实际搜索的源数量计算进度，而不是固定的4个源
+                val startedSources = searchState.startedSources
+                val hasKnownProgress = searchState.completedSources.isNotEmpty() || searchState.errorSources.isNotEmpty()
+                val linearProgress = if (hasKnownProgress && startedSources.isNotEmpty()) {
+                    (searchState.completedSources.size + searchState.errorSources.size).toFloat() / startedSources.size.coerceAtLeast(1)
+                } else {
+                    0f
+                }
+
+                if (uiState is OnlineMetadataUiState.PartialResults || uiState is OnlineMetadataUiState.Searching) {
+                    if (hasKnownProgress) {
+                        // Determinate: known progress - wavy progress indicator showing 0% to 100%
+                        LinearWavyProgressIndicator(
+                            progress = { linearProgress },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            wavelength = 20.dp
+                        )
+                    } else {
+                        // Indeterminate: unknown progress - wavy animation growing/shrinking along track
+                        LinearWavyProgressIndicator(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(4.dp),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                            wavelength = 20.dp
                         )
                     }
-                },
-                actions = {
-                    IconButton(
-                        onClick = { viewModel.autoSearch() },
-                        enabled = !isLoading
-                    ) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Search Again")
-                    }
                 }
-            )
+            }
         }
     ) { innerPadding ->
         // Content with innerPadding from Scaffold
@@ -162,8 +202,6 @@ fun OnlineMetadataScreen(
             when (val state = uiState) {
                 is OnlineMetadataUiState.Searching -> LoadingBox()
                 is OnlineMetadataUiState.PartialResults -> {
-                    SearchProgressIndicator(searchState = searchState)
-                    Spacer(modifier = Modifier.height(8.dp))
                     OnlineReleaseList(
                         releases = state.releases,
                         onSelect = { release ->
@@ -343,6 +381,7 @@ fun SearchProgressIndicator(
     modifier: Modifier = Modifier
 ) {
     val allSources = listOf(OnlineSource.ITUNES, OnlineSource.QQ_MUSIC, OnlineSource.NETEASE, OnlineSource.MUSICBRAINZ)
+    val startedSources = searchState.startedSources
     val completedSources = searchState.completedSources
     val errorSources = searchState.errorSources
     val isSearching = searchState.isSearching
@@ -383,7 +422,7 @@ fun SearchProgressIndicator(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Progress text
+            // Progress text with wavy Linear Progress Indicator
             val statusText = buildString {
                 append("已找到 $resultCount 个结果")
                 if (isSearching) {
@@ -393,11 +432,53 @@ fun SearchProgressIndicator(
                 }
             }
 
-            Text(
-                text = statusText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            // Indeterminate: unknown progress and wait time - wavy style
+            // Determinate: known progress - fill from 0% to 100%
+            // 使用实际搜索的源数量计算进度，而不是固定的4个源
+            val hasKnownProgress = completedSources.isNotEmpty() || errorSources.isNotEmpty()
+            val linearProgress = if (hasKnownProgress && startedSources.isNotEmpty()) {
+                (completedSources.size + errorSources.size).toFloat() / startedSources.size.coerceAtLeast(1)
+            } else {
+                0f
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (hasKnownProgress) {
+                    // Determinate: known progress - show exact progress (0% to 100%)
+                    LinearProgressIndicator(
+                        progress = { linearProgress },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .clip(MaterialTheme.shapes.extraSmall),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeCap = StrokeCap.Round,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                } else {
+                    // Indeterminate: unknown progress and wait time - wavy style
+                    LinearProgressIndicator(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .clip(MaterialTheme.shapes.extraSmall),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeCap = StrokeCap.Round,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                }
+
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.widthIn(max = 150.dp)
+                )
+            }
 
             // Show errors if any
             if (errorSources.isNotEmpty()) {
