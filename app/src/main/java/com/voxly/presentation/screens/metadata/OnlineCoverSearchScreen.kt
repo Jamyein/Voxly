@@ -26,6 +26,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
 import com.voxly.presentation.theme.ExpressiveMotionTokens
+import com.voxly.presentation.theme.MaterialShapes
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Surface
@@ -53,6 +54,7 @@ import androidx.compose.runtime.setValue
 import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
@@ -389,7 +391,7 @@ private fun CoverThumbnail(
     NetworkAlbumArtImage(
         url = coverArtUrl,
         contentDescription = "Album cover",
-        modifier = modifier
+        modifier = modifier.clip(MaterialShapes.SoftBurst)
     ) {
         Box(
             modifier = modifier,
