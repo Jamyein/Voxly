@@ -38,7 +38,7 @@ android {
         minSdk = 28
         targetSdk = 36
         versionCode = 21
-        versionName = "11.1.0"
+        versionName = "1.1.0"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
