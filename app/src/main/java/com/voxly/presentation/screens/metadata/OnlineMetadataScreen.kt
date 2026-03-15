@@ -176,7 +176,7 @@ fun OnlineMetadataScreen(
                 }
                 is OnlineMetadataUiState.NoResults -> {
                     Text(
-                        text = "No results found.",
+                        text = stringResource(R.string.error_no_results),
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -263,7 +263,7 @@ private fun OnlineReleaseList(
             contentAlignment = Alignment.Center
         ) {
             Text(
-                text = "No results found.",
+                text = stringResource(R.string.error_no_results),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
