@@ -96,7 +96,7 @@ fun SegmentedSwitchRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
     SegmentedListItem(
         checked = false,
         onCheckedChange = onCheckedChange,
@@ -142,7 +142,7 @@ fun SegmentedInfoRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -163,7 +163,7 @@ fun SegmentedClickableRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
     SegmentedListItem(
         onClick = onClick,
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -217,7 +217,7 @@ private fun <T> SegmentedButtonImpl(
     modifier: Modifier,
     titleStyle: androidx.compose.ui.text.TextStyle?,
     iconContentDescription: ((SegmentedOption<T>) -> String)?
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -260,7 +260,7 @@ fun <T> ConnectedButtonGroupRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -313,7 +313,7 @@ fun <T> ConnectedButtonGroupRowCompact(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -359,7 +359,7 @@ fun <T> ConnectedButtonGroupVerticalRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.primaryContainer) {
+) = Surface(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
     Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TitleSubtitleContent(title, subtitle, MaterialTheme.typography.titleMedium)
         ButtonGroup(modifier = Modifier.fillMaxWidth()) {
@@ -405,7 +405,7 @@ fun <T> ConnectedIconOnlyButtonGroupRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
     SegmentedListItem(
         onClick = {},
         shapes = ListItemDefaults.segmentedShapes(index, count),
@@ -490,7 +490,7 @@ fun StandardClickableRow(
     trailingContent: @Composable (() -> Unit)? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
     ListItem(
         onClick = onClick,
         colors = ListItemDefaults.colors(),
@@ -513,7 +513,7 @@ fun StandardClickableRowWithMenu(
     menuContent: @Composable () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.primaryContainer) {
+) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
     ListItem(
         onClick = onClick,
         colors = ListItemDefaults.colors(),
@@ -668,7 +668,7 @@ fun AudioFileStandardRowCompact(
 ) = Card(
     modifier = modifier.fillMaxWidth(),
     shape = MaterialTheme.shapes.small,
-    colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface),
+    colors = CardDefaults.cardColors(containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface),
     onClick = onClick
 ) {
     Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
