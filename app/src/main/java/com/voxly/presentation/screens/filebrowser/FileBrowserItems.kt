@@ -28,6 +28,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import com.voxly.presentation.theme.MaterialShapes
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -239,7 +240,7 @@ internal fun ArtistListItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .clip(MaterialTheme.shapes.extraLarge),
+                    .clip(MaterialShapes.Sunny),
                 contentAlignment = Alignment.Center
             ) {
                 AlbumArtImage(
@@ -250,7 +251,7 @@ internal fun ArtistListItem(
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
-                        shape = MaterialTheme.shapes.extraLarge,
+                        shape = MaterialShapes.Sunny,
                         color = MaterialTheme.colorScheme.secondaryContainer
                     ) {
                         Box(contentAlignment = Alignment.Center) {

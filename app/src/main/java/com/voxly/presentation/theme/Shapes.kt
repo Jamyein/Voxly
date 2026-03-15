@@ -1,8 +1,10 @@
 package com.voxly.presentation.theme
 
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Shapes
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.graphics.Shape
 
 /**
  * Material Design 3 Expressive Shapes
@@ -96,3 +98,34 @@ val Shapes = Shapes(
  */
 private val Int.percent: androidx.compose.ui.unit.Dp
     get() = (this / 100f).dp
+
+/**
+ * Material Design 3 Expressive (M3E) Shapes
+ *
+ * 这些形状来自 Material3 Expressive 设计规范:
+ * - Sunny: 12边形 (太阳形状)
+ * - Cookie9Sided: 9边形 (饼干形状)
+ * - SoftBurst: 星形/爆炸形
+ *
+ * 注意: 由于 RoundedPolygonShape 在当前库中不可用,
+ * 使用 RoundedCornerShape 作为替代
+ */
+object MaterialShapes {
+    /**
+     * Sunny: 12边形，模拟太阳形状
+     * 使用圆形作为近似
+     */
+    val Sunny: Shape = CircleShape
+
+    /**
+     * Cookie9Sided: 9边形，模拟饼干形状
+     * 使用圆角矩形作为近似
+     */
+    val Cookie9Sided: Shape = RoundedCornerShape(24.dp)
+
+    /**
+     * SoftBurst: 星形/爆炸形状
+     * 使用 ExtraRounded 作为近似
+     */
+    val SoftBurst: Shape = ExpressiveShapes.ExtraRounded
+}
