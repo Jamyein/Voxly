@@ -1,6 +1,7 @@
 package com.voxly.presentation.theme
 
 import androidx.compose.animation.core.AnimationSpec
+import androidx.compose.animation.core.FiniteAnimationSpec
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
@@ -31,9 +32,11 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 
 /**
@@ -100,11 +103,25 @@ object ExpressiveMotion {
     const val StiffnessMediumLow = Spring.StiffnessMediumLow
     const val StiffnessLow = Spring.StiffnessLow
 
+    // Float 类型 Spring
     val EmphasizedSpring: AnimationSpec<Float> = spring(dampingRatio = DampingRatioMediumBouncy, stiffness = StiffnessMedium)
     val StandardSpring: AnimationSpec<Float> = spring(dampingRatio = DampingRatioNoBouncy, stiffness = StiffnessMediumLow)
     val ResponsiveSpring: AnimationSpec<Float> = spring(dampingRatio = DampingRatioLowBouncy, stiffness = StiffnessLow)
     val ShortSpring: AnimationSpec<Float> = spring(dampingRatio = DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh)
     val MediumSpring: AnimationSpec<Float> = spring(dampingRatio = DampingRatioMediumBouncy, stiffness = Spring.StiffnessMediumLow)
+    val SlowSpring: AnimationSpec<Float> = spring(dampingRatio = DampingRatioMediumBouncy, stiffness = StiffnessLow)
+
+    // IntSize 类型 Spring - 用于 animateContentSize
+    val EmphasizedSpringSize: FiniteAnimationSpec<IntSize> = spring(dampingRatio = DampingRatioMediumBouncy, stiffness = StiffnessMedium)
+    val StandardSpringSize: FiniteAnimationSpec<IntSize> = spring(dampingRatio = DampingRatioNoBouncy, stiffness = StiffnessMediumLow)
+
+    // Dp 类型 Spring - 用于 animateDpAsState
+    val EmphasizedSpringDp: AnimationSpec<Dp> = spring(dampingRatio = DampingRatioMediumBouncy, stiffness = StiffnessMedium)
+
+    // Color 类型 Spring - 用于 animateColorAsState
+    val EmphasizedSpringColor: AnimationSpec<Color> = spring(dampingRatio = DampingRatioMediumBouncy, stiffness = StiffnessMedium)
+    val SlowSpringColor: AnimationSpec<Color> = spring(dampingRatio = DampingRatioMediumBouncy, stiffness = StiffnessLow)
+
     val ExpressiveEasing = FastOutSlowInEasing
     val StandardEasing = spring<Float>(dampingRatio = DampingRatioMediumBouncy, stiffness = StiffnessMediumLow)
 }
@@ -152,6 +169,13 @@ object ExpressiveAnimations {
     private val EmphasizedExitSpringSlide = spring<IntOffset>(
         dampingRatio = 0.72f,
         stiffness = 700f
+    )
+
+    // ===== Spring 动画 - 尺寸动画 (IntSize 类型) =====
+    // expandVertically/shrinkVertically 需要 IntSize 类型的 AnimationSpec
+    private val StandardSpringSize = spring<IntSize>(
+        dampingRatio = ExpressiveMotion.DampingRatioNoBouncy,
+        stiffness = ExpressiveMotion.StiffnessMediumLow
     )
 
     // ===== Spring 动画 - 底部导航 =====
@@ -225,144 +249,144 @@ object ExpressiveAnimations {
 
     val ListItemEnter = slideInVertically(
         initialOffsetY = { it },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
-    val CardExpand = expandVertically(animationSpec = tween(StandardDuration, easing = StandardEasing))
+    val CardExpand = expandVertically(animationSpec = StandardSpringSize)
 
     val FabEnter = slideInVertically(
         initialOffsetY = { it },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(QuickDuration))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
     val FabExit = slideOutVertically(
         targetOffsetY = { it },
-        animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing)
-    ) + fadeOut(animationSpec = tween(QuickDuration))
+        animationSpec = EmphasizedExitSpringSlide
+    ) + fadeOut(animationSpec = EmphasizedExitSpring)
 
     val DialogEnter = slideInVertically(
         initialOffsetY = { (it * 0.25).toInt() },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(QuickDuration))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
     val PageEnter = slideInHorizontally(
         initialOffsetX = { it },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
     val PageEnterExpressive = slideInHorizontally(
         initialOffsetX = { it },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
     val PageExitExpressive = slideOutHorizontally(
         targetOffsetX = { -it },
-        animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing)
-    ) + fadeOut(animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing))
+        animationSpec = EmphasizedExitSpringSlide
+    ) + fadeOut(animationSpec = EmphasizedExitSpring)
 
     val PageEnterFromLeft = slideInHorizontally(
         initialOffsetX = { -it },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
     val PageExitToRight = slideOutHorizontally(
         targetOffsetX = { it },
-        animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing)
-    ) + fadeOut(animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing))
+        animationSpec = EmphasizedExitSpringSlide
+    ) + fadeOut(animationSpec = EmphasizedExitSpring)
 
     val BottomNavSlideEnter = slideInVertically(
         initialOffsetY = { (it * 0.3).toInt() },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
-    val BottomNavSlideExit = fadeOut(animationSpec = tween(QuickDuration))
-    val CrossFadeEnter = fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing))
-    val CrossFadeExit = fadeOut(animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing))
+    val BottomNavSlideExit = fadeOut(animationSpec = EmphasizedExitSpring)
+    val CrossFadeEnter = fadeIn(animationSpec = EmphasizedEnterSpring)
+    val CrossFadeExit = fadeOut(animationSpec = EmphasizedExitSpring)
 
     val PageEnterWithScale = slideInHorizontally(
         initialOffsetX = { it },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)) + scaleIn(
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring) + scaleIn(
         initialScale = 0.95f,
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
+        animationSpec = EmphasizedEnterSpring
     )
 
     val PageExitWithScale = slideOutHorizontally(
         targetOffsetX = { -it },
-        animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing)
-    ) + fadeOut(animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing)) + scaleOut(
+        animationSpec = EmphasizedExitSpringSlide
+    ) + fadeOut(animationSpec = EmphasizedExitSpring) + scaleOut(
         targetScale = 0.95f,
-        animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing)
+        animationSpec = EmphasizedExitSpring
     )
 
     val SharedAxisEnter = slideInHorizontally(
         initialOffsetX = { it },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
-    val SharedAxisExit = fadeOut(animationSpec = tween(QuickDuration))
+    val SharedAxisExit = fadeOut(animationSpec = EmphasizedExitSpring)
     val SharedAxisPopEnter = slideInHorizontally(
         initialOffsetX = { -it },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing))
-    val SharedAxisPopExit = fadeOut(animationSpec = tween(QuickDuration))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
+    val SharedAxisPopExit = fadeOut(animationSpec = EmphasizedExitSpring)
 
     // ===== M3E 规范页面过渡动画 =====
 
     val M3E_PageExit = fadeOut(
-        animationSpec = tween(300, easing = ExpressiveMotionTokens.M3E_Emphasized_Accelerate)
+        animationSpec = EmphasizedExitSpring
     ) + scaleOut(
         targetScale = 0.95f,
-        animationSpec = tween(300, easing = ExpressiveMotionTokens.M3E_Emphasized_Accelerate)
+        animationSpec = EmphasizedExitSpring
     )
 
     val M3E_PopExit = slideOutVertically(
         targetOffsetY = { it / 10 },
-        animationSpec = tween(300, easing = ExpressiveMotionTokens.M3E_Emphasized_Accelerate)
+        animationSpec = EmphasizedExitSpringSlide
     ) + fadeOut(
-        animationSpec = tween(300, easing = ExpressiveMotionTokens.M3E_Emphasized_Accelerate)
+        animationSpec = EmphasizedExitSpring
     ) + scaleOut(
         targetScale = 0.95f,
-        animationSpec = tween(300, easing = ExpressiveMotionTokens.M3E_Emphasized_Accelerate)
+        animationSpec = EmphasizedExitSpring
     )
 
     // ===== Navigation Transition Animations =====
 
     val SlideInHorizontallyInitialOffsetForward = slideInHorizontally(
         initialOffsetX = { it },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
     val SlideOutHorizontallyInitialOffsetForward = slideOutHorizontally(
         targetOffsetX = { -it },
-        animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing)
-    ) + fadeOut(animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing))
+        animationSpec = EmphasizedExitSpringSlide
+    ) + fadeOut(animationSpec = EmphasizedExitSpring)
 
     val SlideInHorizontallyInitialOffsetBackward = slideInHorizontally(
         initialOffsetX = { -it },
-        animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    ) + fadeIn(animationSpec = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing))
+        animationSpec = EmphasizedEnterSpringSlide
+    ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
     val SlideOutHorizontallyInitialOffsetBackward = slideOutHorizontally(
         targetOffsetX = { it },
-        animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing)
-    ) + fadeOut(animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing))
+        animationSpec = EmphasizedExitSpringSlide
+    ) + fadeOut(animationSpec = EmphasizedExitSpring)
 
     // ===== Exit Animations =====
 
     val ListItemExit = slideOutVertically(
         targetOffsetY = { -it },
-        animationSpec = tween(EmphasizedExitDuration, easing = EmphasizedAccelerateEasing)
-    ) + fadeOut(animationSpec = tween(QuickDuration))
+        animationSpec = EmphasizedExitSpringSlide
+    ) + fadeOut(animationSpec = EmphasizedExitSpring)
 
-    val CardCollapse = shrinkVertically(animationSpec = tween(StandardDuration, easing = StandardEasing))
-    val PageExit = fadeOut(animationSpec = tween(QuickDuration))
+    val CardCollapse = shrinkVertically(animationSpec = StandardSpringSize)
+    val PageExit = fadeOut(animationSpec = EmphasizedExitSpring)
 
     // ===== State Change Animations =====
 
-    val SelectionChange: AnimationSpec<Float> = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    val ValueChange: AnimationSpec<Float> = tween(EmphasizedEnterDuration, easing = EmphasizedDecelerateEasing)
-    val ExpandCollapse: AnimationSpec<Float> = tween(StandardDuration, easing = StandardEasing)
+    val SelectionChange: AnimationSpec<Float> = EmphasizedEnterSpring
+    val ValueChange: AnimationSpec<Float> = EmphasizedEnterSpring
+    val ExpandCollapse: AnimationSpec<Float> = ExpressiveMotion.StandardSpring
 }
 
 // ============================================================================
@@ -467,12 +491,12 @@ object MotionPresets {
     private val QuickDuration = 200
     private val StandardDuration = 350
 
-    val FadeIn: AnimationSpec<Float> = tween(QuickDuration)
+    val FadeIn: AnimationSpec<Float> = ExpressiveMotion.EmphasizedSpring
     val SlideInUp: AnimationSpec<Float> = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = ExpressiveMotion.StiffnessMedium)
     val ScaleIn: AnimationSpec<Float> = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = ExpressiveMotion.StiffnessMedium)
-    val FadeOut: AnimationSpec<Float> = tween(QuickDuration)
+    val FadeOut: AnimationSpec<Float> = ExpressiveMotion.MediumSpring
     val SlideOutDown: AnimationSpec<Float> = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = ExpressiveMotion.StiffnessMedium)
-    val ScaleOut: AnimationSpec<Float> = tween(QuickDuration)
+    val ScaleOut: AnimationSpec<Float> = ExpressiveMotion.MediumSpring
     val StateChange: AnimationSpec<Float> = spring(dampingRatio = ExpressiveMotion.DampingRatioNoBouncy, stiffness = ExpressiveMotion.StiffnessMediumLow)
     val Emphasis: AnimationSpec<Float> = spring(dampingRatio = ExpressiveMotion.DampingRatioLowBouncy, stiffness = ExpressiveMotion.StiffnessLow)
 }

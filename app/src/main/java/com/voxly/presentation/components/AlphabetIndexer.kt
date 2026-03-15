@@ -4,6 +4,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateDpAsState
+import com.voxly.presentation.theme.ExpressiveMotion
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -175,10 +176,7 @@ fun AlphabetIndexer(
         ) {
             val previewScale by animateDpAsState(
                 targetValue = 20.dp,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessLow
-                ),
+                animationSpec = ExpressiveMotion.EmphasizedSpringDp,
                 label = "preview_scale"
             )
             Text(

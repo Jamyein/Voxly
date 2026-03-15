@@ -86,6 +86,7 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.theme.ExpressiveMotionTokens
 import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.ui.loadLocalAlbumArt
@@ -361,10 +362,7 @@ fun FileBrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .animateContentSize(
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                                    stiffness = Spring.StiffnessLow
-                                )
+                                animationSpec = ExpressiveMotion.StandardSpringSize
                             )
                     ) {
                         if (openedDirectory != null) {

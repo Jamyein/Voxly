@@ -2,7 +2,6 @@ package com.voxly.presentation.screens.filebrowser
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -49,7 +48,8 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.theme.ExpressiveMotionTokens
+import com.voxly.presentation.theme.ExpressiveAnimations
+import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
 import com.voxly.presentation.screens.filebrowser.FixMetadataOptions
 import com.voxly.presentation.screens.filebrowser.OnlineMetadataOptions
@@ -644,10 +644,7 @@ fun DirectoryBatchOperationsFAB(
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 45f else 0f,
-        animationSpec = spring(
-            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-        ),
+        animationSpec = ExpressiveMotion.EmphasizedSpring,
         label = "fab_rotation"
     )
 
@@ -659,20 +656,8 @@ fun DirectoryBatchOperationsFAB(
         // Menu items
         AnimatedVisibility(
             visible = expanded,
-            enter = fadeIn(animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
-                stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
-            )) + expandVertically(expandFrom = Alignment.Bottom, animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.StandardDecelerate.dampingRatio,
-                stiffness = ExpressiveMotionTokens.StandardDecelerate.stiffness
-            )),
-            exit = fadeOut(animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.StandardAccelerate.dampingRatio,
-                stiffness = ExpressiveMotionTokens.StandardAccelerate.stiffness
-            )) + shrinkVertically(animationSpec = spring(
-                dampingRatio = ExpressiveMotionTokens.StandardAccelerate.dampingRatio,
-                stiffness = ExpressiveMotionTokens.StandardAccelerate.stiffness
-            ))
+            enter = ExpressiveAnimations.ListItemEnter,
+            exit = ExpressiveAnimations.ListItemExit
         ) {
             Column(
                 horizontalAlignment = Alignment.End,

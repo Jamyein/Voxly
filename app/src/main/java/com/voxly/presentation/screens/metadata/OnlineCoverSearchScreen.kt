@@ -1,10 +1,6 @@
 package com.voxly.presentation.screens.metadata
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.Image
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
@@ -25,7 +21,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.Refresh
-import com.voxly.presentation.theme.ExpressiveMotionTokens
+import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.MaterialShapes
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -129,18 +125,7 @@ fun OnlineCoverSearchScreen(
             // Search info card - 使用 Surface 容器 + tertiary 颜色点缀
             AnimatedVisibility(
                 visible = true,
-                enter = fadeIn(
-                    animationSpec = spring(
-                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                    )
-                ) + scaleIn(
-                    initialScale = 0.95f,
-                    animationSpec = spring(
-                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                    )
-                )
+                enter = ExpressiveAnimations.BottomNavEnterM3E
             ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -185,18 +170,7 @@ fun OnlineCoverSearchScreen(
             // Search progress - 使用弹性缩放动画
             AnimatedVisibility(
                 visible = isLoading,
-                enter = fadeIn(
-                    animationSpec = spring(
-                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                    )
-                ) + scaleIn(
-                    initialScale = 0.8f,
-                    animationSpec = spring(
-                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                    )
-                )
+                enter = ExpressiveAnimations.BottomNavEnterM3E
             ) {
                 Box(
                     modifier = Modifier
@@ -211,18 +185,7 @@ fun OnlineCoverSearchScreen(
             // Error message - 使用 Surface 容器
             AnimatedVisibility(
                 visible = errorMessage != null,
-                enter = fadeIn(
-                    animationSpec = spring(
-                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                    )
-                ) + slideInVertically(
-                    initialOffsetY = { -it / 2 },
-                    animationSpec = spring(
-                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                    )
-                )
+                enter = ExpressiveAnimations.ListItemEnter
             ) {
                 errorMessage?.let { error ->
                     Surface(
@@ -244,18 +207,7 @@ fun OnlineCoverSearchScreen(
             // Results - 无结果提示
             AnimatedVisibility(
                 visible = coverResults.isEmpty() && !isLoading && errorMessage == null,
-                enter = fadeIn(
-                    animationSpec = spring(
-                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                    )
-                ) + scaleIn(
-                    initialScale = 0.9f,
-                    animationSpec = spring(
-                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                    )
-                )
+                enter = ExpressiveAnimations.BottomNavEnterM3E
             ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
@@ -274,18 +226,7 @@ fun OnlineCoverSearchScreen(
             // Results - 封面列表
             AnimatedVisibility(
                 visible = coverResults.isNotEmpty(),
-                enter = fadeIn(
-                    animationSpec = spring(
-                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                    )
-                ) + slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = spring(
-                        dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                        stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                    )
-                )
+                enter = ExpressiveAnimations.ListItemEnter
             ) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

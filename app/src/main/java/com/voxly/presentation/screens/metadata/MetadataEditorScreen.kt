@@ -11,6 +11,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import com.voxly.presentation.theme.ExpressiveMotion
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -137,7 +138,7 @@ fun MetadataEditorScreen(
     var backProgress by remember { mutableFloatStateOf(0f) }
     val animatedBackProgress by animateFloatAsState(
         targetValue = backProgress,
-        animationSpec = spring(stiffness = Spring.StiffnessLow),
+        animationSpec = ExpressiveMotion.SlowSpring,
         label = "backProgress"
     )
 

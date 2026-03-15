@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
+import com.voxly.presentation.theme.ExpressiveMotion
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -147,10 +148,7 @@ fun LyricsPosterPreviewSheet(
     // Animate background color with spring animation (M3E style)
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
+        animationSpec = ExpressiveMotion.SlowSpringColor,
         label = "background_color"
     )
 
@@ -168,10 +166,7 @@ fun LyricsPosterPreviewSheet(
     // Animate content color with spring animation
     val contentColor by animateColorAsState(
         targetValue = targetContentColor,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessLow
-        ),
+        animationSpec = ExpressiveMotion.SlowSpringColor,
         label = "content_color"
     )
 

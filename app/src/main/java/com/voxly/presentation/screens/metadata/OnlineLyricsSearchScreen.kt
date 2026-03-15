@@ -14,15 +14,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
-import com.voxly.presentation.theme.ExpressiveMotionTokens
+import com.voxly.presentation.theme.ExpressiveAnimations
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -127,18 +123,7 @@ fun OnlineLyricsSearchScreen(
             item {
                 AnimatedVisibility(
                     visible = true,
-                    enter = fadeIn(
-                        animationSpec = spring(
-                            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                        )
-                    ) + scaleIn(
-                        initialScale = 0.95f,
-                        animationSpec = spring(
-                            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                        )
-                    )
+                    enter = ExpressiveAnimations.BottomNavEnterM3E
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxWidth(),
@@ -193,18 +178,7 @@ fun OnlineLyricsSearchScreen(
                 item {
                     AnimatedVisibility(
                         visible = true,
-                        enter = fadeIn(
-                            animationSpec = spring(
-                                dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                                stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                            )
-                        ) + scaleIn(
-                            initialScale = 0.8f,
-                            animationSpec = spring(
-                                dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                                stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                            )
-                        )
+                        enter = ExpressiveAnimations.BottomNavEnterM3E
                     ) {
                         Box(
                             modifier = Modifier
@@ -222,18 +196,7 @@ fun OnlineLyricsSearchScreen(
             item {
                 AnimatedVisibility(
                     visible = errorMessage != null,
-                    enter = fadeIn(
-                        animationSpec = spring(
-                            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                        )
-                    ) + slideInVertically(
-                        initialOffsetY = { -it / 2 },
-                        animationSpec = spring(
-                            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                        )
-                    )
+                    enter = ExpressiveAnimations.ListItemEnter
                 ) {
                     errorMessage?.let { error ->
                         Surface(
@@ -258,18 +221,7 @@ fun OnlineLyricsSearchScreen(
                 item {
                     AnimatedVisibility(
                         visible = true,
-                        enter = fadeIn(
-                            animationSpec = spring(
-                                dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                                stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                            )
-                        ) + scaleIn(
-                            initialScale = 0.9f,
-                            animationSpec = spring(
-                                dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-                                stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-                            )
-                        )
+                        enter = ExpressiveAnimations.BottomNavEnterM3E
                     ) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -291,10 +243,7 @@ fun OnlineLyricsSearchScreen(
                 items(lyricsResults, key = { it.id }) { item ->
                     AnimatedVisibility(
                         visible = true,
-                        enter = fadeIn(animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)) + slideInVertically(
-                            initialOffsetY = { it },
-                            animationSpec = spring(dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio, stiffness = ExpressiveMotionTokens.Emphasized.stiffness)
-                        )
+                        enter = ExpressiveAnimations.ListItemEnter
                     ) {
                         LyricsResultItem(
                             item = item,

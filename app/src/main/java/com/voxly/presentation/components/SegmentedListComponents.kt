@@ -3,6 +3,7 @@ package com.voxly.presentation.components
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
+import com.voxly.presentation.theme.ExpressiveMotion
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -66,7 +67,7 @@ import kotlinx.coroutines.launch
 
 // ============ Helper Functions ============
 
-private val weightAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float> = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow)
+private val weightAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float> = ExpressiveMotion.EmphasizedSpring
 
 @Composable
 private fun TitleSubtitleContent(
@@ -364,7 +365,7 @@ fun <T> ConnectedButtonGroupVerticalRow(
                 val isSelected = option.value == selectedValue
                 val weight by animateFloatAsState(
                     targetValue = if (isSelected) 1.3f else 1.0f,
-                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessLow),
+                    animationSpec = weightAnimationSpec,
                     label = "weight_anim"
                 )
                 val buttonShapes = when {

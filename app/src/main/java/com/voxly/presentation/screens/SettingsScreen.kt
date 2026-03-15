@@ -6,6 +6,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
+import com.voxly.presentation.theme.ExpressiveMotion
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.layout.Arrangement
@@ -203,10 +204,7 @@ private fun <T> ConnectedIconButtonGroup(
             // M3E 动态权重要换动画
             val animatedWeight by animateFloatAsState(
                 targetValue = if (isSelected) selectedWeight else baseWeight,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
+                animationSpec = ExpressiveMotion.MediumSpring,
                 label = "weight_anim"
             )
 
@@ -241,10 +239,7 @@ private fun <T> ConnectedIconButtonGroup(
                                 text = option.text,
                                 style = MaterialTheme.typography.labelLarge,
                                 modifier = Modifier.animateContentSize(
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                        stiffness = Spring.StiffnessMedium
-                                    )
+                                    animationSpec = ExpressiveMotion.EmphasizedSpringSize
                                 )
                             )
                         } else {
@@ -252,10 +247,7 @@ private fun <T> ConnectedIconButtonGroup(
                                 imageVector = option.icon!!,
                                 contentDescription = option.tooltip,
                                 modifier = Modifier.animateContentSize(
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                                        stiffness = Spring.StiffnessMedium
-                                    )
+                                    animationSpec = ExpressiveMotion.EmphasizedSpringSize
                                 )
                             )
                         }
@@ -336,10 +328,7 @@ fun DraggableSourcePriorityDialog(
                     .heightIn(max = 450.dp)
                     .verticalScroll(rememberScrollState())
                     .animateContentSize(
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
+                        animationSpec = ExpressiveMotion.StandardSpringSize
                     ),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -355,18 +344,12 @@ fun DraggableSourcePriorityDialog(
                     // Animated hover effects for dragged item
                     val animatedScale by animateFloatAsState(
                         targetValue = if (isDragging) 1.05f else 1f,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        ),
+                        animationSpec = ExpressiveMotion.MediumSpring,
                         label = "scale"
                     )
                     val animatedElevation by animateDpAsState(
                         targetValue = if (isDragging) 8.dp else 0.dp,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        ),
+                        animationSpec = ExpressiveMotion.EmphasizedSpringDp,
                         label = "elevation"
                     )
 

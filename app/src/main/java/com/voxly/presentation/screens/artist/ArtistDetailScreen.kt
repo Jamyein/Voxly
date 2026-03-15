@@ -34,9 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -58,7 +56,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
-import com.voxly.presentation.theme.ExpressiveMotionTokens
+import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 
@@ -324,10 +322,7 @@ private fun AlbumCard(
 ) {
     val scale by animateFloatAsState(
         targetValue = 1f,
-        animationSpec = spring(
-            dampingRatio = ExpressiveMotionTokens.Emphasized.dampingRatio,
-            stiffness = ExpressiveMotionTokens.Emphasized.stiffness
-        ),
+        animationSpec = ExpressiveMotion.EmphasizedSpring,
         label = "albumCardScale"
     )
 

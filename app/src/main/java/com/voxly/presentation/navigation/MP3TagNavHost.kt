@@ -1,16 +1,6 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
-import androidx.compose.animation.ContentTransform
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -359,38 +349,14 @@ fun MP3TagNavHost() {
                         )
                     }
                 },
-                // Animation transitions using Material3 Expressive patterns with spring physics
+                // Animation transitions using ExpressiveAnimations
                 transitionSpec = {
-                    // Forward navigation: slide in from right
-                    slideInHorizontally(
-                        initialOffsetX = { it },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        )
-                    ) togetherWith slideOutHorizontally(
-                        targetOffsetX = { -it / 3 },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    )
+                    ExpressiveAnimations.SlideInHorizontallyInitialOffsetForward togetherWith
+                            ExpressiveAnimations.SlideOutHorizontallyInitialOffsetForward
                 },
                 popTransitionSpec = {
-                    // Back navigation: slide in from left
-                    slideInHorizontally(
-                        initialOffsetX = { -it },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessLow
-                        )
-                    ) togetherWith slideOutHorizontally(
-                        targetOffsetX = { it },
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioMediumBouncy,
-                            stiffness = Spring.StiffnessMediumLow
-                        )
-                    )
+                    ExpressiveAnimations.SlideInHorizontallyInitialOffsetBackward togetherWith
+                            ExpressiveAnimations.SlideOutHorizontallyInitialOffsetBackward
                 },
                 modifier = Modifier.fillMaxSize()
             )
