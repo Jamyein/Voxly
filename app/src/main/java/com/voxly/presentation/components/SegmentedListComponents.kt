@@ -61,6 +61,7 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.theme.MaterialShapes
 import kotlinx.coroutines.launch
 
 // ============ Helper Functions ============
@@ -545,7 +546,7 @@ fun AudioFileStandardRow(
             mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
             contentDescription = null,
             size = 64.dp,
-            modifier = Modifier.clip(MaterialTheme.shapes.medium)
+            modifier = Modifier.clip(MaterialShapes.Cookie9Sided)
         ) {
             Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(24.dp))
         }
@@ -633,7 +634,7 @@ fun AudioFileStandardRowWithMenu(
     color = MaterialTheme.colorScheme.surface
 ) {
     Row(modifier = Modifier.fillMaxWidth().padding(12.dp, 12.dp, 8.dp, 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = 64.dp, modifier = Modifier.clip(MaterialTheme.shapes.medium)) {
+        AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = 64.dp, modifier = Modifier.clip(MaterialShapes.Cookie9Sided)) {
             Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.width(10.dp))
@@ -668,9 +669,9 @@ fun AudioFileStandardRowCompact(
     onClick = onClick
 ) {
     Row(modifier = Modifier.fillMaxWidth().padding(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(modifier = Modifier.size(40.dp).clip(MaterialTheme.shapes.extraSmall), contentAlignment = Alignment.Center) {
+        Box(modifier = Modifier.size(40.dp).clip(MaterialShapes.Cookie9Sided), contentAlignment = Alignment.Center) {
             AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = 40.dp, modifier = Modifier.fillMaxSize()) {
-                Surface(modifier = Modifier.fillMaxSize(), shape = MaterialTheme.shapes.extraSmall, color = MaterialTheme.colorScheme.surfaceVariant) {
+                Surface(modifier = Modifier.fillMaxSize(), shape = MaterialShapes.Cookie9Sided, color = MaterialTheme.colorScheme.surfaceVariant) {
                     Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(20.dp)) }
                 }
             }
