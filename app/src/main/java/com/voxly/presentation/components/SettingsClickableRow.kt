@@ -45,6 +45,6 @@ fun SettingsClickableRow(
         modifier = modifier
             .fillMaxWidth()
             .clickable(onClick = onClick),
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f))
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
     )
 }

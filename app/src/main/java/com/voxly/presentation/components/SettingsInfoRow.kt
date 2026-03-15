@@ -27,7 +27,7 @@ fun SettingsInfoRow(
             )
         },
         trailingContent = { Text(text = value) },
-        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)),
+        colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         modifier = modifier
     )
 }

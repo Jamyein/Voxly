@@ -171,13 +171,6 @@ object ExpressiveAnimations {
         stiffness = 700f
     )
 
-    // ===== Spring 动画 - 尺寸动画 (IntSize 类型) =====
-    // expandVertically/shrinkVertically 需要 IntSize 类型的 AnimationSpec
-    private val StandardSpringSize = spring<IntSize>(
-        dampingRatio = ExpressiveMotion.DampingRatioNoBouncy,
-        stiffness = ExpressiveMotion.StiffnessMediumLow
-    )
-
     // ===== Spring 动画 - 底部导航 =====
     val BottomNavEnter = fadeIn(
         animationSpec = EmphasizedEnterSpring
@@ -252,7 +245,7 @@ object ExpressiveAnimations {
         animationSpec = EmphasizedEnterSpringSlide
     ) + fadeIn(animationSpec = EmphasizedEnterSpring)
 
-    val CardExpand = expandVertically(animationSpec = StandardSpringSize)
+    val CardExpand = expandVertically(animationSpec = ExpressiveMotion.StandardSpringSize)
 
     val FabEnter = slideInVertically(
         initialOffsetY = { it },
@@ -379,7 +372,7 @@ object ExpressiveAnimations {
         animationSpec = EmphasizedExitSpringSlide
     ) + fadeOut(animationSpec = EmphasizedExitSpring)
 
-    val CardCollapse = shrinkVertically(animationSpec = StandardSpringSize)
+    val CardCollapse = shrinkVertically(animationSpec = ExpressiveMotion.StandardSpringSize)
     val PageExit = fadeOut(animationSpec = EmphasizedExitSpring)
 
     // ===== State Change Animations =====
