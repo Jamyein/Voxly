@@ -19,6 +19,7 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlphabetIndexer
 import com.voxly.presentation.components.AudioFileStandardRow
 import com.voxly.presentation.components.AudioFileStandardRowCompact
+import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
 import com.voxly.presentation.components.getFirstLetter
 import com.voxly.presentation.icons.AppIcon
@@ -53,11 +54,15 @@ internal fun AudioFileItem(
             isSelected = isSelected,
             onClick = onClick,
             onLongClick = onLongClick,
-            onEditMetadata = onEditMetadata,
-            onRename = onRename,
-            onDelete = onDelete,
-            onFetchOnlineMetadata = onFetchOnlineMetadata,
-            onFixMetadata = onFixMetadata,
+            onAction = { action ->
+                when (action) {
+                    is AudioFileAction.EditMetadata -> onEditMetadata()
+                    is AudioFileAction.Rename -> onRename()
+                    is AudioFileAction.Delete -> onDelete()
+                    is AudioFileAction.FetchOnlineMetadata -> onFetchOnlineMetadata()
+                    is AudioFileAction.FixMetadata -> onFixMetadata()
+                }
+            },
             modifier = modifier
         )
     } else {
