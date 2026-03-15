@@ -2,6 +2,9 @@ package com.voxly.presentation.screens.filebrowser
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.systemBars
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.lazy.LazyColumn
@@ -280,7 +283,12 @@ internal fun AudioFileListWithIndexer(
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val availableHeight = maxHeight - 160.dp
+        // Use WindowInsets to get actual system bar heights
+        val systemBarsPadding = WindowInsets.systemBars.asPaddingValues()
+        val bottomPadding = systemBarsPadding.calculateBottomPadding()
+
+        // Calculate available height for alphabet indexer (subtract padding)
+        val indexerAvailableHeight = maxHeight - bottomPadding
 
         AudioFileList(
             files = files,
@@ -310,8 +318,8 @@ internal fun AudioFileListWithIndexer(
                 },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(top = 80.dp, bottom = 80.dp, end = 4.dp),
-                availableHeight = availableHeight
+                    .padding(end = 4.dp),
+                availableHeight = indexerAvailableHeight
             )
         }
     }
