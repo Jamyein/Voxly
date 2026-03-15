@@ -11,6 +11,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -296,6 +297,9 @@ internal fun AudioFileListWithIndexer(
         )
 
         if (showIndexer) {
+            val configuration = LocalConfiguration.current
+            val availableHeight = configuration.screenHeightDp.dp - 160.dp
+
             AlphabetIndexer(
                 groupedFiles = letterToIndex.mapValues { listOf() },
                 onLetterSelected = { letter ->
@@ -308,7 +312,8 @@ internal fun AudioFileListWithIndexer(
                 },
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(top = 80.dp, bottom = 80.dp, end = 4.dp)
+                    .padding(top = 80.dp, bottom = 80.dp, end = 4.dp),
+                availableHeight = availableHeight
             )
         }
     }

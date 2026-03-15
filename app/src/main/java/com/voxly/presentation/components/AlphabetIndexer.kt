@@ -31,6 +31,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -54,7 +55,8 @@ fun AlphabetIndexer(
     groupedFiles: Map<Char, List<AudioFile>>,
     onLetterSelected: (Char) -> Unit,
     modifier: Modifier = Modifier,
-    showAllLetters: Boolean = true
+    showAllLetters: Boolean = true,
+    availableHeight: Dp
 ) {
     // Full alphabet: 0 for numbers, A-Z for letters, # for symbols
     val allLetters = listOf('0') + ('A'..'Z').toList() + '#'
@@ -75,20 +77,14 @@ fun AlphabetIndexer(
 
     // Fixed dimensions for the sidebar
     val sidebarWidth = 20.dp
-    val letterSpacing = 2.dp
 
     // Static font sizes
     val selectedFontSize = 11.sp
     val unselectedFontSize = 8.sp
 
-    // Calculate expected height based on letter count
-    val expectedHeight = remember(displayLetters.size) {
-        (displayLetters.size * 16).dp
-    }
-
     Box(
         modifier = modifier
-            .size(width = sidebarWidth, height = expectedHeight)
+            .size(width = sidebarWidth, height = availableHeight)
             .padding(start = 2.dp)
             .pointerInput(displayLetters) {
                 awaitEachGesture {
@@ -130,7 +126,7 @@ fun AlphabetIndexer(
     ) {
         Column(
             modifier = Modifier.fillMaxHeight(),
-            verticalArrangement = Arrangement.SpaceBetween,
+            verticalArrangement = Arrangement.SpaceEvenly,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             displayLetters.forEach { letter ->
@@ -152,8 +148,7 @@ fun AlphabetIndexer(
                     text = letter.uppercase(),
                     fontSize = fontSize,
                     fontWeight = fontWeight,
-                    color = color,
-                    modifier = Modifier.padding(vertical = letterSpacing)
+                    color = color
                 )
             }
         }
