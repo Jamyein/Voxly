@@ -1118,7 +1118,7 @@ fun SettingsScreen(
                 .padding(horizontal = 16.dp)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Appearance Section
+            // Basic Settings Section (Appearance + Language)
             SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
                 ConnectedIconOnlyButtonGroupRow(
                     title = stringResource(R.string.settings_theme),
@@ -1130,7 +1130,7 @@ fun SettingsScreen(
                     selectedValue = themeMode,
                     onSelected = viewModel::setThemeMode,
                     index = 0,
-                    count = 2
+                    count = 3
                 )
 
                 SegmentedSwitchRow(
@@ -1139,14 +1139,9 @@ fun SettingsScreen(
                     checked = dynamicColors,
                     onCheckedChange = { viewModel.setDynamicColors(it) },
                     index = 1,
-                    count = 2
+                    count = 3
                 )
-            }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Language Section
-            SettingsSection(title = stringResource(R.string.settings_section_language)) {
                 SegmentedClickableRow(
                     title = stringResource(R.string.settings_language),
                     subtitle = stringResource(currentLanguageOption.labelResId),
@@ -1187,16 +1182,63 @@ fun SettingsScreen(
                         }
                     },
                     onClick = { },
-                    index = 0,
-                    count = 1,
+                    index = 2,
+                    count = 3,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // Scanning Section
+            // Artist Separator variables (declared outside to be accessible by dialog)
+            var separatorText by remember { mutableStateOf(viewModel.artistSeparators.value) }
+
+            LaunchedEffect(viewModel.artistSeparators.value) {
+                separatorText = viewModel.artistSeparators.value
+            }
+
+            // Media Settings Section (Scan Directory + Artist Separator + Min Duration + Scan Mode + ReplayGain)
             SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
+                SegmentedClickableRow(
+                    title = stringResource(R.string.settings_scan_directory_settings),
+                    subtitle = stringResource(R.string.settings_scan_directory_settings_subtitle),
+                    onClick = { onNavigateToScanDirectorySettings() },
+                    index = 0,
+                    count = 6
+                )
+
+                SegmentedSwitchRow(
+                    title = stringResource(R.string.artist_separator),
+                    subtitle = stringResource(R.string.artist_separator_summary),
+                    checked = viewModel.artistSeparatorEnabled.value,
+                    onCheckedChange = { viewModel.setArtistSeparatorEnabled(it) },
+                    index = 1,
+                    count = if (viewModel.artistSeparatorEnabled.value) 6 else 5
+                )
+
+                // Last item - only show if enabled
+                if (viewModel.artistSeparatorEnabled.value) {
+                    SegmentedClickableRow(
+                        title = stringResource(R.string.artist_separators),
+                        subtitle = separatorText.ifBlank { "& \\" },
+                        onClick = {
+                            separatorText = viewModel.artistSeparators.value
+                            showSeparatorDialog = true
+                        },
+                        index = 2,
+                        count = 6
+                    )
+                }
+
+                SegmentedSwitchRow(
+                    title = stringResource(R.string.settings_min_duration_filter),
+                    subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
+                    checked = minDurationFilterEnabled,
+                    onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) },
+                    index = 3,
+                    count = 6
+                )
+
                 ConnectedIconOnlyButtonGroupRow(
                     title = stringResource(R.string.settings_scan_mode),
                     options = scanModeOptions.map { option ->
@@ -1212,52 +1254,27 @@ fun SettingsScreen(
                     },
                     selectedValue = scanMode,
                     onSelected = viewModel::setScanMode,
-                    index = 0,
-                    count = 2
+                    index = 4,
+                    count = 6
                 )
 
-                SegmentedSwitchRow(
-                    title = stringResource(R.string.settings_min_duration_filter),
-                    subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
-                    checked = minDurationFilterEnabled,
-                    onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) },
-                    index = 1,
-                    count = 2
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Artist Separator Section
-            var separatorText by remember { mutableStateOf(viewModel.artistSeparators.value) }
-
-            LaunchedEffect(viewModel.artistSeparators.value) {
-                separatorText = viewModel.artistSeparators.value
-            }
-
-            SettingsSection(title = stringResource(R.string.artist_separator)) {
-                SegmentedSwitchRow(
-                    title = stringResource(R.string.artist_separator),
-                    subtitle = stringResource(R.string.artist_separator_summary),
-                    checked = viewModel.artistSeparatorEnabled.value,
-                    onCheckedChange = { viewModel.setArtistSeparatorEnabled(it) },
-                    index = 0,
-                    count = if (viewModel.artistSeparatorEnabled.value) 2 else 1
+                // ReplayGain target loudness preset values
+                val replayGainOptions = listOf(
+                    SegmentedOption(value = -23f, label = "EBU R128\n-23 dB"),
+                    SegmentedOption(value = -18f, label = "Streaming\n-18 dB"),
+                    SegmentedOption(value = -16f, label = "CD\n-16 dB"),
+                    SegmentedOption(value = -14f, label = "Loud\n-14 dB")
                 )
 
-                // Last item - only show if enabled
-                if (viewModel.artistSeparatorEnabled.value) {
-                    SegmentedClickableRow(
-                        title = stringResource(R.string.artist_separators),
-                        subtitle = separatorText.ifBlank { "& \\" },
-                        onClick = {
-                            separatorText = viewModel.artistSeparators.value
-                            showSeparatorDialog = true
-                        },
-                        index = 1,
-                        count = 2
-                    )
-                }
+                ConnectedButtonGroupVerticalRow(
+                    title = stringResource(R.string.replay_gain_target_loudness),
+                    subtitle = stringResource(R.string.replay_gain_default_loudness),
+                    options = replayGainOptions,
+                    selectedValue = replayGainTargetLoudness,
+                    onSelected = { viewModel.setReplayGainTargetLoudness(it) },
+                    index = 5,
+                    count = 6
+                )
             }
 
             // Separator dialog
@@ -1293,18 +1310,7 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            SettingsSection(title = stringResource(R.string.settings_scan_directory_settings)) {
-                SegmentedClickableRow(
-                    title = stringResource(R.string.settings_scan_directory_settings),
-                    subtitle = stringResource(R.string.settings_scan_directory_settings_subtitle),
-                    onClick = { onNavigateToScanDirectorySettings() },
-                    index = 0,
-                    count = 1
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
+            // Online Services Section
             SettingsSection(title = stringResource(R.string.settings_section_online_metadata)) {
                 // Metadata source
                 SegmentedClickableRow(
@@ -1355,7 +1361,7 @@ fun SettingsScreen(
                         viewModel.setLoggingEnabled(it)
                     },
                     index = 0,
-                    count = 7
+                    count = 8
                 )
                 // File logging switch
                 SegmentedSwitchRow(
@@ -1367,7 +1373,7 @@ fun SettingsScreen(
                         viewModel.setFileLoggingEnabled(it)
                     },
                     index = 1,
-                    count = 7
+                    count = 8
                 )
                 // Console logging switch
                 SegmentedSwitchRow(
@@ -1379,7 +1385,7 @@ fun SettingsScreen(
                         viewModel.setConsoleLoggingEnabled(it)
                     },
                     index = 2,
-                    count = 7
+                    count = 8
                 )
                 // Crash reporting switch
                 SegmentedSwitchRow(
@@ -1391,14 +1397,14 @@ fun SettingsScreen(
                         viewModel.setCrashReportingEnabled(it)
                     },
                     index = 3,
-                    count = 7
+                    count = 8
                 )
                 // Log size info
                 SegmentedInfoRow(
                     title = stringResource(R.string.settings_logging_size),
                     value = LogManager.formatLogSize(LogManager.getLogDirectorySize()),
                     index = 4,
-                    count = 7
+                    count = 8
                 )
                 // View logs
                 SegmentedClickableRow(
@@ -1406,7 +1412,7 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_logging_view_subtitle),
                     onClick = { onNavigateToLogViewer() },
                     index = 5,
-                    count = 7
+                    count = 8
                 )
                 // Export logs
                 SegmentedClickableRow(
@@ -1414,7 +1420,7 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_logging_export_subtitle),
                     onClick = { onExportLogs() },
                     index = 6,
-                    count = 7
+                    count = 8
                 )
                 // Cleanup logs
                 SegmentedClickableRow(
@@ -1422,30 +1428,7 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_logging_cleanup_subtitle),
                     onClick = { onCleanupLogs() },
                     index = 7,
-                    count = 7
-                )
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // ReplayGain Section
-            // ReplayGain target loudness preset values
-            val replayGainOptions = listOf(
-                SegmentedOption(value = -23f, label = "EBU R128\n-23 dB"),
-                SegmentedOption(value = -18f, label = "Streaming\n-18 dB"),
-                SegmentedOption(value = -16f, label = "CD\n-16 dB"),
-                SegmentedOption(value = -14f, label = "Loud\n-14 dB")
-            )
-            
-            SettingsSection(title = stringResource(R.string.replay_gain_settings)) {
-                ConnectedButtonGroupVerticalRow(
-                    title = stringResource(R.string.replay_gain_target_loudness),
-                    subtitle = stringResource(R.string.replay_gain_default_loudness),
-                    options = replayGainOptions,
-                    selectedValue = replayGainTargetLoudness,
-                    onSelected = { viewModel.setReplayGainTargetLoudness(it) },
-                    index = 0,
-                    count = 1
+                    count = 8
                 )
             }
 
