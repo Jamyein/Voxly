@@ -11,7 +11,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -280,7 +279,9 @@ internal fun AudioFileListWithIndexer(
         }.distinctBy { it.first }.toMap()
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val availableHeight = maxHeight - 160.dp
+
         AudioFileList(
             files = files,
             listState = listState,
@@ -297,9 +298,6 @@ internal fun AudioFileListWithIndexer(
         )
 
         if (showIndexer) {
-            val configuration = LocalConfiguration.current
-            val availableHeight = configuration.screenHeightDp.dp - 160.dp
-
             AlphabetIndexer(
                 groupedFiles = letterToIndex.mapValues { listOf() },
                 onLetterSelected = { letter ->
