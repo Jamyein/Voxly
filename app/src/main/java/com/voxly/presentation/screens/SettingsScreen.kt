@@ -84,13 +84,10 @@ import com.voxly.R
 import com.voxly.core.util.LogManager
 import com.voxly.presentation.components.ConnectedButtonGroupRow
 import com.voxly.presentation.components.ConnectedButtonGroupRowCompact
-import com.voxly.presentation.components.ConnectedButtonGroupVerticalRow
 import com.voxly.presentation.components.ConnectedIconOnlyButtonGroupRow
 import com.voxly.presentation.components.SegmentedOption
 import com.voxly.presentation.components.SegmentedClickableRow
 import com.voxly.presentation.components.SegmentedInfoRow
-import com.voxly.presentation.components.SegmentedButton
-import com.voxly.presentation.components.SegmentedButtonRow
 import com.voxly.presentation.components.SegmentedSwitchRow
 import com.voxly.presentation.components.SettingsSection
 import com.voxly.presentation.viewmodel.SettingsViewModel
@@ -112,6 +109,11 @@ data class AppleCountryOption(
     @StringRes val labelResId: Int
 )
 
+// ============ Layout Constants ============
+private val HorizontalPadding = 16.dp
+private val SectionSpacing = 16.dp
+
+// ============ Data Classes ============
 data class SearchLimitOption(
     val value: Int,
     @StringRes val labelResId: Int? = null
@@ -940,6 +942,7 @@ fun SettingsScreen(
     var showCoverSourceDialog by remember { mutableStateOf(false) }
     var showSearchLimitsDialog by remember { mutableStateOf(false) }
     var showSeparatorDialog by remember { mutableStateOf(false) }
+    var showLoudnessDialog by remember { mutableStateOf(false) }
 
     val searchLimitOptions = remember {
         listOf(
@@ -989,7 +992,7 @@ fun SettingsScreen(
                     top = innerPadding.calculateTopPadding(),
                     bottom = outerPadding.calculateBottomPadding()
                 )
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = HorizontalPadding)
                 .verticalScroll(rememberScrollState())
         ) {
             // Basic Settings Section (Appearance + Language)
@@ -1062,7 +1065,7 @@ fun SettingsScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(SectionSpacing))
 
             // Artist Separator variables (declared outside to be accessible by dialog)
             var separatorText by remember { mutableStateOf(viewModel.artistSeparators.value) }
@@ -1087,7 +1090,7 @@ fun SettingsScreen(
                     checked = viewModel.artistSeparatorEnabled.value,
                     onCheckedChange = { viewModel.setArtistSeparatorEnabled(it) },
                     index = 1,
-                    count = if (viewModel.artistSeparatorEnabled.value) 6 else 5
+                    count = 6  // Always use max count for consistent visual grouping
                 )
 
                 // Last item - only show if enabled
@@ -1140,14 +1143,65 @@ fun SettingsScreen(
                     SegmentedOption(value = -14f, label = "Loud\n-14 dB")
                 )
 
-                ConnectedButtonGroupVerticalRow(
+                SegmentedClickableRow(
                     title = stringResource(R.string.replay_gain_target_loudness),
                     subtitle = stringResource(R.string.replay_gain_default_loudness),
-                    options = replayGainOptions,
-                    selectedValue = replayGainTargetLoudness,
-                    onSelected = { viewModel.setReplayGainTargetLoudness(it) },
+                    trailingContent = {
+                        Text(
+                            text = replayGainOptions.find { it.value == replayGainTargetLoudness }?.label?.replace("\n", " ") ?: "",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    onClick = { showLoudnessDialog = true },
                     index = 5,
                     count = 6
+                )
+            }
+
+            // Loudness dialog
+            if (showLoudnessDialog) {
+                val replayGainDialogOptions = listOf(
+                    SegmentedOption(value = -23f, label = "EBU R128 -23 dB"),
+                    SegmentedOption(value = -18f, label = "Streaming -18 dB"),
+                    SegmentedOption(value = -16f, label = "CD -16 dB"),
+                    SegmentedOption(value = -14f, label = "Loud -14 dB")
+                )
+                AlertDialog(
+                    onDismissRequest = { showLoudnessDialog = false },
+                    shape = MaterialTheme.shapes.large,
+                    title = { Text(stringResource(R.string.replay_gain_target_loudness)) },
+                    text = {
+                        Column {
+                            replayGainDialogOptions.forEach { (value, _, label) ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            viewModel.setReplayGainTargetLoudness(value)
+                                            showLoudnessDialog = false
+                                        }
+                                        .padding(vertical = 12.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    RadioButton(
+                                        selected = value == replayGainTargetLoudness,
+                                        onClick = {
+                                            viewModel.setReplayGainTargetLoudness(value)
+                                            showLoudnessDialog = false
+                                        }
+                                    )
+                                    Spacer(Modifier.width(12.dp))
+                                    Text(label ?: "")
+                                }
+                            }
+                        }
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showLoudnessDialog = false }) {
+                            Text(stringResource(R.string.dialog_cancel))
+                        }
+                    }
                 )
             }
 
@@ -1182,7 +1236,7 @@ fun SettingsScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(SectionSpacing))
 
             // Online Services Section
             SettingsSection(title = stringResource(R.string.settings_section_online_metadata)) {
@@ -1221,7 +1275,7 @@ fun SettingsScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(SectionSpacing))
 
             // Logging Section
             SettingsSection(title = stringResource(R.string.settings_section_logging)) {
@@ -1306,7 +1360,7 @@ fun SettingsScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(SectionSpacing))
 
             // About Section
             SettingsSection(title = stringResource(R.string.settings_section_about)) {

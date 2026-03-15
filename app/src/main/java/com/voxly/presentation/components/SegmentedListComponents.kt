@@ -151,17 +151,18 @@ fun SegmentedSwitchRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
-    SegmentedListItem(
-        checked = false,
-        onCheckedChange = onCheckedChange,
-        shapes = ListItemDefaults.segmentedShapes(index, count),
-        leadingContent = { TitleSubtitleContent(title, subtitle) },
-        trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
-        modifier = modifier.fillMaxWidth(),
-        content = {}
-    )
-}
+) = SegmentedListItem(
+    checked = false,
+    onCheckedChange = onCheckedChange,
+    shapes = ListItemDefaults.segmentedShapes(index, count),
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ),
+    leadingContent = { TitleSubtitleContent(title, subtitle) },
+    trailingContent = { Switch(checked = checked, onCheckedChange = onCheckedChange) },
+    modifier = modifier.fillMaxWidth(),
+    content = {}
+)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -197,16 +198,17 @@ fun SegmentedInfoRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index, count),
-        leadingContent = { Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant) },
-        trailingContent = { Text(value) },
-        modifier = modifier.fillMaxWidth(),
-        content = {}
-    )
-}
+) = SegmentedListItem(
+    onClick = {},
+    shapes = ListItemDefaults.segmentedShapes(index, count),
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ),
+    leadingContent = { Text(title, color = MaterialTheme.colorScheme.onSurfaceVariant) },
+    trailingContent = { Text(value) },
+    modifier = modifier.fillMaxWidth(),
+    content = {}
+)
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -218,16 +220,17 @@ fun SegmentedClickableRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
-    SegmentedListItem(
-        onClick = onClick,
-        shapes = ListItemDefaults.segmentedShapes(index, count),
-        leadingContent = { TitleSubtitleContent(title, subtitle) },
-        trailingContent = trailingContent,
-        modifier = modifier.fillMaxWidth(),
-        content = {}
-    )
-}
+) = SegmentedListItem(
+    onClick = onClick,
+    shapes = ListItemDefaults.segmentedShapes(index, count),
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ),
+    leadingContent = { TitleSubtitleContent(title, subtitle) },
+    trailingContent = trailingContent,
+    modifier = modifier.fillMaxWidth(),
+    content = {}
+)
 
 /**
  * Segmented row with segmented button group for selecting one option.
@@ -272,43 +275,44 @@ private fun <T> SegmentedButtonImpl(
     modifier: Modifier,
     titleStyle: androidx.compose.ui.text.TextStyle?,
     iconContentDescription: ((SegmentedOption<T>) -> String)?
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index, count),
-        leadingContent = { TitleSubtitleContent(title, subtitle, titleStyle ?: MaterialTheme.typography.bodyLarge) },
-        trailingContent = {
-            // Using ButtonGroup with ToggleButton for M3E Connected style (replaces deprecated SegmentedButton)
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                ButtonGroup {
-                    options.forEachIndexed { btnIndex, option ->
-                        val isSelected = option.value == selectedValue
-                        val weight by animateFloatAsState(
-                            targetValue = if (isSelected) SelectedButtonWeight else UnselectedButtonWeight,
-                            animationSpec = weightAnimationSpec,
-                            label = "weight_anim"
-                        )
-                        val shapes = getConnectedButtonShapes(options, btnIndex)
-                        ToggleButton(
-                            checked = isSelected,
-                            onCheckedChange = { if (it) onSelected(option.value) },
-                            modifier = Modifier.weight(weight),
-                            shapes = shapes
-                        ) {
-                            option.icon?.let { icon ->
-                                Icon(icon, iconContentDescription?.invoke(option), Modifier.size(IconSizeMedium))
-                                Spacer(Modifier.width(IconTextSpacing))
-                            }
-                            Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
+) = SegmentedListItem(
+    onClick = {},
+    shapes = ListItemDefaults.segmentedShapes(index, count),
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ),
+    leadingContent = { TitleSubtitleContent(title, subtitle, titleStyle ?: MaterialTheme.typography.bodyLarge) },
+    trailingContent = {
+        // Using ButtonGroup with ToggleButton for M3E Connected style (replaces deprecated SegmentedButton)
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            ButtonGroup {
+                options.forEachIndexed { btnIndex, option ->
+                    val isSelected = option.value == selectedValue
+                    val weight by animateFloatAsState(
+                        targetValue = if (isSelected) SelectedButtonWeight else UnselectedButtonWeight,
+                        animationSpec = weightAnimationSpec,
+                        label = "weight_anim"
+                    )
+                    val shapes = getConnectedButtonShapes(options, btnIndex)
+                    ToggleButton(
+                        checked = isSelected,
+                        onCheckedChange = { if (it) onSelected(option.value) },
+                        modifier = Modifier.weight(weight),
+                        shapes = shapes
+                    ) {
+                        option.icon?.let { icon ->
+                            Icon(icon, iconContentDescription?.invoke(option), Modifier.size(IconSizeMedium))
+                            Spacer(Modifier.width(IconTextSpacing))
                         }
+                        Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
-        },
-        modifier = modifier.fillMaxWidth(),
-        content = {}
-    )
-}
+        }
+    },
+    modifier = modifier.fillMaxWidth(),
+    content = {}
+)
 
 
 /**
@@ -327,39 +331,40 @@ fun <T> ConnectedButtonGroupRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index, count),
-        leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
-        trailingContent = {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                ButtonGroup {
-                    options.forEachIndexed { btnIndex, option ->
-                        val isSelected = option.value == selectedValue
-                        val weight by animateFloatAsState(
-                            targetValue = if (isSelected) SelectedButtonWeight else UnselectedButtonWeight,
-                            animationSpec = weightAnimationSpec,
-                            label = "weight_anim"
-                        )
-                        val shapes = getConnectedButtonShapes(options, btnIndex)
-                        ToggleButton(
-                            checked = isSelected,
-                            onCheckedChange = { if (it) onSelected(option.value) },
-                            modifier = Modifier.weight(weight),
-                            shapes = shapes
-                        ) {
-                            option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeMedium)); Spacer(Modifier.width(IconTextSpacing)) }
-                            Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
-                        }
+) = SegmentedListItem(
+    onClick = {},
+    shapes = ListItemDefaults.segmentedShapes(index, count),
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ),
+    leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
+    trailingContent = {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            ButtonGroup {
+                options.forEachIndexed { btnIndex, option ->
+                    val isSelected = option.value == selectedValue
+                    val weight by animateFloatAsState(
+                        targetValue = if (isSelected) SelectedButtonWeight else UnselectedButtonWeight,
+                        animationSpec = weightAnimationSpec,
+                        label = "weight_anim"
+                    )
+                    val shapes = getConnectedButtonShapes(options, btnIndex)
+                    ToggleButton(
+                        checked = isSelected,
+                        onCheckedChange = { if (it) onSelected(option.value) },
+                        modifier = Modifier.weight(weight),
+                        shapes = shapes
+                    ) {
+                        option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeMedium)); Spacer(Modifier.width(IconTextSpacing)) }
+                        Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
                     }
                 }
             }
-        },
-        modifier = modifier.fillMaxWidth(),
-        content = {}
-    )
-}
+        }
+    },
+    modifier = modifier.fillMaxWidth(),
+    content = {}
+)
 
 /**
  * Segmented row with compact connected button group - no spacing between buttons.
@@ -375,34 +380,35 @@ fun <T> ConnectedButtonGroupRowCompact(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index, count),
-        leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
-        trailingContent = {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                // Compact mode: no spacing between buttons
-                ButtonGroup {
-                    options.forEachIndexed { btnIndex, option ->
-                        val isSelected = option.value == selectedValue
-                        val shapes = getConnectedButtonShapes(options, btnIndex)
-                        ToggleButton(
-                            checked = isSelected,
-                            onCheckedChange = { if (it) onSelected(option.value) },
-                            shapes = shapes
-                        ) {
-                            option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeSmall)) }
-                            option.label?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
-                        }
+) = SegmentedListItem(
+    onClick = {},
+    shapes = ListItemDefaults.segmentedShapes(index, count),
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ),
+    leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
+    trailingContent = {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            // Compact mode: no spacing between buttons
+            ButtonGroup {
+                options.forEachIndexed { btnIndex, option ->
+                    val isSelected = option.value == selectedValue
+                    val shapes = getConnectedButtonShapes(options, btnIndex)
+                    ToggleButton(
+                        checked = isSelected,
+                        onCheckedChange = { if (it) onSelected(option.value) },
+                        shapes = shapes
+                    ) {
+                        option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeSmall)) }
+                        option.label?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
                     }
                 }
             }
-        },
-        modifier = modifier.fillMaxWidth(),
-        content = {}
-    )
-}
+        }
+    },
+    modifier = modifier.fillMaxWidth(),
+    content = {}
+)
 
 /**
  * Segmented row with vertical layout - title on top, buttons below.
@@ -419,7 +425,12 @@ fun <T> ConnectedButtonGroupVerticalRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(modifier = modifier.fillMaxWidth(), shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.surfaceContainer) {
+) = Surface(
+    modifier = modifier.fillMaxWidth(),
+    shape = MaterialTheme.shapes.medium,
+    color = MaterialTheme.colorScheme.surfaceContainer,
+    onClick = {} // Required for Surface to have proper shape
+) {
     Column(modifier = Modifier.fillMaxWidth().padding(VerticalLayoutPadding), verticalArrangement = Arrangement.spacedBy(VerticalItemSpacing)) {
         TitleSubtitleContent(title, subtitle, MaterialTheme.typography.titleMedium)
         ButtonGroup(modifier = Modifier.fillMaxWidth()) {
@@ -460,47 +471,48 @@ fun <T> ConnectedIconOnlyButtonGroupRow(
     index: Int = 0,
     count: Int = 1,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
-    SegmentedListItem(
-        onClick = {},
-        shapes = ListItemDefaults.segmentedShapes(index, count),
-        leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
-        trailingContent = {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                ButtonGroup {
-                    options.forEachIndexed { btnIndex, option ->
-                        val tooltipState = rememberTooltipState()
-                        val isSelected = option.value == selectedValue
-                        val weight by animateFloatAsState(
-                            targetValue = if (isSelected) SelectedButtonWeight else UnselectedButtonWeight,
-                            animationSpec = weightAnimationSpec,
-                            label = "weight_anim"
-                        )
-                        val shapes = getConnectedButtonShapes(options, btnIndex)
-                        Box {
-                            TooltipBox(
-                                positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
-                                tooltip = { PlainTooltip { Text(option.label ?: "") } },
-                                state = tooltipState
+) = SegmentedListItem(
+    onClick = {},
+    shapes = ListItemDefaults.segmentedShapes(index, count),
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ),
+    leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
+    trailingContent = {
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            ButtonGroup {
+                options.forEachIndexed { btnIndex, option ->
+                    val tooltipState = rememberTooltipState()
+                    val isSelected = option.value == selectedValue
+                    val weight by animateFloatAsState(
+                        targetValue = if (isSelected) SelectedButtonWeight else UnselectedButtonWeight,
+                        animationSpec = weightAnimationSpec,
+                        label = "weight_anim"
+                    )
+                    val shapes = getConnectedButtonShapes(options, btnIndex)
+                    Box {
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
+                            tooltip = { PlainTooltip { Text(option.label ?: "") } },
+                            state = tooltipState
+                        ) {
+                            ToggleButton(
+                                checked = isSelected,
+                                onCheckedChange = { if (it) onSelected(option.value) },
+                                modifier = Modifier.weight(weight).height(ButtonHeight),
+                                shapes = shapes
                             ) {
-                                ToggleButton(
-                                    checked = isSelected,
-                                    onCheckedChange = { if (it) onSelected(option.value) },
-                                    modifier = Modifier.weight(weight).height(ButtonHeight),
-                                    shapes = shapes
-                                ) {
-                                    option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeCompact)) }
-                                }
+                                option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeCompact)) }
                             }
                         }
                     }
                 }
             }
-        },
-        modifier = modifier.fillMaxWidth(),
-        content = {}
-    )
-}
+        }
+    },
+    modifier = modifier.fillMaxWidth(),
+    content = {}
+)
 
 // ============ Standard List Components (non-segmented) ============
 
@@ -540,16 +552,16 @@ fun StandardClickableRow(
     trailingContent: @Composable (() -> Unit)? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
-    ListItem(
-        onClick = onClick,
-        colors = ListItemDefaults.colors(),
-        leadingContent = leadingContent ?: { TitleSubtitleContent(title, subtitle) },
-        trailingContent = trailingContent,
-        modifier = modifier.fillMaxWidth(),
-        content = {}
-    )
-}
+) = ListItem(
+    onClick = onClick,
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ),
+    leadingContent = leadingContent ?: { TitleSubtitleContent(title, subtitle) },
+    trailingContent = trailingContent,
+    modifier = modifier.fillMaxWidth(),
+    content = {}
+)
 
 /**
  * Standard clickable row with more (three dots) menu button.
@@ -563,16 +575,16 @@ fun StandardClickableRowWithMenu(
     menuContent: @Composable () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) = Surface(shape = MaterialTheme.shapes.large, color = MaterialTheme.colorScheme.surfaceContainer) {
-    ListItem(
-        onClick = onClick,
-        colors = ListItemDefaults.colors(),
-        leadingContent = leadingContent ?: { TitleSubtitleContent(title, subtitle) },
-        trailingContent = menuContent,
-        modifier = modifier.fillMaxWidth(),
-        content = {}
-    )
-}
+) = ListItem(
+    onClick = onClick,
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surfaceContainer
+    ),
+    leadingContent = leadingContent ?: { TitleSubtitleContent(title, subtitle) },
+    trailingContent = menuContent,
+    modifier = modifier.fillMaxWidth(),
+    content = {}
+)
 
 // ============ Audio File Standard Components ============
 
@@ -588,12 +600,24 @@ fun AudioFileStandardRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier
-) = Surface(
+) = ListItem(
     modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
-    shape = MaterialTheme.shapes.large,
-    color = MaterialTheme.colorScheme.surface
-) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = ListItemPaddingHorizontal, vertical = ListItemPaddingVertical), verticalAlignment = Alignment.CenterVertically) {
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surface
+    ),
+    headlineContent = {
+        Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    },
+    supportingContent = {
+        Column {
+            Text(
+                audioFile.getDisplayArtistAlbum(),
+                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
+            )
+            Text("${audioFile.format} • ${audioFile.getFormattedDuration()} • ${audioFile.getFormattedSize()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+        }
+    },
+    leadingContent = {
         AlbumArtImage(
             filePath = audioFile.path,
             mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
@@ -603,18 +627,11 @@ fun AudioFileStandardRow(
         ) {
             Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
         }
-        Spacer(Modifier.width(ContentSpacing))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(
-                audioFile.getDisplayArtistAlbum(),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-            Text("${audioFile.format} • ${audioFile.getFormattedDuration()} • ${audioFile.getFormattedSize()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-        }
+    },
+    trailingContent = {
         if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(IconPadding))
     }
-}
+)
 
 /**
  * Actions menu for audio file items (three dots menu).
@@ -672,28 +689,33 @@ fun AudioFileStandardRowWithMenu(
     onLongClick: () -> Unit = {},
     onAction: (AudioFileAction) -> Unit,
     modifier: Modifier = Modifier
-) = Surface(
+) = ListItem(
     modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
-    shape = MaterialTheme.shapes.large,
-    color = MaterialTheme.colorScheme.surface
-) {
-    Row(modifier = Modifier.fillMaxWidth().padding(horizontal = ListItemPaddingHorizontal, vertical = ListItemPaddingVertical), verticalAlignment = Alignment.CenterVertically) {
-        AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = AlbumArtSizeLarge, modifier = Modifier.clip(MaterialShapes.Cookie9Sided.toShape())) {
-            Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
-        }
-        Spacer(Modifier.width(ContentSpacing))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    colors = ListItemDefaults.colors(
+        containerColor = MaterialTheme.colorScheme.surface
+    ),
+    headlineContent = {
+        Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    },
+    supportingContent = {
+        Column {
             Text(
                 audioFile.getDisplayArtistAlbum(),
                 style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
             )
             Text("${audioFile.format} • ${audioFile.getFormattedDuration()} • ${audioFile.getFormattedSize()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
         }
+    },
+    leadingContent = {
+        AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = AlbumArtSizeLarge, modifier = Modifier.clip(MaterialShapes.Cookie9Sided.toShape())) {
+            Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
+        }
+    },
+    trailingContent = {
         if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(IconPadding))
         else AudioFileActionsMenu(onAction)
     }
-}
+)
 
 /**
  * Standard audio file list item (compact mode).
@@ -706,12 +728,18 @@ fun AudioFileStandardRowCompact(
     isSelected: Boolean = false,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
-) = Surface(
+) = ListItem(
     modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick),
-    shape = MaterialTheme.shapes.small,
-    color = if (isSelected) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface
-) {
-    Row(modifier = Modifier.fillMaxWidth().padding(CompactPadding), verticalAlignment = Alignment.CenterVertically) {
+    colors = ListItemDefaults.colors(
+        containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface
+    ),
+    headlineContent = {
+        Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    },
+    supportingContent = {
+        Text(audioFile.metadata.album ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    },
+    leadingContent = {
         Box(modifier = Modifier.size(AlbumArtSizeSmall).clip(MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
             AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = AlbumArtSizeSmall, modifier = Modifier.fillMaxSize()) {
                 Surface(modifier = Modifier.fillMaxSize(), shape = MaterialShapes.Cookie9Sided.toShape(), color = MaterialTheme.colorScheme.surfaceVariant) {
@@ -719,12 +747,11 @@ fun AudioFileStandardRowCompact(
                 }
             }
         }
-        Spacer(Modifier.width(CompactPadding))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(audioFile.metadata.album ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+    },
+    trailingContent = {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(audioFile.getFormattedDuration(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
+            if (isSelected) { Spacer(Modifier.width(CompactPadding)); Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(IconSizeSmall)) }
         }
-        Text(audioFile.getFormattedDuration(), style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-        if (isSelected) { Spacer(Modifier.width(CompactPadding)); Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(IconSizeSmall)) }
     }
-}
+)
