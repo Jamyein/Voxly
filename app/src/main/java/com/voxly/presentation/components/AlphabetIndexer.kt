@@ -12,7 +12,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,15 +76,24 @@ fun AlphabetIndexer(
     var isTouching by remember { mutableStateOf(false) }
 
     // Fixed dimensions for the sidebar
-    val sidebarWidth = 20.dp
+    val sidebarWidth = 24.dp
 
-    // Static font sizes
-    val selectedFontSize = 11.sp
-    val unselectedFontSize = 8.sp
+    // Font size - use Material 3 labelSmall for readability
+    val letterFontSize = 10.sp
+
+    // 计算所有字母需要的最小高度（28个字母 × 紧凑行高）
+    val minLetterHeight = letterFontSize.value * 0.8f
+    val minRequiredHeight = minLetterHeight * displayLetters.size
+
+    // 实际可用高度（确保最小高度能容纳所有字母）
+    val actualAvailableHeight = availableHeight.coerceAtLeast(minRequiredHeight.dp)
+
+    // 动态计算每个字母的高度，确保全部显示
+    val adjustedLetterHeight = (actualAvailableHeight.value / displayLetters.size).dp
 
     Box(
         modifier = modifier
-            .size(width = sidebarWidth, height = availableHeight)
+            .size(width = sidebarWidth, height = actualAvailableHeight)
             .padding(start = 2.dp)
             .pointerInput(displayLetters) {
                 awaitEachGesture {
@@ -125,7 +134,7 @@ fun AlphabetIndexer(
             }
     ) {
         Column(
-            modifier = Modifier.fillMaxHeight(),
+            modifier = Modifier.height(actualAvailableHeight),
             verticalArrangement = Arrangement.SpaceEvenly,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -133,7 +142,7 @@ fun AlphabetIndexer(
                 val isAvailable = letter in availableLetters
                 val isSelected = selectedLetter == letter
 
-                val fontSize = if (isSelected) selectedFontSize else unselectedFontSize
+                val fontSize = if (isSelected) (letterFontSize.value + 2).sp else letterFontSize
                 val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
                 val color by animateColorAsState(
                     targetValue = when {
