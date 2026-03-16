@@ -12,10 +12,11 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -34,7 +35,6 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import android.view.HapticFeedbackConstants
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.voxly.domain.model.AudioFile
@@ -94,108 +94,112 @@ fun AlphabetIndexer(
     // 动态计算每个字母的高度，确保全部显示
     val adjustedLetterHeight = (actualAvailableHeight.value / displayLetters.size).dp
 
-    Box(
+    // Use Row to arrange preview bubble and sidebar (Lyrico pattern)
+    Row(
         modifier = modifier
-            .size(width = sidebarWidth, height = actualAvailableHeight)
-            .padding(start = 2.dp)
-            .pointerInput(displayLetters) {
-                awaitEachGesture {
-                    val down = awaitFirstDown()
-                    var isDragging = true
-
-                    while (isDragging) {
-                        val event = awaitPointerEvent()
-                        val y = event.changes.first().position.y
-
-                        // Calculate which letter index based on Y position
-                        val index = ((y / size.height) * displayLetters.size)
-                            .toInt()
-                            .coerceIn(0, displayLetters.lastIndex)
-
-                        val letter = displayLetters.getOrNull(index)
-
-                        // Update state and trigger callback
-                        if (letter != null && letter != selectedLetter) {
-                            touchOffsetY = y
-                            selectedLetter = letter
-                            isTouching = true
-
-                            // Haptic feedback on letter change (Lyrico pattern)
-                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
-
-                            // Only trigger callback if letter has files (or showAllLetters is false)
-                            if (!showAllLetters || letter in availableLetters) {
-                                onLetterSelected(letter)
-                            }
-                        }
-
-                        // Check if gesture ended
-                        if (!event.changes.any { it.pressed }) {
-                            isDragging = false
-                            isTouching = false
-                            selectedLetter = null
-                        }
-                    }
-                }
-            }
+            .height(actualAvailableHeight)
+            .padding(start = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.End
     ) {
-        Column(
-            modifier = Modifier.height(actualAvailableHeight),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            displayLetters.forEach { letter ->
-                val isAvailable = letter in availableLetters
-                val isSelected = selectedLetter == letter
-
-                val fontSize = if (isSelected) (letterFontSize.value + 2).sp else letterFontSize
-                val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
-                val color by animateColorAsState(
-                    targetValue = when {
-                        isSelected -> MaterialTheme.colorScheme.primary
-                        !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                    label = "letter_color"
+        // Preview tooltip (with animation - follows finger movement)
+        if (isTouching && selectedLetter != null) {
+            Box(
+                modifier = Modifier
+                    .padding(end = 8.dp)
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                val previewScale by animateDpAsState(
+                    targetValue = 20.dp,
+                    animationSpec = ExpressiveMotion.EmphasizedSpringDp,
+                    label = "preview_scale"
                 )
-
                 Text(
-                    text = letter.uppercase(),
-                    fontSize = fontSize,
-                    fontWeight = fontWeight,
-                    color = color,
-                    modifier = Modifier.padding(vertical = 1.dp)  // 1.dp spacing (Lyrico pattern)
+                    text = selectedLetter!!.uppercase(),
+                    fontSize = previewScale.value.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
                 )
             }
         }
-    }
 
-    // Preview tooltip (with animation - follows finger movement)
-    if (isTouching && selectedLetter != null) {
+        // Alphabet sidebar
         Box(
             modifier = Modifier
-                .offset {
-                    IntOffset(
-                        x = -56,
-                        y = (touchOffsetY - 24.dp.toPx()).roundToInt()
+                .width(sidebarWidth)
+                .pointerInput(displayLetters) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown()
+                        var isDragging = true
+
+                        while (isDragging) {
+                            val event = awaitPointerEvent()
+                            val y = event.changes.first().position.y
+
+                            // Calculate which letter index based on Y position
+                            val index = ((y / size.height) * displayLetters.size)
+                                .toInt()
+                                .coerceIn(0, displayLetters.lastIndex)
+
+                            val letter = displayLetters.getOrNull(index)
+
+                            // Update state and trigger callback
+                            if (letter != null && letter != selectedLetter) {
+                                touchOffsetY = y
+                                selectedLetter = letter
+                                isTouching = true
+
+                                // Haptic feedback on letter change (Lyrico pattern)
+                                view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+
+                                // Only trigger callback if letter has files (or showAllLetters is false)
+                                if (!showAllLetters || letter in availableLetters) {
+                                    onLetterSelected(letter)
+                                }
+                            }
+
+                            // Check if gesture ended
+                            if (!event.changes.any { it.pressed }) {
+                                isDragging = false
+                                isTouching = false
+                                selectedLetter = null
+                            }
+                        }
+                    }
+                }
+        ) {
+            Column(
+                modifier = Modifier.height(actualAvailableHeight),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                displayLetters.forEach { letter ->
+                    val isAvailable = letter in availableLetters
+                    val isSelected = selectedLetter == letter
+
+                    val fontSize = if (isSelected) (letterFontSize.value + 2).sp else letterFontSize
+                    val fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    val color by animateColorAsState(
+                        targetValue = when {
+                            isSelected -> MaterialTheme.colorScheme.primary
+                            !isAvailable -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.25f)
+                            else -> MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                        label = "letter_color"
+                    )
+
+                    Text(
+                        text = letter.uppercase(),
+                        fontSize = fontSize,
+                        fontWeight = fontWeight,
+                        color = color,
+                        modifier = Modifier.padding(vertical = 1.dp)  // 1.dp spacing (Lyrico pattern)
                     )
                 }
-                .size(40.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            val previewScale by animateDpAsState(
-                targetValue = 20.dp,
-                animationSpec = ExpressiveMotion.EmphasizedSpringDp,
-                label = "preview_scale"
-            )
-            Text(
-                text = selectedLetter!!.uppercase(),
-                fontSize = previewScale.value.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
-            )
+            }
         }
     }
 }
