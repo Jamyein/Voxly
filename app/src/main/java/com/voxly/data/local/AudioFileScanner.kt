@@ -335,23 +335,24 @@ class AudioFileScanner @Inject constructor(
         }
 
         // Fallback: if MediaStore has no data, use TagLib to read audio properties
+        // Read audioInfo once and reuse for all properties
         var sampleRate = 0
         var channels = 0
-        if (duration == 0L) {
-            val audioInfo = metadataProcessor.readAudioInfo(filePath)
-            duration = audioInfo?.durationMs ?: 0L
-            if (bitrate == 0) {
-                // TagLib returns bitrate in bps, convert to kbps
-                bitrate = (audioInfo?.bitrate ?: 0) / 1000
+        val audioInfo = if (duration == 0L) {
+            // Need to read from file to get duration
+            metadataProcessor.readAudioInfo(filePath).also { info ->
+                duration = info?.durationMs ?: 0L
+                if (bitrate == 0) {
+                    // TagLib returns bitrate in bps, convert to kbps
+                    bitrate = (info?.bitrate ?: 0) / 1000
+                }
             }
-            sampleRate = audioInfo?.sampleRate ?: 0
-            channels = audioInfo?.channels ?: 0
         } else {
-            // MediaStore doesn't provide sampleRate and channels, always need to read from file
-            val audioInfo = metadataProcessor.readAudioInfo(filePath)
-            sampleRate = audioInfo?.sampleRate ?: 0
-            channels = audioInfo?.channels ?: 0
+            // MediaStore provides duration, but we still need to read file for sampleRate and channels
+            metadataProcessor.readAudioInfo(filePath)
         }
+        sampleRate = audioInfo?.sampleRate ?: 0
+        channels = audioInfo?.channels ?: 0
 
         return AudioFile(
             id = filePath.hashCode().toString(),
