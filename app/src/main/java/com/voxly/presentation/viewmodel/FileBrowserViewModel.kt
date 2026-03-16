@@ -1218,17 +1218,9 @@ class FileBrowserViewModel @Inject constructor(
                 val albumBitrate = coverFile?.bitrate ?: 0
                 val albumSampleRate = coverFile?.sampleRate ?: 0
 
-                // Try MediaStore year first, then load from file tags if empty
-                var albumYear = coverFile?.metadata?.year
-                if (albumYear.isNullOrBlank() && coverFile != null) {
-                    // Load detailed metadata from file tags (synchronous for simplicity)
-                    val detailedMetadata = runCatching {
-                        kotlinx.coroutines.runBlocking {
-                            audioFileScanner.loadDetailedMetadata(coverFile.path)
-                        }
-                    }.getOrNull()
-                    albumYear = detailedMetadata?.year
-                }
+                // Pre-compute year from MediaStore metadata
+                // Note: If MediaStore year is empty, user can view album detail to see file tag year
+                val albumYear = coverFile?.metadata?.year
 
                 AlbumGroup(
                     name = albumName,
