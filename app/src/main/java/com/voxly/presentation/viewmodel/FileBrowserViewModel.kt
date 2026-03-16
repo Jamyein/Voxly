@@ -1215,10 +1215,21 @@ class FileBrowserViewModel @Inject constructor(
             .map { (albumName, files) ->
                 val coverFile = files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
                     ?: files.firstOrNull()
-                // Pre-compute year, bitrate, sampleRate at aggregation time to avoid R8 issues
-                val albumYear = coverFile?.metadata?.year
                 val albumBitrate = coverFile?.bitrate ?: 0
                 val albumSampleRate = coverFile?.sampleRate ?: 0
+
+                // Try MediaStore year first, then load from file tags if empty
+                var albumYear = coverFile?.metadata?.year
+                if (albumYear.isNullOrBlank() && coverFile != null) {
+                    // Load detailed metadata from file tags (synchronous for simplicity)
+                    val detailedMetadata = runCatching {
+                        kotlinx.coroutines.runBlocking {
+                            audioFileScanner.loadDetailedMetadata(coverFile.path)
+                        }
+                    }.getOrNull()
+                    albumYear = detailedMetadata?.year
+                }
+
                 AlbumGroup(
                     name = albumName,
                     artist = files.firstOrNull()?.metadata?.artist,

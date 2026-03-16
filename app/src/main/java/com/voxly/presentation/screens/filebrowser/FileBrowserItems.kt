@@ -141,13 +141,14 @@ internal fun AlbumGridItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
-    // 使用 AlbumGroup 中预计算的 year，完全避免 R8 问题
-    val albumYear = album.year
     // 使用 coverPath 或从 files 中获取
     val coverFile = remember(album.files) {
         album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
             ?: album.files.firstOrNull()
     }
+
+    // 使用 AlbumGroup 中预计算的 year
+    val albumYear = album.year
 
     Card(
         modifier = Modifier.fillMaxWidth(),
