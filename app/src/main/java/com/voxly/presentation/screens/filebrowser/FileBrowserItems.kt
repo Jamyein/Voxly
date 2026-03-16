@@ -141,15 +141,12 @@ internal fun AlbumGridItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
-    // 缓存封面文件，避免每次 recomposition 重新计算
+    // 使用 AlbumGroup 中预计算的 year，完全避免 R8 问题
+    val albumYear = album.year
+    // 使用 coverPath 或从 files 中获取
     val coverFile = remember(album.files) {
         album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
             ?: album.files.firstOrNull()
-    }
-
-    // 缓存年份，使用 R8 抗混淆方法
-    val albumYear = remember(album.files) {
-        coverFile?.metadata?.getReleaseYear()
     }
 
     Card(

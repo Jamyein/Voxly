@@ -229,12 +229,14 @@ data class DirectoryEntry(
 
 /**
  * Domain model representing a group of audio files by album.
+ * Year is pre-computed and stored to avoid R8 issues with nested metadata access.
  */
 data class AlbumGroup(
     val name: String,
     val artist: String?,
     val files: List<AudioFile>,
-    val coverPath: String? = null
+    val coverPath: String? = null,
+    val year: String? = null
 )
 
 /**

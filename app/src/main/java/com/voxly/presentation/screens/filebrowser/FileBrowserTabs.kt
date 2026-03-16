@@ -156,10 +156,8 @@ internal fun AlbumDetailContent(
         }
     }
 
-    // Get album year
-    val albumYear = remember(album.files) {
-        album.files.firstOrNull()?.metadata?.getReleaseYear()
-    }
+    // Get album year from pre-computed AlbumGroup field
+    val albumYear = album.year
 
     // Get album artist (prefer albumArtist field)
     val albumArtist = remember(album.files) {

@@ -1215,11 +1215,14 @@ class FileBrowserViewModel @Inject constructor(
             .map { (albumName, files) ->
                 val coverFile = files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
                     ?: files.firstOrNull()
+                // Pre-compute year at aggregation time to avoid R8 issues
+                val albumYear = coverFile?.metadata?.year
                 AlbumGroup(
                     name = albumName,
                     artist = files.firstOrNull()?.metadata?.artist,
                     files = files.sortedBy { it.metadata.trackNumber },
-                    coverPath = coverFile?.path
+                    coverPath = coverFile?.path,
+                    year = albumYear
                 )
             }
             .sortedBy { it.name.lowercase() }
