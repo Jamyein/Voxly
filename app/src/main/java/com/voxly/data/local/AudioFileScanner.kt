@@ -207,6 +207,10 @@ class AudioFileScanner @Inject constructor(
             }
         }
 
+        // Load album years from file tags for albums with empty MediaStore year
+        // This is done here instead of in ViewModel for instant album year display
+        loadAlbumYearsFromTags(audioFiles)
+
         // Cache the result
         val sortedFiles = audioFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
         directoryScanCache[normalizedDirectory] = sortedFiles
@@ -797,5 +801,49 @@ class AudioFileScanner @Inject constructor(
         }
 
         return true
+    }
+
+    /**
+     * Loads album years from file tags for albums where MediaStore year is empty.
+     * Uses readMetadata with includeAlbumArt=false for fast tag-only reading.
+     * This populates the year data during scan so it's instantly available when albums are displayed.
+     */
+    private suspend fun loadAlbumYearsFromTags(audioFiles: MutableList<AudioFile>) {
+        // Group files by album to find unique albums
+        val albumsWithEmptyYear = audioFiles
+            .filter { it.metadata.album?.isNotBlank() == true }
+            .groupBy { it.metadata.album to it.metadata.artist }
+            .filter { (_, files) ->
+                files.any { it.metadata.year.isNullOrBlank() }
+            }
+            .map { (_, files) -> files.first() }
+            .take(50) // Limit to first 50 albums to avoid long scan time
+
+        if (albumsWithEmptyYear.isEmpty()) return
+
+        // Load year for each album (parallel for speed)
+        coroutineScope {
+            albumsWithEmptyYear.map { file ->
+                async {
+                    try {
+                        val metadata = metadataProcessor.readMetadata(file.path, includeAlbumArt = false)
+                        metadata?.year
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+            }.awaitAll().forEachIndexed { index, year ->
+                if (!year.isNullOrBlank()) {
+                    val file = albumsWithEmptyYear[index]
+                    // Update the file's metadata with year from tags
+                    val updatedMetadata = file.metadata.copy(year = year)
+                    // Find and update the file in the list
+                    val fileIndex = audioFiles.indexOfFirst { it.path == file.path }
+                    if (fileIndex >= 0) {
+                        audioFiles[fileIndex] = file.copy(metadata = updatedMetadata)
+                    }
+                }
+            }
+        }
     }
 }

@@ -1,7 +1,9 @@
 package com.voxly.presentation.viewmodel
 
 import android.content.Context
+import android.icu.text.Transliterator
 import android.net.Uri
+import android.os.Build
 import android.os.Environment
 import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
@@ -64,6 +66,18 @@ class FileBrowserViewModel @Inject constructor(
 ) : ViewModel() {
     companion object {
         private const val TAG = "FileBrowserViewModel"
+
+        /** Transliterator for converting Chinese to pinyin */
+        private val pinyinTransliterator: Transliterator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            try {
+                Transliterator.getInstance("Han-Latin; Latin-Ascii")
+            } catch (e: Exception) { null }
+        } else { null }
+
+        /** Convert Chinese to pinyin for sorting */
+        private fun toSortablePinyin(input: String): String {
+            return pinyinTransliterator?.transliterate(input)?.lowercase() ?: input.lowercase()
+        }
     }
 
     private val _uiState = MutableStateFlow<FileBrowserUiState>(FileBrowserUiState.Loading)
@@ -1303,7 +1317,7 @@ class FileBrowserViewModel @Inject constructor(
                         sampleRate = albumSampleRate
                     )
                 }
-                .sortedBy { it.name.lowercase() }
+                .sortedWith(compareBy { toSortablePinyin(it.name.lowercase()) })
 
             _albums.value = albumsMap
 
@@ -1342,11 +1356,11 @@ class FileBrowserViewModel @Inject constructor(
                 ?: files.firstOrNull()
             ArtistGroup(
                 name = artistName,
-                albums = files.mapNotNull { it.metadata.album }.distinct().sorted(),
+                albums = files.mapNotNull { it.metadata.album }.distinct().sortedWith(compareBy { toSortablePinyin(it.lowercase()) }),
                 files = files.sortedBy { it.metadata.album },
                 coverPath = coverFile?.path
             )
-        }.sortedBy { it.name.lowercase() }
+        }.sortedWith(compareBy { toSortablePinyin(it.name.lowercase()) })
 
         _artists.value = artistsList
 

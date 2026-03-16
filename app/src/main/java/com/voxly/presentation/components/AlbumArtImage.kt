@@ -148,19 +148,19 @@ private fun produceAlbumArtBitmap(
         key2 = mediaStoreAlbumId
     ) {
         value = withContext(Dispatchers.IO) {
-            // First try: local file embedded album art
-            if (!filePath.isNullOrBlank()) {
-                val localArt = loadLocalAlbumArt(filePath)
-                if (localArt != null) {
-                    return@withContext localArt
-                }
-            }
-
-            // Second try: MediaStore album art
+            // First try: MediaStore album art (fast - already indexed)
             if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
                 val mediaStoreArt = loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
                 if (mediaStoreArt != null) {
                     return@withContext mediaStoreArt
+                }
+            }
+
+            // Second try: local file embedded album art (slower - reads file)
+            if (!filePath.isNullOrBlank()) {
+                val localArt = loadLocalAlbumArt(filePath)
+                if (localArt != null) {
+                    return@withContext localArt
                 }
             }
 
