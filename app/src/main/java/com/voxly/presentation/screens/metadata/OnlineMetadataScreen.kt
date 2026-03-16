@@ -311,7 +311,7 @@ private fun OnlineReleaseList(
             modifier = modifier.fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            items(releases) { release ->
+            items(releases, key = { it.id }) { release ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()

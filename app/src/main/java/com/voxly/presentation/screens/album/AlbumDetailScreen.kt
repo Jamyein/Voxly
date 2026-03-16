@@ -260,7 +260,10 @@ fun AlbumDetailScreen(
             val groupedFiles = sortedFiles.groupBy { it.metadata.discNumber ?: 1 }
             val sortedDiscNumbers = groupedFiles.keys.sorted()
 
-            items(sortedDiscNumbers.size) { discIndex ->
+            items(
+                count = sortedDiscNumbers.size,
+                key = { index -> sortedDiscNumbers[index] }
+            ) { discIndex ->
                 val discNumber = sortedDiscNumbers[discIndex]
                 val discFiles = groupedFiles[discNumber] ?: return@items
 

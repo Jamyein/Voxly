@@ -247,7 +247,7 @@ fun OnlineCoverSearchScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
-                    items(coverResults) { item ->
+                    items(coverResults, key = { it.id }) { item ->
                         CoverResultItem(
                             item = item,
                             isLoading = isSelectingCover,

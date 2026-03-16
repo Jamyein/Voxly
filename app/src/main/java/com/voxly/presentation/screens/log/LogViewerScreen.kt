@@ -280,7 +280,7 @@ private fun LogContent(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                items(filteredLogs) { line ->
+                items(filteredLogs, key = { it.hashCode() }) { line ->
                     LogLine(line = line)
                 }
             }
