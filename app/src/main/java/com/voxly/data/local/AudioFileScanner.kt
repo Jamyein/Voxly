@@ -25,6 +25,7 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import java.text.Collator
+import java.util.LinkedHashMap
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -48,11 +49,16 @@ class AudioFileScanner @Inject constructor(
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
 
-    // Simple memory cache for directory scans (respects forceRefresh)
-    private val directoryScanCache = mutableMapOf<String, List<AudioFile>>()
+    // LRU cache for directory scans (max 10 directories to prevent memory issues)
+    private val directoryScanCache = object : LinkedHashMap<String, List<AudioFile>>(10, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, List<AudioFile>>?): Boolean {
+            return size > MAX_DIRECTORY_CACHE_SIZE
+        }
+    }
 
     companion object {
         private const val TAG = "AudioFileScanner"
+        private const val MAX_DIRECTORY_CACHE_SIZE = 10
         private val AUDIO_URI = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI
         private val ALBUM_ART_URI = Uri.parse("content://media/external/audio/albumart")
 
