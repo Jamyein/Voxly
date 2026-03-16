@@ -6,6 +6,9 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanQuality
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import javax.inject.Inject
@@ -32,65 +35,39 @@ class BatchEditMetadataUseCase @Inject constructor(
         var successCount = 0
         var failureCount = 0
         val startedAt = SystemClock.elapsedRealtime()
+        val maxConcurrency = 4
         Logger.i(
             "Batch metadata edit started. files=$totalFiles fields=${fieldsToUpdate.joinToString(",")}",
             "BatchEdit"
         )
 
-        filePaths.forEachIndexed { index, filePath ->
-            emit(
-                BatchProgress(
-                    currentFile = index + 1,
-                    totalFiles = totalFiles,
-                    percentage = (index + 1).toFloat() / totalFiles,
-                    currentFilePath = filePath,
-                    status = BatchStatus.PROCESSING,
-                    successCount = successCount,
-                    failureCount = failureCount
-                )
-            )
-
-            try {
-                // Read existing metadata
-                val existingMetadataResult = audioRepository.readMetadata(filePath)
-
-                if (existingMetadataResult.isSuccess) {
-                    val existingMetadata = existingMetadataResult.getOrNull()!!
-
-                    // Merge metadata based on fields to update
-                    val updatedMetadata = mergeMetadata(
-                        existing = existingMetadata,
-                        new = metadata,
-                        fieldsToUpdate = fieldsToUpdate
-                    )
-
-                    // Update the file
-                    val updateResult = audioRepository.updateMetadata(filePath, updatedMetadata)
-
-                    if (updateResult.isSuccess) {
-                        successCount++
-                        Logger.v("Batch metadata edit success file=$filePath", "BatchEdit")
-                    } else {
-                        failureCount++
-                        Logger.w(
-                            "Batch metadata edit failed file=$filePath reason=${updateResult.exceptionOrNull()?.message ?: "unknown"}",
-                            "BatchEdit"
-                        )
+        // Process files in parallel chunks for better performance
+        filePaths.chunked(maxConcurrency).forEach { batch ->
+            coroutineScope {
+                val results = batch.map { filePath ->
+                    async {
+                        processFileMetadata(filePath, metadata, fieldsToUpdate)
                     }
-                } else {
-                    failureCount++
-                    Logger.w(
-                        "Batch metadata read failed file=$filePath reason=${existingMetadataResult.exceptionOrNull()?.message ?: "unknown"}",
-                        "BatchEdit"
+                }.awaitAll()
+
+                results.forEach { result ->
+                    when (result) {
+                        is FileProcessResult.Success -> successCount++
+                        is FileProcessResult.Failure -> failureCount++
+                    }
+
+                    emit(
+                        BatchProgress(
+                            currentFile = successCount + failureCount,
+                            totalFiles = totalFiles,
+                            percentage = (successCount + failureCount).toFloat() / totalFiles,
+                            currentFilePath = result.filePath,
+                            status = BatchStatus.PROCESSING,
+                            successCount = successCount,
+                            failureCount = failureCount
+                        )
                     )
                 }
-            } catch (e: Exception) {
-                failureCount++
-                Logger.e(
-                    "Batch metadata edit exception file=$filePath reason=${e.message ?: "unknown"}",
-                    e,
-                    "BatchEdit"
-                )
             }
         }
 
@@ -109,6 +86,52 @@ class BatchEditMetadataUseCase @Inject constructor(
             "Batch metadata edit finished. files=$totalFiles success=$successCount failed=$failureCount elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
             "BatchEdit"
         )
+    }
+
+    private sealed class FileProcessResult {
+        abstract val filePath: String
+        data class Success(override val filePath: String) : FileProcessResult()
+        data class Failure(override val filePath: String) : FileProcessResult()
+    }
+
+    private suspend fun processFileMetadata(
+        filePath: String,
+        metadata: AudioMetadata,
+        fieldsToUpdate: Set<MetadataField>
+    ): FileProcessResult {
+        return try {
+            val existingMetadataResult = audioRepository.readMetadata(filePath)
+
+            if (existingMetadataResult.isSuccess) {
+                val existingMetadata = existingMetadataResult.getOrNull()!!
+                val updatedMetadata = mergeMetadata(existingMetadata, metadata, fieldsToUpdate)
+                val updateResult = audioRepository.updateMetadata(filePath, updatedMetadata)
+
+                if (updateResult.isSuccess) {
+                    Logger.v("Batch metadata edit success file=$filePath", "BatchEdit")
+                    FileProcessResult.Success(filePath)
+                } else {
+                    Logger.w(
+                        "Batch metadata edit failed file=$filePath reason=${updateResult.exceptionOrNull()?.message ?: "unknown"}",
+                        "BatchEdit"
+                    )
+                    FileProcessResult.Failure(filePath)
+                }
+            } else {
+                Logger.w(
+                    "Batch metadata read failed file=$filePath reason=${existingMetadataResult.exceptionOrNull()?.message ?: "unknown"}",
+                    "BatchEdit"
+                )
+                FileProcessResult.Failure(filePath)
+            }
+        } catch (e: Exception) {
+            Logger.e(
+                "Batch metadata edit exception file=$filePath reason=${e.message ?: "unknown"}",
+                e,
+                "BatchEdit"
+            )
+            FileProcessResult.Failure(filePath)
+        }
     }
 
     /**
