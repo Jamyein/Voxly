@@ -37,10 +37,13 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AlbumGroup
+import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 @Composable
 internal fun BatchMenuItem(
@@ -147,7 +150,7 @@ internal fun AlbumGridItem(
             ?: album.files.firstOrNull()
     }
 
-    // 使用 AlbumGroup 中预计算的 year
+    // 使用 MediaStore 中的年份
     val albumYear = album.year
 
     Card(
