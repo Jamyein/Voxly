@@ -1,3 +1,7 @@
+# Git worktrees
+.worktrees/
+worktrees/
+
 # Gradle files
 .gradle/
 build/
