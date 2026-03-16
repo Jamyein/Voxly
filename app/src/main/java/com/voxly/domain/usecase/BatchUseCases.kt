@@ -186,6 +186,8 @@ class BatchReplayGainUseCase @Inject constructor(
 class BatchAlbumArtUseCase @Inject constructor(
     private val audioRepository: AudioRepository
 ) {
+    private val maxConcurrency = 4
+
     /**
      * Sets the same album art for multiple files.
      * @param filePaths List of file paths to update
@@ -202,29 +204,33 @@ class BatchAlbumArtUseCase @Inject constructor(
         val startedAt = SystemClock.elapsedRealtime()
         Logger.i("Batch album art set started. files=$totalFiles", "BatchAlbumArt")
 
-        filePaths.forEachIndexed { index, filePath ->
-            emit(
-                BatchProgress(
-                    currentFile = index + 1,
-                    totalFiles = totalFiles,
-                    percentage = (index + 1).toFloat() / totalFiles,
-                    currentFilePath = filePath,
-                    status = BatchStatus.PROCESSING,
-                    successCount = successCount,
-                    failureCount = failureCount
-                )
-            )
+        // Process files in parallel chunks
+        filePaths.chunked(maxConcurrency).forEach { batch ->
+            coroutineScope {
+                val results = batch.map { filePath ->
+                    async {
+                        processSetAlbumArt(filePath, albumArtBytes)
+                    }
+                }.awaitAll()
 
-            val result = audioRepository.setAlbumArt(filePath, albumArtBytes)
+                results.forEach { result ->
+                    when (result) {
+                        is AlbumArtResult.Success -> successCount++
+                        is AlbumArtResult.Failure -> failureCount++
+                    }
 
-            if (result.isSuccess) {
-                successCount++
-            } else {
-                failureCount++
-                Logger.w(
-                    "Batch album art set failed file=$filePath reason=${result.exceptionOrNull()?.message ?: "unknown"}",
-                    "BatchAlbumArt"
-                )
+                    emit(
+                        BatchProgress(
+                            currentFile = successCount + failureCount,
+                            totalFiles = totalFiles,
+                            percentage = (successCount + failureCount).toFloat() / totalFiles,
+                            currentFilePath = result.filePath,
+                            status = BatchStatus.PROCESSING,
+                            successCount = successCount,
+                            failureCount = failureCount
+                        )
+                    )
+                }
             }
         }
 
@@ -245,6 +251,33 @@ class BatchAlbumArtUseCase @Inject constructor(
         )
     }
 
+    private sealed class AlbumArtResult {
+        abstract val filePath: String
+        data class Success(override val filePath: String) : AlbumArtResult()
+        data class Failure(override val filePath: String) : AlbumArtResult()
+    }
+
+    private suspend fun processSetAlbumArt(filePath: String, albumArtBytes: ByteArray): AlbumArtResult {
+        return try {
+            val result = audioRepository.setAlbumArt(filePath, albumArtBytes)
+            if (result.isSuccess) {
+                AlbumArtResult.Success(filePath)
+            } else {
+                Logger.w(
+                    "Batch album art set failed file=$filePath reason=${result.exceptionOrNull()?.message ?: "unknown"}",
+                    "BatchAlbumArt"
+                )
+                AlbumArtResult.Failure(filePath)
+            }
+        } catch (e: Exception) {
+            Logger.w(
+                "Batch album art set failed file=$filePath reason=${e.message ?: "unknown"}",
+                "BatchAlbumArt"
+            )
+            AlbumArtResult.Failure(filePath)
+        }
+    }
+
     /**
      * Removes album art from multiple files.
      * @param filePaths List of file paths to update
@@ -257,29 +290,33 @@ class BatchAlbumArtUseCase @Inject constructor(
         val startedAt = SystemClock.elapsedRealtime()
         Logger.i("Batch album art remove started. files=$totalFiles", "BatchAlbumArt")
 
-        filePaths.forEachIndexed { index, filePath ->
-            emit(
-                BatchProgress(
-                    currentFile = index + 1,
-                    totalFiles = totalFiles,
-                    percentage = (index + 1).toFloat() / totalFiles,
-                    currentFilePath = filePath,
-                    status = BatchStatus.PROCESSING,
-                    successCount = successCount,
-                    failureCount = failureCount
-                )
-            )
+        // Process files in parallel chunks
+        filePaths.chunked(maxConcurrency).forEach { batch ->
+            coroutineScope {
+                val results = batch.map { filePath ->
+                    async {
+                        processRemoveAlbumArt(filePath)
+                    }
+                }.awaitAll()
 
-            val result = audioRepository.removeAlbumArt(filePath)
+                results.forEach { result ->
+                    when (result) {
+                        is AlbumArtResult.Success -> successCount++
+                        is AlbumArtResult.Failure -> failureCount++
+                    }
 
-            if (result.isSuccess) {
-                successCount++
-            } else {
-                failureCount++
-                Logger.w(
-                    "Batch album art remove failed file=$filePath reason=${result.exceptionOrNull()?.message ?: "unknown"}",
-                    "BatchAlbumArt"
-                )
+                    emit(
+                        BatchProgress(
+                            currentFile = successCount + failureCount,
+                            totalFiles = totalFiles,
+                            percentage = (successCount + failureCount).toFloat() / totalFiles,
+                            currentFilePath = result.filePath,
+                            status = BatchStatus.PROCESSING,
+                            successCount = successCount,
+                            failureCount = failureCount
+                        )
+                    )
+                }
             }
         }
 
@@ -298,6 +335,27 @@ class BatchAlbumArtUseCase @Inject constructor(
             "Batch album art remove finished. files=$totalFiles success=$successCount failed=$failureCount elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
             "BatchAlbumArt"
         )
+    }
+
+    private suspend fun processRemoveAlbumArt(filePath: String): AlbumArtResult {
+        return try {
+            val result = audioRepository.removeAlbumArt(filePath)
+            if (result.isSuccess) {
+                AlbumArtResult.Success(filePath)
+            } else {
+                Logger.w(
+                    "Batch album art remove failed file=$filePath reason=${result.exceptionOrNull()?.message ?: "unknown"}",
+                    "BatchAlbumArt"
+                )
+                AlbumArtResult.Failure(filePath)
+            }
+        } catch (e: Exception) {
+            Logger.w(
+                "Batch album art remove failed file=$filePath reason=${e.message ?: "unknown"}",
+                "BatchAlbumArt"
+            )
+            AlbumArtResult.Failure(filePath)
+        }
     }
 }
 
