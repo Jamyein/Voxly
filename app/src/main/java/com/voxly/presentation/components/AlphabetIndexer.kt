@@ -30,7 +30,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
+import android.view.HapticFeedbackConstants
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
@@ -71,6 +73,7 @@ fun AlphabetIndexer(
 
     if (displayLetters.isEmpty()) return
 
+    val view = LocalView.current
     var selectedLetter by remember { mutableStateOf<Char?>(null) }
     var touchOffsetY by remember { mutableFloatStateOf(0f) }
     var isTouching by remember { mutableStateOf(false) }
@@ -117,6 +120,9 @@ fun AlphabetIndexer(
                             selectedLetter = letter
                             isTouching = true
 
+                            // Haptic feedback on letter change (Lyrico pattern)
+                            view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+
                             // Only trigger callback if letter has files (or showAllLetters is false)
                             if (!showAllLetters || letter in availableLetters) {
                                 onLetterSelected(letter)
@@ -135,7 +141,7 @@ fun AlphabetIndexer(
     ) {
         Column(
             modifier = Modifier.height(actualAvailableHeight),
-            verticalArrangement = Arrangement.SpaceEvenly,
+            verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             displayLetters.forEach { letter ->
@@ -157,7 +163,8 @@ fun AlphabetIndexer(
                     text = letter.uppercase(),
                     fontSize = fontSize,
                     fontWeight = fontWeight,
-                    color = color
+                    color = color,
+                    modifier = Modifier.padding(vertical = 1.dp)  // 1.dp spacing (Lyrico pattern)
                 )
             }
         }
@@ -292,6 +299,49 @@ private fun fallbackPinyin(char: Char): Char {
     }
 
     return 'Z'
+}
+
+/**
+ * Sort order for alphabet indexer navigation.
+ */
+enum class SortOrder { ASC, DESC }
+
+/**
+ * Finds the target scroll index for a given letter, considering sort order.
+ * Follows Lyrico's findScrollIndex logic.
+ *
+ * @param letter The letter to find
+ * @param letterToIndex Map of letters to their scroll indices
+ * @param sortOrder The sort order (ASC or DESC)
+ * @return The target index to scroll to
+ */
+fun findTargetIndex(
+    letter: Char,
+    letterToIndex: Map<Char, Int>,
+    sortOrder: SortOrder
+): Int {
+    if (letterToIndex.isEmpty()) return 0
+
+    // Direct lookup
+    letterToIndex[letter]?.let { return it }
+
+    // If letter doesn't exist, find the nearest one based on sort order
+    val sortedLetters = letterToIndex.keys.sorted()
+
+    return when (sortOrder) {
+        SortOrder.ASC -> {
+            // Find first letter >= target letter
+            sortedLetters.firstOrNull { it >= letter }
+                ?.let { letterToIndex[it] }
+                ?: letterToIndex[sortedLetters.last()]
+        }
+        SortOrder.DESC -> {
+            // Find first letter <= target letter
+            sortedLetters.lastOrNull { it <= letter }
+                ?.let { letterToIndex[it] }
+                ?: letterToIndex[sortedLetters.first()]
+        }
+    } ?: 0
 }
 
 /**
