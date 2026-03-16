@@ -160,6 +160,32 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
+     * Reads only custom fields from audio file metadata.
+     * More efficient than readMetadata when only custom fields are needed.
+     * Note: Still reads all properties from TagLib but skips album art.
+     *
+     * @param filePath Path to the audio file
+     * @return Map of custom field key-value pairs, or empty map if none found
+     */
+    suspend fun readCustomFields(filePath: String): Map<String, String> = withContext(Dispatchers.IO) {
+        try {
+            val normalizedPath = PathUtils.normalizeFilePath(filePath)
+            val file = File(normalizedPath)
+
+            if (!file.exists()) {
+                return@withContext emptyMap()
+            }
+
+            // Read metadata without album art
+            val metadata = readMetadata(filePath, includeAlbumArt = false)
+            metadata?.customFields ?: emptyMap()
+        } catch (e: Exception) {
+            Timber.tag(TAG).e( "Failed to read custom fields: $filePath", e)
+            emptyMap()
+        }
+    }
+
+    /**
      * Attempts to resolve a file path by searching in likely locations.
      * This handles cases where MediaStore paths become stale.
      */

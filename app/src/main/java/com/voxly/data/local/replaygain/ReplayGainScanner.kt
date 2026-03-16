@@ -902,8 +902,9 @@ class ReplayGainScanner @Inject constructor(
                 val file = File(filePath)
                 if (!file.exists()) return@withContext null
 
-                val metadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
-                val customFields = metadata?.customFields ?: return@withContext null
+                // Use optimized method that only reads custom fields
+                val customFields = metadataProcessor.readCustomFields(filePath)
+                if (customFields.isEmpty()) return@withContext null
 
                 val trackGainStr = customFields["REPLAYGAIN_TRACK_GAIN"]
                 val trackPeakStr = customFields["REPLAYGAIN_TRACK_PEAK"]
