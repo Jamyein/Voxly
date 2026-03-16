@@ -166,19 +166,9 @@ internal fun AlbumDetailContent(
             ?: ""
     }
 
-    // Get first file for bitrate and sample rate (R8-resistant)
-    val firstFile = remember(album.files) {
-        album.files.firstOrNull()
-    }
-
-    // Cache bitrate and sample rate using R8-resistant methods
-    val bitrate = remember(album.files) {
-        firstFile?.getBitrateValue() ?: 0
-    }
-
-    val sampleRate = remember(album.files) {
-        firstFile?.getSampleRateValue() ?: 0
-    }
+    // Use pre-computed bitrate and sampleRate from AlbumGroup
+    val bitrate = album.bitrate
+    val sampleRate = album.sampleRate
 
     Column(modifier = Modifier.fillMaxSize()) {
         // TopAppBar with back button
