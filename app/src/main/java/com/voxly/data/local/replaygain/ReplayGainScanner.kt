@@ -14,6 +14,9 @@ import com.voxly.domain.repository.ScanQuality
 import com.voxly.domain.repository.ScanStatus
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
@@ -180,6 +183,135 @@ class ReplayGainScanner @Inject constructor(
             "ReplayGain scan finished. files=$totalFiles processed=$processedFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
             "ReplayGainScanner"
         )
+    }
+
+    /**
+     * Parallel version of scanReplayGain with configurable concurrency.
+     * Processes multiple files concurrently for better throughput on multi-core devices.
+     *
+     * @param filePaths List of file paths to scan
+     * @param scanQuality Quality level affecting sample rate
+     * @param targetLoudness Target loudness in LUFS
+     * @param maxConcurrency Maximum concurrent scans (default 2 to prevent device overload)
+     * @return Flow emitting scan progress
+     */
+    fun scanReplayGainParallel(
+        filePaths: List<String>,
+        scanQuality: ScanQuality,
+        targetLoudness: Float = -14f,
+        maxConcurrency: Int = 2
+    ): Flow<ScanProgress> = flow {
+        val totalFiles = filePaths.size
+        var processedFiles = 0
+        val scanStartedAt = SystemClock.elapsedRealtime()
+        Logger.i(
+            "Parallel ReplayGain scan started. files=$totalFiles quality=$scanQuality concurrency=$maxConcurrency",
+            "ReplayGainScanner"
+        )
+
+        if (!kotlin.coroutines.coroutineContext.isActive) {
+            emit(
+                ScanProgress(
+                    currentFile = 0,
+                    totalFiles = totalFiles,
+                    percentage = 0f,
+                    currentFilePath = "",
+                    status = ScanStatus.CANCELLED
+                )
+            )
+            return@flow
+        }
+
+        filePaths.chunked(maxConcurrency).forEach { batch ->
+            coroutineScope {
+                val deferredResults = batch.map { filePath ->
+                    async {
+                        scanSingleFileReplayGain(filePath, scanQuality, targetLoudness)
+                    }
+                }
+
+                val results = deferredResults.awaitAll()
+
+                results.forEach { result ->
+                    processedFiles++
+                    emit(
+                        ScanProgress(
+                            currentFile = processedFiles,
+                            totalFiles = totalFiles,
+                            percentage = processedFiles.toFloat() / totalFiles,
+                            currentFilePath = result.filePath,
+                            status = if (result.success) ScanStatus.COMPLETED else ScanStatus.FAILED
+                        )
+                    )
+                }
+            }
+
+            // Small delay between batches to prevent device overload
+            delay(50)
+        }
+
+        emit(
+            ScanProgress(
+                currentFile = totalFiles,
+                totalFiles = totalFiles,
+                percentage = 1f,
+                currentFilePath = "",
+                status = ScanStatus.COMPLETED
+            )
+        )
+
+        Logger.i(
+            "Parallel ReplayGain scan finished. files=$totalFiles processed=$processedFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
+            "ReplayGainScanner"
+        )
+    }
+
+    private data class SingleFileResult(
+        val filePath: String,
+        val success: Boolean
+    )
+
+    private suspend fun scanSingleFileReplayGain(
+        filePath: String,
+        scanQuality: ScanQuality,
+        targetLoudness: Float
+    ): SingleFileResult {
+        return try {
+            val fileStartedAt = SystemClock.elapsedRealtime()
+            Logger.v(
+                "Analyzing ReplayGain file=${File(filePath).name} path=$filePath",
+                "ReplayGainScanner"
+            )
+            val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness)
+            if (replayGainInfo != null) {
+                val saved = saveReplayGainToFile(filePath, replayGainInfo)
+                if (saved) {
+                    Logger.i(
+                        "ReplayGain success file=${File(filePath).name} gain=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}",
+                        "ReplayGainScanner"
+                    )
+                } else {
+                    Logger.w(
+                        "ReplayGain analysis done but save failed file=${File(filePath).name} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}",
+                        "ReplayGainScanner"
+                    )
+                }
+                SingleFileResult(filePath, saved)
+            } else {
+                Logger.w(
+                    "ReplayGain failed file=${File(filePath).name} reason=analyze_returned_null",
+                    "ReplayGainScanner"
+                )
+                SingleFileResult(filePath, false)
+            }
+        } catch (e: Exception) {
+            Logger.e(
+                "ReplayGain failed file=${File(filePath).name} reason=${e.message ?: "unknown"}",
+                e,
+                "ReplayGainScanner"
+            )
+            SingleFileResult(filePath, false)
+        }
     }
 
     /**
