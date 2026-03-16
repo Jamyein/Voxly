@@ -28,6 +28,7 @@ import com.voxly.domain.repository.OnlineReleaseDetails
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
 import kotlinx.coroutines.async
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -38,6 +39,7 @@ import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.util.concurrent.TimeoutException
 import java.net.UnknownHostException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -350,50 +352,44 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val neteaseResult = neteaseDeferred?.await()
         val qqMusicResult = qqMusicDeferred?.await()
 
-        // Merge results
+        // Merge results with HashSet for O(1) duplicate detection
         val mergedResults = mutableListOf<OnlineRelease>()
-        
+        val seenKeys = mutableSetOf<String>()
+
+        fun addIfNotDuplicate(release: OnlineRelease): Boolean {
+            val key = "${release.artist.lowercase().trim()}|${release.title.lowercase().trim()}"
+            if (seenKeys.add(key)) {
+                mergedResults.add(release)
+                return true
+            }
+            return false
+        }
+
         // Add MusicBrainz results first
         if (musicBrainzResult?.isSuccess == true) {
-            mergedResults.addAll(musicBrainzResult.getOrNull() ?: emptyList())
+            musicBrainzResult.getOrNull()?.forEach { release ->
+                addIfNotDuplicate(release)
+            }
         }
 
         // Add iTunes results
         if (iTunesResult?.isSuccess == true) {
-            val iTunesReleases = iTunesResult.getOrNull() ?: emptyList()
-            iTunesReleases.forEach { release ->
-                val isDuplicate = mergedResults.any { existing ->
-                    isSimilarRelease(existing, release)
-                }
-                if (!isDuplicate) {
-                    mergedResults.add(release)
-                }
+            iTunesResult.getOrNull()?.forEach { release ->
+                addIfNotDuplicate(release)
             }
         }
 
         // Add NetEase results (for Chinese music)
         if (neteaseResult?.isSuccess == true) {
-            val neteaseReleases = neteaseResult.getOrNull() ?: emptyList()
-            neteaseReleases.forEach { release ->
-                val isDuplicate = mergedResults.any { existing ->
-                    isSimilarRelease(existing, release)
-                }
-                if (!isDuplicate) {
-                    mergedResults.add(release)
-                }
+            neteaseResult.getOrNull()?.forEach { release ->
+                addIfNotDuplicate(release)
             }
         }
 
         // Add QQ Music results (for Chinese music)
         if (qqMusicResult?.isSuccess == true) {
-            val qqReleases = qqMusicResult.getOrNull() ?: emptyList()
-            qqReleases.forEach { release ->
-                val isDuplicate = mergedResults.any { existing ->
-                    isSimilarRelease(existing, release)
-                }
-                if (!isDuplicate) {
-                    mergedResults.add(release)
-                }
+            qqMusicResult.getOrNull()?.forEach { release ->
+                addIfNotDuplicate(release)
             }
         }
 
