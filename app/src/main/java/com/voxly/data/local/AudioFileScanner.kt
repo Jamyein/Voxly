@@ -177,6 +177,10 @@ class AudioFileScanner @Inject constructor(
                     // Apply minimum duration filter
                     val duration = it.getLong(durationColumn)
                     if (duration != 0L && (!minDurationFilterEnabled || duration >= minDurationFilterThresholdMs)) {
+                        // Read sampleRate and channels from file (MediaStore doesn't provide these)
+                        val audioInfo = metadataProcessor.readAudioInfo(filePath)
+                        val sampleRate = audioInfo?.sampleRate ?: 0
+                        val channels = audioInfo?.channels ?: 0
                         audioFiles.add(
                             AudioFile(
                                 id = it.getLong(idColumn).toString(),
@@ -186,8 +190,8 @@ class AudioFileScanner @Inject constructor(
                                 duration = it.getLong(durationColumn),
                                 format = extension.uppercase(),
                                 bitrate = it.getInt(bitrateColumn) / 1000,
-                                sampleRate = 0,
-                                channels = 0,
+                                sampleRate = sampleRate,
+                                channels = channels,
                                 mediaStoreAlbumId = albumId,
                                 metadata = metadata
                             )
