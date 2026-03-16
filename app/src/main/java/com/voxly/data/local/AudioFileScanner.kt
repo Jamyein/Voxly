@@ -14,6 +14,7 @@ import com.voxly.domain.model.parseMediaStoreTrackField
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -86,6 +87,18 @@ class AudioFileScanner @Inject constructor(
     }
 
     /**
+     * Bundle of scan settings to reduce multiple first() calls.
+     */
+    private data class SettingsBundle(
+        val minDurationFilterEnabled: Boolean,
+        val minDurationFilterThresholdMs: Long,
+        val whitelistEnabled: Boolean,
+        val blacklistEnabled: Boolean,
+        val selectedDirectoryUris: List<String>,
+        val blacklistDirectoryUris: List<String>
+    )
+
+    /**
      * Scans audio files within a specific directory.
      * @param directoryPath The directory path to scan
      * @param forceRefresh If true, bypass cache and re-scan from MediaStore
@@ -103,9 +116,15 @@ class AudioFileScanner @Inject constructor(
 
         val audioFiles = mutableListOf<AudioFile>()
 
-        // Get duration filter settings
-        val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled.first()
-        val minDurationFilterThresholdMs = settingsDataStore.minDurationFilterThresholdMs.first()
+        // Get duration filter settings using combine for efficiency
+        val scanSettings = combine(
+            settingsDataStore.minDurationFilterEnabled,
+            settingsDataStore.minDurationFilterThresholdMs
+        ) { minDurationEnabled, minDurationThreshold ->
+            Pair(minDurationEnabled, minDurationThreshold)
+        }.first()
+        val minDurationFilterEnabled = scanSettings.first
+        val minDurationFilterThresholdMs = scanSettings.second
 
 
         // Fast path: query MediaStore by directory prefix
@@ -413,10 +432,7 @@ class AudioFileScanner @Inject constructor(
             val cachedCount = libraryCache.getCachedFileCount()
             if (cachedCount > 0) {
                 Timber.d(TAG, "Using cache: $cachedCount files")
-                val cachedFiles = mutableListOf<AudioFile>()
-                libraryCache.getCachedAudioFiles().collect { cached ->
-                    cachedFiles.addAll(cached)
-                }
+                val cachedFiles = libraryCache.getCachedAudioFiles().first()
                 if (cachedFiles.isNotEmpty()) {
                     // Cache is already sorted by title in DAO query
                     emit(cachedFiles)
@@ -468,10 +484,9 @@ class AudioFileScanner @Inject constructor(
         Timber.i(TAG, "Incremental scan: ${pathsNeedingRescan.size} files need rescanning")
         
         // Get cached files that don't need rescan
-        val cachedFiles = mutableListOf<AudioFile>()
-        libraryCache.getCachedAudioFiles().collect { cached ->
-            cachedFiles.addAll(cached.filter { it.path !in pathsNeedingRescan })
-        }
+        val cachedFiles = libraryCache.getCachedAudioFiles()
+            .first()
+            .filter { it.path !in pathsNeedingRescan }
         
         // Rescan only changed files in parallel
         val updatedFiles = if (pathsNeedingRescan.isNotEmpty()) {
@@ -577,23 +592,40 @@ class AudioFileScanner @Inject constructor(
         onProgress: (current: Int, total: Int) -> Unit
     ) {
 
-        // Get duration filter settings
-        val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled.first()
-        val minDurationFilterThresholdMs = settingsDataStore.minDurationFilterThresholdMs.first()
+        // Get all settings using combine for efficiency
+        val allSettings = combine(
+            settingsDataStore.minDurationFilterEnabled,
+            settingsDataStore.minDurationFilterThresholdMs,
+            settingsDataStore.whitelistEnabled,
+            settingsDataStore.blacklistEnabled,
+            settingsDataStore.selectedDirectoryUris,
+            settingsDataStore.blacklistDirectoryUris
+        ) { values ->
+            SettingsBundle(
+                minDurationFilterEnabled = values[0] as Boolean,
+                minDurationFilterThresholdMs = values[1] as Long,
+                whitelistEnabled = values[2] as Boolean,
+                blacklistEnabled = values[3] as Boolean,
+                selectedDirectoryUris = values[4] as List<String>,
+                blacklistDirectoryUris = values[5] as List<String>
+            )
+        }.first()
 
-        // Get whitelist/blacklist filter settings
-        val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
-        val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
-        val whitelistDirs = if (whitelistEnabled) {
-            settingsDataStore.selectedDirectoryUris.first()
+        val whitelistDirs = if (allSettings.whitelistEnabled) {
+            allSettings.selectedDirectoryUris
                 .map { getPathFromUri(Uri.parse(it)) }
                 .filter { it.isNotBlank() }
         } else emptyList()
-        val blacklistDirs = if (blacklistEnabled) {
-            settingsDataStore.blacklistDirectoryUris.first()
+        val blacklistDirs = if (allSettings.blacklistEnabled) {
+            allSettings.blacklistDirectoryUris
                 .map { getPathFromUri(Uri.parse(it)) }
                 .filter { it.isNotBlank() }
         } else emptyList()
+
+        val minDurationFilterEnabled = allSettings.minDurationFilterEnabled
+        val minDurationFilterThresholdMs = allSettings.minDurationFilterThresholdMs
+        val whitelistEnabled = allSettings.whitelistEnabled
+        val blacklistEnabled = allSettings.blacklistEnabled
 
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
         
