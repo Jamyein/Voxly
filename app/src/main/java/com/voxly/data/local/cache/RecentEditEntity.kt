@@ -11,7 +11,8 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "recent_edits",
     indices = [
-        Index(value = ["timestamp"])
+        Index(value = ["timestamp"]),
+        Index(value = ["filePath"])
     ]
 )
 data class RecentEditEntity(

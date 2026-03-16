@@ -62,15 +62,17 @@ interface CachedAudioFileDao {
     
     /**
      * Searches audio files by title, artist, or album.
+     * Uses LIMIT to prevent full table scan on large databases.
      */
     @Query("""
-        SELECT * FROM cached_audio_files 
-        WHERE title LIKE '%' || :query || '%' 
+        SELECT * FROM cached_audio_files
+        WHERE title LIKE '%' || :query || '%'
            OR artist LIKE '%' || :query || '%'
            OR album LIKE '%' || :query || '%'
         ORDER BY COALESCE(title, name) ASC
+        LIMIT :limit
     """)
-    fun searchAudioFiles(query: String): Flow<List<CachedAudioFileEntity>>
+    fun searchAudioFiles(query: String, limit: Int = 50): Flow<List<CachedAudioFileEntity>>
     
     /**
      * Gets all distinct artists.
@@ -165,14 +167,10 @@ interface CachedAudioFileDao {
     suspend fun deleteByPath(path: String)
     
     /**
-     * Deletes multiple audio files by paths.
+     * Deletes multiple audio files by paths using a single query.
      */
-    @Transaction
-    suspend fun deleteByPaths(paths: List<String>) {
-        paths.forEach { path ->
-            deleteByPath(path)
-        }
-    }
+    @Query("DELETE FROM cached_audio_files WHERE path IN (:paths)")
+    suspend fun deleteByPaths(paths: List<String>)
     
     /**
      * Deletes audio files not in the provided list of paths.

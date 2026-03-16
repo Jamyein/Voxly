@@ -16,7 +16,8 @@ import androidx.room.PrimaryKey
 @Entity(
     tableName = "album_thumbnails",
     indices = [
-        Index(value = ["albumId"], unique = true)
+        Index(value = ["albumId"], unique = true),
+        Index(value = ["cachedAt"])
     ]
 )
 data class AlbumThumbnailEntity(
