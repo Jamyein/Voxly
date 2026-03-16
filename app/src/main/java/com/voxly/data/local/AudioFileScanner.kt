@@ -635,21 +635,8 @@ class AudioFileScanner @Inject constructor(
         val blacklistEnabled = allSettings.blacklistEnabled
 
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
-        
-        // First, get the count for progress reporting
-        val countCursor = contentResolver.query(
-            AUDIO_URI,
-            arrayOf(MediaStore.Audio.Media._ID),
-            selection,
-            null,
-            null
-        )
-        val totalCount = countCursor?.count ?: 0
-        countCursor?.close()
-        
-        Timber.d(TAG, "Starting full scan of $totalCount audio files")
 
-        // Now scan with actual data
+        // Query once for actual data - get count from cursor to avoid extra query
         val cursor: Cursor? = contentResolver.query(
             AUDIO_URI,
             FAST_PROJECTION,
@@ -657,6 +644,9 @@ class AudioFileScanner @Inject constructor(
             null,
             "${MediaStore.Audio.Media.TITLE} ASC"
         )
+
+        val totalCount = cursor?.count ?: 0
+        Timber.d(TAG, "Starting full scan of $totalCount audio files")
 
         cursor?.use {
             val idColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
