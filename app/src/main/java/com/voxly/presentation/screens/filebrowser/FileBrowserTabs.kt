@@ -41,11 +41,25 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
+import android.icu.text.Transliterator
+import android.os.Build
 import com.voxly.R
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.ui.loadLocalAlbumArt
+
+/** Transliterator for converting Chinese to pinyin */
+private val pinyinTransliterator: Transliterator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    try {
+        Transliterator.getInstance("Han-Latin; Latin-Ascii")
+    } catch (e: Exception) { null }
+} else { null }
+
+/** Convert Chinese to pinyin for sorting */
+private fun toSortablePinyin(input: String): String {
+    return pinyinTransliterator?.transliterate(input)?.lowercase() ?: input.lowercase()
+}
 
 @Composable
 internal fun AlbumTabContent(
@@ -340,7 +354,7 @@ internal fun ArtistDetailContent(
     val albumsWithFiles = remember(artist.files) {
         artist.files.groupBy { it.metadata.album ?: "" }
             .toList()
-            .sortedBy { it.first }
+            .sortedWith(compareBy { toSortablePinyin(it.first.lowercase()) })
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
