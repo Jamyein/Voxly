@@ -7,6 +7,7 @@ import android.provider.DocumentsContract
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import java.text.Normalizer
+import java.util.LinkedHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -17,6 +18,7 @@ import javax.inject.Singleton
  * 1. 缓存 treeUri 与物理路径的映射关系 (O(1) 查找)
  * 2. 缓存文件夹级别的 Document ID，避免重复逐级查找
  * 3. 批量处理同一文件夹下的文件时复用已解析的父目录 ID
+ * 4. 使用 LRU 缓存限制大小，防止内存溢出
  */
 @Singleton
 class SafPermissionCache @Inject constructor(
@@ -24,6 +26,7 @@ class SafPermissionCache @Inject constructor(
 ) {
     companion object {
         private const val TAG = "SafPermissionCache"
+        private const val MAX_FOLDER_CACHE_SIZE = 500
     }
 
     // TreeUri -> 物理路径映射
@@ -32,8 +35,12 @@ class SafPermissionCache @Inject constructor(
     // 物理路径 -> TreeUri 映射
     private val pathToTreeUriMap = mutableMapOf<String, Uri>()
 
-    // 文件夹 Document ID 缓存: (TreeUri, folderRelativePath) -> DocumentId
-    private val folderDocIdCache = mutableMapOf<Pair<Uri, String>, String>()
+    // 文件夹 Document ID 缓存 (LRU): (TreeUri, folderRelativePath) -> DocumentId
+    private val folderDocIdCache = object : LinkedHashMap<Pair<Uri, String>, String>(MAX_FOLDER_CACHE_SIZE, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<Pair<Uri, String>, String>?): Boolean {
+            return size > MAX_FOLDER_CACHE_SIZE
+        }
+    }
 
     // 根目录的 Document ID 缓存: TreeUri -> Root DocumentId
     private val rootDocIdCache = mutableMapOf<Uri, String>()
