@@ -62,6 +62,18 @@ data class AudioFile(
             else -> "$size B"
         }
     }
+
+    /**
+     * Returns the bitrate value.
+     * This method is R8-resistant as it doesn't rely on property name reflection.
+     */
+    fun getBitrateValue(): Int = bitrate
+
+    /**
+     * Returns the sample rate value.
+     * This method is R8-resistant as it doesn't rely on property name reflection.
+     */
+    fun getSampleRateValue(): Int = sampleRate
 }
 
 /**
@@ -115,6 +127,12 @@ data class AudioMetadata(
             else -> ""
         }
     }
+
+    /**
+     * Returns the release year of the audio.
+     * This method is R8-resistant as it doesn't rely on property name reflection.
+     */
+    fun getReleaseYear(): String? = year
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true

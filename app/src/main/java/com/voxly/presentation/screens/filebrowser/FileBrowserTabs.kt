@@ -158,7 +158,7 @@ internal fun AlbumDetailContent(
 
     // Get album year
     val albumYear = remember(album.files) {
-        album.files.firstOrNull()?.metadata?.year
+        album.files.firstOrNull()?.metadata?.getReleaseYear()
     }
 
     // Get album artist (prefer albumArtist field)
@@ -166,6 +166,20 @@ internal fun AlbumDetailContent(
         album.files.firstOrNull()?.metadata?.albumArtist
             ?: album.artist
             ?: ""
+    }
+
+    // Get first file for bitrate and sample rate (R8-resistant)
+    val firstFile = remember(album.files) {
+        album.files.firstOrNull()
+    }
+
+    // Cache bitrate and sample rate using R8-resistant methods
+    val bitrate = remember(album.files) {
+        firstFile?.getBitrateValue() ?: 0
+    }
+
+    val sampleRate = remember(album.files) {
+        firstFile?.getSampleRateValue() ?: 0
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
@@ -258,12 +272,14 @@ internal fun AlbumDetailContent(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Text(
-                                text = "${album.files.firstOrNull()?.bitrate ?: 0} kbps",
+                                text = if (bitrate > 0) "$bitrate kbps" else "N/A",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
                             )
                             Text(
-                                text = "${album.files.firstOrNull()?.sampleRate ?: 0} Hz",
+                                text = if (sampleRate > 0) {
+                                    String.format("%.1f kHz", sampleRate / 1000.0)
+                                } else "N/A",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.outline
                             )

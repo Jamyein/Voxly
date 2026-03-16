@@ -24,6 +24,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -140,6 +141,17 @@ internal fun AlbumGridItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
+    // 缓存封面文件，避免每次 recomposition 重新计算
+    val coverFile = remember(album.files) {
+        album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+            ?: album.files.firstOrNull()
+    }
+
+    // 缓存年份，使用 R8 抗混淆方法
+    val albumYear = remember(album.files) {
+        coverFile?.metadata?.getReleaseYear()
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -157,8 +169,6 @@ internal fun AlbumGridItem(
                     .clip(MaterialTheme.shapes.medium),
                 contentAlignment = Alignment.Center
             ) {
-                val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                    ?: album.files.firstOrNull()
                 AlbumArtImage(
                     filePath = coverFile?.path,
                     mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
@@ -204,8 +214,6 @@ internal fun AlbumGridItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Spacer(modifier = Modifier.height(2.dp))
-                // 直接取第一个文件的年份，与专辑详情保持一致，避免 R8 优化导致的行为差异
-                val albumYear = album.files.firstOrNull()?.metadata?.year
                 Text(
                     text = if (albumYear != null) {
                         "$albumYear • ${stringResource(R.string.track_count, album.files.size)}"
