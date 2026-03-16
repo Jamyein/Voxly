@@ -1181,6 +1181,52 @@ class FileBrowserViewModel @Inject constructor(
     }
 
     /**
+     * Loads album years in background using TagLib.
+     * MediaStore year field is often empty, so we load from file tags.
+     * Uses coroutines to avoid blocking the UI.
+     */
+    private fun loadAlbumYearsInBackground(albums: List<AlbumGroup>) {
+        viewModelScope.launch {
+            try {
+                coroutineScope {
+                    albums.map { album ->
+                        async(Dispatchers.IO) {
+                            // Only load year if MediaStore year is empty
+                            if (album.year.isNullOrBlank()) {
+                                val coverFile = album.files.firstOrNull()
+                                coverFile?.let { file ->
+                                    try {
+                                        val metadataResult = audioRepository.readMetadata(file.path)
+                                        metadataResult.getOrNull()?.year?.toString()
+                                    } catch (e: Exception) {
+                                        Timber.w(TAG, "Failed to load year for album: ${album.name}")
+                                        null
+                                    }
+                                }
+                            } else {
+                                null // Already has year from MediaStore
+                            }
+                        }.await()?.let { year ->
+                            // Update album with loaded year
+                            val updatedAlbum = album.copy(year = year)
+                            val currentAlbums = _albums.value.toMutableList()
+                            val index = currentAlbums.indexOfFirst { it.name == album.name && it.artist == album.artist }
+                            if (index >= 0) {
+                                currentAlbums[index] = updatedAlbum
+                                _albums.value = currentAlbums
+                            }
+                        }
+                    }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.w(TAG, "Failed to load album years", e)
+            }
+        }
+    }
+
+    /**
      * Split artist string by separators
      * @param artist The artist string to split
      * @param separators String containing separator characters (e.g., "&\")
@@ -1235,6 +1281,9 @@ class FileBrowserViewModel @Inject constructor(
             .sortedBy { it.name.lowercase() }
 
         _albums.value = albumsMap
+
+        // Load album years in background (MediaStore year is often empty, so load from file tags)
+        loadAlbumYearsInBackground(albumsMap)
 
         // Aggregate artists
         val isSeparatorEnabled = artistSeparatorEnabled.value
