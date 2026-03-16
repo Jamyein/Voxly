@@ -27,16 +27,16 @@ private val cacheLock = ReentrantLock()
 // Session-scoped LRU cache for cover art bytes (ByteArray)
 private val coverArtByteCache = LinkedHashMap<String, ByteArray>(16, 0.75f, true)
 private val byteCacheLock = ReentrantLock()
-private const val MAX_BYTE_CACHE_SIZE = 30
+private const val MAX_BYTE_CACHE_SIZE = 100
 
 // LRU cache for local album art (Bitmap)
-private val localAlbumArtCache = LinkedHashMap<String, Bitmap>(200, 0.75f, true)
+private val localAlbumArtCache = LinkedHashMap<String, Bitmap>(500, 0.75f, true)
 private val localCacheLock = ReentrantLock()
-private const val MAX_LOCAL_CACHE_SIZE = 200
+private const val MAX_LOCAL_CACHE_SIZE = 500
 
 // MediaStore album art cache (Bitmap)
-private val mediaStoreAlbumCache = LinkedHashMap<String, Bitmap>(50, 0.75f, true)
-private const val MAX_MEDIASTORE_CACHE_SIZE = 50
+private val mediaStoreAlbumCache = LinkedHashMap<String, Bitmap>(200, 0.75f, true)
+private const val MAX_MEDIASTORE_CACHE_SIZE = 200
 
 /**
  * Loads an image from URL and returns as ImageBitmap.
