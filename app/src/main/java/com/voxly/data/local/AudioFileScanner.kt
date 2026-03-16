@@ -227,8 +227,8 @@ class AudioFileScanner @Inject constructor(
         }
 
         // Load album years from file tags for albums with empty MediaStore year
-        // This is done here instead of in ViewModel for instant album year display
-        loadAlbumYearsFromTags(audioFiles)
+        // Skip for large libraries unless forceRefresh is true
+        loadAlbumYearsFromTags(audioFiles, forceLoad = forceRefresh)
 
         // Cache the result
         val sortedFiles = audioFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
@@ -840,8 +840,17 @@ class AudioFileScanner @Inject constructor(
      * Loads album years from file tags for albums where MediaStore year is empty.
      * Uses readMetadata with includeAlbumArt=false for fast tag-only reading.
      * This populates the year data during scan so it's instantly available when albums are displayed.
+     *
+     * @param audioFiles List of audio files to update
+     * @param forceLoad If true, always load album years. If false and files > 100, skip to improve performance
      */
-    private suspend fun loadAlbumYearsFromTags(audioFiles: MutableList<AudioFile>) {
+    private suspend fun loadAlbumYearsFromTags(audioFiles: MutableList<AudioFile>, forceLoad: Boolean = false) {
+        // Skip for large libraries unless forced (e.g., user manually refreshed)
+        if (!forceLoad && audioFiles.size > 100) {
+            Timber.d(TAG, "Skipping album year load for large library (${audioFiles.size} files)")
+            return
+        }
+
         // Group files by album to find unique albums
         val albumsWithEmptyYear = audioFiles
             .filter { it.metadata.album?.isNotBlank() == true }
@@ -850,7 +859,7 @@ class AudioFileScanner @Inject constructor(
                 files.any { it.metadata.year.isNullOrBlank() }
             }
             .map { (_, files) -> files.first() }
-            .take(50) // Limit to first 50 albums to avoid long scan time
+            .take(20) // Reduced from 50 to improve scan performance
 
         if (albumsWithEmptyYear.isEmpty()) return
 
