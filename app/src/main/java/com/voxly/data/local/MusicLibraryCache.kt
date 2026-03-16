@@ -45,6 +45,7 @@ class MusicLibraryCache @Inject constructor(
     private val database: MusicCacheDatabase by lazy { databaseProvider.getDatabase() }
     private val audioFileDao: CachedAudioFileDao by lazy { database.audioFileDao() }
     private val albumThumbnailDao: AlbumThumbnailDao by lazy { database.albumThumbnailDao() }
+    private val albumYearDao: AlbumYearDao by lazy { database.albumYearDao() }
     
     // ==================== Audio File Cache Operations ====================
     
@@ -281,5 +282,66 @@ class MusicLibraryCache @Inject constructor(
      */
     fun getAlbumArtUri(albumId: Long): Uri {
         return Uri.withAppendedPath(ALBUM_ART_URI, albumId.toString())
+    }
+
+    // ==================== Album Year Cache Operations ====================
+
+    /**
+     * Gets all cached album years as a map for instant access.
+     * Key: "${albumName}_${artist}", Value: year
+     */
+    suspend fun getAllAlbumYears(): Map<String, String> = withContext(Dispatchers.IO) {
+        try {
+            albumYearDao.getAllYears().associate { "${it.albumName}_${it.artist}" to it.year }
+        } catch (e: Exception) {
+            Timber.w(TAG, "Failed to get album years from cache", e)
+            emptyMap()
+        }
+    }
+
+    /**
+     * Saves or updates album year in cache.
+     */
+    suspend fun saveAlbumYear(albumName: String, artist: String?, year: String) = withContext(Dispatchers.IO) {
+        try {
+            albumYearDao.insertOrUpdate(
+                AlbumYearEntity(
+                    albumName = albumName,
+                    artist = artist,
+                    year = year
+                )
+            )
+        } catch (e: Exception) {
+            Timber.w(TAG, "Failed to save album year: $albumName", e)
+        }
+    }
+
+    /**
+     * Saves multiple album years at once (batch operation).
+     */
+    suspend fun saveAlbumYears(albumYears: List<Triple<String, String?, String>>) = withContext(Dispatchers.IO) {
+        try {
+            val entities = albumYears.map { (albumName, artist, year) ->
+                AlbumYearEntity(
+                    albumName = albumName,
+                    artist = artist,
+                    year = year
+                )
+            }
+            albumYearDao.insertOrUpdateAll(entities)
+        } catch (e: Exception) {
+            Timber.w(TAG, "Failed to save album years batch", e)
+        }
+    }
+
+    /**
+     * Clears all cached album years.
+     */
+    suspend fun clearAlbumYearCache() = withContext(Dispatchers.IO) {
+        try {
+            albumYearDao.clearAll()
+        } catch (e: Exception) {
+            Timber.w(TAG, "Failed to clear album year cache", e)
+        }
     }
 }

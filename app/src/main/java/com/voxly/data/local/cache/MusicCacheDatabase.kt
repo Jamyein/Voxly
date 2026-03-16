@@ -18,9 +18,10 @@ import javax.inject.Singleton
     entities = [
         CachedAudioFileEntity::class,
         AlbumThumbnailEntity::class,
-        RecentEditEntity::class
+        RecentEditEntity::class,
+        AlbumYearEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -28,6 +29,7 @@ abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun audioFileDao(): CachedAudioFileDao
     abstract fun albumThumbnailDao(): AlbumThumbnailDao
     abstract fun recentEditDao(): RecentEditDao
+    abstract fun albumYearDao(): AlbumYearDao
 
     companion object {
         const val DATABASE_NAME = "music_cache.db"

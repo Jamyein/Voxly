@@ -92,18 +92,24 @@ import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.FileBrowserUiState
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
+import android.icu.text.Transliterator
 import com.voxly.presentation.viewmodel.SelectedDirectory
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import java.text.Collator
-import java.util.Locale
 
-/** Collator for Chinese pinyin sorting */
-private val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply {
-    strength = Collator.PRIMARY
+/** Transliterator for converting Chinese to pinyin */
+private val pinyinTransliterator: Transliterator? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+    try {
+        Transliterator.getInstance("Han-Latin; Latin-Ascii")
+    } catch (e: Exception) { null }
+} else { null }
+
+/** Convert Chinese to pinyin for sorting */
+private fun toSortablePinyin(input: String): String {
+    return pinyinTransliterator?.transliterate(input)?.lowercase() ?: input.lowercase()
 }
 
 /**
@@ -762,8 +768,8 @@ private fun applySearchAndSort(
     }
 
     return when (sortOption) {
-        FileSortOption.NAME_ASC -> filtered.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
-        FileSortOption.NAME_DESC -> filtered.sortedWith(compareByDescending(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
+        FileSortOption.NAME_ASC -> filtered.sortedWith(compareBy { toSortablePinyin(it.metadata.getDisplayTitle(it.name).lowercase()) })
+        FileSortOption.NAME_DESC -> filtered.sortedWith(compareByDescending { toSortablePinyin(it.metadata.getDisplayTitle(it.name).lowercase()) })
         FileSortOption.SIZE_DESC -> filtered.sortedByDescending { it.size }
         FileSortOption.DURATION_DESC -> filtered.sortedByDescending { it.duration }
     }
@@ -774,8 +780,8 @@ private fun applySort(
     sortOption: FileSortOption
 ): List<AudioFile> {
     return when (sortOption) {
-        FileSortOption.NAME_ASC -> files.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
-        FileSortOption.NAME_DESC -> files.sortedWith(compareByDescending(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
+        FileSortOption.NAME_ASC -> files.sortedWith(compareBy { toSortablePinyin(it.metadata.getDisplayTitle(it.name).lowercase()) })
+        FileSortOption.NAME_DESC -> files.sortedWith(compareByDescending { toSortablePinyin(it.metadata.getDisplayTitle(it.name).lowercase()) })
         FileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
         FileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
     }

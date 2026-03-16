@@ -59,7 +59,8 @@ class FileBrowserViewModel @Inject constructor(
     private val unifiedScanManager: UnifiedScanManager,
     private val safWriteAccessService: SafWriteAccessService,
     private val albumCacheRepository: AlbumCacheRepository,
-    private val artistCacheRepository: ArtistCacheRepository
+    private val artistCacheRepository: ArtistCacheRepository,
+    private val musicLibraryCache: com.voxly.data.local.MusicLibraryCache
 ) : ViewModel() {
     companion object {
         private const val TAG = "FileBrowserViewModel"
@@ -1191,21 +1192,31 @@ class FileBrowserViewModel @Inject constructor(
                 coroutineScope {
                     albums.map { album ->
                         async(Dispatchers.IO) {
-                            // Only load year if MediaStore year is empty
-                            if (album.year.isNullOrBlank()) {
+                            val albumKey = "${album.name}_${album.artist}"
+
+                            val yearToSave: String? = if (album.year.isNullOrBlank()) {
+                                // Load from file tags
                                 val coverFile = album.files.firstOrNull()
                                 coverFile?.let { file ->
                                     try {
                                         val metadataResult = audioRepository.readMetadata(file.path)
-                                        metadataResult.getOrNull()?.year?.toString()
+                                        val year = metadataResult.getOrNull()?.year?.toString()
+                                        // Save to database cache for persistence
+                                        year?.let {
+                                            musicLibraryCache.saveAlbumYear(album.name, album.artist, it)
+                                        }
+                                        year
                                     } catch (e: Exception) {
                                         Timber.w(TAG, "Failed to load year for album: ${album.name}")
                                         null
                                     }
                                 }
                             } else {
-                                null // Already has year from MediaStore
+                                // Save MediaStore year to database cache
+                                musicLibraryCache.saveAlbumYear(album.name, album.artist, album.year)
+                                null // No need to update UI
                             }
+                            yearToSave
                         }.await()?.let { year ->
                             // Update album with loaded year
                             val updatedAlbum = album.copy(year = year)
@@ -1249,43 +1260,60 @@ class FileBrowserViewModel @Inject constructor(
      * Aggregates audio files into albums and artists groups.
      */
     private fun aggregateData() {
-        val allFiles = _directoryFiles.value.values.flatten()
-
-        // Aggregate all audios
-        _allAudios.value = allFiles
-
-        // Aggregate albums
-        val albumsMap = allFiles
-            .filter { it.metadata.album?.isNotBlank() == true }
-            .groupBy { it.metadata.album!! }
-            .map { (albumName, files) ->
-                val coverFile = files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                    ?: files.firstOrNull()
-                val albumBitrate = coverFile?.bitrate ?: 0
-                val albumSampleRate = coverFile?.sampleRate ?: 0
-
-                // Pre-compute year from MediaStore metadata
-                // Note: If MediaStore year is empty, user can view album detail to see file tag year
-                val albumYear = coverFile?.metadata?.year
-
-                AlbumGroup(
-                    name = albumName,
-                    artist = files.firstOrNull()?.metadata?.artist,
-                    files = files.sortedBy { it.metadata.trackNumber },
-                    coverPath = coverFile?.path,
-                    year = albumYear,
-                    bitrate = albumBitrate,
-                    sampleRate = albumSampleRate
-                )
+        // Load album years from database cache synchronously for instant display
+        viewModelScope.launch {
+            val dbYearCache = try {
+                musicLibraryCache.getAllAlbumYears()
+            } catch (e: Exception) {
+                Timber.w(TAG, "Failed to load album year cache", e)
+                emptyMap()
             }
-            .sortedBy { it.name.lowercase() }
 
-        _albums.value = albumsMap
+            // Use database cache directly
 
-        // Load album years in background (MediaStore year is often empty, so load from file tags)
-        loadAlbumYearsInBackground(albumsMap)
+            val allFiles = _directoryFiles.value.values.flatten()
 
-        // Aggregate artists
+            // Aggregate all audios
+            _allAudios.value = allFiles
+
+            // Aggregate albums
+            val albumsMap = allFiles
+                .filter { it.metadata.album?.isNotBlank() == true }
+                .groupBy { it.metadata.album!! }
+                .map { (albumName, files) ->
+                    val coverFile = files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                        ?: files.firstOrNull()
+                    val albumBitrate = coverFile?.bitrate ?: 0
+                    val albumSampleRate = coverFile?.sampleRate ?: 0
+                    val artist = files.firstOrNull()?.metadata?.artist
+
+                    // Get year: cache > MediaStore
+                    val albumKey = "${albumName}_${artist}"
+                    val cachedYear = dbYearCache[albumKey]
+                    val mediaStoreYear = coverFile?.metadata?.year
+                    val albumYear = cachedYear ?: mediaStoreYear
+
+                    AlbumGroup(
+                        name = albumName,
+                        artist = artist,
+                        files = files.sortedBy { it.metadata.trackNumber },
+                        coverPath = coverFile?.path,
+                        year = albumYear,
+                        bitrate = albumBitrate,
+                        sampleRate = albumSampleRate
+                    )
+                }
+                .sortedBy { it.name.lowercase() }
+
+            _albums.value = albumsMap
+
+            // Load missing album years in background and save to database cache
+            // This populates database cache for future instant access
+            loadAlbumYearsInBackground(albumsMap)
+        } // End of viewModelScope.launch for albums
+
+        // Aggregate artists (synchronous, doesn't need year cache)
+        val allFiles = _directoryFiles.value.values.flatten()
         val isSeparatorEnabled = artistSeparatorEnabled.value
         val customSeparators = artistSeparators.value
 
