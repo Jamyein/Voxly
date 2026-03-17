@@ -2,6 +2,7 @@ package com.voxly.data.remote.wangy.crypto
 
 import android.util.Base64
 import com.google.gson.Gson
+import com.voxly.BuildConfig
 import java.security.KeyFactory
 import java.security.MessageDigest
 import java.security.spec.MGF1ParameterSpec
@@ -21,9 +22,9 @@ import kotlin.random.Random
  */
 object WangyCrypto {
 
-    // EAPI constants
-    private const val EAPI_KEY = "e82ckenh8dichen8"
-    private const val EAPI_AES_KEY = "e82ckenh8dichen8"
+    // EAPI constants - loaded from BuildConfig for security
+    private val EAPI_KEY = BuildConfig.WANGY_EAPI_KEY
+    private val EAPI_AES_KEY = BuildConfig.WANGY_EAPI_KEY
     private const val EAPI_DIGEST = "36cd479b6b5"
 
     // WeAPI constants
@@ -31,8 +32,8 @@ object WangyCrypto {
     private const val WEAPI_AES_IV = "0102030405060708"
     private const val WEAPI_RSA_PUBLIC_KEY = """MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7clFSs6sXqHauqKWqdtLkF2KexO40H1YTX8z2lSgBBOAxLsvaklV8k4cBFK9snQXE9/DDaFt6Rr7iVZMldczhC0JNgTz+SHXT6CBHuX3e9SdB1Ua44oncaTWz7OBGLbCiK45wIDAQAB"""
 
-    // LinuxAPI constants (simulates Linux client)
-    private const val LINUX_API_KEY = "rFgB&h#%2?^eDg:Q"
+    // LinuxAPI constants (simulates Linux client) - loaded from BuildConfig for security
+    private val LINUX_API_KEY = BuildConfig.WANGY_LINUX_API_KEY
 
     // Common constants
     private const val AES_BLOCK_SIZE = 16

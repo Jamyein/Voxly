@@ -1473,6 +1473,12 @@ class FileBrowserViewModel @Inject constructor(
     fun getScrollPosition(listKey: String): ScrollPosition {
         return scrollPositions[listKey] ?: ScrollPosition()
     }
+
+    override fun onCleared() {
+        super.onCleared()
+        scanJob?.cancel()
+        batchJob?.cancel()
+    }
 }
 
 data class SelectedDirectory(

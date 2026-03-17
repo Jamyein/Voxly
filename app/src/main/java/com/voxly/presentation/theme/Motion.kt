@@ -412,6 +412,8 @@ fun rememberPulseScale(
         initialValue = initialScale,
         targetValue = pulsedScale,
         animationSpec = infiniteRepeatable(
+            // Note: tween() is intentional for infiniteRepeatable animations.
+            // spring() would cause continuous oscillation between endpoints.
             animation = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
             repeatMode = RepeatMode.Reverse
         ),
@@ -427,6 +429,8 @@ fun rememberShimmerOffset(width: Float, durationMillis: Int = 1200): Offset {
             initialValue = -width,
             targetValue = width * 2,
             animationSpec = infiniteRepeatable(
+                // Note: tween() is intentional for linear continuous scrolling effect.
+                // spring() would cause bouncing motion which is not desired for shimmer.
                 animation = tween(durationMillis = durationMillis, easing = LinearEasing),
                 repeatMode = RepeatMode.Restart
             ),

@@ -11,6 +11,9 @@ object NetworkConstants {
     const val USER_AGENT_LINUX = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/60.0.3112.90 Safari/537.36"
     const val USER_AGENT_IPHONE = "Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1"
 
+    // MP3Tag Android app User-Agent (used for metadata API calls)
+    const val USER_AGENT_APP = "MP3TagAndroid/1.0"
+
     // Default User-Agent for API calls
     const val DEFAULT_USER_AGENT = USER_AGENT_ANDROID
 

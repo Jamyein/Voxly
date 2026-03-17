@@ -2,6 +2,7 @@ package com.voxly.data.remote.musicbrainz
 
 import com.voxly.data.helper.SearchQueryBuilder
 import com.voxly.data.mapper.OnlineRecordingMapper
+import com.voxly.data.remote.NetworkConstants
 import com.voxly.data.remote.musicbrainz.model.*
 import com.voxly.domain.repository.*
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -251,7 +252,7 @@ class MusicBrainzRepository @Inject constructor(
                 // Make HTTP request to fetch cover art
                 val url = java.net.URL(coverArtUrl)
                 val connection = url.openConnection()
-                connection.setRequestProperty("User-Agent", MusicBrainzApi.USER_AGENT)
+                connection.setRequestProperty("User-Agent", NetworkConstants.USER_AGENT_APP)
                 
                 val responseCode = (connection as java.net.HttpURLConnection).responseCode
                 

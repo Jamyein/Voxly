@@ -3,6 +3,7 @@ package com.voxly.data.remote.itunes
 import com.voxly.data.helper.SearchQueryBuilder
 import com.voxly.data.mapper.OnlineRecordingMapper
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.remote.NetworkConstants
 import com.voxly.domain.repository.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -231,7 +232,7 @@ class ITunesRepository @Inject constructor(
                 // Download the artwork
                 val url = URL(artworkUrl)
                 val connection = url.openConnection()
-                connection.setRequestProperty("User-Agent", "MP3TagAndroid/1.0")
+                connection.setRequestProperty("User-Agent", NetworkConstants.USER_AGENT_APP)
                 
                 val inputStream = connection.getInputStream()
                 val bytes = inputStream.readBytes()
