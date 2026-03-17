@@ -737,7 +737,28 @@ fun AudioFileStandardRowCompact(
         Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {
-        Text(audioFile.metadata.album ?: "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Column {
+            // 第一行：艺术家
+            audioFile.metadata.artist?.let { artist ->
+                Text(
+                    text = artist,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            // 第二行：专辑名
+            audioFile.metadata.album?.let { album ->
+                Text(
+                    text = album,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
     },
     leadingContent = {
         Box(modifier = Modifier.size(AlbumArtSizeSmall).clip(MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
