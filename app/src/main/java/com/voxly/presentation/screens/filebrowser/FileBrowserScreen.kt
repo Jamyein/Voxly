@@ -82,6 +82,7 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.RootTab
 import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.usecase.BatchStatus
+import com.voxly.core.util.SortUtil
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.icons.AppIcon
@@ -98,13 +99,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlin.math.abs
-import java.text.Collator
-import java.util.Locale
-
-/** Collator for Chinese pinyin sorting */
-private val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply {
-    strength = Collator.PRIMARY
-}
 
 /**
  * File browser screen for browsing and selecting audio files.
@@ -762,8 +756,8 @@ private fun applySearchAndSort(
     }
 
     return when (sortOption) {
-        FileSortOption.NAME_ASC -> filtered.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
-        FileSortOption.NAME_DESC -> filtered.sortedWith(compareByDescending(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
+        FileSortOption.NAME_ASC -> filtered.sortedWith(compareBy { SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name)) })
+        FileSortOption.NAME_DESC -> filtered.sortedWith(compareByDescending { SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name)) })
         FileSortOption.SIZE_DESC -> filtered.sortedByDescending { it.size }
         FileSortOption.DURATION_DESC -> filtered.sortedByDescending { it.duration }
     }
@@ -774,8 +768,8 @@ private fun applySort(
     sortOption: FileSortOption
 ): List<AudioFile> {
     return when (sortOption) {
-        FileSortOption.NAME_ASC -> files.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
-        FileSortOption.NAME_DESC -> files.sortedWith(compareByDescending(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
+        FileSortOption.NAME_ASC -> files.sortedWith(compareBy { SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name)) })
+        FileSortOption.NAME_DESC -> files.sortedWith(compareByDescending { SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name)) })
         FileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
         FileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
     }
