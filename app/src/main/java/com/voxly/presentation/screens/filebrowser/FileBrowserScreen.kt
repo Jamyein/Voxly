@@ -98,7 +98,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
-import com.voxly.util.SortUtil
 import kotlin.math.abs
 
 /**
