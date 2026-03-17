@@ -185,7 +185,7 @@ class AudioFileScanner @Inject constructor(
                                 size = it.getLong(sizeColumn),
                                 duration = it.getLong(durationColumn),
                                 format = extension.uppercase(),
-                                bitrate = it.getInt(bitrateColumn),
+                                bitrate = it.getInt(bitrateColumn) / 1000,
                                 sampleRate = 0,
                                 channels = 0,
                                 mediaStoreAlbumId = albumId,
@@ -676,7 +676,7 @@ class AudioFileScanner @Inject constructor(
                         size = it.getLong(sizeColumn),
                         duration = it.getLong(durationColumn),
                         format = extension.uppercase(),
-                        bitrate = it.getInt(bitrateColumn),
+                        bitrate = it.getInt(bitrateColumn) / 1000,
                         sampleRate = 0,  // Not in MediaStore, loaded on-demand
                         channels = 0,    // Not in MediaStore, loaded on-demand
                         mediaStoreAlbumId = albumId,
