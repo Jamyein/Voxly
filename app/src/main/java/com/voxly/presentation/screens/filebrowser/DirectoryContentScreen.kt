@@ -51,10 +51,9 @@ import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.viewmodel.FileBrowserViewModel
+import com.voxly.core.util.SortUtil
 import com.voxly.presentation.screens.filebrowser.FixMetadataOptions
 import com.voxly.presentation.screens.filebrowser.OnlineMetadataOptions
-import java.text.Collator
-import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -785,11 +784,6 @@ fun DirectoryEmptyContent(modifier: Modifier = Modifier) {
     }
 }
 
-// Chinese collator for proper sorting
-private val chineseCollator = Collator.getInstance(Locale.CHINA).apply {
-    strength = Collator.PRIMARY
-}
-
 // Sort options for directory content
 private enum class DirFileSortOption {
     NAME_ASC,
@@ -825,8 +819,8 @@ private fun applySort(
     sortOption: DirFileSortOption
 ): List<AudioFile> {
     return when (sortOption) {
-        DirFileSortOption.NAME_ASC -> files.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
-        DirFileSortOption.NAME_DESC -> files.sortedWith(compareByDescending(chineseCollator) { it.metadata.getDisplayTitle(it.name).lowercase() })
+        DirFileSortOption.NAME_ASC -> files.sortedWith(compareBy { SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name)) })
+        DirFileSortOption.NAME_DESC -> files.sortedWith(compareByDescending { SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name)) })
         DirFileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
         DirFileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
     }
