@@ -3,7 +3,9 @@ package com.voxly.presentation.screens.filebrowser
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -73,8 +75,10 @@ fun DirectoryOverviewContent(
     onOpenDirectory: (String, String, List<String>) -> Unit,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
+    listState: LazyListState? = null,
     bottomPadding: Dp = 0.dp
 ) {
+    val lazyListState = listState ?: rememberLazyListState()
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
@@ -88,6 +92,7 @@ fun DirectoryOverviewContent(
             )
 
             LazyColumn(
+                state = lazyListState,
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(
                     start = 12.dp,

@@ -156,6 +156,11 @@ fun FileBrowserScreen(
     var sortOption by rememberSaveable { mutableStateOf(FileSortOption.NAME_ASC.name) }
     var isSortExpanded by rememberSaveable { mutableStateOf(false) }
 
+    // Sort All Tab audios
+    val sortedAllAudios = remember(allAudios, sortOption) {
+        applySort(allAudios, FileSortOption.valueOf(sortOption))
+    }
+
     // Dialog states
     var renameTargetFile by remember { mutableStateOf<AudioFile?>(null) }
     var deleteTargetFile by remember { mutableStateOf<AudioFile?>(null) }
@@ -475,6 +480,12 @@ fun FileBrowserScreen(
             if (isDirectoryListLevel) {
                 // Root directory - show TabRow with tabs
                 Column(modifier = Modifier.weight(1f)) {
+                    // States for scroll-to-top functionality
+                    val directoriesListState = rememberLazyListState()
+                    val albumsScrollTrigger = remember { mutableIntStateOf(0) }
+                    val artistsListState = rememberLazyListState()
+                    val allAudiosListState = rememberLazyListState()
+
                     // Pager state for swipe gesture
                     val pagerState = rememberPagerState(
                         initialPage = selectedRootTab.ordinal,
@@ -495,22 +506,46 @@ fun FileBrowserScreen(
                     ) {
                         Tab(
                             selected = selectedRootTab == RootTab.DIRECTORIES,
-                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(0) } },
+                            onClick = {
+                                if (selectedRootTab == RootTab.DIRECTORIES) {
+                                    coroutineScope.launch { directoriesListState.animateScrollToItem(0) }
+                                } else {
+                                    coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                                }
+                            },
                             icon = { Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.tab_directories)) }
                         )
                         Tab(
                             selected = selectedRootTab == RootTab.ALBUMS,
-                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(1) } },
+                            onClick = {
+                                if (selectedRootTab == RootTab.ALBUMS) {
+                                    albumsScrollTrigger.intValue++
+                                } else {
+                                    coroutineScope.launch { pagerState.animateScrollToPage(1) }
+                                }
+                            },
                             icon = { Icon(Icons.Default.Album, contentDescription = stringResource(R.string.tab_albums)) }
                         )
                         Tab(
                             selected = selectedRootTab == RootTab.ARTISTS,
-                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(2) } },
+                            onClick = {
+                                if (selectedRootTab == RootTab.ARTISTS) {
+                                    coroutineScope.launch { artistsListState.animateScrollToItem(0) }
+                                } else {
+                                    coroutineScope.launch { pagerState.animateScrollToPage(2) }
+                                }
+                            },
                             icon = { Icon(Icons.Default.Person, contentDescription = stringResource(R.string.tab_artists)) }
                         )
                         Tab(
                             selected = selectedRootTab == RootTab.ALL,
-                            onClick = { coroutineScope.launch { pagerState.animateScrollToPage(3) } },
+                            onClick = {
+                                if (selectedRootTab == RootTab.ALL) {
+                                    coroutineScope.launch { allAudiosListState.animateScrollToItem(0) }
+                                } else {
+                                    coroutineScope.launch { pagerState.animateScrollToPage(3) }
+                                }
+                            },
                             icon = { Icon(Icons.Default.MusicNote, contentDescription = stringResource(R.string.tab_all)) }
                         )
                     }
@@ -529,6 +564,7 @@ fun FileBrowserScreen(
                                     onOpenDirectory = onNavigateToDirectory,
                                     isRefreshing = isRefreshing,
                                     onRefresh = onRefresh,
+                                    listState = directoriesListState,
                                     bottomPadding = outerPadding.calculateBottomPadding()
                                 )
                             }
@@ -540,7 +576,8 @@ fun FileBrowserScreen(
                                         onNavigateToAlbum(album.name, album.artist)
                                     },
                                     isRefreshing = isRefreshing,
-                                    onRefresh = onRefresh
+                                    onRefresh = onRefresh,
+                                    scrollToTopTrigger = albumsScrollTrigger.intValue
                                 )
                             }
                             RootTab.ARTISTS -> {
@@ -555,13 +592,14 @@ fun FileBrowserScreen(
                                         artists = artists,
                                         onArtistClick = { artist -> onNavigateToArtist(artist.name) },
                                         isRefreshing = isRefreshing,
-                                        onRefresh = onRefresh
+                                        onRefresh = onRefresh,
+                                        listState = artistsListState
                                     )
                                 }
                             }
                             RootTab.ALL -> {
                                 AllAudiosTabContent(
-                                    audios = allAudios,
+                                    audios = sortedAllAudios,
                                     selectedFiles = selectedFiles,
                                     onFileClick = { audioFile ->
                                         if (selectedFiles.isNotEmpty()) {
@@ -574,7 +612,8 @@ fun FileBrowserScreen(
                                         viewModel.toggleFileSelection(audioFile.path)
                                     },
                                     isRefreshing = isRefreshing,
-                                    onRefresh = onRefresh
+                                    onRefresh = onRefresh,
+                                    listState = allAudiosListState
                                 )
                             }
                         }
