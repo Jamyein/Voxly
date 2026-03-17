@@ -23,6 +23,7 @@ import com.voxly.domain.usecase.ScanResult
 import com.voxly.domain.usecase.ScanState
 import com.voxly.domain.usecase.ScanTarget
 import com.voxly.domain.usecase.UnifiedScanManager
+import com.voxly.core.util.SortUtil
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -1222,7 +1223,7 @@ class FileBrowserViewModel @Inject constructor(
                     coverPath = coverFile?.path
                 )
             }
-            .sortedBy { it.name.lowercase() }
+            .sortedBy { SortUtil.toSortablePinyin(it.name) }
 
         _albums.value = albumsMap
 
@@ -1259,7 +1260,7 @@ class FileBrowserViewModel @Inject constructor(
                 files = files.sortedBy { it.metadata.album },
                 coverPath = coverFile?.path
             )
-        }.sortedBy { it.name.lowercase() }
+        }.sortedBy { SortUtil.toSortablePinyin(it.name) }
 
         _artists.value = artistsList
 
