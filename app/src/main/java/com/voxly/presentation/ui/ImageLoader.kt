@@ -29,14 +29,18 @@ private val coverArtByteCache = LinkedHashMap<String, ByteArray>(16, 0.75f, true
 private val byteCacheLock = ReentrantLock()
 private const val MAX_BYTE_CACHE_SIZE = 100
 
-// LRU cache for local album art (Bitmap)
-private val localAlbumArtCache = LinkedHashMap<String, Bitmap>(500, 0.75f, true)
+// LRU cache for local album art (Bitmap) - reduced for lower memory usage
+private val localAlbumArtCache = LinkedHashMap<String, Bitmap>(200, 0.75f, true)
 private val localCacheLock = ReentrantLock()
-private const val MAX_LOCAL_CACHE_SIZE = 500
+private const val MAX_LOCAL_CACHE_SIZE = 200
 
-// MediaStore album art cache (Bitmap)
-private val mediaStoreAlbumCache = LinkedHashMap<String, Bitmap>(200, 0.75f, true)
-private const val MAX_MEDIASTORE_CACHE_SIZE = 200
+// MediaStore album art cache (Bitmap) - reduced for lower memory usage
+private val mediaStoreAlbumCache = LinkedHashMap<String, Bitmap>(100, 0.75f, true)
+private const val MAX_MEDIASTORE_CACHE_SIZE = 100
+
+// Folder cover art cache (Bitmap) - caches folder-level cover images - reduced for lower memory
+private val folderCoverCache = LinkedHashMap<String, Bitmap?>(50, 0.75f, true)
+private const val MAX_FOLDER_COVER_CACHE_SIZE = 50
 
 /**
  * Loads an image from URL and returns as ImageBitmap.
@@ -272,22 +276,45 @@ private fun loadEmbeddedAlbumArt(filePath: String): Bitmap? {
 
 /**
  * Loads folder cover art from the parent directory of the audio file.
+ * Uses folder-level caching to avoid repeated directory scans.
  */
 private fun loadFolderCoverArt(filePath: String): Bitmap? {
     val folder = File(filePath).parentFile ?: return null
+    val folderPath = folder.absolutePath
+
+    // Check cache first (folder-level caching)
+    folderCoverCache[folderPath]?.let { cached ->
+        return cached
+    }
+
     val coverFileNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
 
+    var result: Bitmap? = null
     for (fileName in coverFileNames) {
         val coverFile = File(folder, fileName)
         if (coverFile.exists()) {
-            return try {
+            result = try {
                 decodeSampledBitmapFromFile(coverFile.absolutePath, 300)
             } catch (e: Exception) {
                 null
             }
+            break // Found a cover, stop searching
         }
     }
-    return null
+
+    // Cache the result (including null for folders with no cover)
+    try {
+        while (folderCoverCache.size >= MAX_FOLDER_COVER_CACHE_SIZE) {
+            folderCoverCache.keys.firstOrNull()?.let { key ->
+                folderCoverCache.remove(key)
+            }
+        }
+        folderCoverCache[folderPath] = result
+    } catch (e: Exception) {
+        // Ignore cache errors
+    }
+
+    return result
 }
 
 /**

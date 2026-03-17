@@ -144,9 +144,10 @@ interface CachedAudioFileDao {
     /**
      * Inserts multiple audio files in chunks for very large libraries.
      * Prevents memory issues with 10,000+ files.
+     * Increased chunk size for better batch performance.
      */
     @Transaction
-    suspend fun insertAllChunked(audioFiles: List<CachedAudioFileEntity>, chunkSize: Int = 500) {
+    suspend fun insertAllChunked(audioFiles: List<CachedAudioFileEntity>, chunkSize: Int = 1000) {
         audioFiles.chunked(chunkSize).forEach { chunk ->
             insertAll(chunk)
         }
@@ -157,6 +158,13 @@ interface CachedAudioFileDao {
      */
     @Update
     suspend fun update(audioFile: CachedAudioFileEntity)
+
+    /**
+     * Updates audio properties (sampleRate, channels) for a file by path.
+     * Used for batch preloading after initial scan.
+     */
+    @Query("UPDATE cached_audio_files SET sampleRate = :sampleRate, channels = :channels WHERE path = :path")
+    suspend fun updateAudioProperties(path: String, sampleRate: Int, channels: Int)
     
     // ==================== Deletes ====================
     

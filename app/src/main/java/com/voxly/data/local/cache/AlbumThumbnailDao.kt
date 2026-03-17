@@ -65,9 +65,10 @@ interface AlbumThumbnailDao {
     
     /**
      * Inserts thumbnails in chunks for large batches.
+     * Increased chunk size for better batch performance.
      */
     @Transaction
-    suspend fun insertAllChunked(thumbnails: List<AlbumThumbnailEntity>, chunkSize: Int = 50) {
+    suspend fun insertAllChunked(thumbnails: List<AlbumThumbnailEntity>, chunkSize: Int = 100) {
         thumbnails.chunked(chunkSize).forEach { chunk ->
             insertAll(chunk)
         }

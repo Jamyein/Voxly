@@ -6,9 +6,13 @@ import android.graphics.BitmapFactory
 import android.net.Uri
 import com.google.gson.Gson
 import com.voxly.data.local.cache.*
+import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
@@ -32,12 +36,13 @@ import javax.inject.Singleton
 @Singleton
 class MusicLibraryCache @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val databaseProvider: MusicCacheDatabaseProvider
+    private val databaseProvider: MusicCacheDatabaseProvider,
+    private val metadataProcessor: TagLibMetadataProcessor
 ) {
     companion object {
         private const val TAG = "MusicLibraryCache"
-        private const val THUMBNAIL_SIZE = 256  // 256x256 pixels
-        private const val THUMBNAIL_QUALITY = 80  // JPEG quality
+        private const val THUMBNAIL_SIZE = 128  // 128x128 pixels - reduced for lower memory
+        private const val THUMBNAIL_QUALITY = 75  // JPEG quality - slightly reduced for smaller size
         private val ALBUM_ART_URI = Uri.parse("content://media/external/audio/albumart")
     }
     
@@ -342,6 +347,95 @@ class MusicLibraryCache @Inject constructor(
             albumYearDao.clearAll()
         } catch (e: Exception) {
             Timber.w(TAG, "Failed to clear album year cache", e)
+        }
+    }
+
+    // ==================== Batch Album Art Preload ====================
+
+    /**
+     * Preloads album art for all unique albums in the background.
+     * This should be called after a full scan completes for optimal performance.
+     * Only loads one track per album to minimize I/O.
+     *
+     * @param audioFiles List of scanned audio files
+     * @param maxConcurrency Maximum parallel loading (default: CPU cores, max 8)
+     */
+    suspend fun preloadAlbumArts(audioFiles: List<AudioFile>, maxConcurrency: Int = 8) = coroutineScope {
+        // Group by album to get unique albums
+        val uniqueAlbums = audioFiles
+            .filter { it.metadata.album?.isNotBlank() == true }
+            .groupBy { it.metadata.album to it.metadata.artist }
+            .values
+            .map { it.first() } // One track per album
+
+        Timber.d(TAG, "Preloading album art for ${uniqueAlbums.size} unique albums")
+
+        // Process in parallel batches
+        uniqueAlbums.chunked(maxConcurrency).forEach { batch ->
+            val deferred = batch.map { audioFile ->
+                async(Dispatchers.IO) {
+                    try {
+                        // Skip if already cached
+                        val albumId = audioFile.mediaStoreAlbumId
+                        if (albumId != null && albumId > 0 && hasAlbumThumbnail(albumId)) {
+                            return@async
+                        }
+
+                        // Extract album art from file
+                        val artBytes = metadataProcessor.extractAlbumArt(audioFile.path)
+                        if (artBytes != null && albumId != null && albumId > 0) {
+                            // Cache to Room database
+                            cacheAlbumThumbnailFromBytes(albumId, artBytes, sourceUri = audioFile.path)
+                            Timber.d(TAG, "Preloaded album art for: ${audioFile.metadata.album}")
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(TAG, "Failed to preload album art: ${audioFile.path}", e)
+                    }
+                }
+            }
+            deferred.awaitAll()
+        }
+    }
+
+    /**
+     * Preloads audio properties (sampleRate, channels) for files that don't have them cached.
+     * This runs in background after initial scan to avoid blocking the UI.
+     *
+     * @param audioFiles List of scanned audio files
+     * @param maxConcurrency Maximum parallel loading (default: 6)
+     */
+    suspend fun preloadAudioProperties(audioFiles: List<AudioFile>, maxConcurrency: Int = 6) = coroutineScope {
+        // Filter files that need properties loaded (sampleRate or channels is 0)
+        val filesNeedingProperties = audioFiles.filter { it.sampleRate == 0 || it.channels == 0 }
+
+        if (filesNeedingProperties.isEmpty()) {
+            Timber.d(TAG, "No files need audio properties preload")
+            return@coroutineScope
+        }
+
+        Timber.d(TAG, "Preloading audio properties for ${filesNeedingProperties.size} files")
+
+        // Process in parallel batches
+        filesNeedingProperties.chunked(maxConcurrency).forEach { batch ->
+            val deferred = batch.map { audioFile ->
+                async(Dispatchers.IO) {
+                    try {
+                        val audioInfo = metadataProcessor.readAudioInfo(audioFile.path)
+                        if (audioInfo != null) {
+                            // Update the cached entity with audio properties
+                            audioFileDao.updateAudioProperties(
+                                path = audioFile.path,
+                                sampleRate = audioInfo.sampleRate,
+                                channels = audioInfo.channels
+                            )
+                            Timber.d(TAG, "Preloaded audio props for: ${audioFile.name}")
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(TAG, "Failed to preload audio props: ${audioFile.path}", e)
+                    }
+                }
+            }
+            deferred.awaitAll()
         }
     }
 }

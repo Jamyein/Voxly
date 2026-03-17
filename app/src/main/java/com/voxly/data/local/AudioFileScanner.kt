@@ -461,10 +461,17 @@ class AudioFileScanner @Inject constructor(
         }
         
         Timber.d(TAG, "Full scan complete: ${allFiles.size} files found")
-        
+
         // Update cache with all scanned files
         libraryCache.updateCache(allFiles)
-        
+
+        // Preload album art in background for instant display
+        // Use smaller concurrency to not overload during initial scan
+        libraryCache.preloadAlbumArts(allFiles, maxConcurrency = 4)
+
+        // Preload audio properties (sampleRate, channels) in background
+        libraryCache.preloadAudioProperties(allFiles, maxConcurrency = 6)
+
         // MediaStore query already returns sorted data by title,
         // but we re-sort to ensure correct order after building the list
         allFiles.sortWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
@@ -516,10 +523,11 @@ class AudioFileScanner @Inject constructor(
     /**
      * Scan files in parallel for better performance.
      * Uses coroutines to read multiple metadata simultaneously.
+     * Uses available CPU cores for optimal parallelism on modern devices.
      */
     private suspend fun scanFilesInParallel(
         filePaths: List<String>,
-        maxConcurrency: Int = 4
+        maxConcurrency: Int = Runtime.getRuntime().availableProcessors().coerceIn(4, 12)
     ): List<AudioFile> = coroutineScope {
         val results = mutableListOf<AudioFile>()
         
@@ -636,7 +644,7 @@ class AudioFileScanner @Inject constructor(
 
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
 
-        // Query once for actual data - get count from cursor to avoid extra query
+        // Query once for actual data - use cursor.count for progress reporting
         val cursor: Cursor? = contentResolver.query(
             AUDIO_URI,
             FAST_PROJECTION,
@@ -645,6 +653,8 @@ class AudioFileScanner @Inject constructor(
             "${MediaStore.Audio.Media.TITLE} ASC"
         )
 
+        // Note: cursor.count is required for progress reporting (currentIndex/totalCount)
+        // This is a single query, not redundant - we need the total count upfront
         val totalCount = cursor?.count ?: 0
         Timber.d(TAG, "Starting full scan of $totalCount audio files")
 
@@ -662,12 +672,13 @@ class AudioFileScanner @Inject constructor(
             val bitrateColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
             val trackColumn = it.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
 
+            // Use totalCount from cursor.count - no need to increment in loop
             var currentIndex = 0
             while (it.moveToNext()) {
                 currentIndex++
                 
-                // Report progress periodically
-                if (currentIndex % 50 == 0 || currentIndex == totalCount) {
+                // Report progress periodically - more frequent for better responsiveness
+                if (currentIndex % 25 == 0 || currentIndex == totalCount) {
                     onProgress(currentIndex, totalCount)
                 }
 

@@ -37,8 +37,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 28
         targetSdk = 36
-        versionCode = 23
-        versionName = "1.1.3"
+        versionCode = 24
+        versionName = "1.1.4"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -47,6 +47,10 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
+
+        // WangY API keys (sensitive, moved to BuildConfig for security)
+        buildConfigField("String", "WANGY_EAPI_KEY", "\"e82ckenh8dichen8\"")
+        buildConfigField("String", "WANGY_LINUX_API_KEY", "\"rFgB&h#%2?^eDg:Q\"")
     }
 
     flavorDimensions += "channel"
