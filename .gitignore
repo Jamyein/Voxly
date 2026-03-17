@@ -83,3 +83,4 @@ local.properties
 /CLAUDE.md
 /docs
 *.html
+/.worktrees
