@@ -3,6 +3,8 @@ package com.voxly.domain.usecase
 import android.os.SystemClock
 import com.voxly.core.util.Logger
 import com.voxly.domain.model.AudioMetadata
+import com.voxly.domain.model.BatchResult
+import com.voxly.domain.model.BatchStatus
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanQuality
@@ -14,7 +16,8 @@ import javax.inject.Inject
  * Use case for batch editing metadata across multiple files.
  */
 class BatchEditMetadataUseCase @Inject constructor(
-    private val audioRepository: AudioRepository
+    private val audioRepository: AudioRepository,
+    private val batchEngine: BatchEngine<String>
 ) {
     /**
      * Applies the same metadata fields to multiple files.
@@ -28,29 +31,16 @@ class BatchEditMetadataUseCase @Inject constructor(
         metadata: AudioMetadata,
         fieldsToUpdate: Set<MetadataField> = MetadataField.ALL
     ): Flow<BatchProgress> = flow {
-        val totalFiles = filePaths.size
-        var successCount = 0
-        var failureCount = 0
         val startedAt = SystemClock.elapsedRealtime()
+        val totalFiles = filePaths.size
         Logger.i(
             "Batch metadata edit started. files=$totalFiles fields=${fieldsToUpdate.joinToString(",")}",
             "BatchEdit"
         )
 
-        filePaths.forEachIndexed { index, filePath ->
-            emit(
-                BatchProgress(
-                    currentFile = index + 1,
-                    totalFiles = totalFiles,
-                    percentage = (index + 1).toFloat() / totalFiles,
-                    currentFilePath = filePath,
-                    status = BatchStatus.PROCESSING,
-                    successCount = successCount,
-                    failureCount = failureCount
-                )
-            )
-
-            try {
+        batchEngine.execute(
+            items = filePaths,
+            operation = { filePath ->
                 // Read existing metadata
                 val existingMetadataResult = audioRepository.readMetadata(filePath)
 
@@ -68,45 +58,30 @@ class BatchEditMetadataUseCase @Inject constructor(
                     val updateResult = audioRepository.updateMetadata(filePath, updatedMetadata)
 
                     if (updateResult.isSuccess) {
-                        successCount++
                         Logger.v("Batch metadata edit success file=$filePath", "BatchEdit")
+                        Result.success(Unit)
                     } else {
-                        failureCount++
                         Logger.w(
                             "Batch metadata edit failed file=$filePath reason=${updateResult.exceptionOrNull()?.message ?: "unknown"}",
                             "BatchEdit"
                         )
+                        Result.failure(updateResult.exceptionOrNull() ?: Exception("Update failed"))
                     }
                 } else {
-                    failureCount++
                     Logger.w(
                         "Batch metadata read failed file=$filePath reason=${existingMetadataResult.exceptionOrNull()?.message ?: "unknown"}",
                         "BatchEdit"
                     )
+                    Result.failure(existingMetadataResult.exceptionOrNull() ?: Exception("Read failed"))
                 }
-            } catch (e: Exception) {
-                failureCount++
-                Logger.e(
-                    "Batch metadata edit exception file=$filePath reason=${e.message ?: "unknown"}",
-                    e,
-                    "BatchEdit"
-                )
-            }
+            },
+            itemName = { it }
+        ).collect { result ->
+            emit(result.toBatchProgress())
         }
 
-        emit(
-            BatchProgress(
-                currentFile = totalFiles,
-                totalFiles = totalFiles,
-                percentage = 1f,
-                currentFilePath = "",
-                status = BatchStatus.COMPLETED,
-                successCount = successCount,
-                failureCount = failureCount
-            )
-        )
         Logger.i(
-            "Batch metadata edit finished. files=$totalFiles success=$successCount failed=$failureCount elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+            "Batch metadata edit finished. files=$totalFiles success=${batchEngine.getFailedItems().let { totalFiles - it.size }} failed=${batchEngine.getFailedItems().size} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
             "BatchEdit"
         )
     }
@@ -129,6 +104,19 @@ class BatchEditMetadataUseCase @Inject constructor(
             composer = if (MetadataField.COMPOSER in fieldsToUpdate) new.composer ?: existing.composer else existing.composer,
             trackNumber = if (MetadataField.TRACK_NUMBER in fieldsToUpdate) new.trackNumber else existing.trackNumber,
             discNumber = if (MetadataField.DISC_NUMBER in fieldsToUpdate) new.discNumber else existing.discNumber
+        )
+    }
+
+    private fun BatchResult.toBatchProgress(): BatchProgress {
+        val currentFile = successCount + failedCount + if (status == BatchStatus.PROCESSING) 1 else 0
+        return BatchProgress(
+            currentFile = currentFile.coerceAtMost(totalFiles),
+            totalFiles = totalFiles,
+            percentage = if (totalFiles > 0) (successCount + failedCount).toFloat() / totalFiles else 0f,
+            currentFilePath = lastUpdatedFile,
+            status = status,
+            successCount = successCount,
+            failureCount = failedCount
         )
     }
 }
@@ -307,16 +295,7 @@ data class BatchProgress(
     val totalFiles: Int,
     val percentage: Float,
     val currentFilePath: String,
-    val status: BatchStatus,
+    val status: com.voxly.domain.model.BatchStatus,
     val successCount: Int = 0,
     val failureCount: Int = 0
 )
-
-/**
- * Enum representing batch operation status.
- */
-enum class BatchStatus {
-    PROCESSING,
-    COMPLETED,
-    CANCELLED
-}

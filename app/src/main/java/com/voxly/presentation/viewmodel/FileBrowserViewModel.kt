@@ -18,7 +18,7 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
 import com.voxly.domain.usecase.BatchProgress
-import com.voxly.domain.usecase.BatchStatus
+import com.voxly.domain.model.BatchStatus
 import com.voxly.domain.usecase.ScanResult
 import com.voxly.domain.usecase.ScanState
 import com.voxly.domain.usecase.ScanTarget

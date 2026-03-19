@@ -81,7 +81,7 @@ import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.RootTab
 import com.voxly.domain.usecase.BatchProgress
-import com.voxly.domain.usecase.BatchStatus
+import com.voxly.domain.model.BatchStatus
 import com.voxly.core.util.SortUtil
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.SearchBottomSheet

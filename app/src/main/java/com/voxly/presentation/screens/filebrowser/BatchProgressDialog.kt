@@ -15,7 +15,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.voxly.R
 import com.voxly.domain.usecase.BatchProgress
-import com.voxly.domain.usecase.BatchStatus
+import com.voxly.domain.model.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 

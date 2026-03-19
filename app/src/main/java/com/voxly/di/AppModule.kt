@@ -31,7 +31,9 @@ import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.usecase.BatchAlbumArtUseCase
 import com.voxly.domain.usecase.BatchEditMetadataUseCase
+import com.voxly.domain.usecase.BatchEngine
 import com.voxly.domain.usecase.BatchReplayGainUseCase
+import com.voxly.domain.usecase.MemoryPressureMonitor
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.domain.usecase.UnifiedScanManagerImpl
 import dagger.Binds
@@ -216,10 +218,19 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideBatchEngine(
+        memoryPressureMonitor: MemoryPressureMonitor
+    ): BatchEngine<String> {
+        return BatchEngine(memoryPressureMonitor = memoryPressureMonitor)
+    }
+
+    @Provides
+    @Singleton
     fun provideBatchEditMetadataUseCase(
-        audioRepository: AudioRepository
+        audioRepository: AudioRepository,
+        batchEngine: BatchEngine<String>
     ): BatchEditMetadataUseCase {
-        return BatchEditMetadataUseCase(audioRepository)
+        return BatchEditMetadataUseCase(audioRepository, batchEngine)
     }
 
     @Provides
