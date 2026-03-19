@@ -6,6 +6,8 @@ import com.voxly.core.util.FileLoggingTree
 import com.voxly.core.util.LogManager
 import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.presentation.ui.clearAllCaches
+import com.voxly.presentation.ui.trimToCoreCache
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -28,6 +30,31 @@ class MP3TagApplication : Application() {
         super.onCreate()
 
         initLogging()
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        when (level) {
+            TRIM_MEMORY_RUNNING_LOW,
+            TRIM_MEMORY_RUNNING_CRITICAL -> {
+                Timber.d(TAG, "Low memory, trimming to core cache")
+                trimToCoreCache()
+            }
+            TRIM_MEMORY_UI_HIDDEN -> {
+                // User switched to another app, release non-essential caches
+                Timber.d(TAG, "UI hidden, trimming to essential")
+                trimToCoreCache()
+            }
+            TRIM_MEMORY_COMPLETE,
+            TRIM_MEMORY_MODERATE -> {
+                Timber.d(TAG, "Memory pressure, clearing caches")
+                clearAllCaches()
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "MP3TagApplication"
     }
 
     private fun initLogging() {
