@@ -598,7 +598,17 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = "&\\"
+            initialValue = """["&","/","\\"]"""
+        )
+
+    /**
+     * Artist separators as Set<String> for UI layer (tag display)
+     */
+    val artistSeparatorsSet: StateFlow<Set<String>> = settingsDataStore.artistSeparatorsSet
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = setOf("&", "/", "\\")
         )
 
     /**
@@ -650,6 +660,15 @@ class SettingsViewModel @Inject constructor(
      * Set artist separators preference
      */
     fun setArtistSeparators(separators: String) {
+        viewModelScope.launch {
+            settingsDataStore.setArtistSeparators(separators)
+        }
+    }
+
+    /**
+     * Set artist separators from UI (Set version — preferred)
+     */
+    fun setArtistSeparators(separators: Set<String>) {
         viewModelScope.launch {
             settingsDataStore.setArtistSeparators(separators)
         }
