@@ -2,6 +2,7 @@ package com.voxly.data.local.cache
 
 import android.content.Context
 import androidx.room.*
+import androidx.room.migration.Migration
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -20,7 +21,7 @@ import javax.inject.Singleton
         AlbumThumbnailEntity::class,
         RecentEditEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -84,8 +85,15 @@ class MusicCacheDatabaseProvider @Inject constructor(
             )
                 // Enable WAL mode for better concurrent performance
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
-                // Fallback to destructive migration during development
-                .fallbackToDestructiveMigration(dropAllTables = true)
+                // Migration from version 2 to 3: adds year index
+                .addMigrations(object : Migration(2, 3) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        // Create index on year column for faster year-based filtering
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_year` ON `cached_audio_files` (`year`)")
+                    }
+                })
+                // Fallback to destructive migration only when schema is incompatible
+                .fallbackToDestructiveMigration()
                 .build()
             instance = newInstance
             newInstance

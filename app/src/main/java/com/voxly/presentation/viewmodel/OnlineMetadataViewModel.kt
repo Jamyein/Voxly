@@ -25,6 +25,7 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -83,6 +84,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     private var selectedSyncedLyrics: Lyrics? = null
     private var activeSearchJob: Job? = null
     private var activeLyricsJob: Job? = null
+    private var activeSelectReleaseJob: Job? = null
     private var activeSearchId: Long = 0L
     
     // 从设置中获取的元数据源优先级
@@ -572,6 +574,10 @@ class OnlineMetadataViewModel @AssistedInject constructor(
 
     fun selectRelease(release: OnlineRelease) {
         Timber.d("selectRelease called: id=${release.id}, title=${release.title}, source=${release.source}")
+
+        // Cancel previous release selection coroutines before starting new ones
+        activeSelectReleaseJob?.cancel()
+
         _selectedReleaseCandidate.value = release
         _selectedRelease.value = null
         selectedSyncedLyrics = _syncedLyricsByReleaseId.value[release.id]
@@ -581,12 +587,16 @@ class OnlineMetadataViewModel @AssistedInject constructor(
 
         Timber.d("selectRelease: candidate set, launching coroutines for details, cover and lyrics")
 
+        // Create a parent job to track all three coroutines
+        val parentJob = SupervisorJob()
+        activeSelectReleaseJob = parentJob
+
         // Track if cover has been downloaded to avoid duplicate downloads
         var coverDownloaded = false
 
         // 并行启动三个协程：封面图、详情、歌词
         // 协程1：获取搜索结果中的封面图（优先缓存，带超时回退到下载）
-        viewModelScope.launch {
+        viewModelScope.launch(parentJob) {
             if (!release.coverArtUrl.isNullOrBlank()) {
                 try {
                     // 优先从缓存获取，如果没有则下载，最多等待5秒
@@ -609,7 +619,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
             }
         }
 
-        viewModelScope.launch {
+        viewModelScope.launch(parentJob) {
             _isLoading.value = true
             try {
                 setRepositoryPreferredSource(release.source)
@@ -666,7 +676,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
         }
 
         // 协程3：预加载歌词
-        viewModelScope.launch {
+        viewModelScope.launch(parentJob) {
             try {
                 val lyrics = fetchSyncedLyrics(release)
                 if (lyrics != null) {

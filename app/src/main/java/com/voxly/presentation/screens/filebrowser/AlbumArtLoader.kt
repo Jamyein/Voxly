@@ -1,15 +1,23 @@
 package com.voxly.presentation.screens.filebrowser
 
 import android.net.Uri
+import android.util.LruCache
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 
 /**
+ * LRU cache for embedded album art to avoid repeated file reads.
+ * Max 50 entries to balance memory usage with performance.
+ */
+private val embeddedArtCache = LruCache<String, android.graphics.Bitmap>(50)
+
+/**
  * Loads album art from multiple sources:
- * 1. Embedded album art from the audio file
- * 2. MediaStore album art
+ * 1. LRU cache for embedded art
+ * 2. Embedded album art from the audio file
+ * 3. MediaStore album art
  * Returns null if no album art is found.
  */
 fun loadAlbumArt(
@@ -19,10 +27,14 @@ fun loadAlbumArt(
     // 1. First check global cache (embedded + folder cover)
     loadLocalAlbumArt(audioFile.path)?.let { return it }
 
-    // 2. Try embedded album art from the file
+    // 2. Try embedded album art from the file (with LRU cache)
+    val cached = embeddedArtCache.get(audioFile.path)
+    if (cached != null) return cached
+
     val embeddedArt = loadEmbeddedAlbumArt(context, audioFile.path)
     if (embeddedArt != null) {
-        return embeddedArt  // loadLocalAlbumArt already cached it
+        embeddedArtCache.put(audioFile.path, embeddedArt)
+        return embeddedArt
     }
 
     // 3. Try MediaStore album art (with global caching)

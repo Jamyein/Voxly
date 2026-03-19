@@ -166,13 +166,10 @@ interface CachedAudioFileDao {
     
     /**
      * Deletes multiple audio files by paths.
+     * Uses batch DELETE for efficiency - single query instead of N queries.
      */
-    @Transaction
-    suspend fun deleteByPaths(paths: List<String>) {
-        paths.forEach { path ->
-            deleteByPath(path)
-        }
-    }
+    @Query("DELETE FROM cached_audio_files WHERE path IN (:paths)")
+    suspend fun deleteByPaths(paths: List<String>)
     
     /**
      * Deletes audio files not in the provided list of paths.

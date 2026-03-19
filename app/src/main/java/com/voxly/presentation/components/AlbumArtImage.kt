@@ -84,17 +84,7 @@ fun NetworkAlbumArtImage(
         key1 = url
     ) {
         value = withContext(Dispatchers.IO) {
-            loadImageBitmapFromUrl(url)?.let { imageBitmap ->
-                // Convert ImageBitmap back to Bitmap for consistency
-                val bitmap = android.graphics.Bitmap.createBitmap(
-                    imageBitmap.width,
-                    imageBitmap.height,
-                    android.graphics.Bitmap.Config.ARGB_8888
-                )
-                val canvas = android.graphics.Canvas(bitmap)
-                canvas.drawBitmap(imageBitmap.asAndroidBitmap(), 0f, 0f, null)
-                bitmap
-            }
+            loadImageBitmapFromUrl(url)?.asAndroidBitmap()
         }
     }
 

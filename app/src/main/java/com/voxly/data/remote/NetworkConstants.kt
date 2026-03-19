@@ -20,6 +20,7 @@ object NetworkConstants {
     const val WRITE_TIMEOUT_SECONDS = 30L
 
     // Image loader timeouts in milliseconds
-    const val IMAGE_CONNECT_TIMEOUT_MS = 5000L
-    const val IMAGE_READ_TIMEOUT_MS = 5000L
+    // Increased from 5s to 15s for better reliability on slow networks
+    const val IMAGE_CONNECT_TIMEOUT_MS = 15000L
+    const val IMAGE_READ_TIMEOUT_MS = 15000L
 }

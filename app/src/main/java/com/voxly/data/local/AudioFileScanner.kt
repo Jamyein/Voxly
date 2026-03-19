@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import android.util.LruCache
 import java.io.File
 import java.text.Collator
 import java.util.Locale
@@ -48,8 +49,9 @@ class AudioFileScanner @Inject constructor(
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
 
-    // Simple memory cache for directory scans (respects forceRefresh)
-    private val directoryScanCache = mutableMapOf<String, List<AudioFile>>()
+    // LRU cache for directory scans (max 50 entries to prevent memory issues)
+    // Uses path as key, list of AudioFiles as value
+    private val directoryScanCache = LruCache<String, List<AudioFile>>(50)
 
     companion object {
         private const val TAG = "AudioFileScanner"
@@ -96,9 +98,9 @@ class AudioFileScanner @Inject constructor(
         val normalizedDirectory = directoryPath.trimEnd('/', '\\')
 
         // Check cache first (unless forceRefresh)
-        if (!forceRefresh && normalizedDirectory in directoryScanCache) {
+        if (!forceRefresh && directoryScanCache.get(normalizedDirectory) != null) {
             Timber.d(TAG, "Using directory cache: $normalizedDirectory")
-            emit(directoryScanCache[normalizedDirectory]!!)
+            emit(directoryScanCache.get(normalizedDirectory)!!)
             return@flow
         }
 
@@ -208,7 +210,7 @@ class AudioFileScanner @Inject constructor(
 
         // Cache the result
         val sortedFiles = audioFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
-        directoryScanCache[normalizedDirectory] = sortedFiles
+        directoryScanCache.put(normalizedDirectory, sortedFiles)
 
         emit(sortedFiles)
     }.conflate() // Conflate: only keep latest emission, skip intermediate values if collector can't keep up

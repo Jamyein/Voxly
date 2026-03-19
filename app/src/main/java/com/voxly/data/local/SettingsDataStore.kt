@@ -11,6 +11,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -71,6 +72,7 @@ class SettingsDataStore @Inject constructor(
         val MIN_DURATION_FILTER_ENABLED = booleanPreferencesKey("min_duration_filter_enabled")
         val MIN_DURATION_FILTER_THRESHOLD_MS = intPreferencesKey("min_duration_filter_threshold_ms")
         val SOURCE_CONFIGURATIONS = stringPreferencesKey("source_configurations")
+        val SOURCE_CONFIGURATIONS_MIGRATED = booleanPreferencesKey("source_configurations_migrated")
         val WHITELIST_ENABLED = booleanPreferencesKey("whitelist_enabled")
         val BLACKLIST_ENABLED = booleanPreferencesKey("blacklist_enabled")
         val BLACKLIST_DIRECTORY_URIS = stringPreferencesKey("blacklist_directory_uris")
@@ -349,23 +351,30 @@ class SettingsDataStore @Inject constructor(
         encodeDefaults = true
     }
 
+    // Cache for migrated source configurations to avoid repeated migration work
+    @Volatile
+    private var cachedSourceConfigurations: SourceConfigurations? = null
+
     /**
      * Unified source configurations flow (new approach - stores enabled, priority, and extra options together)
      */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val sourceConfigurations: Flow<SourceConfigurations> = context.settingsDataStore.data
         .map { preferences ->
             val jsonString = preferences[SOURCE_CONFIGURATIONS]
-            if (jsonString.isNullOrBlank()) {
-                // Return default configurations with migration from old settings
-                migrateToNewFormat(preferences)
-            } else {
+            if (!jsonString.isNullOrBlank()) {
                 try {
-                    json.decodeFromString<SourceConfigurations>(jsonString)
+                    return@map json.decodeFromString<SourceConfigurations>(jsonString)
                 } catch (e: Exception) {
-                    migrateToNewFormat(preferences)
+                    // Fall through to migration
                 }
             }
+            // Use cached migration result if available to avoid repeated work
+            cachedSourceConfigurations?.let { return@map it }
+            // Run migration and cache the result
+            migrateToNewFormat(preferences).also { cachedSourceConfigurations = it }
         }
+        .distinctUntilChanged()
 
     /**
      * Migrate from old format to new unified format

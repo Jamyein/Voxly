@@ -17,7 +17,8 @@ import com.voxly.domain.model.ReplayGainInfo
         Index(value = ["path"], unique = true),
         Index(value = ["albumId"]),
         Index(value = ["artist"]),
-        Index(value = ["album"])
+        Index(value = ["album"]),
+        Index(value = ["year"])
     ]
 )
 data class CachedAudioFileEntity(

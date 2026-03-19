@@ -63,8 +63,9 @@ fun SearchBottomSheet(
     var localSearchQuery by remember { mutableStateOf("") }
 
     // Internal search logic - independent from main list
+    // Minimum 2 characters to avoid excessive filtering on large libraries
     val searchResults = remember(localSearchQuery, allFiles) {
-        if (localSearchQuery.isBlank()) {
+        if (localSearchQuery.length < 2) {
             emptyList()
         } else {
             val query = localSearchQuery.lowercase()
