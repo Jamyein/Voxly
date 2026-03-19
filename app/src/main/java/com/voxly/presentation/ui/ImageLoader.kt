@@ -225,23 +225,24 @@ suspend fun loadImageBytesFromUrl(url: String?): ByteArray? {
  * Uses embedded album art from MediaMetadataRetriever.
  *
  * @param filePath The path to the audio file
+ * @param targetSizePx Target size in pixels for memory-efficient decoding (default 300)
  * @return Bitmap of the album art, or null if not found
  */
-fun loadLocalAlbumArt(filePath: String): Bitmap? {
+fun loadLocalAlbumArt(filePath: String, targetSizePx: Int = 300): Bitmap? {
     if (filePath.isBlank()) return null
 
-    // Check cache first
+    // Check cache with size-aware key
     localCacheLock.lock()
-    val cached = localAlbumArtCache[filePath]
+    val cached = localAlbumArtCache[getLocalArtCacheKey(filePath, targetSizePx)]
     localCacheLock.unlock()
     if (cached != null && !cached.isRecycled) {
         return cached
     }
 
     // Load from file
-    val bitmap = loadEmbeddedAlbumArt(filePath)
+    val bitmap = loadEmbeddedAlbumArtSized(filePath, targetSizePx)
 
-    // Cache the result
+    // Cache the result with size-aware key
     if (bitmap != null) {
         localCacheLock.lock()
         try {
@@ -253,7 +254,7 @@ fun loadLocalAlbumArt(filePath: String): Bitmap? {
                     localAlbumArtCache.remove(key)
                 }
             }
-            localAlbumArtCache[filePath] = bitmap
+            localAlbumArtCache[getLocalArtCacheKey(filePath, targetSizePx)] = bitmap
         } finally {
             localCacheLock.unlock()
         }
@@ -263,19 +264,33 @@ fun loadLocalAlbumArt(filePath: String): Bitmap? {
 }
 
 /**
+ * Loads local album art with explicit target size (Chunk 2 API).
+ */
+fun loadLocalAlbumArtSized(filePath: String, targetSizePx: Int): Bitmap? {
+    return loadLocalAlbumArt(filePath, targetSizePx)
+}
+
+/**
  * Loads embedded album art from an audio file using MediaMetadataRetriever.
  */
 private fun loadEmbeddedAlbumArt(filePath: String): Bitmap? {
+    return loadEmbeddedAlbumArtSized(filePath, 300)
+}
+
+/**
+ * Loads embedded album art with explicit target size.
+ */
+private fun loadEmbeddedAlbumArtSized(filePath: String, targetSizePx: Int): Bitmap? {
     return try {
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(filePath)
             val artBytes = retriever.embeddedPicture
             if (artBytes != null) {
-                decodeSampledBitmapFromBytes(artBytes, 300)
+                decodeSampledBitmapFromBytes(artBytes, targetSizePx)
             } else {
                 // Try to load from folder cover (cover.jpg, folder.jpg, etc.)
-                loadFolderCoverArt(filePath)
+                loadFolderCoverArtSized(filePath, targetSizePx)
             }
         } catch (e: Exception) {
             null
@@ -295,6 +310,13 @@ private fun loadEmbeddedAlbumArt(filePath: String): Bitmap? {
  * Loads folder cover art from the parent directory of the audio file.
  */
 private fun loadFolderCoverArt(filePath: String): Bitmap? {
+    return loadFolderCoverArtSized(filePath, 300)
+}
+
+/**
+ * Loads folder cover art with explicit target size.
+ */
+private fun loadFolderCoverArtSized(filePath: String, targetSizePx: Int): Bitmap? {
     val folder = File(filePath).parentFile ?: return null
     val coverFileNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
 
@@ -302,7 +324,7 @@ private fun loadFolderCoverArt(filePath: String): Bitmap? {
         val coverFile = File(folder, fileName)
         if (coverFile.exists()) {
             return try {
-                decodeSampledBitmapFromFile(coverFile.absolutePath, 300)
+                decodeSampledBitmapFromFile(coverFile.absolutePath, targetSizePx)
             } catch (e: Exception) {
                 null
             }
@@ -388,12 +410,13 @@ fun clearLocalAlbumArtCache() {
  *
  * @param context Android context
  * @param albumId MediaStore album ID
+ * @param targetSizePx Target size in pixels for memory-efficient decoding (default 300)
  * @return Bitmap of the album art, or null if not found
  */
-fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
+fun loadMediaStoreAlbumArt(context: Context, albumId: Long, targetSizePx: Int = 300): Bitmap? {
     if (albumId <= 0L) return null
 
-    val cacheKey = "mediastore_$albumId"
+    val cacheKey = getMediaStoreCacheKey(albumId, targetSizePx)
 
     // Check cache first
     mediaStoreAlbumCache[cacheKey]?.let { cached ->
@@ -409,13 +432,13 @@ fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
     val bitmap = try {
         context.contentResolver.openInputStream(uri)?.use { stream ->
             val bytes = stream.readBytes()
-            decodeSampledBitmapFromBytes(bytes, 300)
+            decodeSampledBitmapFromBytes(bytes, targetSizePx)
         }
     } catch (e: Exception) {
         null
     }
 
-    // Cache the result
+    // Cache the result with size-aware key
     if (bitmap != null) {
         // Don't recycle immediately on eviction - let GC handle memory.
         // This prevents crashes when old bitmaps are still referenced by Compose.
@@ -428,6 +451,13 @@ fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
     }
 
     return bitmap
+}
+
+/**
+ * Loads MediaStore album art with explicit target size (Chunk 2 API).
+ */
+fun loadMediaStoreAlbumArtSized(context: Context, albumId: Long, targetSizePx: Int): Bitmap? {
+    return loadMediaStoreAlbumArt(context, albumId, targetSizePx)
 }
 
 /**
