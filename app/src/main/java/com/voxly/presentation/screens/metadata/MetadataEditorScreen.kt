@@ -82,6 +82,7 @@ fun MetadataEditorScreen(
     var showAlbumArtOptions by remember { mutableStateOf(false) }
     var showAlbumArtPreview by remember { mutableStateOf(false) }
     var showConversionDialog by remember { mutableStateOf(false) }
+    var showConversionMenu by remember { mutableStateOf(false) }
     var showReauthorizeDialog by remember { mutableStateOf(false) }
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     var exitAfterSave by remember { mutableStateOf(false) }
@@ -221,16 +222,17 @@ fun MetadataEditorScreen(
                 },
                 actions = {
                     Box {
-                        IconButton(onClick = { /* Show conversion menu */ }) {
+                        IconButton(onClick = { showConversionMenu = true }) {
                             Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
                         }
                         DropdownMenu(
-                            expanded = false,
-                            onDismissRequest = { }
+                            expanded = showConversionMenu,
+                            onDismissRequest = { showConversionMenu = false }
                         ) {
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.convert_to_simplified)) },
                                 onClick = {
+                                    showConversionMenu = false
                                     conversionType = ConversionType.TO_SIMPLIFIED
                                     showConversionDialog = true
                                 },
@@ -241,6 +243,7 @@ fun MetadataEditorScreen(
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.convert_to_traditional)) },
                                 onClick = {
+                                    showConversionMenu = false
                                     conversionType = ConversionType.TO_TRADITIONAL
                                     showConversionDialog = true
                                 },
