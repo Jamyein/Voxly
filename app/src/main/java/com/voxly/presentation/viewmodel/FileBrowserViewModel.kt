@@ -17,6 +17,8 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
+import com.voxly.domain.model.BatchResult
+import com.voxly.domain.usecase.BatchEngine
 import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.model.BatchStatus
 import com.voxly.domain.usecase.ScanResult
@@ -60,10 +62,12 @@ class FileBrowserViewModel @Inject constructor(
     private val unifiedScanManager: UnifiedScanManager,
     private val safWriteAccessService: SafWriteAccessService,
     private val albumCacheRepository: AlbumCacheRepository,
-    private val artistCacheRepository: ArtistCacheRepository
+    private val artistCacheRepository: ArtistCacheRepository,
+    private val batchEngine: BatchEngine<String>
 ) : ViewModel() {
     companion object {
         private const val TAG = "FileBrowserViewModel"
+        private const val STATE_FLOW_TIMEOUT_MS = 5000L
     }
 
     private val _uiState = MutableStateFlow<FileBrowserUiState>(FileBrowserUiState.Loading)
@@ -97,8 +101,15 @@ class FileBrowserViewModel @Inject constructor(
     val artistSeparatorEnabled: StateFlow<Boolean> = settingsDataStore.artistSeparatorEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
 
-    val artistSeparators: StateFlow<String> = settingsDataStore.artistSeparators
-        .stateIn(viewModelScope, SharingStarted.Eagerly, "&\\")
+    /**
+     * Artist separators as Set<String> for splitArtist()
+     */
+    val artistSeparatorsSet: StateFlow<Set<String>> = settingsDataStore.artistSeparatorsSet
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = setOf("&", "/", "\\")
+        )
 
     /**
      * Cache an album to the repository for instant loading in AlbumDetailScreen.
@@ -116,6 +127,10 @@ class FileBrowserViewModel @Inject constructor(
 
     private val _batchError = MutableStateFlow<String?>(null)
     val batchError: StateFlow<String?> = _batchError.asStateFlow()
+
+    // Replace _batchProgress and _batchError with unified result
+    private val _batchResult = MutableStateFlow<BatchResult?>(null)
+    val batchResult: StateFlow<BatchResult?> = _batchResult.asStateFlow()
 
     // Pull-to-refresh state
     private val _isRefreshing = MutableStateFlow(false)
@@ -591,113 +606,89 @@ class FileBrowserViewModel @Inject constructor(
         batchJob = viewModelScope.launch {
             _isBatchProcessing.value = true
             _batchError.value = null
-            var successCount = 0
-            var failureCount = 0
 
-            filePaths.forEachIndexed { index, filePath ->
-                _batchProgress.value = BatchProgress(
-                    currentFile = index + 1,
-                    totalFiles = filePaths.size,
-                    percentage = (index + 1).toFloat() / filePaths.size,
-                    currentFilePath = filePath,
-                    status = BatchStatus.PROCESSING,
-                    successCount = successCount,
-                    failureCount = failureCount
-                )
-
-                try {
+            batchEngine.execute(
+                items = filePaths,
+                operation = { filePath ->
                     // Read current metadata to get search query
                     val currentMetadata = audioRepository.readMetadata(filePath).getOrNull()
-                    if (currentMetadata != null) {
-                        val searchTitle = currentMetadata.title ?: File(filePath).nameWithoutExtension
-                        val artistQuery = currentMetadata.artist
+                        ?: return@execute Result.failure(Exception("Failed to read metadata"))
 
-                        // Search online metadata
-                        val searchResult = onlineMetadataRepository.searchByTrack(searchTitle, artistQuery)
-                        
-                        if (searchResult.isSuccess) {
-                            val searchResults = searchResult.getOrNull()
-                            if (!searchResults.isNullOrEmpty()) {
-                                val bestMatch = searchResults.first()
-                                
-                                // Get release details for more complete metadata
-                                val releaseDetailsResult = bestMatch.releaseId?.let {
-                                    onlineMetadataRepository.getReleaseDetails(it)
-                                }
-                                
-                                val releaseDetails = releaseDetailsResult?.getOrNull()
-                                
-                                // Try to find track number from release details
-                                val trackNumber = releaseDetails?.tracks?.find { track ->
-                                    track.title.equals(bestMatch.title, ignoreCase = true) ||
-                                    track.artist?.equals(bestMatch.artist, ignoreCase = true) == true
-                                }?.number
-                                
-                                // Only update if overwrite is enabled or field is empty
-                                val updatedMetadata = currentMetadata.copy(
-                                    title = if (options.overwriteExisting || currentMetadata.title.isNullOrBlank()) 
-                                        bestMatch.title else currentMetadata.title,
-                                    artist = if (options.overwriteExisting || currentMetadata.artist.isNullOrBlank()) 
-                                        bestMatch.artist else currentMetadata.artist,
-                                    album = if (options.overwriteExisting || currentMetadata.album.isNullOrBlank()) 
-                                        releaseDetails?.title ?: currentMetadata.album else currentMetadata.album,
-                                    year = if (options.overwriteExisting || currentMetadata.year == null) 
-                                        releaseDetails?.year?.toString() else currentMetadata.year,
-                                    genre = if (options.overwriteExisting || currentMetadata.genre.isNullOrBlank()) 
-                                        releaseDetails?.genre ?: currentMetadata.genre else currentMetadata.genre,
-                                    trackNumber = if (options.overwriteExisting || currentMetadata.trackNumber == null) 
-                                        trackNumber else currentMetadata.trackNumber
-                                )
+                    val searchTitle = currentMetadata.title ?: File(filePath).nameWithoutExtension
+                    val artistQuery = currentMetadata.artist
 
-                                // Update metadata
-                                val result = audioRepository.updateMetadata(filePath, updatedMetadata)
-                                
-                                // Fetch album art if requested
-                                if (options.fetchAlbumArt && bestMatch.releaseId != null) {
-                                    try {
-                                        val coverArtResult = onlineMetadataRepository.getCoverArt(bestMatch.releaseId)
-                                        if (coverArtResult.isSuccess) {
-                                            coverArtResult.getOrNull()?.let { albumArtBytes ->
-                                                audioRepository.setAlbumArt(filePath, albumArtBytes)
-                                            }
-                                        }
-                                    } catch (e: Exception) {
-                                        Timber.tag(TAG).w( "Failed to fetch album art for $filePath", e)
-                                    }
-                                }
+                    // Search online metadata
+                    val searchResult = onlineMetadataRepository.searchByTrack(searchTitle, artistQuery)
 
-                                if (result.isSuccess) {
-                                    successCount++
-                                } else {
-                                    failureCount++
-                                }
-                            } else {
-                                failureCount++
-                            }
-                        } else {
-                            failureCount++
-                        }
-                    } else {
-                        failureCount++
+                    if (searchResult.isFailure) {
+                        return@execute Result.failure(searchResult.exceptionOrNull() ?: Exception("Search failed"))
                     }
-                } catch (e: Exception) {
-                    Timber.tag(TAG).e( "Failed to process $filePath", e)
-                    failureCount++
-                }
+
+                    val searchResults = searchResult.getOrNull()
+                    if (searchResults.isNullOrEmpty()) {
+                        return@execute Result.failure(Exception("No search results"))
+                    }
+
+                    val bestMatch = searchResults.first()
+
+                    // Get release details for more complete metadata
+                    val releaseDetailsResult = bestMatch.releaseId?.let {
+                        onlineMetadataRepository.getReleaseDetails(it)
+                    }
+
+                    val releaseDetails = releaseDetailsResult?.getOrNull()
+
+                    // Try to find track number from release details
+                    val trackNumber = releaseDetails?.tracks?.find { track ->
+                        track.title.equals(bestMatch.title, ignoreCase = true) ||
+                        track.artist?.equals(bestMatch.artist, ignoreCase = true) == true
+                    }?.number
+
+                    // Only update if overwrite is enabled or field is empty
+                    val updatedMetadata = currentMetadata.copy(
+                        title = if (options.overwriteExisting || currentMetadata.title.isNullOrBlank())
+                            bestMatch.title else currentMetadata.title,
+                        artist = if (options.overwriteExisting || currentMetadata.artist.isNullOrBlank())
+                            bestMatch.artist else currentMetadata.artist,
+                        album = if (options.overwriteExisting || currentMetadata.album.isNullOrBlank())
+                            releaseDetails?.title ?: currentMetadata.album else currentMetadata.album,
+                        year = if (options.overwriteExisting || currentMetadata.year == null)
+                            releaseDetails?.year?.toString() else currentMetadata.year,
+                        genre = if (options.overwriteExisting || currentMetadata.genre.isNullOrBlank())
+                            releaseDetails?.genre ?: currentMetadata.genre else currentMetadata.genre,
+                        trackNumber = if (options.overwriteExisting || currentMetadata.trackNumber == null)
+                            trackNumber else currentMetadata.trackNumber
+                    )
+
+                    // Update metadata
+                    val result = audioRepository.updateMetadata(filePath, updatedMetadata)
+
+                    // Fetch album art if requested
+                    if (options.fetchAlbumArt && bestMatch.releaseId != null) {
+                        try {
+                            val coverArtResult = onlineMetadataRepository.getCoverArt(bestMatch.releaseId)
+                            if (coverArtResult.isSuccess) {
+                                coverArtResult.getOrNull()?.let { albumArtBytes ->
+                                    audioRepository.setAlbumArt(filePath, albumArtBytes)
+                                }
+                            }
+                        } catch (e: Exception) {
+                            Timber.tag(TAG).w("Failed to fetch album art for $filePath", e)
+                        }
+                    }
+
+                    if (result.isSuccess) {
+                        Result.success(Unit)
+                    } else {
+                        Result.failure(result.exceptionOrNull() ?: Exception("Update failed"))
+                    }
+                },
+                itemName = { it }
+            ).collect { result ->
+                _batchResult.value = result
             }
 
-            _batchProgress.value = BatchProgress(
-                currentFile = filePaths.size,
-                totalFiles = filePaths.size,
-                percentage = 1f,
-                currentFilePath = "",
-                status = BatchStatus.COMPLETED,
-                successCount = successCount,
-                failureCount = failureCount
-            )
             _isBatchProcessing.value = false
-            
-            // Refresh files to show updated metadata
             loadAudioFiles(forceRefresh = false)
         }
     }
@@ -710,30 +701,19 @@ class FileBrowserViewModel @Inject constructor(
         batchJob = viewModelScope.launch {
             _isBatchProcessing.value = true
             _batchError.value = null
-            var successCount = 0
-            var failureCount = 0
 
-            filePaths.forEachIndexed { index, filePath ->
-                _batchProgress.value = BatchProgress(
-                    currentFile = index + 1,
-                    totalFiles = filePaths.size,
-                    percentage = (index + 1).toFloat() / filePaths.size,
-                    currentFilePath = filePath,
-                    status = BatchStatus.PROCESSING,
-                    successCount = successCount,
-                    failureCount = failureCount
-                )
-
-                try {
+            batchEngine.execute(
+                items = filePaths,
+                operation = { filePath ->
+                    val index = filePaths.indexOf(filePath)
                     val file = File(filePath)
                     if (!file.exists()) {
-                        failureCount++
-                        return@forEachIndexed
+                        return@execute Result.failure(Exception("File does not exist"))
                     }
 
                     // Read metadata for pattern substitution
                     val metadata = audioRepository.readMetadata(filePath).getOrNull()
-                    
+
                     // Generate new filename
                     var newName = pattern
                         .replace("{title}", metadata?.title ?: file.nameWithoutExtension)
@@ -745,35 +725,24 @@ class FileBrowserViewModel @Inject constructor(
 
                     // Sanitize filename
                     newName = newName.replace(Regex("[\\\\/:*?\"<>|]"), "_")
-                    
+
                     // Add original extension
                     newName = "$newName.${file.extension}"
 
                     // Rename file
                     val newFile = File(file.parent, newName)
                     if (file.renameTo(newFile)) {
-                        successCount++
+                        Result.success(Unit)
                     } else {
-                        failureCount++
+                        Result.failure(Exception("Rename failed"))
                     }
-                } catch (e: Exception) {
-                    Timber.tag(TAG).e( "Failed to rename $filePath", e)
-                    failureCount++
-                }
+                },
+                itemName = { it }
+            ).collect { result ->
+                _batchResult.value = result
             }
 
-            _batchProgress.value = BatchProgress(
-                currentFile = filePaths.size,
-                totalFiles = filePaths.size,
-                percentage = 1f,
-                currentFilePath = "",
-                status = BatchStatus.COMPLETED,
-                successCount = successCount,
-                failureCount = failureCount
-            )
             _isBatchProcessing.value = false
-            
-            // Refresh files
             loadAudioFiles(forceRefresh = false)
         }
     }
@@ -1184,17 +1153,17 @@ class FileBrowserViewModel @Inject constructor(
     /**
      * Split artist string by separators
      * @param artist The artist string to split
-     * @param separators String containing separator characters (e.g., "&\")
+     * @param separators Set of separator strings (e.g., setOf("&", "/", "\\"))
      * @return List of split artist names (empty strings filtered out)
      */
-    private fun splitArtist(artist: String, separators: String): List<String> {
+    private fun splitArtist(artist: String, separators: Set<String>): List<String> {
         if (artist.isBlank()) return emptyList()
-        if (separators.isBlank()) return listOf(artist)
+        if (separators.isEmpty()) return listOf(artist)
 
-        val separatorChars = separators.toCharArray().filter { it.isWhitespace().not() }
-        if (separatorChars.isEmpty()) return listOf(artist)
+        // Sort by length descending to avoid short separators matching before long ones
+        val sortedSeparators = separators.sortedByDescending { it.length }
+        val regex = sortedSeparators.joinToString("|") { Regex.escape(it) }
 
-        val regex = separatorChars.joinToString("|") { Regex.escape(it.toString()) }
         return artist.split(Regex(regex))
             .map { it.trim() }
             .filter { it.isNotBlank() }
@@ -1229,7 +1198,7 @@ class FileBrowserViewModel @Inject constructor(
 
         // Aggregate artists
         val isSeparatorEnabled = artistSeparatorEnabled.value
-        val customSeparators = artistSeparators.value
+        val customSeparators = artistSeparatorsSet.value
 
         val artistsMap = mutableMapOf<String, MutableList<AudioFile>>()
 
@@ -1238,7 +1207,7 @@ class FileBrowserViewModel @Inject constructor(
             .forEach { file ->
                 val artistField = file.metadata.artist!!
 
-                if (isSeparatorEnabled && customSeparators.isNotBlank()) {
+                if (isSeparatorEnabled && customSeparators.isNotEmpty()) {
                     // Split artist field
                     val splitArtists = splitArtist(artistField, customSeparators)
                     splitArtists.forEach { artistName ->
