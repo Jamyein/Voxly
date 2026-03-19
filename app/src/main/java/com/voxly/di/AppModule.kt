@@ -236,9 +236,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideBatchReplayGainUseCase(
-        replayGainRepository: ReplayGainRepository
+        replayGainRepository: ReplayGainRepository,
+        batchEngine: BatchEngine<String>
     ): BatchReplayGainUseCase {
-        return BatchReplayGainUseCase(replayGainRepository)
+        return BatchReplayGainUseCase(replayGainRepository, batchEngine)
     }
 
     @Provides

@@ -125,7 +125,8 @@ class BatchEditMetadataUseCase @Inject constructor(
  * Use case for batch ReplayGain scanning.
  */
 class BatchReplayGainUseCase @Inject constructor(
-    private val replayGainRepository: ReplayGainRepository
+    private val replayGainRepository: ReplayGainRepository,
+    private val batchEngine: BatchEngine<String>
 ) {
     /**
      * Scans multiple files for ReplayGain.
@@ -140,8 +141,29 @@ class BatchReplayGainUseCase @Inject constructor(
         filePaths: List<String>,
         scanQuality: ScanQuality = ScanQuality.ACCURATE,
         targetLoudness: Float = -14f
-    ): Flow<com.voxly.domain.repository.ScanProgress> {
-        return replayGainRepository.scanReplayGain(filePaths, scanQuality, targetLoudness)
+    ): Flow<com.voxly.domain.repository.ScanProgress> = flow {
+        batchEngine.execute(
+            items = filePaths,
+            operation = { filePath ->
+                replayGainRepository.scanReplayGain(listOf(filePath), scanQuality, targetLoudness)
+                Result.success(Unit)
+            },
+            itemName = { it }
+        ).collect { result ->
+            emit(
+                com.voxly.domain.repository.ScanProgress(
+                    currentFile = result.successCount + result.failedCount,
+                    totalFiles = result.totalFiles,
+                    percentage = (result.successCount + result.failedCount).toFloat() / result.totalFiles,
+                    currentFilePath = result.lastUpdatedFile,
+                    status = when (result.status) {
+                        com.voxly.domain.model.BatchStatus.PROCESSING -> com.voxly.domain.repository.ScanStatus.SCANNING
+                        com.voxly.domain.model.BatchStatus.COMPLETED -> com.voxly.domain.repository.ScanStatus.COMPLETED
+                        com.voxly.domain.model.BatchStatus.CANCELLED -> com.voxly.domain.repository.ScanStatus.CANCELLED
+                    }
+                )
+            )
+        }
     }
 }
 
