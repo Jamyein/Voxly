@@ -171,7 +171,8 @@ class BatchReplayGainUseCase @Inject constructor(
  * Use case for batch album art operations.
  */
 class BatchAlbumArtUseCase @Inject constructor(
-    private val audioRepository: AudioRepository
+    private val audioRepository: AudioRepository,
+    private val batchEngine: BatchEngine<String>
 ) {
     /**
      * Sets the same album art for multiple files.
@@ -182,54 +183,29 @@ class BatchAlbumArtUseCase @Inject constructor(
     operator fun invoke(
         filePaths: List<String>,
         albumArtBytes: ByteArray
-    ): Flow<BatchProgress> = flow {
-        val totalFiles = filePaths.size
-        var successCount = 0
-        var failureCount = 0
+    ): Flow<BatchProgress> {
         val startedAt = SystemClock.elapsedRealtime()
+        val totalFiles = filePaths.size
         Logger.i("Batch album art set started. files=$totalFiles", "BatchAlbumArt")
 
-        filePaths.forEachIndexed { index, filePath ->
-            emit(
-                BatchProgress(
-                    currentFile = index + 1,
-                    totalFiles = totalFiles,
-                    percentage = (index + 1).toFloat() / totalFiles,
-                    currentFilePath = filePath,
-                    status = BatchStatus.PROCESSING,
-                    successCount = successCount,
-                    failureCount = failureCount
-                )
-            )
-
-            val result = audioRepository.setAlbumArt(filePath, albumArtBytes)
-
-            if (result.isSuccess) {
-                successCount++
-            } else {
-                failureCount++
-                Logger.w(
-                    "Batch album art set failed file=$filePath reason=${result.exceptionOrNull()?.message ?: "unknown"}",
-                    "BatchAlbumArt"
-                )
+        return batchEngine.execute(
+            items = filePaths,
+            operation = { filePath ->
+                audioRepository.setAlbumArt(filePath, albumArtBytes)
+            },
+            itemName = { it }
+        ).let { flow ->
+            kotlinx.coroutines.flow.flow {
+                flow.collect { result ->
+                    emit(result.toBatchProgress())
+                }
             }
-        }
-
-        emit(
-            BatchProgress(
-                currentFile = totalFiles,
-                totalFiles = totalFiles,
-                percentage = 1f,
-                currentFilePath = "",
-                status = BatchStatus.COMPLETED,
-                successCount = successCount,
-                failureCount = failureCount
+        }.also {
+            Logger.i(
+                "Batch album art set finished. files=$totalFiles success=${batchEngine.getFailedItems().let { totalFiles - it.size }} failed=${batchEngine.getFailedItems().size} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+                "BatchAlbumArt"
             )
-        )
-        Logger.i(
-            "Batch album art set finished. files=$totalFiles success=$successCount failed=$failureCount elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
-            "BatchAlbumArt"
-        )
+        }
     }
 
     /**
@@ -237,53 +213,41 @@ class BatchAlbumArtUseCase @Inject constructor(
      * @param filePaths List of file paths to update
      * @return Flow emitting progress
      */
-    fun removeAlbumArt(filePaths: List<String>): Flow<BatchProgress> = flow {
-        val totalFiles = filePaths.size
-        var successCount = 0
-        var failureCount = 0
+    fun removeAlbumArt(filePaths: List<String>): Flow<BatchProgress> {
         val startedAt = SystemClock.elapsedRealtime()
+        val totalFiles = filePaths.size
         Logger.i("Batch album art remove started. files=$totalFiles", "BatchAlbumArt")
 
-        filePaths.forEachIndexed { index, filePath ->
-            emit(
-                BatchProgress(
-                    currentFile = index + 1,
-                    totalFiles = totalFiles,
-                    percentage = (index + 1).toFloat() / totalFiles,
-                    currentFilePath = filePath,
-                    status = BatchStatus.PROCESSING,
-                    successCount = successCount,
-                    failureCount = failureCount
-                )
-            )
-
-            val result = audioRepository.removeAlbumArt(filePath)
-
-            if (result.isSuccess) {
-                successCount++
-            } else {
-                failureCount++
-                Logger.w(
-                    "Batch album art remove failed file=$filePath reason=${result.exceptionOrNull()?.message ?: "unknown"}",
-                    "BatchAlbumArt"
-                )
+        return batchEngine.execute(
+            items = filePaths,
+            operation = { filePath ->
+                audioRepository.removeAlbumArt(filePath)
+            },
+            itemName = { it }
+        ).let { flow ->
+            kotlinx.coroutines.flow.flow {
+                flow.collect { result ->
+                    emit(result.toBatchProgress())
+                }
             }
-        }
-
-        emit(
-            BatchProgress(
-                currentFile = totalFiles,
-                totalFiles = totalFiles,
-                percentage = 1f,
-                currentFilePath = "",
-                status = BatchStatus.COMPLETED,
-                successCount = successCount,
-                failureCount = failureCount
+        }.also {
+            Logger.i(
+                "Batch album art remove finished. files=$totalFiles success=${batchEngine.getFailedItems().let { totalFiles - it.size }} failed=${batchEngine.getFailedItems().size} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+                "BatchAlbumArt"
             )
-        )
-        Logger.i(
-            "Batch album art remove finished. files=$totalFiles success=$successCount failed=$failureCount elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
-            "BatchAlbumArt"
+        }
+    }
+
+    private fun BatchResult.toBatchProgress(): BatchProgress {
+        val currentFile = successCount + failedCount + if (status == BatchStatus.PROCESSING) 1 else 0
+        return BatchProgress(
+            currentFile = currentFile.coerceAtMost(totalFiles),
+            totalFiles = totalFiles,
+            percentage = if (totalFiles > 0) (successCount + failedCount).toFloat() / totalFiles else 0f,
+            currentFilePath = lastUpdatedFile,
+            status = status,
+            successCount = successCount,
+            failureCount = failedCount
         )
     }
 }

@@ -245,9 +245,10 @@ object AppModule {
     @Provides
     @Singleton
     fun provideBatchAlbumArtUseCase(
-        audioRepository: AudioRepository
+        audioRepository: AudioRepository,
+        batchEngine: BatchEngine<String>
     ): BatchAlbumArtUseCase {
-        return BatchAlbumArtUseCase(audioRepository)
+        return BatchAlbumArtUseCase(audioRepository, batchEngine)
     }
 
     @Provides
