@@ -18,6 +18,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
@@ -210,7 +211,8 @@ class AudioFileScanner @Inject constructor(
         directoryScanCache[normalizedDirectory] = sortedFiles
 
         emit(sortedFiles)
-    }.flowOn(Dispatchers.IO)
+    }.conflate() // Conflate: only keep latest emission, skip intermediate values if collector can't keep up
+        .flowOn(Dispatchers.IO)
 
     /**
      * Loads detailed metadata on-demand (lazy loading).

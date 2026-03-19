@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
@@ -185,7 +186,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         album: String
     ): Flow<OnlineSourceResult> = callbackFlow {
         val settings = getOnlineSourceSettings()
-        val sourceJobs = mutableListOf<kotlinx.coroutines.Job>()
 
         val useITunes = settings.enableITunes && (preferredSource == DataSource.ITUNES || preferredSource == DataSource.BOTH)
         val useQQMusic = settings.enableQQMusic && (preferredSource == DataSource.QQ_MUSIC || preferredSource == DataSource.BOTH)
@@ -195,132 +195,134 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         if (!useITunes && !useQQMusic && !useNetease && !useMusicBrainz) {
             trySend(OnlineSourceResult.Error(OnlineSource.UNKNOWN, "No metadata sources enabled"))
             channel.close()
+            return@callbackFlow
         }
 
-        if (useITunes) {
-            sourceJobs += launch {
-                try {
-                    val result = iTunesRepository.searchByArtistAlbum(artist, album)
-                    result
-                        .map {
-                            finalizeReleaseResults(
-                                releases = it,
-                                artist = artist,
-                                album = album,
-                                settings = settings
-                            )
-                        }
-                        .onSuccess { releases ->
-                            releases.forEach { release ->
-                                trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.ITUNES))
+        // Use supervisorScope so each source fails independently - one failed source doesn't cancel others
+        supervisorScope {
+            if (useITunes) {
+                launch {
+                    try {
+                        val result = iTunesRepository.searchByArtistAlbum(artist, album)
+                        result
+                            .map {
+                                finalizeReleaseResults(
+                                    releases = it,
+                                    artist = artist,
+                                    album = album,
+                                    settings = settings
+                                )
                             }
-                        }
-                        .onFailure { error ->
-                            trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, error.message ?: "Failed"))
-                        }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.message ?: "Failed"))
-                } finally {
-                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.ITUNES))
+                            .onSuccess { releases ->
+                                releases.forEach { release ->
+                                    trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.ITUNES))
+                                }
+                            }
+                            .onFailure { error ->
+                                trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, error.message ?: "Failed"))
+                            }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.message ?: "Failed"))
+                    } finally {
+                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.ITUNES))
+                    }
+                }
+            }
+
+            if (useQQMusic) {
+                launch {
+                    try {
+                        val result = searchQQMusicByArtistAlbum(artist, album, settings.requestLimit)
+                        result
+                            .map {
+                                finalizeReleaseResults(
+                                    releases = it,
+                                    artist = artist,
+                                    album = album,
+                                    settings = settings
+                                )
+                            }
+                            .onSuccess { releases ->
+                                releases.forEach { release ->
+                                    trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.QQ_MUSIC))
+                                }
+                            }
+                            .onFailure { error ->
+                                trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, error.message ?: "Failed"))
+                            }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.message ?: "Failed"))
+                    } finally {
+                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.QQ_MUSIC))
+                    }
+                }
+            }
+
+            if (useNetease) {
+                launch {
+                    try {
+                        val result = searchNeteaseByArtistAlbum(artist, album, settings.requestLimit)
+                        result
+                            .map {
+                                finalizeReleaseResults(
+                                    releases = it,
+                                    artist = artist,
+                                    album = album,
+                                    settings = settings
+                                )
+                            }
+                            .onSuccess { releases ->
+                                releases.forEach { release ->
+                                    trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.NETEASE))
+                                }
+                            }
+                            .onFailure { error ->
+                                trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, error.message ?: "Failed"))
+                            }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.message ?: "Failed"))
+                    } finally {
+                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.NETEASE))
+                    }
+                }
+            }
+
+            if (useMusicBrainz) {
+                launch {
+                    try {
+                        val result = musicBrainzRepository.searchByArtistAlbum(artist, album)
+                        result
+                            .map {
+                                finalizeReleaseResults(
+                                    releases = it,
+                                    artist = artist,
+                                    album = album,
+                                    settings = settings
+                                )
+                            }
+                            .onSuccess { releases ->
+                                releases.forEach { release ->
+                                    trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.MUSICBRAINZ))
+                                }
+                            }
+                            .onFailure { error ->
+                                trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, error.message ?: "Failed"))
+                            }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.message ?: "Failed"))
+                    } finally {
+                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.MUSICBRAINZ))
+                    }
                 }
             }
         }
 
-        if (useQQMusic) {
-            sourceJobs += launch {
-                try {
-                    val result = searchQQMusicByArtistAlbum(artist, album, settings.requestLimit)
-                    result
-                        .map {
-                            finalizeReleaseResults(
-                                releases = it,
-                                artist = artist,
-                                album = album,
-                                settings = settings
-                            )
-                        }
-                        .onSuccess { releases ->
-                            releases.forEach { release ->
-                                trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.QQ_MUSIC))
-                            }
-                        }
-                        .onFailure { error ->
-                            trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, error.message ?: "Failed"))
-                        }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.message ?: "Failed"))
-                } finally {
-                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.QQ_MUSIC))
-                }
-            }
-        }
-
-        if (useNetease) {
-            sourceJobs += launch {
-                try {
-                    val result = searchNeteaseByArtistAlbum(artist, album, settings.requestLimit)
-                    result
-                        .map {
-                            finalizeReleaseResults(
-                                releases = it,
-                                artist = artist,
-                                album = album,
-                                settings = settings
-                            )
-                        }
-                        .onSuccess { releases ->
-                            releases.forEach { release ->
-                                trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.NETEASE))
-                            }
-                        }
-                        .onFailure { error ->
-                            trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, error.message ?: "Failed"))
-                        }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.message ?: "Failed"))
-                } finally {
-                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.NETEASE))
-                }
-            }
-        }
-
-        if (useMusicBrainz) {
-            sourceJobs += launch {
-                try {
-                    val result = musicBrainzRepository.searchByArtistAlbum(artist, album)
-                    result
-                        .map {
-                            finalizeReleaseResults(
-                                releases = it,
-                                artist = artist,
-                                album = album,
-                                settings = settings
-                            )
-                        }
-                        .onSuccess { releases ->
-                            releases.forEach { release ->
-                                trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.MUSICBRAINZ))
-                            }
-                        }
-                        .onFailure { error ->
-                            trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, error.message ?: "Failed"))
-                        }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.message ?: "Failed"))
-                } finally {
-                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.MUSICBRAINZ))
-                }
-            }
-        }
-
-        val completionJob = launch {
-            sourceJobs.joinAll()
-            channel.close()
-        }
+        // supervisorScope completes when all child coroutines finish
+        channel.close()
 
         awaitClose {
-            completionJob.cancel()
-            sourceJobs.forEach { it.cancel() }
+            // No explicit cleanup needed - supervisorScope children are cancelled automatically
+            // when the parent callbackFlow scope is cancelled
         }
     }
 
@@ -671,7 +673,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     ): Flow<OnlineSourceResult> = callbackFlow {
         val settings = getOnlineSourceSettings()
         Timber.d("searchByTrackFlow: title='$title', artist='$artist'")
-        val sourceJobs = mutableListOf<kotlinx.coroutines.Job>()
 
         val useITunes = settings.enableITunes && (preferredSource == DataSource.ITUNES || preferredSource == DataSource.BOTH)
         val useQQMusic = settings.enableQQMusic && (preferredSource == DataSource.QQ_MUSIC || preferredSource == DataSource.BOTH)
@@ -681,137 +682,139 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         if (!useITunes && !useQQMusic && !useNetease && !useMusicBrainz) {
             trySend(OnlineSourceResult.Error(OnlineSource.UNKNOWN, "No metadata sources enabled"))
             channel.close()
+            return@callbackFlow
         }
 
-        if (useITunes) {
-            sourceJobs += launch {
-                try {
-                    val result = iTunesRepository.searchByTrack(title, artist)
-                    Timber.d("iTunes raw results count: ${result.getOrNull()?.size ?: 0}")
-                    result
-                        .map {
-                            finalizeRecordingResults(
-                                recordings = it,
-                                title = title,
-                                artist = artist,
-                                priority = settings.metadataPriority,
-                                limit = settings.getSourceLimit("iTunes")
-                            )
-                        }
-                        .onSuccess { recordings ->
-                            recordings.forEach { recording ->
-                                trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.ITUNES))
+        // Use supervisorScope so each source fails independently - one failed source doesn't cancel others
+        supervisorScope {
+            if (useITunes) {
+                launch {
+                    try {
+                        val result = iTunesRepository.searchByTrack(title, artist)
+                        Timber.d("iTunes raw results count: ${result.getOrNull()?.size ?: 0}")
+                        result
+                            .map {
+                                finalizeRecordingResults(
+                                    recordings = it,
+                                    title = title,
+                                    artist = artist,
+                                    priority = settings.metadataPriority,
+                                    limit = settings.getSourceLimit("iTunes")
+                                )
                             }
-                        }
-                        .onFailure { error ->
-                            trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, error.toUserFriendlyError()))
-                        }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.toUserFriendlyError()))
-                } finally {
-                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.ITUNES))
+                            .onSuccess { recordings ->
+                                recordings.forEach { recording ->
+                                    trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.ITUNES))
+                                }
+                            }
+                            .onFailure { error ->
+                                trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, error.toUserFriendlyError()))
+                            }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.toUserFriendlyError()))
+                    } finally {
+                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.ITUNES))
+                    }
+                }
+            }
+
+            if (useQQMusic) {
+                launch {
+                    try {
+                        val result = searchQQMusicByTrack(title, artist, settings.requestLimit)
+                        result
+                            .map {
+                                finalizeRecordingResults(
+                                    recordings = it,
+                                    title = title,
+                                    artist = artist,
+                                    priority = settings.metadataPriority,
+                                    limit = settings.getSourceLimit("QQ Music")
+                                )
+                            }
+                            .onSuccess { recordings ->
+                                recordings.forEach { recording ->
+                                    trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.QQ_MUSIC))
+                                }
+                            }
+                            .onFailure { error ->
+                                trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, error.toUserFriendlyError()))
+                            }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.toUserFriendlyError()))
+                    } finally {
+                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.QQ_MUSIC))
+                    }
+                }
+            }
+
+            if (useNetease) {
+                launch {
+                    try {
+                        val result = searchNeteaseByTrack(title, artist, settings.requestLimit)
+                        result
+                            .map {
+                                finalizeRecordingResults(
+                                    recordings = it,
+                                    title = title,
+                                    artist = artist,
+                                    priority = settings.metadataPriority,
+                                    limit = settings.getSourceLimit("NetEase")
+                                )
+                            }
+                            .onSuccess { recordings ->
+                                recordings.forEach { recording ->
+                                    trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.NETEASE))
+                                }
+                            }
+                            .onFailure { error ->
+                                trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, error.toUserFriendlyError()))
+                            }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.toUserFriendlyError()))
+                    } finally {
+                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.NETEASE))
+                    }
+                }
+            }
+
+            if (useMusicBrainz) {
+                launch {
+                    try {
+                        val result = musicBrainzRepository.searchByTrack(title, artist)
+                        result
+                            .map {
+                                finalizeRecordingResults(
+                                    recordings = it,
+                                    title = title,
+                                    artist = artist,
+                                    priority = settings.metadataPriority,
+                                    limit = settings.getSourceLimit("MusicBrainz")
+                                )
+                            }
+                            .onSuccess { recordings ->
+                                recordings.forEach { recording ->
+                                    trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.MUSICBRAINZ))
+                                }
+                            }
+                            .onFailure { error ->
+                                trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, error.toUserFriendlyError()))
+                            }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.toUserFriendlyError()))
+                    } finally {
+                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.MUSICBRAINZ))
+                    }
                 }
             }
         }
 
-        if (useQQMusic) {
-            sourceJobs += launch {
-                try {
-                    val result = searchQQMusicByTrack(title, artist, settings.requestLimit)
-                    result
-                        .map {
-                            finalizeRecordingResults(
-                                recordings = it,
-                                title = title,
-                                artist = artist,
-                                priority = settings.metadataPriority,
-                                limit = settings.getSourceLimit("QQ Music")
-                            )
-                        }
-                        .onSuccess { recordings ->
-                            recordings.forEach { recording ->
-                                trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.QQ_MUSIC))
-                            }
-                        }
-                        .onFailure { error ->
-                            trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, error.toUserFriendlyError()))
-                        }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.toUserFriendlyError()))
-                } finally {
-                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.QQ_MUSIC))
-                }
-            }
-        }
-
-        if (useNetease) {
-            sourceJobs += launch {
-                try {
-                    val result = searchNeteaseByTrack(title, artist, settings.requestLimit)
-                    result
-                        .map {
-                            finalizeRecordingResults(
-                                recordings = it,
-                                title = title,
-                                artist = artist,
-                                priority = settings.metadataPriority,
-                                limit = settings.getSourceLimit("NetEase")
-                            )
-                        }
-                        .onSuccess { recordings ->
-                            recordings.forEach { recording ->
-                                trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.NETEASE))
-                            }
-                        }
-                        .onFailure { error ->
-                            trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, error.toUserFriendlyError()))
-                        }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.toUserFriendlyError()))
-                } finally {
-                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.NETEASE))
-                }
-            }
-        }
-
-        if (useMusicBrainz) {
-            sourceJobs += launch {
-                try {
-                    val result = musicBrainzRepository.searchByTrack(title, artist)
-                    result
-                        .map {
-                            finalizeRecordingResults(
-                                recordings = it,
-                                title = title,
-                                artist = artist,
-                                priority = settings.metadataPriority,
-                                limit = settings.getSourceLimit("MusicBrainz")
-                            )
-                        }
-                        .onSuccess { recordings ->
-                            recordings.forEach { recording ->
-                                trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.MUSICBRAINZ))
-                            }
-                        }
-                        .onFailure { error ->
-                            trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, error.toUserFriendlyError()))
-                        }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.toUserFriendlyError()))
-                } finally {
-                    trySend(OnlineSourceResult.SourceCompleted(OnlineSource.MUSICBRAINZ))
-                }
-            }
-        }
-
-        val completionJob = launch {
-            sourceJobs.joinAll()
-            channel.close()
-        }
+        // supervisorScope completes when all child coroutines finish
+        channel.close()
 
         awaitClose {
-            completionJob.cancel()
-            sourceJobs.forEach { it.cancel() }
+            // No explicit cleanup needed - supervisorScope children are cancelled automatically
+            // when the parent callbackFlow scope is cancelled
         }
     }
 
@@ -960,6 +963,8 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         }
 
+        // Note: No explicit cleanup needed - launches are children of callbackFlow scope
+        // and will be cancelled automatically when channel closes or collection ends.
         awaitClose { }
     }
 

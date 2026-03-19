@@ -36,7 +36,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.WhileSubscribed
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -135,6 +141,27 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val _isScanningReplayGain = MutableStateFlow(false)
     private var _originalMetadata: AudioMetadata? = null
     val isScanningReplayGain: StateFlow<Boolean> = _isScanningReplayGain.asStateFlow()
+
+    // Search job tracking - cancel previous search when new one starts
+    private var _lyricsSearchJob: kotlinx.coroutines.Job? = null
+    private var _coverSearchJob: kotlinx.coroutines.Job? = null
+
+    // Combined edit state using combine() - reduces multiple StateFlow updates to single UI recomposition
+    val editState: StateFlow<EditState> = combine(
+        _hasUnsavedChanges,
+        _modifiedFields,
+        _saveResult
+    ) { hasUnsavedChanges, modifiedFields, saveResult ->
+        EditState(
+            hasUnsavedChanges = hasUnsavedChanges,
+            modifiedFields = modifiedFields,
+            saveResult = saveResult
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5000),
+        initialValue = EditState()
+    )
 
     init {
         loadAudioFile()
@@ -706,7 +733,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
         val title = metadata.title?.takeIf { it.isNotBlank() } ?: File(filePath).nameWithoutExtension
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
 
-        viewModelScope.launch {
+        // Cancel previous search before starting new one (flatMapLatest pattern)
+        _coverSearchJob?.cancel()
+
+        _coverSearchJob = viewModelScope.launch {
             _coverSearchState.value = CoverSearchState(isSearching = true)
             _isOnlineCoverLoading.value = true
             _onlineCoverError.value = null
@@ -832,7 +862,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
         val album = metadata.album?.takeIf { it.isNotBlank() }
         val flowLyricsRepository = lyricsRepository as? LyricsRepositoryImpl ?: return
 
-        viewModelScope.launch {
+        // Cancel previous search before starting new one (flatMapLatest pattern)
+        _lyricsSearchJob?.cancel()
+
+        _lyricsSearchJob = viewModelScope.launch {
             _lyricsSearchState.value = LyricsSearchState(isSearching = true)
             _isOnlineLyricsLoading.value = true
             _onlineLyricsError.value = null

@@ -84,3 +84,14 @@ data class CoverSearchState(
     val errorSources: Map<String, String> = emptyMap(),
     val isSearching: Boolean = false
 )
+
+/**
+ * Combined state for edit-related fields.
+ * Uses combine() to reduce multiple StateFlow updates into a single state update.
+ */
+@Immutable
+data class EditState(
+    val hasUnsavedChanges: Boolean = false,
+    val modifiedFields: Set<MetadataField> = emptySet(),
+    val saveResult: SaveResult? = null
+)

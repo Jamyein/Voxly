@@ -314,6 +314,9 @@ class LyricsRepositoryImpl @Inject constructor(
             }
         }
 
+        // Note: No resources to clean up - this callbackFlow uses pure coroutine launches
+        // that are automatically cancelled when the flow collection ends (channel.close()
+        // triggers scope cancellation). Empty awaitClose is intentional.
         awaitClose { }
     }
 
