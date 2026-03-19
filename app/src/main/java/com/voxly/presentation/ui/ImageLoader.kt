@@ -477,14 +477,14 @@ fun trimToCoreCache() {
     localCacheLock.lock()
     try {
         // Keep first CORE_CACHE_SIZE entries
-        val keysToRemove = localAlbumArtCache.keys().drop(CORE_CACHE_SIZE)
+        val keysToRemove = localAlbumArtCache.keys.drop(CORE_CACHE_SIZE)
         keysToRemove.forEach { localAlbumArtCache.remove(it) }
     } finally {
         localCacheLock.unlock()
     }
     // Also handle mediaStoreAlbumCache
     synchronized(mediaStoreAlbumCache) {
-        val keysToRemove = mediaStoreAlbumCache.keys().drop(CORE_CACHE_SIZE)
+        val keysToRemove = mediaStoreAlbumCache.keys.drop(CORE_CACHE_SIZE)
         keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
     }
     Timber.d(TAG, "Trimmed to core cache: $CORE_CACHE_SIZE entries retained")
@@ -497,13 +497,13 @@ fun trimToCoreCache() {
 fun trimToEssentialCache() {
     localCacheLock.lock()
     try {
-        val keysToRemove = localAlbumArtCache.keys().drop(ESSENTIAL_CACHE_SIZE)
+        val keysToRemove = localAlbumArtCache.keys.drop(ESSENTIAL_CACHE_SIZE)
         keysToRemove.forEach { localAlbumArtCache.remove(it) }
     } finally {
         localCacheLock.unlock()
     }
     synchronized(mediaStoreAlbumCache) {
-        val keysToRemove = mediaStoreAlbumCache.keys().drop(ESSENTIAL_CACHE_SIZE)
+        val keysToRemove = mediaStoreAlbumCache.keys.drop(ESSENTIAL_CACHE_SIZE)
         keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
     }
     Timber.d(TAG, "Trimmed to essential cache: $ESSENTIAL_CACHE_SIZE entries retained")
@@ -544,7 +544,7 @@ fun updateAlbumArtCache(filePath: String, bitmap: Bitmap, sizePx: Int = 300) {
 fun removeAlbumArtFromCache(filePath: String) {
     localCacheLock.lock()
     try {
-        localAlbumArtCache.keys().filter { it.startsWith(filePath) }.forEach {
+        localAlbumArtCache.keys.filter { it.startsWith(filePath) }.forEach {
             localAlbumArtCache.remove(it)
         }
     } finally {

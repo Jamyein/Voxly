@@ -9,9 +9,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
@@ -27,8 +29,10 @@ import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.ui.findCachedAlbumArt
 import com.voxly.presentation.ui.loadImageBitmapFromUrl
-import kotlinx.coroutines.CoroutineScope
+import com.voxly.presentation.ui.loadLocalAlbumArtSized
+import com.voxly.presentation.ui.loadMediaStoreAlbumArtSized
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -53,7 +57,7 @@ fun AlbumArtImage(
     val density = LocalDensity.current
     val targetSizePx = with(density) { targetSize.toPx().toInt() }
 
-    val albumArtBitmap = produceAlbumArtBitmap(
+    val albumArtBitmap = produceAlbumArtBitmapState(
         filePath = filePath,
         mediaStoreAlbumId = mediaStoreAlbumId,
         targetSizePx = targetSizePx
@@ -89,14 +93,13 @@ fun NetworkAlbumArtImage(
     contentScale: ContentScale = ContentScale.Crop,
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
-    val context = LocalContext.current
+    var bitmap by remember(url) { mutableStateOf<Bitmap?>(null) }
 
-    val imageBitmap = produceState<android.graphics.Bitmap?>(
-        initialValue = null,
-        key1 = url
-    ) {
-        value = withContext(Dispatchers.IO) {
-            loadImageBitmapFromUrl(url)?.asAndroidBitmap()
+    LaunchedEffect(url) {
+        if (!url.isNullOrBlank()) {
+            bitmap = withContext(Dispatchers.IO) {
+                loadImageBitmapFromUrl(url)?.asAndroidBitmap()
+            }
         }
     }
 
@@ -104,10 +107,9 @@ fun NetworkAlbumArtImage(
         modifier = modifier.size(size),
         contentAlignment = Alignment.Center
     ) {
-        val bitmap = imageBitmap.value
         if (bitmap != null) {
             Image(
-                bitmap = bitmap.asImageBitmap(),
+                bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = contentDescription,
                 modifier = Modifier.size(size),
                 contentScale = contentScale
@@ -135,59 +137,46 @@ fun DefaultAlbumArtPlaceholder(
 }
 
 /**
- * Internal helper to produce album art bitmap from multiple sources.
+ * Internal helper to produce album art bitmap state from multiple sources.
  * Uses DisposableEffect to support cancellation during list scrolling.
  */
 @Composable
-private fun produceAlbumArtBitmap(
+private fun produceAlbumArtBitmapState(
     filePath: String?,
     mediaStoreAlbumId: Long?,
     targetSizePx: Int
 ): androidx.compose.runtime.State<Bitmap?> {
     val context = LocalContext.current
 
-    // 1. 尝试从内存缓存同步获取（调用 ImageLoader 的缓存查找）
+    // 1. Try to get from memory cache synchronously
     val cachedBitmap = remember(filePath, mediaStoreAlbumId, targetSizePx) {
         findCachedAlbumArt(filePath, mediaStoreAlbumId, targetSizePx)
     }
 
-    // 2. 如果缓存命中，直接返回
+    // 2. If cache hit, return immediately
     if (cachedBitmap != null) {
         return remember { mutableStateOf(cachedBitmap) }
     }
 
-    // 3. 异步加载，带取消支持
-    var loadingBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    // 3. Async loading with cancellation support
+    val loadingState = remember { mutableStateOf<Bitmap?>(null) }
+    val scope = rememberCoroutineScope()
 
     DisposableEffect(filePath, mediaStoreAlbumId, targetSizePx) {
-        val scope = CoroutineScope(Dispatchers.IO)
         val job = scope.launch {
             val loaded = loadAlbumArtInternal(context, filePath, mediaStoreAlbumId, targetSizePx)
-            loadingBitmap = loaded
+            loadingState.value = loaded
         }
         onDispose {
             job.cancel()
         }
     }
 
-    return loadingBitmap
+    return loadingState
 }
 
 /**
- * 从 ImageLoader 缓存中查找已缓存的封面
- */
-private fun findCachedAlbumArt(filePath: String?, albumId: Long?, sizePx: Int): Bitmap? {
-    if (!filePath.isNullOrBlank()) {
-        localAlbumArtCache[getLocalArtCacheKey(filePath, sizePx)]?.let { return it }
-    }
-    if (albumId != null && albumId > 0) {
-        mediaStoreAlbumCache[getMediaStoreCacheKey(albumId, sizePx)]?.let { return it }
-    }
-    return null
-}
-
-/**
- * 内部加载函数，生成尺寸目标的像素值
+ * Internal loading function
  */
 private suspend fun loadAlbumArtInternal(
     context: Context,
@@ -202,37 +191,4 @@ private suspend fun loadAlbumArtInternal(
         loadMediaStoreAlbumArtSized(context, mediaStoreAlbumId, targetSizePx)?.let { return@withContext it }
     }
     null
-}
-
-/**
- * 带尺寸的本地封面加载 - Chunk 5 中定义
- */
-private fun loadLocalAlbumArtSized(filePath: String, targetSizePx: Int): Bitmap? {
-    // Stub - will be implemented in Chunk 5
-    return loadLocalAlbumArtSizedImpl(filePath, targetSizePx)
-}
-
-/**
- * 带尺寸的 MediaStore 封面加载 - Chunk 5 中定义
- */
-private fun loadMediaStoreAlbumArtSized(context: Context, albumId: Long, targetSizePx: Int): Bitmap? {
-    // Stub - will be implemented in Chunk 5
-    return loadMediaStoreAlbumArtSizedImpl(context, albumId, targetSizePx)
-}
-
-// Temporary stub implementations that delegate to existing functions
-private fun loadLocalAlbumArtSizedImpl(filePath: String, targetSizePx: Int): Bitmap? {
-    return try {
-        com.voxly.presentation.ui.loadLocalAlbumArt(filePath)
-    } catch (e: Exception) {
-        null
-    }
-}
-
-private fun loadMediaStoreAlbumArtSizedImpl(context: Context, albumId: Long, targetSizePx: Int): Bitmap? {
-    return try {
-        com.voxly.presentation.ui.loadMediaStoreAlbumArt(context, albumId)
-    } catch (e: Exception) {
-        null
-    }
 }
