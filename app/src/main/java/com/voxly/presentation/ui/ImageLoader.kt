@@ -65,7 +65,7 @@ fun calculateTargetPixels(sizeDp: Int, density: Float): Int {
  */
 suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
     if (url.isNullOrBlank()) return null
-    
+
     // Check session cache first
     cacheLock.lock()
     val cached = searchResultCache[url]
@@ -73,16 +73,16 @@ suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
     if (cached != null) {
         return cached
     }
-    
+
     // Load from network
     val bytes = loadImageBytesFromUrl(url) ?: return null
     val bitmap = decodeBitmapFromBytes(bytes)?.asImageBitmap() ?: return null
-    
+
     // Store in session cache
     cacheLock.lock()
     searchResultCache[url] = bitmap
     cacheLock.unlock()
-    
+
     return bitmap
 }
 
@@ -290,7 +290,7 @@ private fun loadEmbeddedAlbumArtSized(filePath: String, targetSizePx: Int): Bitm
                 decodeSampledBitmapFromBytes(artBytes, targetSizePx)
             } else {
                 // Try to load from folder cover (cover.jpg, folder.jpg, etc.)
-                loadFolderCoverArtSized(filePath, targetSizePx)
+                loadFolderCoverArt(filePath, targetSizePx)
             }
         } catch (e: Exception) {
             null
@@ -309,14 +309,7 @@ private fun loadEmbeddedAlbumArtSized(filePath: String, targetSizePx: Int): Bitm
 /**
  * Loads folder cover art from the parent directory of the audio file.
  */
-private fun loadFolderCoverArt(filePath: String): Bitmap? {
-    return loadFolderCoverArtSized(filePath, 300)
-}
-
-/**
- * Loads folder cover art with explicit target size.
- */
-private fun loadFolderCoverArtSized(filePath: String, targetSizePx: Int): Bitmap? {
+private fun loadFolderCoverArt(filePath: String, targetSizePx: Int): Bitmap? {
     val folder = File(filePath).parentFile ?: return null
     val coverFileNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
 
@@ -374,6 +367,13 @@ private fun decodeSampledBitmapFromFile(filePath: String, targetSize: Int): Bitm
 }
 
 /**
+ * Decodes a bitmap from bytes without downsampling.
+ */
+private fun decodeBitmapFromBytes(bytes: ByteArray): Bitmap? {
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+}
+
+/**
  * Preloads multiple album arts in the background (fire-and-forget).
  */
 fun preloadLocalAlbumArts(filePaths: List<String>) {
@@ -410,13 +410,12 @@ fun clearLocalAlbumArtCache() {
  *
  * @param context Android context
  * @param albumId MediaStore album ID
- * @param targetSizePx Target size in pixels for memory-efficient decoding (default 300)
  * @return Bitmap of the album art, or null if not found
  */
-fun loadMediaStoreAlbumArt(context: Context, albumId: Long, targetSizePx: Int = 300): Bitmap? {
+fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
     if (albumId <= 0L) return null
 
-    val cacheKey = getMediaStoreCacheKey(albumId, targetSizePx)
+    val cacheKey = "mediastore_$albumId"
 
     // Check cache first
     mediaStoreAlbumCache[cacheKey]?.let { cached ->
@@ -432,13 +431,13 @@ fun loadMediaStoreAlbumArt(context: Context, albumId: Long, targetSizePx: Int = 
     val bitmap = try {
         context.contentResolver.openInputStream(uri)?.use { stream ->
             val bytes = stream.readBytes()
-            decodeSampledBitmapFromBytes(bytes, targetSizePx)
+            decodeSampledBitmapFromBytes(bytes, 300)
         }
     } catch (e: Exception) {
         null
     }
 
-    // Cache the result with size-aware key
+    // Cache the result
     if (bitmap != null) {
         // Don't recycle immediately on eviction - let GC handle memory.
         // This prevents crashes when old bitmaps are still referenced by Compose.
@@ -451,13 +450,6 @@ fun loadMediaStoreAlbumArt(context: Context, albumId: Long, targetSizePx: Int = 
     }
 
     return bitmap
-}
-
-/**
- * Loads MediaStore album art with explicit target size (Chunk 2 API).
- */
-fun loadMediaStoreAlbumArtSized(context: Context, albumId: Long, targetSizePx: Int): Bitmap? {
-    return loadMediaStoreAlbumArt(context, albumId, targetSizePx)
 }
 
 /**

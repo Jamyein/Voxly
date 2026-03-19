@@ -1,6 +1,5 @@
 package com.voxly.presentation.components
 
-import android.content.Context
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
@@ -8,21 +7,17 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.produceState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -31,10 +26,9 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.ui.findCachedAlbumArt
 import com.voxly.presentation.ui.loadImageBitmapFromUrl
-import com.voxly.presentation.ui.loadLocalAlbumArtSized
-import com.voxly.presentation.ui.loadMediaStoreAlbumArtSized
+import com.voxly.presentation.ui.loadLocalAlbumArt
+import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 /**
@@ -50,17 +44,12 @@ fun AlbumArtImage(
     contentDescription: String?,
     modifier: Modifier = Modifier,
     size: Dp = 64.dp,
-    targetSize: Dp = size,
     contentScale: ContentScale = ContentScale.Crop,
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
-    val density = LocalDensity.current
-    val targetSizePx = with(density) { targetSize.toPx().toInt() }
-
-    val albumArtBitmap = produceAlbumArtBitmapState(
+    val albumArtBitmap = produceAlbumArtBitmap(
         filePath = filePath,
-        mediaStoreAlbumId = mediaStoreAlbumId,
-        targetSizePx = targetSizePx
+        mediaStoreAlbumId = mediaStoreAlbumId
     )
 
     Box(
@@ -137,58 +126,40 @@ fun DefaultAlbumArtPlaceholder(
 }
 
 /**
- * Internal helper to produce album art bitmap state from multiple sources.
- * Uses DisposableEffect to support cancellation during list scrolling.
+ * Internal helper to produce album art bitmap from multiple sources.
  */
 @Composable
-private fun produceAlbumArtBitmapState(
+private fun produceAlbumArtBitmap(
     filePath: String?,
-    mediaStoreAlbumId: Long?,
-    targetSizePx: Int
+    mediaStoreAlbumId: Long?
 ): androidx.compose.runtime.State<Bitmap?> {
     val context = LocalContext.current
+    return androidx.compose.runtime.produceState<Bitmap?>(
+        initialValue = null,
+        key1 = filePath,
+        key2 = mediaStoreAlbumId
+    ) {
+        value = withContext(Dispatchers.IO) {
+            // First try: local file embedded album art
+            if (!filePath.isNullOrBlank()) {
+                val localArt = loadLocalAlbumArt(filePath)
+                if (localArt != null) {
+                    return@withContext localArt
+                }
+            }
 
-    // 1. Try to get from memory cache synchronously
-    val cachedBitmap = remember(filePath, mediaStoreAlbumId, targetSizePx) {
-        findCachedAlbumArt(filePath, mediaStoreAlbumId, targetSizePx)
-    }
+            // Second try: MediaStore album art
+            if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
+                val mediaStoreArt = loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
+                if (mediaStoreArt != null) {
+                    return@withContext mediaStoreArt
+                }
+            }
 
-    // 2. If cache hit, return immediately
-    if (cachedBitmap != null) {
-        return remember { mutableStateOf(cachedBitmap) }
-    }
+            // Third try: folder cover art (already included in loadLocalAlbumArt)
+            // If filePath is provided, loadLocalAlbumArt already tried folder covers
 
-    // 3. Async loading with cancellation support
-    val loadingState = remember { mutableStateOf<Bitmap?>(null) }
-    val scope = rememberCoroutineScope()
-
-    DisposableEffect(filePath, mediaStoreAlbumId, targetSizePx) {
-        val job = scope.launch {
-            val loaded = loadAlbumArtInternal(context, filePath, mediaStoreAlbumId, targetSizePx)
-            loadingState.value = loaded
+            null
         }
-        onDispose {
-            job.cancel()
-        }
     }
-
-    return loadingState
-}
-
-/**
- * Internal loading function
- */
-private suspend fun loadAlbumArtInternal(
-    context: Context,
-    filePath: String?,
-    mediaStoreAlbumId: Long?,
-    targetSizePx: Int
-): Bitmap? = withContext(Dispatchers.IO) {
-    if (!filePath.isNullOrBlank()) {
-        loadLocalAlbumArtSized(filePath, targetSizePx)?.let { return@withContext it }
-    }
-    if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
-        loadMediaStoreAlbumArtSized(context, mediaStoreAlbumId, targetSizePx)?.let { return@withContext it }
-    }
-    null
 }

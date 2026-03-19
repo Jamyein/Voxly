@@ -37,8 +37,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 28
         targetSdk = 36
-        versionCode = 26
-        versionName = "1.1.6"
+        versionCode = 27
+        versionName = "1.2.0"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
