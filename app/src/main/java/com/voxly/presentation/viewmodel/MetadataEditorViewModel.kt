@@ -16,6 +16,7 @@ import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
+import com.voxly.domain.model.ScanModeConstants
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineLyricsResult
@@ -78,8 +79,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
         viewModelScope.launch {
             val mode = settingsDataStore.scanMode.first()
             _scanMode.value = when (mode) {
-                "SINGLE_ALBUM" -> ScanMode.SINGLE_ALBUM
-                "ALBUMS" -> ScanMode.ALBUMS
+                ScanModeConstants.SINGLE_ALBUM -> ScanMode.SINGLE_ALBUM
+                ScanModeConstants.ALBUMS -> ScanMode.ALBUMS
                 else -> ScanMode.TRACK_ONLY
             }
         }

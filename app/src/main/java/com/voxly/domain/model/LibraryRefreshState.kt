@@ -1,5 +1,7 @@
 package com.voxly.domain.model
 
+import androidx.compose.runtime.Immutable
+
 /**
  * Represents the state of music library refresh operations.
  */
@@ -34,6 +36,7 @@ sealed class LibraryRefreshState {
  * @param total Total number of files to scan
  * @param currentFile Name of the current file being scanned
  */
+@Immutable
 data class ScanProgress(
     val current: Int,
     val total: Int,

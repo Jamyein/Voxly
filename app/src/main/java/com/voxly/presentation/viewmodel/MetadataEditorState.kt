@@ -1,5 +1,6 @@
 package com.voxly.presentation.viewmodel
 
+import androidx.compose.runtime.Immutable
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineLyricsResult
@@ -68,6 +69,7 @@ enum class ConvertibleField(val displayName: String) {
     LYRICS("歌词")
 }
 
+@Immutable
 data class LyricsSearchState(
     val results: List<OnlineLyricsResult> = emptyList(),
     val completedSources: Set<String> = emptySet(),
@@ -75,6 +77,7 @@ data class LyricsSearchState(
     val isSearching: Boolean = false
 )
 
+@Immutable
 data class CoverSearchState(
     val results: List<OnlineRecording> = emptyList(),
     val completedSources: Set<String> = emptySet(),
