@@ -183,90 +183,166 @@ class FileBrowserViewModel @Inject constructor(
 
     /**
      * Loads all audio files from device storage.
+     *
+     * @param forceRefresh If true, bypass cache and perform full scan (refresh button).
+     *                      If false, use cache when available.
+     * @param isIncremental If true, perform incremental scan to detect new/modified files (pull-to-refresh).
+     *                      If false, perform full scan based on forceRefresh.
      */
-    fun loadAudioFiles(forceRefresh: Boolean = false) {
+    fun loadAudioFiles(forceRefresh: Boolean = false, isIncremental: Boolean = false) {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             // Set pull-to-refresh state
-            if (forceRefresh) {
+            if (forceRefresh || isIncremental) {
                 _isRefreshing.value = true
             }
 
             syncSelectedDirectoriesFromStorage()
 
-                if (_selectedDirectories.value.isNotEmpty()) {
-                    scanSelectedDirectories(_selectedDirectories.value, forceRefresh)
+            if (_selectedDirectories.value.isNotEmpty()) {
+                if (isIncremental) {
+                    // Pull-to-refresh: use incremental scan for new/modified files
+                    scanSelectedDirectoriesIncremental(_selectedDirectories.value)
+                } else {
+                    // Refresh button: full directory scan
+                    scanSelectedDirectories(_selectedDirectories.value, forceRefresh = true)
+                }
+                return@launch
+            }
+
+            // No selected directories - handle global/all files case
+            // Check cache BEFORE setting Loading state to avoid flash
+            // Check database cache first (persisted, survives app restart)
+            if (!forceRefresh && !isIncremental && audioFileScanner.hasCachedData()) {
+                val cachedFiles = audioFileScanner.getCachedAudioFiles().first()
+                if (cachedFiles.isNotEmpty()) {
+                    cachedGlobalFiles = cachedFiles
+                    _directoryFiles.value = emptyMap()
+                    _uiState.value = FileBrowserUiState.Success(
+                        files = cachedFiles,
+                        selectedCount = _selectedFiles.value.size
+                    )
+                    Timber.d(TAG, "Loaded ${cachedFiles.size} files from cache")
                     return@launch
                 }
+            }
 
-                // Check cache BEFORE setting Loading state to avoid flash
-                // Check database cache first (persisted, survives app restart)
-                if (!forceRefresh && audioFileScanner.hasCachedData()) {
-                    val cachedFiles = audioFileScanner.getCachedAudioFiles().first()
-                    if (cachedFiles.isNotEmpty()) {
-                        cachedGlobalFiles = cachedFiles
-                        _directoryFiles.value = emptyMap()
-                        _uiState.value = FileBrowserUiState.Success(
-                            files = cachedFiles,
+            // Check in-memory cache
+            if (!forceRefresh && !isIncremental) {
+                cachedGlobalFiles?.let { files ->
+                    _directoryFiles.value = emptyMap()
+                    _uiState.value = if (files.isEmpty()) {
+                        FileBrowserUiState.Empty
+                    } else {
+                        FileBrowserUiState.Success(
+                            files = files,
                             selectedCount = _selectedFiles.value.size
                         )
-                        Timber.d(TAG, "Loaded ${cachedFiles.size} files from cache")
-                        return@launch
+                    }
+                    return@launch
+                }
+            }
+
+            // Keep current list during non-forced refresh to avoid UI flicker on resume.
+            if (forceRefresh || isIncremental || _uiState.value !is FileBrowserUiState.Success) {
+                _uiState.value = FileBrowserUiState.Loading
+            }
+
+            // Perform scan using unifiedScanManager
+            val result = if (isIncremental) {
+                // Incremental scan: only new/modified files
+                unifiedScanManager.scan(target = ScanTarget.Incremental, force = true)
+            } else {
+                // Full scan: Global scan for unfiltered view
+                unifiedScanManager.scan(target = ScanTarget.Global, force = forceRefresh)
+            }
+
+            when (result) {
+                is ScanResult.Success -> {
+                    _isRefreshing.value = false
+                    cachedGlobalFiles = result.files
+                    _directoryFiles.value = emptyMap()
+                    _uiState.value = if (result.files.isEmpty()) {
+                        FileBrowserUiState.Empty
+                    } else {
+                        FileBrowserUiState.Success(
+                            files = result.files,
+                            selectedCount = _selectedFiles.value.size
+                        )
+                    }
+                    if (isIncremental) {
+                        aggregateData()
                     }
                 }
-
-                // Check in-memory cache
-                if (!forceRefresh) {
-                    cachedGlobalFiles?.let { files ->
-                        _directoryFiles.value = emptyMap()
-                        _uiState.value = if (files.isEmpty()) {
-                            FileBrowserUiState.Empty
-                        } else {
-                            FileBrowserUiState.Success(
-                                files = files,
-                                selectedCount = _selectedFiles.value.size
-                            )
-                        }
-                        return@launch
-                    }
+                is ScanResult.Error -> {
+                    _isRefreshing.value = false
+                    Timber.tag(TAG).e("Audio scan failed: ${result.message}")
+                    _uiState.value = FileBrowserUiState.Error(result.message)
                 }
-
-                // Keep current list during non-forced refresh to avoid UI flicker on resume.
-                if (forceRefresh || _uiState.value !is FileBrowserUiState.Success) {
-                    _uiState.value = FileBrowserUiState.Loading
+                is ScanResult.Cancelled -> {
+                    _isRefreshing.value = false
                 }
+            }
+        }
+    }
 
-                // No cache available - perform full scan using unifiedScanManager
-                val scanTarget = if (_selectedDirectories.value.isNotEmpty()) {
-                    ScanTarget.Directories(_selectedDirectories.value.map { it.path })
-                } else {
-                    ScanTarget.Global
-                }
+    /**
+     * Performs incremental scan on selected directories.
+     * Detects new/modified files by comparing modification times with cache.
+     */
+    private suspend fun scanSelectedDirectoriesIncremental(directories: List<SelectedDirectory>) {
+        Timber.d(TAG, "Performing incremental scan on ${directories.size} directories")
 
-                val result = unifiedScanManager.scan(target = scanTarget, force = forceRefresh)
+        runCatching {
+            val paths = directories.map { it.path }.filter { it.isNotBlank() }
+            if (paths.isEmpty()) {
+                emptyMap()
+            } else {
+                // Use incremental scan which checks file modification times
+                val result = unifiedScanManager.scan(
+                    target = ScanTarget.Incremental,
+                    force = true
+                )
                 when (result) {
                     is ScanResult.Success -> {
-                        _isRefreshing.value = false
-                        cachedGlobalFiles = result.files
-                        _directoryFiles.value = emptyMap()
-                        _uiState.value = if (result.files.isEmpty()) {
-                            FileBrowserUiState.Empty
-                        } else {
-                            FileBrowserUiState.Success(
-                                files = result.files,
-                                selectedCount = _selectedFiles.value.size
-                            )
+                        // Group files by directory URI
+                        val filesByDir = mutableMapOf<String, List<AudioFile>>()
+                        directories.forEach { dir ->
+                            val dirFiles = result.files.filter { it.path.startsWith(dir.path) }
+                            filesByDir[dir.uri] = dirFiles
                         }
+                        filesByDir
                     }
-                    is ScanResult.Error -> {
-                        _isRefreshing.value = false
-                        Timber.tag(TAG).e("Global audio scan failed: ${result.message}")
-                        _uiState.value = FileBrowserUiState.Error(result.message)
-                    }
-                    is ScanResult.Cancelled -> {
-                        _isRefreshing.value = false
-                    }
+                    is ScanResult.Error -> throw IllegalStateException(result.message)
+                    is ScanResult.Cancelled -> emptyMap()
                 }
+            }
+        }.onSuccess { filesByDirectory ->
+            _isRefreshing.value = false
+            _directoryFiles.value = filesByDirectory
+            _currentDirectory.value = directories.firstOrNull()?.path
+            if (_openedDirectoryUri.value != null && _openedDirectoryUri.value !in filesByDirectory.keys) {
+                _openedDirectoryUri.value = null
+                clearSelection()
+            }
+            val mergedFiles = filesByDirectory.values.flatten().distinctBy { it.path }
+            _uiState.value = if (mergedFiles.isEmpty()) {
+                FileBrowserUiState.Empty
+            } else {
+                FileBrowserUiState.Success(
+                    files = mergedFiles,
+                    selectedCount = _selectedFiles.value.size
+                )
+            }
+            aggregateData()
+        }.onFailure { error ->
+            _isRefreshing.value = false
+            if (error is CancellationException) {
+                return@onFailure
+            }
+            Timber.tag(TAG).e("Incremental directory scan failed for ${directories.joinToString { it.path }}", error)
+            // Fall back to full scan on error
+            scanSelectedDirectories(directories, forceRefresh = true)
         }
     }
 

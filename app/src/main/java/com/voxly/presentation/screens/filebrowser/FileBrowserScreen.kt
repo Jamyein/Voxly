@@ -149,8 +149,9 @@ fun FileBrowserScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     // Handle pull-to-refresh trigger via onRefresh callback
+    // Pull-to-refresh uses incremental scan to detect new/modified files
     val onRefresh: () -> Unit = {
-        viewModel.loadAudioFiles(forceRefresh = true)
+        viewModel.loadAudioFiles(isIncremental = true)
     }
 
     var sortOption by rememberSaveable { mutableStateOf(FileSortOption.NAME_ASC.name) }
