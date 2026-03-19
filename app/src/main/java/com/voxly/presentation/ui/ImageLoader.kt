@@ -19,6 +19,7 @@ import java.net.URL
 import java.util.Base64
 import java.util.LinkedHashMap
 import java.util.concurrent.locks.ReentrantLock
+import timber.log.Timber
 
 // Session-scoped LRU cache for search result album covers (ImageBitmap)
 private val searchResultCache = mutableMapOf<String, ImageBitmap>()
@@ -37,6 +38,26 @@ private const val MAX_LOCAL_CACHE_SIZE = 200
 // MediaStore album art cache (Bitmap)
 private val mediaStoreAlbumCache = LinkedHashMap<String, Bitmap>(50, 0.75f, true)
 private const val MAX_MEDIASTORE_CACHE_SIZE = 50
+
+// Cache tier thresholds
+private const val CORE_CACHE_SIZE = 50   // Core cache: detail page covers
+private const val ESSENTIAL_CACHE_SIZE = 20  // Minimal cache: currently visible items
+
+private const val TAG = "ImageLoader"
+
+/**
+ * Generates a size-aware cache key for album art
+ */
+private fun getAlbumArtCacheKey(filePath: String, albumId: Long?, sizePx: Int): String {
+    return "${filePath}_${albumId}_$sizePx"
+}
+
+/**
+ * Calculates actual pixels from dp size
+ */
+fun calculateTargetPixels(sizeDp: Int, density: Float): Int {
+    return (sizeDp * density).toInt()
+}
 
 /**
  * Loads an image from URL and returns as ImageBitmap.
@@ -416,4 +437,114 @@ fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
  */
 fun clearMediaStoreAlbumCache() {
     mediaStoreAlbumCache.clear()
+}
+
+/**
+ * Releases non-core cache, keeping core cache (detail page covers).
+ * Triggered by: TRIM_MEMORY_RUNNING_LOW
+ */
+fun trimToCoreCache() {
+    localCacheLock.lock()
+    try {
+        // Keep first CORE_CACHE_SIZE entries
+        val keysToRemove = localAlbumArtCache.keys().drop(CORE_CACHE_SIZE)
+        keysToRemove.forEach { localAlbumArtCache.remove(it) }
+    } finally {
+        localCacheLock.unlock()
+    }
+    // Also handle mediaStoreAlbumCache
+    synchronized(mediaStoreAlbumCache) {
+        val keysToRemove = mediaStoreAlbumCache.keys().drop(CORE_CACHE_SIZE)
+        keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
+    }
+    Timber.d(TAG, "Trimmed to core cache: $CORE_CACHE_SIZE entries retained")
+}
+
+/**
+ * Releases non-core cache, keeping minimal cache (currently visible items).
+ * Triggered by: TRIM_MEMORY_UI_HIDDEN
+ */
+fun trimToEssentialCache() {
+    localCacheLock.lock()
+    try {
+        val keysToRemove = localAlbumArtCache.keys().drop(ESSENTIAL_CACHE_SIZE)
+        keysToRemove.forEach { localAlbumArtCache.remove(it) }
+    } finally {
+        localCacheLock.unlock()
+    }
+    synchronized(mediaStoreAlbumCache) {
+        val keysToRemove = mediaStoreAlbumCache.keys().drop(ESSENTIAL_CACHE_SIZE)
+        keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
+    }
+    Timber.d(TAG, "Trimmed to essential cache: $ESSENTIAL_CACHE_SIZE entries retained")
+}
+
+/**
+ * Releases all caches.
+ * Triggered by: TRIM_MEMORY_COMPLETE
+ */
+fun clearAllCaches() {
+    localCacheLock.lock()
+    try {
+        localAlbumArtCache.clear()
+    } finally {
+        localCacheLock.unlock()
+    }
+    synchronized(mediaStoreAlbumCache) {
+        mediaStoreAlbumCache.clear()
+    }
+    Timber.d(TAG, "Cleared all album art caches")
+}
+
+/**
+ * Updates a single cover in cache (used after cover editing)
+ */
+fun updateAlbumArtCache(filePath: String, bitmap: Bitmap, sizePx: Int = 300) {
+    localCacheLock.lock()
+    try {
+        localAlbumArtCache[getLocalArtCacheKey(filePath, sizePx)] = bitmap
+    } finally {
+        localCacheLock.unlock()
+    }
+}
+
+/**
+ * Removes a single cover from cache
+ */
+fun removeAlbumArtFromCache(filePath: String) {
+    localCacheLock.lock()
+    try {
+        localAlbumArtCache.keys().filter { it.startsWith(filePath) }.forEach {
+            localAlbumArtCache.remove(it)
+        }
+    } finally {
+        localCacheLock.unlock()
+    }
+}
+
+/**
+ * Finds a cached cover (used by AlbumArtImage for sync cache checking)
+ */
+fun findCachedAlbumArt(filePath: String?, albumId: Long?, sizePx: Int): Bitmap? {
+    if (!filePath.isNullOrBlank()) {
+        localAlbumArtCache[getLocalArtCacheKey(filePath, sizePx)]?.let { return it }
+    }
+    if (albumId != null && albumId > 0) {
+        mediaStoreAlbumCache[getMediaStoreCacheKey(albumId, sizePx)]?.let { return it }
+    }
+    return null
+}
+
+/**
+ * Gets the local album art cache key
+ */
+private fun getLocalArtCacheKey(filePath: String, sizePx: Int): String {
+    return "${filePath}_$sizePx"
+}
+
+/**
+ * Gets the MediaStore album art cache key
+ */
+private fun getMediaStoreCacheKey(albumId: Long, sizePx: Int): String {
+    return "mediastore_${albumId}_$sizePx"
 }
