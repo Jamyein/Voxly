@@ -203,9 +203,6 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
-    // Immutable collections for Compose stability
-    implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.3.7")
-
     // Audio Processing - Kyant0/taglib from Maven Central (supports Android SAF)
     // Replaces KTagLib which had JitPack reliability issues
     implementation("io.github.kyant0:taglib:1.0.5")

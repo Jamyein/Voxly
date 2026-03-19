@@ -14,6 +14,7 @@ import com.voxly.core.util.Constants
 import javax.inject.Inject
 import com.voxly.domain.model.DataSourceConfig
 import com.voxly.domain.model.DataSourceType
+import com.voxly.domain.model.ScanModeConstants
 import com.voxly.domain.model.SourceConfigurations
 
 /** Timeout for StateFlow sharing in milliseconds */
@@ -228,7 +229,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = "TRACK_ONLY"
+            initialValue = ScanModeConstants.TRACK_ONLY
     )
 
     /**
