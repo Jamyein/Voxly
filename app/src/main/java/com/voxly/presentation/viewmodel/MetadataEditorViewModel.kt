@@ -27,6 +27,7 @@ import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.repository.ScanMode
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.presentation.navigation.MetadataEditor
+import com.voxly.presentation.ui.updateAlbumArtCache
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
@@ -49,9 +50,13 @@ import kotlinx.coroutines.withContext
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sqrt
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.net.URLDecoder
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import javax.inject.Inject
+import timber.log.Timber
 
 /**
  * ViewModel for the metadata editor screen.
@@ -133,6 +138,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     private val _coverSearchState = MutableStateFlow(CoverSearchState())
     val coverSearchState: StateFlow<CoverSearchState> = _coverSearchState.asStateFlow()
+
+    // Cover save state for async cover art saving
+    private val _coverSaveState = MutableStateFlow<CoverSaveState>(CoverSaveState.Idle)
+    val coverSaveState: StateFlow<CoverSaveState> = _coverSaveState.asStateFlow()
 
     // ReplayGain state
     private val _pendingReplayGainInfo = MutableStateFlow<ReplayGainInfo?>(null)
@@ -957,5 +966,76 @@ class MetadataEditorViewModel @AssistedInject constructor(
     @AssistedFactory
     interface Factory {
         fun create(navKey: MetadataEditor): MetadataEditorViewModel
+    }
+
+    /**
+     * Sealed class representing cover save states.
+     */
+    sealed class CoverSaveState {
+        data object Idle : CoverSaveState()
+        data object Saving : CoverSaveState()
+        data object Success : CoverSaveState()
+        data class Error(val message: String?) : CoverSaveState()
+    }
+
+    /**
+     * Saves cover art asynchronously.
+     * Compresses the cover, writes to file, and updates cache.
+     * @param coverBytes The cover art bytes to save
+     */
+    fun saveCoverArt(coverBytes: ByteArray) {
+        if (_coverSaveState.value == CoverSaveState.Saving) return
+
+        viewModelScope.launch {
+            _coverSaveState.value = CoverSaveState.Saving
+
+            val result = withContext(Dispatchers.IO) {
+                try {
+                    // 1. Compress cover art
+                    val compressed = compressCoverArt(coverBytes, quality = 85)
+                    // 2. Write to file
+                    audioRepository.setAlbumArt(filePath, compressed)
+                    // 3. Update cache - decode compressed bytes back to Bitmap
+                    val bitmap = BitmapFactory.decodeByteArray(compressed, 0, compressed.size)
+                    if (bitmap != null) {
+                        updateAlbumArtCache(filePath, bitmap)
+                    }
+                    Result.success(Unit)
+                } catch (e: Exception) {
+                    Timber.e(TAG, "Failed to save cover art", e)
+                    Result.failure(e)
+                }
+            }
+
+            result.fold(
+                onSuccess = {
+                    _coverSaveState.value = CoverSaveState.Success
+                },
+                onFailure = { e ->
+                    _coverSaveState.value = CoverSaveState.Error(e.message)
+                }
+            )
+        }
+    }
+
+    /**
+     * Compresses cover art bytes to JPEG format.
+     */
+    private suspend fun compressCoverArt(bytes: ByteArray, quality: Int): ByteArray {
+        return withContext(Dispatchers.IO) {
+            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+                ?: return@withContext bytes
+            val outputStream = ByteArrayOutputStream()
+            bitmap.compress(Bitmap.CompressFormat.JPEG, quality, outputStream)
+            bitmap.recycle()
+            outputStream.toByteArray()
+        }
+    }
+
+    /**
+     * Clears the cover save state.
+     */
+    fun clearCoverSaveState() {
+        _coverSaveState.value = CoverSaveState.Idle
     }
 }
