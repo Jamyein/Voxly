@@ -19,6 +19,7 @@ import java.net.URL
 import java.util.Base64
 import java.util.LinkedHashMap
 import java.util.concurrent.locks.ReentrantLock
+import timber.log.Timber
 
 // Session-scoped LRU cache for search result album covers (ImageBitmap)
 private val searchResultCache = mutableMapOf<String, ImageBitmap>()
@@ -37,6 +38,26 @@ private const val MAX_LOCAL_CACHE_SIZE = 200
 // MediaStore album art cache (Bitmap)
 private val mediaStoreAlbumCache = LinkedHashMap<String, Bitmap>(50, 0.75f, true)
 private const val MAX_MEDIASTORE_CACHE_SIZE = 50
+
+// Cache tier thresholds
+private const val CORE_CACHE_SIZE = 50   // Core cache: detail page covers
+private const val ESSENTIAL_CACHE_SIZE = 20  // Minimal cache: currently visible items
+
+private const val TAG = "ImageLoader"
+
+/**
+ * Generates a size-aware cache key for album art
+ */
+private fun getAlbumArtCacheKey(filePath: String, albumId: Long?, sizePx: Int): String {
+    return "${filePath}_${albumId}_$sizePx"
+}
+
+/**
+ * Calculates actual pixels from dp size
+ */
+fun calculateTargetPixels(sizeDp: Int, density: Float): Int {
+    return (sizeDp * density).toInt()
+}
 
 /**
  * Loads an image from URL and returns as ImageBitmap.
@@ -204,23 +225,24 @@ suspend fun loadImageBytesFromUrl(url: String?): ByteArray? {
  * Uses embedded album art from MediaMetadataRetriever.
  *
  * @param filePath The path to the audio file
+ * @param targetSizePx Target size in pixels for memory-efficient decoding (default 300)
  * @return Bitmap of the album art, or null if not found
  */
-fun loadLocalAlbumArt(filePath: String): Bitmap? {
+fun loadLocalAlbumArt(filePath: String, targetSizePx: Int = 300): Bitmap? {
     if (filePath.isBlank()) return null
 
-    // Check cache first
+    // Check cache with size-aware key
     localCacheLock.lock()
-    val cached = localAlbumArtCache[filePath]
+    val cached = localAlbumArtCache[getLocalArtCacheKey(filePath, targetSizePx)]
     localCacheLock.unlock()
     if (cached != null && !cached.isRecycled) {
         return cached
     }
 
     // Load from file
-    val bitmap = loadEmbeddedAlbumArt(filePath)
+    val bitmap = loadEmbeddedAlbumArtSized(filePath, targetSizePx)
 
-    // Cache the result
+    // Cache the result with size-aware key
     if (bitmap != null) {
         localCacheLock.lock()
         try {
@@ -232,7 +254,7 @@ fun loadLocalAlbumArt(filePath: String): Bitmap? {
                     localAlbumArtCache.remove(key)
                 }
             }
-            localAlbumArtCache[filePath] = bitmap
+            localAlbumArtCache[getLocalArtCacheKey(filePath, targetSizePx)] = bitmap
         } finally {
             localCacheLock.unlock()
         }
@@ -242,19 +264,33 @@ fun loadLocalAlbumArt(filePath: String): Bitmap? {
 }
 
 /**
+ * Loads local album art with explicit target size (Chunk 2 API).
+ */
+fun loadLocalAlbumArtSized(filePath: String, targetSizePx: Int): Bitmap? {
+    return loadLocalAlbumArt(filePath, targetSizePx)
+}
+
+/**
  * Loads embedded album art from an audio file using MediaMetadataRetriever.
  */
 private fun loadEmbeddedAlbumArt(filePath: String): Bitmap? {
+    return loadEmbeddedAlbumArtSized(filePath, 300)
+}
+
+/**
+ * Loads embedded album art with explicit target size.
+ */
+private fun loadEmbeddedAlbumArtSized(filePath: String, targetSizePx: Int): Bitmap? {
     return try {
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(filePath)
             val artBytes = retriever.embeddedPicture
             if (artBytes != null) {
-                decodeSampledBitmapFromBytes(artBytes, 300)
+                decodeSampledBitmapFromBytes(artBytes, targetSizePx)
             } else {
                 // Try to load from folder cover (cover.jpg, folder.jpg, etc.)
-                loadFolderCoverArt(filePath)
+                loadFolderCoverArtSized(filePath, targetSizePx)
             }
         } catch (e: Exception) {
             null
@@ -274,6 +310,13 @@ private fun loadEmbeddedAlbumArt(filePath: String): Bitmap? {
  * Loads folder cover art from the parent directory of the audio file.
  */
 private fun loadFolderCoverArt(filePath: String): Bitmap? {
+    return loadFolderCoverArtSized(filePath, 300)
+}
+
+/**
+ * Loads folder cover art with explicit target size.
+ */
+private fun loadFolderCoverArtSized(filePath: String, targetSizePx: Int): Bitmap? {
     val folder = File(filePath).parentFile ?: return null
     val coverFileNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
 
@@ -281,7 +324,7 @@ private fun loadFolderCoverArt(filePath: String): Bitmap? {
         val coverFile = File(folder, fileName)
         if (coverFile.exists()) {
             return try {
-                decodeSampledBitmapFromFile(coverFile.absolutePath, 300)
+                decodeSampledBitmapFromFile(coverFile.absolutePath, targetSizePx)
             } catch (e: Exception) {
                 null
             }
@@ -367,12 +410,13 @@ fun clearLocalAlbumArtCache() {
  *
  * @param context Android context
  * @param albumId MediaStore album ID
+ * @param targetSizePx Target size in pixels for memory-efficient decoding (default 300)
  * @return Bitmap of the album art, or null if not found
  */
-fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
+fun loadMediaStoreAlbumArt(context: Context, albumId: Long, targetSizePx: Int = 300): Bitmap? {
     if (albumId <= 0L) return null
 
-    val cacheKey = "mediastore_$albumId"
+    val cacheKey = getMediaStoreCacheKey(albumId, targetSizePx)
 
     // Check cache first
     mediaStoreAlbumCache[cacheKey]?.let { cached ->
@@ -388,13 +432,13 @@ fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
     val bitmap = try {
         context.contentResolver.openInputStream(uri)?.use { stream ->
             val bytes = stream.readBytes()
-            decodeSampledBitmapFromBytes(bytes, 300)
+            decodeSampledBitmapFromBytes(bytes, targetSizePx)
         }
     } catch (e: Exception) {
         null
     }
 
-    // Cache the result
+    // Cache the result with size-aware key
     if (bitmap != null) {
         // Don't recycle immediately on eviction - let GC handle memory.
         // This prevents crashes when old bitmaps are still referenced by Compose.
@@ -410,10 +454,127 @@ fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
 }
 
 /**
+ * Loads MediaStore album art with explicit target size (Chunk 2 API).
+ */
+fun loadMediaStoreAlbumArtSized(context: Context, albumId: Long, targetSizePx: Int): Bitmap? {
+    return loadMediaStoreAlbumArt(context, albumId, targetSizePx)
+}
+
+/**
  * Clears the MediaStore album art cache.
  * Note: We don't call recycle() here to avoid crashes if bitmaps are still
  * referenced by Compose. The bitmaps will be garbage collected naturally.
  */
 fun clearMediaStoreAlbumCache() {
     mediaStoreAlbumCache.clear()
+}
+
+/**
+ * Releases non-core cache, keeping core cache (detail page covers).
+ * Triggered by: TRIM_MEMORY_RUNNING_LOW
+ */
+fun trimToCoreCache() {
+    localCacheLock.lock()
+    try {
+        // Keep first CORE_CACHE_SIZE entries
+        val keysToRemove = localAlbumArtCache.keys().drop(CORE_CACHE_SIZE)
+        keysToRemove.forEach { localAlbumArtCache.remove(it) }
+    } finally {
+        localCacheLock.unlock()
+    }
+    // Also handle mediaStoreAlbumCache
+    synchronized(mediaStoreAlbumCache) {
+        val keysToRemove = mediaStoreAlbumCache.keys().drop(CORE_CACHE_SIZE)
+        keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
+    }
+    Timber.d(TAG, "Trimmed to core cache: $CORE_CACHE_SIZE entries retained")
+}
+
+/**
+ * Releases non-core cache, keeping minimal cache (currently visible items).
+ * Triggered by: TRIM_MEMORY_UI_HIDDEN
+ */
+fun trimToEssentialCache() {
+    localCacheLock.lock()
+    try {
+        val keysToRemove = localAlbumArtCache.keys().drop(ESSENTIAL_CACHE_SIZE)
+        keysToRemove.forEach { localAlbumArtCache.remove(it) }
+    } finally {
+        localCacheLock.unlock()
+    }
+    synchronized(mediaStoreAlbumCache) {
+        val keysToRemove = mediaStoreAlbumCache.keys().drop(ESSENTIAL_CACHE_SIZE)
+        keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
+    }
+    Timber.d(TAG, "Trimmed to essential cache: $ESSENTIAL_CACHE_SIZE entries retained")
+}
+
+/**
+ * Releases all caches.
+ * Triggered by: TRIM_MEMORY_COMPLETE
+ */
+fun clearAllCaches() {
+    localCacheLock.lock()
+    try {
+        localAlbumArtCache.clear()
+    } finally {
+        localCacheLock.unlock()
+    }
+    synchronized(mediaStoreAlbumCache) {
+        mediaStoreAlbumCache.clear()
+    }
+    Timber.d(TAG, "Cleared all album art caches")
+}
+
+/**
+ * Updates a single cover in cache (used after cover editing)
+ */
+fun updateAlbumArtCache(filePath: String, bitmap: Bitmap, sizePx: Int = 300) {
+    localCacheLock.lock()
+    try {
+        localAlbumArtCache[getLocalArtCacheKey(filePath, sizePx)] = bitmap
+    } finally {
+        localCacheLock.unlock()
+    }
+}
+
+/**
+ * Removes a single cover from cache
+ */
+fun removeAlbumArtFromCache(filePath: String) {
+    localCacheLock.lock()
+    try {
+        localAlbumArtCache.keys().filter { it.startsWith(filePath) }.forEach {
+            localAlbumArtCache.remove(it)
+        }
+    } finally {
+        localCacheLock.unlock()
+    }
+}
+
+/**
+ * Finds a cached cover (used by AlbumArtImage for sync cache checking)
+ */
+fun findCachedAlbumArt(filePath: String?, albumId: Long?, sizePx: Int): Bitmap? {
+    if (!filePath.isNullOrBlank()) {
+        localAlbumArtCache[getLocalArtCacheKey(filePath, sizePx)]?.let { return it }
+    }
+    if (albumId != null && albumId > 0) {
+        mediaStoreAlbumCache[getMediaStoreCacheKey(albumId, sizePx)]?.let { return it }
+    }
+    return null
+}
+
+/**
+ * Gets the local album art cache key
+ */
+private fun getLocalArtCacheKey(filePath: String, sizePx: Int): String {
+    return "${filePath}_$sizePx"
+}
+
+/**
+ * Gets the MediaStore album art cache key
+ */
+private fun getMediaStoreCacheKey(albumId: Long, sizePx: Int): String {
+    return "mediastore_${albumId}_$sizePx"
 }

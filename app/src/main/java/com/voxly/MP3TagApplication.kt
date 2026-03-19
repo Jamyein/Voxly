@@ -14,6 +14,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import com.voxly.presentation.ui.clearAllCaches
+import com.voxly.presentation.ui.trimToCoreCache
 import timber.log.Timber
 
 /**
@@ -96,5 +98,30 @@ class MP3TagApplication : Application() {
                 Timber.w(e, "Failed to load logging settings, using defaults")
             }
         }
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        when (level) {
+            TRIM_MEMORY_RUNNING_LOW,
+            TRIM_MEMORY_RUNNING_CRITICAL -> {
+                Timber.d(TAG, "Low memory, trimming to core cache")
+                trimToCoreCache()
+            }
+            TRIM_MEMORY_UI_HIDDEN -> {
+                // User switched to another app, release non-essential caches
+                Timber.d(TAG, "UI hidden, trimming to essential")
+                trimToCoreCache()
+            }
+            TRIM_MEMORY_COMPLETE,
+            TRIM_MEMORY_MODERATE -> {
+                Timber.d(TAG, "Memory pressure, clearing caches")
+                clearAllCaches()
+            }
+        }
+    }
+
+    companion object {
+        private const val TAG = "MP3TagApplication"
     }
 }
