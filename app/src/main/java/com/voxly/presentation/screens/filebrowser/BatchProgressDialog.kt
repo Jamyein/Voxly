@@ -6,6 +6,10 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -18,6 +22,7 @@ import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.model.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.viewmodel.FileBrowserViewModel
 
 /**
  * Batch progress dialog showing operation progress.
@@ -26,8 +31,12 @@ import com.voxly.presentation.icons.appIconPainter
 @Composable
 fun BatchProgressDialog(
     progress: BatchProgress,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    viewModel: FileBrowserViewModel
 ) {
+    val batchResult by viewModel.batchResult.collectAsState()
+    val showFailureList = remember { mutableStateOf(false) }
+    val batchResultSnapshot = batchResult
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(
@@ -120,6 +129,23 @@ fun BatchProgressDialog(
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.primary
                 )
+
+                // After progress bar section
+                if (batchResultSnapshot?.failedItems?.isNotEmpty() == true) {
+                    TextButton(onClick = { showFailureList.value = !showFailureList.value }) {
+                        Text("Show ${batchResultSnapshot.failedCount} failures")
+                    }
+
+                    if (showFailureList.value) {
+                        batchResultSnapshot.failedItems.forEach { item ->
+                            Text("${item.filePath}: ${item.reason}", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+
+                    TextButton(onClick = { viewModel.retryFailedItems() }) {
+                        Text("Retry Failed Items")
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
