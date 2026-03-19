@@ -1212,7 +1212,10 @@ fun SettingsScreen(
             // Separator dialog
             if (showSeparatorDialog) {
                 AlertDialog(
-                    onDismissRequest = { showSeparatorDialog = false },
+                    onDismissRequest = {
+                        separatorTags.value = viewModel.artistSeparatorsSet.value.toList()
+                        showSeparatorDialog = false
+                    },
                     shape = MaterialTheme.shapes.large,
                     title = { Text(stringResource(R.string.artist_separators)) },
                     text = {
@@ -1274,7 +1277,10 @@ fun SettingsScreen(
                         }
                     },
                     dismissButton = {
-                        TextButton(onClick = { showSeparatorDialog = false }) {
+                        TextButton(onClick = {
+                            separatorTags.value = viewModel.artistSeparatorsSet.value.toList()
+                            showSeparatorDialog = false
+                        }) {
                             Text(stringResource(R.string.dialog_cancel))
                         }
                     }

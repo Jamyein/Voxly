@@ -6,6 +6,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -28,7 +29,9 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarExitDirection
 import androidx.compose.material3.FloatingToolbarScrollBehavior
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -42,6 +45,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import kotlinx.coroutines.launch
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
@@ -55,7 +59,7 @@ import com.voxly.core.util.SortUtil
 import com.voxly.presentation.screens.filebrowser.FixMetadataOptions
 import com.voxly.presentation.screens.filebrowser.OnlineMetadataOptions
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 @Composable
 fun DirectoryContentScreen(
     directoryUri: String,
@@ -96,6 +100,17 @@ fun DirectoryContentScreen(
     val floatingToolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
         exitDirection = FloatingToolbarExitDirection.Bottom
     )
+
+    // Pull-to-refresh state
+    var isRefreshing by remember { mutableStateOf(false) }
+
+    // Double-tap to scroll to top
+    val scrollCoroutineScope = rememberCoroutineScope()
+    val onScrollToTop: () -> Unit = {
+        scrollCoroutineScope.launch {
+            listState.animateScrollToItem(0)
+        }
+    }
 
     // Dialog states
 
@@ -143,7 +158,11 @@ fun DirectoryContentScreen(
                         Text(
                             text = directoryName,
                             maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.combinedClickable(
+                                onClick = {},
+                                onDoubleClick = onScrollToTop
+                            )
                         )
                     }
                 },
@@ -223,7 +242,16 @@ fun DirectoryContentScreen(
             )
         },
     ) { innerPadding ->
-    Box(
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            isRefreshing = true
+            scrollCoroutineScope.launch {
+                viewModel.loadFromDirectory(android.net.Uri.parse(directoryUri))
+            }.invokeOnCompletion {
+                isRefreshing = false
+            }
+        },
         modifier = Modifier
             .fillMaxSize()
             .padding(innerPadding)

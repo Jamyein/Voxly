@@ -2,10 +2,11 @@ package com.voxly.domain.usecase
 
 import android.app.ActivityManager
 import android.content.Context
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 
 class MemoryPressureMonitor @Inject constructor(
-    context: Context
+    @ApplicationContext context: Context
 ) {
     private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
 
