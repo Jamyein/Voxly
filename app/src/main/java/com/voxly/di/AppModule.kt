@@ -218,11 +218,15 @@ object AppModule {
 
     @Provides
     @Singleton
+    fun provideMemoryPressureMonitor(
+        @ApplicationContext context: Context
+    ): MemoryPressureMonitor = MemoryPressureMonitor(context)
+
+    @Provides
+    @Singleton
     fun provideBatchEngine(
         memoryPressureMonitor: MemoryPressureMonitor
-    ): BatchEngine<String> {
-        return BatchEngine(memoryPressureMonitor = memoryPressureMonitor)
-    }
+    ): BatchEngine<String> = BatchEngine(memoryPressureMonitor = memoryPressureMonitor)
 
     @Provides
     @Singleton
