@@ -107,4 +107,22 @@ class BatchEngineTest {
         // Should have both original failure and retry failure
         assertEquals(2, final.failedCount)
     }
+
+    @Test
+    fun `execute throttles progress updates to every 5 percent`() = runBlocking {
+        val engine = BatchEngine<String>(memoryPressureMonitor = mockMemoryMonitor)
+
+        val results = mutableListOf<BatchResult>()
+        engine.execute(
+            items = (1..100).map { "file$it.mp3" },
+            operation = { Result.success(Unit) },
+            itemName = { it }
+        ).collect { results.add(it) }
+
+        // With 100 files and 5% throttle, should emit ~20 updates max
+        assertTrue("Expected <= 25 updates but got ${results.size}", results.size <= 25)
+        // First and last should always emit
+        assertEquals(0, results.first().successCount)
+        assertEquals(BatchStatus.COMPLETED, results.last().status)
+    }
 }

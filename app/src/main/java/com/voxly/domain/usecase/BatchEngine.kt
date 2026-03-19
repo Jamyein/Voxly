@@ -33,6 +33,20 @@ class BatchEngine<T>(
         lastEmitTime = 0L
 
         try {
+            // Emit initial state before processing begins
+            emit(
+                BatchResult(
+                    totalFiles = totalFiles,
+                    successCount = 0,
+                    failedCount = 0,
+                    failedItems = emptyList(),
+                    status = BatchStatus.PROCESSING,
+                    lastUpdatedFile = ""
+                )
+            )
+            lastEmittedPercent = 0f
+            lastEmitTime = System.currentTimeMillis()
+
             coroutineScope {
                 items.chunked(maxConcurrency).forEach { batch ->
                     // Check memory pressure between chunks
@@ -115,6 +129,20 @@ class BatchEngine<T>(
         lastEmitTime = 0L
 
         try {
+            // Emit initial state before processing begins
+            emit(
+                BatchResult(
+                    totalFiles = totalFiles,
+                    successCount = 0,
+                    failedCount = 0,
+                    failedItems = emptyList(),
+                    status = BatchStatus.PROCESSING,
+                    lastUpdatedFile = ""
+                )
+            )
+            lastEmittedPercent = 0f
+            lastEmitTime = System.currentTimeMillis()
+
             coroutineScope {
                 itemsToRetry.chunked(maxConcurrency).forEach { batch ->
                     val concurrency = memoryPressureMonitor.getCurrentConcurrency(maxConcurrency)
