@@ -146,6 +146,43 @@ class StatisticsViewModel @Inject constructor(
                 val topAlbumsRaw = topAlbumsQuery?.let { dao.getTopAlbumsFiltered(it) } ?: dao.getTopAlbums(10)
                 val topAlbums = topAlbumsRaw.map { "${it.album}" to it.count }
 
+                // Get year distribution
+                val yearDistributionQuery = dao.buildPathFilterQuery(
+                    whitelist, blacklist, "SELECT year, COUNT(*) as count FROM cached_audio_files WHERE year IS NOT NULL AND year != '' AND year != '0' GROUP BY year ORDER BY year DESC"
+                )
+                val yearDistributionRaw = yearDistributionQuery?.let { dao.getYearDistributionFiltered(it) } ?: dao.getYearDistribution()
+
+                // Group raw year data into ranges
+                val yearGroups = mutableMapOf<String, Int>()
+                yearDistributionRaw.forEach { yearCount ->
+                    val group = groupYearIntoRange(yearCount.year)
+                    yearGroups[group] = yearGroups.getOrDefault(group, 0) + yearCount.count
+                }
+                val yearDistribution = yearGroups.toSortedMap()  // 按键排序
+
+                // Get bitrate distribution
+                val bitrateDistributionQuery = dao.buildPathFilterQuery(
+                    whitelist, blacklist, "SELECT bitrate, COUNT(*) as count FROM cached_audio_files GROUP BY bitrate ORDER BY bitrate ASC"
+                )
+                val bitrateDistributionRaw = bitrateDistributionQuery?.let { dao.getBitrateDistributionFiltered(it) } ?: dao.getBitrateDistribution()
+
+                // Group raw bitrate data into SQ/HQ/HiFi
+                val bitrateGroups = mutableMapOf<String, Int>()
+                bitrateDistributionRaw.forEach { bitrateCount ->
+                    val group = groupBitrateIntoRange(bitrateCount.bitrate)
+                    bitrateGroups[group] = bitrateGroups.getOrDefault(group, 0) + bitrateCount.count
+                }
+                val bitrateDistribution = bitrateGroups
+
+                // Get genre distribution (top 10)
+                val genreDistributionQuery = dao.buildPathFilterQuery(
+                    whitelist, blacklist,
+                    "SELECT genre, COUNT(*) as count FROM cached_audio_files WHERE genre IS NOT NULL AND genre != '' GROUP BY genre ORDER BY count DESC",
+                    limit = 10
+                )
+                val genreDistributionRaw = genreDistributionQuery?.let { dao.getGenreDistributionFiltered(it) } ?: dao.getGenreDistribution(10)
+                val genreDistribution = genreDistributionRaw.associate { it.genre to it.count }
+
                 // Calculate total size formatted
                 val totalSizeFormatted = formatSize(totalSizeBytes)
 
@@ -170,7 +207,10 @@ class StatisticsViewModel @Inject constructor(
                     topAlbums = topAlbums,
                     todayEdits = todayEdits,
                     weekEdits = weekEdits,
-                    monthEdits = monthEdits
+                    monthEdits = monthEdits,
+                    yearDistribution = yearDistribution,
+                    genreDistribution = genreDistribution,
+                    bitrateDistribution = bitrateDistribution
                 )
             } catch (e: Exception) {
                 Timber.e(e, "Failed to load statistics")
@@ -194,6 +234,49 @@ class StatisticsViewModel @Inject constructor(
                     _uiState.value = StatisticsUiState.Empty
                 }
             }
+        }
+    }
+
+    /**
+     * 将年份字符串分组到对应的年代区间。
+     * 使用动态计算，适配不同年份的数据。
+     *
+     * 分组规则（按优先级）：
+     * 1. year > currentYear -> "${currentYear}+"
+     * 2. currentYear-5 <= year <= currentYear -> "${currentYear-5}-${currentYear}"
+     * 3. currentYear-10 <= year <= currentYear-6 -> "${currentYear-10}-${currentYear-6}"
+     * 4. currentYear-15 <= year <= currentYear-11 -> "${currentYear-15}-${currentYear-11}"
+     * 5. year < currentYear-15 且 year >= 2000 -> 动态 decade 区间 (如 "2000-2010")
+     * 6. year < 2000 -> "<2000"
+     * 7. year 为空或无效 -> "Unknown" (不计入统计)
+     */
+    private fun groupYearIntoRange(yearStr: String): String {
+        val year = yearStr.toIntOrNull() ?: return "Unknown"
+        val currentYear = java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
+        val fiveYearAgo = currentYear - 5
+        val tenYearAgo = currentYear - 10
+        val fifteenYearAgo = currentYear - 15
+
+        return when {
+            year > currentYear -> "${currentYear}+"
+            year >= fiveYearAgo -> "${fiveYearAgo}-${currentYear}"
+            year >= tenYearAgo -> "${tenYearAgo}-${fiveYearAgo - 1}"
+            year >= fifteenYearAgo -> "${fifteenYearAgo}-${tenYearAgo - 1}"
+            year >= 2000 -> "${2000}-${tenYearAgo - 1}"  // Gap: 2000 ~ (currentYear-16)
+            year < 2000 -> "<2000"
+            else -> "Unknown"
+        }
+    }
+
+    /**
+     * 将比特率值分组到对应的质量等级。
+     * SQ: <192 kbps, HQ: 192-320 kbps, HiFi: >320 kbps
+     */
+    private fun groupBitrateIntoRange(bitrate: Int): String {
+        return when {
+            bitrate > 320 -> "HiFi"
+            bitrate >= 192 -> "HQ"
+            else -> "SQ"
         }
     }
 
@@ -281,6 +364,9 @@ sealed class StatisticsUiState {
         val topAlbums: List<Pair<String, Int>>,
         val todayEdits: Int,
         val weekEdits: Int,
-        val monthEdits: Int
+        val monthEdits: Int,
+        val yearDistribution: Map<String, Int>,   // e.g. "2021-2026" -> 150
+        val genreDistribution: Map<String, Int>,  // e.g. "Pop" -> 120
+        val bitrateDistribution: Map<String, Int> // e.g. "SQ" -> 50, "HQ" -> 80, "HiFi" -> 20
     ) : StatisticsUiState()
 }

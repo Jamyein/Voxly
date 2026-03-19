@@ -198,6 +198,54 @@ private fun StatisticsContent(
             }
         }
 
+        if (state.yearDistribution.isNotEmpty()) {
+            item {
+                Text(
+                    text = stringResource(R.string.statistics_year_distribution),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            item {
+                YearDistributionCard(
+                    distribution = state.yearDistribution,
+                    totalFiles = state.totalFiles
+                )
+            }
+        }
+
+        if (state.bitrateDistribution.isNotEmpty()) {
+            item {
+                Text(
+                    text = stringResource(R.string.statistics_bitrate_distribution),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            item {
+                BitrateDistributionCard(
+                    distribution = state.bitrateDistribution,
+                    totalFiles = state.totalFiles
+                )
+            }
+        }
+
+        if (state.genreDistribution.isNotEmpty()) {
+            item {
+                Text(
+                    text = stringResource(R.string.statistics_genre_distribution),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+            item {
+                GenreDistributionCard(
+                    distribution = state.genreDistribution,
+                    totalFiles = state.totalFiles
+                )
+            }
+        }
+
         if (state.topArtists.isNotEmpty()) {
             item {
                 Text(
@@ -392,6 +440,140 @@ private fun TopAlbumsCard(albums: List<Pair<String, Int>>) {
                     Text(text = item.first, modifier = Modifier.weight(1f), maxLines = 1)
                     Text(text = item.second.toString(), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun YearDistributionCard(
+    distribution: Map<String, Int>,
+    totalFiles: Int
+) {
+    Card(
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 按时间倒序排序（最近的在前面）
+            val temporalSorted = distribution.entries.sortedByDescending { entry ->
+                when {
+                    entry.key.endsWith("+") -> entry.key.dropLast(1).toIntOrNull() ?: Int.MIN_VALUE
+                    entry.key.startsWith("<") -> entry.key.drop(1).toIntOrNull() ?: Int.MIN_VALUE
+                    else -> entry.key.split("-").firstOrNull()?.toIntOrNull() ?: 0
+                }
+            }
+
+            temporalSorted.forEach { (yearRange, count) ->
+                val pct = if (totalFiles > 0) (count.toFloat() / totalFiles) else 0f
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(text = yearRange)
+                    Text(
+                        text = "$count (${String.format("%.1f", pct * 100)}%)",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { pct },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(MaterialTheme.shapes.extraSmall)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun BitrateDistributionCard(
+    distribution: Map<String, Int>,
+    totalFiles: Int
+) {
+    Card(
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 按 HiFi, HQ, SQ 顺序展示
+            listOf("HiFi", "HQ", "SQ").forEach { group ->
+                val count = distribution[group] ?: 0
+                val pct = if (totalFiles > 0) (count.toFloat() / totalFiles) else 0f
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(text = group)
+                    Text(
+                        text = "$count (${String.format("%.1f", pct * 100)}%)",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { pct },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(MaterialTheme.shapes.extraSmall)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GenreDistributionCard(
+    distribution: Map<String, Int>,
+    totalFiles: Int
+) {
+    Card(
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+        )
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            distribution.entries.sortedByDescending { it.value }.forEach { (genre, count) ->
+                val pct = if (totalFiles > 0) (count.toFloat() / totalFiles) else 0f
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(text = genre, maxLines = 1)
+                    Text(
+                        text = "$count (${String.format("%.1f", pct * 100)}%)",
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                LinearProgressIndicator(
+                    progress = { pct },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(8.dp)
+                        .clip(MaterialTheme.shapes.extraSmall)
+                )
             }
         }
     }

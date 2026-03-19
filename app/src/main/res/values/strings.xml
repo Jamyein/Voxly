@@ -318,6 +318,9 @@
     <string name="statistics_top_artists">Top Artists</string>
     <string name="statistics_top_albums">Top Albums</string>
     <string name="statistics_recent_activity">Recent Activity</string>
+    <string name="statistics_year_distribution">Year Distribution</string>
+    <string name="statistics_bitrate_distribution">Bitrate Distribution</string>
+    <string name="statistics_genre_distribution">Genre Distribution</string>
     <string name="statistics_empty_title">No Statistics Available</string>
     <string name="statistics_empty_subtitle">Edit some audio files to see your library statistics</string>
     <string name="total_files">Total Files</string>

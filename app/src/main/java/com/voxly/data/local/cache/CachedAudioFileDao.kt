@@ -236,6 +236,39 @@ interface CachedAudioFileDao {
     """)
     suspend fun getTopAlbums(limit: Int): List<AlbumCount>
 
+    /**
+     * Gets genre distribution - genre and count.
+     */
+    @Query("""
+        SELECT genre, COUNT(*) as count
+        FROM cached_audio_files
+        WHERE genre IS NOT NULL AND genre != ''
+        GROUP BY genre
+        ORDER BY count DESC
+        LIMIT :limit
+    """)
+    suspend fun getGenreDistribution(limit: Int): List<GenreCount>
+
+    /**
+     * Gets year distribution - year group and count.
+     * Year is grouped into ranges dynamically based on current year.
+     */
+    @Query("""
+        SELECT year, COUNT(*) as count
+        FROM cached_audio_files
+        WHERE year IS NOT NULL AND year != '' AND year != '0'
+        GROUP BY year
+        ORDER BY year DESC
+    """)
+    suspend fun getYearDistribution(): List<YearCount>
+
+    /**
+     * Gets bitrate distribution - bitrate group and count.
+     * Grouping: SQ (<192), HQ (192-320), HiFi (>320)
+     */
+    @Query("SELECT bitrate, COUNT(*) as count FROM cached_audio_files GROUP BY bitrate ORDER BY bitrate ASC")
+    suspend fun getBitrateDistribution(): List<BitrateRawCount>
+
     // ==================== Statistics Queries with Path Filtering ====================
 
     /**
@@ -274,6 +307,24 @@ interface CachedAudioFileDao {
      */
     @RawQuery(observedEntities = [CachedAudioFileEntity::class])
     suspend fun getTopAlbumsFiltered(query: SupportSQLiteQuery): List<AlbumCount>
+
+    /**
+     * Gets genre distribution with optional path filtering.
+     */
+    @RawQuery(observedEntities = [CachedAudioFileEntity::class])
+    suspend fun getGenreDistributionFiltered(query: SupportSQLiteQuery): List<GenreCount>
+
+    /**
+     * Gets year distribution with optional path filtering.
+     */
+    @RawQuery(observedEntities = [CachedAudioFileEntity::class])
+    suspend fun getYearDistributionFiltered(query: SupportSQLiteQuery): List<YearCount>
+
+    /**
+     * Gets bitrate distribution with optional path filtering.
+     */
+    @RawQuery(observedEntities = [CachedAudioFileEntity::class])
+    suspend fun getBitrateDistributionFiltered(query: SupportSQLiteQuery): List<BitrateRawCount>
 
     /**
      * Builds a SupportSQLiteQuery for path filtering from whitelist and blacklist paths.
@@ -382,5 +433,37 @@ data class ArtistCount(
 data class AlbumCount(
     val album: String,
     val artist: String?,
+    val count: Int
+)
+
+/**
+ * Data class for bitrate count.
+ */
+data class BitrateCount(
+    val bitrateGroup: String,  // "SQ", "HQ", "HiFi"
+    val count: Int
+)
+
+/**
+ * Data class for genre count.
+ */
+data class GenreCount(
+    val genre: String,
+    val count: Int
+)
+
+/**
+ * Data class for year count (raw year value from DB).
+ */
+data class YearCount(
+    val year: String,
+    val count: Int
+)
+
+/**
+ * Data class for raw bitrate count (before grouping into SQ/HQ/HiFi).
+ */
+data class BitrateRawCount(
+    val bitrate: Int,
     val count: Int
 )
