@@ -908,7 +908,17 @@ class SettingsDataStore @Inject constructor(
      */
     val artistSeparators: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[ARTIST_SEPARATORS] ?: "&\\"
+            preferences[ARTIST_SEPARATORS] ?: """["&","/","\\"]"""
+        }
+
+    /**
+     * Artist separators as Set<String> — exposed for ViewModel use
+     * Handles migration from old format automatically
+     */
+    val artistSeparatorsSet: Flow<Set<String>> = context.settingsDataStore.data
+        .map { preferences ->
+            val raw = preferences[ARTIST_SEPARATORS] ?: """["&","/","\\"]"""
+            migrateArtistSeparators(raw)
         }
 
     /**
@@ -957,11 +967,40 @@ class SettingsDataStore @Inject constructor(
     }
 
     /**
-     * Save artist separators preference
+     * Save artist separators preference (legacy String version for backward compat)
      */
     suspend fun setArtistSeparators(separators: String) {
         context.settingsDataStore.edit { preferences ->
-            preferences[ARTIST_SEPARATORS] = separators.ifBlank { "&\\" }
+            preferences[ARTIST_SEPARATORS] = separators.ifBlank { """["&","/","\\"]""" }
+        }
+    }
+
+    /**
+     * Save artist separators preference (Set version — JSON serialization)
+     */
+    suspend fun setArtistSeparators(separators: Set<String>) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[ARTIST_SEPARATORS] = json.encodeToString(separators)
+        }
+    }
+
+    /**
+     * Migrate artist separators from old string format to new Set<String> format.
+     * Old format: "&\\" (concatenated chars)
+     * New format: ["&","/","\\"] (JSON array)
+     */
+    private fun migrateArtistSeparators(raw: String): Set<String> {
+        return if (raw.startsWith("[")) {
+            // New JSON format — parse directly
+            try {
+                json.decodeFromString<Set<String>>(raw)
+            } catch (e: Exception) {
+                // Parse failed, return default
+                setOf("&", "/", "\\")
+            }
+        } else {
+            // Old format: split by character (filter whitespace)
+            raw.toCharArray().filter { !it.isWhitespace() }.map { it.toString() }.toSet()
         }
     }
 }
