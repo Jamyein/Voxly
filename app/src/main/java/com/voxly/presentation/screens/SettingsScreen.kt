@@ -1087,29 +1087,17 @@ fun SettingsScreen(
                     count = 6
                 )
 
-                SegmentedSwitchRow(
-                    title = stringResource(R.string.artist_separator),
-                    subtitle = stringResource(R.string.artist_separator_summary),
-                    checked = viewModel.artistSeparatorEnabled.value,
-                    onCheckedChange = { viewModel.setArtistSeparatorEnabled(it) },
+                SegmentedClickableRow(
+                    title = stringResource(R.string.artist_separators),
+                    subtitle = viewModel.artistSeparatorsSet.value.joinToString(" "),
+                    onClick = {
+                        separatorTags.value = viewModel.artistSeparatorsSet.value.toList()
+                        separatorInput = ""
+                        showSeparatorDialog = true
+                    },
                     index = 1,
-                    count = 6  // Always use max count for consistent visual grouping
+                    count = 6
                 )
-
-                // Last item - only show if enabled
-                if (viewModel.artistSeparatorEnabled.value) {
-                    SegmentedClickableRow(
-                        title = stringResource(R.string.artist_separators),
-                        subtitle = viewModel.artistSeparatorsSet.value.joinToString(" "),
-                        onClick = {
-                            separatorTags.value = viewModel.artistSeparatorsSet.value.toList()
-                            separatorInput = ""
-                            showSeparatorDialog = true
-                        },
-                        index = 2,
-                        count = 6
-                    )
-                }
 
                 SegmentedSwitchRow(
                     title = stringResource(R.string.settings_min_duration_filter),
