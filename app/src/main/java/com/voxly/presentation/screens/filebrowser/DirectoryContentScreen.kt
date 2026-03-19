@@ -97,12 +97,6 @@ fun DirectoryContentScreen(
         exitDirection = FloatingToolbarExitDirection.Bottom
     )
 
-    val canScrollToTop by remember {
-        derivedStateOf {
-            listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 0
-        }
-    }
-
     // Dialog states
 
     // Search states - using BottomSheet
@@ -228,22 +222,6 @@ fun DirectoryContentScreen(
                 }
             )
         },
-        floatingActionButton = {
-            if (!isBatchProcessing && files.isNotEmpty() && canScrollToTop) {
-                SmallFloatingActionButton(
-                    onClick = {
-                        // Scroll to top
-                    },
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowUp,
-                        contentDescription = stringResource(R.string.back_to_top)
-                    )
-                }
-            }
-        }
     ) { innerPadding ->
     Box(
         modifier = Modifier

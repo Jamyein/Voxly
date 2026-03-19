@@ -9,6 +9,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import com.voxly.presentation.theme.ExpressiveMotion
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentSize
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -65,6 +67,7 @@ import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.LooksTwo
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -942,6 +945,9 @@ fun SettingsScreen(
     var showCoverSourceDialog by remember { mutableStateOf(false) }
     var showSearchLimitsDialog by remember { mutableStateOf(false) }
     var showSeparatorDialog by remember { mutableStateOf(false) }
+    var separatorInput by remember { mutableStateOf("") }
+    var pendingDeleteSeparator by remember { mutableStateOf<String?>(null) }
+    val separatorTags = remember { mutableStateOf(viewModel.artistSeparatorsSet.value.toList()) }
     var showLoudnessDialog by remember { mutableStateOf(false) }
 
     val searchLimitOptions = remember {
@@ -1067,15 +1073,12 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(SectionSpacing))
 
-            // Artist Separator variables (declared outside to be accessible by dialog)
-            var separatorText by remember { mutableStateOf(viewModel.artistSeparators.value) }
-
-            LaunchedEffect(viewModel.artistSeparators.value) {
-                separatorText = viewModel.artistSeparators.value
-            }
-
             // Media Settings Section (Scan Directory + Artist Separator + Min Duration + Scan Mode + ReplayGain)
             SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
+                LaunchedEffect(viewModel.artistSeparatorsSet.value) {
+                    separatorTags.value = viewModel.artistSeparatorsSet.value.toList()
+                }
+
                 SegmentedClickableRow(
                     title = stringResource(R.string.settings_scan_directory_settings),
                     subtitle = stringResource(R.string.settings_scan_directory_settings_subtitle),
@@ -1097,9 +1100,10 @@ fun SettingsScreen(
                 if (viewModel.artistSeparatorEnabled.value) {
                     SegmentedClickableRow(
                         title = stringResource(R.string.artist_separators),
-                        subtitle = separatorText.ifBlank { "& \\" },
+                        subtitle = viewModel.artistSeparatorsSet.value.joinToString(" "),
                         onClick = {
-                            separatorText = viewModel.artistSeparators.value
+                            separatorTags.value = viewModel.artistSeparatorsSet.value.toList()
+                            separatorInput = ""
                             showSeparatorDialog = true
                         },
                         index = 2,
@@ -1212,25 +1216,91 @@ fun SettingsScreen(
                     shape = MaterialTheme.shapes.large,
                     title = { Text(stringResource(R.string.artist_separators)) },
                     text = {
-                        OutlinedTextField(
-                            value = separatorText,
-                            onValueChange = { separatorText = it },
-                            label = { Text(stringResource(R.string.artist_separators)) },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
-                        )
+                        Column(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            // Tags display area using FlowRow
+                            FlowRow(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                separatorTags.value.forEach { separator ->
+                                    SeparatorChip(
+                                        separator = separator,
+                                        onDelete = { separatorTags.value = separatorTags.value - separator },
+                                        onLongPress = { pendingDeleteSeparator = separator }
+                                    )
+                                }
+                            }
+
+                            // Input area
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                OutlinedTextField(
+                                    value = separatorInput,
+                                    onValueChange = { separatorInput = it },
+                                    label = { Text(stringResource(R.string.artist_separators)) },
+                                    singleLine = true,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                FilledTonalButton(
+                                    onClick = {
+                                        val trimmed = separatorInput.trim()
+                                        if (trimmed.isNotBlank() && trimmed !in separatorTags.value) {
+                                            separatorTags.value = separatorTags.value + trimmed
+                                            separatorInput = ""
+                                        }
+                                    },
+                                    enabled = separatorInput.isNotBlank()
+                                ) {
+                                    Text("Add")
+                                }
+                            }
+                        }
                     },
                     confirmButton = {
-                        TextButton(onClick = {
-                            viewModel.setArtistSeparators(separatorText)
-                            showSeparatorDialog = false
-                        }) {
+                        TextButton(
+                            onClick = {
+                                viewModel.setArtistSeparators(separatorTags.value.toSet())
+                                showSeparatorDialog = false
+                            }
+                        ) {
                             Text(stringResource(R.string.dialog_confirm))
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { showSeparatorDialog = false }) {
                             Text(stringResource(R.string.dialog_cancel))
+                        }
+                    }
+                )
+            }
+
+            // Pending delete confirmation dialog
+            if (pendingDeleteSeparator != null) {
+                AlertDialog(
+                    onDismissRequest = { pendingDeleteSeparator = null },
+                    shape = MaterialTheme.shapes.large,
+                    title = { Text("删除分隔符") },
+                    text = { Text("确定删除分隔符 \"${pendingDeleteSeparator}\" 吗？") },
+                    confirmButton = {
+                        TextButton(
+                            onClick = {
+                                separatorTags.value = separatorTags.value - pendingDeleteSeparator!!
+                                pendingDeleteSeparator = null
+                            }
+                        ) {
+                            Text("删除")
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { pendingDeleteSeparator = null }) {
+                            Text("取消")
                         }
                     }
                 )
@@ -1457,6 +1527,45 @@ fun SettingsScreen(
                 onNeteaseLimitChange = { viewModel.setOnlineSearchLimitNetease(it) },
                 onQQMusicLimitChange = { viewModel.setOnlineSearchLimitQQMusic(it) }
             )
+        }
+    }
+}
+
+@Composable
+private fun SeparatorChip(
+    separator: String,
+    onDelete: () -> Unit,
+    onLongPress: () -> Unit
+) {
+    Surface(
+        onClick = {},
+        shape = MaterialTheme.shapes.small,
+        color = MaterialTheme.colorScheme.secondaryContainer,
+        modifier = Modifier.pointerInput(separator) {
+            detectTapGestures(onLongPress = { onLongPress() })
+        }
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = separator,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier.size(18.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Close,
+                    contentDescription = "删除",
+                    modifier = Modifier.size(14.dp),
+                    tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                )
+            }
         }
     }
 }
