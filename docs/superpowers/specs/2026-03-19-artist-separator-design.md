@@ -23,6 +23,20 @@
 - 反斜杠 `\` 在 JSON 中自动序列化为 `\\`，读取时自动还原，用户无感知
 - 底层 split 时通过 `Regex.escape()` 处理，无需手动转义
 
+**默认值（DataStore）：**
+```kotlin
+val artistSeparators: Flow<String> = context.settingsDataStore.data
+    .map { preferences ->
+        preferences[ARTIST_SEPARATORS] ?: """["&","/","\\"]"""  // JSON 格式默认
+    }
+```
+
+**默认值（ViewModel）：**
+```kotlin
+val artistSeparators: StateFlow<String> = settingsDataStore.artistSeparators
+    .stateIn(viewModelScope, SharingStarted.Eagerly, """["&","/","\\"]""")
+```
+
 ### 2.2 拆分逻辑改进
 
 **文件：** `FileBrowserViewModel.kt`
@@ -131,10 +145,11 @@ if (viewModel.artistSeparatorEnabled.value) {
 **输入区：**
 - `OutlinedTextField` — 用户输入任意字符串
 - "添加"按钮 — 输入非空内容后点击，生成新标签并清空输入框
-- 空输入点击添加：无反应（不会清空或触发任何操作）
+- 空输入或纯空白输入点击添加：无反应
+- 已存在的分隔符不可重复添加（Add 按钮此时可显示为禁用态或点击后无反应）
 
 **底部按钮：**
-- "取消"：关闭弹窗，不保存
+- "取消"：关闭弹窗，不保存（按 back 键或点击外部同样丢弃更改）
 - "确认"：保存当前分隔符列表，关闭弹窗
 
 ### 3.3 标签显示规则
@@ -157,24 +172,57 @@ if (viewModel.artistSeparatorEnabled.value) {
 
 ## 4. ViewModel 改动
 
-### 4.1 SettingsViewModel
+### 4.1 SettingsDataStore
 
-`artistSeparators` 类型从 `StateFlow<String>` 保持不变（DataStore 层仍为 String），但：
+新增 `Set<String>` 版本的 `setArtistSeparators` 方法：
 
-- 内部逻辑：存储为 JSON 字符串，读取时反序列化
-- 新增 `artistSeparatorsSet: StateFlow<Set<String>>` 供 UI 层直接使用（显示标签列表）
+```kotlin
+// 新增：直接接受 Set<String>
+suspend fun setArtistSeparators(separators: Set<String>) {
+    context.settingsDataStore.edit { preferences ->
+        preferences[ARTIST_SEPARATORS] = json.encodeToString(separators)
+    }
+}
+```
 
-### 4.2 FileBrowserViewModel
+原有 `setArtistSeparators(String)` 方法保留，内部逻辑更新为 JSON 序列化。
 
-`splitArtist()` 方法按第 2.2 节改进。
+### 4.2 SettingsViewModel
+
+- `artistSeparators: StateFlow<String>` — DataStore 兼容用（JSON 字符串）
+- 新增 `artistSeparatorsSet: StateFlow<Set<String>>` — 供 UI 层显示标签列表使用，内部通过 `migrateArtistSeparators()` 解析
+
+```kotlin
+val artistSeparatorsSet: StateFlow<Set<String>> = settingsDataStore.artistSeparators
+    .map { raw ->
+        migrateArtistSeparators(raw)
+    }
+    .stateIn(viewModelScope, SharingStarted.Eagerly, setOf("&", "/", "\\"))
+```
+
+- 新增 `setArtistSeparators(separators: Set<String>)` 方法供 UI 层调用
+
+### 4.3 FileBrowserViewModel
+
+`splitArtist()` 方法签名从 `splitArtist(artist: String, separators: String)` 改为 `splitArtist(artist: String, separators: Set<String>)`，调用处相应更新。
 
 ---
 
-## 5. 修复的问题
+## 5. 输入校验
 
-- `/` 分隔符无法保存的问题 — 标签式 UI 天然解决，不存在字符串拼接/转义问题
-- `\` 在字符串中可能被错误处理的问题 — JSON 序列化自动处理
-- 无法添加多字符分隔符的问题 — 新 UI 支持任意字符串分隔符
+分隔符添加时需过滤无效输入：
+
+```kotlin
+private fun normalizeSeparator(input: String): String? {
+    val trimmed = input.trim()
+    // 空字符串、纯空白、重复项均不添加
+    if (trimmed.isBlank()) return null
+    return trimmed
+}
+```
+
+- 空输入或纯空白（空格、Tab、换行）：不添加
+- 重复分隔符：已在 Set 中时不添加
 
 ---
 
@@ -199,3 +247,7 @@ if (viewModel.artistSeparatorEnabled.value) {
 5. 验证拆分效果：`"Artist1 & Artist2"` → `["Artist1", "Artist2"]`
 6. 长按标签删除确认弹窗正常显示
 7. 空输入点击添加无异常
+8. 重复添加已存在的分隔符（`&`）无反应
+9. 纯空白输入（空格）点击添加无异常
+10. 首次安装新用户，默认分隔符为 `["&", "/", "\\"]`
+11. Back 键或点击弹窗外区域，验证更改被丢弃
