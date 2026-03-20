@@ -58,12 +58,14 @@ fun FlexibleBottomAppBar(
                             contentDescription = item.label
                         )
                     },
-                    label = {
-                        Text(
-                            text = item.label,
-                            maxLines = 1
-                        )
-                    },
+                    label = if (selected) {
+                        {
+                            Text(
+                                text = item.label,
+                                maxLines = 1
+                            )
+                        }
+                    } else null,
                     colors = NavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
