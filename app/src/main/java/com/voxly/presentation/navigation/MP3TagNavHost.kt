@@ -27,12 +27,13 @@ import com.voxly.R
 import com.voxly.core.util.LogManager
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.presentation.components.FlexibleBottomAppBar
-import com.voxly.presentation.screens.RecentEditsScreen
 import com.voxly.presentation.screens.ReplayGainScannerScreen
 import com.voxly.presentation.screens.SettingsScreen
 import com.voxly.presentation.screens.StatisticsScreen
 import com.voxly.presentation.screens.album.AlbumDetailScreen
+import com.voxly.presentation.screens.album.AlbumScreen
 import com.voxly.presentation.screens.artist.ArtistDetailScreen
+import com.voxly.presentation.screens.artist.ArtistScreen
 import com.voxly.presentation.screens.filebrowser.DirectoryContentScreen
 import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
 import com.voxly.presentation.screens.log.LogViewerScreen
@@ -86,8 +87,8 @@ fun MP3TagNavHost() {
     // Determine if bottom bar should be shown
     val currentKey = backStack.lastOrNull()
     val showBottomBar = currentKey == FileBrowser ||
-            currentKey == RecentEdits ||
-            currentKey == Statistics ||
+            currentKey == Albums ||
+            currentKey == Artists ||
             currentKey == Settings
 
     Scaffold(
@@ -133,22 +134,28 @@ fun MP3TagNavHost() {
                         )
                     }
 
-                    entry<RecentEdits> {
-                        RecentEditsScreen(
+                    entry<Statistics> {
+                        StatisticsScreen(
                             outerPadding = outerPadding,
-                            onNavigateToMetadata = { filePath, coverTag ->
-                                backStack.add(MetadataEditor(filePath, coverTag ?: ""))
+                            onNavigateToArtist = { artistName ->
+                                backStack.add(ArtistDetail(artistName))
                             }
                         )
                     }
 
-                    entry<Statistics> {
-                        StatisticsScreen(
+                    entry<Albums> {
+                        AlbumScreen(
                             outerPadding = outerPadding,
-                            onNavigateToSettings = {
-                                backStack.add(Settings)
-                            },
-                            onNavigateToArtist = { artistName ->
+                            onNavigateToAlbumDetail = { albumName, albumArtist ->
+                                backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
+                            }
+                        )
+                    }
+
+                    entry<Artists> {
+                        ArtistScreen(
+                            outerPadding = outerPadding,
+                            onNavigateToArtistDetail = { artistName ->
                                 backStack.add(ArtistDetail(artistName))
                             }
                         )
@@ -157,6 +164,9 @@ fun MP3TagNavHost() {
                     entry<Settings> {
                         SettingsScreen(
                             outerPadding = outerPadding,
+                            onNavigateToStatistics = {
+                                backStack.add(Statistics)
+                            },
                             onNavigateToLogViewer = {
                                 backStack.add(LogViewer)
                             },
