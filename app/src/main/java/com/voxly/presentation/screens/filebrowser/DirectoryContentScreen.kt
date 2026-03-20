@@ -74,14 +74,17 @@ fun DirectoryContentScreen(
     // Get directory files from the ViewModel
     val directoryFiles by viewModel.directoryFiles.collectAsState()
     val selectedFiles by viewModel.selectedFiles.collectAsState()
+    val selectedDirectories by viewModel.selectedDirectories.collectAsState()
 
     val files = remember(directoryUri, directoryFiles) {
         directoryFiles[directoryUri] ?: emptyList()
     }
 
     // Auto-load when directoryFiles[directoryUri] is null
+    // Only trigger load if selectedDirectories is empty (initial state)
+    // When user navigates from FileBrowserScreen, selectedDirectories already contains the directory
     LaunchedEffect(directoryUri) {
-        if (directoryUri.isNotEmpty() && directoryFiles[directoryUri] == null) {
+        if (directoryUri.isNotEmpty() && directoryFiles[directoryUri] == null && selectedDirectories.isEmpty()) {
             viewModel.loadFromDirectory(android.net.Uri.parse(directoryUri))
         }
     }

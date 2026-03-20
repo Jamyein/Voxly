@@ -405,9 +405,16 @@ class AudioFileScanner @Inject constructor(
      */
     suspend fun loadAudioFiles(isIncremental: Boolean = false) {
         val files = if (isIncremental) {
-            scanIncremental().first()
+            // For incremental scan, check if we have cached data first
+            if (hasCachedData()) {
+                scanIncremental().first()
+            } else {
+                // No cache - need full scan to populate albums/artists
+                scanAudioFilesOptimized(forceRefresh = true).first() ?: emptyList()
+            }
         } else {
-            scanAudioFilesOptimized(forceRefresh = false).first()
+            // Full scan - force refresh to ensure we get actual results, not loading state
+            scanAudioFilesOptimized(forceRefresh = true).first() ?: emptyList()
         }
         updateAlbumsFromFiles(files)
         updateArtistsFromFiles(files)
