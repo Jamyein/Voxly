@@ -46,6 +46,7 @@ import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.AppViewModel
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
+import com.voxly.presentation.viewmodel.FileBrowserViewModel
 import com.voxly.presentation.viewmodel.LyricsSelectorViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.OnlineCoverSearchViewModel
@@ -61,6 +62,8 @@ import com.voxly.presentation.viewmodel.ReplayGainViewModel
 fun MP3TagNavHost() {
     val context = LocalContext.current
     val appViewModel: AppViewModel = hiltViewModel()
+    // Shared ViewModel for FileBrowserScreen and DirectoryContentScreen to ensure state consistency
+    val fileBrowserViewModel: FileBrowserViewModel = hiltViewModel()
 
     // Create back stack using mutableStateListOf<Any> (matches nav3-recipes approach)
     // The NavKey objects are still used, but the list type is Any for compatibility
@@ -115,6 +118,7 @@ fun MP3TagNavHost() {
                     entry<FileBrowser> {
                         FileBrowserScreen(
                             outerPadding = outerPadding,
+                            viewModel = fileBrowserViewModel,
                             onNavigateToMetadata = { filePath, coverTag ->
                                 backStack.add(MetadataEditor(filePath, coverTag ?: ""))
                             },
@@ -204,6 +208,7 @@ fun MP3TagNavHost() {
                         DirectoryContentScreen(
                             directoryUri = key.directoryUri,
                             directoryName = key.directoryName,
+                            viewModel = fileBrowserViewModel,
                             onNavigateBack = { backStack.removeLastOrNull() },
                             onNavigateToMetadata = { filePath, coverTag ->
                                 backStack.add(MetadataEditor(filePath, coverTag ?: ""))

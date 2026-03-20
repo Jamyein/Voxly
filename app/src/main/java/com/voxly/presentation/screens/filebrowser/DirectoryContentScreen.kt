@@ -67,25 +67,22 @@ fun DirectoryContentScreen(
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
-    viewModel: FileBrowserViewModel = hiltViewModel()
+    viewModel: FileBrowserViewModel
 ) {
     val context = LocalContext.current
 
     // Get directory files from the ViewModel
     val directoryFiles by viewModel.directoryFiles.collectAsState()
     val selectedFiles by viewModel.selectedFiles.collectAsState()
-    val selectedDirectories by viewModel.selectedDirectories.collectAsState()
 
     val files = remember(directoryUri, directoryFiles) {
         directoryFiles[directoryUri] ?: emptyList()
     }
 
-    // Auto-load when directoryFiles[directoryUri] is null
-    // Only trigger load if this directory is NOT already in selectedDirectories
-    // This prevents loadFromDirectory from being called during normal navigation
+    // Auto-load directory content when entering this screen
+    // addDirectory has distinctBy deduplication, so calling multiple times for the same directory is safe
     LaunchedEffect(directoryUri) {
-        val directoryAlreadySelected = selectedDirectories.any { it.uri == directoryUri }
-        if (directoryUri.isNotEmpty() && directoryFiles[directoryUri] == null && !directoryAlreadySelected) {
+        if (directoryUri.isNotEmpty()) {
             viewModel.loadFromDirectory(android.net.Uri.parse(directoryUri))
         }
     }
