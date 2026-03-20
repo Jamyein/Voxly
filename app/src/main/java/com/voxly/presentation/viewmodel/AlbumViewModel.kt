@@ -37,10 +37,13 @@ class AlbumViewModel @Inject constructor(
         refreshJob = viewModelScope.launch {
             try {
                 _isRefreshing.value = true
+                Timber.d("AlbumViewModel.refresh: starting loadAudioFiles(isIncremental=${!forceRefresh})")
                 audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
+                Timber.d("AlbumViewModel.refresh: loadAudioFiles completed")
             } catch (e: Exception) {
                 Timber.e(e, "Album refresh failed")
             } finally {
+                Timber.d("AlbumViewModel.refresh: finally block, setting isRefreshing=false")
                 _isRefreshing.value = false
             }
         }

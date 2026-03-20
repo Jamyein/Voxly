@@ -406,20 +406,26 @@ class AudioFileScanner @Inject constructor(
      */
     suspend fun loadAudioFiles(isIncremental: Boolean = false) {
         try {
+            Timber.d("loadAudioFiles: starting, isIncremental=$isIncremental")
             val files = if (isIncremental) {
                 // For incremental scan, check if we have cached data first
                 if (hasCachedData()) {
+                    Timber.d("loadAudioFiles: using scanIncremental")
                     scanIncremental().first()
                 } else {
                     // No cache - need full scan to populate albums/artists
+                    Timber.d("loadAudioFiles: no cache, using scanAudioFilesOptimized")
                     scanAudioFilesOptimized(forceRefresh = true).first()
                 }
             } else {
                 // Full scan - force refresh to ensure we get actual results, not loading state
+                Timber.d("loadAudioFiles: using scanAudioFilesOptimized (forceRefresh)")
                 scanAudioFilesOptimized(forceRefresh = true).first()
             }
+            Timber.d("loadAudioFiles: got ${files.size} files, updating albums/artists")
             updateAlbumsFromFiles(files)
             updateArtistsFromFiles(files)
+            Timber.d("loadAudioFiles: completed successfully")
         } catch (e: Exception) {
             Timber.e(e, "loadAudioFiles failed")
             updateAlbumsFromFiles(emptyList())
@@ -504,6 +510,7 @@ class AudioFileScanner @Inject constructor(
      * @return Flow emitting scan results
      */
     fun scanAudioFilesOptimized(forceRefresh: Boolean = false): Flow<List<AudioFile>> = flow {
+        Timber.d("$TAG: scanAudioFilesOptimized starting, forceRefresh=$forceRefresh")
         // Get whitelist/blacklist filter settings upfront
         val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
         val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
@@ -559,9 +566,10 @@ class AudioFileScanner @Inject constructor(
         // MediaStore query already returns sorted data by title,
         // but we re-sort to ensure correct order after building the list
         allFiles.sortWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
+        Timber.d("$TAG: emitting ${allFiles.size} files")
         emit(allFiles)
     }.catch { e ->
-        Timber.e(e, "scanAudioFilesOptimized failed, emitting empty list")
+        Timber.e(e, "$TAG: scanAudioFilesOptimized failed, emitting empty list")
         emit(emptyList<AudioFile>())
     }.flowOn(Dispatchers.IO)
 
