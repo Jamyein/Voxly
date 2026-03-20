@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
-import com.voxly.data.repository.AlbumCacheRepository
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.navigation.AlbumDetail
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -15,17 +14,17 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
  * ViewModel for AlbumDetailScreen.
- * Loads album data from memory cache.
+ * Loads album data directly from AudioFileScanner's albums StateFlow.
  */
 @HiltViewModel(assistedFactory = AlbumDetailViewModel.Factory::class)
 class AlbumDetailViewModel @AssistedInject constructor(
     @Assisted val navKey: AlbumDetail,
     @ApplicationContext private val context: Context,
-    private val albumCacheRepository: AlbumCacheRepository,
     private val audioFileScanner: AudioFileScanner
 ) : ViewModel() {
 
@@ -51,38 +50,44 @@ class AlbumDetailViewModel @AssistedInject constructor(
     val files: StateFlow<List<AudioFile>> = _files.asStateFlow()
 
     init {
-        // Load album data from navKey on init
+        // Load album data from AudioFileScanner albums on init
         loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
     }
 
     /**
-     * Load album data from cache by album name and artist.
-     * Year is loaded from file tags (not MediaStore) for accurate results.
+     * Load album data from AudioFileScanner by album name and artist.
+     * Sample rate is loaded from file tags (MediaStore doesn't provide this).
+     * Year is loaded from file tags for accurate results.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
         viewModelScope.launch {
             try {
-                val albumGroup = albumCacheRepository.getAlbum(albumName, albumArtist)
+                // Get albums from AudioFileScanner and find the matching one
+                val albums = audioFileScanner.albums.first()
+                val albumGroup = albums.find { album ->
+                    album.name == albumName && album.artist == albumArtist
+                }
 
                 if (albumGroup != null) {
                     _albumName.value = albumGroup.name
                     _albumArtist.value = albumGroup.artist
                     _coverPath.value = albumGroup.coverPath
-
-                    // Use the AudioFile objects directly from the cached AlbumGroup
                     _files.value = albumGroup.files
 
-                    // Get bitrate, sample rate, and year from first file
+                    // Get bitrate from first file (MediaStore provides this)
                     albumGroup.files.firstOrNull()?.let { firstFile ->
                         _albumBitrate.value = firstFile.bitrate
-                        _albumSampleRate.value = firstFile.sampleRate
 
-                        // Load detailed metadata to get year from file tags (not MediaStore)
+                        // Load audio properties for sample rate (MediaStore doesn't provide this)
+                        val audioProperties = audioFileScanner.loadAudioProperties(firstFile.path)
+                        _albumSampleRate.value = audioProperties?.sampleRate ?: 0
+
+                        // Load detailed metadata to get year from file tags
                         val detailedMetadata = audioFileScanner.loadDetailedMetadata(firstFile.path)
                         _albumYear.value = detailedMetadata?.year
                     }
                 } else {
-                    // Album not found in cache - should not happen if caching is done correctly
+                    // Album not found - set basic info at least
                     _albumName.value = albumName
                     _albumArtist.value = albumArtist
                 }

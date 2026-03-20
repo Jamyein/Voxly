@@ -1,8 +1,5 @@
 package com.voxly.presentation.screens.album
 
-import android.graphics.Bitmap
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,7 +22,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.MaterialTheme
@@ -43,15 +39,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.ui.loadLocalAlbumArt
+import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 
 /**
@@ -79,8 +73,6 @@ fun AlbumDetailScreen(
     val albumSampleRate by viewModel.albumSampleRate.collectAsState()
     val files by viewModel.files.collectAsState()
     val coverPath by viewModel.coverPath.collectAsState()
-
-    val context = LocalContext.current
 
     // Calculate total duration
     val totalDuration = remember(files) {
@@ -138,11 +130,11 @@ fun AlbumDetailScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Large Card: Cover + Album Info
+            // Card: Cover + Album Info
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.large,
+                    shape = MaterialTheme.shapes.medium,
                     colors = CardDefaults.cardColors(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant
                     )
@@ -153,38 +145,30 @@ fun AlbumDetailScreen(
                             .padding(16.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Left: Cover image
-                        Box(
+                        // Left: Cover image using AlbumArtImage composable
+                        val firstFile = files.firstOrNull()
+                        AlbumArtImage(
+                            filePath = coverPath ?: firstFile?.path,
+                            mediaStoreAlbumId = firstFile?.mediaStoreAlbumId,
+                            contentDescription = stringResource(R.string.album_cover),
+                            size = 120.dp,
                             modifier = Modifier
                                 .size(120.dp)
-                                .clip(MaterialTheme.shapes.medium),
-                            contentAlignment = Alignment.Center
+                                .clip(MaterialTheme.shapes.medium)
                         ) {
-                            val firstFile = files.firstOrNull()
-                            val bitmap = remember(coverPath) {
-                                firstFile?.let { loadAlbumArtFromPath(context, it.path, coverPath) }
-                            }
-                            if (bitmap != null) {
-                                Image(
-                                    bitmap = bitmap.asImageBitmap(),
-                                    contentDescription = stringResource(R.string.album_cover),
-                                    modifier = Modifier.fillMaxSize()
+                            Surface(
+                                modifier = Modifier.fillMaxSize(),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Album,
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .padding(24.dp)
+                                        .fillMaxSize(),
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
-                            } else {
-                                Surface(
-                                    modifier = Modifier.fillMaxSize(),
-                                    color = MaterialTheme.colorScheme.surfaceVariant,
-                                    shape = MaterialTheme.shapes.medium
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Album,
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .padding(24.dp)
-                                            .fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
                             }
                         }
 
@@ -207,22 +191,26 @@ fun AlbumDetailScreen(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            Text(
-                                text = "$albumBitrate kbps",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                            Text(
-                                text = "$albumSampleRate Hz",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
+                            if (albumBitrate > 0) {
+                                Text(
+                                    text = "$albumBitrate kbps",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
+                            if (albumSampleRate > 0) {
+                                Text(
+                                    text = "${albumSampleRate / 1000} kHz",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.outline
+                                )
+                            }
                         }
                     }
                 }
             }
 
-            // Small Card: Statistics
+            // Card: Statistics
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -237,21 +225,42 @@ fun AlbumDetailScreen(
                             .padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly
                     ) {
-                        Text(
-                            text = stringResource(R.string.track_count, files.size),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        Text(
-                            text = formattedTotalDuration,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                        Text(
-                            text = albumYear ?: "N/A",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = files.size.toString(),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = stringResource(R.string.singles),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = formattedTotalDuration,
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = stringResource(R.string.metadata_duration),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = albumYear ?: "N/A",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                            Text(
+                                text = stringResource(R.string.metadata_year),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                            )
+                        }
                     }
                 }
             }
@@ -320,16 +329,4 @@ fun AlbumDetailScreen(
             }
         }
     }
-}
-
-private fun loadAlbumArtFromPath(context: android.content.Context, filePath: String, coverPath: String?): Bitmap? {
-    // First check global cache (covers embedded + folder cover)
-    loadLocalAlbumArt(filePath)?.let { return it }
-
-    // If coverPath is different from filePath, check that too
-    if (coverPath != null && coverPath != filePath) {
-        loadLocalAlbumArt(coverPath)?.let { return it }
-    }
-
-    return null
 }
