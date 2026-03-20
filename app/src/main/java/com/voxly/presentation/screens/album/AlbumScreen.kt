@@ -67,12 +67,16 @@ fun AlbumScreen(
         hasReadPermission = granted
     }
 
-    LaunchedEffect(hasReadPermission, lifecycleOwner) {
+    LaunchedEffect(hasReadPermission) {
         if (!hasReadPermission) {
             readPermissionLauncher.launch(readPermission)
             return@LaunchedEffect
         }
         viewModel.refresh()
+    }
+
+    // Only refresh on resume (not on every recomposition)
+    LaunchedEffect(lifecycleOwner) {
         lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
             viewModel.refresh()
         }

@@ -81,10 +81,11 @@ fun DirectoryContentScreen(
     }
 
     // Auto-load when directoryFiles[directoryUri] is null
-    // Only trigger load if selectedDirectories is empty (initial state)
-    // When user navigates from FileBrowserScreen, selectedDirectories already contains the directory
+    // Only trigger load if this directory is NOT already in selectedDirectories
+    // This prevents loadFromDirectory from being called during normal navigation
     LaunchedEffect(directoryUri) {
-        if (directoryUri.isNotEmpty() && directoryFiles[directoryUri] == null && selectedDirectories.isEmpty()) {
+        val directoryAlreadySelected = selectedDirectories.any { it.uri == directoryUri }
+        if (directoryUri.isNotEmpty() && directoryFiles[directoryUri] == null && !directoryAlreadySelected) {
             viewModel.loadFromDirectory(android.net.Uri.parse(directoryUri))
         }
     }
