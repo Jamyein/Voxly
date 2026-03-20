@@ -234,8 +234,6 @@ data class ArtistGroup(
  */
 enum class RootTab {
     DIRECTORIES,
-    ALBUMS,
-    ARTISTS,
     ALL
 }
 

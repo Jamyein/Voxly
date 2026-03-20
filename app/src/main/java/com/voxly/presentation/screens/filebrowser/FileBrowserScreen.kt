@@ -77,8 +77,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.domain.model.AlbumGroup
-import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.RootTab
 import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.model.BatchStatus
@@ -132,18 +130,10 @@ fun FileBrowserScreen(
         else -> emptyList()
     }
 
-    // Tab states for albums/artists view
-    val albums by viewModel.albums.collectAsState()
-    val artists by viewModel.artists.collectAsState()
+    // Tab states
     val allAudios by viewModel.allAudios.collectAsState()
     var selectedRootTab by rememberSaveable { mutableStateOf(RootTab.DIRECTORIES) }
     val isAudioFileView = !isDirectoryListLevel || selectedRootTab == RootTab.ALL
-
-    // Navigation state for album/artist detail
-    // Note: Cannot use rememberSaveable for AlbumGroup/ArtistGroup as they contain
-    // AudioFile objects with non-serializable data (lyrics, customFields, etc.)
-    var selectedAlbum by remember { mutableStateOf<AlbumGroup?>(null) }
-    var selectedArtist by remember { mutableStateOf<ArtistGroup?>(null) }
 
     // Pull-to-refresh state
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -483,14 +473,12 @@ fun FileBrowserScreen(
                 Column(modifier = Modifier.weight(1f)) {
                     // States for scroll-to-top functionality
                     val directoriesListState = rememberLazyListState()
-                    val albumsScrollTrigger = remember { mutableIntStateOf(0) }
-                    val artistsListState = rememberLazyListState()
                     val allAudiosListState = rememberLazyListState()
 
                     // Pager state for swipe gesture
                     val pagerState = rememberPagerState(
                         initialPage = selectedRootTab.ordinal,
-                        pageCount = { RootTab.entries.size }
+                        pageCount = { 2 }  // DIRECTORIES and ALL only
                     )
 
                     // Sync pager scroll with selectedTab
@@ -517,34 +505,12 @@ fun FileBrowserScreen(
                             icon = { Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.tab_directories)) }
                         )
                         Tab(
-                            selected = selectedRootTab == RootTab.ALBUMS,
-                            onClick = {
-                                if (selectedRootTab == RootTab.ALBUMS) {
-                                    albumsScrollTrigger.intValue++
-                                } else {
-                                    coroutineScope.launch { pagerState.animateScrollToPage(1) }
-                                }
-                            },
-                            icon = { Icon(Icons.Default.Album, contentDescription = stringResource(R.string.tab_albums)) }
-                        )
-                        Tab(
-                            selected = selectedRootTab == RootTab.ARTISTS,
-                            onClick = {
-                                if (selectedRootTab == RootTab.ARTISTS) {
-                                    coroutineScope.launch { artistsListState.animateScrollToItem(0) }
-                                } else {
-                                    coroutineScope.launch { pagerState.animateScrollToPage(2) }
-                                }
-                            },
-                            icon = { Icon(Icons.Default.Person, contentDescription = stringResource(R.string.tab_artists)) }
-                        )
-                        Tab(
                             selected = selectedRootTab == RootTab.ALL,
                             onClick = {
                                 if (selectedRootTab == RootTab.ALL) {
                                     coroutineScope.launch { allAudiosListState.animateScrollToItem(0) }
                                 } else {
-                                    coroutineScope.launch { pagerState.animateScrollToPage(3) }
+                                    coroutineScope.launch { pagerState.animateScrollToPage(1) }
                                 }
                             },
                             icon = { Icon(Icons.Default.MusicNote, contentDescription = stringResource(R.string.tab_all)) }
@@ -568,35 +534,6 @@ fun FileBrowserScreen(
                                     listState = directoriesListState,
                                     bottomPadding = outerPadding.calculateBottomPadding()
                                 )
-                            }
-                            RootTab.ALBUMS -> {
-                                AlbumTabContent(
-                                    albums = albums,
-                                    onAlbumClick = { album ->
-                                        viewModel.cacheAlbum(album)
-                                        onNavigateToAlbum(album.name, album.artist)
-                                    },
-                                    isRefreshing = isRefreshing,
-                                    onRefresh = onRefresh,
-                                    scrollToTopTrigger = albumsScrollTrigger.intValue
-                                )
-                            }
-                            RootTab.ARTISTS -> {
-                                if (selectedArtist != null) {
-                                    ArtistDetailContent(
-                                        artist = selectedArtist!!,
-                                        onBackClick = { selectedArtist = null },
-                                        onNavigateToMetadata = onNavigateToMetadata
-                                    )
-                                } else {
-                                    ArtistTabContent(
-                                        artists = artists,
-                                        onArtistClick = { artist -> onNavigateToArtist(artist.name) },
-                                        isRefreshing = isRefreshing,
-                                        onRefresh = onRefresh,
-                                        listState = artistsListState
-                                    )
-                                }
                             }
                             RootTab.ALL -> {
                                 AllAudiosTabContent(
