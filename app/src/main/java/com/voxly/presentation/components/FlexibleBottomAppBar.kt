@@ -11,10 +11,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.navigation3.runtime.NavKey
 import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.navigation.Albums
+import com.voxly.presentation.navigation.Artists
 import com.voxly.presentation.navigation.FileBrowser
-import com.voxly.presentation.navigation.RecentEdits
 import com.voxly.presentation.navigation.Settings
-import com.voxly.presentation.navigation.Statistics
 
 /**
  * Bottom navigation bar for the app using Navigation3.
@@ -28,7 +28,7 @@ fun FlexibleBottomAppBar(
 ) {
     // Bottom navigation keys
     val bottomNavKeys = remember {
-        listOf(FileBrowser, RecentEdits, Statistics, Settings)
+        listOf(FileBrowser, Albums, Artists, Settings)
     }
 
     // Only show bottom bar on bottom nav routes
@@ -96,16 +96,16 @@ private val bottomNavItems = listOf(
         unselectedIcon = AppIcon.FolderOutlined
     ),
     FlexibleBottomNavItem(
-        key = RecentEdits,
-        label = "Recent",
-        selectedIcon = AppIcon.History,
-        unselectedIcon = AppIcon.HistoryOutlined
+        key = Albums,
+        label = "Albums",
+        selectedIcon = AppIcon.Album,
+        unselectedIcon = AppIcon.AlbumOutlined
     ),
     FlexibleBottomNavItem(
-        key = Statistics,
-        label = "Statistics",
-        selectedIcon = AppIcon.BarChart,
-        unselectedIcon = AppIcon.BarChart
+        key = Artists,
+        label = "Artists",
+        selectedIcon = AppIcon.Artist,
+        unselectedIcon = AppIcon.ArtistOutlined
     ),
     FlexibleBottomNavItem(
         key = Settings,

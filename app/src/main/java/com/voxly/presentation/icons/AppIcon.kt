@@ -1,6 +1,7 @@
 package com.voxly.presentation.icons
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material.icons.filled.Error
@@ -10,6 +11,7 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.automirrored.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Schedule
@@ -21,9 +23,11 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.outlined.Album
 import androidx.compose.material.icons.outlined.Folder
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.automirrored.outlined.PlaylistAdd
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material.icons.outlined.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.painter.Painter
@@ -58,7 +62,11 @@ enum class AppIcon(
     Close(Icons.Filled.Close),
     Settings(Icons.Filled.Settings),
     SettingsOutlined(Icons.Outlined.Settings),
-    BarChart(Icons.Filled.BarChart)
+    BarChart(Icons.Filled.BarChart),
+    Album(Icons.Filled.Album),
+    AlbumOutlined(Icons.Outlined.Album),
+    Artist(Icons.Filled.Person),
+    ArtistOutlined(Icons.Outlined.Person)
 }
 
 @Composable
