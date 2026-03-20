@@ -65,7 +65,7 @@ fun ArtistScreen(
     }
 
     // Passive permission check - no active refresh trigger
-    // Data is collected from shared LibraryViewModel via artists StateFlow
+    // Data is collected from AudioFileScanner via artists StateFlow
     LaunchedEffect(hasReadPermission) {
         if (!hasReadPermission) {
             readPermissionLauncher.launch(readPermission)

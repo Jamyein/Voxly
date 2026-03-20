@@ -428,6 +428,15 @@ class AudioFileScanner @Inject constructor(
     }
 
     /**
+     * Updates albums and artists StateFlows from a list of audio files.
+     * Called by LibraryViewModel after scanning to keep AudioFileScanner's data in sync.
+     */
+    fun updateAlbumsAndArtistsFromFiles(files: List<AudioFile>) {
+        updateAlbumsFromFiles(files)
+        updateArtistsFromFiles(files)
+    }
+
+    /**
      * Derives albums from a list of audio files and updates the [albums] StateFlow.
      */
     private fun updateAlbumsFromFiles(files: List<AudioFile>) {

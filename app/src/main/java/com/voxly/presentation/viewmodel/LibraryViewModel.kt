@@ -281,6 +281,8 @@ class LibraryViewModel @Inject constructor(
                             selectedCount = _selectedFiles.value.size
                         )
                     }
+                    // Sync to AudioFileScanner so Album/Artist screens see the data
+                    audioFileScanner.updateAlbumsAndArtistsFromFiles(result.files)
                     if (isIncremental) {
                         aggregateData()
                     }
@@ -355,6 +357,8 @@ class LibraryViewModel @Inject constructor(
                 )
             }
             aggregateData()
+            // Sync to AudioFileScanner so Album/Artist screens see the data
+            audioFileScanner.updateAlbumsAndArtistsFromFiles(mergedFiles)
         }.onFailure { error ->
             _isRefreshing.value = false
             if (error is CancellationException) {
@@ -1391,6 +1395,8 @@ class LibraryViewModel @Inject constructor(
                 )
             }
             aggregateData()
+            // Sync to AudioFileScanner so Album/Artist screens see the data
+            audioFileScanner.updateAlbumsAndArtistsFromFiles(mergedFiles)
         }.onFailure { error ->
             _isRefreshing.value = false
             if (error is CancellationException) {
