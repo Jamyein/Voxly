@@ -10,6 +10,7 @@ import android.os.Environment
 import com.voxly.core.util.SortUtil
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AlbumGroup
+import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioFormat
 import com.voxly.domain.model.parseMediaStoreTrackField
@@ -63,6 +64,10 @@ class AudioFileScanner @Inject constructor(
     // Albums derived from cached audio files
     private val _albums = MutableStateFlow<List<AlbumGroup>>(emptyList())
     val albums: StateFlow<List<AlbumGroup>> = _albums.asStateFlow()
+
+    // Artists derived from cached audio files
+    private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
+    val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
 
     companion object {
         private const val TAG = "AudioFileScanner"
@@ -405,6 +410,7 @@ class AudioFileScanner @Inject constructor(
             scanAudioFilesOptimized(forceRefresh = false).first()
         }
         updateAlbumsFromFiles(files)
+        updateArtistsFromFiles(files)
     }
 
     /**
@@ -427,6 +433,28 @@ class AudioFileScanner @Inject constructor(
             }
             .sortedBy { SortUtil.toSortablePinyin(it.name) }
         _albums.value = albumsMap
+    }
+
+    /**
+     * Derives artists from a list of audio files and updates the [artists] StateFlow.
+     */
+    private fun updateArtistsFromFiles(files: List<AudioFile>) {
+        val artistsMap = files
+            .filter { it.metadata.artist?.isNotBlank() == true }
+            .groupBy { it.metadata.artist!! }
+            .map { (artistName, artistFiles) ->
+                val coverFile = artistFiles.firstOrNull {
+                    it.metadata.album?.isNotBlank() == true
+                } ?: artistFiles.firstOrNull()
+                ArtistGroup(
+                    name = artistName,
+                    albums = artistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
+                    files = artistFiles.sortedBy { it.metadata.album },
+                    coverPath = coverFile?.path
+                )
+            }
+            .sortedBy { SortUtil.toSortablePinyin(it.name) }
+        _artists.value = artistsMap
     }
 
     /**
