@@ -72,7 +72,7 @@ fun SelectionTopBar(
 fun DirectoryOverviewContent(
     directories: List<SelectedDirectory>,
     directoryFiles: Map<String, List<AudioFile>>,
-    onOpenDirectory: (String, String, List<String>) -> Unit,
+    onOpenDirectory: (String, String) -> Unit,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     listState: LazyListState? = null,
@@ -108,7 +108,7 @@ fun DirectoryOverviewContent(
                     DirectoryItem(
                         directory = directory,
                         fileCount = files.size,
-                        onClick = { onOpenDirectory(directory.uri, dirName, files.map { it.path }) }
+                        onClick = { onOpenDirectory(directory.uri, dirName) }
                     )
                 }
             }

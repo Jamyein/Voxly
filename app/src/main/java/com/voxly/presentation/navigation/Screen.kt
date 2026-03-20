@@ -29,8 +29,7 @@ data object Settings : NavKey
 @Serializable
 data class DirectoryContent(
     val directoryUri: String,
-    val directoryName: String,
-    val filePaths: List<String> = emptyList()
+    val directoryName: String
 ) : NavKey
 
 @Serializable
@@ -83,6 +82,9 @@ data object ScanDirectorySettings : NavKey
 
 @Serializable
 data object LogViewer : NavKey
+
+@Serializable
+data object Statistics : NavKey
 
 /**
  * Bottom navigation items for the main screen.

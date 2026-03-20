@@ -64,7 +64,6 @@ import com.voxly.presentation.screens.filebrowser.OnlineMetadataOptions
 fun DirectoryContentScreen(
     directoryUri: String,
     directoryName: String,
-    initialFiles: List<String> = emptyList(),
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
@@ -76,20 +75,14 @@ fun DirectoryContentScreen(
     val directoryFiles by viewModel.directoryFiles.collectAsState()
     val selectedFiles by viewModel.selectedFiles.collectAsState()
 
-    // Use initialFiles passed via navigation, fallback to ViewModel data if available
-    val files = remember(directoryUri, directoryFiles, initialFiles) {
-        if (initialFiles.isNotEmpty()) {
-            // Try to match with ViewModel data to get full AudioFile objects
-            initialFiles.mapNotNull { path ->
-                directoryFiles[directoryUri]?.find { it.path == path }
-            }.ifEmpty {
-                // If no match in ViewModel, try to use paths from other directories or create minimal entries
-                initialFiles.mapNotNull { path ->
-                    directoryFiles.values.flatten().find { it.path == path }
-                }
-            }
-        } else {
-            directoryFiles[directoryUri].orEmpty()
+    val files = remember(directoryUri, directoryFiles) {
+        directoryFiles[directoryUri] ?: emptyList()
+    }
+
+    // Auto-load when directoryFiles[directoryUri] is null
+    LaunchedEffect(directoryUri) {
+        if (directoryUri.isNotEmpty() && directoryFiles[directoryUri] == null) {
+            viewModel.loadFromDirectory(android.net.Uri.parse(directoryUri))
         }
     }
 

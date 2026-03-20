@@ -121,8 +121,8 @@ fun MP3TagNavHost() {
                             onNavigateToReplayGain = { filePaths ->
                                 backStack.add(ReplayGainScanner(filePaths))
                             },
-                            onNavigateToDirectory = { directoryUri, directoryName, filePaths ->
-                                backStack.add(DirectoryContent(directoryUri, directoryName, filePaths))
+                            onNavigateToDirectory = { directoryUri, directoryName ->
+                                backStack.add(DirectoryContent(directoryUri, directoryName))
                             },
                             onNavigateToSearch = {},
                             onNavigateToAlbum = { albumName, albumArtist ->
@@ -204,7 +204,6 @@ fun MP3TagNavHost() {
                         DirectoryContentScreen(
                             directoryUri = key.directoryUri,
                             directoryName = key.directoryName,
-                            initialFiles = key.filePaths,
                             onNavigateBack = { backStack.removeLastOrNull() },
                             onNavigateToMetadata = { filePath, coverTag ->
                                 backStack.add(MetadataEditor(filePath, coverTag ?: ""))

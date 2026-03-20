@@ -108,7 +108,7 @@ fun FileBrowserScreen(
     viewModel: FileBrowserViewModel = hiltViewModel(),
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
-    onNavigateToDirectory: (String, String, List<String>) -> Unit,
+    onNavigateToDirectory: (String, String) -> Unit,
     onNavigateToSearch: (List<AudioFile>) -> Unit = {},
     onNavigateToAlbum: (String, String?) -> Unit = { _, _ -> },
     onNavigateToArtist: (String) -> Unit = {},
