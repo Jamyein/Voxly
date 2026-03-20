@@ -9,6 +9,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,7 +26,7 @@ import kotlinx.coroutines.launch
 /**
  * ReplayGain scanner screen for analyzing audio files and calculating gain values.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ReplayGainScannerScreen(
     filePaths: List<String>,
@@ -171,9 +172,12 @@ private fun ScanningContent(
 
         Spacer(modifier = Modifier.height(32.dp))
 
-        LinearProgressIndicator(
+        LinearWavyProgressIndicator(
             progress = { progress },
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier.fillMaxWidth(),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            wavelength = 20.dp
         )
 
         Spacer(modifier = Modifier.height(16.dp))

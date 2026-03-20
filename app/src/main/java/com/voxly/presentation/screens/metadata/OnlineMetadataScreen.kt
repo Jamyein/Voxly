@@ -461,14 +461,14 @@ fun SearchProgressIndicator(
                     )
                 } else {
                     // Indeterminate: unknown progress and wait time - wavy style
-                    LinearProgressIndicator(
+                    LinearWavyProgressIndicator(
                         modifier = Modifier
                             .weight(1f)
                             .height(6.dp)
                             .clip(MaterialTheme.shapes.extraSmall),
                         color = MaterialTheme.colorScheme.primary,
-                        strokeCap = StrokeCap.Round,
-                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        wavelength = 20.dp
                     )
                 }
 
