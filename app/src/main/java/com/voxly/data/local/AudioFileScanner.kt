@@ -7,7 +7,9 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.provider.DocumentsContract
 import android.os.Environment
+import com.voxly.core.util.SortUtil
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
+import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioFormat
 import com.voxly.domain.model.parseMediaStoreTrackField
@@ -18,9 +20,14 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import android.util.LruCache
@@ -52,6 +59,10 @@ class AudioFileScanner @Inject constructor(
     // LRU cache for directory scans (max 50 entries to prevent memory issues)
     // Uses path as key, list of AudioFiles as value
     private val directoryScanCache = LruCache<String, List<AudioFile>>(50)
+
+    // Albums derived from cached audio files
+    private val _albums = MutableStateFlow<List<AlbumGroup>>(emptyList())
+    val albums: StateFlow<List<AlbumGroup>> = _albums.asStateFlow()
 
     companion object {
         private const val TAG = "AudioFileScanner"
@@ -380,6 +391,43 @@ class AudioFileScanner @Inject constructor(
      * Use this for initial display while scanning in background.
      */
     fun getCachedAudioFiles(): Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
+
+    /**
+     * Load audio files and derive albums.
+     * Updates the [albums] StateFlow with grouped album data.
+     *
+     * @param isIncremental If true, only scan changed files; if false, full scan
+     */
+    suspend fun loadAudioFiles(isIncremental: Boolean = false) {
+        val files = if (isIncremental) {
+            scanIncremental().first()
+        } else {
+            scanAudioFilesOptimized(forceRefresh = false).first()
+        }
+        updateAlbumsFromFiles(files)
+    }
+
+    /**
+     * Derives albums from a list of audio files and updates the [albums] StateFlow.
+     */
+    private fun updateAlbumsFromFiles(files: List<AudioFile>) {
+        val albumsMap = files
+            .filter { it.metadata.album?.isNotBlank() == true }
+            .groupBy { it.metadata.album!! }
+            .map { (albumName, albumFiles) ->
+                val coverFile = albumFiles.firstOrNull {
+                    it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+                } ?: albumFiles.firstOrNull()
+                AlbumGroup(
+                    name = albumName,
+                    artist = albumFiles.firstOrNull()?.metadata?.artist,
+                    files = albumFiles.sortedBy { it.metadata.trackNumber },
+                    coverPath = coverFile?.path
+                )
+            }
+            .sortedBy { SortUtil.toSortablePinyin(it.name) }
+        _albums.value = albumsMap
+    }
 
     /**
      * Check if cache has data.

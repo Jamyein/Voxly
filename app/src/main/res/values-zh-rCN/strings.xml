@@ -4,6 +4,7 @@
 
     <!-- Navigation -->
     <string name="nav_file_browser">音乐库</string>
+    <string name="nav_albums">专辑</string>
     <string name="nav_recent_edits">最近</string>
     <string name="nav_statistics">统计</string>
     <string name="nav_settings">设置</string>

@@ -4,6 +4,7 @@
 
     <!-- Navigation -->
     <string name="nav_file_browser">Library</string>
+    <string name="nav_albums">Albums</string>
     <string name="nav_recent_edits">Recent</string>
     <string name="nav_statistics">Statistics</string>
     <string name="nav_settings">Settings</string>
