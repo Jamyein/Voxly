@@ -30,9 +30,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import com.voxly.R
 import com.voxly.presentation.screens.filebrowser.ArtistTabContent
 import com.voxly.presentation.viewmodel.ArtistViewModel
@@ -45,7 +42,6 @@ fun ArtistScreen(
     viewModel: ArtistViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val artists by viewModel.artists.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val listState = rememberLazyListState()
@@ -68,18 +64,11 @@ fun ArtistScreen(
         hasReadPermission = granted
     }
 
+    // Passive permission check - no active refresh trigger
+    // Data is collected from shared LibraryViewModel via artists StateFlow
     LaunchedEffect(hasReadPermission) {
         if (!hasReadPermission) {
             readPermissionLauncher.launch(readPermission)
-            return@LaunchedEffect
-        }
-        viewModel.refresh()
-    }
-
-    // Only refresh on resume (not on every recomposition)
-    LaunchedEffect(lifecycleOwner) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            viewModel.refresh()
         }
     }
 

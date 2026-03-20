@@ -56,7 +56,7 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.ExpressiveMotion
-import com.voxly.presentation.viewmodel.FileBrowserViewModel
+import com.voxly.presentation.viewmodel.LibraryViewModel
 import com.voxly.core.util.SortUtil
 import com.voxly.presentation.screens.filebrowser.FixMetadataOptions
 import com.voxly.presentation.screens.filebrowser.OnlineMetadataOptions
@@ -69,7 +69,7 @@ fun DirectoryContentScreen(
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
-    viewModel: FileBrowserViewModel
+    viewModel: LibraryViewModel
 ) {
     val context = LocalContext.current
 
@@ -258,11 +258,13 @@ fun DirectoryContentScreen(
             .fillMaxSize()
             .padding(innerPadding),
         indicator = {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                LoadingIndicator()
+            if (isRefreshing) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LoadingIndicator()
+                }
             }
         }
     ) {

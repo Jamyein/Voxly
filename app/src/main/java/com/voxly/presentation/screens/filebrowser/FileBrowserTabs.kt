@@ -74,11 +74,13 @@ internal fun AlbumTabContent(
             onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize(),
             indicator = {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    LoadingIndicator()
+                if (isRefreshing) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LoadingIndicator()
+                    }
                 }
             }
         ) {
@@ -128,11 +130,13 @@ internal fun ArtistTabContent(
         onRefresh = onRefresh,
         modifier = Modifier.fillMaxSize(),
         indicator = {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                LoadingIndicator()
+            if (isRefreshing) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LoadingIndicator()
+                }
             }
         }
     ) {
@@ -469,11 +473,13 @@ internal fun AllAudiosTabContent(
         onRefresh = onRefresh,
         modifier = Modifier.fillMaxSize(),
         indicator = {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                LoadingIndicator()
+            if (isRefreshing) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LoadingIndicator()
+                }
             }
         }
     ) {

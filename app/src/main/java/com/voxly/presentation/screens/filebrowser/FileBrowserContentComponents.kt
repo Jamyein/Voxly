@@ -86,11 +86,13 @@ fun DirectoryOverviewContent(
         onRefresh = onRefresh,
         modifier = Modifier.fillMaxSize(),
         indicator = {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                LoadingIndicator()
+            if (isRefreshing) {
+                Box(
+                    modifier = Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LoadingIndicator()
+                }
             }
         }
     ) {

@@ -92,7 +92,7 @@ import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.FileBrowserUiState
-import com.voxly.presentation.viewmodel.FileBrowserViewModel
+import com.voxly.presentation.viewmodel.LibraryViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.Dispatchers
@@ -107,7 +107,7 @@ import kotlin.math.abs
 @Composable
 fun FileBrowserScreen(
     outerPadding: PaddingValues = PaddingValues(),
-    viewModel: FileBrowserViewModel = hiltViewModel(),
+    viewModel: LibraryViewModel = hiltViewModel(),
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
     onNavigateToDirectory: (String, String) -> Unit,
@@ -580,11 +580,13 @@ fun FileBrowserScreen(
                                     onRefresh = onRefresh,
                                     modifier = Modifier.fillMaxSize(),
                                     indicator = {
-                                        Box(
-                                            modifier = Modifier.fillMaxWidth(),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            LoadingIndicator()
+                                        if (isRefreshing) {
+                                            Box(
+                                                modifier = Modifier.fillMaxWidth(),
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                LoadingIndicator()
+                                            }
                                         }
                                     }
                                 ) {

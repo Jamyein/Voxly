@@ -49,11 +49,12 @@ import java.io.File
 import javax.inject.Inject
 
 /**
- * ViewModel for the file browser screen.
- * Handles audio file scanning, selection, and batch operations.
+ * ViewModel for the library screens (FileBrowser, Albums, Artists).
+ * Handles unified audio scanning, selection, and batch operations.
+ * This is the single source of truth for all library-level data.
  */
 @HiltViewModel
-class FileBrowserViewModel @Inject constructor(
+class LibraryViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val audioRepository: AudioRepository,
     private val audioFileScanner: com.voxly.data.local.AudioFileScanner,
@@ -63,10 +64,11 @@ class FileBrowserViewModel @Inject constructor(
     private val safWriteAccessService: SafWriteAccessService,
     private val albumCacheRepository: AlbumCacheRepository,
     private val artistCacheRepository: ArtistCacheRepository,
-    private val batchEngine: BatchEngine<String>
+    private val batchEngine: BatchEngine<String>,
+    private val libraryDataHolder: LibraryDataHolder
 ) : ViewModel() {
     companion object {
-        private const val TAG = "FileBrowserViewModel"
+        private const val TAG = "LibraryViewModel"
         private const val STATE_FLOW_TIMEOUT_MS = 5000L
     }
 
@@ -114,6 +116,11 @@ class FileBrowserViewModel @Inject constructor(
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
             initialValue = setOf("&", "/", "\\")
         )
+
+    /**
+     * Unified scan state exposed for all screens to observe loading/progress.
+     */
+    val scanState: StateFlow<ScanState> = unifiedScanManager.scanState
 
     /**
      * Cache an album to the repository for instant loading in AlbumDetailScreen.
@@ -288,6 +295,15 @@ class FileBrowserViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Unified refresh entry point for all screens.
+     * forceRefresh=true: full rescan
+     * forceRefresh=false: incremental scan (new/modified files only)
+     */
+    fun refresh(forceRefresh: Boolean = false) {
+        loadAudioFiles(forceRefresh = forceRefresh, isIncremental = !forceRefresh)
     }
 
     /**

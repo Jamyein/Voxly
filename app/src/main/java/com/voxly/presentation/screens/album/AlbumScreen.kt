@@ -29,9 +29,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LocalLifecycleOwner
-import androidx.lifecycle.repeatOnLifecycle
 import com.voxly.R
 import com.voxly.presentation.screens.filebrowser.AlbumTabContent
 import com.voxly.presentation.viewmodel.AlbumViewModel
@@ -44,7 +41,6 @@ fun AlbumScreen(
     viewModel: AlbumViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val lifecycleOwner = LocalLifecycleOwner.current
     val albums by viewModel.albums.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     var scrollToTopTrigger by remember { mutableIntStateOf(0) }
@@ -67,18 +63,11 @@ fun AlbumScreen(
         hasReadPermission = granted
     }
 
+    // Passive permission check - no active refresh trigger
+    // Data is collected from AudioFileScanner via albums StateFlow
     LaunchedEffect(hasReadPermission) {
         if (!hasReadPermission) {
             readPermissionLauncher.launch(readPermission)
-            return@LaunchedEffect
-        }
-        viewModel.refresh()
-    }
-
-    // Only refresh on resume (not on every recomposition)
-    LaunchedEffect(lifecycleOwner) {
-        lifecycleOwner.lifecycle.repeatOnLifecycle(Lifecycle.State.RESUMED) {
-            viewModel.refresh()
         }
     }
 
