@@ -509,8 +509,8 @@ class AudioFileScanner @Inject constructor(
         }
 
         // No cache or force refresh: perform full scan and cache results
-        // Emit empty list first to show loading state
-        emit(emptyList())
+        // Note: Do NOT emit emptyList() first - it causes .first() to return immediately with empty results
+        // instead of waiting for the actual scan to complete
 
         val allFiles = mutableListOf<AudioFile>()
         scanAllFilesForCacheWithProgress(allFiles) { current, _ ->
