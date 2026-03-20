@@ -15,10 +15,10 @@ import kotlinx.serialization.Serializable
 data object FileBrowser : NavKey
 
 @Serializable
-data object RecentEdits : NavKey
+data object Albums : NavKey
 
 @Serializable
-data object Statistics : NavKey
+data object Artists : NavKey
 
 @Serializable
 data object Settings : NavKey
@@ -93,7 +93,7 @@ enum class BottomNavItem(
     val iconName: String
 ) {
     FILE_BROWSER(FileBrowser, "Files", "folder"),
-    RECENT_EDITS(RecentEdits, "Recent", "history"),
-    STATISTICS(Statistics, "Statistics", "bar_chart"),
+    ALBUMS(Albums, "Albums", "album"),
+    ARTISTS(Artists, "Artists", "person"),
     SETTINGS(Settings, "Settings", "settings")
 }
