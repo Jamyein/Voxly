@@ -237,6 +237,7 @@
 
     <!-- Statistics -->
     <string name="statistics_title">统计</string>
+    <string name="statistics_subtitle">查看音乐库统计信息</string>
     <string name="statistics_overview">概览</string>
     <string name="statistics_format_distribution">格式分布</string>
     <string name="statistics_top_artists">热门艺术家</string>

@@ -314,6 +314,7 @@
 
     <!-- Statistics -->
     <string name="statistics_title">Statistics</string>
+    <string name="statistics_subtitle">View your music library statistics</string>
     <string name="statistics_overview">Overview</string>
     <string name="statistics_format_distribution">Format Distribution</string>
     <string name="statistics_top_artists">Top Artists</string>
