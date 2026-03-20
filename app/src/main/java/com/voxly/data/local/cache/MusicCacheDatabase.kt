@@ -1,6 +1,7 @@
 package com.voxly.data.local.cache
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.room.*
 import androidx.room.migration.Migration
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -68,6 +69,7 @@ class RoomTypeConverters {
 
 /**
  * Database provider using Hilt dependency injection.
+ * Uses SharedPreferences to track data format version for smart migration.
  */
 @Singleton
 class MusicCacheDatabaseProvider @Inject constructor(
@@ -75,10 +77,14 @@ class MusicCacheDatabaseProvider @Inject constructor(
 ) {
     @Volatile
     private var instance: MusicCacheDatabase? = null
-    
+
+    private val prefs: SharedPreferences by lazy {
+        context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    }
+
     fun getDatabase(): MusicCacheDatabase {
         return instance ?: synchronized(this) {
-            val newInstance = Room.databaseBuilder(
+            val builder = Room.databaseBuilder(
                 context.applicationContext,
                 MusicCacheDatabase::class.java,
                 MusicCacheDatabase.DATABASE_NAME
@@ -92,18 +98,34 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_year` ON `cached_audio_files` (`year`)")
                     }
                 })
-                // Fallback to destructive migration only when schema is incompatible
-                .fallbackToDestructiveMigration()
-                .build()
+
+            // Conditional destructive migration: only when data format version is old
+            if (prefs.getInt(KEY_DATA_FORMAT_VERSION, 1) < CURRENT_DATA_FORMAT_VERSION) {
+                builder.fallbackToDestructiveMigration(dropAllTables = true)
+            }
+
+            val newInstance = builder.build()
             instance = newInstance
             newInstance
         }
     }
 
     /**
-     * Clear all data from the database
+     * Get current data format version.
+     */
+    fun getDataFormatVersion(): Int = prefs.getInt(KEY_DATA_FORMAT_VERSION, 1)
+
+    /**
+     * Clear all data from the database and reset data format version.
      */
     suspend fun clearAllData() {
         getDatabase().clearAllTables()
+        prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, 1).apply()
+    }
+
+    companion object {
+        private const val PREFS_NAME = "music_cache_meta"
+        private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
+        private const val CURRENT_DATA_FORMAT_VERSION = 2
     }
 }
