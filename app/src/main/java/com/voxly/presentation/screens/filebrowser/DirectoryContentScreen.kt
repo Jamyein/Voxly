@@ -74,6 +74,12 @@ fun DirectoryContentScreen(
     // Get directory files from the ViewModel
     val directoryFiles by viewModel.directoryFiles.collectAsState()
     val selectedFiles by viewModel.selectedFiles.collectAsState()
+    val loadingDirectories by viewModel.directoryLoadingState.collectAsState()
+
+    // Track if this directory is currently being scanned
+    val isDirectoryLoading = remember(directoryUri, loadingDirectories) {
+        directoryUri in loadingDirectories
+    }
 
     val files = remember(directoryUri, directoryFiles) {
         directoryFiles[directoryUri] ?: emptyList()
@@ -265,7 +271,10 @@ fun DirectoryContentScreen(
             )
         }
 
-        if (files.isEmpty()) {
+        // Show loading indicator while scanning, empty content only if truly empty (not loading)
+        if (files.isEmpty() && isDirectoryLoading) {
+            LoadingContent()
+        } else if (files.isEmpty()) {
             DirectoryEmptyContent(
                 modifier = Modifier.fillMaxSize()
             )

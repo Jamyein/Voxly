@@ -85,6 +85,10 @@ class FileBrowserViewModel @Inject constructor(
     private val _directoryFiles = MutableStateFlow<Map<String, List<AudioFile>>>(emptyMap())
     val directoryFiles: StateFlow<Map<String, List<AudioFile>>> = _directoryFiles.asStateFlow()
 
+    // Track loading state per directory for UI to show loading indicator during scan
+    private val _directoryLoadingState = MutableStateFlow<Set<String>>(emptySet())
+    val directoryLoadingState: StateFlow<Set<String>> = _directoryLoadingState.asStateFlow()
+
     private val _openedDirectoryUri = MutableStateFlow<String?>(null)
     val openedDirectoryUri: StateFlow<String?> = _openedDirectoryUri.asStateFlow()
 
@@ -1319,6 +1323,10 @@ class FileBrowserViewModel @Inject constructor(
         directories: List<SelectedDirectory>,
         forceRefresh: Boolean = false
     ) {
+        // Set loading state for all directories being scanned
+        val dirUris = directories.map { it.uri }.toSet()
+        _directoryLoadingState.value = _directoryLoadingState.value + dirUris
+
         if (forceRefresh || _uiState.value !is FileBrowserUiState.Success) {
             _uiState.value = FileBrowserUiState.Loading
         }
@@ -1374,6 +1382,9 @@ class FileBrowserViewModel @Inject constructor(
             }
             Timber.tag(TAG).e( "Directory scan failed for ${directories.joinToString { it.path }}", error)
             _uiState.value = FileBrowserUiState.Error(error.message ?: "Unknown error")
+        }.also {
+            // Clear loading state when scan completes (success or failure)
+            _directoryLoadingState.value = _directoryLoadingState.value - dirUris
         }
     }
 
