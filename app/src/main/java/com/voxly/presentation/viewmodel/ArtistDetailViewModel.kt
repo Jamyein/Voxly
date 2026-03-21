@@ -8,12 +8,15 @@ import com.voxly.data.repository.ArtistCacheRepository
 import com.voxly.data.repository.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.navigation.ArtistDetail
+import com.voxly.presentation.ui.extractAndCacheCoverBytes
+import com.voxly.presentation.ui.loadCarouselCoverArt
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +51,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
 
     private val _albumCovers = MutableStateFlow<Map<String, String?>>(emptyMap())
     val albumCovers: StateFlow<Map<String, String?>> = _albumCovers.asStateFlow()
+
+    private var preloadJob: Job? = null
+    private val preloadMutex = kotlinx.coroutines.sync.Mutex()
 
     init {
         loadArtist(navKey.artistName)
@@ -106,8 +112,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * Precompute album covers to avoid duplicate MediaMetadataRetriever calls in UI.
-     * Returns a map of album name to file path that has embedded art.
+     * 预计算专辑封面路径。
+     * 修复：每封面仅调用一次MediaMetadataRetriever。
+     * 使用extractAndCacheCoverBytes直接获取bytes，null表示无封面。
      */
     private fun precomputeAlbumCovers(files: List<AudioFile>) {
         viewModelScope.launch {
@@ -116,14 +123,11 @@ class ArtistDetailViewModel @AssistedInject constructor(
                 albumGroups.mapNotNull { (albumName, albumFiles) ->
                     if (albumName.isEmpty()) return@mapNotNull null
 
-                    // Find first file with embedded art
+                    // 找第一张有封面的文件（单次调用）
                     val fileWithArt = albumFiles.firstOrNull { file ->
                         try {
-                            val retriever = MediaMetadataRetriever()
-                            retriever.setDataSource(file.path)
-                            val hasArt = retriever.embeddedPicture != null
-                            retriever.release()
-                            hasArt
+                            // extractAndCacheCoverBytes会写入Bytes Cache
+                            extractAndCacheCoverBytes(file.path) != null
                         } catch (e: Exception) {
                             false
                         }
@@ -133,6 +137,36 @@ class ArtistDetailViewModel @AssistedInject constructor(
                 }.toMap()
             }
             _albumCovers.value = covers
+        }
+    }
+
+    /**
+     * 预加载相邻专辑封面（currentPage ± 1）。
+     * 并发保护：使用Mutex确保同时只有一个预加载任务执行。
+     */
+    fun preloadAdjacentAlbumCovers(currentPage: Int) {
+        val albumList = _albumCovers.value.keys.toList()
+        if (albumList.isEmpty()) return
+
+        preloadJob?.cancel()
+        preloadJob = viewModelScope.launch {
+            preloadMutex.lock()
+            try {
+                withContext(Dispatchers.IO) {
+                    val indices = listOf(currentPage - 1, currentPage, currentPage + 1)
+                        .filter { it in albumList.indices }
+
+                    indices.forEach { index ->
+                        val albumName = albumList[index]
+                        val path = _albumCovers.value[albumName]
+                        if (path != null) {
+                            loadCarouselCoverArt(path)
+                        }
+                    }
+                }
+            } finally {
+                preloadMutex.unlock()
+            }
         }
     }
 
