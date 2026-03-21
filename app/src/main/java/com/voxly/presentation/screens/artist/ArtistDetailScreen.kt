@@ -40,7 +40,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.runtime.remember
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -54,9 +57,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
-import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.theme.ExpressiveMotion
+import com.voxly.presentation.ui.loadCarouselCoverArt
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 
@@ -224,6 +227,11 @@ fun ArtistDetailScreen(
                     if (albumList.isNotEmpty()) {
                         val carouselState = rememberCarouselState { albumList.size }
 
+                        // 添加滚动监听：预加载相邻专辑封面
+                        LaunchedEffect(carouselState.currentPage) {
+                            viewModel.preloadAdjacentAlbumCovers(carouselState.currentPage)
+                        }
+
                         HorizontalMultiBrowseCarousel(
                             state = carouselState,
                             modifier = Modifier
@@ -310,6 +318,39 @@ fun ArtistDetailScreen(
 }
 
 /**
+ * 轮播封面专用图片组件（384px）。
+ * 使用produceState在IO线程加载，避免主线程阻塞。
+ * key1 = filePath确保路径变化时重新加载。
+ */
+@Composable
+private fun CarouselAlbumArtImage(
+    filePath: String?,
+    contentDescription: String?,
+    modifier: Modifier = Modifier,
+    placeholder: @Composable () -> Unit = {}
+) {
+    val bitmap = produceState<Bitmap?>(initialValue = null, key1 = filePath) {
+        value = withContext(Dispatchers.IO) {
+            filePath?.let { loadCarouselCoverArt(it) }
+        }
+    }
+
+    Box(modifier = modifier, contentAlignment = Alignment.Center) {
+        val loadedBitmap = bitmap.value
+        if (loadedBitmap != null) {
+            Image(
+                bitmap = loadedBitmap.asImageBitmap(),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            placeholder()
+        }
+    }
+}
+
+/**
  * Album card for carousel with responsive sizing and spring animation.
  */
 @Composable
@@ -347,11 +388,9 @@ private fun AlbumCard(
                     .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
-                AlbumArtImage(
+                CarouselAlbumArtImage(
                     filePath = albumArtPath,
-                    mediaStoreAlbumId = null,
                     contentDescription = albumName,
-                    size = 140.dp,
                     modifier = Modifier.fillMaxSize()
                 ) {
                     Surface(
