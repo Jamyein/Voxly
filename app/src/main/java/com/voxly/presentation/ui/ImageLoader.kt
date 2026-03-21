@@ -35,6 +35,12 @@ private val localAlbumArtCache = LinkedHashMap<String, Bitmap>(200, 0.75f, true)
 private val localCacheLock = ReentrantLock()
 private const val MAX_LOCAL_CACHE_SIZE = 200
 
+// Carousel专用封面缓存（15 entries, 384px）
+private val carouselCoverCache = LinkedHashMap<String, Bitmap>(15, 0.75f, true)
+private val carouselCacheLock = ReentrantLock()
+private const val MAX_CAROUSEL_CACHE_SIZE = 15
+private const val CAROUSEL_TARGET_SIZE = 384
+
 // MediaStore album art cache (Bitmap)
 private val mediaStoreAlbumCache = LinkedHashMap<String, Bitmap>(50, 0.75f, true)
 private const val MAX_MEDIASTORE_CACHE_SIZE = 50
@@ -275,6 +281,38 @@ fun loadLocalAlbumArtSized(filePath: String, targetSizePx: Int): Bitmap? {
  */
 private fun loadEmbeddedAlbumArt(filePath: String): Bitmap? {
     return loadEmbeddedAlbumArtSized(filePath, 300)
+}
+
+/**
+ * 提取封面字节并写入Bytes Cache。
+ * 单次MediaMetadataRetriever调用，同时完成existence check和bytes提取。
+ * 对同一filePath重复调用是安全的（幂等）。
+ */
+@PublishedApi
+internal fun extractAndCacheCoverBytes(filePath: String): ByteArray? {
+    return try {
+        val retriever = MediaMetadataRetriever()
+        try {
+            retriever.setDataSource(filePath)
+            val artBytes = retriever.embeddedPicture  // 一次性获取
+            if (artBytes != null) {
+                byteCacheLock.lock()
+                try {
+                    while (coverArtByteCache.size >= MAX_BYTE_CACHE_SIZE) {
+                        coverArtByteCache.keys.firstOrNull()?.let { coverArtByteCache.remove(it) }
+                    }
+                    coverArtByteCache[filePath] = artBytes
+                } finally {
+                    byteCacheLock.unlock()
+                }
+            }
+            artBytes
+        } finally {
+            retriever.release()  // 在finally中确保释放
+        }
+    } catch (e: Exception) {
+        null
+    }
 }
 
 /**
@@ -562,6 +600,62 @@ fun findCachedAlbumArt(filePath: String?, albumId: Long?, sizePx: Int): Bitmap? 
  */
 private fun getLocalArtCacheKey(filePath: String, sizePx: Int): String {
     return "${filePath}_$sizePx"
+}
+
+/**
+ * 获取本地文件封面原始字节，优先从Bytes Cache读取，否则从文件提取。
+ * 线程安全：提取过程在锁内执行。
+ * 注意：与getCoverArtBytes(url)不同，后者用于网络图片。
+ */
+suspend fun getLocalCoverBytes(filePath: String): ByteArray? {
+    byteCacheLock.lock()
+    val cached = coverArtByteCache[filePath]
+    byteCacheLock.unlock()
+    if (cached != null) return cached
+
+    return withContext(Dispatchers.IO) {
+        extractAndCacheCoverBytes(filePath)
+    }
+}
+
+/**
+ * 加载轮播封面Bitmap（384px）。
+ * 1. 检查carouselCache
+ * 2. 从Bytes Cache decode
+ * 3. 未缓存则提取+decode
+ */
+suspend fun loadCarouselCoverArt(filePath: String): Bitmap? {
+    if (filePath.isBlank()) return null
+
+    carouselCacheLock.lock()
+    val cached = carouselCoverCache[filePath]
+    carouselCacheLock.unlock()
+    if (cached != null && !cached.isRecycled) return cached
+
+    byteCacheLock.lock()
+    val bytes = coverArtByteCache[filePath]
+    byteCacheLock.unlock()
+
+    val bitmap = withContext(Dispatchers.IO) {
+        if (bytes != null) {
+            decodeSampledBitmapFromBytes(bytes, CAROUSEL_TARGET_SIZE)
+        } else {
+            val extractedBytes = extractAndCacheCoverBytes(filePath)
+            extractedBytes?.let { decodeSampledBitmapFromBytes(it, CAROUSEL_TARGET_SIZE) }
+        }
+    } ?: return null
+
+    carouselCacheLock.lock()
+    try {
+        while (carouselCoverCache.size >= MAX_CAROUSEL_CACHE_SIZE) {
+            carouselCoverCache.keys.firstOrNull()?.let { carouselCoverCache.remove(it) }
+        }
+        carouselCoverCache[filePath] = bitmap
+    } finally {
+        carouselCacheLock.unlock()
+    }
+
+    return bitmap
 }
 
 /**
