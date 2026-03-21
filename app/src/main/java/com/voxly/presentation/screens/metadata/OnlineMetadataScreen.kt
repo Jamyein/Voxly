@@ -120,67 +120,49 @@ fun OnlineMetadataScreen(
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            Column {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.fetch_online_metadata)) },
-                    scrollBehavior = scrollBehavior,
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                        titleContentColor = MaterialTheme.colorScheme.onSurface
-                    ),
-                    navigationIcon = {
-                        IconButton(onClick = onNavigateBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.cd_back)
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = query.title.ifBlank { stringResource(R.string.fetch_online_metadata) },
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        if (!query.title.isBlank() && (!query.artist.isNullOrBlank() || !query.album.isNullOrBlank())) {
+                            Text(
+                                text = listOfNotNull(query.artist?.takeIf { it.isNotBlank() }, query.album?.takeIf { it.isNotBlank() }).joinToString(" • "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = { viewModel.autoSearch() },
-                            enabled = !isLoading
-                        ) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Search Again")
-                        }
                     }
-                )
-                // Progress indicator at TopAppBar bottom edge
-                // 使用实际搜索的源数量计算进度，而不是固定的4个源
-                val startedSources = searchState.startedSources
-                val hasKnownProgress = searchState.completedSources.isNotEmpty() || searchState.errorSources.isNotEmpty()
-                val linearProgress = if (hasKnownProgress && startedSources.isNotEmpty()) {
-                    (searchState.completedSources.size + searchState.errorSources.size).toFloat() / startedSources.size.coerceAtLeast(1)
-                } else {
-                    0f
-                }
-
-                if (uiState is OnlineMetadataUiState.PartialResults || uiState is OnlineMetadataUiState.Searching) {
-                    if (hasKnownProgress) {
-                        // Determinate: known progress - wavy progress indicator showing 0% to 100%
-                        LinearWavyProgressIndicator(
-                            progress = { linearProgress },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                            wavelength = 20.dp
-                        )
-                    } else {
-                        // Indeterminate: unknown progress - wavy animation growing/shrinking along track
-                        LinearWavyProgressIndicator(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(4.dp),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                            wavelength = 20.dp
+                },
+                scrollBehavior = scrollBehavior,
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface,
+                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    titleContentColor = MaterialTheme.colorScheme.onSurface
+                ),
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.cd_back)
                         )
                     }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { viewModel.autoSearch() },
+                        enabled = !isLoading
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = "Search Again")
+                    }
                 }
-            }
+            )
         }
     ) { innerPadding ->
         // Content with innerPadding from Scaffold
@@ -191,15 +173,6 @@ fun OnlineMetadataScreen(
                 .padding(16.dp)
                 .pointerInput(Unit) { } // Prevent touch events during exit animation
         ) {
-            QuerySummaryCard(
-                title = query.title,
-                artist = query.artist,
-                album = query.album,
-                fromTags = query.fromTags
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
             when (val state = uiState) {
                 is OnlineMetadataUiState.Searching -> LoadingBox()
                 is OnlineMetadataUiState.PartialResults -> {
@@ -254,39 +227,6 @@ fun OnlineMetadataScreen(
     }
 }
 
-@Composable
-private fun QuerySummaryCard(
-    title: String,
-    artist: String?,
-    album: String?,
-    fromTags: Boolean
-) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.extraLarge
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = if (fromTags) "Auto query source: tags (priority)" else "Auto query source: file name fallback",
-                style = MaterialTheme.typography.labelMedium,
-                color = MaterialTheme.colorScheme.primary
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            Text(
-                text = "Title: ${title.ifBlank { "-" }}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Artist: ${artist?.ifBlank { "-" } ?: "-"}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Text(
-                text = "Album: ${album?.ifBlank { "-" } ?: "-"}",
-                style = MaterialTheme.typography.bodyMedium
-            )
-        }
-    }
-}
 
 @Composable
 private fun OnlineReleaseList(

@@ -55,6 +55,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
@@ -88,7 +89,25 @@ fun OnlineCoverSearchScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.fetch_online_cover_art)) },
+                title = {
+                    Column {
+                        Text(
+                            text = viewModel.searchTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        viewModel.searchArtist?.takeIf { it.isNotBlank() }?.let { artist ->
+                            Text(
+                                text = artist,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                },
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -122,53 +141,6 @@ fun OnlineCoverSearchScreen(
                 .padding(16.dp)
                 .pointerInput(Unit) { } // Prevent touch events during exit animation
         ) {
-            // Search info card - 使用 Surface 容器 + tertiary 颜色点缀
-            AnimatedVisibility(
-                visible = true,
-                enter = ExpressiveAnimations.BottomNavEnterM3E
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = MaterialTheme.colorScheme.tertiaryContainer,
-                    tonalElevation = 2.dp
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Search,
-                                contentDescription = null,
-                                modifier = Modifier.size(18.dp),
-                                tint = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                            Text(
-                                text = stringResource(R.string.search_query),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer
-                            )
-                        }
-                        Text(
-                            text = viewModel.searchTitle,
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer
-                        )
-                        viewModel.searchArtist?.let { artist ->
-                            Text(
-                                text = artist,
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f)
-                            )
-                        }
-                    }
-                }
-            }
-
             // Search progress - 使用弹性缩放动画
             AnimatedVisibility(
                 visible = isLoading,

@@ -44,6 +44,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
@@ -79,7 +80,29 @@ fun OnlineLyricsSearchScreen(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             TopAppBar(
-                title = { Text(stringResource(R.string.search_online_lyrics)) },
+                title = {
+                    Column {
+                        Text(
+                            text = viewModel.searchTitle,
+                            style = MaterialTheme.typography.titleMedium,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        val subtitle = listOfNotNull(
+                            viewModel.searchArtist?.takeIf { it.isNotBlank() },
+                            viewModel.searchAlbum?.takeIf { it.isNotBlank() }
+                        ).joinToString(" • ")
+                        if (subtitle.isNotBlank()) {
+                            Text(
+                                text = subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                },
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
@@ -119,60 +142,6 @@ fun OnlineLyricsSearchScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Search info card - 使用 Surface 容器 + tertiary 颜色点缀
-            item {
-                AnimatedVisibility(
-                    visible = true,
-                    enter = ExpressiveAnimations.BottomNavEnterM3E
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.extraLarge,
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        tonalElevation = 2.dp
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                Text(
-                                    text = "🎵",
-                                    style = MaterialTheme.typography.labelMedium
-                                )
-                                Text(
-                                    text = stringResource(R.string.search_query),
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer
-                                )
-                            }
-                            Text(
-                                text = viewModel.searchTitle,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            viewModel.searchArtist?.let { artist ->
-                                Text(
-                                    text = artist,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.8f)
-                                )
-                            }
-                            viewModel.searchAlbum?.let { album ->
-                                Text(
-                                    text = album,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
             // Search progress - 使用弹性缩放动画
             if (searchState.isSearching || isLoading) {
                 item {
