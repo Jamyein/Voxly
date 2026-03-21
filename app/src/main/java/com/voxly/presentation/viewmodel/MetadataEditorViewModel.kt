@@ -27,6 +27,7 @@ import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.repository.ScanMode
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.presentation.navigation.MetadataEditor
+import com.voxly.presentation.viewmodel.SearchSeedHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
@@ -68,7 +69,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
-    private val unifiedScanManager: UnifiedScanManager
+    private val unifiedScanManager: UnifiedScanManager,
+    private val searchSeedHolder: SearchSeedHolder
 ) : ViewModel() {
 
     private val TAG = "MetadataEditorVM"
@@ -276,6 +278,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
         if (modifiedField != null) {
             _modifiedFields.value = _modifiedFields.value + modifiedField
         }
+
+        // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
+        searchSeedHolder.updateSeed(
+            title = updatedMetadata.title?.takeIf { it.isNotBlank() } ?: File(filePath).nameWithoutExtension,
+            artist = updatedMetadata.artist?.takeIf { it.isNotBlank() },
+            album = updatedMetadata.album?.takeIf { it.isNotBlank() }
+        )
 
         val currentState = _uiState.value
         if (currentState is MetadataEditorUiState.Success) {
@@ -611,6 +620,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 _originalMetadata = originalMetadata
                 _hasUnsavedChanges.value = false
                 _modifiedFields.value = emptySet()
+                // 清除搜索种子（放弃修改后不再使用编辑中的值）
+                searchSeedHolder.clearSeed()
                 val currentState = _uiState.value
                 if (currentState is MetadataEditorUiState.Success) {
                     _uiState.value = currentState.copy(editedMetadata = originalMetadata)
