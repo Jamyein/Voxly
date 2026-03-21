@@ -599,4 +599,12 @@
     <string name="artist_separators">Artist Separators</string>
     <string name="artist_separators_summary">Characters used to split artist names, default &amp; \\</string>
 
+    <!-- Edit History -->
+    <string name="edit_history">编辑历史</string>
+    <string name="edit_history_title">编辑历史</string>
+    <string name="no_edit_history">暂无编辑记录</string>
+    <string name="modified_fields">修改了: %s</string>
+    <string name="original_value">原始: %s</string>
+    <string name="new_value">新: %s</string>
+
 </resources>

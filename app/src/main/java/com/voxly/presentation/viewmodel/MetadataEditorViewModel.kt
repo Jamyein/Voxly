@@ -181,7 +181,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
             audioFileResult.fold(
                 onSuccess = { audioFile ->
                     _editedMetadata.value = audioFile.metadata
-                    
+                    _originalMetadata = audioFile.metadata
+
                     // Load existing ReplayGain info if available
                     val replayGainResult = replayGainRepository.readReplayGain(filePath)
                     replayGainResult.getOrNull()?.let { replayGainInfo ->

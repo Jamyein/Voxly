@@ -29,6 +29,7 @@ import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.HorizontalFloatingToolbar
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -51,6 +52,7 @@ import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.MetadataField
+import com.voxly.presentation.viewmodel.EditHistoryViewModel
 
 /**
  * Metadata editor screen for viewing and editing audio file metadata.
@@ -94,6 +96,15 @@ fun MetadataEditorScreen(
     val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsState()
     val pendingReplayGainInfo by viewModel.pendingReplayGainInfo.collectAsState()
     var currentReplayGainInfo by remember { mutableStateOf<ReplayGainInfo?>(null) }
+
+    // EditHistory state - filter to current file only
+    var showEditHistorySheet by remember { mutableStateOf(false) }
+    val editHistorySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val editHistoryViewModel: EditHistoryViewModel = hiltViewModel()
+    val allRecentEdits by editHistoryViewModel.recentEdits.collectAsState()
+    val currentFileEdits = remember(allRecentEdits, filePath) {
+        allRecentEdits.filter { it.filePath == filePath }
+    }
 
     val coverFetchMessage by viewModel.coverFetchMessage.collectAsState()
 
@@ -229,6 +240,16 @@ fun MetadataEditorScreen(
                             expanded = showConversionMenu,
                             onDismissRequest = { showConversionMenu = false }
                         ) {
+                            DropdownMenuItem(
+                                text = { Text(stringResource(R.string.edit_history)) },
+                                onClick = {
+                                    showConversionMenu = false
+                                    showEditHistorySheet = true
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.History, contentDescription = null)
+                                }
+                            )
                             DropdownMenuItem(
                                 text = { Text(stringResource(R.string.convert_to_simplified)) },
                                 onClick = {
@@ -440,6 +461,15 @@ fun MetadataEditorScreen(
                 }
             }
         }
+    }
+
+    // EditHistory Sheet
+    if (showEditHistorySheet) {
+        EditHistorySheet(
+            sheetState = editHistorySheetState,
+            onDismiss = { showEditHistorySheet = false },
+            recentEdits = currentFileEdits
+        )
     }
 
     // Dialogs
