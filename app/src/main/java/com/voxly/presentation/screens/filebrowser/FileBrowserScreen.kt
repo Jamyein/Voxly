@@ -26,8 +26,6 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
@@ -415,6 +413,29 @@ fun FileBrowserScreen(
                                             contentDescription = stringResource(R.string.cd_search)
                                         )
                                     }
+                                    IconButton(
+                                        onClick = {
+                                            selectedRootTab = if (selectedRootTab == RootTab.DIRECTORIES)
+                                                RootTab.ALL
+                                            else
+                                                RootTab.DIRECTORIES
+                                        }
+                                    ) {
+                                        Icon(
+                                            painter = appIconPainter(
+                                                if (selectedRootTab == RootTab.DIRECTORIES)
+                                                    AppIcon.MusicNote
+                                                else
+                                                    AppIcon.Folder
+                                            ),
+                                            contentDescription = stringResource(
+                                                if (selectedRootTab == RootTab.DIRECTORIES)
+                                                    R.string.switch_to_all_audios
+                                                else
+                                                    R.string.switch_to_directories
+                                            )
+                                        )
+                                    }
                                     IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
                                         Icon(
                                             imageVector = Icons.AutoMirrored.Filled.Sort,
@@ -477,86 +498,35 @@ fun FileBrowserScreen(
                     val directoriesListState = rememberLazyListState()
                     val allAudiosListState = rememberLazyListState()
 
-                    // Pager state for swipe gesture
-                    val pagerState = rememberPagerState(
-                        initialPage = selectedRootTab.ordinal,
-                        pageCount = { 2 }  // DIRECTORIES and ALL only
-                    )
-
-                    // Sync pager scroll with selectedTab
-                    LaunchedEffect(pagerState) {
-                        snapshotFlow { pagerState.currentPage }.collect { page ->
-                            selectedRootTab = RootTab.entries[page]
-                        }
-                    }
-
-                    // Primary TabRow at root level (M3E specification: 48dp height, 1dp divider inside, 3dp rounded indicator)
-                    PrimaryTabRow(
-                        selectedTabIndex = selectedRootTab.ordinal,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Tab(
-                            selected = selectedRootTab == RootTab.DIRECTORIES,
-                            onClick = {
-                                if (selectedRootTab == RootTab.DIRECTORIES) {
-                                    coroutineScope.launch { directoriesListState.animateScrollToItem(0) }
+                    // Conditional content based on selected root tab
+                    if (selectedRootTab == RootTab.DIRECTORIES) {
+                        DirectoryOverviewContent(
+                            directories = selectedDirectories,
+                            directoryFiles = directoryFiles,
+                            onOpenDirectory = onNavigateToDirectory,
+                            isRefreshing = isRefreshing,
+                            onRefresh = onRefresh,
+                            listState = directoriesListState,
+                            bottomPadding = outerPadding.calculateBottomPadding()
+                        )
+                    } else {
+                        AllAudiosTabContent(
+                            audios = sortedAllAudios,
+                            selectedFiles = selectedFiles,
+                            onFileClick = { audioFile ->
+                                if (selectedFiles.isNotEmpty()) {
+                                    viewModel.toggleFileSelection(audioFile.path)
                                 } else {
-                                    coroutineScope.launch { pagerState.animateScrollToPage(0) }
+                                    onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
                                 }
                             },
-                            icon = { Icon(Icons.Default.Folder, contentDescription = stringResource(R.string.tab_directories)) }
-                        )
-                        Tab(
-                            selected = selectedRootTab == RootTab.ALL,
-                            onClick = {
-                                if (selectedRootTab == RootTab.ALL) {
-                                    coroutineScope.launch { allAudiosListState.animateScrollToItem(0) }
-                                } else {
-                                    coroutineScope.launch { pagerState.animateScrollToPage(1) }
-                                }
+                            onFileLongClick = { audioFile ->
+                                viewModel.toggleFileSelection(audioFile.path)
                             },
-                            icon = { Icon(Icons.Default.MusicNote, contentDescription = stringResource(R.string.tab_all)) }
+                            isRefreshing = isRefreshing,
+                            onRefresh = onRefresh,
+                            listState = allAudiosListState
                         )
-                    }
-
-                    // HorizontalPager for swipe content
-                    HorizontalPager(
-                        state = pagerState,
-                        beyondViewportPageCount = 1,
-                        modifier = Modifier.fillMaxSize()
-                    ) { page ->
-                        when (RootTab.entries[page]) {
-                            RootTab.DIRECTORIES -> {
-                                DirectoryOverviewContent(
-                                    directories = selectedDirectories,
-                                    directoryFiles = directoryFiles,
-                                    onOpenDirectory = onNavigateToDirectory,
-                                    isRefreshing = isRefreshing,
-                                    onRefresh = onRefresh,
-                                    listState = directoriesListState,
-                                    bottomPadding = outerPadding.calculateBottomPadding()
-                                )
-                            }
-                            RootTab.ALL -> {
-                                AllAudiosTabContent(
-                                    audios = sortedAllAudios,
-                                    selectedFiles = selectedFiles,
-                                    onFileClick = { audioFile ->
-                                        if (selectedFiles.isNotEmpty()) {
-                                            viewModel.toggleFileSelection(audioFile.path)
-                                        } else {
-                                            onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
-                                        }
-                                    },
-                                    onFileLongClick = { audioFile ->
-                                        viewModel.toggleFileSelection(audioFile.path)
-                                    },
-                                    isRefreshing = isRefreshing,
-                                    onRefresh = onRefresh,
-                                    listState = allAudiosListState
-                                )
-                            }
-                        }
                     }
                 }
             } else {

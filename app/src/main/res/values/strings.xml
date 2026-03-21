@@ -19,6 +19,8 @@
     <string name="tab_albums">Albums</string>
     <string name="tab_artists">Artists</string>
     <string name="tab_all">All</string>
+    <string name="switch_to_all_audios">Switch to all audios</string>
+    <string name="switch_to_directories">Switch to directories</string>
 
     <!-- Albums/Artists -->
     <string name="no_albums_found">No albums found</string>
@@ -126,6 +128,7 @@
     <string name="cd_back">Go back</string>
     <string name="cd_close">Close</string>
     <string name="cd_search">Search</string>
+    <string name="close_search">Close search</string>
     <string name="search">Search</string>
     <string name="sort">Sort</string>
     <string name="clear">Clear</string>
