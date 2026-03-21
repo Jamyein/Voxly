@@ -83,9 +83,6 @@ data object ScanDirectorySettings : NavKey
 @Serializable
 data object LogViewer : NavKey
 
-@Serializable
-data object Statistics : NavKey
-
 /**
  * Bottom navigation items for the main screen.
  */

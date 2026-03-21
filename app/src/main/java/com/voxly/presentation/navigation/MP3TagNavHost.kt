@@ -29,7 +29,6 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.presentation.components.FlexibleBottomAppBar
 import com.voxly.presentation.screens.ReplayGainScannerScreen
 import com.voxly.presentation.screens.SettingsScreen
-import com.voxly.presentation.screens.StatisticsScreen
 import com.voxly.presentation.screens.album.AlbumDetailScreen
 import com.voxly.presentation.screens.album.AlbumScreen
 import com.voxly.presentation.screens.artist.ArtistDetailScreen
@@ -138,15 +137,6 @@ fun MP3TagNavHost() {
                         )
                     }
 
-                    entry<Statistics> {
-                        StatisticsScreen(
-                            outerPadding = outerPadding,
-                            onNavigateToArtist = { artistName ->
-                                backStack.add(ArtistDetail(artistName))
-                            }
-                        )
-                    }
-
                     entry<Albums> {
                         AlbumScreen(
                             outerPadding = outerPadding,
@@ -168,9 +158,6 @@ fun MP3TagNavHost() {
                     entry<Settings> {
                         SettingsScreen(
                             outerPadding = outerPadding,
-                            onNavigateToStatistics = {
-                                backStack.add(Statistics)
-                            },
                             onNavigateToLogViewer = {
                                 backStack.add(LogViewer)
                             },

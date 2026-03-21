@@ -12,9 +12,7 @@ Jetpack Compose screens organized by feature.
 | Settings | App preferences | `SettingsScreen.kt`, `EnhancedSettingsScreen.kt` |
 | ReplayGain | Scan loudness | `ReplayGainScannerScreen.kt` |
 | BatchOperations | Bulk edit | `BatchOperationsScreen.kt` |
-| Statistics | Library stats | `StatisticsScreen.kt` |
 | DirectoryManagement | Folder management | `DirectoryManagementScreen.kt` |
-| RecentEdits | Edit history | `RecentEditsScreen.kt` |
 | LogViewer | Debug logs | `log/LogViewerScreen.kt` |
 
 ## STRUCTURE

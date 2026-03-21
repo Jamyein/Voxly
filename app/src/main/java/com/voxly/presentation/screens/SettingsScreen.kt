@@ -868,7 +868,6 @@ fun SettingsScreen(
     onNavigateToDirectoryManagement: () -> Unit = {},
     onNavigateToScanDirectorySettings: () -> Unit = {},
     onNavigateToLogViewer: () -> Unit = {},
-    onNavigateToStatistics: () -> Unit = {},
     onExportLogs: () -> Unit = {},
     onCleanupLogs: () -> Unit = {},
     viewModel: SettingsViewModel = hiltViewModel()
@@ -1440,19 +1439,6 @@ fun SettingsScreen(
                     value = stringResource(R.string.settings_developer_value),
                     index = 1,
                     count = 2
-                )
-            }
-
-            Spacer(modifier = Modifier.height(SectionSpacing))
-
-            // Statistics Section
-            SettingsSection(title = stringResource(R.string.nav_statistics)) {
-                SegmentedClickableRow(
-                    title = stringResource(R.string.nav_statistics),
-                    subtitle = stringResource(R.string.statistics_subtitle),
-                    onClick = { onNavigateToStatistics() },
-                    index = 0,
-                    count = 1
                 )
             }
         }

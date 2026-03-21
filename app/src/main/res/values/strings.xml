@@ -5,8 +5,6 @@
     <!-- Navigation -->
     <string name="nav_file_browser">Library</string>
     <string name="nav_albums">Albums</string>
-    <string name="nav_recent_edits">Recent</string>
-    <string name="nav_statistics">Statistics</string>
     <string name="nav_settings">Settings</string>
 
     <!-- File Browser -->
@@ -183,6 +181,15 @@
     <string name="file_sort_name_desc">Name (Z-A)</string>
     <string name="file_sort_size_desc">Size (Large-Small)</string>
     <string name="file_sort_duration_desc">Duration (Long-Short)</string>
+    <string name="album_sort_label">Sort albums</string>
+    <string name="album_sort_name_asc">Name (A-Z)</string>
+    <string name="album_sort_name_desc">Name (Z-A)</string>
+    <string name="album_sort_track_count_desc">Tracks (Most-Fewest)</string>
+    <string name="album_sort_year_desc">Year (Newest-Oldest)</string>
+    <string name="artist_sort_label">Sort artists</string>
+    <string name="artist_sort_name_asc">Name (A-Z)</string>
+    <string name="artist_sort_name_desc">Name (Z-A)</string>
+    <string name="artist_sort_song_count_desc">Songs (Most-Fewest)</string>
     <string name="add_directory">Add Directory</string>
     <string name="remove_directory">Remove directory</string>
     <string name="selected_directories_count">%d directories selected</string>
@@ -311,31 +318,6 @@
     <string name="file_info_size">Size</string>
     <string name="no_album_art">No album art</string>
     <string name="saving_metadata">Saving metadata...</string>
-
-    <!-- Statistics -->
-    <string name="statistics_title">Statistics</string>
-    <string name="statistics_subtitle">View your music library statistics</string>
-    <string name="statistics_overview">Overview</string>
-    <string name="statistics_format_distribution">Format Distribution</string>
-    <string name="statistics_top_artists">Top Artists</string>
-    <string name="statistics_top_albums">Top Albums</string>
-    <string name="statistics_recent_activity">Recent Activity</string>
-    <string name="statistics_year_distribution">Year Distribution</string>
-    <string name="statistics_bitrate_distribution">Bitrate Distribution</string>
-    <string name="statistics_genre_distribution">Genre Distribution</string>
-    <string name="statistics_empty_title">No Statistics Available</string>
-    <string name="statistics_empty_subtitle">Edit some audio files to see your library statistics</string>
-    <string name="total_files">Total Files</string>
-    <string name="total_duration">Total Duration</string>
-    <string name="total_size">Total Size</string>
-    <string name="edited_files">Edited Files</string>
-    <string name="today">Today</string>
-    <string name="this_week">This Week</string>
-    <string name="this_month">This Month</string>
-
-    <!-- Recent Edits -->
-    <string name="recent_edits_title">Recent Edits</string>
-    <string name="recent_edits_placeholder">Your recently edited files will appear here</string>
 
     <!-- Lyrics Editor -->
     <string name="save_lyrics">Save Lyrics</string>

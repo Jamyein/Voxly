@@ -112,8 +112,7 @@ fun ScanDirectorySettingsScreen(
                         )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(),
-                windowInsets = WindowInsets(0.dp),
+                colors = TopAppBarDefaults.topAppBarColors()
             )
         }
     ) { paddingValues ->
