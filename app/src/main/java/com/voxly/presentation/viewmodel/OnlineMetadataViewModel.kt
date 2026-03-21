@@ -15,6 +15,7 @@ import com.voxly.domain.repository.OnlineSource
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
 import com.voxly.presentation.navigation.OnlineMetadata
+import com.voxly.presentation.viewmodel.SearchSeedHolder
 import com.voxly.presentation.ui.getCoverArtBytes
 import com.voxly.presentation.ui.loadImageBytesFromUrl
 import com.voxly.core.util.Constants
@@ -51,7 +52,8 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     private val audioRepository: AudioRepository,
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val lyricsRepository: LyricsRepository,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val searchSeedHolder: SearchSeedHolder
 ) : ViewModel() {
 
     private val filePath: String = navKey.filePath
@@ -118,15 +120,29 @@ class OnlineMetadataViewModel @AssistedInject constructor(
 
     private fun prepareAutoSearch() {
         viewModelScope.launch {
-            val metadata = audioRepository.readMetadata(filePath).getOrNull()
-            val fileName = File(filePath).nameWithoutExtension
-            val parsed = parseFromFileName(fileName)
+            // 优先从 SearchSeedHolder 获取实时编辑值（未保存的修改）
+            val seed = searchSeedHolder.getAndClearSeed()
 
-            val rawTitle = metadata?.title?.takeIf { it.isNotBlank() }
-                ?: parsed.title
-                ?: fileName.takeIf { it.isNotBlank() }
-            val rawArtist = metadata?.artist?.takeIf { it.isNotBlank() } ?: parsed.artist
-            val rawAlbum = metadata?.album?.takeIf { it.isNotBlank() } ?: parsed.album
+            val rawTitle: String?
+            val rawArtist: String?
+            val rawAlbum: String?
+
+            if (seed != null) {
+                // 使用编辑中的实时值
+                rawTitle = seed.title.takeIf { it.isNotBlank() }
+                rawArtist = seed.artist
+                rawAlbum = seed.album
+            } else {
+                // 兜底：从文件读取
+                val metadata = audioRepository.readMetadata(filePath).getOrNull()
+                val fileName = File(filePath).nameWithoutExtension
+                val parsed = parseFromFileName(fileName)
+                rawTitle = metadata?.title?.takeIf { it.isNotBlank() }
+                    ?: parsed.title
+                    ?: fileName.takeIf { it.isNotBlank() }
+                rawArtist = metadata?.artist?.takeIf { it.isNotBlank() } ?: parsed.artist
+                rawAlbum = metadata?.album?.takeIf { it.isNotBlank() } ?: parsed.album
+            }
 
             val title = sanitizeSearchSeed(rawTitle) ?: rawTitle
             val artist = sanitizeSearchSeed(rawArtist) ?: rawArtist
@@ -136,9 +152,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                 title = title.orEmpty(),
                 artist = artist,
                 album = album,
-                fromTags = !metadata?.title.isNullOrBlank() ||
-                    !metadata?.artist.isNullOrBlank() ||
-                    !metadata?.album.isNullOrBlank()
+                fromTags = seed != null || (!rawTitle.isNullOrBlank() && !rawArtist.isNullOrBlank() && !rawAlbum.isNullOrBlank())
             )
             autoSearch()
         }
