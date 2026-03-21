@@ -347,17 +347,18 @@ private fun CoverThumbnail(
     NetworkAlbumArtImage(
         url = coverArtUrl,
         contentDescription = "Album cover",
-        modifier = modifier.clip(MaterialShapes.SoftBurst.toShape())
-    ) {
-        Box(
-            modifier = modifier,
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Image,
-                contentDescription = "No cover art",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        modifier = modifier.clip(MaterialShapes.SoftBurst.toShape()),
+        placeholder = {
+            Box(
+                modifier = modifier,
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Image,
+                    contentDescription = "No cover art",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-    }
+    )
 }

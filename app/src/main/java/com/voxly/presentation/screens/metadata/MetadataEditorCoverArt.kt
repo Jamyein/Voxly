@@ -99,17 +99,18 @@ fun CoverCandidateThumbnail(
     NetworkAlbumArtImage(
         url = coverArtUrl,
         contentDescription = stringResource(R.string.cd_cover_thumbnail),
-        modifier = modifier
-    ) {
-        Box(
-            modifier = modifier,
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Image,
-                contentDescription = stringResource(R.string.cd_no_cover),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        modifier = modifier,
+        placeholder = {
+            Box(
+                modifier = modifier,
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Image,
+                    contentDescription = stringResource(R.string.cd_no_cover),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-    }
+    )
 }

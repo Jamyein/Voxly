@@ -80,31 +80,38 @@ fun NetworkAlbumArtImage(
     modifier: Modifier = Modifier,
     size: Dp = 64.dp,
     contentScale: ContentScale = ContentScale.Crop,
-    placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
+    placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) },
+    onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null
 ) {
     var bitmap by remember(url) { mutableStateOf<Bitmap?>(null) }
 
     LaunchedEffect(url) {
         if (!url.isNullOrBlank()) {
-            bitmap = withContext(Dispatchers.IO) {
+            val loaded = withContext(Dispatchers.IO) {
                 loadImageBitmapFromUrl(url)?.asAndroidBitmap()
+            }
+            bitmap = loaded
+            if (loaded != null) {
+                onDimensionsLoaded?.invoke(loaded.width, loaded.height)
             }
         }
     }
 
     Box(
-        modifier = modifier.size(size),
+        modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
         if (bitmap != null) {
             Image(
                 bitmap = bitmap!!.asImageBitmap(),
                 contentDescription = contentDescription,
-                modifier = Modifier.size(size),
+                modifier = modifier,
                 contentScale = contentScale
             )
         } else {
-            placeholder()
+            Box(modifier = modifier, contentAlignment = Alignment.Center) {
+                placeholder()
+            }
         }
     }
 }

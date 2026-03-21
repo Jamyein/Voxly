@@ -38,6 +38,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -293,6 +294,8 @@ private fun OnlineReleaseList(
     onSelect: (OnlineRelease) -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val coverDimensions = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
+
     if (releases.isEmpty()) {
         Box(
             modifier = modifier
@@ -322,7 +325,10 @@ private fun OnlineReleaseList(
                     Row(modifier = Modifier.padding(16.dp)) {
                         ReleaseCover(
                             coverArtUrl = release.coverArtUrl,
-                            modifier = Modifier.size(120.dp)
+                            modifier = Modifier.size(140.dp),
+                            onDimensionsLoaded = { w, h ->
+                                coverDimensions[release.id] = w to h
+                            }
                         )
                         Spacer(modifier = Modifier.size(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -353,6 +359,16 @@ private fun OnlineReleaseList(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
+                            val dims = coverDimensions[release.id]
+                            if (dims != null) {
+                                Text(
+                                    text = "Cover: ${dims.first}×${dims.second}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
                         }
                     }
                 }
@@ -517,24 +533,27 @@ private fun SourceStatusChip(
 @Composable
 private fun ReleaseCover(
     coverArtUrl: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null
 ) {
     NetworkAlbumArtImage(
         url = coverArtUrl,
         contentDescription = "Album cover",
-        modifier = modifier.clip(MaterialShapes.SoftBurst.toShape())
-    ) {
-        Box(
-            modifier = modifier,
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                imageVector = Icons.Default.Image,
-                contentDescription = "No cover art",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        modifier = modifier.clip(MaterialShapes.Cookie9Sided.toShape()),
+        onDimensionsLoaded = onDimensionsLoaded,
+        placeholder = {
+            Box(
+                modifier = modifier,
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Image,
+                    contentDescription = "No cover art",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
-    }
+    )
 }
 
 private fun displaySource(release: OnlineRelease): String {
