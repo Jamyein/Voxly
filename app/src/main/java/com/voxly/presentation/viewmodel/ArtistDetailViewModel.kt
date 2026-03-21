@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.MediaMetadataRetriever
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.repository.ArtistCacheRepository
 import com.voxly.data.repository.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -20,6 +21,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
@@ -31,7 +33,8 @@ import kotlinx.coroutines.withContext
 class ArtistDetailViewModel @AssistedInject constructor(
     @Assisted val navKey: ArtistDetail,
     @ApplicationContext private val context: Context,
-    private val artistCacheRepository: ArtistCacheRepository
+    private val artistCacheRepository: ArtistCacheRepository,
+    private val audioFileScanner: AudioFileScanner
 ) : ViewModel() {
 
     private val _artistName = MutableStateFlow("")
@@ -76,10 +79,17 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     calculateStats(cachedArtist.files)
                     precomputeAlbumCovers(cachedArtist.files)
                 } else {
-                    // If not in cache, we need to query from database
-                    // For now, show empty state
-                    _artistName.value = artistName
-                    _files.value = emptyList()
+                    // Cache miss: look up from AudioFileScanner (source of truth)
+                    val scannerArtist = audioFileScanner.artists.first()
+                        .find { it.name.equals(artistName, ignoreCase = true) }
+
+                    if (scannerArtist != null) {
+                        // Populate cache and ViewModel state
+                        cacheArtistData(scannerArtist.name, scannerArtist.files)
+                    } else {
+                        _artistName.value = artistName
+                        _files.value = emptyList()
+                    }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -137,6 +147,10 @@ class ArtistDetailViewModel @AssistedInject constructor(
                 }.toMap()
             }
             _albumCovers.value = covers
+
+            // 封面计算完成后立即预加载第 0 页封面到 carouselCoverCache
+            // 不依赖 UI recomposition，确保首次渲染时缓存已准备好
+            preloadAdjacentAlbumCovers(0)
         }
     }
 

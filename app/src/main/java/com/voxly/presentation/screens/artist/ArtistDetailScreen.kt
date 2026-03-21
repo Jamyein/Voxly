@@ -227,6 +227,13 @@ fun ArtistDetailScreen(
                     if (albumList.isNotEmpty()) {
                         val carouselState = rememberCarouselState { albumList.size }
 
+                        // 封面数据首次填充时立即预加载（解决首屏空白问题）
+                        LaunchedEffect(albumCovers) {
+                            if (albumCovers.isNotEmpty()) {
+                                viewModel.preloadAdjacentAlbumCovers(0)
+                            }
+                        }
+
                         // 滚动监听：滚动停止时预加载相邻专辑封面
                         LaunchedEffect(carouselState) {
                             snapshotFlow { carouselState.currentItem }.collect { page ->
