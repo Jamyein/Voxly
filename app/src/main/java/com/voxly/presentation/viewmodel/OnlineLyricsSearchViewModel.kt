@@ -8,6 +8,7 @@ import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.presentation.navigation.OnlineLyricsSearch
+import com.voxly.presentation.viewmodel.SearchSeedHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
@@ -30,7 +31,8 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
     @Assisted val navKey: OnlineLyricsSearch,
     @ApplicationContext private val context: android.content.Context,
     private val audioRepository: AudioRepository,
-    private val lyricsRepository: LyricsRepository
+    private val lyricsRepository: LyricsRepository,
+    private val searchSeedHolder: SearchSeedHolder
 ) : ViewModel() {
 
     private val filePath: String = navKey.filePath
@@ -65,33 +67,54 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
      */
     fun search(path: String) {
         val targetPath = path.ifBlank { filePath }
-        
+
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
             _lyricsResults.value = emptyList()
             _searchState.value = LyricsSearchState()
 
-            // Load audio file metadata
-            val result = audioRepository.getAudioFile(targetPath)
-            result.fold(
-                onSuccess = { audioFile ->
-                    val metadata = audioFile.metadata
-                    val track = metadata.title?.takeIf { it.isNotBlank() } ?: File(targetPath).nameWithoutExtension
-                    val artist = metadata.artist?.takeIf { it.isNotBlank() }
-                    val album = metadata.album?.takeIf { it.isNotBlank() }
+            // 优先从 SearchSeedHolder 获取实时编辑值
+            val seed = searchSeedHolder.getAndClearSeed()
 
-                    _searchTitle.value = track
-                    _searchArtist.value = artist
-                    _searchAlbum.value = album
+            val track: String
+            val artist: String?
+            val album: String?
 
-                    performLyricsSearch(track, artist, album)
-                },
-                onFailure = { error ->
-                    _errorMessage.value = "Failed to load audio file: ${error.message}"
-                    _isLoading.value = false
-                }
-            )
+            if (seed != null) {
+                // 使用编辑中的实时值
+                track = seed.title
+                artist = seed.artist
+                album = seed.album
+            } else {
+                // 兜底：从文件读取
+                val result = audioRepository.getAudioFile(targetPath)
+                result.fold(
+                    onSuccess = { audioFile ->
+                        val metadata = audioFile.metadata
+                        track = metadata.title?.takeIf { it.isNotBlank() } ?: File(targetPath).nameWithoutExtension
+                        artist = metadata.artist?.takeIf { it.isNotBlank() }
+                        album = metadata.album?.takeIf { it.isNotBlank() }
+
+                        _searchTitle.value = track
+                        _searchArtist.value = artist
+                        _searchAlbum.value = album
+
+                        performLyricsSearch(track, artist, album)
+                    },
+                    onFailure = { error ->
+                        _errorMessage.value = "Failed to load audio file: ${error.message}"
+                        _isLoading.value = false
+                    }
+                )
+                return@launch
+            }
+
+            _searchTitle.value = track
+            _searchArtist.value = artist
+            _searchAlbum.value = album
+
+            performLyricsSearch(track, artist, album)
         }
     }
 
