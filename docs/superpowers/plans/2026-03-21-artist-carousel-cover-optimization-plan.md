@@ -17,9 +17,9 @@
 
 **Changes:**
 1. Add `carouselCoverCache`, `carouselCacheLock`, `MAX_CAROUSEL_CACHE_SIZE = 15`, `CAROUSEL_TARGET_SIZE = 384`
-2. Add `extractAndCacheCoverBytes()` — single MediaMetadataRetriever call, writes to bytes cache
-3. Add `loadCarouselCoverArt()` — carousel-specific loading with 384px decode
-4. Add `getCoverBytes()` — thread-safe bytes retrieval
+2. Add `extractAndCacheCoverBytes()` — **public**, single MediaMetadataRetriever call, writes to bytes cache
+3. Add `loadCarouselCoverArt()` — **public**, carousel-specific loading with 384px decode
+4. Add `getLocalCoverBytes()` — **public**, thread-safe bytes retrieval (renamed from `getCoverBytes` to avoid conflict with existing `getCoverArtBytes`)
 
 ---
 
@@ -35,7 +35,7 @@ private const val MAX_CAROUSEL_CACHE_SIZE = 15
 private const val CAROUSEL_TARGET_SIZE = 384
 ```
 
-- [ ] **Step 2: Add extractAndCacheCoverBytes() function**
+- [ ] **Step 2: Add extractAndCacheCoverBytes() function (public for ViewModel use)**
 
 Locate the existing `loadEmbeddedAlbumArtSized()` function (~line 283). Add the following new function before it:
 
@@ -43,42 +43,49 @@ Locate the existing `loadEmbeddedAlbumArtSized()` function (~line 283). Add the 
 /**
  * 提取封面字节并写入Bytes Cache。
  * 单次MediaMetadataRetriever调用，同时完成existence check和bytes提取。
+ * 对同一filePath重复调用是安全的（幂等）。
  */
-private fun extractAndCacheCoverBytes(filePath: String): ByteArray? {
+@PublishedApi
+internal fun extractAndCacheCoverBytes(filePath: String): ByteArray? {
     return try {
         val retriever = MediaMetadataRetriever()
-        retriever.setDataSource(filePath)
-        val artBytes = retriever.embeddedPicture  // 一次性获取
-        retriever.release()
-
-        if (artBytes != null) {
-            byteCacheLock.lock()
-            try {
-                while (coverArtByteCache.size >= MAX_BYTE_CACHE_SIZE) {
-                    coverArtByteCache.keys.firstOrNull()?.let { coverArtByteCache.remove(it) }
+        try {
+            retriever.setDataSource(filePath)
+            val artBytes = retriever.embeddedPicture  // 一次性获取
+            if (artBytes != null) {
+                byteCacheLock.lock()
+                try {
+                    while (coverArtByteCache.size >= MAX_BYTE_CACHE_SIZE) {
+                        coverArtByteCache.keys.firstOrNull()?.let { coverArtByteCache.remove(it) }
+                    }
+                    coverArtByteCache[filePath] = artBytes
+                } finally {
+                    byteCacheLock.unlock()
                 }
-                coverArtByteCache[filePath] = artBytes
-            } finally {
-                byteCacheLock.unlock()
             }
+            artBytes
+        } finally {
+            retriever.release()  // 在finally中确保释放
         }
-        artBytes
     } catch (e: Exception) {
         null
     }
 }
 ```
 
-- [ ] **Step 3: Add getCoverBytes() public function**
+Note: `@PublishedApi internal` makes this function callable from the same module (ViewModel) but not from outside the module. `try/finally` ensures `retriever.release()` is always called even if `setDataSource` throws.
+
+- [ ] **Step 3: Add getLocalCoverBytes() public function (renamed to avoid conflict)**
 
 Locate the end of the file, before the closing `getMediaStoreCacheKey()` function. Add:
 
 ```kotlin
 /**
- * 获取封面原始字节，优先从Bytes Cache读取，否则从文件提取。
+ * 获取本地文件封面原始字节，优先从Bytes Cache读取，否则从文件提取。
  * 线程安全：提取过程在锁内执行。
+ * 注意：与getCoverArtBytes(url)不同，后者用于网络图片。
  */
-suspend fun getCoverBytes(filePath: String): ByteArray? {
+suspend fun getLocalCoverBytes(filePath: String): ByteArray? {
     // 1. 检查Bytes Cache
     byteCacheLock.lock()
     val cached = coverArtByteCache[filePath]
@@ -92,9 +99,9 @@ suspend fun getCoverBytes(filePath: String): ByteArray? {
 }
 ```
 
-- [ ] **Step 4: Add loadCarouselCoverArt() function**
+- [ ] **Step 4: Add loadCarouselCoverArt() function (public, suspend)**
 
-Add after `getCoverBytes()`:
+Add after `getLocalCoverBytes()`:
 
 ```kotlin
 /**
@@ -148,9 +155,9 @@ git add app/src/main/java/com/voxly/presentation/ui/ImageLoader.kt
 git commit -m "feat(cover): add carouselCache and extractAndCacheCoverBytes
 
 - Add carouselCoverCache (15 entries @ 384px) with dedicated lock
-- Add extractAndCacheCoverBytes: single MediaMetadataRetriever call
-- Add loadCarouselCoverArt: carousel-specific 384px loading
-- Add getCoverBytes: thread-safe bytes retrieval
+- Add extractAndCacheCoverBytes: single MediaMetadataRetriever call, public
+- Add loadCarouselCoverArt: public suspend, carousel-specific 384px loading
+- Add getLocalCoverBytes: public suspend (renamed from getCoverBytes)
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 ```
@@ -163,8 +170,8 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 - Modify: `app/src/main/java/com/voxly/presentation/viewmodel/ArtistDetailViewModel.kt`
 
 **Changes:**
-1. Fix `precomputeAlbumCovers()` to use single MediaMetadataRetriever call
-2. Add `preloadJob`, `preloadMutex`, `preloadAdjacentAlbumCovers()`
+1. Fix `precomputeAlbumCovers()` — use `extractAndCacheCoverBytes()` directly, single call per file
+2. Add `preloadJob`, `preloadMutex` (as field), `Job` import, `preloadAdjacentAlbumCovers()`
 
 ---
 
@@ -172,7 +179,7 @@ Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
 
 Locate the `precomputeAlbumCovers` function (~line 112). Understand its current implementation before modifying.
 
-- [ ] **Step 2: Replace precomputeAlbumCovers with single-call version**
+- [ ] **Step 2: Replace precomputeAlbumCovers with single-call version using extractAndCacheCoverBytes**
 
 Replace the entire `precomputeAlbumCovers` function with:
 
@@ -180,6 +187,7 @@ Replace the entire `precomputeAlbumCovers` function with:
 /**
  * 预计算专辑封面路径。
  * 修复：每封面仅调用一次MediaMetadataRetriever。
+ * 使用extractAndCacheCoverBytes直接获取bytes，null表示无封面。
  */
 private fun precomputeAlbumCovers(files: List<AudioFile>) {
     viewModelScope.launch {
@@ -191,26 +199,8 @@ private fun precomputeAlbumCovers(files: List<AudioFile>) {
                 // 找第一张有封面的文件（单次调用）
                 val fileWithArt = albumFiles.firstOrNull { file ->
                     try {
-                        val retriever = MediaMetadataRetriever()
-                        retriever.setDataSource(file.path)
-                        val artBytes = retriever.embeddedPicture  // 一次性获取
-                        retriever.release()
-
-                        if (artBytes != null) {
-                            // 写入Bytes Cache
-                            byteCacheLock.lock()
-                            try {
-                                while (coverArtByteCache.size >= MAX_BYTE_CACHE_SIZE) {
-                                    coverArtByteCache.keys.firstOrNull()?.let { coverArtByteCache.remove(it) }
-                                }
-                                coverArtByteCache[file.path] = artBytes
-                            } finally {
-                                byteCacheLock.unlock()
-                            }
-                            true
-                        } else {
-                            false
-                        }
+                        // extractAndCacheCoverBytes会写入Bytes Cache
+                        extractAndCacheCoverBytes(file.path) != null
                     } catch (e: Exception) {
                         false
                     }
@@ -224,21 +214,9 @@ private fun precomputeAlbumCovers(files: List<AudioFile>) {
 }
 ```
 
-- [ ] **Step 3: Add import for extractAndCacheCoverBytes and loadCarouselCoverArt**
+Note: Uses `extractAndCacheCoverBytes` (public, @PublishedApi internal) which handles the MediaMetadataRetriever call and cache writing in one shot. This replaces the old code that made 2 calls per file.
 
-At the top of the file, add the import for the new ImageLoader functions. The file already imports from `com.voxly.presentation.ui`. Add:
-
-```kotlin
-import com.voxly.presentation.ui.extractAndCacheCoverBytes
-import com.voxly.presentation.ui.getCoverBytes
-import com.voxly.presentation.ui.loadCarouselCoverArt
-```
-
-Wait — these functions are `private` in ImageLoader.kt. They need to be made accessible. The `precomputeAlbumCovers` in the ViewModel needs to write to the byte cache directly (which it does in the code above using `byteCacheLock`). The ViewModel should NOT call `loadCarouselCoverArt` directly — instead it calls `loadCarouselCoverArt` which is a `suspend` public function. Let me verify `loadCarouselCoverArt` is already `suspend` in the design... yes it is. So the import should work.
-
-Actually, `extractAndCacheCoverBytes` is `private` in ImageLoader.kt. The ViewModel should NOT need to call it directly — the ViewModel's `precomputeAlbumCovers` needs to write to `coverArtByteCache` directly, which it does in the replacement code above. So no import of `extractAndCacheCoverBytes` is needed in the ViewModel.
-
-- [ ] **Step 4: Add Mutex import and fields**
+- [ ] **Step 3: Add Job import and preloadMutex field**
 
 Locate the existing field declarations. Add after `private val _albumCovers` field (~line 49):
 
@@ -247,15 +225,19 @@ private var preloadJob: Job? = null
 private val preloadMutex = kotlinx.coroutines.sync.Mutex()
 ```
 
-Also ensure `Job` is imported. Check imports ~line 16-20. `Job` should already be imported via `kotlinx.coroutines.Job`.
+Add to imports section (around line 16-21):
 
-- [ ] **Step 5: Add preloadAdjacentAlbumCovers function**
+```kotlin
+import kotlinx.coroutines.Job
+```
+
+Note: `Mutex` is from `kotlinx.coroutines.sync.Mutex` (fully qualified in declaration to avoid import confusion).
+
+- [ ] **Step 4: Add preloadAdjacentAlbumCovers function (NO duplicate mutex declaration)**
 
 Add after the `precomputeAlbumCovers` function (after line ~137):
 
 ```kotlin
-private val preloadMutex = Mutex()
-
 /**
  * 预加载相邻专辑封面（currentPage ± 1）。
  * 并发保护：使用Mutex确保同时只有一个预加载任务执行。
@@ -287,16 +269,17 @@ fun preloadAdjacentAlbumCovers(currentPage: Int) {
 }
 ```
 
-Note: `Mutex` is from `kotlinx.coroutines.sync.Mutex`. Make sure the import is added.
+Important: `preloadMutex` is declared as a **field** in Step 3, not inside this function. Do NOT redeclare it here.
 
-- [ ] **Step 6: Commit Chunk 2**
+- [ ] **Step 5: Commit Chunk 2**
 
 ```bash
 git add app/src/main/java/com/voxly/presentation/viewmodel/ArtistDetailViewModel.kt
 git commit -m "feat(artist): fix precomputeAlbumCovers single-call and add preloading
 
-- Fix: single MediaMetadataRetriever call per cover in precomputeAlbumCovers
+- Fix: uses extractAndCacheCoverBytes for single MediaMetadataRetriever call
 - Add: preloadAdjacentAlbumCovers with Mutex for concurrent protection
+- Add: Job import and preloadMutex field
 - Add: scroll-triggered preloading for currentPage ± 1
 
 Co-Authored-By: Claude Opus 4.6 <noreply@anthropic.com>"
@@ -331,6 +314,8 @@ import androidx.compose.ui.unit.Dp
 import com.voxly.presentation.ui.loadCarouselCoverArt
 ```
 
+Note: `LocalDensity`, `Dp` may already be imported. Verify before adding duplicates.
+
 - [ ] **Step 2: Add CarouselAlbumArtImage composable**
 
 Locate the `AlbumCard` function (~line 315). Add the new `CarouselAlbumArtImage` composable right before it:
@@ -339,6 +324,7 @@ Locate the `AlbumCard` function (~line 315). Add the new `CarouselAlbumArtImage`
 /**
  * 轮播封面专用图片组件（384px）。
  * 使用produceState在IO线程加载，避免主线程阻塞。
+ * key1 = filePath确保路径变化时重新加载。
  */
 @Composable
 private fun CarouselAlbumArtImage(
@@ -368,8 +354,6 @@ private fun CarouselAlbumArtImage(
     }
 }
 ```
-
-Note: `withContext`, `Dispatchers`, and `Bitmap` need imports.
 
 - [ ] **Step 3: Update AlbumCard to use CarouselAlbumArtImage**
 
@@ -411,7 +395,7 @@ Remove the now-unused `AlbumArtImage` import if no other usage remains.
 
 - [ ] **Step 4: Add carousel scroll listener with LaunchedEffect**
 
-Find the carousel setup in the LazyColumn (~line 224-248). Add `LaunchedEffect` for scroll preloading:
+Find the carousel setup in the LazyColumn (~line 224-248). Add `LaunchedEffect` for scroll preloading immediately after the `carouselState` declaration:
 
 ```kotlin
 val carouselState = rememberCarouselState { albumList.size }
@@ -421,8 +405,6 @@ LaunchedEffect(carouselState.currentPage) {
     viewModel.preloadAdjacentAlbumCovers(carouselState.currentPage)
 }
 ```
-
-Place this immediately after `val carouselState = rememberCarouselState { albumList.size }`.
 
 - [ ] **Step 5: Commit Chunk 3**
 
