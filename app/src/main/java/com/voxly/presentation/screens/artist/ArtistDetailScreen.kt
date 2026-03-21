@@ -40,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -226,8 +227,12 @@ fun ArtistDetailScreen(
                     if (albumList.isNotEmpty()) {
                         val carouselState = rememberCarouselState { albumList.size }
 
-                        // 注：滚动预加载通过 CarouselAlbumArtImage.produceState 实现（key1 = filePath）
-                        // 滚动触发重组时自动按需加载
+                        // 滚动监听：滚动停止时预加载相邻专辑封面
+                        LaunchedEffect(carouselState) {
+                            snapshotFlow { carouselState.currentItem }.collect { page ->
+                                viewModel.preloadAdjacentAlbumCovers(page)
+                            }
+                        }
 
                         HorizontalMultiBrowseCarousel(
                             state = carouselState,
