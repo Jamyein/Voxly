@@ -1,7 +1,7 @@
 package com.voxly.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
-import dagger.hilt.android.lifecycle.ActivityRetainedScoped
+import dagger.hilt.android.scopes.ActivityRetainedScoped
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
