@@ -7,6 +7,7 @@ import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
 import com.voxly.presentation.navigation.OnlineCoverSearch
+import com.voxly.presentation.viewmodel.SearchSeedHolder
 import com.voxly.presentation.ui.getCoverArtBytes
 import com.voxly.presentation.ui.prefetchCoverArtBytes
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,7 +30,8 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
     @Assisted val navKey: OnlineCoverSearch,
     @ApplicationContext private val context: android.content.Context,
     private val audioRepository: AudioRepository,
-    private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository
+    private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository,
+    private val searchSeedHolder: SearchSeedHolder
 ) : ViewModel() {
 
     private val filePath: String = navKey.filePath
@@ -69,24 +71,42 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
             _searchState.value = CoverSearchState()
             _coverFetchMessage.value = null
 
-            // Load audio file metadata
-            val result = audioRepository.getAudioFile(targetPath)
-            result.fold(
-                onSuccess = { audioFile ->
-                    val metadata = audioFile.metadata
-                    val title = metadata.title?.takeIf { it.isNotBlank() } ?: File(targetPath).nameWithoutExtension
-                    val artist = metadata.artist?.takeIf { it.isNotBlank() }
+            // 优先从 SearchSeedHolder 获取实时编辑值
+            val seed = searchSeedHolder.getAndClearSeed()
 
-                    _searchTitle.value = title
-                    _searchArtist.value = artist
+            val title: String
+            val artist: String?
 
-                    performCoverSearch(title, artist)
-                },
-                onFailure = { error ->
-                    _errorMessage.value = "Failed to load audio file: ${error.message}"
-                    _isLoading.value = false
-                }
-            )
+            if (seed != null) {
+                // 使用编辑中的实时值
+                title = seed.title
+                artist = seed.artist
+            } else {
+                // 兜底：从文件读取
+                val result = audioRepository.getAudioFile(targetPath)
+                result.fold(
+                    onSuccess = { audioFile ->
+                        val metadata = audioFile.metadata
+                        title = metadata.title?.takeIf { it.isNotBlank() } ?: File(targetPath).nameWithoutExtension
+                        artist = metadata.artist?.takeIf { it.isNotBlank() }
+
+                        _searchTitle.value = title
+                        _searchArtist.value = artist
+
+                        performCoverSearch(title, artist)
+                    },
+                    onFailure = { error ->
+                        _errorMessage.value = "Failed to load audio file: ${error.message}"
+                        _isLoading.value = false
+                    }
+                )
+                return@launch
+            }
+
+            _searchTitle.value = title
+            _searchArtist.value = artist
+
+            performCoverSearch(title, artist)
         }
     }
 
