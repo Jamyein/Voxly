@@ -437,7 +437,7 @@ class AudioFileScanner @Inject constructor(
      * Updates albums and artists StateFlows from a list of audio files.
      * Called by LibraryViewModel after scanning to keep AudioFileScanner's data in sync.
      */
-    fun updateAlbumsAndArtistsFromFiles(files: List<AudioFile>) {
+    suspend fun updateAlbumsAndArtistsFromFiles(files: List<AudioFile>) {
         updateAlbumsFromFiles(files)
         updateArtistsFromFiles(files)
     }
@@ -466,24 +466,63 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Derives artists from a list of audio files and updates the [artists] StateFlow.
+     * Respects artist separator settings to split combined artist names (e.g., "A & B" → "A", "B").
      */
-    private fun updateArtistsFromFiles(files: List<AudioFile>) {
-        val artistsMap = files
+    private suspend fun updateArtistsFromFiles(files: List<AudioFile>) {
+        val isSeparatorEnabled = settingsDataStore.artistSeparatorEnabled.first()
+        val customSeparators = settingsDataStore.artistSeparatorsSet.first()
+
+        val artistsMap = mutableMapOf<String, MutableList<AudioFile>>()
+
+        files
             .filter { it.metadata.artist?.isNotBlank() == true }
-            .groupBy { it.metadata.artist!! }
-            .map { (artistName, artistFiles) ->
-                val coverFile = artistFiles.firstOrNull {
-                    it.metadata.album?.isNotBlank() == true
-                } ?: artistFiles.firstOrNull()
-                ArtistGroup(
-                    name = artistName,
-                    albums = artistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
-                    files = artistFiles.sortedBy { it.metadata.album },
-                    coverPath = coverFile?.path
-                )
+            .forEach { file ->
+                val artistField = file.metadata.artist!!
+
+                if (isSeparatorEnabled && customSeparators.isNotEmpty()) {
+                    // Split artist field by separators
+                    val splitArtists = splitArtist(artistField, customSeparators)
+                    splitArtists.forEach { artistName ->
+                        artistsMap.getOrPut(artistName) { mutableListOf() }.add(file)
+                    }
+                } else {
+                    // No splitting, use original artist field
+                    artistsMap.getOrPut(artistField) { mutableListOf() }.add(file)
+                }
             }
-            .sortedBy { SortUtil.toSortablePinyin(it.name) }
-        _artists.value = artistsMap
+
+        val artistsList = artistsMap.map { (artistName, artistFiles) ->
+            val coverFile = artistFiles.firstOrNull {
+                it.metadata.album?.isNotBlank() == true
+            } ?: artistFiles.firstOrNull()
+            ArtistGroup(
+                name = artistName,
+                albums = artistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
+                files = artistFiles.sortedBy { it.metadata.album },
+                coverPath = coverFile?.path
+            )
+        }.sortedBy { SortUtil.toSortablePinyin(it.name) }
+
+        _artists.value = artistsList
+    }
+
+    /**
+     * Split artist string by separators.
+     * @param artist The artist string to split
+     * @param separators Set of separator strings (e.g., setOf("&", "/", "\\"))
+     * @return List of split artist names (empty strings filtered out)
+     */
+    private fun splitArtist(artist: String, separators: Set<String>): List<String> {
+        if (artist.isBlank()) return emptyList()
+        if (separators.isEmpty()) return listOf(artist)
+
+        // Sort by length descending to avoid short separators matching before long ones
+        val sortedSeparators = separators.sortedByDescending { it.length }
+        val regex = sortedSeparators.joinToString("|") { Regex.escape(it) }
+
+        return artist.split(Regex(regex))
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
     }
 
     /**
