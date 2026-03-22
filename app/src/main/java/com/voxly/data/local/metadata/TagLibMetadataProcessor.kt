@@ -319,8 +319,8 @@ class TagLibMetadataProcessor @Inject constructor(
             artist = propertyMap["ARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             album = propertyMap["ALBUM"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             albumArtist = propertyMap["ALBUMARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-            year = propertyMap["DATE"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
-                ?: propertyMap["YEAR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+            year = findKeyIgnoreCase(propertyMap, "DATE")?.let { propertyMap[it]?.firstOrNull()?.takeIf { y -> y.isNotBlank() } }
+                ?: findKeyIgnoreCase(propertyMap, "YEAR")?.let { propertyMap[it]?.firstOrNull()?.takeIf { y -> y.isNotBlank() } },
             genre = propertyMap["GENRE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             trackNumber = parsedTrack,
             totalTracks = parsedTotalFromTrack
@@ -406,8 +406,8 @@ class TagLibMetadataProcessor @Inject constructor(
                 artist = propertyMap["ARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
                 album = propertyMap["ALBUM"]?.firstOrNull()?.takeIf { it.isNotBlank() },
                 albumArtist = propertyMap["ALBUMARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                year = propertyMap["DATE"]?.firstOrNull()?.takeIf { it.isNotBlank() }
-                    ?: propertyMap["YEAR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
+                year = findKeyIgnoreCase(propertyMap, "DATE")?.let { propertyMap[it]?.firstOrNull()?.takeIf { y -> y.isNotBlank() } }
+                    ?: findKeyIgnoreCase(propertyMap, "YEAR")?.let { propertyMap[it]?.firstOrNull()?.takeIf { y -> y.isNotBlank() } },
                 genre = propertyMap["GENRE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
                 trackNumber = parsedTrack,
                 totalTracks = parsedTotalFromTrack
