@@ -171,6 +171,120 @@ class ReplayGainScanner @Inject constructor(
     }
 
     /**
+     * Fallback: Read raw PCM data directly from file using FileInputStream.
+     * Bypasses MediaCodec decoding for files that fail to decode.
+     *
+     * @param filePath Path to the audio file
+     * @param channelCount Number of audio channels
+     * @return SampleStats extracted from raw PCM, or null if failed
+     */
+    private fun fallbackReadRawPcm(
+        filePath: String,
+        channelCount: Int
+    ): SampleStats? {
+        return try {
+            val file = File(filePath)
+            if (!file.exists() || !file.canRead()) {
+                Logger.w("Fallback PCM read failed: file not accessible $filePath", "ReplayGainScanner")
+                return null
+            }
+
+            // Get file extension to determine format
+            val extension = file.extension.lowercase()
+
+            // Only attempt raw read for formats we can handle
+            if (extension !in listOf("wav", "flac", "ogg", "mp3")) {
+                Logger.w("Fallback PCM read: unsupported format $extension", "ReplayGainScanner")
+                return null
+            }
+
+            // For WAV files, we can directly read PCM data
+            if (extension == "wav") {
+                return fallbackReadWavPcm(file, channelCount)
+            }
+
+            // For other formats, this is a best-effort fallback
+            Logger.w("Fallback PCM read: format $extension not fully supported", "ReplayGainScanner")
+            null
+        } catch (e: Exception) {
+            Logger.e("Fallback PCM read error: ${e.message}", e, "ReplayGainScanner")
+            null
+        }
+    }
+
+    /**
+     * Reads WAV file directly as PCM fallback.
+     */
+    private fun fallbackReadWavPcm(file: File, channelCount: Int): SampleStats? {
+        try {
+            val bytes = file.readBytes()
+
+            // Parse WAV header (44 bytes for standard WAV)
+            if (bytes.size < 44) return null
+
+            // Check RIFF header
+            if (bytes[0] != 0x52.toByte() || // R
+                bytes[1] != 0x49.toByte() || // I
+                bytes[2] != 0x46.toByte() || // F
+                bytes[3] != 0x46.toByte()) {  // F
+                return null
+            }
+
+            // Find data chunk
+            var dataOffset = 12
+            var dataSize = 0L
+            while (dataOffset < bytes.size - 8) {
+                val chunkId = bytes.slice(dataOffset until dataOffset + 4).toByteArray()
+                val chunkSize = (bytes[dataOffset + 4].toInt() and 0xFF) or
+                               ((bytes[dataOffset + 5].toInt() and 0xFF) shl 8) or
+                               ((bytes[dataOffset + 6].toInt() and 0xFF) shl 16) or
+                               ((bytes[dataOffset + 7].toInt() and 0xFF) shl 24)
+
+                if (String(chunkId) == "data") {
+                    dataSize = chunkSize
+                    dataOffset += 8
+                    break
+                }
+                dataOffset += 8 + chunkSize
+            }
+
+            if (dataSize <= 0 || dataOffset >= bytes.size) return null
+
+            // Convert bytes to float samples
+            val sampleData = bytes.sliceArray(dataOffset until minOf(dataOffset + dataSize.toInt(), bytes.size))
+            val floatSamples = mutableListOf<Float>()
+            var i = 0
+            while (i + 1 < sampleData.size) {
+                // 16-bit PCM
+                val sample = ((sampleData[i + 1].toInt() shl 8) or (sampleData[i].toInt() and 0xFF)).toShort()
+                floatSamples.add(sample.toFloat() / 32768.0f)
+                i += 2
+            }
+
+            if (floatSamples.isEmpty()) return null
+
+            // Calculate stats
+            var peak = 0f
+            var sumSquares = 0.0
+            floatSamples.forEach { sample ->
+                val abs = kotlin.math.abs(sample)
+                if (abs > peak) peak = abs
+                sumSquares += sample.toDouble().pow(2.0)
+            }
+
+            return SampleStats(
+                sampleCount = floatSamples.size.toLong(),
+                sumSquares = sumSquares,
+                peak = peak,
+                blockRmsValues = emptyList() // Skip block calculation for fallback
+            )
+        } catch (e: Exception) {
+            Logger.e("WAV fallback read error: ${e.message}", e, "ReplayGainScanner")
+            return null
+        }
+    }
+
+    /**
      * Scans audio files and calculates ReplayGain values.
      * @param filePaths List of file paths to scan
      * @param scanQuality Quality level affecting sample rate
@@ -615,24 +729,32 @@ class ReplayGainScanner @Inject constructor(
                 channelCount = channelCount
             )
 
-            when (decodeResult.result) {
-                DecodeResult.SUCCESS -> {
-                    // Continue with stats
-                }
+            // Determine which stats to use - normal decode or fallback
+            val stats = when (decodeResult.result) {
+                DecodeResult.SUCCESS -> decodeResult.stats!!
                 DecodeResult.SAMPLE_COUNT_ZERO -> {
                     extractor.release()
                     return@withContext null
                 }
                 DecodeResult.DECODER_INIT_FAILED -> {
-                    // Trigger fallback
+                    // Trigger Level 2 fallback
+                    Logger.w("Level 1 retry exhausted, attempting Level 2 fallback", "ReplayGainScanner")
+                    val fallbackStats = fallbackReadRawPcm(filePath, channelCount)
+                    if (fallbackStats != null && fallbackStats.sampleCount > 0) {
+                        Logger.i("Level 2 fallback successful for $filePath", "ReplayGainScanner")
+                        fallbackStats
+                    } else {
+                        // All fallbacks exhausted
+                        Logger.e("All fallbacks exhausted for $filePath", "ReplayGainScanner")
+                        extractor.release()
+                        return@withContext null
+                    }
                 }
                 else -> {
                     extractor.release()
                     return@withContext null
                 }
             }
-
-            val stats = decodeResult.stats!!
 
             // Calculate 95th percentile RMS from block RMS values
             // foobar2000 uses 95th percentile for better human perception matching
