@@ -817,7 +817,22 @@ class ReplayGainScanner @Inject constructor(
                 DecodeResult.SUCCESS -> decodeResult.stats!!
                 DecodeResult.SAMPLE_COUNT_ZERO -> {
                     extractor.release()
-                    return@withContext null
+                    // Trigger Level 2 fallback first
+                    Logger.w("Level 1 retry returned zero samples, attempting Level 2 fallback", "ReplayGainScanner")
+                    val fallbackStats = fallbackReadRawPcm(filePath, channelCount)
+                    if (fallbackStats != null && fallbackStats.sampleCount > 0) {
+                        Logger.i("Level 2 fallback successful for $filePath", "ReplayGainScanner")
+                        fallbackStats
+                    } else {
+                        // Trigger Level 3 estimation
+                        Logger.w("Level 2 fallback failed, attempting Level 3 estimation", "ReplayGainScanner")
+                        val estimatedGain = fallbackEstimateGain(filePath, targetLoudness)
+                        if (estimatedGain != null) {
+                            Logger.i("Level 3 estimation successful for $filePath", "ReplayGainScanner")
+                            return@withContext estimatedGain
+                        }
+                        return@withContext null
+                    }
                 }
                 DecodeResult.DECODER_INIT_FAILED -> {
                     // Trigger Level 2 fallback
