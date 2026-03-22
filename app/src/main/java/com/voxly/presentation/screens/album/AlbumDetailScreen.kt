@@ -60,6 +60,7 @@ fun AlbumDetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit
 ) {
+    @Suppress("DEPRECATION")
     val viewModel: AlbumDetailViewModel = hiltViewModel()
 
     // Load album from cache

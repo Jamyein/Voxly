@@ -347,8 +347,8 @@ fun MetadataEditorScreen(
                                     IconButton(
                                         onClick = {
                                             onNavigateToLyricsSelector(
-                                                state.editedMetadata.lyrics ?: "",
-                                                state.editedMetadata.getDisplayTitle(state.audioFile.name ?: "") ?: "",
+                                                state.editedMetadata.lyrics,
+                                                state.editedMetadata.getDisplayTitle(state.audioFile.name),
                                                 state.editedMetadata.artist ?: "",
                                                 state.editedMetadata.album ?: "",
                                                 state.editedMetadata.albumArt

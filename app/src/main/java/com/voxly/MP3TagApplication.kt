@@ -33,6 +33,7 @@ class MP3TagApplication : Application() {
         initLogging()
     }
 
+    @Suppress("DEPRECATION")
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
         when (level) {

@@ -67,6 +67,7 @@ import com.voxly.presentation.viewmodel.ArtistDetailViewModel
  * Artist detail screen showing artist info and song list.
  */
 @OptIn(ExperimentalMaterial3Api::class)
+@Suppress("DEPRECATION")
 @Composable
 fun ArtistDetailScreen(
     artistName: String,

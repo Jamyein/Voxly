@@ -61,6 +61,7 @@ private const val MAX_SELECTIONS = 6
  * Screen for selecting lyrics lines to include in the poster.
  * Allows selecting up to 6 lines of lyrics.
  */
+@Suppress("DEPRECATION")
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun LyricsSelectorScreen(
