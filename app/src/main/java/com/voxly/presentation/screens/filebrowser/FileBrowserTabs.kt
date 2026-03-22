@@ -114,7 +114,7 @@ internal fun AlbumTabContent(
                     ) {
                         items(
                             count = albums.size,
-                            key = { index -> albums[index].name }
+                            key = { index -> albumStableKey(albums[index]) }
                         ) { index ->
                             val album = albums[index]
                             AlbumGridItem(
@@ -136,12 +136,9 @@ internal fun AlbumYearGroupedContent(
     onAlbumClick: (AlbumGroup) -> Unit,
     isDescending: Boolean = false
 ) {
-    // Group albums by year - use minOrNull to match applyAlbumSort YEAR_ASC logic
-    // This ensures consistency: albums sorted by earliest year are also grouped by earliest year
     val albumsByYear = remember(albums, isDescending) {
         albums.groupBy { album ->
-            album.files.mapNotNull { it.metadata.year?.toIntOrNull() }.minOrNull()
-                ?: 0 // Unknown year
+            albumDisplayYearInt(album) ?: 0
         }.toSortedMap(if (isDescending) compareByDescending { it } else compareBy { it })
     }
 
@@ -171,7 +168,7 @@ internal fun AlbumYearGroupedContent(
             // Album items in this year using SegmentedListItem
             items(
                 count = yearGroup.albums.size,
-                key = { index -> "album_${yearGroup.year}_${yearGroup.albums[index].name}" }
+                key = { index -> "album_${yearGroup.year}_${albumStableKey(yearGroup.albums[index])}" }
             ) { albumIndex ->
                 val album = yearGroup.albums[albumIndex]
                 SegmentedListItem(
@@ -259,6 +256,27 @@ private data class YearGroup(
     val albums: List<AlbumGroup>
 )
 
+private fun albumDisplayYearInt(album: AlbumGroup): Int? {
+    return album.files
+        .mapNotNull { audioFile -> extractYear(audioFile.metadata.year) }
+        .maxOrNull()
+}
+
+private fun albumDisplayYearText(album: AlbumGroup): String? {
+    return albumDisplayYearInt(album)?.toString()
+}
+
+private fun albumStableKey(album: AlbumGroup): String {
+    val representativePath = album.files.firstOrNull()?.path.orEmpty()
+    return "${album.name}|${album.artist.orEmpty()}|$representativePath"
+}
+
+private fun extractYear(rawYear: String?): Int? {
+    val normalized = rawYear?.trim().orEmpty()
+    if (normalized.isEmpty()) return null
+    return Regex("""\d{4}""").find(normalized)?.value?.toIntOrNull()
+}
+
 @Composable
 internal fun ArtistTabContent(
     artists: List<ArtistGroup>,
@@ -340,7 +358,7 @@ internal fun AlbumDetailContent(
 
     // Get album year
     val albumYear = remember(album.files) {
-        album.files.firstOrNull()?.metadata?.year
+        albumDisplayYearText(album)
     }
 
     // Get album artist (prefer albumArtist field)

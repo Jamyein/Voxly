@@ -6,19 +6,10 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -43,6 +34,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.core.util.SortUtil
 import com.voxly.domain.model.AlbumGroup
+import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.screens.filebrowser.AlbumTabContent
 import com.voxly.presentation.viewmodel.AlbumViewModel
 
@@ -107,17 +99,15 @@ fun AlbumScreen(
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 actions = {
-                    IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                            contentDescription = stringResource(R.string.album_sort_label),
-                            tint = if (isSortExpanded) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurface
-                            }
-                        )
-                    }
+                    SortMenuButton(
+                        expanded = isSortExpanded,
+                        onExpandedChange = { isSortExpanded = it },
+                        currentSortOption = AlbumSortOption.valueOf(sortOption),
+                        options = AlbumSortOption.entries,
+                        optionLabelResId = { it.labelResId() },
+                        contentDescription = stringResource(R.string.album_sort_label),
+                        onSortOptionChange = { sortOption = it.name }
+                    )
                 }
             )
         }
@@ -139,24 +129,16 @@ fun AlbumScreen(
                     )
                 }
             } else {
-                Column {
-                    AlbumSortMenu(
-                        isExpanded = isSortExpanded,
-                        currentSortOption = AlbumSortOption.valueOf(sortOption),
-                        onSortOptionChange = { sortOption = it.name },
-                        onDismiss = { isSortExpanded = false }
-                    )
-                    AlbumTabContent(
-                        albums = sortedAlbums,
-                        onAlbumClick = { album ->
-                            onNavigateToAlbumDetail(album.name, album.artist)
-                        },
-                        isRefreshing = isRefreshing,
-                        onRefresh = { viewModel.refresh() },
-                        scrollToTopTrigger = scrollToTopTrigger,
-                        sortOption = AlbumSortOption.valueOf(sortOption)
-                    )
-                }
+                AlbumTabContent(
+                    albums = sortedAlbums,
+                    onAlbumClick = { album ->
+                        onNavigateToAlbumDetail(album.name, album.artist)
+                    },
+                    isRefreshing = isRefreshing,
+                    onRefresh = { viewModel.refresh() },
+                    scrollToTopTrigger = scrollToTopTrigger,
+                    sortOption = AlbumSortOption.valueOf(sortOption)
+                )
             }
         }
     }
@@ -184,42 +166,11 @@ private fun applyAlbumSort(
         )
         AlbumSortOption.TRACK_COUNT_DESC -> albums.sortedByDescending { it.files.size }
         AlbumSortOption.YEAR_DESC -> albums.sortedByDescending { album ->
-            album.files.mapNotNull { it.metadata.year?.toIntOrNull() }.maxOrNull() ?: Int.MIN_VALUE
-        }
-    }
-}
-
-@Composable
-internal fun AlbumSortMenu(
-    isExpanded: Boolean,
-    currentSortOption: AlbumSortOption,
-    onSortOptionChange: (AlbumSortOption) -> Unit,
-    onDismiss: () -> Unit
-) {
-    Box(modifier = Modifier.fillMaxWidth()) {
-        DropdownMenu(
-            expanded = isExpanded,
-            onDismissRequest = onDismiss,
-            modifier = Modifier.align(Alignment.TopEnd)
-        ) {
-            AlbumSortOption.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(option.labelResId())) },
-                    leadingIcon = if (option == currentSortOption) {
-                        {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = stringResource(R.string.cd_selected),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    } else null,
-                    onClick = {
-                        onSortOptionChange(option)
-                        onDismiss()
-                    }
-                )
-            }
+            album.files.mapNotNull { audioFile ->
+                audioFile.metadata.year
+                    ?.let { Regex("""\d{4}""").find(it)?.value }
+                    ?.toIntOrNull()
+            }.maxOrNull() ?: Int.MIN_VALUE
         }
     }
 }
