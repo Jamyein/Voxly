@@ -55,6 +55,17 @@ import java.net.URLDecoder
 import javax.inject.Inject
 
 /**
+ * Error types for ReplayGain scan failures.
+ */
+sealed class ReplayGainScanError {
+    data class DecodeFailed(val reason: String, val filePath: String) : ReplayGainScanError()
+    data class NoAudioTrack(val filePath: String) : ReplayGainScanError()
+    data class PermissionDenied(val filePath: String) : ReplayGainScanError()
+    data class AllFallbacksFailed(val filePath: String) : ReplayGainScanError()
+    data class Unknown(val message: String) : ReplayGainScanError()
+}
+
+/**
  * ViewModel for the metadata editor screen.
  * Handles loading, editing, and saving audio file metadata.
  */
@@ -143,6 +154,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val _isScanningReplayGain = MutableStateFlow(false)
     private var _originalMetadata: AudioMetadata? = null
     val isScanningReplayGain: StateFlow<Boolean> = _isScanningReplayGain.asStateFlow()
+
+    private val _replayGainScanError = MutableStateFlow<ReplayGainScanError?>(null)
+    val replayGainScanError: StateFlow<ReplayGainScanError?> = _replayGainScanError.asStateFlow()
 
     // Search job tracking - cancel previous search when new one starts
     private var _lyricsSearchJob: kotlinx.coroutines.Job? = null
@@ -312,6 +326,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     /**
+     * Clears the ReplayGain scan error.
+     */
+    fun clearReplayGainScanError() {
+        _replayGainScanError.value = null
+    }
+
+    /**
      * Scans the current file for ReplayGain.
      * Uses dynamic sample rate handling - high-resolution audio (>48kHz) 
      * will be automatically downsampled for optimal performance.
@@ -324,6 +345,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     fun scanReplayGain() {
         viewModelScope.launch {
             _isScanningReplayGain.value = true
+            _replayGainScanError.value = null // Clear previous error
             
             // Using ACCURATE mode for best results - dynamic sampling handles high-res files
             val scanQuality = com.voxly.domain.repository.ScanQuality.ACCURATE
@@ -358,6 +380,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 ).collect { progress ->
                     when (progress.status) {
                         com.voxly.domain.repository.ScanStatus.COMPLETED -> {
+                            _replayGainScanError.value = null
                             // Read the scanned ReplayGain info for current file
                             val replayGainReadResult = replayGainRepository.readReplayGain(filePath)
                             replayGainReadResult.getOrNull()?.let { info ->
@@ -367,7 +390,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                 } else {
                                     info
                                 }
-                                
+
                                 _pendingReplayGainInfo.value = finalInfo
                                 _hasUnsavedChanges.value = true
                             }
@@ -375,6 +398,21 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             Logger.i("ReplayGain scan completed. mode=${currentScanMode.name}", "MetadataEditor")
                         }
                         com.voxly.domain.repository.ScanStatus.FAILED -> {
+                            // Determine error type based on reason
+                            val error: ReplayGainScanError = when {
+                                progress.currentFilePath.contains("Permission") ||
+                                progress.currentFilePath.contains("EACCES") ->
+                                    ReplayGainScanError.PermissionDenied(progress.currentFilePath)
+                                progress.currentFilePath.contains("audio track") ||
+                                progress.currentFilePath.contains("no audio") ->
+                                    ReplayGainScanError.NoAudioTrack(progress.currentFilePath)
+                                progress.currentFilePath.contains("decode") ||
+                                progress.currentFilePath.contains("codec") ->
+                                    ReplayGainScanError.DecodeFailed("解码失败", progress.currentFilePath)
+                                else ->
+                                    ReplayGainScanError.Unknown(progress.message ?: "未知错误")
+                            }
+                            _replayGainScanError.value = error
                             _isScanningReplayGain.value = false
                             Logger.e("ReplayGain scan failed.", null, "MetadataEditor")
                         }
