@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,7 +52,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -83,6 +83,12 @@ fun ArtistDetailScreen(
     val files by viewModel.files.collectAsState()
     val coverPath by viewModel.coverPath.collectAsState()
     val albumCovers by viewModel.albumCovers.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+
+    // Pull-to-refresh callback
+    val onRefresh: () -> Unit = {
+        viewModel.refresh(forceRefresh = false)
+    }
 
     // Separate singles (songs without album) and albums
     val singles = remember(files) {
@@ -123,160 +129,82 @@ fun ArtistDetailScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                top = 12.dp + innerPadding.calculateTopPadding(),
-                bottom = 12.dp + innerPadding.calculateBottomPadding(),
-                start = 12.dp,
-                end = 12.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Header: Circle Avatar + Artist Name
-            item {
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    // Circle Avatar (150dp)
-                    Box(
-                        modifier = Modifier
-                            .size(150.dp)
-                            .clip(CircleShape),
-                        contentAlignment = Alignment.Center
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    top = 12.dp + innerPadding.calculateTopPadding(),
+                    bottom = 12.dp + innerPadding.calculateBottomPadding(),
+                    start = 12.dp,
+                    end = 12.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Header: Circle Avatar + Artist Name
+                item {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        if (avatarBitmap != null) {
-                            Image(
-                                bitmap = avatarBitmap.asImageBitmap(),
-                                contentDescription = stringResource(R.string.artist_cover),
-                                modifier = Modifier.fillMaxSize(),
-                                contentScale = ContentScale.Crop
-                            )
-                        } else {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.Person,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .padding(40.dp)
-                                        .fillMaxSize(),
-                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            }
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Artist Name (headlineMedium centered)
-                    Text(
-                        text = artistNameState,
-                        style = MaterialTheme.typography.headlineMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-
-            // Singles Section (Songs without album)
-            if (singles.isNotEmpty()) {
-                item {
-                    Text(
-                        text = stringResource(R.string.singles),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-
-                items(singles, key = { "single_${it.path}" }) { audioFile ->
-                    AudioFileItem(
-                        audioFile = audioFile,
-                        isSelected = false,
-                        onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
-                        onLongClick = {},
-                        showActions = false,
-                        onEditMetadata = {},
-                        onRename = {},
-                        onDelete = {},
-                        onFetchOnlineMetadata = {},
-                        onFixMetadata = {},
-                        compactMode = true
-                    )
-                }
-            }
-
-            // Albums Section
-            if (albumsGrouped.isNotEmpty()) {
-                item {
-                    Text(
-                        text = stringResource(R.string.albums),
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(top = 8.dp)
-                    )
-                }
-
-                // Album cards in carousel
-                item {
-                    val albumList = albumsGrouped.keys.toList()
-                    if (albumList.isNotEmpty()) {
-                        val carouselState = rememberCarouselState { albumList.size }
-
-                        // 封面数据首次填充时立即预加载（解决首屏空白问题）
-                        LaunchedEffect(albumCovers) {
-                            if (albumCovers.isNotEmpty()) {
-                                viewModel.preloadAdjacentAlbumCovers(0)
-                            }
-                        }
-
-                        // 滚动监听：滚动停止时预加载相邻专辑封面
-                        LaunchedEffect(carouselState) {
-                            snapshotFlow { carouselState.currentItem }.collect { page ->
-                                viewModel.preloadAdjacentAlbumCovers(page)
-                            }
-                        }
-
-                        HorizontalMultiBrowseCarousel(
-                            state = carouselState,
+                        // Circle Avatar (150dp)
+                        Box(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .wrapContentHeight(),
-                            preferredItemWidth = 140.dp,
-                            itemSpacing = 12.dp,
-                            contentPadding = PaddingValues(horizontal = 40.dp)
-                        ) { page ->
-                            val albumName = albumList[page]
-                            val albumFiles = albumsGrouped[albumName] ?: emptyList()
-                            val albumArtPath = albumCovers[albumName]
-
-                            AlbumCard(
-                                albumName = albumName,
-                                trackCount = albumFiles.size,
-                                albumArtPath = albumArtPath,
-                                onClick = { /* Could navigate to album detail */ },
-                                modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
-                            )
+                                .size(150.dp)
+                                .clip(CircleShape),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (avatarBitmap != null) {
+                                Image(
+                                    bitmap = avatarBitmap.asImageBitmap(),
+                                    contentDescription = stringResource(R.string.artist_cover),
+                                    modifier = Modifier.fillMaxSize(),
+                                    contentScale = ContentScale.Crop
+                                )
+                            } else {
+                                Surface(
+                                    modifier = Modifier.fillMaxSize(),
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Person,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .padding(40.dp)
+                                            .fillMaxSize(),
+                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                }
+                            }
                         }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // Artist Name (headlineMedium centered)
+                        Text(
+                            text = artistNameState,
+                            style = MaterialTheme.typography.headlineMedium,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
                     }
                 }
 
-                // Show songs grouped by album below
-                albumsGrouped.forEach { (albumName, albumFiles) ->
+                // Singles Section (Songs without album)
+                if (singles.isNotEmpty()) {
                     item {
                         Text(
-                            text = albumName,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            text = stringResource(R.string.singles),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(top = 8.dp)
                         )
                     }
 
-                    items(albumFiles.take(3), key = { "album_${albumName}_${it.path}" }) { audioFile ->
+                    items(singles, key = { "single_${it.path}" }) { audioFile ->
                         AudioFileItem(
                             audioFile = audioFile,
                             isSelected = false,
@@ -291,34 +219,118 @@ fun ArtistDetailScreen(
                             compactMode = true
                         )
                     }
+                }
 
-                    if (albumFiles.size > 3) {
+                // Albums Section
+                if (albumsGrouped.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.albums),
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+
+                    // Album cards in carousel
+                    item {
+                        val albumList = albumsGrouped.keys.toList()
+                        if (albumList.isNotEmpty()) {
+                            val carouselState = rememberCarouselState { albumList.size }
+
+                            // 封面数据首次填充时立即预加载（解决首屏空白问题）
+                            LaunchedEffect(albumCovers) {
+                                if (albumCovers.isNotEmpty()) {
+                                    viewModel.preloadAdjacentAlbumCovers(0)
+                                }
+                            }
+
+                            // 滚动监听：滚动停止时预加载相邻专辑封面
+                            LaunchedEffect(carouselState) {
+                                snapshotFlow { carouselState.currentItem }.collect { page ->
+                                    viewModel.preloadAdjacentAlbumCovers(page)
+                                }
+                            }
+
+                            HorizontalMultiBrowseCarousel(
+                                state = carouselState,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .wrapContentHeight(),
+                                preferredItemWidth = 140.dp,
+                                itemSpacing = 12.dp,
+                                contentPadding = PaddingValues(horizontal = 40.dp)
+                            ) { page ->
+                                val albumName = albumList[page]
+                                val albumFiles = albumsGrouped[albumName] ?: emptyList()
+                                val albumArtPath = albumCovers[albumName]
+
+                                AlbumCard(
+                                    albumName = albumName,
+                                    trackCount = albumFiles.size,
+                                    albumArtPath = albumArtPath,
+                                    onClick = { /* Could navigate to album detail */ },
+                                    modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
+                                )
+                            }
+                        }
+                    }
+
+                    // Show songs grouped by album below
+                    albumsGrouped.forEach { (albumName, albumFiles) ->
                         item {
                             Text(
-                                text = "+${albumFiles.size - 3} more",
-                                style = MaterialTheme.typography.bodySmall,
+                                text = albumName,
+                                style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(start = 16.dp)
+                                modifier = Modifier.padding(top = 8.dp)
                             )
+                        }
+
+                        items(albumFiles.take(3), key = { "album_${albumName}_${it.path}" }) { audioFile ->
+                            AudioFileItem(
+                                audioFile = audioFile,
+                                isSelected = false,
+                                onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
+                                onLongClick = {},
+                                showActions = false,
+                                onEditMetadata = {},
+                                onRename = {},
+                                onDelete = {},
+                                onFetchOnlineMetadata = {},
+                                onFixMetadata = {},
+                                compactMode = true
+                            )
+                        }
+
+                        if (albumFiles.size > 3) {
+                            item {
+                                Text(
+                                    text = "+${albumFiles.size - 3} more",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 16.dp)
+                                )
+                            }
                         }
                     }
                 }
-            }
 
-            // If no files
-            if (files.isEmpty()) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = stringResource(R.string.no_tracks_for_artist),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                // If no files
+                if (files.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(
+                                text = stringResource(R.string.no_tracks_for_artist),
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 }
             }
@@ -332,7 +344,7 @@ fun ArtistDetailScreen(
  * key1 = filePath确保路径变化时重新加载。
  */
 @Composable
-private fun CarouselAlbumArtImage(
+fun CarouselAlbumArtImage(
     filePath: String?,
     contentDescription: String?,
     modifier: Modifier = Modifier,
@@ -363,7 +375,7 @@ private fun CarouselAlbumArtImage(
  * Album card for carousel with responsive sizing and spring animation.
  */
 @Composable
-private fun AlbumCard(
+fun AlbumCard(
     albumName: String,
     trackCount: Int,
     albumArtPath: String?,

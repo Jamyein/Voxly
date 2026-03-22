@@ -30,6 +30,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -73,6 +74,12 @@ fun AlbumDetailScreen(
     val albumSampleRate by viewModel.albumSampleRate.collectAsState()
     val files by viewModel.files.collectAsState()
     val coverPath by viewModel.coverPath.collectAsState()
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+
+    // Pull-to-refresh callback
+    val onRefresh: () -> Unit = {
+        viewModel.refresh(forceRefresh = false)
+    }
 
     // Calculate total duration
     val totalDuration = remember(files) {
@@ -120,212 +127,217 @@ fun AlbumDetailScreen(
             )
         }
     ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(
-                top = 12.dp + innerPadding.calculateTopPadding(),
-                bottom = 12.dp + innerPadding.calculateBottomPadding(),
-                start = 12.dp,
-                end = 12.dp
-            ),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize()
         ) {
-            // Card: Cover + Album Info
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        verticalAlignment = Alignment.CenterVertically
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(
+                    top = 12.dp + innerPadding.calculateTopPadding(),
+                    bottom = 12.dp + innerPadding.calculateBottomPadding(),
+                    start = 12.dp,
+                    end = 12.dp
+                ),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Card: Cover + Album Info
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                        )
                     ) {
-                        // Left: Cover image using AlbumArtImage composable
-                        val firstFile = files.firstOrNull()
-                        AlbumArtImage(
-                            filePath = coverPath ?: firstFile?.path,
-                            mediaStoreAlbumId = firstFile?.mediaStoreAlbumId,
-                            contentDescription = stringResource(R.string.album_cover),
-                            size = 120.dp,
+                        Row(
                             modifier = Modifier
-                                .size(120.dp)
-                                .clip(MaterialTheme.shapes.medium)
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Surface(
-                                modifier = Modifier.fillMaxSize(),
-                                color = MaterialTheme.colorScheme.surfaceVariant,
-                                shape = MaterialTheme.shapes.medium
+                            // Left: Cover image using AlbumArtImage composable
+                            val firstFile = files.firstOrNull()
+                            AlbumArtImage(
+                                filePath = coverPath ?: firstFile?.path,
+                                mediaStoreAlbumId = firstFile?.mediaStoreAlbumId,
+                                contentDescription = stringResource(R.string.album_cover),
+                                size = 120.dp,
+                                modifier = Modifier
+                                    .size(120.dp)
+                                    .clip(MaterialTheme.shapes.medium)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Album,
-                                    contentDescription = null,
-                                    modifier = Modifier
-                                        .padding(24.dp)
-                                        .fillMaxSize(),
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.width(16.dp))
-
-                        // Right: Album info
-                        Column(
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            Text(
-                                text = albumNameState,
-                                style = MaterialTheme.typography.titleLarge,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            Text(
-                                text = albumArtistState ?: "",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                            if (albumBitrate > 0) {
-                                Text(
-                                    text = "$albumBitrate kbps",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                            }
-                            if (albumSampleRate > 0) {
-                                Text(
-                                    text = "${albumSampleRate / 1000} kHz",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.outline
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Card: Statistics
-            item {
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    colors = CardDefaults.cardColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = files.size.toString(),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                text = stringResource(R.string.singles),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = formattedTotalDuration,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                text = stringResource(R.string.metadata_duration),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                            )
-                        }
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(
-                                text = albumYear ?: "N/A",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                            Text(
-                                text = stringResource(R.string.metadata_year),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Song list grouped by disc
-            val groupedFiles = sortedFiles.groupBy { it.metadata.discNumber ?: 1 }
-            val sortedDiscNumbers = groupedFiles.keys.sorted()
-
-            items(sortedDiscNumbers.size) { discIndex ->
-                val discNumber = sortedDiscNumbers[discIndex]
-                val discFiles = groupedFiles[discNumber] ?: return@items
-
-                // Disc 标题
-                Text(
-                    text = "Disc $discNumber",
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-
-                // 歌曲列表 - 使用 SegmentedListItem 实现分段效果
-                Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(0.dp)
-                ) {
-                    discFiles.forEachIndexed { index, audioFile ->
-                        SegmentedListItem(
-                            onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
-                            shapes = ListItemDefaults.segmentedShapes(
-                                index = index,
-                                count = discFiles.size
-                            ),
-                            colors = ListItemDefaults.segmentedColors(
-                                containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                            ),
-                            leadingContent = {
-                                Text(
-                                    text = audioFile.metadata.trackNumber?.toString() ?: "-",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.width(32.dp)
-                                )
-                            },
-                            supportingContent = {
-                                Column {
-                                    Text(
-                                        text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        maxLines = 1
-                                    )
-                                    Text(
-                                        text = "${audioFile.format.uppercase()} • ${audioFile.getFormattedDuration()}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1
+                                Surface(
+                                    modifier = Modifier.fillMaxSize(),
+                                    color = MaterialTheme.colorScheme.surfaceVariant
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Album,
+                                        contentDescription = null,
+                                        modifier = Modifier
+                                            .padding(24.dp)
+                                            .fillMaxSize(),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
                                 }
-                            },
-                            modifier = Modifier.fillMaxWidth(),
-                            content = {}
-                        )
+                            }
+
+                            Spacer(modifier = Modifier.width(16.dp))
+
+                            // Right: Album info
+                            Column(
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = albumNameState,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = albumArtistState ?: "",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                if (albumBitrate > 0) {
+                                    Text(
+                                        text = "$albumBitrate kbps",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                                if (albumSampleRate > 0) {
+                                    Text(
+                                        text = "${albumSampleRate / 1000} kHz",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.outline
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
+                // Card: Statistics
+                item {
+                    Card(
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = MaterialTheme.shapes.medium,
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = files.size.toString(),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = stringResource(R.string.singles),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = formattedTotalDuration,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = stringResource(R.string.metadata_duration),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Text(
+                                    text = albumYear ?: "N/A",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer
+                                )
+                                Text(
+                                    text = stringResource(R.string.metadata_year),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Song list grouped by disc
+                val groupedFiles = sortedFiles.groupBy { it.metadata.discNumber ?: 1 }
+                val sortedDiscNumbers = groupedFiles.keys.sorted()
+
+                items(sortedDiscNumbers.size) { discIndex ->
+                    val discNumber = sortedDiscNumbers[discIndex]
+                    val discFiles = groupedFiles[discNumber] ?: return@items
+
+                    // Disc 标题
+                    Text(
+                        text = "Disc $discNumber",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
+
+                    // 歌曲列表 - 使用 SegmentedListItem 实现分段效果
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(0.dp)
+                    ) {
+                        discFiles.forEachIndexed { index, audioFile ->
+                            SegmentedListItem(
+                                onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
+                                shapes = ListItemDefaults.segmentedShapes(
+                                    index = index,
+                                    count = discFiles.size
+                                ),
+                                colors = ListItemDefaults.segmentedColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                                ),
+                                leadingContent = {
+                                    Text(
+                                        text = audioFile.metadata.trackNumber?.toString() ?: "-",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.width(32.dp)
+                                    )
+                                },
+                                supportingContent = {
+                                    Column {
+                                        Text(
+                                            text = audioFile.metadata.getDisplayTitle(audioFile.name),
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            maxLines = 1
+                                        )
+                                        Text(
+                                            text = "${audioFile.format.uppercase()} • ${audioFile.getFormattedDuration()}",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.fillMaxWidth(),
+                                content = {}
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
             }
         }
     }

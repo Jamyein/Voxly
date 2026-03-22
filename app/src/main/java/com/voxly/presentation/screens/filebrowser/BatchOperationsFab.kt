@@ -4,13 +4,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarAction
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarScrollBehavior
+import androidx.compose.material3.FloatingToolbarState
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SmallFloatingActionButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberFloatingToolbarState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -22,10 +25,12 @@ import com.voxly.presentation.icons.appIconPainter
 /**
  * Batch Operations FloatingToolbar using official M3 HorizontalFloatingToolbar API
  * Uses FloatingToolbarScrollBehavior for scroll-to-hide animation
+ * Automatically expands/collapses based on selection mode
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BatchOperationsToolbar(
+    isSelectionMode: Boolean,
     scrollBehavior: FloatingToolbarScrollBehavior,
     modifier: Modifier = Modifier,
     onOnlineMetadata: () -> Unit,
@@ -35,12 +40,24 @@ fun BatchOperationsToolbar(
     onRenameFiles: () -> Unit,
     onFixMetadata: () -> Unit
 ) {
+    // Create and remember the floating toolbar state
+    val floatingToolbarState = rememberFloatingToolbarState()
+
+    // Listen to selection mode changes and auto expand/collapse
+    LaunchedEffect(isSelectionMode) {
+        if (isSelectionMode) {
+            floatingToolbarState.expand()
+        } else {
+            floatingToolbarState.collapse()
+        }
+    }
+
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = Alignment.BottomCenter
     ) {
         HorizontalFloatingToolbar(
-            expanded = true,
+            state = floatingToolbarState,
             scrollBehavior = scrollBehavior,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
@@ -48,64 +65,46 @@ fun BatchOperationsToolbar(
             colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
         ) {
             // Online Metadata
-            ToolbarAction(
-                label = stringResource(R.string.batch_online_metadata),
-                icon = AppIcon.CloudDownload,
-                onClick = onOnlineMetadata
+            FloatingToolbarAction(
+                onClick = onOnlineMetadata,
+                icon = { Icon(appIconPainter(AppIcon.CloudDownload), contentDescription = null) },
+                label = { Text(stringResource(R.string.batch_online_metadata)) }
             )
 
             // Unified Field
-            ToolbarAction(
-                label = stringResource(R.string.batch_unified_field),
-                icon = AppIcon.Edit,
-                onClick = onUnifiedField
+            FloatingToolbarAction(
+                onClick = onUnifiedField,
+                icon = { Icon(appIconPainter(AppIcon.Edit), contentDescription = null) },
+                label = { Text(stringResource(R.string.batch_unified_field)) }
             )
 
             // Replace Text
-            ToolbarAction(
-                label = stringResource(R.string.batch_replace_text),
-                icon = AppIcon.AutoFix,
-                onClick = onReplaceText
+            FloatingToolbarAction(
+                onClick = onReplaceText,
+                icon = { Icon(appIconPainter(AppIcon.AutoFix), contentDescription = null) },
+                label = { Text(stringResource(R.string.batch_replace_text)) }
             )
 
             // Auto Number
-            ToolbarAction(
-                label = stringResource(R.string.batch_auto_number),
-                icon = AppIcon.Schedule,
-                onClick = onAutoNumber
+            FloatingToolbarAction(
+                onClick = onAutoNumber,
+                icon = { Icon(appIconPainter(AppIcon.Schedule), contentDescription = null) },
+                label = { Text(stringResource(R.string.batch_auto_number)) }
             )
 
             // Rename Files
-            ToolbarAction(
-                label = stringResource(R.string.batch_rename_files),
-                icon = AppIcon.Rename,
-                onClick = onRenameFiles
+            FloatingToolbarAction(
+                onClick = onRenameFiles,
+                icon = { Icon(appIconPainter(AppIcon.Rename), contentDescription = null) },
+                label = { Text(stringResource(R.string.batch_rename_files)) }
             )
 
             // Fix Metadata
-            ToolbarAction(
-                label = stringResource(R.string.fix_metadata),
-                icon = AppIcon.AutoFix,
-                onClick = onFixMetadata
+            FloatingToolbarAction(
+                onClick = onFixMetadata,
+                icon = { Icon(appIconPainter(AppIcon.AutoFix), contentDescription = null) },
+                label = { Text(stringResource(R.string.fix_metadata)) }
             )
         }
-    }
-}
-
-@Composable
-private fun ToolbarAction(
-    label: String,
-    icon: AppIcon,
-    onClick: () -> Unit
-) {
-    SmallFloatingActionButton(
-        onClick = onClick,
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-    ) {
-        Icon(
-            painter = appIconPainter(icon),
-            contentDescription = label
-        )
     }
 }

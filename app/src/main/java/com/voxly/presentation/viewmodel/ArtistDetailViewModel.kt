@@ -55,7 +55,11 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private val _albumCovers = MutableStateFlow<Map<String, String?>>(emptyMap())
     val albumCovers: StateFlow<Map<String, String?>> = _albumCovers.asStateFlow()
 
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
     private var preloadJob: Job? = null
+    private var refreshJob: Job? = null
     private val preloadMutex = kotlinx.coroutines.sync.Mutex()
 
     init {
@@ -196,6 +200,22 @@ class ArtistDetailViewModel @AssistedInject constructor(
             String.format("%d:%02d:%02d", hours, minutes, seconds)
         } else {
             String.format("%d:%02d", minutes, seconds)
+        }
+    }
+
+    /**
+     * Refresh artist data with optional full scan.
+     */
+    fun refresh(forceRefresh: Boolean = false) {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            try {
+                _isRefreshing.value = true
+                audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
+                loadArtist(navKey.artistName)
+            } finally {
+                _isRefreshing.value = false
+            }
         }
     }
 

@@ -11,6 +11,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,6 +49,11 @@ class AlbumDetailViewModel @AssistedInject constructor(
 
     private val _files = MutableStateFlow<List<AudioFile>>(emptyList())
     val files: StateFlow<List<AudioFile>> = _files.asStateFlow()
+
+    private val _isRefreshing = MutableStateFlow(false)
+    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    private var refreshJob: Job? = null
 
     init {
         // Load album data from AudioFileScanner albums on init
@@ -93,6 +99,22 @@ class AlbumDetailViewModel @AssistedInject constructor(
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
+            }
+        }
+    }
+
+    /**
+     * Refresh album data with optional full scan.
+     */
+    fun refresh(forceRefresh: Boolean = false) {
+        refreshJob?.cancel()
+        refreshJob = viewModelScope.launch {
+            try {
+                _isRefreshing.value = true
+                audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
+                loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
+            } finally {
+                _isRefreshing.value = false
             }
         }
     }
