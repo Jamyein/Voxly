@@ -6,9 +6,11 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -25,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -50,6 +53,12 @@ fun AlbumScreen(
     val albums by viewModel.albums.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     var scrollToTopTrigger by remember { mutableIntStateOf(0) }
+    var sortOption by rememberSaveable { mutableStateOf(AlbumSortOption.NAME_ASC.name) }
+    var isSortExpanded by rememberSaveable { mutableStateOf(false) }
+
+    val sortedAlbums = remember(albums, sortOption) {
+        applyAlbumSort(albums, AlbumSortOption.valueOf(sortOption))
+    }
 
     val readPermission = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -92,7 +101,20 @@ fun AlbumScreen(
                     containerColor = MaterialTheme.colorScheme.surface,
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
-                )
+                ),
+                actions = {
+                    IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Sort,
+                            contentDescription = stringResource(R.string.album_sort_label),
+                            tint = if (isSortExpanded) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurface
+                            }
+                        )
+                    }
+                }
             )
         }
     ) { innerPadding ->
@@ -113,15 +135,23 @@ fun AlbumScreen(
                     )
                 }
             } else {
-                AlbumTabContent(
-                    albums = albums,
-                    onAlbumClick = { album ->
-                        onNavigateToAlbumDetail(album.name, album.artist)
-                    },
-                    isRefreshing = isRefreshing,
-                    onRefresh = { viewModel.refresh() },
-                    scrollToTopTrigger = scrollToTopTrigger
-                )
+                Column {
+                    AlbumSortMenu(
+                        isExpanded = isSortExpanded,
+                        currentSortOption = AlbumSortOption.valueOf(sortOption),
+                        onSortOptionChange = { sortOption = it.name },
+                        onDismiss = { isSortExpanded = false }
+                    )
+                    AlbumTabContent(
+                        albums = sortedAlbums,
+                        onAlbumClick = { album ->
+                            onNavigateToAlbumDetail(album.name, album.artist)
+                        },
+                        isRefreshing = isRefreshing,
+                        onRefresh = { viewModel.refresh() },
+                        scrollToTopTrigger = scrollToTopTrigger
+                    )
+                }
             }
         }
     }
