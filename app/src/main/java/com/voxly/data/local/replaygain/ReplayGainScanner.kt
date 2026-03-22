@@ -55,6 +55,26 @@ data class DecodeFailureInfo(
 )
 
 /**
+ * Logs detailed decode failure information.
+ */
+private fun logDecodeFailure(info: DecodeFailureInfo) {
+    val fileName = File(info.filePath).name
+    Logger.e(
+        buildString {
+            append("ReplayGain decode failed: ")
+            append("file=$fileName ")
+            append("errorType=${info.result.name} ")
+            append("mime=${info.mime ?: "unknown"} ")
+            append("sampleRate=${info.sampleRate} ")
+            append("channelCount=${info.channelCount} ")
+            append("fallbackLevel=${info.fallbackLevel}")
+        },
+        info.cause,
+        "ReplayGainScanner"
+    )
+}
+
+/**
  * ReplayGain scanner using Android's MediaExtractor for audio analysis.
  * Implements the EBU R128 loudness standard for accurate gain calculation.
  */
@@ -876,6 +896,13 @@ class ReplayGainScanner @Inject constructor(
             }
             val peak = stats.peak // Peak from UNFILTERED audio (foobar2000 behavior)
 
+            if (peak > 1.0f) {
+                Logger.w(
+                    "Peak clipping detected: peak=$peak (${peak * 100}% of max)",
+                    "ReplayGainScanner"
+                )
+            }
+
             // Calculate gain adjustment needed to reach target loudness level
             // Formula: gain_db = target_loudness - measured_loudness
             // where measured_loudness = 20 * log10(rms / reference)
@@ -890,8 +917,16 @@ class ReplayGainScanner @Inject constructor(
                 "ReplayGainScanner"
             )
 
+            val clampedTrackGain = gainDb.coerceIn(-50f, 50f)
+            if (clampedTrackGain != gainDb) {
+                Logger.w(
+                    "Track gain clamped from ${gainDb}dB to ${clampedTrackGain}dB",
+                    "ReplayGainScanner"
+                )
+            }
+
             ReplayGainInfo(
-                trackGain = gainDb,
+                trackGain = clampedTrackGain,
                 trackPeak = peak,
                 albumGain = null, // Album gain requires scanning all files first
                 albumPeak = null
@@ -928,7 +963,15 @@ class ReplayGainScanner @Inject constructor(
         // Calculate the 95th percentile index
         val percentileIndex = ((sortedRms.size - 1) * 0.95).toInt()
 
-        return sortedRms[percentileIndex]
+        val result = sortedRms[percentileIndex]
+        // After calculating result:
+        if (result > 100f || result < -100f) {
+            Logger.w(
+                "Suspicious gain value calculated: ${result}dB",
+                "ReplayGainScanner"
+            )
+        }
+        return result
     }
 
     private data class SampleStats(
