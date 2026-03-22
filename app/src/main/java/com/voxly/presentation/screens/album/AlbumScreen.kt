@@ -9,6 +9,9 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -160,6 +163,41 @@ private fun applyAlbumSort(
         }
         AlbumSortOption.YEAR_DESC -> albums.sortedByDescending { album ->
             album.files.mapNotNull { it.metadata.year }.maxOrNull() ?: Int.MIN_VALUE
+        }
+    }
+}
+
+@Composable
+internal fun AlbumSortMenu(
+    isExpanded: Boolean,
+    currentSortOption: AlbumSortOption,
+    onSortOptionChange: (AlbumSortOption) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Box(modifier = Modifier.fillMaxWidth()) {
+        DropdownMenu(
+            expanded = isExpanded,
+            onDismissRequest = onDismiss,
+            modifier = Modifier.align(Alignment.TopEnd)
+        ) {
+            AlbumSortOption.entries.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text(stringResource(option.labelResId())) },
+                    leadingIcon = if (option == currentSortOption) {
+                        {
+                            Icon(
+                                imageVector = Icons.Default.CheckCircle,
+                                contentDescription = stringResource(R.string.cd_selected),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    } else null,
+                    onClick = {
+                        onSortOptionChange(option)
+                        onDismiss()
+                    }
+                )
+            }
         }
     }
 }
