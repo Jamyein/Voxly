@@ -185,10 +185,12 @@
     <string name="file_sort_size_desc">Size (Large-Small)</string>
     <string name="file_sort_duration_desc">Duration (Long-Short)</string>
     <string name="album_sort_label">Sort albums</string>
-    <string name="album_sort_name_asc">Name (A-Z)</string>
-    <string name="album_sort_name_desc">Name (Z-A)</string>
-    <string name="album_sort_track_count_desc">Tracks (Most-Fewest)</string>
-    <string name="album_sort_year_desc">Year (Newest-Oldest)</string>
+    <string name="album_sort_name_asc">名称 ↑</string>
+    <string name="album_sort_name_desc">名称 ↓</string>
+    <string name="album_sort_track_count_desc">歌曲数量 ↓</string>
+    <string name="album_sort_track_count_asc">歌曲数量 ↑</string>
+    <string name="album_sort_year_desc">年份 ↓</string>
+    <string name="album_sort_year_asc">年份 ↑</string>
     <string name="artist_sort_label">Sort artists</string>
     <string name="artist_sort_name_asc">Name (A-Z)</string>
     <string name="artist_sort_name_desc">Name (Z-A)</string>
