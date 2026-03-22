@@ -94,6 +94,8 @@ import com.voxly.presentation.components.SegmentedClickableRow
 import com.voxly.presentation.components.SegmentedInfoRow
 import com.voxly.presentation.components.SegmentedSwitchRow
 import com.voxly.presentation.components.SettingsSection
+import com.voxly.presentation.components.SortDropdownMenu
+import com.voxly.presentation.components.SortMenuItem
 import com.voxly.presentation.viewmodel.SettingsViewModel
 import com.voxly.domain.model.DataSourceConfig
 import com.voxly.domain.model.DataSourceType
@@ -943,7 +945,6 @@ fun SettingsScreen(
         normalizeLanguageTag(it.languageTag) == normalizeLanguageTag(effectiveLanguageTag)
     } ?: languageOptions.first()
 
-    var appleCountryExpanded by remember { mutableStateOf(false) }
     val appleCountryOptions = remember {
         listOf(
             AppleCountryOption("us", R.string.settings_apple_country_us),
@@ -1049,38 +1050,44 @@ fun SettingsScreen(
                     title = stringResource(R.string.settings_language),
                     subtitle = stringResource(currentLanguageOption.labelResId),
                     trailingContent = {
-                        ExposedDropdownMenuBox(
+                        val arrowRotation by animateFloatAsState(
+                            targetValue = if (languageExpanded) 180f else 0f,
+                            animationSpec = ExpressiveMotion.MediumSpring,
+                            label = "language_dropdown_arrow"
+                        )
+                        SortDropdownMenu(
                             expanded = languageExpanded,
-                            onExpandedChange = { languageExpanded = it }
-                        ) {
-                            OutlinedTextField(
-                                value = stringResource(currentLanguageOption.labelResId),
-                                onValueChange = {},
-                                readOnly = true,
-                                singleLine = true,
-                                textStyle = MaterialTheme.typography.bodyMedium,
-                                trailingIcon = {
-                                    ExposedDropdownMenuDefaults.TrailingIcon(expanded = languageExpanded)
-                                },
-                                modifier = Modifier
-                                    .width(156.dp)
-                                    .menuAnchor(type = ExposedDropdownMenuAnchorType.PrimaryNotEditable)
-                            )
-
-                            ExposedDropdownMenu(
-                                expanded = languageExpanded,
-                                onDismissRequest = { languageExpanded = false }
-                            ) {
-                                languageOptions.forEach { option ->
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(option.labelResId)) },
-                                        onClick = {
-                                            viewModel.setLanguage(option.languageTag)
-                                            languageExpanded = false
-                                            activity?.recreate()
-                                        }
+                            onExpandedChange = { languageExpanded = it },
+                            anchor = {
+                                TextButton(
+                                    onClick = {},
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = stringResource(currentLanguageOption.labelResId),
+                                        style = MaterialTheme.typography.labelLarge
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.graphicsLayer { rotationZ = arrowRotation }
                                     )
                                 }
+                            }
+                        ) {
+                            languageOptions.forEach { option ->
+                                SortMenuItem(
+                                    option = option,
+                                    labelResId = option.labelResId,
+                                    currentSortOption = currentLanguageOption,
+                                    onSortOptionChange = { selected ->
+                                        viewModel.setLanguage(selected.languageTag)
+                                        languageExpanded = false
+                                        activity?.recreate()
+                                    },
+                                    onDismiss = { languageExpanded = false }
+                                )
                             }
                         }
                     },
