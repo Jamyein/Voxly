@@ -14,16 +14,7 @@ import com.voxly.core.util.Logger
 object ReplayGainFilter {
 
     // New validation constants
-    const val MAX_SAMPLE_VALUE = 2.0f // Allow some headroom beyond 1.0
     const val MIN_VALID_SAMPLES = 1000L
-
-    /**
-     * Validates samples before filter processing.
-     * @return true if samples are valid for processing
-     */
-    fun isValidSample(sample: Float): Boolean {
-        return sample.isFinite() && kotlin.math.abs(sample) <= MAX_SAMPLE_VALUE
-    }
 
     /**
      * Validates sample array before processing.
@@ -53,7 +44,7 @@ object ReplayGainFilter {
             )
         }
 
-        if (clippingCount > samples.size / 10) { // >10% clipping
+        if (clippingCount > samples.size * 0.1) { // >10% clipping
             return ValidationResult.Warning(
                 "$clippingCount clipping samples detected (>10%)"
             )
