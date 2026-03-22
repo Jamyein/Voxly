@@ -404,16 +404,18 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                 progress.currentFilePath.contains("EACCES") ->
                                     ReplayGainScanError.PermissionDenied(progress.currentFilePath)
                                 progress.currentFilePath.contains("audio track") ||
-                                progress.currentFilePath.contains("no audio") ->
+                                progress.currentFilePath.contains("no audio") ||
+                                progress.currentFilePath.contains("NO_AUDIO_TRACK") ->
                                     ReplayGainScanError.NoAudioTrack(progress.currentFilePath)
+                                progress.currentFilePath.contains("ALL_FALLBACKS_EXHAUSTED") ->
+                                    ReplayGainScanError.AllFallbacksFailed(progress.currentFilePath)
                                 progress.currentFilePath.contains("decode") ||
                                 progress.currentFilePath.contains("codec") ||
+                                progress.currentFilePath.contains("DECODER_INIT_FAILED") ||
                                 progress.currentFilePath.contains("fallback") ->
                                     ReplayGainScanError.DecodeFailed("解码失败", progress.currentFilePath)
-                                progress.message?.contains("fallback") == true ->
-                                    ReplayGainScanError.AllFallbacksFailed(progress.currentFilePath)
                                 else ->
-                                    ReplayGainScanError.Unknown(progress.message ?: "未知错误")
+                                    ReplayGainScanError.Unknown(progress.currentFilePath)
                             }
                             _replayGainScanError.value = error
                             _isScanningReplayGain.value = false
