@@ -21,6 +21,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteBuffer
+import java.nio.charset.StandardCharsets
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.math.log10
@@ -230,22 +231,41 @@ class ReplayGainScanner @Inject constructor(
                 return null
             }
 
+            // Verify WAVE format at bytes 8-11
+            if (bytes[8] != 0x57.toByte() || // W
+                bytes[9] != 0x41.toByte() || // A
+                bytes[10] != 0x56.toByte() || // V
+                bytes[11] != 0x45.toByte()) { // E
+                return null
+            }
+
+            // Check for 16-bit PCM in fmt chunk
+            // Read bits per sample from bytes 34-35 (standard WAV header layout)
+            if (bytes.size < 36) return null
+            val bitsPerSample = (bytes[35].toInt() and 0xFF) or ((bytes[34].toInt() and 0xFF) shl 8)
+            if (bitsPerSample != 16) {
+                Logger.w("Fallback WAV: only 16-bit PCM supported, found $bitsPerSample bits", "ReplayGainScanner")
+                return null
+            }
+
             // Find data chunk
             var dataOffset = 12
             var dataSize = 0L
-            while (dataOffset < bytes.size - 8) {
+            while (dataOffset + 8 <= bytes.size) {
                 val chunkId = bytes.slice(dataOffset until dataOffset + 4).toByteArray()
                 val chunkSize = (bytes[dataOffset + 4].toInt() and 0xFF) or
                                ((bytes[dataOffset + 5].toInt() and 0xFF) shl 8) or
                                ((bytes[dataOffset + 6].toInt() and 0xFF) shl 16) or
                                ((bytes[dataOffset + 7].toInt() and 0xFF) shl 24)
 
-                if (String(chunkId) == "data") {
+                if (String(chunkId, StandardCharsets.US_ASCII) == "data") {
                     dataSize = chunkSize
                     dataOffset += 8
                     break
                 }
-                dataOffset += 8 + chunkSize
+                // Handle WAV chunk padding: chunks are padded to 2-byte boundaries
+                val padding = if (chunkSize % 2 == 1) 1 else 0
+                dataOffset += 8 + chunkSize + padding
             }
 
             if (dataSize <= 0 || dataOffset >= bytes.size) return null
