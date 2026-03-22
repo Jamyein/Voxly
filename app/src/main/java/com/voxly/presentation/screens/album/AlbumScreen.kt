@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,7 +40,7 @@ import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.screens.filebrowser.AlbumTabContent
 import com.voxly.presentation.viewmodel.AlbumViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun AlbumScreen(
     outerPadding: PaddingValues = PaddingValues(),
@@ -89,7 +91,11 @@ fun AlbumScreen(
                 title = {
                     Text(
                         text = stringResource(R.string.nav_albums),
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.combinedClickable(
+                            onDoubleClick = { scrollToTopTrigger++ },
+                            onClick = {}
+                        )
                     )
                 },
                 scrollBehavior = scrollBehavior,

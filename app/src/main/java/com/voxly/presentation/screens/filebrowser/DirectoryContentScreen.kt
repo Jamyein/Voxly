@@ -35,6 +35,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.graphics.Color
@@ -156,15 +158,19 @@ fun DirectoryContentScreen(
                     if (isSelectionMode) {
                         Text("${selectedFiles.size} selected")
                     } else {
-                        Text(
-                            text = directoryName,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.combinedClickable(
-                                onClick = {},
-                                onDoubleClick = onScrollToTop
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .pointerInput(Unit) {
+                                    detectTapGestures(onDoubleTap = { onScrollToTop() })
+                                }
+                        ) {
+                            Text(
+                                text = directoryName,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
-                        )
+                        }
                     }
                 },
                 scrollBehavior = scrollBehavior,

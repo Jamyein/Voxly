@@ -100,7 +100,7 @@ import kotlin.math.abs
 /**
  * File browser screen for browsing and selecting audio files.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun FileBrowserScreen(
     outerPadding: PaddingValues = PaddingValues(),
@@ -324,6 +324,8 @@ fun FileBrowserScreen(
     }
 
 
+    val directoriesListState = rememberLazyListState()
+    val allAudiosListState = rememberLazyListState()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
@@ -353,7 +355,17 @@ fun FileBrowserScreen(
                     ) {
                         if (openedDirectory != null) {
                             TopAppBar(
-                                title = { Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path }) },
+                                title = {
+                                    Text(
+                                        text = openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path },
+                                        modifier = Modifier.combinedClickable(
+                                            onDoubleClick = {
+                                                coroutineScope.launch { listState.animateScrollToItem(0) }
+                                            },
+                                            onClick = {}
+                                        )
+                                    )
+                                },
                                 scrollBehavior = scrollBehavior,
                                 colors = TopAppBarDefaults.topAppBarColors(
                                     containerColor = MaterialTheme.colorScheme.surface,
@@ -397,7 +409,25 @@ fun FileBrowserScreen(
                             )
                         } else {
                             MediumTopAppBar(
-                                title = { Text(stringResource(R.string.nav_file_browser)) },
+                                title = {
+                                    Text(
+                                        text = stringResource(R.string.nav_file_browser),
+                                        modifier = Modifier.combinedClickable(
+                                            onDoubleClick = {
+                                                coroutineScope.launch {
+                                                    when {
+                                                        isDirectoryListLevel && selectedRootTab == RootTab.ALL ->
+                                                            allAudiosListState.animateScrollToItem(0)
+                                                        isDirectoryListLevel ->
+                                                            directoriesListState.animateScrollToItem(0)
+                                                        else -> listState.animateScrollToItem(0)
+                                                    }
+                                                }
+                                            },
+                                            onClick = {}
+                                        )
+                                    )
+                                },
                                 scrollBehavior = scrollBehavior,
                                 colors = TopAppBarDefaults.topAppBarColors(
                                     containerColor = MaterialTheme.colorScheme.surface,
@@ -493,10 +523,6 @@ fun FileBrowserScreen(
             if (isDirectoryListLevel) {
                 // Root directory - show TabRow with tabs
                 Column(modifier = Modifier.weight(1f)) {
-                    // States for scroll-to-top functionality
-                    val directoriesListState = rememberLazyListState()
-                    val allAudiosListState = rememberLazyListState()
-
                     // Conditional content based on selected root tab
                     if (selectedRootTab == RootTab.DIRECTORIES) {
                         DirectoryOverviewContent(

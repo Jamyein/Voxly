@@ -5,6 +5,8 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -23,6 +25,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,10 +35,11 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
+import kotlinx.coroutines.launch
 import com.voxly.presentation.screens.filebrowser.ArtistTabContent
 import com.voxly.presentation.viewmodel.ArtistViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun ArtistScreen(
     outerPadding: PaddingValues = PaddingValues(),
@@ -46,6 +50,7 @@ fun ArtistScreen(
     val artists by viewModel.artists.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val listState = rememberLazyListState()
+    val coroutineScope = rememberCoroutineScope()
 
     val readPermission = remember {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
@@ -80,7 +85,13 @@ fun ArtistScreen(
                 title = {
                     Text(
                         text = stringResource(R.string.tab_artists),
-                        style = MaterialTheme.typography.titleLarge
+                        style = MaterialTheme.typography.titleLarge,
+                        modifier = Modifier.combinedClickable(
+                            onDoubleClick = {
+                                coroutineScope.launch { listState.animateScrollToItem(0) }
+                            },
+                            onClick = {}
+                        )
                     )
                 },
                 scrollBehavior = scrollBehavior,
