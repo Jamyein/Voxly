@@ -18,6 +18,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
@@ -203,6 +204,7 @@ fun MetadataEditorScreen(
     Scaffold(
         modifier = Modifier
             .nestedScroll(scrollBehavior.nestedScrollConnection)
+            .nestedScroll(floatingToolbarScrollBehavior)
             .graphicsLayer {
                 val scale = 1f - (animatedBackProgress * 0.05f)
                 scaleX = scale
@@ -284,7 +286,7 @@ fun MetadataEditorScreen(
                             audioFile = state.audioFile,
                             bottomPadding = innerPadding.calculateBottomPadding() + 80.dp, // Extra space for toolbar
                             scrollState = scrollState,
-                            nestedScrollModifier = Modifier.nestedScroll(floatingToolbarScrollBehavior),
+                            nestedScrollModifier = Modifier,
                             modifiedFields = modifiedFields,
                             onTitleChange = { viewModel.updateMetadataField(MetadataField.TITLE, it) },
                             onArtistChange = { viewModel.updateMetadataField(MetadataField.ARTIST, it) },
@@ -326,13 +328,15 @@ fun MetadataEditorScreen(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(
-                                    bottom = innerPadding.calculateBottomPadding() + 8.dp,
                                     start = 16.dp,
                                     end = 16.dp
                                 )
                         ) {
                             HorizontalFloatingToolbar(
                                 expanded = true,
+                                modifier = Modifier
+                                    .navigationBarsPadding()
+                                    .padding(bottom = 8.dp),
                                 scrollBehavior = floatingToolbarScrollBehavior,
                                 colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
                             ) {

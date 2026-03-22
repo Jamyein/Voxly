@@ -150,7 +150,9 @@ fun DirectoryContentScreen(
     val batchError by viewModel.batchError.collectAsState()
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = Modifier
+            .nestedScroll(scrollBehavior.nestedScrollConnection)
+            .nestedScroll(floatingToolbarScrollBehavior),
         topBar = {
             LargeTopAppBar(
                 title = {
@@ -294,7 +296,7 @@ fun DirectoryContentScreen(
             AudioFileListWithIndexer(
                 files = displayedFiles,
                 listState = listState,
-                modifier = Modifier.nestedScroll(floatingToolbarScrollBehavior),
+                modifier = Modifier,
                 selectedFiles = selectedFiles,
                 onFileClick = { audioFile ->
                     if (isSelectionMode) {
