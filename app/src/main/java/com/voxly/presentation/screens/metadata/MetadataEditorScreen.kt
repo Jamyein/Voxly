@@ -51,6 +51,7 @@ import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.MetadataField
 import com.voxly.presentation.viewmodel.EditHistoryViewModel
+import com.voxly.presentation.viewmodel.ReplayGainScanError
 
 /**
  * Metadata editor screen for viewing and editing audio file metadata.
@@ -95,6 +96,7 @@ fun MetadataEditorScreen(
     val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsState()
     val pendingReplayGainInfo by viewModel.pendingReplayGainInfo.collectAsState()
     var currentReplayGainInfo by remember { mutableStateOf<ReplayGainInfo?>(null) }
+    val replayGainScanError by viewModel.replayGainScanError.collectAsState()
 
     // EditHistory state - filter to current file only
     var showEditHistorySheet by remember { mutableStateOf(false) }
@@ -315,7 +317,8 @@ fun MetadataEditorScreen(
                                 currentReplayGainInfo = null
                             },
                             isScanningReplayGain = isScanningReplayGain,
-                            replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo
+                            replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo,
+                            replayGainScanError = replayGainScanError
                         )
 
                         // Toolbar at bottom, above content
@@ -599,6 +602,7 @@ private fun MetadataFormContent(
     onClearReplayGain: () -> Unit = {},
     isScanningReplayGain: Boolean = false,
     replayGainInfo: ReplayGainInfo? = null,
+    replayGainScanError: ReplayGainScanError? = null,
     bottomPadding: Dp = 0.dp,
     scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     nestedScrollModifier: Modifier = Modifier
@@ -793,7 +797,8 @@ private fun MetadataFormContent(
             replayGainInfo = replayGainInfo,
             isScanning = isScanningReplayGain,
             onScan = onScanReplayGain,
-            onClear = onClearReplayGain
+            onClear = onClearReplayGain,
+            error = replayGainScanError
         )
     }
 }
