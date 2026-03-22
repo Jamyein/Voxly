@@ -247,7 +247,7 @@ class ReplayGainScanner @Inject constructor(
                                ((bytes[dataOffset + 7].toInt() and 0xFF) shl 24)
 
                 if (String(chunkId, StandardCharsets.US_ASCII) == "data") {
-                    dataSize = chunkSize
+                    dataSize = chunkSize.toLong()
                     dataOffset += 8
                     break
                 }
@@ -842,7 +842,7 @@ class ReplayGainScanner @Inject constructor(
                         }
 
                         // All fallbacks exhausted
-                        Logger.e("All fallbacks exhausted for $filePath", "ReplayGainScanner")
+                        Logger.e("All fallbacks exhausted for $filePath", null, "ReplayGainScanner")
                         extractor.release()
                         return@withContext null
                     }

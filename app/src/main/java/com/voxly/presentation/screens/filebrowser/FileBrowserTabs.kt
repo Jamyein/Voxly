@@ -137,10 +137,11 @@ internal fun AlbumYearGroupedContent(
     onAlbumClick: (AlbumGroup) -> Unit,
     isDescending: Boolean = false
 ) {
-    // Group albums by year
+    // Group albums by year - use minOrNull to match applyAlbumSort YEAR_ASC logic
+    // This ensures consistency: albums sorted by earliest year are also grouped by earliest year
     val albumsByYear = remember(albums, isDescending) {
         albums.groupBy { album ->
-            album.files.mapNotNull { it.metadata.year?.toIntOrNull() }.firstOrNull()
+            album.files.mapNotNull { it.metadata.year?.toIntOrNull() }.minOrNull()
                 ?: 0 // Unknown year
         }.toSortedMap(if (isDescending) compareByDescending { it } else compareBy { it })
     }

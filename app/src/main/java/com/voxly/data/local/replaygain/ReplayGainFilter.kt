@@ -184,7 +184,7 @@ object ReplayGainFilter {
     fun processFilters(samples: FloatArray, channelCount: Int): FloatArray {
         when (val validation = validateSamples(samples)) {
             is ValidationResult.Invalid -> {
-                Logger.e("Filter validation failed: ${validation.message}", "ReplayGainFilter")
+                Logger.e("Filter validation failed: ${validation.message}", null, "ReplayGainFilter")
                 return samples // Return unfiltered on invalid input
             }
             is ValidationResult.Warning -> {
