@@ -73,15 +73,13 @@ jobs:
                 if [ -z "${TEMP_MAP[$type]+x}" ]; then
                   TEMP_MAP[$type]=""
                 fi
-                TEMP_MAP[$type]+="- ${msg}
-"
+                TEMP_MAP[$type]+="- ${msg}\n"
                 matched=true
                 break
               fi
             done
             if [ "$matched" = false ]; then
-              OTHERS+="- ${msg}
-"
+              OTHERS+="- ${msg}\n"
             fi
           done < <(git log --pretty=format:"%H %s" $COMMIT_RANGE)
 
