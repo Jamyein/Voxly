@@ -18,6 +18,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
@@ -26,9 +27,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
-import androidx.compose.material3.HorizontalFloatingToolbar
+import androidx.compose.material3.FloatingToolbarExitDirection
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -370,72 +370,77 @@ fun MetadataEditorScreen(
                             replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo
                         )
 
-                        // FloatingToolbar at bottom, above content
-                        @OptIn(ExperimentalMaterial3ExpressiveApi::class)
-                        HorizontalFloatingToolbar(
-                            expanded = true,
-                            scrollBehavior = floatingToolbarScrollBehavior,
+                        // Toolbar at bottom, above content
+                        Surface(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
-                                .padding(bottom = innerPadding.calculateBottomPadding() + 8.dp),
-                            colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
+                                .padding(
+                                    bottom = innerPadding.calculateBottomPadding() + 8.dp,
+                                    start = 16.dp,
+                                    end = 16.dp
+                                ),
+                            shape = RoundedCornerShape(28.dp),
+                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                            tonalElevation = 3.dp
                         ) {
-                            // Lyrics Selection (only show if there are lyrics)
-                            val hasLyrics = state.editedMetadata.lyrics?.isNotBlank() == true
-                            if (hasLyrics) {
-                                SmallFloatingActionButton(
-                                    onClick = {
-                                        onNavigateToLyricsSelector(
-                                            state.editedMetadata.lyrics ?: "",
-                                            state.editedMetadata.getDisplayTitle(state.audioFile.name ?: "") ?: "",
-                                            state.editedMetadata.artist ?: "",
-                                            state.editedMetadata.album ?: "",
-                                            state.editedMetadata.albumArt
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                // Lyrics Selection (only show if there are lyrics)
+                                val hasLyrics = state.editedMetadata.lyrics?.isNotBlank() == true
+                                if (hasLyrics) {
+                                    IconButton(
+                                        onClick = {
+                                            onNavigateToLyricsSelector(
+                                                state.editedMetadata.lyrics ?: "",
+                                                state.editedMetadata.getDisplayTitle(state.audioFile.name ?: "") ?: "",
+                                                state.editedMetadata.artist ?: "",
+                                                state.editedMetadata.album ?: "",
+                                                state.editedMetadata.albumArt
+                                            )
+                                        }
+                                    ) {
+                                        Icon(
+                                            Icons.Default.Lyrics,
+                                            contentDescription = stringResource(R.string.select_lyrics_for_poster)
                                         )
-                                    },
-                                    containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                                ) {
-                                    Icon(
-                                        Icons.Default.Lyrics,
-                                        contentDescription = stringResource(R.string.select_lyrics_for_poster)
-                                    )
-                                }
-                            }
-
-                            // Search Online Lyrics
-                            SmallFloatingActionButton(
-                                onClick = { onNavigateToOnlineLyricsSearch() },
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
-                            ) {
-                                Icon(
-                                    painter = appIconPainter(AppIcon.MusicNote),
-                                    contentDescription = stringResource(R.string.cd_online_lyrics)
-                                )
-                            }
-
-                            // Fetch Online Metadata
-                            SmallFloatingActionButton(
-                                onClick = { onNavigateToOnlineMetadata() },
-                                containerColor = MaterialTheme.colorScheme.tertiaryContainer
-                            ) {
-                                Icon(
-                                    painter = appIconPainter(AppIcon.CloudDownload),
-                                    contentDescription = stringResource(R.string.cd_online_metadata)
-                                )
-                            }
-
-                            // Save
-                            SmallFloatingActionButton(
-                                onClick = {
-                                    if (hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving) {
-                                        viewModel.saveMetadata()
                                     }
                                 }
-                            ) {
-                                Icon(
-                                    Icons.Default.Save,
-                                    contentDescription = stringResource(R.string.cd_save)
-                                )
+
+                                // Search Online Lyrics
+                                IconButton(
+                                    onClick = { onNavigateToOnlineLyricsSearch() }
+                                ) {
+                                    Icon(
+                                        painter = appIconPainter(AppIcon.MusicNote),
+                                        contentDescription = stringResource(R.string.cd_online_lyrics)
+                                    )
+                                }
+
+                                // Fetch Online Metadata
+                                IconButton(
+                                    onClick = { onNavigateToOnlineMetadata() }
+                                ) {
+                                    Icon(
+                                        painter = appIconPainter(AppIcon.CloudDownload),
+                                        contentDescription = stringResource(R.string.cd_online_metadata)
+                                    )
+                                }
+
+                                // Save
+                                IconButton(
+                                    onClick = {
+                                        if (hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving) {
+                                            viewModel.saveMetadata()
+                                        }
+                                    }
+                                ) {
+                                    Icon(
+                                        Icons.Default.Save,
+                                        contentDescription = stringResource(R.string.cd_save)
+                                    )
+                                }
                             }
                         }
                     }
