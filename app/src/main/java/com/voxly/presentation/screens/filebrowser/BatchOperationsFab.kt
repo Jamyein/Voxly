@@ -30,7 +30,7 @@ import com.voxly.presentation.icons.appIconPainter
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun BatchOperationsToolbar(
-    isSelectionMode: Boolean,
+    expanded: Boolean,
     scrollBehavior: FloatingToolbarScrollBehavior,
     modifier: Modifier = Modifier,
     onOnlineMetadata: () -> Unit,
@@ -43,9 +43,9 @@ fun BatchOperationsToolbar(
     // Create and remember the floating toolbar state
     val floatingToolbarState = rememberFloatingToolbarState()
 
-    // Listen to selection mode changes and auto expand/collapse
-    LaunchedEffect(isSelectionMode) {
-        if (isSelectionMode) {
+    // Listen to expanded state changes
+    LaunchedEffect(expanded) {
+        if (expanded) {
             floatingToolbarState.expand()
         } else {
             floatingToolbarState.collapse()

@@ -330,10 +330,10 @@ fun DirectoryContentScreen(
             )
         }
 
-        // FloatingToolbar for batch operations - visible in both modes
-        if (!isBatchProcessing && files.isNotEmpty()) {
+        // FloatingToolbar for batch operations - only show in selection mode
+        if (!isBatchProcessing && files.isNotEmpty() && isSelectionMode) {
             BatchOperationsToolbar(
-                isSelectionMode = isSelectionMode,
+                expanded = true,
                 scrollBehavior = floatingToolbarScrollBehavior,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
