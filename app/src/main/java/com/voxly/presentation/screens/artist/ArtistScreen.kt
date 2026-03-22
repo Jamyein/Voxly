@@ -5,8 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -30,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
@@ -39,7 +39,7 @@ import kotlinx.coroutines.launch
 import com.voxly.presentation.screens.filebrowser.ArtistTabContent
 import com.voxly.presentation.viewmodel.ArtistViewModel
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ArtistScreen(
     outerPadding: PaddingValues = PaddingValues(),
@@ -83,16 +83,20 @@ fun ArtistScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = stringResource(R.string.tab_artists),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.combinedClickable(
-                            onDoubleClick = {
-                                coroutineScope.launch { listState.animateScrollToItem(0) }
-                            },
-                            onClick = {}
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .pointerInput(Unit) {
+                                detectTapGestures(onDoubleTap = {
+                                    coroutineScope.launch { listState.animateScrollToItem(0) }
+                                })
+                            }
+                    ) {
+                        Text(
+                            text = stringResource(R.string.tab_artists),
+                            style = MaterialTheme.typography.titleLarge
                         )
-                    )
+                    }
                 },
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(

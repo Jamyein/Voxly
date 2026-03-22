@@ -35,6 +35,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
@@ -100,7 +102,7 @@ import kotlin.math.abs
 /**
  * File browser screen for browsing and selecting audio files.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FileBrowserScreen(
     outerPadding: PaddingValues = PaddingValues(),
@@ -356,15 +358,17 @@ fun FileBrowserScreen(
                         if (openedDirectory != null) {
                             TopAppBar(
                                 title = {
-                                    Text(
-                                        text = openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path },
-                                        modifier = Modifier.combinedClickable(
-                                            onDoubleClick = {
-                                                coroutineScope.launch { listState.animateScrollToItem(0) }
-                                            },
-                                            onClick = {}
-                                        )
-                                    )
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .pointerInput(Unit) {
+                                                detectTapGestures(onDoubleTap = {
+                                                    coroutineScope.launch { listState.animateScrollToItem(0) }
+                                                })
+                                            }
+                                    ) {
+                                        Text(openedDirectory.path.substringAfterLast('/').ifBlank { openedDirectory.path })
+                                    }
                                 },
                                 scrollBehavior = scrollBehavior,
                                 colors = TopAppBarDefaults.topAppBarColors(
@@ -410,23 +414,25 @@ fun FileBrowserScreen(
                         } else {
                             MediumTopAppBar(
                                 title = {
-                                    Text(
-                                        text = stringResource(R.string.nav_file_browser),
-                                        modifier = Modifier.combinedClickable(
-                                            onDoubleClick = {
-                                                coroutineScope.launch {
-                                                    when {
-                                                        isDirectoryListLevel && selectedRootTab == RootTab.ALL ->
-                                                            allAudiosListState.animateScrollToItem(0)
-                                                        isDirectoryListLevel ->
-                                                            directoriesListState.animateScrollToItem(0)
-                                                        else -> listState.animateScrollToItem(0)
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .pointerInput(Unit) {
+                                                detectTapGestures(onDoubleTap = {
+                                                    coroutineScope.launch {
+                                                        when {
+                                                            isDirectoryListLevel && selectedRootTab == RootTab.ALL ->
+                                                                allAudiosListState.animateScrollToItem(0)
+                                                            isDirectoryListLevel ->
+                                                                directoriesListState.animateScrollToItem(0)
+                                                            else -> listState.animateScrollToItem(0)
+                                                        }
                                                     }
-                                                }
-                                            },
-                                            onClick = {}
-                                        )
-                                    )
+                                                })
+                                            }
+                                    ) {
+                                        Text(stringResource(R.string.nav_file_browser))
+                                    }
                                 },
                                 scrollBehavior = scrollBehavior,
                                 colors = TopAppBarDefaults.topAppBarColors(

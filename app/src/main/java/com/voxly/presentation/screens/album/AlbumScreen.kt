@@ -5,8 +5,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -29,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
@@ -40,7 +40,7 @@ import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.screens.filebrowser.AlbumTabContent
 import com.voxly.presentation.viewmodel.AlbumViewModel
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumScreen(
     outerPadding: PaddingValues = PaddingValues(),
@@ -89,14 +89,18 @@ fun AlbumScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = stringResource(R.string.nav_albums),
-                        style = MaterialTheme.typography.titleLarge,
-                        modifier = Modifier.combinedClickable(
-                            onDoubleClick = { scrollToTopTrigger++ },
-                            onClick = {}
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .pointerInput(Unit) {
+                                detectTapGestures(onDoubleTap = { scrollToTopTrigger++ })
+                            }
+                    ) {
+                        Text(
+                            text = stringResource(R.string.nav_albums),
+                            style = MaterialTheme.typography.titleLarge
                         )
-                    )
+                    }
                 },
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
