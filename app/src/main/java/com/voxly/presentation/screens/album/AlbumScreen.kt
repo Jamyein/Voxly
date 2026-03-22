@@ -153,7 +153,8 @@ fun AlbumScreen(
                         },
                         isRefreshing = isRefreshing,
                         onRefresh = { viewModel.refresh() },
-                        scrollToTopTrigger = scrollToTopTrigger
+                        scrollToTopTrigger = scrollToTopTrigger,
+                        sortOption = AlbumSortOption.valueOf(sortOption)
                     )
                 }
             }

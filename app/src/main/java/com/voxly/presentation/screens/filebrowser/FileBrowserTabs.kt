@@ -33,8 +33,10 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -65,7 +67,8 @@ internal fun AlbumTabContent(
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     listState: LazyListState? = null,
-    scrollToTopTrigger: Int = 0
+    scrollToTopTrigger: Int = 0,
+    sortOption: com.voxly.presentation.screens.album.AlbumSortOption? = null
 ) {
     // Use key() to force recomposition when scrollToTopTrigger changes (for scroll to top effect)
     key(scrollToTopTrigger) {
@@ -93,28 +96,168 @@ internal fun AlbumTabContent(
                     )
                 }
             } else {
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(
-                        count = albums.size,
-                        key = { index -> albums[index].name }
-                    ) { index ->
-                        val album = albums[index]
-                        AlbumGridItem(
-                            album = album,
-                            onClick = { onAlbumClick(album) }
-                        )
+                // Use grouped list view when sorting by year
+                val isYearSort = sortOption == com.voxly.presentation.screens.album.AlbumSortOption.YEAR_ASC ||
+                        sortOption == com.voxly.presentation.screens.album.AlbumSortOption.YEAR_DESC
+                if (isYearSort) {
+                    AlbumYearGroupedContent(
+                        albums = albums,
+                        onAlbumClick = onAlbumClick,
+                        isDescending = sortOption == com.voxly.presentation.screens.album.AlbumSortOption.YEAR_DESC
+                    )
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            count = albums.size,
+                            key = { index -> albums[index].name }
+                        ) { index ->
+                            val album = albums[index]
+                            AlbumGridItem(
+                                album = album,
+                                onClick = { onAlbumClick(album) }
+                            )
+                        }
                     }
                 }
             }
         }
     }
 }
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun AlbumYearGroupedContent(
+    albums: List<AlbumGroup>,
+    onAlbumClick: (AlbumGroup) -> Unit,
+    isDescending: Boolean = false
+) {
+    // Group albums by year
+    val albumsByYear = remember(albums, isDescending) {
+        albums.groupBy { album ->
+            album.files.mapNotNull { it.metadata.year?.toIntOrNull() }.firstOrNull()
+                ?: 0 // Unknown year
+        }.toSortedMap(if (isDescending) compareByDescending { it } else compareBy { it })
+    }
+
+    // Build a flat list with year groups
+    val yearGroups = remember(albumsByYear) {
+        albumsByYear.map { (year, yearAlbums) ->
+            YearGroup(year, yearAlbums)
+        }
+    }
+
+    LazyColumn(
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        yearGroups.forEach { yearGroup ->
+            // Year header - normal title style (like settings page)
+            item(key = "header_${yearGroup.year}") {
+                Text(
+                    text = if (yearGroup.year == 0) "N/A" else yearGroup.year.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                )
+            }
+
+            // Album items in this year using SegmentedListItem
+            items(
+                count = yearGroup.albums.size,
+                key = { index -> "album_${yearGroup.year}_${yearGroup.albums[index].name}" }
+            ) { albumIndex ->
+                val album = yearGroup.albums[albumIndex]
+                SegmentedListItem(
+                    onClick = { onAlbumClick(album) },
+                    shapes = ListItemDefaults.segmentedShapes(
+                        index = albumIndex,
+                        count = yearGroup.albums.size
+                    ),
+                    colors = ListItemDefaults.segmentedColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                    ),
+                    leadingContent = {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(MaterialTheme.shapes.small),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val coverFile = album.files.firstOrNull {
+                                it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+                            } ?: album.files.firstOrNull()
+                            com.voxly.presentation.components.AlbumArtImage(
+                                filePath = coverFile?.path,
+                                mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
+                                contentDescription = null,
+                                size = 40.dp,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
+                                Surface(
+                                    modifier = Modifier.fillMaxSize(),
+                                    shape = MaterialTheme.shapes.small,
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Album,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    },
+                    supportingContent = {
+                        Column {
+                            Text(
+                                text = album.name,
+                                style = MaterialTheme.typography.bodyMedium,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Text(
+                                text = album.artist ?: "",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    },
+                    trailingContent = {
+                        Text(
+                            text = stringResource(R.string.track_count, album.files.size),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.outline
+                        )
+                    },
+                    modifier = Modifier.fillMaxWidth(),
+                    content = {}
+                )
+            }
+
+            // Spacer between year groups (16dp)
+            item(key = "spacer_${yearGroup.year}") {
+                Spacer(modifier = Modifier.height(12.dp))
+            }
+        }
+    }
+}
+
+private data class YearGroup(
+    val year: Int,
+    val albums: List<AlbumGroup>
+)
 
 @Composable
 internal fun ArtistTabContent(
