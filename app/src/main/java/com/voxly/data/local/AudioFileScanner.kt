@@ -110,6 +110,7 @@ class AudioFileScanner @Inject constructor(
         private val PROJECTION = FAST_PROJECTION
 
         private val AUDIO_EXTENSIONS = setOf("mp3", "flac", "ogg", "m4a", "mp4", "wma", "wav", "ape", "opus")
+        private val YEAR_REGEX = Regex("""\d{4}""")
     }
 
     /**
@@ -181,11 +182,12 @@ class AudioFileScanner @Inject constructor(
                     val albumId = it.getLong(albumIdColumn).takeIf { value -> value > 0L }
                     // Parse MediaStore TRACK field: trackNumber | (totalTracks << 16)
                     val (parsedTrack, parsedTotal) = parseTrackField(it.getInt(trackColumn))
+                    val resolvedYear = resolveYearValue(filePath, it.getString(yearColumn))
                     val metadata = com.voxly.domain.model.AudioMetadata(
                         title = it.getString(titleColumn)?.takeIf { value -> value.isNotBlank() },
                         artist = it.getString(artistColumn)?.takeIf { value -> value.isNotBlank() },
                         album = it.getString(albumColumn)?.takeIf { value -> value.isNotBlank() },
-                        year = it.getString(yearColumn)?.takeIf { value -> value.isNotBlank() },
+                        year = resolvedYear,
                         trackNumber = parsedTrack,
                         totalTracks = parsedTotal,
                         albumArt = null,
@@ -259,6 +261,18 @@ class AudioFileScanner @Inject constructor(
             Timber.w(TAG, "Failed to load detailed metadata: $filePath", e)
             null
         }
+    }
+
+    private suspend fun resolveYearValue(filePath: String, rawYear: String?): String? {
+        extractYearValue(rawYear)?.let { return it }
+        val detailedYear = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)?.year
+        return extractYearValue(detailedYear)
+    }
+
+    private fun extractYearValue(rawYear: String?): String? {
+        val normalized = rawYear?.trim().orEmpty()
+        if (normalized.isEmpty()) return null
+        return YEAR_REGEX.find(normalized)?.value
     }
 
     /**
@@ -985,13 +999,14 @@ class AudioFileScanner @Inject constructor(
                     
                     // Parse MediaStore TRACK field: trackNumber | (totalTracks << 16)
                     val (parsedTrack, parsedTotal) = parseTrackField(it.getInt(trackColumn))
+                    val resolvedYear = resolveYearValue(filePath, it.getString(yearColumn))
                     
                     // FAST: Use MediaStore data directly - no file parsing
                     val metadata = com.voxly.domain.model.AudioMetadata(
                         title = it.getString(titleColumn)?.takeIf { s -> s.isNotBlank() },
                         artist = it.getString(artistColumn)?.takeIf { s -> s.isNotBlank() },
                         album = it.getString(albumColumn)?.takeIf { s -> s.isNotBlank() },
-                        year = it.getString(yearColumn)?.takeIf { s -> s.isNotBlank() },
+                        year = resolvedYear,
                         trackNumber = parsedTrack,
                         totalTracks = parsedTotal,
                         // Album art URI is built from albumId - no bytes loaded

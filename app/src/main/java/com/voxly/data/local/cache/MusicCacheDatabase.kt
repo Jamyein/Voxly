@@ -84,6 +84,14 @@ class MusicCacheDatabaseProvider @Inject constructor(
 
     fun getDatabase(): MusicCacheDatabase {
         return instance ?: synchronized(this) {
+            val storedDataFormatVersion = prefs.getInt(KEY_DATA_FORMAT_VERSION, 1)
+            if (storedDataFormatVersion < CURRENT_DATA_FORMAT_VERSION) {
+                instance?.close()
+                instance = null
+                context.deleteDatabase(MusicCacheDatabase.DATABASE_NAME)
+                prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
+            }
+
             val builder = Room.databaseBuilder(
                 context.applicationContext,
                 MusicCacheDatabase::class.java,
@@ -99,12 +107,8 @@ class MusicCacheDatabaseProvider @Inject constructor(
                     }
                 })
 
-            // Conditional destructive migration: only when data format version is old
-            if (prefs.getInt(KEY_DATA_FORMAT_VERSION, 1) < CURRENT_DATA_FORMAT_VERSION) {
-                builder.fallbackToDestructiveMigration(dropAllTables = true)
-            }
-
             val newInstance = builder.build()
+            prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
             instance = newInstance
             newInstance
         }
@@ -120,12 +124,12 @@ class MusicCacheDatabaseProvider @Inject constructor(
      */
     suspend fun clearAllData() {
         getDatabase().clearAllTables()
-        prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, 1).apply()
+        prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
     }
 
     companion object {
         private const val PREFS_NAME = "music_cache_meta"
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
-        private const val CURRENT_DATA_FORMAT_VERSION = 2
+        private const val CURRENT_DATA_FORMAT_VERSION = 3
     }
 }
