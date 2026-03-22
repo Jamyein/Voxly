@@ -49,7 +49,7 @@ data class DecodeFailureInfo(
     val mime: String?,
     val sampleRate: Int,
     val channelCount: Int,
-    val fallbackLevel: Int,
+    val fallbackLevel: Int, // 0 = no fallback attempted, 1 = Level 1 (retry), 2 = Level 2 (raw PCM), 3 = Level 3 (estimation)
     val cause: Throwable?
 )
 
