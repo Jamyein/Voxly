@@ -31,6 +31,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
+import com.voxly.core.util.SortUtil
+import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.screens.filebrowser.AlbumTabContent
 import com.voxly.presentation.viewmodel.AlbumViewModel
 
@@ -118,6 +120,46 @@ fun AlbumScreen(
                     scrollToTopTrigger = scrollToTopTrigger
                 )
             }
+        }
+    }
+}
+
+internal enum class AlbumSortOption {
+    NAME_ASC,
+    NAME_DESC,
+    TRACK_COUNT_ASC,
+    TRACK_COUNT_DESC,
+    YEAR_ASC,
+    YEAR_DESC
+}
+
+private fun AlbumSortOption.labelResId(): Int = when (this) {
+    AlbumSortOption.NAME_ASC -> R.string.album_sort_name_asc
+    AlbumSortOption.NAME_DESC -> R.string.album_sort_name_desc
+    AlbumSortOption.TRACK_COUNT_ASC -> R.string.album_sort_track_count_asc
+    AlbumSortOption.TRACK_COUNT_DESC -> R.string.album_sort_track_count_desc
+    AlbumSortOption.YEAR_ASC -> R.string.album_sort_year_asc
+    AlbumSortOption.YEAR_DESC -> R.string.album_sort_year_desc
+}
+
+private fun applyAlbumSort(
+    albums: List<AlbumGroup>,
+    sortOption: AlbumSortOption
+): List<AlbumGroup> {
+    return when (sortOption) {
+        AlbumSortOption.NAME_ASC -> albums.sortedWith(
+            compareBy { SortUtil.toSortablePinyin(it.name) }
+        )
+        AlbumSortOption.NAME_DESC -> albums.sortedWith(
+            compareByDescending { SortUtil.toSortablePinyin(it.name) }
+        )
+        AlbumSortOption.TRACK_COUNT_ASC -> albums.sortedBy { it.files.size }
+        AlbumSortOption.TRACK_COUNT_DESC -> albums.sortedByDescending { it.files.size }
+        AlbumSortOption.YEAR_ASC -> albums.sortedBy { album ->
+            album.files.mapNotNull { it.metadata.year }.minOrNull() ?: Int.MAX_VALUE
+        }
+        AlbumSortOption.YEAR_DESC -> albums.sortedByDescending { album ->
+            album.files.mapNotNull { it.metadata.year }.maxOrNull() ?: Int.MIN_VALUE
         }
     }
 }
