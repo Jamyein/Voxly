@@ -217,10 +217,29 @@ class LibraryViewModel @Inject constructor(
                 syncSelectedDirectoriesFromStorage()
 
                 if (_selectedDirectories.value.isNotEmpty()) {
+                    if (!forceRefresh && !isIncremental) {
+                        val cachedDirectoryFiles = _directoryFiles.value
+                        val hasAllDirectoryEntries = _selectedDirectories.value.all { selected ->
+                            selected.uri in cachedDirectoryFiles
+                        }
+                        if (hasAllDirectoryEntries) {
+                            val mergedFiles = cachedDirectoryFiles.values.flatten().distinctBy { it.path }
+                            _uiState.value = if (mergedFiles.isEmpty()) {
+                                FileBrowserUiState.Empty
+                            } else {
+                                FileBrowserUiState.Success(
+                                    files = mergedFiles,
+                                    selectedCount = _selectedFiles.value.size
+                                )
+                            }
+                            return@launch
+                        }
+                    }
+
                     if (isIncremental) {
                         scanSelectedDirectoriesIncremental(_selectedDirectories.value)
                     } else {
-                        scanSelectedDirectories(_selectedDirectories.value, forceRefresh = true)
+                        scanSelectedDirectoriesIncremental(_selectedDirectories.value)
                     }
                     return@launch
                 }
@@ -439,11 +458,20 @@ class LibraryViewModel @Inject constructor(
             path = filePath
         )).distinctBy { it.uri }
 
+        val alreadyLoaded = uriString in _directoryFiles.value || uriString in _directoryLoadingState.value
+        if (updatedDirectories.size == _selectedDirectories.value.size && alreadyLoaded) {
+            return
+        }
+
         _selectedDirectories.value = updatedDirectories
         persistSelectedDirectories(updatedDirectories)
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            scanSelectedDirectories(updatedDirectories)
+            if (alreadyLoaded) {
+                scanSelectedDirectoriesIncremental(updatedDirectories)
+            } else {
+                scanSelectedDirectories(updatedDirectories)
+            }
         }
     }
 

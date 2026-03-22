@@ -182,7 +182,7 @@ class AudioFileScanner @Inject constructor(
                     val albumId = it.getLong(albumIdColumn).takeIf { value -> value > 0L }
                     // Parse MediaStore TRACK field: trackNumber | (totalTracks << 16)
                     val (parsedTrack, parsedTotal) = parseTrackField(it.getInt(trackColumn))
-                    val resolvedYear = resolveYearValue(filePath, it.getString(yearColumn))
+                    val resolvedYear = resolveYearValue(it.getString(yearColumn))
                     val metadata = com.voxly.domain.model.AudioMetadata(
                         title = it.getString(titleColumn)?.takeIf { value -> value.isNotBlank() },
                         artist = it.getString(artistColumn)?.takeIf { value -> value.isNotBlank() },
@@ -263,10 +263,8 @@ class AudioFileScanner @Inject constructor(
         }
     }
 
-    private suspend fun resolveYearValue(filePath: String, rawYear: String?): String? {
-        extractYearValue(rawYear)?.let { return it }
-        val detailedYear = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)?.year
-        return extractYearValue(detailedYear)
+    private fun resolveYearValue(rawYear: String?): String? {
+        return extractYearValue(rawYear)
     }
 
     private fun extractYearValue(rawYear: String?): String? {
@@ -999,7 +997,7 @@ class AudioFileScanner @Inject constructor(
                     
                     // Parse MediaStore TRACK field: trackNumber | (totalTracks << 16)
                     val (parsedTrack, parsedTotal) = parseTrackField(it.getInt(trackColumn))
-                    val resolvedYear = resolveYearValue(filePath, it.getString(yearColumn))
+                    val resolvedYear = resolveYearValue(it.getString(yearColumn))
                     
                     // FAST: Use MediaStore data directly - no file parsing
                     val metadata = com.voxly.domain.model.AudioMetadata(
