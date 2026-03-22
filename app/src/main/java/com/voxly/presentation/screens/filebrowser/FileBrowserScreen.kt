@@ -378,16 +378,19 @@ fun FileBrowserScreen(
                                             contentDescription = stringResource(R.string.cd_search)
                                         )
                                     }
-                                    IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                                            contentDescription = stringResource(R.string.file_sort_label),
-                                            tint = if (isSortExpanded) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurface
-                                            }
-                                        )
+                                    // 只在"所有音频"Tab下显示排序按钮
+                                    if (selectedRootTab == RootTab.ALL) {
+                                        IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.Sort,
+                                                contentDescription = stringResource(R.string.file_sort_label),
+                                                tint = if (isSortExpanded) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                }
+                                            )
+                                        }
                                     }
                                     IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
                                         Icon(
@@ -436,16 +439,19 @@ fun FileBrowserScreen(
                                             )
                                         )
                                     }
-                                    IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
-                                        Icon(
-                                            imageVector = Icons.AutoMirrored.Filled.Sort,
-                                            contentDescription = stringResource(R.string.file_sort_label),
-                                            tint = if (isSortExpanded) {
-                                                MaterialTheme.colorScheme.primary
-                                            } else {
-                                                MaterialTheme.colorScheme.onSurface
-                                            }
-                                        )
+                                    // 只在"所有音频"Tab下显示排序按钮
+                                    if (selectedRootTab == RootTab.ALL) {
+                                        IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
+                                            Icon(
+                                                imageVector = Icons.AutoMirrored.Filled.Sort,
+                                                contentDescription = stringResource(R.string.file_sort_label),
+                                                tint = if (isSortExpanded) {
+                                                    MaterialTheme.colorScheme.primary
+                                                } else {
+                                                    MaterialTheme.colorScheme.onSurface
+                                                }
+                                            )
+                                        }
                                     }
                                     IconButton(onClick = { viewModel.loadAudioFiles(forceRefresh = true) }) {
                                         Icon(
@@ -510,23 +516,32 @@ fun FileBrowserScreen(
                             bottomPadding = outerPadding.calculateBottomPadding()
                         )
                     } else {
-                        AllAudiosTabContent(
-                            audios = sortedAllAudios,
-                            selectedFiles = selectedFiles,
-                            onFileClick = { audioFile ->
-                                if (selectedFiles.isNotEmpty()) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            // 在所有音频Tab下显示排序菜单
+                            SortMenu(
+                                isExpanded = isSortExpanded,
+                                currentSortOption = FileSortOption.valueOf(sortOption),
+                                onSortOptionChange = { sortOption = it.name },
+                                onDismiss = { isSortExpanded = false }
+                            )
+                            AllAudiosTabContent(
+                                audios = sortedAllAudios,
+                                selectedFiles = selectedFiles,
+                                onFileClick = { audioFile ->
+                                    if (selectedFiles.isNotEmpty()) {
+                                        viewModel.toggleFileSelection(audioFile.path)
+                                    } else {
+                                        onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
+                                    }
+                                },
+                                onFileLongClick = { audioFile ->
                                     viewModel.toggleFileSelection(audioFile.path)
-                                } else {
-                                    onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
-                                }
-                            },
-                            onFileLongClick = { audioFile ->
-                                viewModel.toggleFileSelection(audioFile.path)
-                            },
-                            isRefreshing = isRefreshing,
-                            onRefresh = onRefresh,
-                            listState = allAudiosListState
-                        )
+                                },
+                                isRefreshing = isRefreshing,
+                                onRefresh = onRefresh,
+                                listState = allAudiosListState
+                            )
+                        }
                     }
                 }
             } else {
