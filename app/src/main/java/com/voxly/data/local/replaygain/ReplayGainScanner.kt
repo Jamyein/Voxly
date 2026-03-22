@@ -28,6 +28,32 @@ import kotlin.math.pow
 import kotlin.math.sqrt
 
 /**
+ * Represents the result of an audio decode attempt.
+ */
+enum class DecodeResult {
+    SUCCESS,
+    DECODER_INIT_FAILED,
+    NO_AUDIO_TRACK,
+    SAMPLE_COUNT_ZERO,
+    PARTIAL_FAILURE,
+    FILE_READ_ERROR,
+    ALL_FALLBACKS_EXHAUSTED
+}
+
+/**
+ * Detailed information about a decode failure for logging and error handling.
+ */
+data class DecodeFailureInfo(
+    val result: DecodeResult,
+    val filePath: String,
+    val mime: String?,
+    val sampleRate: Int,
+    val channelCount: Int,
+    val fallbackLevel: Int,
+    val cause: Throwable?
+)
+
+/**
  * ReplayGain scanner using Android's MediaExtractor for audio analysis.
  * Implements the EBU R128 loudness standard for accurate gain calculation.
  */
@@ -56,6 +82,12 @@ class ReplayGainScanner @Inject constructor(
         const val SAMPLES_PER_CHUNK = 4096
 
         private const val DECODE_TIMEOUT_US = 10_000L
+
+        // Fallback config
+        const val MAX_RETRY_ATTEMPTS = 3
+        const val RETRY_DELAY_MS = 100L
+        const val MIN_VALID_SAMPLES = 1000L // ~20ms @ 48kHz
+        const val MIN_AUDIO_DURATION_MS = 100L
     }
 
     /**
