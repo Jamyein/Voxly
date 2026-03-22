@@ -8,9 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import com.voxly.presentation.theme.ExpressiveMotion
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -84,7 +82,8 @@ fun MetadataEditorScreen(
     var showAlbumArtOptions by remember { mutableStateOf(false) }
     var showAlbumArtPreview by remember { mutableStateOf(false) }
     var showConversionDialog by remember { mutableStateOf(false) }
-    var showConversionMenu by remember { mutableStateOf(false) }
+    var showMoreOptionsSheet by remember { mutableStateOf(false) }
+    val moreOptionsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showReauthorizeDialog by remember { mutableStateOf(false) }
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     var exitAfterSave by remember { mutableStateOf(false) }
@@ -232,59 +231,8 @@ fun MetadataEditorScreen(
                     }
                 },
                 actions = {
-                    Box {
-                        IconButton(onClick = { showConversionMenu = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
-                        }
-                        DropdownMenu(
-                            expanded = showConversionMenu,
-                            onDismissRequest = { showConversionMenu = false }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.edit_history)) },
-                                onClick = {
-                                    showConversionMenu = false
-                                    showEditHistorySheet = true
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.History, contentDescription = null)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.convert_to_simplified)) },
-                                onClick = {
-                                    showConversionMenu = false
-                                    conversionType = ConversionType.TO_SIMPLIFIED
-                                    showConversionDialog = true
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Translate, contentDescription = null)
-                                }
-                            )
-                            DropdownMenuItem(
-                                text = { Text(stringResource(R.string.convert_to_traditional)) },
-                                onClick = {
-                                    showConversionMenu = false
-                                    conversionType = ConversionType.TO_TRADITIONAL
-                                    showConversionDialog = true
-                                },
-                                leadingIcon = {
-                                    Icon(Icons.Default.Translate, contentDescription = null)
-                                }
-                            )
-                        }
-                    }
-                    IconButton(
-                        onClick = { viewModel.saveMetadata() },
-                        enabled = hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving
-                    ) {
-                        if (uiState is MetadataEditorUiState.Saving) {
-                            LoadingIndicator(
-                                modifier = Modifier.size(16.dp)
-                            )
-                        } else {
-                            Icon(Icons.Default.Save, contentDescription = stringResource(R.string.dialog_save))
-                        }
+                    IconButton(onClick = { showMoreOptionsSheet = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
                     }
                 }
             )
@@ -371,22 +319,21 @@ fun MetadataEditorScreen(
                         )
 
                         // Toolbar at bottom, above content
-                        Surface(
+                        Box(
                             modifier = Modifier
                                 .align(Alignment.BottomCenter)
                                 .padding(
                                     bottom = innerPadding.calculateBottomPadding() + 8.dp,
                                     start = 16.dp,
                                     end = 16.dp
-                                ),
-                            shape = RoundedCornerShape(28.dp),
-                            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                            tonalElevation = 3.dp
+                                )
                         ) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            HorizontalFloatingToolbar(
+                                expanded = true,
+                                scrollBehavior = floatingToolbarScrollBehavior,
+                                colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
                             ) {
+                                // Using IconButton per official M3E FloatingToolbar API
                                 // Lyrics Selection (only show if there are lyrics)
                                 val hasLyrics = state.editedMetadata.lyrics?.isNotBlank() == true
                                 if (hasLyrics) {
@@ -474,6 +421,28 @@ fun MetadataEditorScreen(
             sheetState = editHistorySheetState,
             onDismiss = { showEditHistorySheet = false },
             recentEdits = currentFileEdits
+        )
+    }
+
+    // More Options Sheet
+    if (showMoreOptionsSheet) {
+        MoreOptionsSheet(
+            sheetState = moreOptionsSheetState,
+            onDismiss = { showMoreOptionsSheet = false },
+            onEditHistoryClick = {
+                showMoreOptionsSheet = false
+                showEditHistorySheet = true
+            },
+            onConvertToSimplifiedClick = {
+                showMoreOptionsSheet = false
+                conversionType = ConversionType.TO_SIMPLIFIED
+                showConversionDialog = true
+            },
+            onConvertToTraditionalClick = {
+                showMoreOptionsSheet = false
+                conversionType = ConversionType.TO_TRADITIONAL
+                showConversionDialog = true
+            }
         )
     }
 

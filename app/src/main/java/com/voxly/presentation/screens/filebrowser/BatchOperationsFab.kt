@@ -1,37 +1,29 @@
 package com.voxly.presentation.screens.filebrowser
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBars
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarScrollBehavior
+import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 
 /**
- * Batch Operations FloatingToolbar using M3E styling
+ * Batch Operations FloatingToolbar using official M3 HorizontalFloatingToolbar API
  * Uses FloatingToolbarScrollBehavior for scroll-to-hide animation
  * Automatically expands/collapses based on selection mode
  *
- * Uses Surface with IconButtons for the toolbar items, styled with M3E colors.
- * WindowInsets.systemBars provides proper bottom inset handling.
+ * Official API usage: IconButton in content slot (no FAB)
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -48,24 +40,23 @@ fun BatchOperationsToolbar(
 ) {
     Box(
         modifier = modifier.fillMaxWidth(),
-        contentAlignment = Alignment.BottomCenter
+        contentAlignment = androidx.compose.ui.Alignment.BottomCenter
     ) {
-        Surface(
+        Box(
             modifier = Modifier
-                .align(Alignment.BottomCenter)
                 .padding(
                     start = FloatingToolbarDefaults.ScreenOffset,
                     end = FloatingToolbarDefaults.ScreenOffset,
                     bottom = 8.dp + WindowInsets.systemBars.asPaddingValues().calculateBottomPadding()
-                ),
-            shape = RoundedCornerShape(28.dp),
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            tonalElevation = 3.dp
+                )
         ) {
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(4.dp),
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+            HorizontalFloatingToolbar(
+                expanded = expanded,
+                scrollBehavior = scrollBehavior,
+                colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
             ) {
+                // Using IconButton per official M3E FloatingToolbar API
+                // IconButton should be used in content slot when no FAB is needed
                 IconButton(onClick = onOnlineMetadata) {
                     Icon(appIconPainter(AppIcon.CloudDownload), contentDescription = null)
                 }
