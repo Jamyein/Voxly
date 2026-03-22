@@ -407,8 +407,11 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                 progress.currentFilePath.contains("no audio") ->
                                     ReplayGainScanError.NoAudioTrack(progress.currentFilePath)
                                 progress.currentFilePath.contains("decode") ||
-                                progress.currentFilePath.contains("codec") ->
+                                progress.currentFilePath.contains("codec") ||
+                                progress.currentFilePath.contains("fallback") ->
                                     ReplayGainScanError.DecodeFailed("解码失败", progress.currentFilePath)
+                                progress.message?.contains("fallback") == true ->
+                                    ReplayGainScanError.AllFallbacksFailed(progress.currentFilePath)
                                 else ->
                                     ReplayGainScanError.Unknown(progress.message ?: "未知错误")
                             }
