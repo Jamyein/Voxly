@@ -91,6 +91,62 @@ class ReplayGainScanner @Inject constructor(
     }
 
     /**
+     * Result of decode operation with status.
+     */
+    private data class DecodeOperationResult(
+        val stats: SampleStats?,
+        val result: DecodeResult,
+        val cause: Throwable?
+    )
+
+    /**
+     * Attempts to decode audio with retry mechanism.
+     * @return DecodeOperationResult containing stats and decode status
+     */
+    private fun attemptDecodeWithRetry(
+        extractor: MediaExtractor,
+        format: MediaFormat,
+        targetSampleRate: Int,
+        channelCount: Int
+    ): DecodeOperationResult {
+        var lastCause: Throwable? = null
+
+        repeat(MAX_RETRY_ATTEMPTS) { attempt ->
+            try {
+                val stats = decodeAndAccumulateStats(
+                    extractor = extractor,
+                    format = format,
+                    targetSampleRate = targetSampleRate,
+                    channelCount = channelCount
+                )
+
+                if (stats.sampleCount <= 0) {
+                    return DecodeOperationResult(null, DecodeResult.SAMPLE_COUNT_ZERO, null)
+                }
+
+                return DecodeOperationResult(stats, DecodeResult.SUCCESS, null)
+            } catch (e: Exception) {
+                lastCause = e
+                Logger.w(
+                    "Decode attempt ${attempt + 1}/$MAX_RETRY_ATTEMPTS failed: ${e.message}",
+                    "ReplayGainScanner"
+                )
+
+                if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+                    // Wait before retry
+                    Thread.sleep(RETRY_DELAY_MS)
+                }
+            }
+        }
+
+        return DecodeOperationResult(
+            null,
+            DecodeResult.DECODER_INIT_FAILED,
+            lastCause
+        )
+    }
+
+    /**
      * Scans audio files and calculates ReplayGain values.
      * @param filePaths List of file paths to scan
      * @param scanQuality Quality level affecting sample rate
@@ -528,17 +584,31 @@ class ReplayGainScanner @Inject constructor(
             // - If file sample rate > maxSampleRate: downsample to maxSampleRate
             val targetSampleRate = minOf(sampleRate, scanQuality.maxSampleRate)
 
-            val stats = decodeAndAccumulateStats(
+            val decodeResult = attemptDecodeWithRetry(
                 extractor = extractor,
                 format = format,
                 targetSampleRate = targetSampleRate,
                 channelCount = channelCount
             )
 
-            if (stats.sampleCount <= 0L) {
-                extractor.release()
-                return@withContext null
+            when (decodeResult.result) {
+                DecodeResult.SUCCESS -> {
+                    // Continue with stats
+                }
+                DecodeResult.SAMPLE_COUNT_ZERO -> {
+                    extractor.release()
+                    return@withContext null
+                }
+                DecodeResult.DECODER_INIT_FAILED -> {
+                    // Trigger fallback
+                }
+                else -> {
+                    extractor.release()
+                    return@withContext null
+                }
             }
+
+            val stats = decodeResult.stats!!
 
             // Calculate 95th percentile RMS from block RMS values
             // foobar2000 uses 95th percentile for better human perception matching
