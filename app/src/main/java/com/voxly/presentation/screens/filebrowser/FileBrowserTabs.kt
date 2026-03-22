@@ -97,13 +97,12 @@ internal fun AlbumTabContent(
                 }
             } else {
                 // Use grouped list view when sorting by year
-                val isYearSort = sortOption == com.voxly.presentation.screens.album.AlbumSortOption.YEAR_ASC ||
-                        sortOption == com.voxly.presentation.screens.album.AlbumSortOption.YEAR_DESC
+                val isYearSort = sortOption == com.voxly.presentation.screens.album.AlbumSortOption.YEAR_DESC
                 if (isYearSort) {
                     AlbumYearGroupedContent(
                         albums = albums,
                         onAlbumClick = onAlbumClick,
-                        isDescending = sortOption == com.voxly.presentation.screens.album.AlbumSortOption.YEAR_DESC
+                        isDescending = true
                     )
                 } else {
                     LazyVerticalGrid(

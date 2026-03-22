@@ -3,12 +3,12 @@ package com.voxly.data.remote.itunes
 import com.voxly.data.helper.SearchQueryBuilder
 import com.voxly.data.mapper.OnlineRecordingMapper
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.remote.downloadImageBytes
 import com.voxly.domain.repository.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.net.URL
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -228,14 +228,11 @@ class ITunesRepository @Inject constructor(
                     return@withContext Result.success(null)
                 }
 
-                // Download the artwork
-                val url = URL(artworkUrl)
-                val connection = url.openConnection()
-                connection.setRequestProperty("User-Agent", "MP3TagAndroid/1.0")
-                
-                val inputStream = connection.getInputStream()
-                val bytes = inputStream.readBytes()
-                inputStream.close()
+                val bytes = downloadImageBytes(
+                    url = artworkUrl,
+                    userAgent = "MP3TagAndroid/1.0",
+                    referer = "https://music.apple.com"
+                )
 
                 Result.success(bytes)
             } catch (e: Exception) {

@@ -2,6 +2,7 @@ package com.voxly.data.remote.musicbrainz
 
 import com.voxly.data.helper.SearchQueryBuilder
 import com.voxly.data.mapper.OnlineRecordingMapper
+import com.voxly.data.remote.downloadImageBytes
 import com.voxly.data.remote.musicbrainz.model.*
 import com.voxly.domain.repository.*
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -247,25 +248,13 @@ class MusicBrainzRepository @Inject constructor(
             try {
                 // Cover Art Archive API
                 val coverArtUrl = "$COVER_ART_ARCHIVE_URL$releaseId/front"
-                
-                // Make HTTP request to fetch cover art
-                val url = java.net.URL(coverArtUrl)
-                val connection = url.openConnection()
-                connection.setRequestProperty("User-Agent", MusicBrainzApi.USER_AGENT)
-                
-                val responseCode = (connection as java.net.HttpURLConnection).responseCode
-                
-                if (responseCode == 200) {
-                    val inputStream = connection.inputStream
-                    val bytes = inputStream.readBytes()
-                    inputStream.close()
-                    Result.success(bytes)
-                } else if (responseCode == 404) {
-                    // No cover art available
-                    Result.success(null)
-                } else {
-                    Result.failure(Exception("Failed to fetch cover art: HTTP $responseCode"))
-                }
+
+                val bytes = downloadImageBytes(
+                    url = coverArtUrl,
+                    userAgent = MusicBrainzApi.USER_AGENT,
+                    referer = "https://musicbrainz.org"
+                )
+                Result.success(bytes)
             } catch (e: java.io.FileNotFoundException) {
                 // Cover art not available
                 Result.success(null)

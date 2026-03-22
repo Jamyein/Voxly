@@ -802,7 +802,11 @@ class ReplayGainScanner @Inject constructor(
 
             // Determine which stats to use - normal decode or fallback
             val stats = when (decodeResult.result) {
-                DecodeResult.SUCCESS -> decodeResult.stats!!
+                DecodeResult.SUCCESS -> decodeResult.stats ?: run {
+                    Logger.e("Decode succeeded without stats for $filePath", null, "ReplayGainScanner")
+                    extractor.release()
+                    return@withContext null
+                }
                 DecodeResult.SAMPLE_COUNT_ZERO -> {
                     // Trigger Level 2 fallback first
                     Logger.w("Level 1 retry returned zero samples, attempting Level 2 fallback", "ReplayGainScanner")

@@ -56,6 +56,13 @@ class MusicLibraryCache @Inject constructor(
             entities.map { it.toAudioFile() }
         }
     }
+
+    /**
+     * Gets all cached audio files as a one-shot query.
+     */
+    suspend fun getCachedAudioFilesOnce(): List<AudioFile> = withContext(Dispatchers.IO) {
+        audioFileDao.getAllAudioFilesOnce().map { it.toAudioFile() }
+    }
     
     /**
      * Gets cached audio files for a specific directory.
@@ -141,6 +148,15 @@ class MusicLibraryCache @Inject constructor(
      */
     suspend fun removeFromCache(filePath: String) = withContext(Dispatchers.IO) {
         audioFileDao.deleteByPath(filePath)
+    }
+
+    /**
+     * Removes multiple files from cache.
+     */
+    suspend fun removeFromCache(filePaths: List<String>) = withContext(Dispatchers.IO) {
+        if (filePaths.isNotEmpty()) {
+            audioFileDao.deleteByPaths(filePaths)
+        }
     }
     
     /**

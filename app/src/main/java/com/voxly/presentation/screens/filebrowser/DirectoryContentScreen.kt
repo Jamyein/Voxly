@@ -78,7 +78,8 @@ fun DirectoryContentScreen(
     val selectedFiles by viewModel.selectedFiles.collectAsState()
     val loadingDirectories by viewModel.directoryLoadingState.collectAsState()
 
-    // Track if this directory is currently being scanned
+    val isRefreshing by viewModel.isRefreshing.collectAsState()
+
     val isDirectoryLoading = remember(directoryUri, loadingDirectories) {
         directoryUri in loadingDirectories
     }
@@ -102,9 +103,6 @@ fun DirectoryContentScreen(
     val floatingToolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
         exitDirection = FloatingToolbarExitDirection.Bottom
     )
-
-    // Pull-to-refresh state
-    var isRefreshing by remember { mutableStateOf(false) }
 
     // Double-tap to scroll to top
     val scrollCoroutineScope = rememberCoroutineScope()
@@ -249,12 +247,7 @@ fun DirectoryContentScreen(
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = {
-            isRefreshing = true
-            scrollCoroutineScope.launch {
-                viewModel.loadFromDirectory(android.net.Uri.parse(directoryUri))
-            }.invokeOnCompletion {
-                isRefreshing = false
-            }
+            viewModel.refresh()
         },
         modifier = Modifier
             .fillMaxSize()

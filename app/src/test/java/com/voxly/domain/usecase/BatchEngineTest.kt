@@ -9,6 +9,7 @@ import com.voxly.domain.usecase.MemoryPressureMonitor
 import io.mockk.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import java.util.concurrent.atomic.AtomicInteger
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -124,5 +125,45 @@ class BatchEngineTest {
         // First and last should always emit
         assertEquals(0, results.first().successCount)
         assertEquals(BatchStatus.COMPLETED, results.last().status)
+    }
+
+    @Test
+    fun `execute counts failures toward visible progress`() = runBlocking {
+        val engine = BatchEngine<String>(memoryPressureMonitor = mockMemoryMonitor)
+
+        val results = mutableListOf<BatchResult>()
+        engine.execute(
+            items = listOf("file1.mp3", "file2.mp3", "file3.mp3", "file4.mp3"),
+            operation = { Result.failure(Exception("Always fails")) },
+            itemName = { it }
+        ).collect { results.add(it) }
+
+        assertTrue(results.any { it.status == BatchStatus.PROCESSING && it.failedCount > 0 })
+        assertEquals(4, results.last().failedCount)
+        assertEquals(BatchStatus.COMPLETED, results.last().status)
+    }
+
+    @Test
+    fun `execute respects reduced concurrency from memory monitor`() = runBlocking {
+        val constrainedMonitor = mockk<MemoryPressureMonitor> {
+            every { getCurrentConcurrency(any()) } returns 1
+        }
+        val engine = BatchEngine<String>(memoryPressureMonitor = constrainedMonitor)
+        val activeOperations = AtomicInteger(0)
+        val maxObservedConcurrency = AtomicInteger(0)
+
+        engine.execute(
+            items = listOf("file1.mp3", "file2.mp3", "file3.mp3"),
+            operation = {
+                val current = activeOperations.incrementAndGet()
+                maxObservedConcurrency.updateAndGet { previous -> maxOf(previous, current) }
+                Thread.sleep(25)
+                activeOperations.decrementAndGet()
+                Result.success(Unit)
+            },
+            itemName = { it }
+        ).collect()
+
+        assertEquals(1, maxObservedConcurrency.get())
     }
 }

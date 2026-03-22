@@ -183,24 +183,22 @@ class BatchAlbumArtUseCase @Inject constructor(
     operator fun invoke(
         filePaths: List<String>,
         albumArtBytes: ByteArray
-    ): Flow<BatchProgress> {
+    ): Flow<BatchProgress> = flow {
         val startedAt = SystemClock.elapsedRealtime()
         val totalFiles = filePaths.size
         Logger.i("Batch album art set started. files=$totalFiles", "BatchAlbumArt")
 
-        return batchEngine.execute(
-            items = filePaths,
-            operation = { filePath ->
-                audioRepository.setAlbumArt(filePath, albumArtBytes)
-            },
-            itemName = { it }
-        ).let { flow ->
-            kotlinx.coroutines.flow.flow {
-                flow.collect { result ->
-                    emit(result.toBatchProgress())
-                }
+        try {
+            batchEngine.execute(
+                items = filePaths,
+                operation = { filePath ->
+                    audioRepository.setAlbumArt(filePath, albumArtBytes)
+                },
+                itemName = { it }
+            ).collect { result ->
+                emit(result.toBatchProgress())
             }
-        }.also {
+        } finally {
             Logger.i(
                 "Batch album art set finished. files=$totalFiles success=${batchEngine.getFailedItems().let { totalFiles - it.size }} failed=${batchEngine.getFailedItems().size} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
                 "BatchAlbumArt"
@@ -213,24 +211,22 @@ class BatchAlbumArtUseCase @Inject constructor(
      * @param filePaths List of file paths to update
      * @return Flow emitting progress
      */
-    fun removeAlbumArt(filePaths: List<String>): Flow<BatchProgress> {
+    fun removeAlbumArt(filePaths: List<String>): Flow<BatchProgress> = flow {
         val startedAt = SystemClock.elapsedRealtime()
         val totalFiles = filePaths.size
         Logger.i("Batch album art remove started. files=$totalFiles", "BatchAlbumArt")
 
-        return batchEngine.execute(
-            items = filePaths,
-            operation = { filePath ->
-                audioRepository.removeAlbumArt(filePath)
-            },
-            itemName = { it }
-        ).let { flow ->
-            kotlinx.coroutines.flow.flow {
-                flow.collect { result ->
-                    emit(result.toBatchProgress())
-                }
+        try {
+            batchEngine.execute(
+                items = filePaths,
+                operation = { filePath ->
+                    audioRepository.removeAlbumArt(filePath)
+                },
+                itemName = { it }
+            ).collect { result ->
+                emit(result.toBatchProgress())
             }
-        }.also {
+        } finally {
             Logger.i(
                 "Batch album art remove finished. files=$totalFiles success=${batchEngine.getFailedItems().let { totalFiles - it.size }} failed=${batchEngine.getFailedItems().size} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
                 "BatchAlbumArt"

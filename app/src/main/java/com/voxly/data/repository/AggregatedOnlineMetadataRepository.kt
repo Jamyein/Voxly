@@ -13,6 +13,7 @@ import com.voxly.data.mapper.OnlineRecordingMapper.AlbumInfo
 import com.voxly.data.mapper.OnlineRecordingMapper.ArtistData
 import com.voxly.data.mapper.OnlineRecordingMapper.SingerData
 import com.voxly.data.remote.NetworkConstants
+import com.voxly.data.remote.downloadImageBytes
 import com.voxly.data.remote.itunes.ITunesRepository
 import com.voxly.data.remote.musicbrainz.MusicBrainzRepository
 import com.voxly.data.remote.tengx.TengxRepository
@@ -1489,11 +1490,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                     val album = result.getOrNull()
                     val coverUrl = normalizeCoverUrl(album?.album?.picUrl)
                     if (coverUrl != null) {
-                        // Download cover art
-                        val url = java.net.URL(coverUrl)
-                        val connection = url.openConnection()
-                        connection.setRequestProperty("User-Agent", NetworkConstants.USER_AGENT_ANDROID)
-                        val bytes = connection.getInputStream().use { it.readBytes() }
+                        val bytes = downloadImageBytes(
+                            url = coverUrl,
+                            userAgent = NetworkConstants.USER_AGENT_ANDROID,
+                            referer = "https://music.163.com"
+                        )
                         Result.success(bytes)
                     } else {
                         Result.success(null)
@@ -1519,11 +1520,11 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                     rawCoverUrl = null,
                     fallbackId = albumId.takeIf { it.all(Char::isDigit) }
                 ) ?: return@withContext Result.success(null)
-                val url = java.net.URL(coverUrl)
-                val connection = url.openConnection()
-                connection.setRequestProperty("User-Agent", NetworkConstants.USER_AGENT_ANDROID)
-                connection.setRequestProperty("Referer", "https://y.qq.com")
-                val bytes = connection.getInputStream().use { it.readBytes() }
+                val bytes = downloadImageBytes(
+                    url = coverUrl,
+                    userAgent = NetworkConstants.USER_AGENT_ANDROID,
+                    referer = "https://y.qq.com"
+                )
                 Result.success(bytes)
             } catch (e: Exception) {
                 Timber.e(TAG, "QQ Music cover art failed: ${e.message}", e)

@@ -48,9 +48,13 @@ class BatchEngine<T>(
             lastEmitTime = System.currentTimeMillis()
 
             coroutineScope {
-                items.chunked(maxConcurrency).forEach { batch ->
+                var nextIndex = 0
+                while (nextIndex < items.size) {
                     // Check memory pressure between chunks
                     val concurrency = memoryPressureMonitor.getCurrentConcurrency(maxConcurrency)
+                        .coerceIn(1, maxConcurrency)
+                    val batch = items.subList(nextIndex, minOf(nextIndex + concurrency, items.size))
+                    nextIndex += batch.size
 
                     val deferreds = batch.map { item ->
                         async {
@@ -79,7 +83,12 @@ class BatchEngine<T>(
                     }
 
                     // Throttle check: emit only if 5% more or 200ms passed
-                    val currentPercent = successCount.toFloat() / totalFiles
+                    val processedCount = successCount + failureCount
+                    val currentPercent = if (totalFiles > 0) {
+                        processedCount.toFloat() / totalFiles
+                    } else {
+                        1f
+                    }
                     val now = System.currentTimeMillis()
                     val percentChanged = (currentPercent - lastEmittedPercent) >= throttlePercent
                     val timeElapsed = (now - lastEmitTime) >= minEmitIntervalMs
@@ -144,8 +153,12 @@ class BatchEngine<T>(
             lastEmitTime = System.currentTimeMillis()
 
             coroutineScope {
-                itemsToRetry.chunked(maxConcurrency).forEach { batch ->
+                var nextIndex = 0
+                while (nextIndex < itemsToRetry.size) {
                     val concurrency = memoryPressureMonitor.getCurrentConcurrency(maxConcurrency)
+                        .coerceIn(1, maxConcurrency)
+                    val batch = itemsToRetry.subList(nextIndex, minOf(nextIndex + concurrency, itemsToRetry.size))
+                    nextIndex += batch.size
 
                     val deferreds = batch.map { item ->
                         async {
@@ -173,7 +186,12 @@ class BatchEngine<T>(
                         }
                     }
 
-                    val currentPercent = successCount.toFloat() / totalFiles
+                    val processedCount = successCount + failureCount
+                    val currentPercent = if (totalFiles > 0) {
+                        processedCount.toFloat() / totalFiles
+                    } else {
+                        1f
+                    }
                     val now = System.currentTimeMillis()
                     val percentChanged = (currentPercent - lastEmittedPercent) >= throttlePercent
                     val timeElapsed = (now - lastEmitTime) >= minEmitIntervalMs

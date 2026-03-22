@@ -10,6 +10,7 @@ import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.data.local.saf.SafWriteAccessService
+import com.voxly.data.remote.downloadImageBytes
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.data.repository.LyricsRepositoryImpl
 import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
@@ -836,10 +837,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
         if (!existingCoverUrl.isNullOrBlank()) {
             viewModelScope.launch {
                 try {
-                    val url = java.net.URL(existingCoverUrl)
-                    val connection = url.openConnection()
-                    connection.setRequestProperty("User-Agent", "Mozilla/5.0")
-                    val bytes = connection.getInputStream().use { it.readBytes() }
+                    val bytes = downloadImageBytes(
+                        url = existingCoverUrl,
+                        userAgent = "Mozilla/5.0"
+                    )
                     if (bytes.isNotEmpty()) {
                         updateAlbumArt(bytes)
                         _coverFetchMessage.value = "Cover fetched successfully"

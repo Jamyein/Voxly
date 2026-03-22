@@ -58,6 +58,11 @@ class AudioFileScanner @Inject constructor(
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
 
+    private data class AlbumAggregationKey(
+        val album: String,
+        val albumArtist: String
+    )
+
     // LRU cache for directory scans (max 50 entries to prevent memory issues)
     // Uses path as key, list of AudioFiles as value
     private val directoryScanCache = LruCache<String, List<AudioFile>>(50)
@@ -103,6 +108,8 @@ class AudioFileScanner @Inject constructor(
 
         // Legacy projection - kept for compatibility
         private val PROJECTION = FAST_PROJECTION
+
+        private val AUDIO_EXTENSIONS = setOf("mp3", "flac", "ogg", "m4a", "mp4", "wma", "wav", "ape", "opus")
     }
 
     /**
@@ -115,9 +122,10 @@ class AudioFileScanner @Inject constructor(
         val normalizedDirectory = directoryPath.trimEnd('/', '\\')
 
         // Check cache first (unless forceRefresh)
-        if (!forceRefresh && directoryScanCache.get(normalizedDirectory) != null) {
+        val cachedDirectoryFiles = directoryScanCache.get(normalizedDirectory)
+        if (!forceRefresh && cachedDirectoryFiles != null) {
             Timber.d(TAG, "Using directory cache: $normalizedDirectory")
-            emit(directoryScanCache.get(normalizedDirectory)!!)
+            emit(cachedDirectoryFiles)
             return@flow
         }
 
@@ -275,14 +283,12 @@ class AudioFileScanner @Inject constructor(
      * Now reads full metadata including lyrics from file tags.
      */
     private suspend fun scanDirectoryRecursive(directory: File, audioFiles: MutableList<AudioFile>) {
-        val audioExtensions = setOf("mp3", "flac", "ogg", "m4a", "mp4", "wma", "wav", "ape", "opus")
-
         directory.listFiles()?.forEach { file ->
             if (file.isDirectory) {
                 scanDirectoryRecursive(file, audioFiles)
             } else {
                 val extension = file.name.substringAfterLast('.').lowercase()
-                if (extension in audioExtensions && file.canRead()) {
+                if (extension in AUDIO_EXTENSIONS && file.canRead()) {
                     val audioFile = createAudioFileFromPath(file.absolutePath)
                     audioFiles.add(audioFile)
                 }
@@ -411,7 +417,14 @@ class AudioFileScanner @Inject constructor(
                 // For incremental scan, check if we have cached data first
                 if (hasCachedData()) {
                     Timber.d("loadAudioFiles: using scanIncremental")
-                    scanIncremental().first()
+                    val selectedDirectories = settingsDataStore.selectedDirectoryUris.first()
+                        .map { getPathFromUri(Uri.parse(it)) }
+                        .filter { it.isNotBlank() }
+                    if (selectedDirectories.isNotEmpty()) {
+                        scanIncrementalForDirectories(selectedDirectories).first()
+                    } else {
+                        scanIncremental().first()
+                    }
                 } else {
                     // No cache - need full scan to populate albums/artists
                     Timber.d("loadAudioFiles: no cache, using scanAudioFilesOptimized")
@@ -420,7 +433,14 @@ class AudioFileScanner @Inject constructor(
             } else {
                 // Full scan - force refresh to ensure we get actual results, not loading state
                 Timber.d("loadAudioFiles: using scanAudioFilesOptimized (forceRefresh)")
-                scanAudioFilesOptimized(forceRefresh = true).first()
+                val selectedDirectories = settingsDataStore.selectedDirectoryUris.first()
+                    .map { getPathFromUri(Uri.parse(it)) }
+                    .filter { it.isNotBlank() }
+                if (selectedDirectories.isNotEmpty()) {
+                    scanDirectoriesFull(selectedDirectories).first()
+                } else {
+                    scanAudioFilesOptimized(forceRefresh = true).first()
+                }
             }
             Timber.d("loadAudioFiles: got ${files.size} files, updating albums/artists")
             updateAlbumsFromFiles(files)
@@ -448,14 +468,21 @@ class AudioFileScanner @Inject constructor(
     private fun updateAlbumsFromFiles(files: List<AudioFile>) {
         val albumsMap = files
             .filter { it.metadata.album?.isNotBlank() == true }
-            .groupBy { it.metadata.album!! }
-            .map { (albumName, albumFiles) ->
+            .groupBy { file ->
+                AlbumAggregationKey(
+                    album = file.metadata.album!!,
+                    albumArtist = file.metadata.albumArtist
+                        ?.takeIf { it.isNotBlank() }
+                        ?: file.metadata.artist.orEmpty()
+                )
+            }
+            .map { (key, albumFiles) ->
                 val coverFile = albumFiles.firstOrNull {
                     it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
                 } ?: albumFiles.firstOrNull()
                 AlbumGroup(
-                    name = albumName,
-                    artist = albumFiles.firstOrNull()?.metadata?.artist,
+                    name = key.album,
+                    artist = key.albumArtist.ifBlank { albumFiles.firstOrNull()?.metadata?.artist },
                     files = albumFiles.sortedBy { it.metadata.trackNumber },
                     coverPath = coverFile?.path
                 )
@@ -570,10 +597,7 @@ class AudioFileScanner @Inject constructor(
             val cachedCount = libraryCache.getCachedFileCount()
             if (cachedCount > 0) {
                 Timber.d(TAG, "Using cache: $cachedCount files")
-                val cachedFiles = mutableListOf<AudioFile>()
-                libraryCache.getCachedAudioFiles().collect { cached ->
-                    cachedFiles.addAll(cached)
-                }
+                val cachedFiles = libraryCache.getCachedAudioFilesOnce()
                 if (cachedFiles.isNotEmpty()) {
                     // Apply whitelist/blacklist filter to cached files
                     val filteredFiles = cachedFiles
@@ -646,10 +670,8 @@ class AudioFileScanner @Inject constructor(
         Timber.i(TAG, "Incremental scan: ${pathsNeedingRescan.size} files need rescanning")
 
         // Get cached files that don't need rescan
-        val cachedFiles = mutableListOf<AudioFile>()
-        libraryCache.getCachedAudioFiles().collect { cached ->
-            cachedFiles.addAll(cached.filter { it.path !in pathsNeedingRescan })
-        }
+        val cachedFiles = libraryCache.getCachedAudioFilesOnce()
+            .filter { it.path !in pathsNeedingRescan }
 
         // Rescan only changed files in parallel
         val updatedFiles = if (pathsNeedingRescan.isNotEmpty()) {
@@ -671,6 +693,118 @@ class AudioFileScanner @Inject constructor(
         emit(allFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) }))
     }.catch { e ->
         Timber.e(e, "scanIncremental failed, emitting empty list")
+        emit(emptyList<AudioFile>())
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * True incremental scan for user-selected directories.
+     * Scans the filesystem directly so newly copied files are visible even before MediaStore indexes them.
+     */
+    fun scanIncrementalForDirectories(
+        directoryPaths: List<String>
+    ): Flow<List<AudioFile>> = flow {
+        val normalizedDirectories = directoryPaths
+            .map { it.trimEnd('/', '\\') }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        if (normalizedDirectories.isEmpty()) {
+            emit(emptyList())
+            return@flow
+        }
+
+        val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
+        val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
+        val whitelistDirs = if (whitelistEnabled) {
+            settingsDataStore.selectedDirectoryUris.first()
+                .map { getPathFromUri(Uri.parse(it)) }
+                .filter { it.isNotBlank() }
+        } else {
+            emptyList()
+        }
+        val blacklistDirs = if (blacklistEnabled) {
+            settingsDataStore.blacklistDirectoryUris.first()
+                .map { getPathFromUri(Uri.parse(it)) }
+                .filter { it.isNotBlank() }
+        } else {
+            emptyList()
+        }
+
+        val currentFiles = mutableListOf<Pair<String, Long>>()
+        normalizedDirectories.forEach { directory ->
+            collectDirectoryFileModificationTimes(File(directory), currentFiles)
+        }
+
+        val currentPaths = currentFiles.map { it.first }.toSet()
+        val pathsNeedingRescan = libraryCache.getFilesNeedingRescan(currentFiles)
+        Timber.i(TAG, "Directory incremental scan: ${pathsNeedingRescan.size} files need rescanning")
+
+        val cachedFiles = libraryCache.getCachedAudioFilesOnce()
+        val cachedDirectoryFiles = cachedFiles.filter { cached ->
+            normalizedDirectories.any { isPathInsideDirectory(cached.path, it) }
+        }
+
+        val retainedCachedFiles = cachedDirectoryFiles.filter { cached ->
+            cached.path !in pathsNeedingRescan && cached.path in currentPaths
+        }
+
+        val updatedFiles = if (pathsNeedingRescan.isNotEmpty()) {
+            val newlyScanned = scanFilesInParallel(pathsNeedingRescan)
+            libraryCache.updateCache(newlyScanned)
+            newlyScanned
+        } else {
+            emptyList()
+        }
+
+        val deletedPaths = cachedDirectoryFiles.map { it.path }.filter { it !in currentPaths }
+        libraryCache.removeFromCache(deletedPaths)
+
+        val allFiles = (retainedCachedFiles + updatedFiles)
+            .distinctBy { it.path }
+            .filter { shouldIncludeFile(it.path, whitelistEnabled, blacklistEnabled, whitelistDirs, blacklistDirs) }
+            .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
+
+        emit(allFiles)
+    }.catch { e ->
+        Timber.e(e, "scanIncrementalForDirectories failed, emitting empty list")
+        emit(emptyList<AudioFile>())
+    }.flowOn(Dispatchers.IO)
+
+    /**
+     * Full filesystem rescan for user-selected directories.
+     */
+    fun scanDirectoriesFull(
+        directoryPaths: List<String>
+    ): Flow<List<AudioFile>> = flow {
+        val normalizedDirectories = directoryPaths
+            .map { it.trimEnd('/', '\\') }
+            .filter { it.isNotBlank() }
+            .distinct()
+
+        if (normalizedDirectories.isEmpty()) {
+            emit(emptyList())
+            return@flow
+        }
+
+        val allFiles = normalizedDirectories.flatMap { directory ->
+            scanDirectory(directory, forceRefresh = true).first()
+        }.distinctBy { it.path }
+
+        val currentFiles = mutableListOf<Pair<String, Long>>()
+        normalizedDirectories.forEach { directory ->
+            collectDirectoryFileModificationTimes(File(directory), currentFiles)
+        }
+        val currentPaths = currentFiles.map { it.first }
+        val cachedFiles = libraryCache.getCachedAudioFilesOnce()
+        val deletedPaths = cachedFiles.map { it.path }.filter { cachedPath ->
+            normalizedDirectories.any { isPathInsideDirectory(cachedPath, it) } && cachedPath !in currentPaths
+        }
+        libraryCache.updateCache(allFiles)
+        libraryCache.removeFromCache(deletedPaths)
+
+        emit(allFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) }))
+    }.catch { e ->
+        Timber.e(e, "scanDirectoriesFull failed, emitting empty list")
         emit(emptyList<AudioFile>())
     }.flowOn(Dispatchers.IO)
 
@@ -733,6 +867,24 @@ class AudioFileScanner @Inject constructor(
                     if (file.exists()) {
                         output.add(filePath to file.lastModified())
                     }
+                }
+            }
+        }
+    }
+
+    private fun collectDirectoryFileModificationTimes(
+        directory: File,
+        output: MutableList<Pair<String, Long>>
+    ) {
+        if (!directory.exists() || !directory.isDirectory) return
+
+        directory.listFiles()?.forEach { file ->
+            if (file.isDirectory) {
+                collectDirectoryFileModificationTimes(file, output)
+            } else {
+                val extension = file.extension.lowercase()
+                if (extension in AUDIO_EXTENSIONS && file.canRead()) {
+                    output.add(file.absolutePath to file.lastModified())
                 }
             }
         }
@@ -986,5 +1138,13 @@ class AudioFileScanner @Inject constructor(
         }
 
         return true
+    }
+
+    private fun isPathInsideDirectory(filePath: String, directoryPath: String): Boolean {
+        val normalizedFile = filePath.trimEnd('/', '\\')
+        val normalizedDirectory = directoryPath.trimEnd('/', '\\')
+        return normalizedFile == normalizedDirectory ||
+            normalizedFile.startsWith("$normalizedDirectory/") ||
+            normalizedFile.startsWith("$normalizedDirectory\\")
     }
 }
