@@ -87,15 +87,11 @@ jobs:
           AUTO_CHANGELOG=""
           for type in "${ORDER[@]}"; do
             if [ -n "${TEMP_MAP[$type]+x}" ]; then
-              AUTO_CHANGELOG+="### ${SECTIONS[$type]}
-${TEMP_MAP[$type]}
-"
+              AUTO_CHANGELOG+="### ${SECTIONS[$type]}\n${TEMP_MAP[$type]}\n"
             fi
           done
           if [ -n "$OTHERS" ]; then
-            AUTO_CHANGELOG+="### 📦 其他
-${OTHERS}
-"
+            AUTO_CHANGELOG+="### 📦 其他\n${OTHERS}\n"
           fi
 
           # Save to env
@@ -113,16 +109,11 @@ ${OTHERS}
           BODY=""
 
           if [ -n "$MANUAL" ]; then
-            BODY="## 📋 更新说明
-${MANUAL}
-
----
-"
+            BODY="## 📋 更新说明\n${MANUAL}\n\n---\n"
           fi
 
           if [ -n "$AUTO" ]; then
-            BODY+="## 🔄 变更日志
-${AUTO}"
+            BODY+="## 🔄 变更日志\n${AUTO}"
           fi
 
           if [ -z "$BODY" ]; then
