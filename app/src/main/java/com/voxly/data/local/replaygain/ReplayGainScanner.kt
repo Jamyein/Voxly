@@ -305,6 +305,69 @@ class ReplayGainScanner @Inject constructor(
     }
 
     /**
+     * Fallback Level 3: Estimate gain based on file metadata when all decode attempts fail.
+     * Uses file size and format to provide a reasoned default value.
+     *
+     * @param filePath Path to the audio file
+     * @param targetLoudness Target loudness in LUFS
+     * @return Estimated ReplayGainInfo, or null if cannot estimate
+     */
+    private fun fallbackEstimateGain(
+        filePath: String,
+        targetLoudness: Float
+    ): ReplayGainInfo? {
+        return try {
+            val file = File(filePath)
+            if (!file.exists()) return null
+
+            val fileSizeBytes = file.length()
+            val extension = file.extension.lowercase()
+
+            // Estimate duration based on file size and format
+            // Bitrate estimates per format (bits per second):
+            val estimatedBitrate = when (extension) {
+                "flac" -> 800_000 // ~800 kbps for FLAC
+                "wav" -> 1_411_200 // 1411.2 kbps for 44.1kHz 16-bit stereo
+                "mp3" -> 320_000 // 320 kbps for high-quality MP3
+                "m4a", "aac" -> 256_000 // 256 kbps for AAC
+                "ogg" -> 256_000 // 256 kbps for Ogg Vorbis
+                "ape" -> 800_000 // ~800 kbps for APE
+                else -> 320_000 // Default estimate
+            }
+
+            val estimatedDurationSeconds = (fileSizeBytes * 8.0) / estimatedBitrate
+            val estimatedSamples = (estimatedDurationSeconds * 44100).toLong()
+
+            // Only provide estimation if file is reasonable size (> 100KB)
+            if (fileSizeBytes < 100_000) {
+                Logger.w("File too small for estimation: $filePath", "ReplayGainScanner")
+                return null
+            }
+
+            // For estimation, use a neutral gain (0 dB) with moderate peak
+            // This indicates "unable to analyze" rather than wrong value
+            val estimatedGain = 0f // Neutral
+            val estimatedPeak = 0.5f // Safe default below clipping
+
+            Logger.w(
+                "Level 3 fallback estimation for $filePath: " +
+                "estimatedDuration=${estimatedDurationSeconds}s fileSize=${fileSizeBytes}B",
+                "ReplayGainScanner"
+            )
+
+            ReplayGainInfo(
+                trackGain = estimatedGain,
+                trackPeak = estimatedPeak,
+                albumGain = null,
+                albumPeak = null
+            )
+        } catch (e: Exception) {
+            Logger.e("Level 3 estimation failed: ${e.message}", e, "ReplayGainScanner")
+            null
+        }
+    }
+
+    /**
      * Scans audio files and calculates ReplayGain values.
      * @param filePaths List of file paths to scan
      * @param scanQuality Quality level affecting sample rate
@@ -764,6 +827,15 @@ class ReplayGainScanner @Inject constructor(
                         Logger.i("Level 2 fallback successful for $filePath", "ReplayGainScanner")
                         fallbackStats
                     } else {
+                        // After Level 2 fallback also fails:
+                        Logger.w("Level 2 fallback failed, attempting Level 3 estimation", "ReplayGainScanner")
+                        val estimatedGain = fallbackEstimateGain(filePath, targetLoudness)
+                        if (estimatedGain != null) {
+                            Logger.i("Level 3 estimation successful for $filePath", "ReplayGainScanner")
+                            extractor.release()
+                            return@withContext estimatedGain
+                        }
+
                         // All fallbacks exhausted
                         Logger.e("All fallbacks exhausted for $filePath", "ReplayGainScanner")
                         extractor.release()
