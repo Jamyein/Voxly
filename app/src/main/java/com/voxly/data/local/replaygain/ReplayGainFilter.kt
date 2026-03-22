@@ -1,5 +1,7 @@
 package com.voxly.data.local.replaygain
 
+import com.voxly.core.util.Logger
+
 /**
  * IIR Filter implementations for ReplayGain psychoacoustic compensation.
  *
@@ -10,6 +12,61 @@ package com.voxly.data.local.replaygain
  * These filters make the loudness measurement match human perception better.
  */
 object ReplayGainFilter {
+
+    // New validation constants
+    const val MAX_SAMPLE_VALUE = 2.0f // Allow some headroom beyond 1.0
+    const val MIN_VALID_SAMPLES = 1000L
+
+    /**
+     * Validates samples before filter processing.
+     * @return true if samples are valid for processing
+     */
+    fun isValidSample(sample: Float): Boolean {
+        return sample.isFinite() && kotlin.math.abs(sample) <= MAX_SAMPLE_VALUE
+    }
+
+    /**
+     * Validates sample array before processing.
+     * @return ValidationResult with status and details
+     */
+    fun validateSamples(samples: FloatArray): ValidationResult {
+        if (samples.isEmpty()) {
+            return ValidationResult.Invalid("Empty sample array")
+        }
+
+        if (samples.size < MIN_VALID_SAMPLES) {
+            return ValidationResult.Invalid(
+                "Sample count ${samples.size} below minimum $MIN_VALID_SAMPLES"
+            )
+        }
+
+        var invalidCount = 0
+        var clippingCount = 0
+        samples.forEach { sample ->
+            if (!sample.isFinite()) invalidCount++
+            if (kotlin.math.abs(sample) > 1.0f) clippingCount++
+        }
+
+        if (invalidCount > 0) {
+            return ValidationResult.Invalid(
+                "$invalidCount invalid (NaN/Infinity) samples found"
+            )
+        }
+
+        if (clippingCount > samples.size / 10) { // >10% clipping
+            return ValidationResult.Warning(
+                "$clippingCount clipping samples detected (>10%)"
+            )
+        }
+
+        return ValidationResult.Valid
+    }
+
+    sealed class ValidationResult {
+        object Valid : ValidationResult()
+        data class Warning(val message: String) : ValidationResult()
+        data class Invalid(val message: String) : ValidationResult()
+    }
 
     /**
      * Yulewalk 10th order filter coefficients for psychoacoustic compensation.
@@ -28,7 +85,8 @@ object ReplayGainFilter {
         0.002884937999946808, 0.015419499826159935, 0.065903618826159618,
         0.11971681409515991, 0.13451743232365993, 0.11971681409515991,
         0.065903618826159618, 0.015419499826159935, 0.002884937999946808,
-        0.0
+        // b9 = 0.0 (implicit), b10 = 0.0 (for 10th-order filter indexing)
+        0.0, 0.0
     )
 
     /**
@@ -133,6 +191,18 @@ object ReplayGainFilter {
      * @return Psychoacoustically compensated samples
      */
     fun processFilters(samples: FloatArray, channelCount: Int): FloatArray {
+        when (val validation = validateSamples(samples)) {
+            is ValidationResult.Invalid -> {
+                Logger.e("Filter validation failed: ${validation.message}", "ReplayGainFilter")
+                return samples // Return unfiltered on invalid input
+            }
+            is ValidationResult.Warning -> {
+                Logger.w("Filter validation warning: ${validation.message}", "ReplayGainFilter")
+                // Continue processing with warning
+            }
+            ValidationResult.Valid -> { /* Continue */ }
+        }
+
         // First apply Yulewalk (psychoacoustic compensation)
         var filtered = processYulewalk(samples, channelCount)
 
