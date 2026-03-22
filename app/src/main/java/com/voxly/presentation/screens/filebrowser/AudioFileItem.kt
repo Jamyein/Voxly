@@ -2,16 +2,12 @@ package com.voxly.presentation.screens.filebrowser
 
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.voxly.R
@@ -22,8 +18,6 @@ import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
 import com.voxly.presentation.components.getFirstLetter
-import com.voxly.presentation.icons.AppIcon
-import com.voxly.presentation.icons.appIconPainter
 import kotlinx.coroutines.launch
 
 @Composable
@@ -76,137 +70,11 @@ internal fun AudioFileItem(
     }
 }
 
-@Composable
-internal fun FileActionsMenu(
-    onEditMetadata: () -> Unit,
-    onRename: () -> Unit,
-    onDelete: () -> Unit,
-    onFetchOnlineMetadata: () -> Unit,
-    onFixMetadata: () -> Unit
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                painter = appIconPainter(AppIcon.MoreVert),
-                contentDescription = stringResource(R.string.file_item_actions)
-            )
-        }
-        DropdownMenu(
-            expanded = expanded,
-            onDismissRequest = { expanded = false }
-        ) {
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.edit_metadata)) },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.Edit),
-                        contentDescription = stringResource(R.string.cd_edit_file)
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onEditMetadata()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.fetch_online_metadata)) },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.CloudDownload),
-                        contentDescription = stringResource(R.string.cd_online_metadata)
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onFetchOnlineMetadata()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.fix_metadata)) },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.AutoFix),
-                        contentDescription = stringResource(R.string.cd_batch_fix)
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onFixMetadata()
-                }
-            )
-            Spacer(modifier = Modifier.height(4.dp))
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.rename_file)) },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.Rename),
-                        contentDescription = stringResource(R.string.cd_batch_rename)
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onRename()
-                }
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(R.string.log_viewer_delete)) },
-                leadingIcon = {
-                    Icon(
-                        painter = appIconPainter(AppIcon.Close),
-                        contentDescription = stringResource(R.string.cd_delete_file),
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                },
-                onClick = {
-                    expanded = false
-                    onDelete()
-                }
-            )
-        }
-    }
-}
-
-private fun FileSortOption.labelResId(): Int = when (this) {
+internal fun FileSortOption.labelResId(): Int = when (this) {
     FileSortOption.NAME_ASC -> R.string.file_sort_name_asc
     FileSortOption.NAME_DESC -> R.string.file_sort_name_desc
     FileSortOption.SIZE_DESC -> R.string.file_sort_size_desc
     FileSortOption.DURATION_DESC -> R.string.file_sort_duration_desc
-}
-
-@Composable
-internal fun SortMenu(
-    isExpanded: Boolean,
-    currentSortOption: FileSortOption,
-    onSortOptionChange: (FileSortOption) -> Unit,
-    onDismiss: () -> Unit
-) {
-    Box(modifier = Modifier.fillMaxWidth()) {
-        DropdownMenu(
-            expanded = isExpanded,
-            onDismissRequest = onDismiss,
-            modifier = Modifier.align(Alignment.TopEnd)
-        ) {
-            FileSortOption.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(option.labelResId())) },
-                    leadingIcon = if (option == currentSortOption) {
-                        {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = stringResource(R.string.cd_selected),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    } else null,
-                    onClick = {
-                        onSortOptionChange(option)
-                        onDismiss()
-                    }
-                )
-            }
-        }
-    }
 }
 
 @OptIn(ExperimentalFoundationApi::class)

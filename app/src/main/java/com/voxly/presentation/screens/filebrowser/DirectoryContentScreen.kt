@@ -14,12 +14,10 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
@@ -49,17 +47,18 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import com.voxly.R
+import com.voxly.core.util.SortUtil
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.SearchBottomSheet
+import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.screens.filebrowser.FixMetadataOptions
+import com.voxly.presentation.screens.filebrowser.OnlineMetadataOptions
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.viewmodel.LibraryViewModel
-import com.voxly.core.util.SortUtil
-import com.voxly.presentation.screens.filebrowser.FixMetadataOptions
-import com.voxly.presentation.screens.filebrowser.OnlineMetadataOptions
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalFoundationApi::class)
 @Composable
@@ -220,24 +219,17 @@ fun DirectoryContentScreen(
                                 )
                             }
                             // Sort button
-                            Box {
-                                IconButton(onClick = {
-                                    isSortExpanded = true
-                                }) {
-                                    Icon(
-                                        imageVector = Icons.AutoMirrored.Filled.Sort,
-                                        contentDescription = stringResource(R.string.sort)
-                                    )
+                            SortMenuButton(
+                                expanded = isSortExpanded,
+                                onExpandedChange = { isSortExpanded = it },
+                                currentSortOption = currentSortOption,
+                                options = DirFileSortOption.entries,
+                                optionLabelResId = { it.labelResId() },
+                                contentDescription = stringResource(R.string.sort),
+                                onSortOptionChange = { option ->
+                                    currentSortOption = option
                                 }
-                                SortMenu(
-                                    isExpanded = isSortExpanded,
-                                    currentSortOption = currentSortOption,
-                                    onSortOptionChange = { option ->
-                                        currentSortOption = option
-                                    },
-                                    onDismiss = { isSortExpanded = false }
-                                )
-                            }
+                            )
                         }
                     }
                 }
@@ -840,41 +832,6 @@ private fun applySort(
         DirFileSortOption.NAME_DESC -> files.sortedWith(compareByDescending { SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name)) })
         DirFileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
         DirFileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun SortMenu(
-    isExpanded: Boolean,
-    currentSortOption: DirFileSortOption,
-    onSortOptionChange: (DirFileSortOption) -> Unit,
-    onDismiss: () -> Unit
-) {
-    Box {
-        DropdownMenu(
-            expanded = isExpanded,
-            onDismissRequest = onDismiss
-        ) {
-            DirFileSortOption.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(stringResource(option.labelResId())) },
-                    leadingIcon = if (option == currentSortOption) {
-                        {
-                            Icon(
-                                imageVector = Icons.Default.CheckCircle,
-                                contentDescription = stringResource(R.string.cd_selected),
-                                tint = MaterialTheme.colorScheme.primary
-                            )
-                        }
-                    } else null,
-                    onClick = {
-                        onSortOptionChange(option)
-                        onDismiss()
-                    }
-                )
-            }
-        }
     }
 }
 

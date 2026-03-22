@@ -1,14 +1,14 @@
 package com.voxly.presentation.components
 
-import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -21,15 +21,18 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.ButtonGroup
 import androidx.compose.material3.ButtonGroupDefaults
+import androidx.compose.material3.ButtonGroupMenuState
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.MenuDefaults
 import androidx.compose.material3.PlainTooltip
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
@@ -52,8 +55,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.voxly.R
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
@@ -64,11 +69,7 @@ import kotlinx.coroutines.launch
 
 // ============ Constants ============
 
-private val SelectedButtonWeight = 1.3f
-private val UnselectedButtonWeight = 1.0f
 private val TitleMaxWidth = 100.dp
-private val weightAnimationSpec: androidx.compose.animation.core.AnimationSpec<Float> = ExpressiveMotion.EmphasizedSpring
-
 // Icon sizes
 private val IconSizeLarge = 24.dp   // 占位符
 private val IconSizeMedium = 18.dp  // 普通按钮
@@ -83,6 +84,11 @@ private val IconPadding = 8.dp
 private val IconTextSpacing = 4.dp
 private val ContentSpacing = 10.dp
 private val ButtonHeight = 40.dp
+private val ConnectedButtonMinWidth = 56.dp
+private val ConnectedCompactButtonMinWidth = 48.dp
+private val ConnectedButtonHorizontalPadding = 12.dp
+private const val SelectedButtonWeight = 1.24f
+private const val UnselectedButtonWeight = 1.0f
 private val AlbumArtSizeLarge = 64.dp
 private val AlbumArtSizeSmall = 40.dp
 private val VerticalLayoutPadding = 16.dp
@@ -97,6 +103,30 @@ private fun getConnectedButtonShapes(options: List<*>, btnIndex: Int) = when {
     btnIndex == 0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
     btnIndex == options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
     else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DefaultButtonGroupOverflowIndicator(menuState: ButtonGroupMenuState) {
+    ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
+}
+
+private val ConnectedButtonArrangement =
+    Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
+
+@Composable
+private fun <T> rememberConnectedButtonWeights(
+    options: List<T>,
+    selectedValue: T,
+    selectedWeight: Float = SelectedButtonWeight,
+    unselectedWeight: Float = UnselectedButtonWeight
+): List<Float> = options.map { option ->
+    val animatedWeight by animateFloatAsState(
+        targetValue = if (option == selectedValue) selectedWeight else unselectedWeight,
+        animationSpec = ExpressiveMotion.MediumSpring,
+        label = "connected_button_weight"
+    )
+    animatedWeight
 }
 
 // ============ Extension Functions ============
@@ -283,29 +313,64 @@ private fun <T> SegmentedButtonImpl(
     ),
     leadingContent = { TitleSubtitleContent(title, subtitle, titleStyle ?: MaterialTheme.typography.bodyLarge) },
     trailingContent = {
+        val animatedWeights = rememberConnectedButtonWeights(
+            options = options.map { it.value },
+            selectedValue = selectedValue
+        )
         // Using ButtonGroup with ToggleButton for M3E Connected style (replaces deprecated SegmentedButton)
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            ButtonGroup {
+            ButtonGroup(
+                overflowIndicator = { menuState ->
+                    DefaultButtonGroupOverflowIndicator(menuState)
+                },
+                horizontalArrangement = ConnectedButtonArrangement
+            ) {
                 options.forEachIndexed { btnIndex, option ->
                     val isSelected = option.value == selectedValue
-                    val weight by animateFloatAsState(
-                        targetValue = if (isSelected) SelectedButtonWeight else UnselectedButtonWeight,
-                        animationSpec = weightAnimationSpec,
-                        label = "weight_anim"
-                    )
-                    val shapes = getConnectedButtonShapes(options, btnIndex)
-                    ToggleButton(
-                        checked = isSelected,
-                        onCheckedChange = { if (it) onSelected(option.value) },
-                        modifier = Modifier.weight(weight),
-                        shapes = shapes
-                    ) {
-                        option.icon?.let { icon ->
-                            Icon(icon, iconContentDescription?.invoke(option), Modifier.size(IconSizeMedium))
-                            Spacer(Modifier.width(IconTextSpacing))
+                    val buttonModifier = Modifier
+                        .weight(animatedWeights[btnIndex])
+                        .defaultMinSize(
+                            minWidth = ConnectedButtonMinWidth,
+                            minHeight = ButtonHeight
+                        )
+                    customItem(
+                        buttonGroupContent = {
+                            val shapes = getConnectedButtonShapes(options, btnIndex)
+                            ToggleButton(
+                                checked = isSelected,
+                                onCheckedChange = { if (it) onSelected(option.value) },
+                                modifier = buttonModifier,
+                                contentPadding = PaddingValues(
+                                    horizontal = ConnectedButtonHorizontalPadding,
+                                    vertical = CompactPadding
+                                ),
+                                shapes = shapes
+                            ) {
+                                option.icon?.let { icon ->
+                                    Icon(icon, iconContentDescription?.invoke(option), Modifier.size(IconSizeMedium))
+                                    Spacer(Modifier.width(IconTextSpacing))
+                                }
+                                Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
+                            }
+                        },
+                        menuContent = { state ->
+                            DropdownMenuItem(
+                                text = { Text(option.label ?: "") },
+                                leadingIcon = option.icon?.let { icon ->
+                                    {
+                                        Icon(
+                                            imageVector = icon,
+                                            contentDescription = iconContentDescription?.invoke(option)
+                                        )
+                                    }
+                                },
+                                onClick = {
+                                    onSelected(option.value)
+                                    state.dismiss()
+                                }
+                            )
                         }
-                        Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
-                    }
+                    )
                 }
             }
         }
@@ -339,25 +404,55 @@ fun <T> ConnectedButtonGroupRow(
     ),
     leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
     trailingContent = {
+        val animatedWeights = rememberConnectedButtonWeights(
+            options = options.map { it.value },
+            selectedValue = selectedValue
+        )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            ButtonGroup {
+            ButtonGroup(
+                overflowIndicator = { menuState ->
+                    DefaultButtonGroupOverflowIndicator(menuState)
+                },
+                horizontalArrangement = ConnectedButtonArrangement
+            ) {
                 options.forEachIndexed { btnIndex, option ->
                     val isSelected = option.value == selectedValue
-                    val weight by animateFloatAsState(
-                        targetValue = if (isSelected) SelectedButtonWeight else UnselectedButtonWeight,
-                        animationSpec = weightAnimationSpec,
-                        label = "weight_anim"
+                    val buttonModifier = Modifier
+                        .weight(animatedWeights[btnIndex])
+                        .defaultMinSize(
+                            minWidth = ConnectedButtonMinWidth,
+                            minHeight = ButtonHeight
+                        )
+                    customItem(
+                        buttonGroupContent = {
+                            val shapes = getConnectedButtonShapes(options, btnIndex)
+                            ToggleButton(
+                                checked = isSelected,
+                                onCheckedChange = { if (it) onSelected(option.value) },
+                                modifier = buttonModifier,
+                                contentPadding = PaddingValues(
+                                    horizontal = ConnectedButtonHorizontalPadding,
+                                    vertical = CompactPadding
+                                ),
+                                shapes = shapes
+                            ) {
+                                option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeMedium)); Spacer(Modifier.width(IconTextSpacing)) }
+                                Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
+                            }
+                        },
+                        menuContent = { state ->
+                            DropdownMenuItem(
+                                text = { Text(option.label ?: "") },
+                                leadingIcon = option.icon?.let { icon ->
+                                    { Icon(icon, option.label) }
+                                },
+                                onClick = {
+                                    onSelected(option.value)
+                                    state.dismiss()
+                                }
+                            )
+                        }
                     )
-                    val shapes = getConnectedButtonShapes(options, btnIndex)
-                    ToggleButton(
-                        checked = isSelected,
-                        onCheckedChange = { if (it) onSelected(option.value) },
-                        modifier = Modifier.weight(weight),
-                        shapes = shapes
-                    ) {
-                        option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeMedium)); Spacer(Modifier.width(IconTextSpacing)) }
-                        Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
-                    }
                 }
             }
         }
@@ -388,20 +483,57 @@ fun <T> ConnectedButtonGroupRowCompact(
     ),
     leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
     trailingContent = {
+        val animatedWeights = rememberConnectedButtonWeights(
+            options = options.map { it.value },
+            selectedValue = selectedValue,
+            selectedWeight = 1.16f
+        )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
             // Compact mode: no spacing between buttons
-            ButtonGroup {
+            ButtonGroup(
+                overflowIndicator = { menuState ->
+                    DefaultButtonGroupOverflowIndicator(menuState)
+                },
+                horizontalArrangement = ConnectedButtonArrangement
+            ) {
                 options.forEachIndexed { btnIndex, option ->
                     val isSelected = option.value == selectedValue
-                    val shapes = getConnectedButtonShapes(options, btnIndex)
-                    ToggleButton(
-                        checked = isSelected,
-                        onCheckedChange = { if (it) onSelected(option.value) },
-                        shapes = shapes
-                    ) {
-                        option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeSmall)) }
-                        option.label?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
-                    }
+                    val buttonModifier = Modifier
+                        .weight(animatedWeights[btnIndex])
+                        .defaultMinSize(
+                            minWidth = ConnectedCompactButtonMinWidth,
+                            minHeight = ButtonHeight
+                        )
+                    customItem(
+                        buttonGroupContent = {
+                            val shapes = getConnectedButtonShapes(options, btnIndex)
+                            ToggleButton(
+                                checked = isSelected,
+                                onCheckedChange = { if (it) onSelected(option.value) },
+                                modifier = buttonModifier,
+                                contentPadding = PaddingValues(
+                                    horizontal = CompactPadding,
+                                    vertical = CompactPadding
+                                ),
+                                shapes = shapes
+                            ) {
+                                option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeSmall)) }
+                                option.label?.let { Text(it, style = MaterialTheme.typography.labelSmall) }
+                            }
+                        },
+                        menuContent = { state ->
+                            DropdownMenuItem(
+                                text = { Text(option.label ?: "") },
+                                leadingIcon = option.icon?.let { icon ->
+                                    { Icon(icon, option.label) }
+                                },
+                                onClick = {
+                                    onSelected(option.value)
+                                    state.dismiss()
+                                }
+                            )
+                        }
+                    )
                 }
             }
         }
@@ -433,24 +565,55 @@ fun <T> ConnectedButtonGroupVerticalRow(
 ) {
     Column(modifier = Modifier.fillMaxWidth().padding(VerticalLayoutPadding), verticalArrangement = Arrangement.spacedBy(VerticalItemSpacing)) {
         TitleSubtitleContent(title, subtitle, MaterialTheme.typography.titleMedium)
-        ButtonGroup(modifier = Modifier.fillMaxWidth()) {
+        val animatedWeights = rememberConnectedButtonWeights(
+            options = options.map { it.value },
+            selectedValue = selectedValue
+        )
+        ButtonGroup(
+            overflowIndicator = { menuState ->
+                DefaultButtonGroupOverflowIndicator(menuState)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = ConnectedButtonArrangement
+        ) {
             options.forEachIndexed { btnIndex, option ->
                 val isSelected = option.value == selectedValue
-                val weight by animateFloatAsState(
-                    targetValue = if (isSelected) SelectedButtonWeight else UnselectedButtonWeight,
-                    animationSpec = weightAnimationSpec,
-                    label = "weight_anim"
+                val buttonModifier = Modifier
+                    .weight(animatedWeights[btnIndex])
+                    .defaultMinSize(
+                        minWidth = ConnectedButtonMinWidth,
+                        minHeight = ButtonHeight
+                    )
+                customItem(
+                    buttonGroupContent = {
+                        val buttonShapes = getConnectedButtonShapes(options, btnIndex)
+                        ToggleButton(
+                            checked = isSelected,
+                            onCheckedChange = { if (it) onSelected(option.value) },
+                            modifier = buttonModifier,
+                            contentPadding = PaddingValues(
+                                horizontal = ConnectedButtonHorizontalPadding,
+                                vertical = CompactPadding
+                            ),
+                            shapes = buttonShapes
+                        ) {
+                            option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeSmall)); Spacer(Modifier.width(IconTextSpacing)) }
+                            Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
+                        }
+                    },
+                    menuContent = { state ->
+                        DropdownMenuItem(
+                            text = { Text(option.label ?: "") },
+                            leadingIcon = option.icon?.let { icon ->
+                                { Icon(icon, option.label) }
+                            },
+                            onClick = {
+                                onSelected(option.value)
+                                state.dismiss()
+                            }
+                        )
+                    }
                 )
-                val buttonShapes = getConnectedButtonShapes(options, btnIndex)
-                ToggleButton(
-                    checked = isSelected,
-                    onCheckedChange = { if (it) onSelected(option.value) },
-                    modifier = Modifier.weight(weight),
-                    shapes = buttonShapes
-                ) {
-                    option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeSmall)); Spacer(Modifier.width(IconTextSpacing)) }
-                    Text(option.label ?: "", style = MaterialTheme.typography.labelMedium)
-                }
             }
         }
     }
@@ -479,33 +642,61 @@ fun <T> ConnectedIconOnlyButtonGroupRow(
     ),
     leadingContent = { TitleSubtitleContent(title, subtitle, MaterialTheme.typography.bodyLarge, Modifier.widthIn(max = TitleMaxWidth)) },
     trailingContent = {
+        val animatedWeights = rememberConnectedButtonWeights(
+            options = options.map { it.value },
+            selectedValue = selectedValue,
+            selectedWeight = 1.18f
+        )
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-            ButtonGroup {
+            ButtonGroup(
+                overflowIndicator = { menuState ->
+                    DefaultButtonGroupOverflowIndicator(menuState)
+                },
+                horizontalArrangement = ConnectedButtonArrangement
+            ) {
                 options.forEachIndexed { btnIndex, option ->
-                    val tooltipState = rememberTooltipState()
                     val isSelected = option.value == selectedValue
-                    val weight by animateFloatAsState(
-                        targetValue = if (isSelected) SelectedButtonWeight else UnselectedButtonWeight,
-                        animationSpec = weightAnimationSpec,
-                        label = "weight_anim"
-                    )
-                    val shapes = getConnectedButtonShapes(options, btnIndex)
-                    Box {
-                        TooltipBox(
-                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
-                            tooltip = { PlainTooltip { Text(option.label ?: "") } },
-                            state = tooltipState
-                        ) {
-                            ToggleButton(
-                                checked = isSelected,
-                                onCheckedChange = { if (it) onSelected(option.value) },
-                                modifier = Modifier.weight(weight).height(ButtonHeight),
-                                shapes = shapes
-                            ) {
-                                option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeCompact)) }
+                    val buttonModifier = Modifier
+                        .weight(animatedWeights[btnIndex])
+                        .defaultMinSize(
+                            minWidth = ConnectedCompactButtonMinWidth,
+                            minHeight = ButtonHeight
+                        )
+                    customItem(
+                        buttonGroupContent = {
+                            val tooltipState = rememberTooltipState()
+                            val shapes = getConnectedButtonShapes(options, btnIndex)
+                            Box {
+                                TooltipBox(
+                                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
+                                    tooltip = { PlainTooltip { Text(option.label ?: "") } },
+                                    state = tooltipState
+                                ) {
+                                    ToggleButton(
+                                        checked = isSelected,
+                                        onCheckedChange = { if (it) onSelected(option.value) },
+                                        modifier = buttonModifier,
+                                        contentPadding = PaddingValues(CompactPadding),
+                                        shapes = shapes
+                                    ) {
+                                        option.icon?.let { Icon(it, option.label, Modifier.size(IconSizeCompact)) }
+                                    }
+                                }
                             }
+                        },
+                        menuContent = { state ->
+                            DropdownMenuItem(
+                                text = { Text(option.label ?: "") },
+                                leadingIcon = option.icon?.let { icon ->
+                                    { Icon(icon, option.label) }
+                                },
+                                onClick = {
+                                    onSelected(option.value)
+                                    state.dismiss()
+                                }
+                            )
                         }
-                    }
+                    )
                 }
             }
         }
@@ -643,32 +834,98 @@ private fun AudioFileActionsMenu(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton({ expanded = true }) { Icon(appIconPainter(AppIcon.MoreVert), null) }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+        IconButton(onClick = { expanded = !expanded }) {
+            Icon(
+                painter = appIconPainter(AppIcon.MoreVert),
+                contentDescription = stringResource(R.string.file_item_actions),
+                tint = if (expanded) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false },
+            modifier = Modifier.widthIn(min = 220.dp),
+            shape = MaterialTheme.shapes.large,
+            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+            tonalElevation = 6.dp,
+            shadowElevation = 8.dp
+        ) {
             DropdownMenuItem(
-                text = { Text("Edit Metadata") },
-                leadingIcon = { Icon(appIconPainter(AppIcon.Edit), null) },
+                text = {
+                    Text(
+                        text = stringResource(R.string.edit_metadata),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                },
+                leadingIcon = { Icon(appIconPainter(AppIcon.Edit), stringResource(R.string.cd_edit_file)) },
+                colors = MenuDefaults.itemColors(),
                 onClick = { expanded = false; onAction(AudioFileAction.EditMetadata) }
             )
             DropdownMenuItem(
-                text = { Text("Fetch Online Metadata") },
-                leadingIcon = { Icon(appIconPainter(AppIcon.CloudDownload), null) },
+                text = {
+                    Text(
+                        text = stringResource(R.string.fetch_online_metadata),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        appIconPainter(AppIcon.CloudDownload),
+                        stringResource(R.string.cd_online_metadata)
+                    )
+                },
+                colors = MenuDefaults.itemColors(),
                 onClick = { expanded = false; onAction(AudioFileAction.FetchOnlineMetadata) }
             )
             DropdownMenuItem(
-                text = { Text("Fix Metadata") },
-                leadingIcon = { Icon(appIconPainter(AppIcon.AutoFix), null) },
+                text = {
+                    Text(
+                        text = stringResource(R.string.fix_metadata),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                },
+                leadingIcon = { Icon(appIconPainter(AppIcon.AutoFix), stringResource(R.string.cd_batch_fix)) },
+                colors = MenuDefaults.itemColors(),
                 onClick = { expanded = false; onAction(AudioFileAction.FixMetadata) }
             )
-            Surface(modifier = Modifier.padding(vertical = MenuDividerPadding), color = MaterialTheme.colorScheme.outlineVariant) { Spacer(Modifier.height(1.dp)) }
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = MenuDividerPadding),
+                color = MaterialTheme.colorScheme.outlineVariant
+            )
             DropdownMenuItem(
-                text = { Text("Rename") },
-                leadingIcon = { Icon(appIconPainter(AppIcon.Rename), null) },
+                text = {
+                    Text(
+                        text = stringResource(R.string.rename_file),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                },
+                leadingIcon = { Icon(appIconPainter(AppIcon.Rename), stringResource(R.string.cd_batch_rename)) },
+                colors = MenuDefaults.itemColors(),
                 onClick = { expanded = false; onAction(AudioFileAction.Rename) }
             )
             DropdownMenuItem(
-                text = { Text("Delete") },
-                leadingIcon = { Icon(appIconPainter(AppIcon.Close), null, tint = MaterialTheme.colorScheme.error) },
+                text = {
+                    Text(
+                        text = stringResource(R.string.log_viewer_delete),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        appIconPainter(AppIcon.Close),
+                        stringResource(R.string.cd_delete_file),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                },
+                colors = MenuDefaults.itemColors(
+                    textColor = MaterialTheme.colorScheme.error,
+                    leadingIconColor = MaterialTheme.colorScheme.error
+                ),
                 onClick = { expanded = false; onAction(AudioFileAction.Delete) }
             )
         }

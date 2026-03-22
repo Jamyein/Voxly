@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -195,70 +196,89 @@ private fun <T> ConnectedIconButtonGroup(
     onSelected: (T) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val mediumHeight = 40.dp
     val baseWeight = 1.0f
-    val selectedWeight = 1.5f
-
+    val selectedWeight = 1.24f
+    val animatedWeights = options.map { option ->
+        val animatedWeight by animateFloatAsState(
+            targetValue = if (option.value == selectedValue) selectedWeight else baseWeight,
+            animationSpec = ExpressiveMotion.MediumSpring,
+            label = "settings_connected_button_weight"
+        )
+        animatedWeight
+    }
     ButtonGroup(
-        modifier = modifier
+        modifier = modifier,
+        overflowIndicator = { menuState ->
+            ButtonGroupDefaults.OverflowIndicator(menuState = menuState)
+        },
+        horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
     ) {
         options.forEachIndexed { index, option ->
-            val tooltipState = rememberTooltipState()
             val isSelected = option.value == selectedValue
-
-            // M3E 动态权重要换动画
-            val animatedWeight by animateFloatAsState(
-                targetValue = if (isSelected) selectedWeight else baseWeight,
-                animationSpec = ExpressiveMotion.MediumSpring,
-                label = "weight_anim"
-            )
-
-            Box {
-                TooltipBox(
-                    positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
-                    tooltip = {
-                        PlainTooltip {
-                            Text(option.tooltip)
-                        }
-                    },
-                    state = tooltipState
-                ) {
-                    ToggleButton(
-                        checked = isSelected,
-                        onCheckedChange = { checked ->
-                            if (checked) onSelected(option.value)
-                        },
-                        modifier = Modifier
-                            .weight(animatedWeight)
-                            .height(mediumHeight)
-                            .semantics { role = Role.RadioButton },
-                        shapes = when (index) {
-                            0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                            options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                            else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
-                        },
-                        contentPadding = PaddingValues(2.dp)
-                    ) {
-                        if (option.text != null) {
-                            Text(
-                                text = option.text,
-                                style = MaterialTheme.typography.labelLarge,
-                                modifier = Modifier.animateContentSize(
-                                    animationSpec = ExpressiveMotion.EmphasizedSpringSize
-                                )
-                            )
-                        } else {
-                            Icon(
-                                imageVector = option.icon!!,
-                                contentDescription = option.tooltip,
-                                modifier = Modifier.animateContentSize(
-                                    animationSpec = ExpressiveMotion.EmphasizedSpringSize
-                                )
-                            )
+            val itemModifier = Modifier
+                .weight(animatedWeights[index])
+                .defaultMinSize(minWidth = 56.dp, minHeight = 40.dp)
+                .semantics { role = Role.RadioButton }
+            customItem(
+                buttonGroupContent = {
+                    val tooltipState = rememberTooltipState()
+                    Box {
+                        TooltipBox(
+                            positionProvider = TooltipDefaults.rememberTooltipPositionProvider(positioning = TooltipAnchorPosition.Above),
+                            tooltip = {
+                                PlainTooltip {
+                                    Text(option.tooltip)
+                                }
+                            },
+                            state = tooltipState
+                        ) {
+                            ToggleButton(
+                                checked = isSelected,
+                                onCheckedChange = { checked ->
+                                    if (checked) onSelected(option.value)
+                                },
+                                modifier = itemModifier,
+                                shapes = when (index) {
+                                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                                    options.lastIndex -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                                },
+                                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                            ) {
+                                if (option.text != null) {
+                                    Text(
+                                        text = option.text,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        modifier = Modifier.animateContentSize(
+                                            animationSpec = ExpressiveMotion.EmphasizedSpringSize
+                                        )
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = option.icon!!,
+                                        contentDescription = option.tooltip,
+                                        modifier = Modifier.animateContentSize(
+                                            animationSpec = ExpressiveMotion.EmphasizedSpringSize
+                                        )
+                                    )
+                                }
+                            }
                         }
                     }
+                },
+                menuContent = { state ->
+                    DropdownMenuItem(
+                        text = { Text(option.tooltip) },
+                        leadingIcon = option.icon?.let { icon ->
+                            { Icon(imageVector = icon, contentDescription = option.tooltip) }
+                        },
+                        onClick = {
+                            onSelected(option.value)
+                            state.dismiss()
+                        }
+                    )
                 }
-            }
+            )
         }
     }
 }

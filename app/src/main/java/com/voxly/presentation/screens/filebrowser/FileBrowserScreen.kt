@@ -42,10 +42,8 @@ import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Surface
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -83,6 +81,7 @@ import com.voxly.domain.model.BatchStatus
 import com.voxly.core.util.SortUtil
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.SearchBottomSheet
+import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.ExpressiveMotion
@@ -378,17 +377,15 @@ fun FileBrowserScreen(
                                     }
                                     // 只在"所有音频"Tab下显示排序按钮
                                     if (selectedRootTab == RootTab.ALL) {
-                                        IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Filled.Sort,
-                                                contentDescription = stringResource(R.string.file_sort_label),
-                                                tint = if (isSortExpanded) {
-                                                    MaterialTheme.colorScheme.primary
-                                                } else {
-                                                    MaterialTheme.colorScheme.onSurface
-                                                }
-                                            )
-                                        }
+                                        SortMenuButton(
+                                            expanded = isSortExpanded,
+                                            onExpandedChange = { isSortExpanded = it },
+                                            currentSortOption = FileSortOption.valueOf(sortOption),
+                                            options = FileSortOption.entries,
+                                            optionLabelResId = { it.labelResId() },
+                                            contentDescription = stringResource(R.string.file_sort_label),
+                                            onSortOptionChange = { sortOption = it.name }
+                                        )
                                     }
                                     IconButton(onClick = { viewModel.refresh() }) {
                                         Icon(
@@ -439,17 +436,15 @@ fun FileBrowserScreen(
                                     }
                                     // 只在"所有音频"Tab下显示排序按钮
                                     if (selectedRootTab == RootTab.ALL) {
-                                        IconButton(onClick = { isSortExpanded = !isSortExpanded }) {
-                                            Icon(
-                                                imageVector = Icons.AutoMirrored.Filled.Sort,
-                                                contentDescription = stringResource(R.string.file_sort_label),
-                                                tint = if (isSortExpanded) {
-                                                    MaterialTheme.colorScheme.primary
-                                                } else {
-                                                    MaterialTheme.colorScheme.onSurface
-                                                }
-                                            )
-                                        }
+                                        SortMenuButton(
+                                            expanded = isSortExpanded,
+                                            onExpandedChange = { isSortExpanded = it },
+                                            currentSortOption = FileSortOption.valueOf(sortOption),
+                                            options = FileSortOption.entries,
+                                            optionLabelResId = { it.labelResId() },
+                                            contentDescription = stringResource(R.string.file_sort_label),
+                                            onSortOptionChange = { sortOption = it.name }
+                                        )
                                     }
                                     IconButton(onClick = { viewModel.refresh() }) {
                                         Icon(
@@ -515,13 +510,6 @@ fun FileBrowserScreen(
                         )
                     } else {
                         Column(modifier = Modifier.weight(1f)) {
-                            // 在所有音频Tab下显示排序菜单
-                            SortMenu(
-                                isExpanded = isSortExpanded,
-                                currentSortOption = FileSortOption.valueOf(sortOption),
-                                onSortOptionChange = { sortOption = it.name },
-                                onDismiss = { isSortExpanded = false }
-                            )
                             AllAudiosTabContent(
                                 audios = sortedAllAudios,
                                 selectedFiles = selectedFiles,
@@ -576,12 +564,6 @@ fun FileBrowserScreen(
                                     Column(
                                         modifier = Modifier.fillMaxSize()
                                     ) {
-                                        SortMenu(
-                                            isExpanded = isSortExpanded,
-                                            currentSortOption = FileSortOption.valueOf(sortOption),
-                                            onSortOptionChange = { sortOption = it.name },
-                                            onDismiss = { isSortExpanded = false }
-                                        )
                                         AudioFileListWithIndexer(
                                             files = filesToShow,
                                             listState = listState,
