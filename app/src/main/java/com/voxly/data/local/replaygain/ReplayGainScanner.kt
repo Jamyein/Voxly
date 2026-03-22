@@ -101,10 +101,12 @@ class ReplayGainScanner @Inject constructor(
 
     /**
      * Attempts to decode audio with retry mechanism.
+     * Creates a fresh MediaExtractor for each retry attempt to avoid
+     * extractor release issues on subsequent retries.
      * @return DecodeOperationResult containing stats and decode status
      */
-    private fun attemptDecodeWithRetry(
-        extractor: MediaExtractor,
+    private suspend fun attemptDecodeWithRetry(
+        filePath: String,
         format: MediaFormat,
         targetSampleRate: Int,
         channelCount: Int
@@ -112,7 +114,27 @@ class ReplayGainScanner @Inject constructor(
         var lastCause: Throwable? = null
 
         repeat(MAX_RETRY_ATTEMPTS) { attempt ->
+            val extractor = MediaExtractor()
             try {
+                extractor.setDataSource(filePath)
+
+                // Find audio track and configure codec
+                var audioTrackIndex = -1
+                for (i in 0 until extractor.trackCount) {
+                    val trackFormat = extractor.getTrackFormat(i)
+                    val mime = trackFormat.getString(MediaFormat.KEY_MIME)
+                    if (mime?.startsWith("audio/") == true) {
+                        audioTrackIndex = i
+                        break
+                    }
+                }
+
+                if (audioTrackIndex == -1) {
+                    return DecodeOperationResult(null, DecodeResult.NO_AUDIO_TRACK, null)
+                }
+
+                extractor.selectTrack(audioTrackIndex)
+
                 val stats = decodeAndAccumulateStats(
                     extractor = extractor,
                     format = format,
@@ -131,11 +153,13 @@ class ReplayGainScanner @Inject constructor(
                     "Decode attempt ${attempt + 1}/$MAX_RETRY_ATTEMPTS failed: ${e.message}",
                     "ReplayGainScanner"
                 )
+            } finally {
+                try { extractor.release() } catch (_: Exception) {}
+            }
 
-                if (attempt < MAX_RETRY_ATTEMPTS - 1) {
-                    // Wait before retry
-                    Thread.sleep(RETRY_DELAY_MS)
-                }
+            if (attempt < MAX_RETRY_ATTEMPTS - 1) {
+                // Wait before retry (using coroutine delay, not blocking Thread.sleep)
+                delay(RETRY_DELAY_MS)
             }
         }
 
@@ -585,7 +609,7 @@ class ReplayGainScanner @Inject constructor(
             val targetSampleRate = minOf(sampleRate, scanQuality.maxSampleRate)
 
             val decodeResult = attemptDecodeWithRetry(
-                extractor = extractor,
+                filePath = filePath,
                 format = format,
                 targetSampleRate = targetSampleRate,
                 channelCount = channelCount
@@ -860,10 +884,8 @@ class ReplayGainScanner @Inject constructor(
                 codec.release()
             } catch (_: Exception) {
             }
-            try {
-                extractor.release()
-            } catch (_: Exception) {
-            }
+            // Note: extractor is released by caller (attemptDecodeWithRetry) in its finally block
+            // to ensure proper cleanup even when exceptions occur during decode
         }
     }
 
