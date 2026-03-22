@@ -829,6 +829,7 @@ class ReplayGainScanner @Inject constructor(
                         val estimatedGain = fallbackEstimateGain(filePath, targetLoudness)
                         if (estimatedGain != null) {
                             Logger.i("Level 3 estimation successful for $filePath", "ReplayGainScanner")
+                            extractor.release()
                             return@withContext estimatedGain
                         }
                         return@withContext null
