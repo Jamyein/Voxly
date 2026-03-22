@@ -41,38 +41,6 @@ enum class DecodeResult {
     ALL_FALLBACKS_EXHAUSTED
 }
 
-/**
- * Detailed information about a decode failure for logging and error handling.
- */
-data class DecodeFailureInfo(
-    val result: DecodeResult,
-    val filePath: String,
-    val mime: String?,
-    val sampleRate: Int,
-    val channelCount: Int,
-    val fallbackLevel: Int, // 0 = no fallback attempted, 1 = Level 1 (retry), 2 = Level 2 (raw PCM), 3 = Level 3 (estimation)
-    val cause: Throwable?
-)
-
-/**
- * Logs detailed decode failure information.
- */
-private fun logDecodeFailure(info: DecodeFailureInfo) {
-    val fileName = File(info.filePath).name
-    Logger.e(
-        buildString {
-            append("ReplayGain decode failed: ")
-            append("file=$fileName ")
-            append("errorType=${info.result.name} ")
-            append("mime=${info.mime ?: "unknown"} ")
-            append("sampleRate=${info.sampleRate} ")
-            append("channelCount=${info.channelCount} ")
-            append("fallbackLevel=${info.fallbackLevel}")
-        },
-        info.cause,
-        "ReplayGainScanner"
-    )
-}
 
 /**
  * ReplayGain scanner using Android's MediaExtractor for audio analysis.
@@ -917,6 +885,9 @@ class ReplayGainScanner @Inject constructor(
                 "ReplayGainScanner"
             )
 
+            // Clamp gain to reasonable range (-50dB to +50dB) to prevent extreme values
+            // These bounds are based on ReplayGain standard: tracks rarely need more than 18dB adjustment
+            // The wide range (50dB) handles edge cases like very quiet recordings or heavily clipped audio
             val clampedTrackGain = gainDb.coerceIn(-50f, 50f)
             if (clampedTrackGain != gainDb) {
                 Logger.w(
@@ -964,13 +935,6 @@ class ReplayGainScanner @Inject constructor(
         val percentileIndex = ((sortedRms.size - 1) * 0.95).toInt()
 
         val result = sortedRms[percentileIndex]
-        // After calculating result:
-        if (result > 100f || result < -100f) {
-            Logger.w(
-                "Suspicious gain value calculated: ${result}dB",
-                "ReplayGainScanner"
-            )
-        }
         return result
     }
 
