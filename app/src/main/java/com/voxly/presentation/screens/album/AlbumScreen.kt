@@ -191,10 +191,10 @@ private fun applyAlbumSort(
         AlbumSortOption.TRACK_COUNT_ASC -> albums.sortedBy { it.files.size }
         AlbumSortOption.TRACK_COUNT_DESC -> albums.sortedByDescending { it.files.size }
         AlbumSortOption.YEAR_ASC -> albums.sortedBy { album ->
-            album.files.mapNotNull { it.metadata.year }.minOrNull() ?: Int.MAX_VALUE
+            album.files.mapNotNull { it.metadata.year?.toIntOrNull() }.minOrNull() ?: Int.MAX_VALUE
         }
         AlbumSortOption.YEAR_DESC -> albums.sortedByDescending { album ->
-            album.files.mapNotNull { it.metadata.year }.maxOrNull() ?: Int.MIN_VALUE
+            album.files.mapNotNull { it.metadata.year?.toIntOrNull() }.maxOrNull() ?: Int.MIN_VALUE
         }
     }
 }
