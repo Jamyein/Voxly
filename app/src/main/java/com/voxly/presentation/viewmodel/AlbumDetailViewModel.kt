@@ -80,6 +80,10 @@ class AlbumDetailViewModel @AssistedInject constructor(
                     _coverPath.value = albumGroup.coverPath
                     _files.value = albumGroup.files
 
+                    val scannedAlbumYear = albumGroup.files
+                        .mapNotNull { file -> file.metadata.year?.takeIf { it.isNotBlank() } }
+                        .maxOrNull()
+
                     // Get bitrate from first file (MediaStore provides this)
                     albumGroup.files.firstOrNull()?.let { firstFile ->
                         _albumBitrate.value = firstFile.bitrate
@@ -88,9 +92,10 @@ class AlbumDetailViewModel @AssistedInject constructor(
                         val audioProperties = audioFileScanner.loadAudioProperties(firstFile.path)
                         _albumSampleRate.value = audioProperties?.sampleRate ?: 0
 
-                        // Load detailed metadata to get year from file tags
-                        val detailedMetadata = audioFileScanner.loadDetailedMetadata(firstFile.path)
-                        _albumYear.value = detailedMetadata?.year
+                        // Prefer the scanner year used by album sorting; only fall back to TagLib when absent.
+                        _albumYear.value = scannedAlbumYear ?: audioFileScanner
+                            .loadDetailedMetadata(firstFile.path)
+                            ?.year
                     }
                 } else {
                     // Album not found - set basic info at least
