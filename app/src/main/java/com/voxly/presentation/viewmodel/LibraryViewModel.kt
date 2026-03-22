@@ -218,7 +218,24 @@ class LibraryViewModel @Inject constructor(
 
                 if (_selectedDirectories.value.isNotEmpty()) {
                     if (!forceRefresh && !isIncremental) {
-                        val cachedDirectoryFiles = _directoryFiles.value
+                        var cachedDirectoryFiles = _directoryFiles.value
+                        if (cachedDirectoryFiles.isEmpty() && audioFileScanner.hasCachedData()) {
+                            cachedDirectoryFiles = buildDirectoryFilesFromCache(_selectedDirectories.value)
+                            if (cachedDirectoryFiles.isNotEmpty()) {
+                                _directoryFiles.value = cachedDirectoryFiles
+                                val mergedFiles = cachedDirectoryFiles.values.flatten().distinctBy { it.path }
+                                _uiState.value = if (mergedFiles.isEmpty()) {
+                                    FileBrowserUiState.Empty
+                                } else {
+                                    FileBrowserUiState.Success(
+                                        files = mergedFiles,
+                                        selectedCount = _selectedFiles.value.size
+                                    )
+                                }
+                                aggregateData()
+                                audioFileScanner.updateAlbumsAndArtistsFromFiles(mergedFiles)
+                            }
+                        }
                         val hasAllDirectoryEntries = _selectedDirectories.value.all { selected ->
                             selected.uri in cachedDirectoryFiles
                         }
@@ -1371,6 +1388,19 @@ class LibraryViewModel @Inject constructor(
     private fun persistSelectedDirectories(directories: List<SelectedDirectory>) {
         viewModelScope.launch {
             settingsDataStore.setSelectedDirectoryUris(directories.map { it.uri })
+        }
+    }
+
+    private suspend fun buildDirectoryFilesFromCache(
+        directories: List<SelectedDirectory>
+    ): Map<String, List<AudioFile>> {
+        val cachedFiles = audioFileScanner.getCachedAudioFiles().first()
+        if (cachedFiles.isEmpty()) return emptyMap()
+
+        return directories.associate { directory ->
+            directory.uri to cachedFiles.filter { file ->
+                isFileInDirectory(file.path, directory.path)
+            }
         }
     }
 
