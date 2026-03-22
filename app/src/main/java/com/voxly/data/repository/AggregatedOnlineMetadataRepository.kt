@@ -38,6 +38,8 @@ import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.net.UnknownHostException
@@ -81,6 +83,9 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     private val wangyRepository: WangyRepository,
     private val tengxRepository: TengxRepository
 ) : OnlineMetadataRepository {
+
+    // Semaphore to limit concurrent detail/lyrics fetching (max 5 concurrent)
+    private val detailSemaphore = Semaphore(5)
 
     /**
      * Data source preference for metadata lookup.
@@ -998,17 +1003,20 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         Result.success(emptyList())
                     } else {
                         // 并行获取每首歌的详情（包含封面URL）和歌词
+                        // 使用 semaphore 限制并发，防止资源耗尽
                         val detailJobs = searchSongs.map { song ->
                             coroutineScope {
                                 async {
-                                    // 并行获取详情和歌词
-                                    val detailDeferred = async { wangyRepository.getSongDetail(song.id) }
-                                    val lyricsDeferred = async { wangyRepository.getLyrics(song.id) }
-                                    
-                                    val detail = detailDeferred.await().getOrNull()
-                                    val lyrics = lyricsDeferred.await().getOrNull()
-                                    
-                                    Triple(song, detail, lyrics)
+                                    detailSemaphore.withPermit {
+                                        // 并行获取详情和歌词
+                                        val detailDeferred = async { wangyRepository.getSongDetail(song.id) }
+                                        val lyricsDeferred = async { wangyRepository.getLyrics(song.id) }
+                                        
+                                        val detail = detailDeferred.await().getOrNull()
+                                        val lyrics = lyricsDeferred.await().getOrNull()
+                                        
+                                        Triple(song, detail, lyrics)
+                                    }
                                 }
                             }
                         }
@@ -1121,29 +1129,32 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         Result.success(emptyList())
                     } else {
                         // 并行获取每首歌的详情和歌词
+                        // 使用 semaphore 限制并发，防止资源耗尽
                         val detailJobs = songs.map { song ->
                             coroutineScope {
                                 async {
-                                    // 并行获取详情和歌词
-                                    val detailDeferred = async { 
-                                        if (song.id > 0) {
-                                            tengxRepository.getSongDetail(listOf(song.id))
-                                        } else {
-                                            Result.failure(Exception("Invalid song id"))
+                                    detailSemaphore.withPermit {
+                                        // 并行获取详情和歌词
+                                        val detailDeferred = async {
+                                            if (song.id > 0) {
+                                                tengxRepository.getSongDetail(listOf(song.id))
+                                            } else {
+                                                Result.failure(Exception("Invalid song id"))
+                                            }
                                         }
-                                    }
-                                    val lyricsDeferred = async { 
-                                        if (song.mid.isNotBlank()) {
-                                            tengxRepository.getLyrics(song.mid)
-                                        } else {
-                                            Result.failure(Exception("Invalid song mid"))
+                                        val lyricsDeferred = async {
+                                            if (song.mid.isNotBlank()) {
+                                                tengxRepository.getLyrics(song.mid)
+                                            } else {
+                                                Result.failure(Exception("Invalid song mid"))
+                                            }
                                         }
+
+                                        val detail = detailDeferred.await().getOrNull()
+                                        val lyricsResult = lyricsDeferred.await().getOrNull()
+
+                                        Triple(song, detail, lyricsResult)
                                     }
-                                    
-                                    val detail = detailDeferred.await().getOrNull()
-                                    val lyricsResult = lyricsDeferred.await().getOrNull()
-                                    
-                                    Triple(song, detail, lyricsResult)
                                 }
                             }
                         }

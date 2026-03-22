@@ -45,9 +45,11 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import okhttp3.Cache
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import okhttp3.MediaType.Companion.toMediaType
+import java.io.File
 import retrofit2.Retrofit
 import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import kotlinx.serialization.json.Json
@@ -65,6 +67,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(
+        @ApplicationContext context: Context,
         proxyInterceptor: ProxyInterceptor
     ): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor().apply {
@@ -80,9 +83,30 @@ object AppModule {
             chain.proceed(requestWithUserAgent)
         }
 
+        // Cache interceptor for image responses (7 days cache)
+        val cacheInterceptor = okhttp3.Interceptor { chain ->
+            val response = chain.proceed(chain.request())
+            
+            // Check if this is an image response
+            val contentType = response.header("Content-Type")
+            if (contentType?.startsWith("image/") == true) {
+                response.newBuilder()
+                    .header("Cache-Control", "max-age=604800") // 7 days
+                    .build()
+            } else {
+                response
+            }
+        }
+
+        // HTTP Cache (50MB for image caching)
+        val cacheDir = File(context.cacheDir, "http_cache")
+        val cache = Cache(cacheDir, 50 * 1024 * 1024)
+
         return OkHttpClient.Builder()
+            .cache(cache)
             .addInterceptor(proxyInterceptor)
             .addInterceptor(userAgentInterceptor)
+            .addInterceptor(cacheInterceptor)
             .addInterceptor(loggingInterceptor)
             // Enable retry on connection failure
             .retryOnConnectionFailure(true)
