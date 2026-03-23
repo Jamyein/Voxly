@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -64,7 +65,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.Lyrics.Companion.parseToLines
 import com.voxly.presentation.components.lyricsposter.ColorExtractor
-import com.voxly.presentation.components.lyricsposter.LyricsPosterCardWithBlurBackground
+
 import com.voxly.presentation.components.lyricsposter.LyricsPosterGenerator
 import com.voxly.presentation.components.lyricsposter.LyricsPosterShare
 import com.voxly.presentation.components.lyricsposter.LyricsAlignment
@@ -77,6 +78,8 @@ import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.viewmodel.LyricsPosterViewModel
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.asImageBitmap
 
 /**
  * 歌词海报生成器 Screen
@@ -335,7 +338,9 @@ fun LyricsPosterScreen(
 }
 
 /**
- * Compose UI 实时预览组件
+ * 海报预览组件
+ * 
+ * 使用 LyricsPosterGenerator 生成 Bitmap，确保与分享结果完全一致
  */
 @Composable
 private fun PosterPreviewCompose(
@@ -347,11 +352,28 @@ private fun PosterPreviewCompose(
     backgroundColor: Color,
     contentColor: Color
 ) {
-    val previewConfig = config.copy(
-        colorTheme = PosterColorTheme.CUSTOM,
-        customBackgroundColor = backgroundColor,
-        customContentColor = contentColor
-    )
+    val context = LocalContext.current
+    var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    
+    // 生成预览 Bitmap（当配置变更时）
+    LaunchedEffect(title, artist, albumArtBitmap, lyrics, config, backgroundColor, contentColor) {
+        if (lyrics.isNotEmpty() && !isLoading) {
+            isLoading = true
+            previewBitmap = LyricsPosterGenerator.generatePoster(
+                context = context,
+                title = title,
+                artist = artist,
+                lyricsText = "", // lyrics 通过 selectedLyrics 传入
+                albumArtBitmap = albumArtBitmap,
+                backgroundColor = backgroundColor,
+                contentColor = contentColor,
+                selectedLyrics = lyrics,
+                config = config
+            )
+            isLoading = false
+        }
+    }
     
     Box(
         modifier = Modifier
@@ -360,22 +382,28 @@ private fun PosterPreviewCompose(
             .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center
     ) {
-        if (lyrics.isNotEmpty()) {
-            LyricsPosterCardWithBlurBackground(
-                title = title,
-                artist = artist,
-                albumArt = albumArtBitmap,
-                lyrics = lyrics,
-                config = previewConfig,
-                modifier = Modifier.fillMaxWidth()
-            )
-        } else {
-            Text(
-                text = stringResource(R.string.generating_poster),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(32.dp)
-            )
+        when {
+            isLoading -> {
+                CircularProgressIndicator(
+                    modifier = Modifier.padding(32.dp)
+                )
+            }
+            previewBitmap != null -> {
+                Image(
+                    bitmap = previewBitmap!!.asImageBitmap(),
+                    contentDescription = stringResource(R.string.cd_poster_preview),
+                    modifier = Modifier.fillMaxWidth(),
+                    contentScale = ContentScale.FillWidth
+                )
+            }
+            else -> {
+                Text(
+                    text = stringResource(R.string.generating_poster),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(32.dp)
+                )
+            }
         }
     }
 }
