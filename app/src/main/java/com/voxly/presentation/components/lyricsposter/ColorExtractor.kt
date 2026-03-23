@@ -101,27 +101,67 @@ object ColorExtractor {
 
     /**
      * Extracts all available colors from palette for gradient generation.
-     * Returns a list of vibrant and muted colors.
+     * Returns a list of vibrant and muted colors with high contrast and distinct hues.
      */
     fun extractAllColors(bitmap: Bitmap): List<Color> {
         val palette = extractPalette(bitmap) ?: return listOf(DEFAULT_COLOR)
         
-        val colors = mutableListOf<Color>()
+        val allColors = mutableListOf<Color>()
         
         // Add all vibrant variants
-        palette.vibrantSwatch?.rgb?.let { colors.add(Color(it)) }
-        palette.lightVibrantSwatch?.rgb?.let { colors.add(Color(it)) }
-        palette.darkVibrantSwatch?.rgb?.let { colors.add(Color(it)) }
+        palette.vibrantSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.lightVibrantSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.darkVibrantSwatch?.rgb?.let { allColors.add(Color(it)) }
         
         // Add all muted variants
-        palette.mutedSwatch?.rgb?.let { colors.add(Color(it)) }
-        palette.lightMutedSwatch?.rgb?.let { colors.add(Color(it)) }
-        palette.darkMutedSwatch?.rgb?.let { colors.add(Color(it)) }
+        palette.mutedSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.lightMutedSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.darkMutedSwatch?.rgb?.let { allColors.add(Color(it)) }
         
         // Add dominant color
-        palette.dominantSwatch?.rgb?.let { colors.add(Color(it)) }
+        palette.dominantSwatch?.rgb?.let { allColors.add(Color(it)) }
         
-        return colors.ifEmpty { listOf(DEFAULT_COLOR) }
+        // Filter colors to ensure high contrast and distinct hues
+        return filterDiverseColors(allColors).ifEmpty { listOf(DEFAULT_COLOR) }
+    }
+    
+    /**
+     * Filters colors to keep only those with significant differences in RGB space.
+     * Minimum distance threshold ensures distinct colors for gradient.
+     */
+    private fun filterDiverseColors(colors: List<Color>): List<Color> {
+        if (colors.size <= 2) return colors.distinct()
+        
+        val distinctColors = colors.distinct()
+        val selectedColors = mutableListOf<Color>()
+        val minDistance = 80f // Minimum RGB distance threshold
+        
+        for (color in distinctColors) {
+            if (selectedColors.isEmpty()) {
+                selectedColors.add(color)
+            } else {
+                // Check if this color is sufficiently different from all selected colors
+                val isDistinct = selectedColors.all { selected ->
+                    calculateColorDistance(color, selected) >= minDistance
+                }
+                if (isDistinct) {
+                    selectedColors.add(color)
+                }
+            }
+        }
+        
+        // Ensure we have at least 2 colors for gradient
+        return if (selectedColors.size >= 2) selectedColors else distinctColors.take(3)
+    }
+    
+    /**
+     * Calculates Euclidean distance between two colors in RGB space.
+     */
+    private fun calculateColorDistance(c1: Color, c2: Color): Float {
+        val rDiff = (c1.red - c2.red) * 255
+        val gDiff = (c1.green - c2.green) * 255
+        val bDiff = (c1.blue - c2.blue) * 255
+        return kotlin.math.sqrt(rDiff * rDiff + gDiff * gDiff + bDiff * bDiff)
     }
 
     /**
