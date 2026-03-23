@@ -190,6 +190,42 @@ fun LyricsPosterScreen(
                         )
                     }
                 },
+                actions = {
+                    // Share button in top bar
+                    IconButton(
+                        onClick = {
+                            if (!isGenerating && selectedLyrics.isNotEmpty()) {
+                                scope.launch {
+                                    isGenerating = true
+                                    val poster = LyricsPosterGenerator.generatePoster(
+                                        context = context,
+                                        title = title,
+                                        artist = artist,
+                                        album = album,
+                                        lyricsText = lyricsText,
+                                        albumArtBitmap = albumArtBitmap,
+                                        backgroundColor = backgroundColor,
+                                        contentColor = contentColor,
+                                        selectedLyrics = selectedLyrics,
+                                        config = posterConfig
+                                    )
+                                    LyricsPosterShare.sharePoster(context, poster, title)
+                                    isGenerating = false
+                                }
+                            }
+                        },
+                        enabled = selectedLyrics.isNotEmpty() && !isGenerating
+                    ) {
+                        if (isGenerating) {
+                            Text("...")
+                        } else {
+                            Icon(
+                                Icons.Default.Share,
+                                contentDescription = stringResource(R.string.share_poster)
+                            )
+                        }
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface
                 )
@@ -285,46 +321,7 @@ fun LyricsPosterScreen(
                 )
             }
 
-            // Share button
-            item {
-                Button(
-                    onClick = {
-                        if (!isGenerating && selectedLyrics.isNotEmpty()) {
-                            scope.launch {
-                                isGenerating = true
-                                val poster = LyricsPosterGenerator.generatePoster(
-                                    context = context,
-                                    title = title,
-                                    artist = artist,
-                                    album = album,
-                                    lyricsText = lyricsText,
-                                    albumArtBitmap = albumArtBitmap,
-                                    backgroundColor = backgroundColor,
-                                    contentColor = contentColor,
-                                    selectedLyrics = selectedLyrics,
-                                    config = posterConfig
-                                )
-                                LyricsPosterShare.sharePoster(context, poster, title)
-                                isGenerating = false
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    enabled = selectedLyrics.isNotEmpty() && !isGenerating
-                ) {
-                    if (isGenerating) {
-                        Text("生成中...")
-                    } else {
-                        Icon(
-                            Icons.Default.Share,
-                            contentDescription = null,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(stringResource(R.string.share_poster))
-                    }
-                }
-            }
+
         }
     }
 }
