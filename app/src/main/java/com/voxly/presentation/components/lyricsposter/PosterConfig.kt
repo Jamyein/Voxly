@@ -22,9 +22,10 @@ enum class PosterStyle {
  * 歌词海报颜色主题
  */
 enum class PosterColorTheme {
-    MUTED,      // 柔和 - 使用 muted 颜色
-    VIBRANT,    // 鲜艳 - 使用 vibrant 颜色
-    CUSTOM      // 自定义 - 用户选择颜色
+    MUTED,          // 柔和 - 使用 muted 颜色
+    VIBRANT,        // 鲜艳 - 使用 vibrant 颜色
+    BLURRED_COVER,  // 模糊封面 - 使用25.dp高斯模糊专辑封面作为背景
+    CUSTOM          // 自定义 - 用户选择颜色
 }
 
 /**

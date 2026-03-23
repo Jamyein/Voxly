@@ -154,6 +154,8 @@ fun LyricsPosterScreen(
                 ?: ColorExtractor.colorOptions.first()
             PosterColorTheme.VIBRANT -> extractedColors?.backgroundDominant?.let { Color(it) }
                 ?: ColorExtractor.colorOptions.first()
+            PosterColorTheme.BLURRED_COVER -> extractedColors?.backgroundDominant?.let { Color(it) }
+                ?: Color.DarkGray // 模糊封面主题使用提取的主色调作为参考
             PosterColorTheme.CUSTOM -> customColor
         }
     }
@@ -172,6 +174,7 @@ fun LyricsPosterScreen(
                 ?: Color.White
             PosterColorTheme.VIBRANT -> extractedColors?.contentDominant?.let { Color(it) }
                 ?: Color.White
+            PosterColorTheme.BLURRED_COVER -> Color.White // 模糊封面主题固定使用白色文字
             PosterColorTheme.CUSTOM -> ColorExtractor.getContrastingTextColor(customColor)
         }
     }
@@ -184,11 +187,20 @@ fun LyricsPosterScreen(
     )
 
     // Unified config for both preview and share
-    val unifiedConfig = posterConfig.copy(
-        colorTheme = PosterColorTheme.CUSTOM,
-        customBackgroundColor = backgroundColor,
-        customContentColor = contentColor
-    )
+    // 模糊封面主题需要保留原主题类型，其他主题使用 CUSTOM 并设置自定义颜色
+    val unifiedConfig = if (selectedTheme == PosterColorTheme.BLURRED_COVER) {
+        posterConfig.copy(
+            colorTheme = PosterColorTheme.BLURRED_COVER,
+            customBackgroundColor = backgroundColor,
+            customContentColor = contentColor
+        )
+    } else {
+        posterConfig.copy(
+            colorTheme = PosterColorTheme.CUSTOM,
+            customBackgroundColor = backgroundColor,
+            customContentColor = contentColor
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -494,13 +506,19 @@ private fun ColorThemeSelector(
                     onClick = { onThemeSelected(PosterColorTheme.MUTED) },
                     label = { Text("柔和") }
                 )
-                
+
                 FilterChip(
                     selected = selectedTheme == PosterColorTheme.VIBRANT,
                     onClick = { onThemeSelected(PosterColorTheme.VIBRANT) },
                     label = { Text("鲜艳") }
                 )
-                
+
+                FilterChip(
+                    selected = selectedTheme == PosterColorTheme.BLURRED_COVER,
+                    onClick = { onThemeSelected(PosterColorTheme.BLURRED_COVER) },
+                    label = { Text("模糊封面") }
+                )
+
                 FilterChip(
                     selected = selectedTheme == PosterColorTheme.CUSTOM,
                     onClick = { onThemeSelected(PosterColorTheme.CUSTOM) },

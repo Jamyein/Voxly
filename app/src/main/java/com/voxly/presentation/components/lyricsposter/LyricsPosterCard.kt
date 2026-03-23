@@ -55,15 +55,21 @@ fun LyricsPosterCard(
     config: PosterConfig,
     modifier: Modifier = Modifier
 ) {
-    val backgroundColor = when (config.colorTheme) {
-        PosterColorTheme.CUSTOM -> config.customBackgroundColor ?: Color.DarkGray
-        else -> Color.DarkGray // 实际颜色由调用者提供
+    // 判断是否为模糊封面主题
+    val isBlurredCoverTheme = config.colorTheme == PosterColorTheme.BLURRED_COVER
+
+    // 计算背景色：模糊封面主题使用透明背景（背景由父组件处理）
+    val backgroundColor = when {
+        isBlurredCoverTheme -> Color.Transparent
+        config.colorTheme == PosterColorTheme.CUSTOM -> config.customBackgroundColor ?: Color.DarkGray
+        else -> Color.DarkGray
     }
-    
-    val contentColor = if (config.enableAutoTextColor) {
-        calculateContrastColor(backgroundColor)
-    } else {
-        config.customContentColor ?: Color.White
+
+    // 计算内容颜色：模糊封面主题优先使用白色文字以确保可读性
+    val contentColor = when {
+        isBlurredCoverTheme -> Color.White
+        config.enableAutoTextColor -> calculateContrastColor(backgroundColor)
+        else -> config.customContentColor ?: Color.White
     }
 
     Box(
@@ -274,8 +280,11 @@ private fun Watermark(
 
 /**
  * 带模糊背景的海报卡片
- * 
+ *
  * 关键修复：使用 wrapContentHeight 代替 matchParentSize，确保动态高度
+ * 支持多种背景模式：
+ * - BLURRED_COVER: 使用25.dp高斯模糊专辑封面作为背景，带轻微暗角遮罩
+ * - 其他主题: 使用纯色背景
  */
 @Composable
 fun LyricsPosterCardWithBlurBackground(
@@ -286,29 +295,31 @@ fun LyricsPosterCardWithBlurBackground(
     config: PosterConfig,
     modifier: Modifier = Modifier
 ) {
+    val isBlurredCoverTheme = config.colorTheme == PosterColorTheme.BLURRED_COVER
+
     Box(
         modifier = modifier
             .fillMaxWidth()
             .wrapContentHeight() // 关键：允许动态高度
     ) {
-        // 模糊背景
-        if (albumArt != null) {
+        if (isBlurredCoverTheme && albumArt != null) {
+            // 模糊封面背景模式：使用25.dp高斯模糊专辑封面
             Image(
                 bitmap = albumArt.asImageBitmap(),
                 contentDescription = null,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .matchParentSize() // 背景填满整个 Box
+                    .matchParentSize()
                     .blur(25.dp),
                 contentScale = ContentScale.Crop
             )
 
-            // 渐变遮罩
+            // 轻微暗角遮罩层，确保文字可读性
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.4f))
+                    .background(Color.Black.copy(alpha = 0.25f))
             )
         }
 
@@ -319,7 +330,7 @@ fun LyricsPosterCardWithBlurBackground(
             albumArt = albumArt,
             lyrics = lyrics,
             config = config,
-            modifier = Modifier.fillMaxWidth() // 内容宽度填满
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
