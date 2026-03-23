@@ -49,7 +49,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.Lyrics.Companion.parseToLines
-import com.voxly.presentation.components.lyricsposter.LyricsPosterPreviewSheet
 import com.voxly.presentation.viewmodel.LyricsSelectorViewModel
 
 /**
@@ -70,6 +69,7 @@ fun LyricsSelectorScreen(
     album: String,
     onNavigateBack: () -> Unit,
     onDismiss: () -> Unit,
+    onNavigateToLyricsPoster: (lyricsText: String, selectedIndices: List<Int>) -> Unit,
     viewModel: LyricsSelectorViewModel = hiltViewModel()
 ) {
     val lyricsText by viewModel.lyricsText.collectAsState()
@@ -83,9 +83,6 @@ fun LyricsSelectorScreen(
 
     // Selected lines state - Map of index to lyrics text
     var selectedLines by remember { mutableStateOf<Map<Int, String>>(emptyMap()) }
-
-    // Show poster preview sheet
-    var showPosterPreview by remember { mutableStateOf(false) }
 
     Scaffold(
         topBar = {
@@ -221,7 +218,7 @@ fun LyricsSelectorScreen(
 
                 Button(
                     onClick = {
-                        showPosterPreview = true
+                        onNavigateToLyricsPoster(lyricsText, selectedLines.keys.toList())
                     },
                     enabled = selectedLines.isNotEmpty()
                 ) {
@@ -239,23 +236,6 @@ fun LyricsSelectorScreen(
         }
     }
 
-    // Poster Preview Sheet
-    if (showPosterPreview) {
-        LyricsPosterPreviewSheet(
-            title = title,
-            artist = artist,
-            album = album,
-            lyricsText = lyricsText,
-            albumArtBytes = albumArtBytes,
-            preSelectedLyrics = selectedLines.values.toList(),
-            onDismiss = {
-                showPosterPreview = false
-            },
-            onShare = { bitmap ->
-                // Share is handled in the sheet
-            }
-        )
-    }
 }
 
 /**

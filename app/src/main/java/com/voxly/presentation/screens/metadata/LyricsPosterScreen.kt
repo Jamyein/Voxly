@@ -1,4 +1,4 @@
-package com.voxly.presentation.components.lyricsposter
+package com.voxly.presentation.screens.metadata
 
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -24,6 +24,7 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
@@ -32,14 +33,15 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.BottomSheetDefaults
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,25 +58,45 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
+import com.voxly.domain.model.Lyrics.Companion.parseToLines
+import com.voxly.presentation.components.lyricsposter.ColorExtractor
+import com.voxly.presentation.components.lyricsposter.LyricsPosterCardWithBlurBackground
+import com.voxly.presentation.components.lyricsposter.LyricsPosterGenerator
+import com.voxly.presentation.components.lyricsposter.LyricsPosterShare
+import com.voxly.presentation.components.lyricsposter.LyricsAlignment
+import com.voxly.presentation.components.lyricsposter.PosterColorTheme
+import com.voxly.presentation.components.lyricsposter.PosterConfig
+import com.voxly.presentation.components.lyricsposter.PosterFontWeight
+import com.voxly.presentation.components.lyricsposter.PosterShape
+import com.voxly.presentation.components.lyricsposter.WatermarkPosition
 import com.voxly.presentation.theme.ExpressiveMotion
+import com.voxly.presentation.viewmodel.LyricsPosterViewModel
 import kotlinx.coroutines.launch
+import androidx.compose.runtime.collectAsState
 
+/**
+ * 歌词海报生成器 Screen
+ * 
+ * 从 LyricsSelector 导航过来，显示海报预览和配置选项
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LyricsPosterPreviewSheet(
+fun LyricsPosterScreen(
+    filePath: String,
     title: String,
     artist: String,
-    album: String = "",
+    album: String,
     lyricsText: String,
-    albumArtBytes: ByteArray?,
-    preSelectedLyrics: List<String> = emptyList(),
-    onDismiss: () -> Unit,
-    onShare: (Bitmap) -> Unit
+    selectedLyricsIndices: List<Int>,
+    onNavigateBack: () -> Unit,
+    viewModel: LyricsPosterViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+
+    val albumArtBytes by viewModel.albumArtBytes.collectAsState()
 
     // Decode album art
     val albumArtBitmap = remember(albumArtBytes) {
@@ -84,6 +106,17 @@ fun LyricsPosterPreviewSheet(
             } catch (e: Exception) {
                 null
             }
+        }
+    }
+
+    // Parse selected lyrics
+    val allLyricsLines = remember(lyricsText) {
+        parseToLines(lyricsText)
+    }
+    
+    val selectedLyrics = remember(selectedLyricsIndices, allLyricsLines) {
+        selectedLyricsIndices.mapNotNull { index ->
+            allLyricsLines.getOrNull(index)
         }
     }
 
@@ -145,49 +178,40 @@ fun LyricsPosterPreviewSheet(
         LyricsPosterGenerator.preloadShapes()
     }
 
-    // Get localized strings
-    val colorMuted = stringResource(R.string.color_soft)
-    val colorVibrant = stringResource(R.string.color_vivid)
-    val colorCustom = stringResource(R.string.color_custom)
-
-    val themes = listOf(
-        PosterColorTheme.MUTED to colorMuted,
-        PosterColorTheme.VIBRANT to colorVibrant,
-    )
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        modifier = Modifier.fillMaxHeight(),
-        containerColor = MaterialTheme.colorScheme.surface,
-        dragHandle = { BottomSheetDefaults.DragHandle() }
-    ) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(R.string.lyrics_poster_preview)) },
+                navigationIcon = {
+                    IconButton(onClick = onNavigateBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
+            )
+        }
+    ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
-                .fillMaxWidth()
-                .fillMaxHeight()
+                .fillMaxSize()
+                .padding(paddingValues)
                 .padding(horizontal = 16.dp)
                 .navigationBarsPadding(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
-            // Title
-            item {
-                Text(
-                    text = stringResource(R.string.lyrics_poster_preview),
-                    style = MaterialTheme.typography.headlineSmall,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-
             // Preview with Compose UI (real-time)
             item {
                 PosterPreviewCompose(
                     title = title,
                     artist = artist,
                     albumArtBitmap = albumArtBitmap,
-                    lyrics = preSelectedLyrics,
+                    lyrics = selectedLyrics,
                     config = posterConfig,
                     backgroundColor = backgroundColor,
                     contentColor = contentColor
@@ -265,7 +289,7 @@ fun LyricsPosterPreviewSheet(
             item {
                 Button(
                     onClick = {
-                        if (!isGenerating && preSelectedLyrics.isNotEmpty()) {
+                        if (!isGenerating && selectedLyrics.isNotEmpty()) {
                             scope.launch {
                                 isGenerating = true
                                 val poster = LyricsPosterGenerator.generatePoster(
@@ -277,17 +301,16 @@ fun LyricsPosterPreviewSheet(
                                     albumArtBitmap = albumArtBitmap,
                                     backgroundColor = backgroundColor,
                                     contentColor = contentColor,
-                                    selectedLyrics = preSelectedLyrics,
+                                    selectedLyrics = selectedLyrics,
                                     config = posterConfig
                                 )
                                 LyricsPosterShare.sharePoster(context, poster, title)
                                 isGenerating = false
-                                onDismiss()
                             }
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = preSelectedLyrics.isNotEmpty() && !isGenerating
+                    enabled = selectedLyrics.isNotEmpty() && !isGenerating
                 ) {
                     if (isGenerating) {
                         Text("生成中...")
@@ -319,7 +342,6 @@ private fun PosterPreviewCompose(
     backgroundColor: Color,
     contentColor: Color
 ) {
-    // 临时更新 config 中的颜色
     val previewConfig = config.copy(
         customBackgroundColor = backgroundColor,
         customContentColor = contentColor
@@ -378,7 +400,6 @@ private fun ShapeSelector(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 标准形状
             Text(
                 text = "标准",
                 style = MaterialTheme.typography.labelMedium,
@@ -400,7 +421,6 @@ private fun ShapeSelector(
 
             HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
 
-            // Expressive 形状
             Text(
                 text = "创意",
                 style = MaterialTheme.typography.labelMedium,
@@ -423,9 +443,6 @@ private fun ShapeSelector(
     }
 }
 
-/**
- * 形状选择芯片
- */
 @Composable
 private fun ShapeChip(
     shape: PosterShape,
@@ -443,9 +460,6 @@ private fun ShapeChip(
     )
 }
 
-/**
- * 颜色主题选择器
- */
 @Composable
 private fun ColorThemeSelector(
     selectedTheme: PosterColorTheme,
@@ -453,8 +467,6 @@ private fun ColorThemeSelector(
     onThemeSelected: (PosterColorTheme) -> Unit,
     onCustomColorSelected: (Color) -> Unit
 ) {
-    val colorCustom = "自定义"
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -488,11 +500,10 @@ private fun ColorThemeSelector(
                 FilterChip(
                     selected = selectedTheme == PosterColorTheme.CUSTOM,
                     onClick = { onThemeSelected(PosterColorTheme.CUSTOM) },
-                    label = { Text(colorCustom) }
+                    label = { Text("自定义") }
                 )
             }
 
-            // 自定义颜色选择器
             if (selectedTheme == PosterColorTheme.CUSTOM) {
                 Spacer(modifier = Modifier.height(12.dp))
                 
@@ -529,9 +540,6 @@ private fun ColorThemeSelector(
     }
 }
 
-/**
- * 字体设置区域
- */
 @Composable
 private fun FontSettingsSection(
     fontWeight: PosterFontWeight,
@@ -554,7 +562,6 @@ private fun FontSettingsSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 字体粗细
             Row(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -573,7 +580,6 @@ private fun FontSettingsSection(
 
             Spacer(modifier = Modifier.height(16.dp))
 
-            // 字体大小滑块
             Text(
                 text = "字体大小",
                 style = MaterialTheme.typography.labelMedium
@@ -607,9 +613,6 @@ private fun FontSettingsSection(
     }
 }
 
-/**
- * 布局选项区域
- */
 @Composable
 private fun LayoutOptionsSection(
     lyricsAlignment: LyricsAlignment,
@@ -634,7 +637,6 @@ private fun LayoutOptionsSection(
 
             Spacer(modifier = Modifier.height(12.dp))
 
-            // 歌词对齐
             Text(
                 text = "歌词对齐",
                 style = MaterialTheme.typography.labelMedium
@@ -659,7 +661,6 @@ private fun LayoutOptionsSection(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 水印位置
             Text(
                 text = "水印位置",
                 style = MaterialTheme.typography.labelMedium
@@ -684,7 +685,6 @@ private fun LayoutOptionsSection(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            // 行间距
             Text(
                 text = "行间距",
                 style = MaterialTheme.typography.labelMedium
@@ -718,9 +718,6 @@ private fun LayoutOptionsSection(
     }
 }
 
-/**
- * 水印开关
- */
 @Composable
 private fun WatermarkToggle(
     showWatermark: Boolean,
@@ -749,26 +746,4 @@ private fun WatermarkToggle(
             )
         }
     }
-}
-
-@Composable
-private fun ColorThemeChip(
-    label: String,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    FilterChip(
-        selected = isSelected,
-        onClick = onClick,
-        label = {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelLarge
-            )
-        },
-        colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-        )
-    )
 }

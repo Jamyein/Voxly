@@ -46,7 +46,7 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.components.lyricsposter.LyricsPosterPreviewSheet
+
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
@@ -89,9 +89,6 @@ fun MetadataEditorScreen(
     var showReauthorizeDialog by remember { mutableStateOf(false) }
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     var exitAfterSave by remember { mutableStateOf(false) }
-    var showLyricsPosterPreview by remember { mutableStateOf(false) }
-    var selectedLyricsIndices by remember { mutableStateOf<Set<Int>>(emptySet()) }
-    var selectedLyricsText by remember { mutableStateOf<List<String>>(emptyList()) }
 
     // ReplayGain state from ViewModel
     val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsState()
@@ -540,28 +537,6 @@ fun MetadataEditorScreen(
         )
     }
 
-    // Lyrics Poster Preview Sheet
-    if (showLyricsPosterPreview) {
-        val successState = uiState as? MetadataEditorUiState.Success
-        if (successState != null) {
-            LyricsPosterPreviewSheet(
-                title = successState.editedMetadata.getDisplayTitle(successState.audioFile.name),
-                artist = successState.editedMetadata.artist ?: "",
-                album = successState.editedMetadata.album ?: "",
-                lyricsText = successState.editedMetadata.lyrics ?: "",
-                albumArtBytes = successState.editedMetadata.albumArt,
-                preSelectedLyrics = selectedLyricsText,
-                onDismiss = {
-                    selectedLyricsIndices = emptySet()
-                    selectedLyricsText = emptyList()
-                    showLyricsPosterPreview = false
-                },
-                onShare = { bitmap ->
-                    // Share is handled in the sheet
-                }
-            )
-        }
-    }
 }
 
 /**

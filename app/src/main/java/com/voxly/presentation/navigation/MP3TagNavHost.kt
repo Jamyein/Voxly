@@ -41,11 +41,13 @@ import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 import com.voxly.presentation.screens.metadata.LyricsSelectorScreen
+import com.voxly.presentation.screens.metadata.LyricsPosterScreen
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.AppViewModel
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 import com.voxly.presentation.viewmodel.LibraryViewModel
+import com.voxly.presentation.viewmodel.LyricsPosterViewModel
 import com.voxly.presentation.viewmodel.LyricsSelectorViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.OnlineCoverSearchViewModel
@@ -307,7 +309,34 @@ fun MP3TagNavHost() {
                             onNavigateBack = { backStack.removeLastOrNull() },
                             onDismiss = {
                                 backStack.removeLastOrNull()
+                            },
+                            onNavigateToLyricsPoster = { lyricsText, selectedIndices ->
+                                backStack.add(
+                                    LyricsPoster(
+                                        filePath = key.filePath,
+                                        title = key.title,
+                                        artist = key.artist,
+                                        album = key.album,
+                                        lyricsText = lyricsText,
+                                        selectedLyricsIndices = selectedIndices
+                                    )
+                                )
                             }
+                        )
+                    }
+
+                    entry<LyricsPoster> { key ->
+                        val viewModel = hiltViewModel<LyricsPosterViewModel, LyricsPosterViewModel.Factory>(
+                            creationCallback = { factory -> factory.create(key) }
+                        )
+                        LyricsPosterScreen(
+                            filePath = key.filePath,
+                            title = key.title,
+                            artist = key.artist,
+                            album = key.album,
+                            lyricsText = key.lyricsText,
+                            selectedLyricsIndices = key.selectedLyricsIndices,
+                            onNavigateBack = { backStack.removeLastOrNull() }
                         )
                     }
 

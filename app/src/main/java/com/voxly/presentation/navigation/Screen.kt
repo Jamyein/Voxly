@@ -67,6 +67,16 @@ data class LyricsSelector(
 ) : NavKey
 
 @Serializable
+data class LyricsPoster(
+    val filePath: String,
+    val title: String = "",
+    val artist: String = "",
+    val album: String = "",
+    val lyricsText: String = "",
+    val selectedLyricsIndices: List<Int> = emptyList()
+) : NavKey
+
+@Serializable
 data class AlbumDetail(
     val albumName: String,
     val albumArtist: String = ""
