@@ -314,15 +314,17 @@ fun LyricsPosterCardWithBlurBackground(
                 val colorCount = Random.nextInt(2, 4) // 2 or 3 colors
                 val selectedColors = shuffled.take(colorCount)
                 
-                // 使用径向渐变，从中心向外扩散
-                val centerX = Random.nextFloat() * 0.4f + 0.3f // 0.3-0.7，偏向中心
-                val centerY = Random.nextFloat() * 0.4f + 0.3f // 0.3-0.7，偏向中心
-                val radius = Random.nextFloat() * 0.6f + 0.7f // 0.7-1.3，适中的半径
+                // 使用径向渐变，从中心向外扩散，增大半径确保多种颜色可见
+                val centerX = Random.nextFloat() * 0.2f + 0.4f // 0.4-0.6，接近中心
+                val centerY = Random.nextFloat() * 0.2f + 0.4f // 0.4-0.6，接近中心
+                // 使用极大的半径，让颜色均匀分布在整个海报区域
+                val radius = 2.5f // 固定的超大半径，确保渐变覆盖整个区域
                 
                 Brush.radialGradient(
                     colors = selectedColors,
                     center = Offset(centerX, centerY),
-                    radius = radius
+                    radius = radius,
+                    tileMode = androidx.compose.ui.graphics.TileMode.Clamp
                 )
             } else {
                 null
