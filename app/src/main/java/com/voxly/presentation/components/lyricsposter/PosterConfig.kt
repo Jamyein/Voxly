@@ -25,6 +25,7 @@ enum class PosterColorTheme {
     MUTED,          // 柔和 - 使用 muted 颜色
     VIBRANT,        // 鲜艳 - 使用 vibrant 颜色
     BLURRED_COVER,  // 模糊封面 - 使用25.dp高斯模糊专辑封面作为背景
+    GRADIENT,       // 渐变色 - 提取封面颜色随机组合成径向渐变
     CUSTOM          // 自定义 - 用户选择颜色
 }
 

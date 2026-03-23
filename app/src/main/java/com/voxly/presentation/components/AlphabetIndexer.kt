@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -81,17 +82,13 @@ fun AlphabetIndexer(
     // Fixed dimensions for the sidebar
     val sidebarWidth = 24.dp
 
-    // Font size - use Material 3 labelSmall for readability
+    // 字体大小：10sp 确保可读性
     val letterFontSize = 10.sp
 
-    // 计算所有字母需要的最小高度（28个字母 × 紧凑行高）
-    val minLetterHeight = letterFontSize.value * 0.8f
-    val minRequiredHeight = minLetterHeight * displayLetters.size
+    // 实际可用高度 - 使用传入的高度，不再强制扩展
+    val actualAvailableHeight = availableHeight
 
-    // 实际可用高度（确保最小高度能容纳所有字母）
-    val actualAvailableHeight = availableHeight.coerceAtLeast(minRequiredHeight.dp)
-
-    // 动态计算每个字母的高度，确保全部显示
+    // 动态计算每个字母的高度，确保全部显示在可用空间内
     val adjustedLetterHeight = (actualAvailableHeight.value / displayLetters.size).dp
 
     // Use Row to arrange preview bubble and sidebar (Lyrico pattern)
@@ -172,8 +169,10 @@ fun AlphabetIndexer(
                 }
         ) {
             Column(
-                modifier = Modifier.height(actualAvailableHeight),
-                verticalArrangement = Arrangement.Center,
+                modifier = Modifier
+                    .height(actualAvailableHeight)
+                    .padding(vertical = 4.dp),
+                verticalArrangement = Arrangement.SpaceEvenly,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
                 displayLetters.forEach { letter ->
@@ -191,13 +190,20 @@ fun AlphabetIndexer(
                         label = "letter_color"
                     )
 
-                    Text(
-                        text = letter.uppercase(),
-                        fontSize = fontSize,
-                        fontWeight = fontWeight,
-                        color = color,
-                        modifier = Modifier.padding(vertical = 1.dp)  // 1.dp spacing (Lyrico pattern)
-                    )
+                    Box(
+                        modifier = Modifier
+                            .height(adjustedLetterHeight)
+                            .fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = letter.uppercase(),
+                            fontSize = fontSize,
+                            fontWeight = fontWeight,
+                            color = color,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }

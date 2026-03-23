@@ -23,10 +23,14 @@ import androidx.compose.material3.MaterialShapes
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import kotlin.random.Random
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
@@ -55,19 +59,20 @@ fun LyricsPosterCard(
     config: PosterConfig,
     modifier: Modifier = Modifier
 ) {
-    // 判断是否为模糊封面主题
-    val isBlurredCoverTheme = config.colorTheme == PosterColorTheme.BLURRED_COVER
+    // 判断是否为特殊背景主题（模糊封面或渐变色）
+    val isSpecialBackgroundTheme = config.colorTheme == PosterColorTheme.BLURRED_COVER ||
+            config.colorTheme == PosterColorTheme.GRADIENT
 
-    // 计算背景色：模糊封面主题使用透明背景（背景由父组件处理）
+    // 计算背景色：特殊背景主题使用透明背景（背景由父组件处理）
     val backgroundColor = when {
-        isBlurredCoverTheme -> Color.Transparent
+        isSpecialBackgroundTheme -> Color.Transparent
         config.colorTheme == PosterColorTheme.CUSTOM -> config.customBackgroundColor ?: Color.DarkGray
         else -> Color.DarkGray
     }
 
-    // 计算内容颜色：模糊封面主题优先使用白色文字以确保可读性
+    // 计算内容颜色：特殊背景主题优先使用白色文字以确保可读性
     val contentColor = when {
-        isBlurredCoverTheme -> Color.White
+        isSpecialBackgroundTheme -> Color.White
         config.enableAutoTextColor -> calculateContrastColor(backgroundColor)
         else -> config.customContentColor ?: Color.White
     }
@@ -283,7 +288,8 @@ private fun Watermark(
  *
  * 关键修复：使用 wrapContentHeight 代替 matchParentSize，确保动态高度
  * 支持多种背景模式：
- * - BLURRED_COVER: 使用25.dp高斯模糊专辑封面作为背景，带轻微暗角遮罩
+ * - BLURRED_COVER: 使用50.dp高斯模糊专辑封面作为背景，带轻微暗角遮罩
+ * - GRADIENT: 使用从封面提取的颜色随机组合成径向渐变，带50.dp高斯模糊
  * - 其他主题: 使用纯色背景
  */
 @Composable
@@ -296,31 +302,81 @@ fun LyricsPosterCardWithBlurBackground(
     modifier: Modifier = Modifier
 ) {
     val isBlurredCoverTheme = config.colorTheme == PosterColorTheme.BLURRED_COVER
+    val isGradientTheme = config.colorTheme == PosterColorTheme.GRADIENT
+
+    // 为渐变色主题生成随机渐变色和方向
+    val gradientBrush = remember(albumArt, config.colorTheme) {
+        if (isGradientTheme && albumArt != null) {
+            val allColors = ColorExtractor.extractAllColors(albumArt)
+            if (allColors.size >= 2) {
+                // 随机选择2-3个颜色
+                val shuffled = allColors.shuffled()
+                val colorCount = Random.nextInt(2, 4) // 2 or 3 colors
+                val selectedColors = shuffled.take(colorCount)
+                
+                // 随机生成中心点和半径
+                val centerX = Random.nextFloat() * 0.6f + 0.2f // 0.2f to 0.8f
+                val centerY = Random.nextFloat() * 0.6f + 0.2f // 0.2f to 0.8f
+                val radius = Random.nextFloat() * 0.7f + 0.5f // 0.5f to 1.2f
+                
+                Brush.radialGradient(
+                    colors = selectedColors,
+                    center = Offset(centerX, centerY),
+                    radius = radius
+                )
+            } else {
+                null
+            }
+        } else {
+            null
+        }
+    }
 
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .wrapContentHeight() // 关键：允许动态高度
+            .wrapContentHeight()
     ) {
-        if (isBlurredCoverTheme && albumArt != null) {
-            // 模糊封面背景模式：使用25.dp高斯模糊专辑封面
-            Image(
-                bitmap = albumArt.asImageBitmap(),
-                contentDescription = null,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .matchParentSize()
-                    .blur(50.dp),
-                contentScale = ContentScale.Crop
-            )
+        when {
+            // 模糊封面背景模式
+            isBlurredCoverTheme && albumArt != null -> {
+                Image(
+                    bitmap = albumArt.asImageBitmap(),
+                    contentDescription = null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .matchParentSize()
+                        .blur(50.dp),
+                    contentScale = ContentScale.Crop
+                )
 
-            // 轻微暗角遮罩层，确保文字可读性
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .matchParentSize()
-                    .background(Color.Black.copy(alpha = 0.25f))
-            )
+                // 轻微暗角遮罩层
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.25f))
+                )
+            }
+            
+            // 渐变色背景模式
+            isGradientTheme && gradientBrush != null -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .matchParentSize()
+                        .background(gradientBrush)
+                        .blur(50.dp)
+                )
+                
+                // 轻微暗角遮罩层增强文字可读性
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .matchParentSize()
+                        .background(Color.Black.copy(alpha = 0.15f))
+                )
+            }
         }
 
         // 海报内容 - 前景层

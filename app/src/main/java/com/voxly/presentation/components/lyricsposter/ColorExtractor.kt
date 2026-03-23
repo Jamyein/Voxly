@@ -100,6 +100,31 @@ object ColorExtractor {
     }
 
     /**
+     * Extracts all available colors from palette for gradient generation.
+     * Returns a list of vibrant and muted colors.
+     */
+    fun extractAllColors(bitmap: Bitmap): List<Color> {
+        val palette = extractPalette(bitmap) ?: return listOf(DEFAULT_COLOR)
+        
+        val colors = mutableListOf<Color>()
+        
+        // Add all vibrant variants
+        palette.vibrantSwatch?.rgb?.let { colors.add(Color(it)) }
+        palette.lightVibrantSwatch?.rgb?.let { colors.add(Color(it)) }
+        palette.darkVibrantSwatch?.rgb?.let { colors.add(Color(it)) }
+        
+        // Add all muted variants
+        palette.mutedSwatch?.rgb?.let { colors.add(Color(it)) }
+        palette.lightMutedSwatch?.rgb?.let { colors.add(Color(it)) }
+        palette.darkMutedSwatch?.rgb?.let { colors.add(Color(it)) }
+        
+        // Add dominant color
+        palette.dominantSwatch?.rgb?.let { colors.add(Color(it)) }
+        
+        return colors.ifEmpty { listOf(DEFAULT_COLOR) }
+    }
+
+    /**
      * Determines if a color is dark (for contrast calculations).
      */
     fun isDarkColor(color: Color): Boolean {

@@ -154,8 +154,9 @@ fun LyricsPosterScreen(
                 ?: ColorExtractor.colorOptions.first()
             PosterColorTheme.VIBRANT -> extractedColors?.backgroundDominant?.let { Color(it) }
                 ?: ColorExtractor.colorOptions.first()
-            PosterColorTheme.BLURRED_COVER -> extractedColors?.backgroundDominant?.let { Color(it) }
-                ?: Color.DarkGray // 模糊封面主题使用提取的主色调作为参考
+            PosterColorTheme.BLURRED_COVER, PosterColorTheme.GRADIENT -> 
+                extractedColors?.backgroundDominant?.let { Color(it) }
+                ?: Color.DarkGray // 模糊封面和渐变色主题使用提取的主色调作为参考
             PosterColorTheme.CUSTOM -> customColor
         }
     }
@@ -174,7 +175,7 @@ fun LyricsPosterScreen(
                 ?: Color.White
             PosterColorTheme.VIBRANT -> extractedColors?.contentDominant?.let { Color(it) }
                 ?: Color.White
-            PosterColorTheme.BLURRED_COVER -> Color.White // 模糊封面主题固定使用白色文字
+            PosterColorTheme.BLURRED_COVER, PosterColorTheme.GRADIENT -> Color.White // 模糊封面和渐变色主题固定使用白色文字
             PosterColorTheme.CUSTOM -> ColorExtractor.getContrastingTextColor(customColor)
         }
     }
@@ -187,10 +188,10 @@ fun LyricsPosterScreen(
     )
 
     // Unified config for both preview and share
-    // 模糊封面主题需要保留原主题类型，其他主题使用 CUSTOM 并设置自定义颜色
-    val unifiedConfig = if (selectedTheme == PosterColorTheme.BLURRED_COVER) {
+    // 特殊背景主题（模糊封面、渐变色）需要保留原主题类型
+    val unifiedConfig = if (selectedTheme == PosterColorTheme.BLURRED_COVER || selectedTheme == PosterColorTheme.GRADIENT) {
         posterConfig.copy(
-            colorTheme = PosterColorTheme.BLURRED_COVER,
+            colorTheme = selectedTheme,
             customBackgroundColor = backgroundColor,
             customContentColor = contentColor
         )
@@ -517,6 +518,12 @@ private fun ColorThemeSelector(
                     selected = selectedTheme == PosterColorTheme.BLURRED_COVER,
                     onClick = { onThemeSelected(PosterColorTheme.BLURRED_COVER) },
                     label = { Text("模糊封面") }
+                )
+
+                FilterChip(
+                    selected = selectedTheme == PosterColorTheme.GRADIENT,
+                    onClick = { onThemeSelected(PosterColorTheme.GRADIENT) },
+                    label = { Text("渐变色") }
                 )
 
                 FilterChip(
