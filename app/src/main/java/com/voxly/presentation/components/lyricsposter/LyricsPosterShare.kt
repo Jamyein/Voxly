@@ -1,5 +1,6 @@
 package com.voxly.presentation.components.lyricsposter
 
+import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -27,35 +28,32 @@ object LyricsPosterShare {
         // Save full resolution image
         val posterFile = saveBitmapToCache(context, bitmap, title, POSTER_FILE_NAME)
         val posterUri = getUriForFile(context, posterFile)
-        
-        // Save a thumbnail for preview
-        val thumbnailFile = saveThumbnailToCache(context, bitmap, title)
-        val thumbnailUri = if (thumbnailFile != null) {
-            getUriForFile(context, thumbnailFile)
-        } else {
-            posterUri
-        }
 
         val shareIntent = Intent(Intent.ACTION_SEND).apply {
             type = "image/png"
-            
+
             // Set the main image to share
             putExtra(Intent.EXTRA_STREAM, posterUri)
-            
-            // Add subject and text
+
+            // Add subject and text (optional)
             putExtra(Intent.EXTRA_SUBJECT, "Lyrics Poster - $title")
-            putExtra(Intent.EXTRA_TEXT, "Check out the lyrics poster for \"$title\"")
-            
+
+            // Use ClipData for proper image sharing with preview
+            clipData = ClipData.newUri(
+                context.contentResolver,
+                "Lyrics Poster",
+                posterUri
+            )
+
             // Grant read permission for the URI
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
 
         // Use createChooser with the poster URI to show preview
-        val chooserIntent = Intent.createChooser(shareIntent, "Share Lyrics Poster").apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-        }
-        
+        val chooserIntent = Intent.createChooser(shareIntent, "Share Lyrics Poster")
+        chooserIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        chooserIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+
         context.startActivity(chooserIntent)
     }
 
@@ -79,39 +77,6 @@ object LyricsPosterShare {
         return file
     }
     
-    /**
-     * Creates a smaller thumbnail for preview purposes.
-     */
-    private fun saveThumbnailToCache(context: Context, bitmap: Bitmap, title: String): File? {
-        return try {
-            // Scale down to thumbnail size (max 512px)
-            val maxDimension = 512
-            val scale = if (bitmap.width > bitmap.height) {
-                maxDimension.toFloat() / bitmap.width
-            } else {
-                maxDimension.toFloat() / bitmap.height
-            }
-            
-            if (scale >= 1f) {
-                // Image is already small enough, no need for thumbnail
-                return null
-            }
-            
-            val newWidth = (bitmap.width * scale).toInt()
-            val newHeight = (bitmap.height * scale).toInt()
-            
-            val thumbnail = Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
-            
-            val thumbnailFile = saveBitmapToCache(context, thumbnail, title, "thumbnail.png")
-            thumbnail.recycle()
-            
-            thumbnailFile
-        } catch (e: Exception) {
-            e.printStackTrace()
-            null
-        }
-    }
-
     /**
      * Gets a content URI for the file using FileProvider.
      */
