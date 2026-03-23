@@ -3,9 +3,6 @@ package com.voxly.presentation.components.lyricsposter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.spring
-import com.voxly.presentation.theme.ExpressiveMotion
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -65,12 +62,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.Lyrics.Companion.parseToLines
+import com.voxly.presentation.theme.ExpressiveMotion
 import kotlinx.coroutines.launch
 
 /**
- * Color theme options for poster - matching Rush's CardColors enum
- * MUTED: 柔和颜色 (muted swatch)
- * VIBRANT: 鲜艳颜色 (vibrant swatch)
+ * Color theme options for poster
+ * MUTED: 柔和颜色
+ * VIBRANT: 鲜艳颜色
  * CUSTOM: 用户自定义颜色
  */
 enum class PosterColorTheme {
@@ -106,7 +104,7 @@ fun LyricsPosterPreviewSheet(
         }
     }
 
-    // Parse lyrics - single source of truth
+    // Parse lyrics
     val allLyricsLines = remember(lyricsText) {
         parseToLines(lyricsText)
     }
@@ -117,24 +115,23 @@ fun LyricsPosterPreviewSheet(
     var fontSizeScale by remember { mutableFloatStateOf(1.0f) }
     var posterOrientation by remember { mutableStateOf(LyricsPosterGenerator.PosterOrientation.PORTRAIT) }
     var generatedPoster by remember { mutableStateOf<Bitmap?>(null) }
-
-    // Style state
-    var posterStyle by remember { mutableStateOf(PosterStyle.SPOTIFY) }
+    
+    // Poster configuration
     var posterConfig by remember {
-        mutableStateOf(PosterConfig(style = PosterStyle.SPOTIFY))
+        mutableStateOf(PosterConfig())
     }
 
     // Directly use preSelectedLyrics for poster generation
     val selectedLyricsForPoster = preSelectedLyrics
 
-    // Extract colors from album art - Rush's approach
+    // Extract colors from album art
     val extractedColors = remember(selectedTheme, albumArtBitmap) {
         if (albumArtBitmap != null && selectedTheme != PosterColorTheme.CUSTOM) {
             ColorExtractor.extractColors(albumArtBitmap)
         } else null
     }
 
-    // Get background and content colors based on selected theme - Rush's approach
+    // Get background color based on selected theme
     val targetBackgroundColor = remember(selectedTheme, customColor, extractedColors) {
         when (selectedTheme) {
             PosterColorTheme.MUTED -> extractedColors?.backgroundMuted?.let { Color(it) }
@@ -145,14 +142,14 @@ fun LyricsPosterPreviewSheet(
         }
     }
 
-    // Animate background color with spring animation (M3E style)
+    // Animate background color
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
         animationSpec = ExpressiveMotion.SlowSpringColor,
         label = "background_color"
     )
 
-    // Get content (text) color for contrast
+    // Get content color for contrast
     val targetContentColor = remember(selectedTheme, extractedColors) {
         when (selectedTheme) {
             PosterColorTheme.MUTED -> extractedColors?.contentMuted?.let { Color(it) }
@@ -163,7 +160,7 @@ fun LyricsPosterPreviewSheet(
         }
     }
 
-    // Animate content color with spring animation
+    // Animate content color
     val contentColor by animateColorAsState(
         targetValue = targetContentColor,
         animationSpec = ExpressiveMotion.SlowSpringColor,
@@ -171,7 +168,11 @@ fun LyricsPosterPreviewSheet(
     )
 
     // Generate poster when any parameter changes
-    LaunchedEffect(title, artist, album, lyricsText, albumArtBitmap, backgroundColor, contentColor, preSelectedLyrics, fontSizeScale, posterOrientation, posterStyle, posterConfig) {
+    LaunchedEffect(
+        title, artist, album, lyricsText, albumArtBitmap, 
+        backgroundColor, contentColor, preSelectedLyrics, 
+        fontSizeScale, posterOrientation, posterConfig
+    ) {
         if (allLyricsLines.isNotEmpty()) {
             generatedPoster = LyricsPosterGenerator.generatePoster(
                 title = title,
@@ -184,15 +185,14 @@ fun LyricsPosterPreviewSheet(
                 selectedLyrics = selectedLyricsForPoster,
                 fontSizeScale = fontSizeScale,
                 orientation = posterOrientation,
-                style = posterStyle,
                 config = posterConfig
             )
         }
     }
 
-    // Get localized strings outside LazyRow
-    val colorMuted = stringResource(R.string.color_soft)     // 柔和
-    val colorVibrant = stringResource(R.string.color_vivid) // 鲜艳
+    // Get localized strings
+    val colorMuted = stringResource(R.string.color_soft)
+    val colorVibrant = stringResource(R.string.color_vivid)
     val colorCustom = stringResource(R.string.color_custom)
 
     val themes = listOf(
@@ -200,7 +200,7 @@ fun LyricsPosterPreviewSheet(
         PosterColorTheme.VIBRANT to colorVibrant,
     )
 
-    // Calculate poster aspect ratio based on orientation (auto mode: 3:4 portrait / 4:3 landscape)
+    // Calculate poster aspect ratio
     val posterAspectRatio = when (posterOrientation) {
         LyricsPosterGenerator.PosterOrientation.PORTRAIT -> 3f / 4f
         LyricsPosterGenerator.PosterOrientation.LANDSCAPE -> 4f / 3f
@@ -259,83 +259,7 @@ fun LyricsPosterPreviewSheet(
                 }
             }
 
-            // Style selector
-            item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.poster_style),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        item {
-                            FilterChip(
-                                selected = posterStyle == PosterStyle.SPOTIFY,
-                                onClick = {
-                                    posterStyle = PosterStyle.SPOTIFY
-                                    posterConfig = posterConfig.copy(style = PosterStyle.SPOTIFY)
-                                },
-                                label = { Text(stringResource(R.string.style_spotify)) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = posterStyle == PosterStyle.RUSHED,
-                                onClick = {
-                                    posterStyle = PosterStyle.RUSHED
-                                    posterConfig = posterConfig.copy(style = PosterStyle.RUSHED)
-                                },
-                                label = { Text(stringResource(R.string.style_rushed)) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = posterStyle == PosterStyle.MINIMAL,
-                                onClick = {
-                                    posterStyle = PosterStyle.MINIMAL
-                                    posterConfig = posterConfig.copy(style = PosterStyle.MINIMAL)
-                                },
-                                label = { Text(stringResource(R.string.style_minimal)) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = posterStyle == PosterStyle.ARTISTIC,
-                                onClick = {
-                                    posterStyle = PosterStyle.ARTISTIC
-                                    posterConfig = posterConfig.copy(style = PosterStyle.ARTISTIC)
-                                },
-                                label = { Text(stringResource(R.string.style_artistic)) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Orientation selector (Portrait / Landscape)
+            // Orientation selector
             item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -484,7 +408,7 @@ fun LyricsPosterPreviewSheet(
                             Slider(
                                 value = fontSizeScale,
                                 onValueChange = { fontSizeScale = it },
-                                valueRange = 0.7f..1.5f,
+                                valueRange = 0.7f..1.3f,
                                 modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
                             )
                             Text(
@@ -496,141 +420,32 @@ fun LyricsPosterPreviewSheet(
                     }
                 }
             }
-
-            // Style-specific settings
+            
+            // Watermark toggle
             item {
-                when (posterStyle) {
-                    PosterStyle.RUSHED -> {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            shape = MaterialTheme.shapes.medium
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = stringResource(R.string.card_corner_radius),
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween
-                                ) {
-                                    Text(stringResource(R.string.small), style = MaterialTheme.typography.bodySmall)
-                                    Slider(
-                                        value = posterConfig.cardCornerRadius,
-                                        onValueChange = { posterConfig = posterConfig.copy(cardCornerRadius = it) },
-                                        valueRange = 8f..32f,
-                                        modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                                    )
-                                    Text(stringResource(R.string.large), style = MaterialTheme.typography.bodySmall)
-                                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = MaterialTheme.shapes.medium
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(16.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = stringResource(R.string.show_watermark),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Switch(
+                            checked = posterConfig.showWatermark,
+                            onCheckedChange = { 
+                                posterConfig = posterConfig.copy(showWatermark = it) 
                             }
-                        }
+                        )
                     }
-                    PosterStyle.MINIMAL -> {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            shape = MaterialTheme.shapes.medium
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Text(
-                                        text = stringResource(R.string.show_watermark),
-                                        style = MaterialTheme.typography.titleMedium
-                                    )
-                                    Switch(
-                                        checked = posterConfig.showWatermark,
-                                        onCheckedChange = { posterConfig = posterConfig.copy(showWatermark = it) }
-                                    )
-                                }
-
-                                Spacer(modifier = Modifier.height(16.dp))
-
-                                Text(
-                                    text = stringResource(R.string.gradient_direction),
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    item {
-                                        FilterChip(
-                                            selected = posterConfig.gradientDirection == GradientDirection.VERTICAL,
-                                            onClick = { posterConfig = posterConfig.copy(gradientDirection = GradientDirection.VERTICAL) },
-                                            label = { Text(stringResource(R.string.vertical)) }
-                                        )
-                                    }
-                                    item {
-                                        FilterChip(
-                                            selected = posterConfig.gradientDirection == GradientDirection.HORIZONTAL,
-                                            onClick = { posterConfig = posterConfig.copy(gradientDirection = GradientDirection.HORIZONTAL) },
-                                            label = { Text(stringResource(R.string.horizontal)) }
-                                        )
-                                    }
-                                    item {
-                                        FilterChip(
-                                            selected = posterConfig.gradientDirection == GradientDirection.DIAGONAL,
-                                            onClick = { posterConfig = posterConfig.copy(gradientDirection = GradientDirection.DIAGONAL) },
-                                            label = { Text(stringResource(R.string.diagonal)) }
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    PosterStyle.ARTISTIC -> {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            shape = MaterialTheme.shapes.medium
-                        ) {
-                            Column(modifier = Modifier.padding(16.dp)) {
-                                Text(
-                                    text = stringResource(R.string.color_scheme),
-                                    style = MaterialTheme.typography.titleMedium
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                                    item {
-                                        FilterChip(
-                                            selected = posterConfig.artisticColorScheme == ArtisticColorScheme.PURPLE,
-                                            onClick = { posterConfig = posterConfig.copy(artisticColorScheme = ArtisticColorScheme.PURPLE) },
-                                            label = { Text(stringResource(R.string.purple)) },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer
-                                            )
-                                        )
-                                    }
-                                    item {
-                                        FilterChip(
-                                            selected = posterConfig.artisticColorScheme == ArtisticColorScheme.PINK,
-                                            onClick = { posterConfig = posterConfig.copy(artisticColorScheme = ArtisticColorScheme.PINK) },
-                                            label = { Text(stringResource(R.string.pink)) },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer
-                                            )
-                                        )
-                                    }
-                                    item {
-                                        FilterChip(
-                                            selected = posterConfig.artisticColorScheme == ArtisticColorScheme.BLUE,
-                                            onClick = { posterConfig = posterConfig.copy(artisticColorScheme = ArtisticColorScheme.BLUE) },
-                                            label = { Text(stringResource(R.string.blue)) },
-                                            colors = FilterChipDefaults.filterChipColors(
-                                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer
-                                            )
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    else -> {}
                 }
             }
 
