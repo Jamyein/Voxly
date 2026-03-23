@@ -90,13 +90,15 @@ fun LyricsPosterCard(
                 contentColor = contentColor
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
-
-            // 水印
-            Watermark(
-                config = config,
-                contentColor = contentColor
-            )
+            // 水印（根据配置显示/隐藏）
+            if (config.showWatermark) {
+                Spacer(modifier = Modifier.height(24.dp))
+                
+                Watermark(
+                    config = config,
+                    contentColor = contentColor
+                )
+            }
         }
     }
 }

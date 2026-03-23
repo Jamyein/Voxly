@@ -340,6 +340,7 @@ private fun PosterPreviewCompose(
     contentColor: Color
 ) {
     val previewConfig = config.copy(
+        colorTheme = PosterColorTheme.CUSTOM,
         customBackgroundColor = backgroundColor,
         customContentColor = contentColor
     )
