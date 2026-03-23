@@ -310,7 +310,7 @@ fun LyricsPosterCardWithBlurBackground(
                 modifier = Modifier
                     .fillMaxWidth()
                     .matchParentSize()
-                    .blur(25.dp),
+                    .blur(50.dp),
                 contentScale = ContentScale.Crop
             )
 

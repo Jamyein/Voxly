@@ -174,7 +174,7 @@ internal fun AudioFileListWithIndexer(
                         }
                     }
                 },
-                availableHeight = maxHeight,  // Pass available height for dynamic calculation
+                availableHeight = maxHeight * 0.7f,  // Use 70% of screen height for better UX
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp)
