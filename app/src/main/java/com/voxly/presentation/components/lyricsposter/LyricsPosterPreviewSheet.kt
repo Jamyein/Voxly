@@ -3,7 +3,6 @@ package com.voxly.presentation.components.lyricsposter
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,9 +12,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -33,6 +30,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
@@ -45,7 +43,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -54,28 +51,14 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.voxly.R
-import com.voxly.domain.model.Lyrics.Companion.parseToLines
 import com.voxly.presentation.theme.ExpressiveMotion
 import kotlinx.coroutines.launch
-
-/**
- * Color theme options for poster
- * MUTED: 柔和颜色
- * VIBRANT: 鲜艳颜色
- * CUSTOM: 用户自定义颜色
- */
-enum class PosterColorTheme {
-    MUTED,
-    VIBRANT,
-    CUSTOM
-}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -104,25 +87,15 @@ fun LyricsPosterPreviewSheet(
         }
     }
 
-    // Parse lyrics
-    val allLyricsLines = remember(lyricsText) {
-        parseToLines(lyricsText)
-    }
-
     // State
     var selectedTheme by remember { mutableStateOf(PosterColorTheme.VIBRANT) }
     var customColor by remember { mutableStateOf(ColorExtractor.colorOptions.first()) }
-    var fontSizeScale by remember { mutableFloatStateOf(1.0f) }
-    var posterOrientation by remember { mutableStateOf(LyricsPosterGenerator.PosterOrientation.PORTRAIT) }
-    var generatedPoster by remember { mutableStateOf<Bitmap?>(null) }
+    var isGenerating by remember { mutableStateOf(false) }
     
     // Poster configuration
     var posterConfig by remember {
         mutableStateOf(PosterConfig())
     }
-
-    // Directly use preSelectedLyrics for poster generation
-    val selectedLyricsForPoster = preSelectedLyrics
 
     // Extract colors from album art
     val extractedColors = remember(selectedTheme, albumArtBitmap) {
@@ -167,27 +140,9 @@ fun LyricsPosterPreviewSheet(
         label = "content_color"
     )
 
-    // Generate poster when any parameter changes
-    LaunchedEffect(
-        title, artist, album, lyricsText, albumArtBitmap, 
-        backgroundColor, contentColor, preSelectedLyrics, 
-        fontSizeScale, posterOrientation, posterConfig
-    ) {
-        if (allLyricsLines.isNotEmpty()) {
-            generatedPoster = LyricsPosterGenerator.generatePoster(
-                title = title,
-                artist = artist,
-                album = album,
-                lyricsText = lyricsText,
-                albumArtBitmap = albumArtBitmap,
-                backgroundColor = backgroundColor,
-                contentColor = contentColor,
-                selectedLyrics = selectedLyricsForPoster,
-                fontSizeScale = fontSizeScale,
-                orientation = posterOrientation,
-                config = posterConfig
-            )
-        }
+    // Preload shapes for better performance
+    LaunchedEffect(Unit) {
+        LyricsPosterGenerator.preloadShapes()
     }
 
     // Get localized strings
@@ -199,12 +154,6 @@ fun LyricsPosterPreviewSheet(
         PosterColorTheme.MUTED to colorMuted,
         PosterColorTheme.VIBRANT to colorVibrant,
     )
-
-    // Calculate poster aspect ratio
-    val posterAspectRatio = when (posterOrientation) {
-        LyricsPosterGenerator.PosterOrientation.PORTRAIT -> 3f / 4f
-        LyricsPosterGenerator.PosterOrientation.LANDSCAPE -> 4f / 3f
-    }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -232,246 +181,572 @@ fun LyricsPosterPreviewSheet(
                 )
             }
 
-            // Preview with dynamic aspect ratio
+            // Preview with Compose UI (real-time)
             item {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(posterAspectRatio)
-                        .clip(MaterialTheme.shapes.extraLarge)
-                        .background(MaterialTheme.colorScheme.surfaceVariant),
-                    contentAlignment = Alignment.Center
-                ) {
-                    generatedPoster?.let { poster ->
-                        Image(
-                            bitmap = poster.asImageBitmap(),
-                            contentDescription = stringResource(R.string.cd_poster_preview),
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .clip(MaterialTheme.shapes.extraLarge),
-                            contentScale = ContentScale.Fit
-                        )
-                    } ?: Text(
-                        text = stringResource(R.string.generating_poster),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
+                PosterPreviewCompose(
+                    title = title,
+                    artist = artist,
+                    albumArtBitmap = albumArtBitmap,
+                    lyrics = preSelectedLyrics,
+                    config = posterConfig,
+                    backgroundColor = backgroundColor,
+                    contentColor = contentColor
+                )
             }
 
-            // Orientation selector
+            // Shape selector
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = stringResource(R.string.orientation),
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.width(12.dp))
-                    LazyRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        item {
-                            FilterChip(
-                                selected = posterOrientation == LyricsPosterGenerator.PosterOrientation.PORTRAIT,
-                                onClick = { posterOrientation = LyricsPosterGenerator.PosterOrientation.PORTRAIT },
-                                label = { Text(stringResource(R.string.portrait)) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            )
-                        }
-                        item {
-                            FilterChip(
-                                selected = posterOrientation == LyricsPosterGenerator.PosterOrientation.LANDSCAPE,
-                                onClick = { posterOrientation = LyricsPosterGenerator.PosterOrientation.LANDSCAPE },
-                                label = { Text(stringResource(R.string.landscape)) },
-                                colors = FilterChipDefaults.filterChipColors(
-                                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                            )
-                        }
+                ShapeSelector(
+                    selectedShape = posterConfig.coverShape,
+                    onShapeSelected = { shape ->
+                        posterConfig = posterConfig.copy(coverShape = shape)
                     }
-                }
+                )
             }
 
             // Color theme selector
             item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.select_color_theme),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        // Theme options
-                        LazyRow(
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            contentPadding = PaddingValues(horizontal = 4.dp)
-                        ) {
-                            items(themes) { (theme, label) ->
-                                ColorThemeChip(
-                                    label = label,
-                                    isSelected = selectedTheme == theme,
-                                    onClick = { selectedTheme = theme }
-                                )
-                            }
-
-                            // Custom color option
-                            item {
-                                ColorThemeChip(
-                                    label = colorCustom,
-                                    isSelected = selectedTheme == PosterColorTheme.CUSTOM,
-                                    onClick = { selectedTheme = PosterColorTheme.CUSTOM }
-                                )
-                            }
-                        }
-
-                        // Custom color picker
-                        if (selectedTheme == PosterColorTheme.CUSTOM) {
-                            Spacer(modifier = Modifier.height(12.dp))
-                            LazyRow(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                contentPadding = PaddingValues(horizontal = 4.dp)
-                            ) {
-                                items(ColorExtractor.colorOptions) { color ->
-                                    Box(
-                                        modifier = Modifier
-                                            .size(40.dp)
-                                            .clip(CircleShape)
-                                            .background(color)
-                                            .border(
-                                                width = if (customColor == color) 3.dp else 0.dp,
-                                                color = MaterialTheme.colorScheme.primary,
-                                                shape = CircleShape
-                                            )
-                                            .clickable { customColor = color },
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        if (customColor == color) {
-                                            Icon(
-                                                Icons.Default.Check,
-                                                contentDescription = null,
-                                                tint = ColorExtractor.getContrastingTextColor(color),
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                ColorThemeSelector(
+                    selectedTheme = selectedTheme,
+                    customColor = customColor,
+                    onThemeSelected = { theme ->
+                        selectedTheme = theme
+                    },
+                    onCustomColorSelected = { color ->
+                        selectedTheme = PosterColorTheme.CUSTOM
+                        customColor = color
                     }
-                }
+                )
             }
 
-            // Font size selector
+            // Font settings
             item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Column(
-                        modifier = Modifier.padding(16.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.font_size),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = stringResource(R.string.small),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Slider(
-                                value = fontSizeScale,
-                                onValueChange = { fontSizeScale = it },
-                                valueRange = 0.7f..1.3f,
-                                modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
-                            )
-                            Text(
-                                text = stringResource(R.string.large),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                FontSettingsSection(
+                    fontWeight = posterConfig.fontWeight,
+                    fontSizeScale = posterConfig.fontSizeScale,
+                    onFontWeightChange = { weight ->
+                        posterConfig = posterConfig.copy(fontWeight = weight)
+                    },
+                    onFontSizeChange = { scale ->
+                        posterConfig = posterConfig.copy(fontSizeScale = scale)
                     }
-                }
+                )
+            }
+
+            // Layout options
+            item {
+                LayoutOptionsSection(
+                    lyricsAlignment = posterConfig.lyricsAlignment,
+                    watermarkPosition = posterConfig.watermarkPosition,
+                    lineSpacing = posterConfig.lineSpacingMultiplier,
+                    onAlignmentChange = { alignment ->
+                        posterConfig = posterConfig.copy(lyricsAlignment = alignment)
+                    },
+                    onWatermarkPositionChange = { position ->
+                        posterConfig = posterConfig.copy(watermarkPosition = position)
+                    },
+                    onLineSpacingChange = { spacing ->
+                        posterConfig = posterConfig.copy(lineSpacingMultiplier = spacing)
+                    }
+                )
             }
             
             // Watermark toggle
             item {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    color = MaterialTheme.colorScheme.surfaceContainerLow,
-                    shape = MaterialTheme.shapes.medium
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = stringResource(R.string.show_watermark),
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                        Switch(
-                            checked = posterConfig.showWatermark,
-                            onCheckedChange = { 
-                                posterConfig = posterConfig.copy(showWatermark = it) 
-                            }
-                        )
+                WatermarkToggle(
+                    showWatermark = posterConfig.showWatermark,
+                    onToggle = { show ->
+                        posterConfig = posterConfig.copy(showWatermark = show)
                     }
-                }
+                )
             }
 
             // Share button
             item {
                 Button(
                     onClick = {
-                        generatedPoster?.let { poster ->
+                        if (!isGenerating && preSelectedLyrics.isNotEmpty()) {
                             scope.launch {
+                                isGenerating = true
+                                val poster = LyricsPosterGenerator.generatePoster(
+                                    context = context,
+                                    title = title,
+                                    artist = artist,
+                                    album = album,
+                                    lyricsText = lyricsText,
+                                    albumArtBitmap = albumArtBitmap,
+                                    backgroundColor = backgroundColor,
+                                    contentColor = contentColor,
+                                    selectedLyrics = preSelectedLyrics,
+                                    config = posterConfig
+                                )
                                 LyricsPosterShare.sharePoster(context, poster, title)
+                                isGenerating = false
                                 onDismiss()
                             }
                         }
                     },
                     modifier = Modifier.fillMaxWidth(),
-                    enabled = generatedPoster != null && allLyricsLines.isNotEmpty()
+                    enabled = preSelectedLyrics.isNotEmpty() && !isGenerating
                 ) {
-                    Icon(
-                        Icons.Default.Share,
-                        contentDescription = null,
-                        modifier = Modifier.size(20.dp)
-                    )
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(stringResource(R.string.share_poster))
+                    if (isGenerating) {
+                        Text("生成中...")
+                    } else {
+                        Icon(
+                            Icons.Default.Share,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(stringResource(R.string.share_poster))
+                    }
                 }
             }
+        }
+    }
+}
+
+/**
+ * Compose UI 实时预览组件
+ */
+@Composable
+private fun PosterPreviewCompose(
+    title: String,
+    artist: String,
+    albumArtBitmap: Bitmap?,
+    lyrics: List<String>,
+    config: PosterConfig,
+    backgroundColor: Color,
+    contentColor: Color
+) {
+    // 临时更新 config 中的颜色
+    val previewConfig = config.copy(
+        customBackgroundColor = backgroundColor,
+        customContentColor = contentColor
+    )
+    
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(MaterialTheme.shapes.extraLarge)
+            .background(MaterialTheme.colorScheme.surfaceVariant),
+        contentAlignment = Alignment.Center
+    ) {
+        if (lyrics.isNotEmpty()) {
+            LyricsPosterCardWithBlurBackground(
+                title = title,
+                artist = artist,
+                albumArt = albumArtBitmap,
+                lyrics = lyrics,
+                config = previewConfig,
+                modifier = Modifier.fillMaxWidth()
+            )
+        } else {
+            Text(
+                text = stringResource(R.string.generating_poster),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(32.dp)
+            )
+        }
+    }
+}
+
+/**
+ * 形状选择器
+ */
+@Composable
+private fun ShapeSelector(
+    selectedShape: PosterShape,
+    onShapeSelected: (PosterShape) -> Unit
+) {
+    val standardShapes = PosterShape.standardShapes()
+    val expressiveShapes = PosterShape.expressiveShapes()
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "封面形状",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 标准形状
+            Text(
+                text = "标准",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(standardShapes) { shape ->
+                    ShapeChip(
+                        shape = shape,
+                        isSelected = selectedShape == shape,
+                        onClick = { onShapeSelected(shape) }
+                    )
+                }
+            }
+
+            HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+
+            // Expressive 形状
+            Text(
+                text = "创意",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 8.dp)
+            ) {
+                items(expressiveShapes) { shape ->
+                    ShapeChip(
+                        shape = shape,
+                        isSelected = selectedShape == shape,
+                        onClick = { onShapeSelected(shape) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 形状选择芯片
+ */
+@Composable
+private fun ShapeChip(
+    shape: PosterShape,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    FilterChip(
+        selected = isSelected,
+        onClick = onClick,
+        label = { Text(shape.getDisplayName()) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    )
+}
+
+/**
+ * 颜色主题选择器
+ */
+@Composable
+private fun ColorThemeSelector(
+    selectedTheme: PosterColorTheme,
+    customColor: Color,
+    onThemeSelected: (PosterColorTheme) -> Unit,
+    onCustomColorSelected: (Color) -> Unit
+) {
+    val colorCustom = "自定义"
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "颜色主题",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = selectedTheme == PosterColorTheme.MUTED,
+                    onClick = { onThemeSelected(PosterColorTheme.MUTED) },
+                    label = { Text("柔和") }
+                )
+                
+                FilterChip(
+                    selected = selectedTheme == PosterColorTheme.VIBRANT,
+                    onClick = { onThemeSelected(PosterColorTheme.VIBRANT) },
+                    label = { Text("鲜艳") }
+                )
+                
+                FilterChip(
+                    selected = selectedTheme == PosterColorTheme.CUSTOM,
+                    onClick = { onThemeSelected(PosterColorTheme.CUSTOM) },
+                    label = { Text(colorCustom) }
+                )
+            }
+
+            // 自定义颜色选择器
+            if (selectedTheme == PosterColorTheme.CUSTOM) {
+                Spacer(modifier = Modifier.height(12.dp))
+                
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(ColorExtractor.colorOptions) { color ->
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(CircleShape)
+                                .background(color)
+                                .border(
+                                    width = if (customColor == color) 3.dp else 0.dp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    shape = CircleShape
+                                )
+                                .clickable { onCustomColorSelected(color) },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            if (customColor == color) {
+                                Icon(
+                                    Icons.Default.Check,
+                                    contentDescription = null,
+                                    tint = if (ColorExtractor.isDarkColor(color)) Color.White else Color.Black,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * 字体设置区域
+ */
+@Composable
+private fun FontSettingsSection(
+    fontWeight: PosterFontWeight,
+    fontSizeScale: Float,
+    onFontWeightChange: (PosterFontWeight) -> Unit,
+    onFontSizeChange: (Float) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "字体设置",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 字体粗细
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = fontWeight == PosterFontWeight.REGULAR,
+                    onClick = { onFontWeightChange(PosterFontWeight.REGULAR) },
+                    label = { Text("常规") }
+                )
+                
+                FilterChip(
+                    selected = fontWeight == PosterFontWeight.BOLD,
+                    onClick = { onFontWeightChange(PosterFontWeight.BOLD) },
+                    label = { Text("粗体") }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 字体大小滑块
+            Text(
+                text = "字体大小",
+                style = MaterialTheme.typography.labelMedium
+            )
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "小",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.width(32.dp)
+                )
+                
+                Slider(
+                    value = fontSizeScale,
+                    onValueChange = onFontSizeChange,
+                    valueRange = 0.7f..1.3f,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                Text(
+                    text = "大",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.width(32.dp),
+                    textAlign = TextAlign.End
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 布局选项区域
+ */
+@Composable
+private fun LayoutOptionsSection(
+    lyricsAlignment: LyricsAlignment,
+    watermarkPosition: WatermarkPosition,
+    lineSpacing: Float,
+    onAlignmentChange: (LyricsAlignment) -> Unit,
+    onWatermarkPositionChange: (WatermarkPosition) -> Unit,
+    onLineSpacingChange: (Float) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "布局选项",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            // 歌词对齐
+            Text(
+                text = "歌词对齐",
+                style = MaterialTheme.typography.labelMedium
+            )
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(vertical = 8.dp)
+            ) {
+                FilterChip(
+                    selected = lyricsAlignment == LyricsAlignment.START,
+                    onClick = { onAlignmentChange(LyricsAlignment.START) },
+                    label = { Text("左对齐") }
+                )
+                
+                FilterChip(
+                    selected = lyricsAlignment == LyricsAlignment.CENTER,
+                    onClick = { onAlignmentChange(LyricsAlignment.CENTER) },
+                    label = { Text("居中") }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 水印位置
+            Text(
+                text = "水印位置",
+                style = MaterialTheme.typography.labelMedium
+            )
+            
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.padding(vertical = 8.dp)
+            ) {
+                FilterChip(
+                    selected = watermarkPosition == WatermarkPosition.START,
+                    onClick = { onWatermarkPositionChange(WatermarkPosition.START) },
+                    label = { Text("左侧") }
+                )
+                
+                FilterChip(
+                    selected = watermarkPosition == WatermarkPosition.END,
+                    onClick = { onWatermarkPositionChange(WatermarkPosition.END) },
+                    label = { Text("右侧") }
+                )
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            // 行间距
+            Text(
+                text = "行间距",
+                style = MaterialTheme.typography.labelMedium
+            )
+            
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "紧凑",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.width(48.dp)
+                )
+                
+                Slider(
+                    value = lineSpacing,
+                    onValueChange = onLineSpacingChange,
+                    valueRange = 1.2f..1.6f,
+                    modifier = Modifier.weight(1f)
+                )
+                
+                Text(
+                    text = "宽松",
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.width(48.dp),
+                    textAlign = TextAlign.End
+                )
+            }
+        }
+    }
+}
+
+/**
+ * 水印开关
+ */
+@Composable
+private fun WatermarkToggle(
+    showWatermark: Boolean,
+    onToggle: (Boolean) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "显示水印",
+                style = MaterialTheme.typography.titleMedium
+            )
+            
+            Switch(
+                checked = showWatermark,
+                onCheckedChange = onToggle
+            )
         }
     }
 }
