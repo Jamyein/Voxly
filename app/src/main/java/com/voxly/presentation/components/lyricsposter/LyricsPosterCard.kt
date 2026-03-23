@@ -314,16 +314,15 @@ fun LyricsPosterCardWithBlurBackground(
                 val colorCount = Random.nextInt(2, 4) // 2 or 3 colors
                 val selectedColors = shuffled.take(colorCount)
                 
-                // 使用线性渐变，从对角线方向，效果更明显
-                val startX = if (Random.nextBoolean()) 0f else 1f
-                val startY = if (Random.nextBoolean()) 0f else 1f
-                val endX = 1f - startX
-                val endY = 1f - startY
+                // 使用径向渐变，从中心向外扩散
+                val centerX = Random.nextFloat() * 0.4f + 0.3f // 0.3-0.7，偏向中心
+                val centerY = Random.nextFloat() * 0.4f + 0.3f // 0.3-0.7，偏向中心
+                val radius = Random.nextFloat() * 0.6f + 0.7f // 0.7-1.3，适中的半径
                 
-                Brush.linearGradient(
+                Brush.radialGradient(
                     colors = selectedColors,
-                    start = Offset(startX, startY),
-                    end = Offset(endX, endY)
+                    center = Offset(centerX, centerY),
+                    radius = radius
                 )
             } else {
                 null
@@ -362,12 +361,13 @@ fun LyricsPosterCardWithBlurBackground(
             
             // 渐变色背景模式
             isGradientTheme && gradientBrush != null -> {
-                // 应用渐变背景，不添加模糊以保留明显的颜色过渡
+                // 应用径向渐变背景，添加高斯模糊创造柔和效果
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .matchParentSize()
                         .background(gradientBrush)
+                        .blur(30.dp)
                 )
 
                 // 轻微暗角遮罩层增强文字可读性
@@ -375,7 +375,7 @@ fun LyricsPosterCardWithBlurBackground(
                     modifier = Modifier
                         .fillMaxWidth()
                         .matchParentSize()
-                        .background(Color.Black.copy(alpha = 0.15f))
+                        .background(Color.Black.copy(alpha = 0.12f))
                 )
             }
         }
