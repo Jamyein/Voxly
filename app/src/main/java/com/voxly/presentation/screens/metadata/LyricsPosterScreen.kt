@@ -1,6 +1,5 @@
 package com.voxly.presentation.screens.metadata
 
-import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
@@ -23,13 +22,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
+import android.widget.Toast
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -46,7 +44,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -56,7 +53,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -65,26 +61,31 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.Lyrics.Companion.parseToLines
 import com.voxly.presentation.components.lyricsposter.ColorExtractor
-
-import com.voxly.presentation.components.lyricsposter.LyricsPosterGenerator
+import com.voxly.presentation.components.lyricsposter.LyricsPosterCardWithBlurBackground
 import com.voxly.presentation.components.lyricsposter.LyricsPosterShare
 import com.voxly.presentation.components.lyricsposter.LyricsAlignment
+import com.voxly.presentation.components.lyricsposter.PosterCaptureBox
 import com.voxly.presentation.components.lyricsposter.PosterColorTheme
 import com.voxly.presentation.components.lyricsposter.PosterConfig
 import com.voxly.presentation.components.lyricsposter.PosterFontWeight
 import com.voxly.presentation.components.lyricsposter.PosterShape
 import com.voxly.presentation.components.lyricsposter.WatermarkPosition
+import com.voxly.presentation.components.lyricsposter.rememberPosterCapture
 import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.viewmodel.LyricsPosterViewModel
-import kotlinx.coroutines.launch
 import androidx.compose.runtime.collectAsState
-import androidx.compose.foundation.Image
-import androidx.compose.ui.graphics.asImageBitmap
 
 /**
  * 歌词海报生成器 Screen
- * 
- * 从 LyricsSelector 导航过来，显示海报预览和配置选项
+ *
+ * 使用 Compose UI 绘制海报，通过 GraphicsLayer 捕获生成图片
+ * 预览和分享使用完全相同的 Compose UI 代码，确保像素级一致
+ *
+ * 核心设计：
+ * 1. 使用 rememberPosterCapture() 创建 GraphicsLayer 捕获器
+ * 2. 使用 PosterCaptureBox 包裹海报 Compose UI
+ * 3. 预览时显示 Compose UI（实时响应配置变化）
+ * 4. 分享时调用 captureAsync() 生成 Bitmap
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,6 +101,9 @@ fun LyricsPosterScreen(
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+
+    // GraphicsLayer 海报捕获器 - 用于预览和导出
+    val posterCapture = rememberPosterCapture()
 
     val albumArtBytes by viewModel.albumArtBytes.collectAsState()
 
@@ -129,6 +133,7 @@ fun LyricsPosterScreen(
     var selectedTheme by remember { mutableStateOf(PosterColorTheme.VIBRANT) }
     var customColor by remember { mutableStateOf(ColorExtractor.colorOptions.first()) }
     var isGenerating by remember { mutableStateOf(false) }
+    var isSaving by remember { mutableStateOf(false) }
     
     // Poster configuration
     var posterConfig by remember {
@@ -178,10 +183,12 @@ fun LyricsPosterScreen(
         label = "content_color"
     )
 
-    // Preload shapes for better performance
-    LaunchedEffect(Unit) {
-        LyricsPosterGenerator.preloadShapes()
-    }
+    // Unified config for both preview and share
+    val unifiedConfig = posterConfig.copy(
+        colorTheme = PosterColorTheme.CUSTOM,
+        customBackgroundColor = backgroundColor,
+        customContentColor = contentColor
+    )
 
     Scaffold(
         topBar = {
@@ -196,39 +203,62 @@ fun LyricsPosterScreen(
                     }
                 },
                 actions = {
-                    // Share button in top bar
+                    // Save button - 保存到本地相册
                     IconButton(
                         onClick = {
-                            if (!isGenerating && selectedLyrics.isNotEmpty()) {
-                                scope.launch {
-                                    isGenerating = true
-                                    // Create config with same colors as preview
-                                    val shareConfig = posterConfig.copy(
-                                        colorTheme = PosterColorTheme.CUSTOM,
-                                        customBackgroundColor = backgroundColor,
-                                        customContentColor = contentColor
-                                    )
-                                    val poster = LyricsPosterGenerator.generatePoster(
-                                        context = context,
-                                        title = title,
-                                        artist = artist,
-                                        album = album,
-                                        lyricsText = lyricsText,
-                                        albumArtBitmap = albumArtBitmap,
-                                        backgroundColor = backgroundColor,
-                                        contentColor = contentColor,
-                                        selectedLyrics = selectedLyrics,
-                                        config = shareConfig
-                                    )
-                                    LyricsPosterShare.sharePoster(context, poster, title)
+                            if (!isSaving && !isGenerating && selectedLyrics.isNotEmpty() && posterCapture.isReady()) {
+                                isSaving = true
+                                posterCapture.captureAsync { bitmap ->
+                                    bitmap?.let {
+                                        LyricsPosterShare.savePosterToGallery(context, it, title) { uri ->
+                                            if (uri != null) {
+                                                Toast.makeText(context, "已保存到相册", Toast.LENGTH_SHORT).show()
+                                            } else {
+                                                Toast.makeText(context, "保存失败", Toast.LENGTH_SHORT).show()
+                                            }
+                                            isSaving = false
+                                        }
+                                    } ?: run {
+                                        isSaving = false
+                                    }
+                                }
+                            }
+                        },
+                        enabled = selectedLyrics.isNotEmpty() && !isGenerating && !isSaving && posterCapture.isReady()
+                    ) {
+                        if (isSaving) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
+                        } else {
+                            Icon(
+                                Icons.Default.Download,
+                                contentDescription = "保存到本地"
+                            )
+                        }
+                    }
+
+                    // Share button in top bar - 使用 GraphicsLayer 捕获 Compose UI
+                    IconButton(
+                        onClick = {
+                            if (!isGenerating && !isSaving && selectedLyrics.isNotEmpty() && posterCapture.isReady()) {
+                                isGenerating = true
+                                posterCapture.captureAsync { bitmap ->
+                                    bitmap?.let {
+                                        LyricsPosterShare.sharePoster(context, it, title)
+                                    }
                                     isGenerating = false
                                 }
                             }
                         },
-                        enabled = selectedLyrics.isNotEmpty() && !isGenerating
+                        enabled = selectedLyrics.isNotEmpty() && !isGenerating && !isSaving && posterCapture.isReady()
                     ) {
                         if (isGenerating) {
-                            Text("...")
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(24.dp),
+                                strokeWidth = 2.dp
+                            )
                         } else {
                             Icon(
                                 Icons.Default.Share,
@@ -252,17 +282,28 @@ fun LyricsPosterScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
             contentPadding = PaddingValues(bottom = 32.dp)
         ) {
-            // Preview with Compose UI (real-time)
+            // Preview with Compose UI + GraphicsLayer capture
+            // 使用 PosterCaptureBox 包裹海报，确保预览和导出像素级一致
             item {
-                PosterPreviewCompose(
-                    title = title,
-                    artist = artist,
-                    albumArtBitmap = albumArtBitmap,
-                    lyrics = selectedLyrics,
-                    config = posterConfig,
-                    backgroundColor = backgroundColor,
-                    contentColor = contentColor
-                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(MaterialTheme.shapes.extraLarge)
+                ) {
+                    PosterCaptureBox(
+                        capture = posterCapture,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        LyricsPosterCardWithBlurBackground(
+                            title = title,
+                            artist = artist,
+                            albumArt = albumArtBitmap,
+                            lyrics = selectedLyrics,
+                            config = unifiedConfig,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
             }
 
             // Shape selector
@@ -331,82 +372,11 @@ fun LyricsPosterScreen(
                     }
                 )
             }
-
-
         }
     }
 }
 
-/**
- * 海报预览组件
- * 
- * 使用 LyricsPosterGenerator 生成 Bitmap，确保与分享结果完全一致
- */
-@Composable
-private fun PosterPreviewCompose(
-    title: String,
-    artist: String,
-    albumArtBitmap: Bitmap?,
-    lyrics: List<String>,
-    config: PosterConfig,
-    backgroundColor: Color,
-    contentColor: Color
-) {
-    val context = LocalContext.current
-    var previewBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var isLoading by remember { mutableStateOf(false) }
-    
-    // 生成预览 Bitmap（当配置变更时）
-    LaunchedEffect(title, artist, albumArtBitmap, lyrics, config, backgroundColor, contentColor) {
-        if (lyrics.isNotEmpty() && !isLoading) {
-            isLoading = true
-            previewBitmap = LyricsPosterGenerator.generatePoster(
-                context = context,
-                title = title,
-                artist = artist,
-                lyricsText = "", // lyrics 通过 selectedLyrics 传入
-                albumArtBitmap = albumArtBitmap,
-                backgroundColor = backgroundColor,
-                contentColor = contentColor,
-                selectedLyrics = lyrics,
-                config = config
-            )
-            isLoading = false
-        }
-    }
-    
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(MaterialTheme.shapes.extraLarge)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
-        contentAlignment = Alignment.Center
-    ) {
-        when {
-            isLoading -> {
-                CircularProgressIndicator(
-                    modifier = Modifier.padding(32.dp)
-                )
-            }
-            previewBitmap != null -> {
-                Image(
-                    bitmap = previewBitmap!!.asImageBitmap(),
-                    contentDescription = stringResource(R.string.cd_poster_preview),
-                    modifier = Modifier.fillMaxWidth(),
-                    contentScale = ContentScale.FillWidth
-                )
-            }
-            else -> {
-                Text(
-                    text = stringResource(R.string.generating_poster),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(32.dp)
-                )
-            }
-        }
-    }
-}
+
 
 /**
  * 形状选择器
@@ -560,7 +530,7 @@ private fun ColorThemeSelector(
                         ) {
                             if (customColor == color) {
                                 Icon(
-                                    Icons.Default.Check,
+                                    imageVector = Icons.Default.Check,
                                     contentDescription = null,
                                     tint = if (ColorExtractor.isDarkColor(color)) Color.White else Color.Black,
                                     modifier = Modifier.size(20.dp)

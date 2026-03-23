@@ -1,13 +1,19 @@
 package com.voxly.presentation.components.lyricsposter
 
 import android.content.ClipData
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
 import android.net.Uri
+import android.os.Environment
+import android.provider.MediaStore
 import androidx.core.content.FileProvider
 import java.io.File
 import java.io.FileOutputStream
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 /**
  * Handles sharing of lyrics poster images with preview support.
@@ -86,5 +92,53 @@ object LyricsPosterShare {
             "${context.packageName}.fileprovider",
             file
         )
+    }
+
+    /**
+     * Saves a lyrics poster bitmap to device gallery (Pictures/Voxly/).
+     *
+     * @param context Android context
+     * @param bitmap The poster bitmap to save
+     * @param title Song title for naming the file
+     * @param onSaved Callback with the saved file URI (null if failed)
+     */
+    fun savePosterToGallery(
+        context: Context,
+        bitmap: Bitmap,
+        title: String,
+        onSaved: (Uri?) -> Unit
+    ) {
+        try {
+            val sanitizedTitle = title.replace(Regex("[^a-zA-Z0-9\\u4e00-\\u9fa5]"), "_").take(30)
+            val timeStamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.getDefault()).format(Date())
+            val fileName = "${sanitizedTitle}_$timeStamp.png"
+
+            val contentValues = ContentValues().apply {
+                put(MediaStore.Images.Media.DISPLAY_NAME, fileName)
+                put(MediaStore.Images.Media.MIME_TYPE, "image/png")
+                put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/Voxly")
+                put(MediaStore.Images.Media.IS_PENDING, 1)
+            }
+
+            val uri = context.contentResolver.insert(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                contentValues
+            )
+
+            uri?.let { imageUri ->
+                context.contentResolver.openOutputStream(imageUri)?.use { outputStream ->
+                    bitmap.compress(Bitmap.CompressFormat.PNG, 100, outputStream)
+                }
+
+                contentValues.clear()
+                contentValues.put(MediaStore.Images.Media.IS_PENDING, 0)
+                context.contentResolver.update(imageUri, contentValues, null, null)
+
+                onSaved(imageUri)
+            } ?: onSaved(null)
+        } catch (e: Exception) {
+            e.printStackTrace()
+            onSaved(null)
+        }
     }
 }
