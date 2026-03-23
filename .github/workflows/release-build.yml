@@ -48,8 +48,8 @@ jobs:
             COMMIT_RANGE="HEAD"
           fi
 
-          # Collect commits by type
-          declare -A SECTIONS TEMP_MAP
+          # Define sections
+          declare -A SECTIONS
           SECTIONS=(
             ["feat"]="✨ 新功能"
             ["fix"]="🐛 修复"
@@ -61,38 +61,74 @@ jobs:
             ["test"]="✅ 测试"
           )
 
-          ORDER=("feat" "fix" "refactor" "docs" "chore" "perf" "style" "test")
-          OTHERS=""
+          ORDER=("feat" "fix" "refactor" "perf" "docs" "chore" "test" "style")
+          
+          # Initialize temp files for each section
+          TEMP_DIR=$(mktemp -d)
+          for type in "${ORDER[@]}"; do
+            touch "${TEMP_DIR}/${type}.txt"
+          done
+          touch "${TEMP_DIR}/others.txt"
 
+          # Parse commits
           while IFS= read -r line; do
             [ -z "$line" ] && continue
+            
+            # Extract message (remove hash prefix)
             msg=$(echo "$line" | sed 's/^[a-f0-9]* //')
-            matched=false
-            for type in "${ORDER[@]}"; do
-              if echo "$msg" | grep -qi "^${type}"; then
-                if [ -z "${TEMP_MAP[$type]+x}" ]; then
-                  TEMP_MAP[$type]=""
-                fi
-                TEMP_MAP[$type]+="- ${msg}\n"
-                matched=true
-                break
+            
+            # Parse conventional commit format: type(scope): subject or type: subject
+            if [[ "$msg" =~ ^([a-z]+)(\([^)]+\))?!?:[[:space:]]*(.+)$ ]]; then
+              type="${BASH_REMATCH[1]}"
+              scope="${BASH_REMATCH[2]}"
+              subject="${BASH_REMATCH[3]}"
+              
+              # Remove parentheses from scope
+              scope="${scope//[\(\)]/}"
+              
+              # Format message
+              if [ -n "$scope" ]; then
+                formatted="**${scope}**: ${subject}"
+              else
+                formatted="${subject}"
               fi
-            done
-            if [ "$matched" = false ]; then
-              OTHERS+="- ${msg}\n"
+              
+              # Categorize
+              matched=false
+              for t in "${ORDER[@]}"; do
+                if [ "$type" = "$t" ]; then
+                  echo "- ${formatted}" >> "${TEMP_DIR}/${t}.txt"
+                  matched=true
+                  break
+                fi
+              done
+              
+              if [ "$matched" = false ]; then
+                echo "- ${msg}" >> "${TEMP_DIR}/others.txt"
+              fi
+            else
+              # Non-conventional commit
+              echo "- ${msg}" >> "${TEMP_DIR}/others.txt"
             fi
           done < <(git log --pretty=format:"%H %s" $COMMIT_RANGE)
 
           # Build markdown output
           AUTO_CHANGELOG=""
+          
           for type in "${ORDER[@]}"; do
-            if [ -n "${TEMP_MAP[$type]+x}" ]; then
-              AUTO_CHANGELOG+="### ${SECTIONS[$type]}\n${TEMP_MAP[$type]}\n"
+            if [ -s "${TEMP_DIR}/${type}.txt" ]; then
+              AUTO_CHANGELOG+="### ${SECTIONS[$type]}"$'\n\n'
+              AUTO_CHANGELOG+=$(cat "${TEMP_DIR}/${type}.txt")$'\n\n'
             fi
           done
-          if [ -n "$OTHERS" ]; then
-            AUTO_CHANGELOG+="### 📦 其他\n${OTHERS}\n"
+          
+          if [ -s "${TEMP_DIR}/others.txt" ]; then
+            AUTO_CHANGELOG+="### 📦 其他"$'\n\n'
+            AUTO_CHANGELOG+=$(cat "${TEMP_DIR}/others.txt")$'\n\n'
           fi
+
+          # Clean up
+          rm -rf "$TEMP_DIR"
 
           # Save to env
           echo "AUTO_CHANGELOG<<GITHUB_ENV_EOF" >> "$GITHUB_ENV"
@@ -109,11 +145,14 @@ jobs:
           BODY=""
 
           if [ -n "$MANUAL" ]; then
-            BODY="## 📋 更新说明\n${MANUAL}\n\n---\n"
+            BODY+="## 📋 更新说明"$'\n\n'
+            BODY+="${MANUAL}"$'\n\n'
+            BODY+="---"$'\n\n'
           fi
 
           if [ -n "$AUTO" ]; then
-            BODY+="## 🔄 变更日志\n${AUTO}"
+            BODY+="## 🔄 变更日志"$'\n\n'
+            BODY+="${AUTO}"
           fi
 
           if [ -z "$BODY" ]; then
