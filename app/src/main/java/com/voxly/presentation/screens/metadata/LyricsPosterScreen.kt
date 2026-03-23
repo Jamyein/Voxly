@@ -199,6 +199,12 @@ fun LyricsPosterScreen(
                             if (!isGenerating && selectedLyrics.isNotEmpty()) {
                                 scope.launch {
                                     isGenerating = true
+                                    // Create config with same colors as preview
+                                    val shareConfig = posterConfig.copy(
+                                        colorTheme = PosterColorTheme.CUSTOM,
+                                        customBackgroundColor = backgroundColor,
+                                        customContentColor = contentColor
+                                    )
                                     val poster = LyricsPosterGenerator.generatePoster(
                                         context = context,
                                         title = title,
@@ -209,7 +215,7 @@ fun LyricsPosterScreen(
                                         backgroundColor = backgroundColor,
                                         contentColor = contentColor,
                                         selectedLyrics = selectedLyrics,
-                                        config = posterConfig
+                                        config = shareConfig
                                     )
                                     LyricsPosterShare.sharePoster(context, poster, title)
                                     isGenerating = false
