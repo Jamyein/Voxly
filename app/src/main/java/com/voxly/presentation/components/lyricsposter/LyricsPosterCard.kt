@@ -314,15 +314,16 @@ fun LyricsPosterCardWithBlurBackground(
                 val colorCount = Random.nextInt(2, 4) // 2 or 3 colors
                 val selectedColors = shuffled.take(colorCount)
                 
-                // 随机生成中心点和半径
-                val centerX = Random.nextFloat() * 0.6f + 0.2f // 0.2f to 0.8f
-                val centerY = Random.nextFloat() * 0.6f + 0.2f // 0.2f to 0.8f
-                val radius = Random.nextFloat() * 0.7f + 0.5f // 0.5f to 1.2f
+                // 使用线性渐变，从对角线方向，效果更明显
+                val startX = if (Random.nextBoolean()) 0f else 1f
+                val startY = if (Random.nextBoolean()) 0f else 1f
+                val endX = 1f - startX
+                val endY = 1f - startY
                 
-                Brush.radialGradient(
+                Brush.linearGradient(
                     colors = selectedColors,
-                    center = Offset(centerX, centerY),
-                    radius = radius
+                    start = Offset(startX, startY),
+                    end = Offset(endX, endY)
                 )
             } else {
                 null
@@ -361,14 +362,14 @@ fun LyricsPosterCardWithBlurBackground(
             
             // 渐变色背景模式
             isGradientTheme && gradientBrush != null -> {
+                // 应用渐变背景，不添加模糊以保留明显的颜色过渡
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .matchParentSize()
                         .background(gradientBrush)
-                        .blur(50.dp)
                 )
-                
+
                 // 轻微暗角遮罩层增强文字可读性
                 Box(
                     modifier = Modifier

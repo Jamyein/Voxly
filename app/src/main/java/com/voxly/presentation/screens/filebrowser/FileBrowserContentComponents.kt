@@ -35,8 +35,11 @@ fun SelectionTopBar(
     selectedCount: Int,
     onSelectAll: () -> Unit,
     onClearSelection: () -> Unit,
-    onNavigateToReplayGain: () -> Unit
+    onNavigateToReplayGain: () -> Unit,
+    visibleFilesCount: Int = -1
 ) {
+    val isAllSelected = visibleFilesCount > 0 && selectedCount >= visibleFilesCount
+
     TopAppBar(
         title = { Text(stringResource(R.string.selected_count, selectedCount)) },
         navigationIcon = {
@@ -51,8 +54,20 @@ fun SelectionTopBar(
             containerColor = MaterialTheme.colorScheme.secondaryContainer
         ),
         actions = {
-            TextButton(onClick = onSelectAll) {
-                Text(stringResource(R.string.select_all))
+            TextButton(onClick = {
+                if (isAllSelected) {
+                    onClearSelection()
+                } else {
+                    onSelectAll()
+                }
+            }) {
+                Text(
+                    if (isAllSelected) {
+                        stringResource(R.string.deselect_all)
+                    } else {
+                        stringResource(R.string.select_all)
+                    }
+                )
             }
 
             FilledTonalButton(

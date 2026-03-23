@@ -321,8 +321,12 @@ fun FileBrowserScreen(
             }
         }
     }
-    BackHandler(enabled = openedDirectory != null && selectedFiles.isEmpty()) {
-        viewModel.closeOpenedDirectory()
+    BackHandler(enabled = openedDirectory != null) {
+        if (selectedFiles.isNotEmpty()) {
+            viewModel.clearSelection()
+        } else {
+            viewModel.closeOpenedDirectory()
+        }
     }
 
 
@@ -333,9 +337,10 @@ fun FileBrowserScreen(
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            if (selectedFiles.isNotEmpty()) {
+            if (selectedFiles.isNotEmpty() && openedDirectory != null) {
                 SelectionTopBar(
                     selectedCount = selectedFiles.size,
+                    visibleFilesCount = visibleFiles.size,
                     onSelectAll = { viewModel.selectFilePaths(visibleFiles.map { it.path }) },
                     onClearSelection = { viewModel.clearSelection() },
                     onNavigateToReplayGain = {

@@ -169,9 +169,7 @@ fun AlphabetIndexer(
                 }
         ) {
             Column(
-                modifier = Modifier
-                    .height(actualAvailableHeight)
-                    .padding(vertical = 4.dp),
+                modifier = Modifier.height(actualAvailableHeight),
                 verticalArrangement = Arrangement.SpaceEvenly,
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
