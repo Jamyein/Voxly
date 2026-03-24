@@ -847,7 +847,7 @@ fun AudioFileStandardRow(
             mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
             contentDescription = null,
             size = AlbumArtSizeLarge,
-            modifier = Modifier.clip(MaterialShapes.Cookie9Sided.toShape())
+            modifier = Modifier.size(AlbumArtSizeLarge).clip(MaterialShapes.Cookie9Sided.toShape())
         ) {
             Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
         }
@@ -997,7 +997,13 @@ fun AudioFileStandardRowWithMenu(
         }
     },
     leadingContent = {
-        AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = AlbumArtSizeLarge, modifier = Modifier.clip(MaterialShapes.Cookie9Sided.toShape())) {
+        AlbumArtImage(
+            filePath = audioFile.path,
+            mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+            contentDescription = null,
+            size = AlbumArtSizeLarge,
+            modifier = Modifier.size(AlbumArtSizeLarge).clip(MaterialShapes.Cookie9Sided.toShape())
+        ) {
             Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
         }
     },
