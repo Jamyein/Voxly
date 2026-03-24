@@ -141,10 +141,14 @@ internal fun AudioFileListWithIndexer(
     val coroutineScope = rememberCoroutineScope()
 
     // Create letter to index mapping for fast navigation
+    // Groups files by their first letter and keeps the first occurrence index for each letter
     val letterToIndex = remember(files) {
-        files.mapIndexed { index, file ->
-            getFirstLetter(file.metadata.getDisplayTitle(file.name)) to index
-        }.distinctBy { it.first }.toMap()
+        files
+            .mapIndexed { index, file ->
+                getFirstLetter(file.metadata.getDisplayTitle(file.name)) to index
+            }
+            .groupBy { it.first }
+            .mapValues { it.value.minOf { pair -> pair.second } }
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {

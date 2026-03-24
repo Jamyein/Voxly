@@ -291,7 +291,7 @@ private fun findLetterForIndex(targetIndex: Int, letterToIndex: Map<Char, Int>):
 
 /**
  * Get the first letter for indexing purposes.
- * Returns uppercase letter for alphabetic characters,
+ * Returns uppercase letter for alphabetic characters (supports Chinese pinyin),
  * '0' for digits, '#' for symbols and empty strings.
  */
 fun getFirstLetter(text: String): Char {
@@ -300,26 +300,42 @@ fun getFirstLetter(text: String): Char {
     val firstChar = text.trim().first()
 
     return when {
-        firstChar.isLetter() -> {
-            // Try to get pinyin for Chinese characters
-            if (firstChar.code > 127) {
-                try {
-                    val pinyin = java.text.Normalizer.normalize(
-                        firstChar.toString(),
-                        java.text.Normalizer.Form.NFD
-                    )
-                    // Get first ASCII letter from normalized string
-                    pinyin.firstOrNull { it.isLetter() && it.code < 128 }
-                        ?.uppercaseChar()
-                        ?: firstChar.uppercaseChar()
-                } catch (e: Exception) {
-                    firstChar.uppercaseChar()
-                }
-            } else {
-                firstChar.uppercaseChar()
-            }
+        // ASCII letters (A-Z, a-z)
+        firstChar.isLetter() && firstChar.code < 128 -> {
+            firstChar.uppercaseChar()
         }
+        // Chinese characters - use ICU Transliterator for pinyin
+        firstChar.code > 127 -> {
+            getPinyinInitial(firstChar)
+        }
+        // Digits
         firstChar.isDigit() -> '0'
+        // Other symbols
         else -> '#'
+    }
+}
+
+/**
+ * Get pinyin initial for a Chinese character using ICU Transliterator.
+ * Falls back to '#' if conversion fails.
+ */
+private fun getPinyinInitial(char: Char): Char {
+    return try {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
+            // Use ICU Transliterator to convert Chinese to Latin/Pinyin
+            val transliterator = android.icu.text.Transliterator.getInstance("Han-Latin")
+            val pinyin = transliterator.transliterate(char.toString())
+            
+            // Get first letter and uppercase it
+            pinyin.firstOrNull { it.isLetter() }
+                ?.uppercaseChar()
+                ?: '#'
+        } else {
+            // Fallback for older Android versions - return the char itself if it's a letter
+            if (char.isLetter()) char.uppercaseChar() else '#'
+        }
+    } catch (e: Exception) {
+        // If conversion fails, check if it's a letter and return it, otherwise '#'
+        if (char.isLetter()) char.uppercaseChar() else '#'
     }
 }

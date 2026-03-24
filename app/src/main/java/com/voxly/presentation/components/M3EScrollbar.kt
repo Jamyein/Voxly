@@ -1,9 +1,11 @@
 package com.voxly.presentation.components
 
+import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.detectVerticalDragGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -26,7 +28,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -34,13 +38,14 @@ import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 
 /**
- * Material 3 Expressive style standard scrollbar for LazyColumn.
+ * Material 3 Expressive style standard scrollbar for LazyColumn with drag support.
  *
  * Features:
  * - Auto-hide: only visible when scrolling (1.5s delay)
  * - M3E style capsule scrollbar (6dp width, rounded corners)
  * - Vibrant thumb color using primary color
  * - Spring animations for smooth appearance/disappearance
+ * - DRAG SUPPORT: Pull thumb to quickly navigate through list
  *
  * @param listState The LazyListState to track scroll position
  * @param modifier Modifier for the scrollbar container
@@ -54,21 +59,31 @@ fun M3EScrollbar(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val view = LocalView.current
 
     // Auto-hide scrollbar state
     var isScrollbarVisible by remember { mutableStateOf(false) }
     var hideJob by remember { mutableStateOf<Job?>(null) }
+    var isDragging by remember { mutableStateOf(false) }
 
     // Monitor scroll state to show/hide scrollbar
     LaunchedEffect(listState.isScrollInProgress) {
         if (listState.isScrollInProgress) {
             hideJob?.cancel()
             isScrollbarVisible = true
-        } else {
+        } else if (!isDragging) {
             hideJob = coroutineScope.launch {
                 delay(hideDelayMillis)
                 isScrollbarVisible = false
             }
+        }
+    }
+
+    // Keep visible while dragging
+    LaunchedEffect(isDragging) {
+        if (isDragging) {
+            hideJob?.cancel()
+            isScrollbarVisible = true
         }
     }
 
@@ -91,7 +106,7 @@ fun M3EScrollbar(
 
     // Animation for scrollbar visibility
     val scrollbarAlpha by animateFloatAsState(
-        targetValue = if (isScrollbarVisible) 1f else 0f,
+        targetValue = if (isScrollbarVisible || isDragging) 1f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMedium
@@ -101,7 +116,7 @@ fun M3EScrollbar(
 
     Box(
         modifier = modifier
-            .width(16.dp)
+            .width(24.dp)  // Wider touch area for easier dragging
             .fillMaxHeight()
             .padding(end = 4.dp),
         contentAlignment = Alignment.CenterEnd
@@ -125,28 +140,84 @@ fun M3EScrollbar(
         val thumbOffsetPx = scrollProgress * maxThumbOffset
         val thumbOffset = with(density) { thumbOffsetPx.toDp() }
 
-        // Visual thumb
+        // Full height draggable area
         Box(
             modifier = Modifier
-                .width(6.dp)
-                .height(48.dp)
-                .alpha(scrollbarAlpha)
-                .align(Alignment.TopEnd)
-                .offset(y = thumbOffset)
-                .clip(RoundedCornerShape(3.dp))
-                .background(MaterialTheme.colorScheme.primary)
-        )
+                .fillMaxHeight()
+                .width(24.dp)
+                .pointerInput(Unit) {
+                    trackHeightPx = size.height.toFloat()
+
+                    detectVerticalDragGestures(
+                        onDragStart = { offset ->
+                            // Check if touch is within thumb area
+                            val touchY = offset.y
+                            val thumbTop = thumbOffsetPx
+                            val thumbBottom = thumbOffsetPx + thumbHeightPx
+                            
+                            if (touchY in thumbTop..thumbBottom) {
+                                isDragging = true
+                                view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
+                            }
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                        },
+                        onDragCancel = {
+                            isDragging = false
+                        },
+                        onVerticalDrag = { change, dragAmount ->
+                            if (!isDragging) return@detectVerticalDragGestures
+                            
+                            change.consume()
+                            
+                            // Calculate new position based on drag
+                            val newOffsetPx = (thumbOffsetPx + dragAmount).coerceIn(0f, maxThumbOffset)
+                            val newProgress = if (maxThumbOffset > 0) {
+                                newOffsetPx / maxThumbOffset
+                            } else 0f
+
+                            val totalItems = listState.layoutInfo.totalItemsCount
+                            val targetIndex = (newProgress * (totalItems - 1)).toInt()
+                                .coerceIn(0, totalItems - 1)
+
+                            coroutineScope.launch {
+                                listState.scrollToItem(targetIndex)
+                            }
+                        }
+                    )
+                }
+        ) {
+            // Visual thumb
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .height(48.dp)
+                    .alpha(scrollbarAlpha)
+                    .align(Alignment.TopEnd)
+                    .offset(y = thumbOffset)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(
+                        if (isDragging) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    )
+            )
+        }
     }
 }
 
 /**
- * Material 3 Expressive style standard scrollbar for LazyVerticalGrid.
+ * Material 3 Expressive style standard scrollbar for LazyVerticalGrid with drag support.
  *
  * Features:
  * - Auto-hide: only visible when scrolling (1.5s delay)
  * - M3E style capsule scrollbar (6dp width, rounded corners)
  * - Vibrant thumb color using primary color
  * - Spring animations for smooth appearance/disappearance
+ * - DRAG SUPPORT: Pull thumb to quickly navigate through grid
  *
  * @param gridState The LazyGridState to track scroll position
  * @param modifier Modifier for the scrollbar container
@@ -160,21 +231,31 @@ fun M3EGridScrollbar(
 ) {
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val view = LocalView.current
 
     // Auto-hide scrollbar state
     var isScrollbarVisible by remember { mutableStateOf(false) }
     var hideJob by remember { mutableStateOf<Job?>(null) }
+    var isDragging by remember { mutableStateOf(false) }
 
     // Monitor scroll state to show/hide scrollbar
     LaunchedEffect(gridState.isScrollInProgress) {
         if (gridState.isScrollInProgress) {
             hideJob?.cancel()
             isScrollbarVisible = true
-        } else {
+        } else if (!isDragging) {
             hideJob = coroutineScope.launch {
                 delay(hideDelayMillis)
                 isScrollbarVisible = false
             }
+        }
+    }
+
+    // Keep visible while dragging
+    LaunchedEffect(isDragging) {
+        if (isDragging) {
+            hideJob?.cancel()
+            isScrollbarVisible = true
         }
     }
 
@@ -197,7 +278,7 @@ fun M3EGridScrollbar(
 
     // Animation for scrollbar visibility
     val scrollbarAlpha by animateFloatAsState(
-        targetValue = if (isScrollbarVisible) 1f else 0f,
+        targetValue = if (isScrollbarVisible || isDragging) 1f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
             stiffness = Spring.StiffnessMedium
@@ -207,7 +288,7 @@ fun M3EGridScrollbar(
 
     Box(
         modifier = modifier
-            .width(16.dp)
+            .width(24.dp)  // Wider touch area for easier dragging
             .fillMaxHeight()
             .padding(end = 4.dp),
         contentAlignment = Alignment.CenterEnd
@@ -231,16 +312,71 @@ fun M3EGridScrollbar(
         val thumbOffsetPx = scrollProgress * maxThumbOffset
         val thumbOffset = with(density) { thumbOffsetPx.toDp() }
 
-        // Visual thumb
+        // Full height draggable area
         Box(
             modifier = Modifier
-                .width(6.dp)
-                .height(48.dp)
-                .alpha(scrollbarAlpha)
-                .align(Alignment.TopEnd)
-                .offset(y = thumbOffset)
-                .clip(RoundedCornerShape(3.dp))
-                .background(MaterialTheme.colorScheme.primary)
-        )
+                .fillMaxHeight()
+                .width(24.dp)
+                .pointerInput(Unit) {
+                    trackHeightPx = size.height.toFloat()
+
+                    detectVerticalDragGestures(
+                        onDragStart = { offset ->
+                            // Check if touch is within thumb area
+                            val touchY = offset.y
+                            val thumbTop = thumbOffsetPx
+                            val thumbBottom = thumbOffsetPx + thumbHeightPx
+                            
+                            if (touchY in thumbTop..thumbBottom) {
+                                isDragging = true
+                                view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
+                            }
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                        },
+                        onDragCancel = {
+                            isDragging = false
+                        },
+                        onVerticalDrag = { change, dragAmount ->
+                            if (!isDragging) return@detectVerticalDragGestures
+                            
+                            change.consume()
+                            
+                            // Calculate new position based on drag
+                            val newOffsetPx = (thumbOffsetPx + dragAmount).coerceIn(0f, maxThumbOffset)
+                            val newProgress = if (maxThumbOffset > 0) {
+                                newOffsetPx / maxThumbOffset
+                            } else 0f
+
+                            val totalItems = gridState.layoutInfo.totalItemsCount
+                            val targetIndex = (newProgress * (totalItems - 1)).toInt()
+                                .coerceIn(0, totalItems - 1)
+
+                            coroutineScope.launch {
+                                gridState.scrollToItem(targetIndex)
+                            }
+                        }
+                    )
+                }
+        ) {
+            // Visual thumb
+            Box(
+                modifier = Modifier
+                    .width(6.dp)
+                    .height(48.dp)
+                    .alpha(scrollbarAlpha)
+                    .align(Alignment.TopEnd)
+                    .offset(y = thumbOffset)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(
+                        if (isDragging) {
+                            MaterialTheme.colorScheme.primaryContainer
+                        } else {
+                            MaterialTheme.colorScheme.primary
+                        }
+                    )
+            )
+        }
     }
 }
