@@ -928,8 +928,8 @@ fun SettingsScreen(
     val replayGainTargetLoudness by viewModel.replayGainTargetLoudness.collectAsState()
     val scanMode by viewModel.scanMode.collectAsState()
     val minDurationFilterEnabled by viewModel.minDurationFilterEnabled.collectAsState()
+    val lyricsTimestampFormatEnabled by viewModel.lyricsTimestampFormatEnabled.collectAsState()
 
-    
     var languageExpanded by remember { mutableStateOf(false) }
     val languageOptions = remember {
         listOf(
@@ -1353,7 +1353,16 @@ fun SettingsScreen(
                     subtitle = stringResource(R.string.settings_source_group_cover_subtitle),
                     onClick = { showCoverSourceDialog = true },
                     index = 2,
-                    count = 4
+                    count = 5
+                )
+                // Lyrics timestamp format
+                SegmentedSwitchRow(
+                    title = stringResource(R.string.settings_lyrics_timestamp_format),
+                    subtitle = stringResource(R.string.settings_lyrics_timestamp_format_subtitle),
+                    checked = lyricsTimestampFormatEnabled,
+                    onCheckedChange = { viewModel.setLyricsTimestampFormatEnabled(it) },
+                    index = 3,
+                    count = 5
                 )
                 // Search limits - global limit with connected button group
                 ConnectedButtonGroupRow(
@@ -1361,8 +1370,8 @@ fun SettingsScreen(
                     options = searchLimitSegmentedOptions,
                     selectedValue = onlineSearchLimit,
                     onSelected = { viewModel.setOnlineSearchLimit(it) },
-                    index = 3,
-                    count = 4
+                    index = 4,
+                    count = 5
                 )
             }
 

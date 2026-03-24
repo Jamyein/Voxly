@@ -430,6 +430,7 @@ fun MetadataEditorScreen(
 
     // More Options Sheet
     if (showMoreOptionsSheet) {
+        val hasLyrics = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.lyrics?.isNotBlank() == true
         MoreOptionsSheet(
             sheetState = moreOptionsSheetState,
             onDismiss = { showMoreOptionsSheet = false },
@@ -446,7 +447,13 @@ fun MetadataEditorScreen(
                 showMoreOptionsSheet = false
                 conversionType = ConversionType.TO_TRADITIONAL
                 showConversionDialog = true
-            }
+            },
+            onToggleLyricsTimestampClick = {
+                showMoreOptionsSheet = false
+                viewModel.toggleLyricsTimestampFormat()
+            },
+            isLyricsTimestampFormatted = viewModel.isLyricsTimestampFormatted,
+            hasLyrics = hasLyrics
         )
     }
 

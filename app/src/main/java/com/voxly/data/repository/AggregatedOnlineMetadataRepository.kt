@@ -28,6 +28,7 @@ import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
@@ -831,31 +832,63 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     suspend fun searchByTrackForCover(
         title: String,
         artist: String?
-    ): Result<List<OnlineRecording>> = coroutineScope {
+    ): Result<List<OnlineRecording>> = supervisorScope {
         val settings = getOnlineSourceSettings()
         if (!settings.hasAnyCoverEnabledSource) {
-            return@coroutineScope Result.failure(Exception("No cover sources enabled"))
+            Timber.w(TAG, "searchByTrackForCover: no cover sources enabled")
+            return@supervisorScope Result.failure(Exception("No cover sources enabled"))
         }
 
+        Timber.d(TAG, "searchByTrackForCover: starting search for title='$title', artist='$artist'")
         val results = mutableListOf<OnlineRecording>()
 
-        val musicBrainzDeferred = if (settings.coverEnableMusicBrainz) {
-            async { musicBrainzRepository.searchByTrack(title, artist) }
+        val musicBrainzDeferred: Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableMusicBrainz) {
+            async { 
+                try {
+                    musicBrainzRepository.searchByTrack(title, artist)
+                } catch (e: Exception) {
+                    Timber.w(TAG, "MusicBrainz search failed: ${e.message}")
+                    Result.success(emptyList())
+                }
+            }
         } else null
-        val iTunesDeferred = if (settings.coverEnableITunes) {
-            async { iTunesRepository.searchByTrack(title, artist) }
+        val iTunesDeferred: Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableITunes) {
+            async { 
+                try {
+                    iTunesRepository.searchByTrack(title, artist)
+                } catch (e: Exception) {
+                    Timber.w(TAG, "iTunes search failed: ${e.message}")
+                    Result.success(emptyList())
+                }
+            }
         } else null
-        val neteaseDeferred = if (settings.coverEnableNetease) {
-            async { searchNeteaseByTrack(title, artist, settings.requestLimit) }
+        val neteaseDeferred: Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableNetease) {
+            async { 
+                try {
+                    searchNeteaseByTrack(title, artist, settings.requestLimit)
+                } catch (e: Exception) {
+                    Timber.w(TAG, "NetEase search failed: ${e.message}")
+                    Result.success(emptyList())
+                }
+            }
         } else null
-        val qqDeferred = if (settings.coverEnableQQMusic) {
-            async { searchQQMusicByTrack(title, artist, settings.requestLimit) }
+        val qqDeferred: Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableQQMusic) {
+            async { 
+                try {
+                    searchQQMusicByTrack(title, artist, settings.requestLimit)
+                } catch (e: Exception) {
+                    Timber.w(TAG, "QQ Music search failed: ${e.message}")
+                    Result.success(emptyList())
+                }
+            }
         } else null
 
         musicBrainzDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
         iTunesDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
         neteaseDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
         qqDeferred?.await()?.getOrNull()?.let { results.addAll(it) }
+
+        Timber.d(TAG, "searchByTrackForCover: raw results count=${results.size}")
 
         val sorted = finalizeRecordingResults(
             recordings = results,
@@ -864,6 +897,8 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             priority = settings.coverPriority,
             limit = settings.searchLimit
         )
+        
+        Timber.d(TAG, "searchByTrackForCover: final results count=${sorted.size}")
         Result.success(sorted)
     }
 
@@ -1036,9 +1071,12 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                 ?: ""
                             val albumId = detailAlbum?.id
                                 ?: searchSong.album?.id
-                            // 详情API返回的封面URL
+
+                            // 详情API返回的封面URL优先，fallback到搜索结果的专辑picUrl
                             val coverUrl = detailAlbum?.picUrl?.takeIf { it.isNotBlank() }
                                 ?.let { normalizeCoverUrl(it) }
+                                ?: searchSong.album?.picUrl?.takeIf { it.isNotBlank() }
+                                    ?.let { normalizeCoverUrl(it) }
 
                             // 获取歌词文本
                             val lyricsText = lyricsResponse?.lrc?.lyric?.takeIf { it.isNotBlank() }
@@ -1065,7 +1103,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                                 lyrics = lyricsText
                             )
                         }
-                        Timber.d(TAG, "NetEase recordings: ${recordings.take(3)}")
+                        Timber.d(TAG, "NetEase recordings: ${recordings.take(3).map { "${it.title}(${it.coverArtUrl?.take(30)}...)" }}")
                         Result.success(recordings)
                     }
                 },
@@ -1631,43 +1669,121 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         limit: Int
     ): List<OnlineRecording> {
         Timber.d("finalizeRecordingResults: input=${recordings.size} recordings, title='$title', artist='$artist'")
-        // 宽松匹配过滤 + 括号处理 + 包含匹配
-        // - 歌曲名匹配：移除括号后检查是否包含
-        // - 歌手名匹配：宽松匹配（包含匹配，不区分大小写）
-        val filtered = recordings.filter { recording ->
-            val titleMatch = matchesTitle(title, recording.title)
-            Timber.d("Filter check: queryTitle='$title', resultTitle='${recording.title}', match=$titleMatch")
-            // 对于 iTunes/Apple Music 源：如果 title 匹配，则放宽 artist 检查
-            // 因为 iTunes 返回英文艺术家名，而用户音乐库可能是中文名
-            val artistMatch = if (titleMatch && recording.source == OnlineSource.ITUNES) {
-                // iTunes 源：title 匹配时信任结果，跳过 artist 严格检查
-                Timber.d("Artist check: queryArtist='$artist', resultArtist='${recording.artist}', source=iTunes, match=relaxed")
-                true
-            } else if (artist.isNullOrBlank()) {
-                // 如果查询没有歌手名，只检查歌曲名
-                true
-            } else {
-                val match = matchesArtist(artist, recording.artist)
-                Timber.d("Artist check: queryArtist='$artist', resultArtist='${recording.artist}', match=$match")
-                match
-            }
-            titleMatch && artistMatch
-        }
-        Timber.d("finalizeRecordingResults: filtered=${filtered.size} recordings")
 
-        // 按优先级排序
-        val sorted = filtered.sortedWith(
+        if (recordings.isEmpty()) {
+            return emptyList()
+        }
+
+        // 步骤1: 首先提取所有有封面URL的结果（封面搜索的核心）
+        val withCovers = recordings.filter { !it.coverArtUrl.isNullOrBlank() }
+        Timber.d("finalizeRecordingResults: ${withCovers.size} recordings have coverArtUrl")
+
+        // 如果没有封面，返回空（封面搜索必须有封面）
+        if (withCovers.isEmpty()) {
+            Timber.d("finalizeRecordingResults: no covers found, returning empty")
+            return emptyList()
+        }
+
+        // 步骤2: 应用宽松的标题匹配
+        val filtered = withCovers.filter { recording ->
+            val titleMatch = matchesTitleFlexible(title, recording.title)
+            Timber.d("Cover match check: queryTitle='$title', resultTitle='${recording.title}', match=$titleMatch")
+            titleMatch
+        }
+
+        // 步骤3: 如果严格过滤后没有结果，返回所有有封面的结果（备选方案）
+        val resultsToReturn = if (filtered.isEmpty() && withCovers.isNotEmpty()) {
+            Timber.d("finalizeRecordingResults: strict filter returned empty, using fallback (all covers)")
+            withCovers
+        } else {
+            filtered
+        }
+
+        Timber.d("finalizeRecordingResults: returning ${resultsToReturn.size} recordings")
+
+        // 步骤4: 按优先级排序（有封面的优先，然后按用户设置的源优先级）
+        val sorted = resultsToReturn.sortedWith(
             compareBy<OnlineRecording> { recording ->
+                // 优先返回有封面的
+                if (recording.coverArtUrl.isNullOrBlank()) 1 else 0
+            }.thenBy { recording ->
+                // 然后按用户设置的源优先级
                 sourcePriorityIndex(recording.source, priority)
             }
         )
+
         return applyLimit(sorted, limit)
     }
 
     /**
-     * 歌曲名匹配：移除括号后检查是否包含，简繁体兼容
+     * 宽松的标题匹配（用于封面搜索）
+     * 支持：
+     * 1. 包含匹配（query包含在result中，或反之）
+     * 2. 移除括号后的匹配
+     * 3. 空格差异匹配
+     * 4. 简繁体兼容
+     * 5. 对于太短的歌名（<=3字符），使用更宽松的匹配
+     */
+    private fun matchesTitleFlexible(queryTitle: String, resultTitle: String): Boolean {
+        if (queryTitle.isBlank() || resultTitle.isBlank()) return false
+
+        val normalizedQuery = queryTitle.trim()
+        val normalizedResult = resultTitle.trim()
+
+        // 完全匹配（不区分大小写）
+        if (normalizedResult.equals(normalizedQuery, ignoreCase = true)) {
+            return true
+        }
+
+        // 对于短歌名（1-3个字符），使用非常宽松的匹配：只要包含即可
+        if (normalizedQuery.length <= 3) {
+            return normalizedResult.contains(normalizedQuery, ignoreCase = true) ||
+                   normalizedQuery.contains(normalizedResult, ignoreCase = true)
+        }
+
+        // 移除括号及其内容后的匹配
+        val queryNoBrackets = normalizedQuery.removeBracketContent()
+        val resultNoBrackets = normalizedResult.removeBracketContent()
+
+        // 括号移除后完全匹配
+        if (resultNoBrackets.equals(queryNoBrackets, ignoreCase = true)) {
+            return true
+        }
+
+        // 包含匹配（不区分大小写）- 双向检查
+        if (resultNoBrackets.contains(queryNoBrackets, ignoreCase = true) ||
+            queryNoBrackets.contains(resultNoBrackets, ignoreCase = true)) {
+            return true
+        }
+
+        // 移除空格后匹配
+        val queryNoSpaces = queryNoBrackets.replace(" ", "")
+        val resultNoSpaces = resultNoBrackets.replace(" ", "")
+        if (resultNoSpaces.contains(queryNoSpaces, ignoreCase = true) ||
+            queryNoSpaces.contains(resultNoSpaces, ignoreCase = true)) {
+            return true
+        }
+
+        // 简繁体中文兼容
+        val querySimplified = queryNoBrackets.toSimplifiedChinese()
+        val resultSimplified = resultNoBrackets.toSimplifiedChinese()
+        if (resultSimplified.contains(querySimplified) ||
+            querySimplified.contains(resultSimplified)) {
+            return true
+        }
+
+        // 简繁体 + 移除空格
+        val querySimplifiedNoSpaces = querySimplified.replace(" ", "")
+        val resultSimplifiedNoSpaces = resultSimplified.replace(" ", "")
+        return resultSimplifiedNoSpaces.contains(querySimplifiedNoSpaces) ||
+               querySimplifiedNoSpaces.contains(resultSimplifiedNoSpaces)
+    }
+
+    /**
+     * 歌曲名匹配：移除括号后检查是否包含，支持空格差异和简繁体兼容
      * 例如：查询 "你好（live）" 可以匹配 "你好"、"你好 (Live)"、"你好 live"
      * 例如：查询 "你好" 可以匹配 "你好（live）"、"你好"、"Hello 你好"
+     * 例如：查询 "MySong" 可以匹配 "My Song"、"My Song (Live)"
      */
     private fun matchesTitle(queryTitle: String, resultTitle: String): Boolean {
         // 移除括号及其内容进行比较
@@ -1680,11 +1796,28 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             return true
         }
 
+        // 新增：移除空格后匹配（处理 "MySong" ↔ "My Song" 的差异）
+        val queryNoSpaces = normalizedQuery.replace(" ", "")
+        val resultNoSpaces = normalizedResult.replace(" ", "")
+        if (queryNoSpaces.contains(resultNoSpaces, ignoreCase = true) ||
+            resultNoSpaces.contains(queryNoSpaces, ignoreCase = true)) {
+            return true
+        }
+
         // 简繁体中文兼容
         val simplifiedQuery = normalizedQuery.toSimplifiedChinese()
         val simplifiedResult = normalizedResult.toSimplifiedChinese()
 
-        return simplifiedResult.contains(simplifiedQuery) || simplifiedQuery.contains(simplifiedResult)
+        // 简繁体匹配
+        if (simplifiedResult.contains(simplifiedQuery) || simplifiedQuery.contains(simplifiedResult)) {
+            return true
+        }
+
+        // 简繁体 + 移除空格匹配
+        val simplifiedQueryNoSpaces = simplifiedQuery.replace(" ", "")
+        val simplifiedResultNoSpaces = simplifiedResult.replace(" ", "")
+        return simplifiedResultNoSpaces.contains(simplifiedQueryNoSpaces) ||
+               simplifiedQueryNoSpaces.contains(simplifiedResultNoSpaces)
     }
 
     /**

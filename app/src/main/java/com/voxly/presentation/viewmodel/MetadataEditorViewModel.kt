@@ -16,6 +16,7 @@ import com.voxly.data.repository.LyricsRepositoryImpl
 import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
+import com.voxly.domain.model.Lyrics
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.domain.model.ScanModeConstants
 import com.voxly.domain.repository.AudioRepository
@@ -1008,6 +1009,42 @@ class MetadataEditorViewModel @AssistedInject constructor(
         )
 
         setEditedMetadata(updatedMetadata)
+    }
+
+    /**
+     * Track whether lyrics timestamps are currently in 2-digit format (xx) or 3-digit format (xxx)
+     */
+    var isLyricsTimestampFormatted: Boolean = false
+        private set
+
+    /**
+     * Toggles lyrics timestamp format between [mm:ss.xxx] and [mm:ss.xx]
+     */
+    fun toggleLyricsTimestampFormat() {
+        val currentMetadata = _editedMetadata.value ?: return
+        val currentLyrics = currentMetadata.lyrics ?: return
+        
+        viewModelScope.launch {
+            val hasThreeDigit = currentLyrics.contains(Regex("""\[\d{2}:\d{2}\.\d{3}\]"""))
+            
+            val newLyrics: String
+            if (hasThreeDigit && !isLyricsTimestampFormatted) {
+                // If currently has 3-digit, convert to 2-digit
+                isLyricsTimestampFormatted = true
+                newLyrics = Lyrics.formatTimestamps(currentLyrics)
+            } else {
+                // If currently has 2-digit (manually formatted), we can't easily convert back
+                // So just toggle the flag
+                isLyricsTimestampFormatted = !isLyricsTimestampFormatted
+                newLyrics = currentLyrics
+            }
+            
+            val updatedMetadata = currentMetadata.copy(lyrics = newLyrics)
+            setEditedMetadata(updatedMetadata)
+            
+            // Track that lyrics field was modified
+            _modifiedFields.value = _modifiedFields.value + MetadataField.LYRICS
+        }
     }
 
     @AssistedFactory

@@ -357,6 +357,8 @@
     <string name="settings_source_group_cover">封面数据源</string>
     <string name="settings_source_group_cover_subtitle">设置封面获取的数据源优先级</string>
     <string name="settings_source_priority_hint">优先级越高，结果越靠前，也会优先使用。</string>
+    <string name="settings_lyrics_timestamp_format">格式化歌词时间轴</string>
+    <string name="settings_lyrics_timestamp_format_subtitle">获取网络歌词时将 [mm:ss.xxx] 转换为 [mm:ss.xx]</string>
 
     <!-- Logging -->
     <string name="settings_section_logging">日志</string>

@@ -3,6 +3,7 @@ package com.voxly.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.UiStateDataStore
 import com.voxly.domain.model.AlbumGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -20,7 +21,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class AlbumViewModel @Inject constructor(
-    private val audioFileScanner: AudioFileScanner
+    private val audioFileScanner: AudioFileScanner,
+    private val uiStateDataStore: UiStateDataStore
 ) : ViewModel() {
 
     // Directly use AudioFileScanner's albums - same singleton instance as LibraryViewModel
@@ -28,6 +30,9 @@ class AlbumViewModel @Inject constructor(
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    // Sort option from persistent storage
+    val sortOption = uiStateDataStore.albumSortOption
 
     private var refreshJob: Job? = null
 
@@ -46,6 +51,15 @@ class AlbumViewModel @Inject constructor(
                 Timber.d("AlbumViewModel.refresh: finally block, setting isRefreshing=false")
                 _isRefreshing.value = false
             }
+        }
+    }
+
+    /**
+     * Save album sort option to persistent storage
+     */
+    fun setSortOption(option: String) {
+        viewModelScope.launch {
+            uiStateDataStore.setAlbumSortOption(option)
         }
     }
 }

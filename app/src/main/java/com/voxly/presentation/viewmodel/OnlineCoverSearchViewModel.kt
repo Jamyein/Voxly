@@ -2,10 +2,12 @@ package com.voxly.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
+import com.voxly.domain.util.OnlineSearchSorter
 import com.voxly.presentation.navigation.OnlineCoverSearch
 import com.voxly.presentation.viewmodel.SearchSeedHolder
 import com.voxly.presentation.ui.getCoverArtBytes
@@ -16,11 +18,30 @@ import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import com.voxly.data.repository.OnlineSourceResult
+import timber.log.Timber
 import java.io.File
+
+/**
+ * 流式搜索进度状态
+ */
+data class CoverSearchProgressState(
+    val isSearching: Boolean = false,
+    val results: List<OnlineRecording> = emptyList(),
+    val startedSources: Set<OnlineSource> = emptySet(),
+    val completedSources: Set<OnlineSource> = emptySet(),
+    val errorSources: Map<OnlineSource, String> = emptyMap(),
+    val hasAnyResults: Boolean = false
+)
 
 /**
  * ViewModel for online cover search screen.
@@ -31,10 +52,12 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
     @ApplicationContext private val context: android.content.Context,
     private val audioRepository: AudioRepository,
     private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository,
-    private val searchSeedHolder: SearchSeedHolder
+    private val searchSeedHolder: SearchSeedHolder,
+    private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
 
     private val filePath: String = navKey.filePath
+    private val TAG = "OnlineCoverSearchVM"
 
     // Search query info (exposed for UI)
     private val _searchTitle = MutableStateFlow("")
@@ -43,36 +66,44 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
     private val _searchArtist = MutableStateFlow<String?>(null)
     val searchArtist: String? get() = _searchArtist.value
 
-    private val _coverResults = MutableStateFlow<List<OnlineRecording>>(emptyList())
-    val coverResults: StateFlow<List<OnlineRecording>> = _coverResults.asStateFlow()
+    // 搜索进度状态（新）
+    private val _searchProgressState = MutableStateFlow(CoverSearchProgressState())
+    val searchProgressState: StateFlow<CoverSearchProgressState> = _searchProgressState.asStateFlow()
 
+    // 保留其他必要的状态
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
-    private val _searchState = MutableStateFlow(CoverSearchState())
-    val searchState: StateFlow<CoverSearchState> = _searchState.asStateFlow()
-
     private val _coverFetchMessage = MutableStateFlow<String?>(null)
     val coverFetchMessage: StateFlow<String?> = _coverFetchMessage.asStateFlow()
+
+    // 兼容旧 UI - 从新的 progress state 派生
+    val coverResults: StateFlow<List<OnlineRecording>> = 
+        _searchProgressState.map { it.results }.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = emptyList()
+        )
 
     /**
      * Search for cover art using the audio file's metadata.
      */
     fun search(path: String) {
         val targetPath = path.ifBlank { filePath }
+        Timber.d(TAG, "search() called, path=$targetPath")
 
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
-            _coverResults.value = emptyList()
-            _searchState.value = CoverSearchState()
+            _searchProgressState.value = CoverSearchProgressState()
             _coverFetchMessage.value = null
 
             // 优先从 SearchSeedHolder 获取实时编辑值
             val seed = searchSeedHolder.getAndClearSeed()
+            Timber.d(TAG, "search() seed=$seed")
 
             val title: String
             val artist: String?
@@ -81,8 +112,10 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                 // 使用编辑中的实时值
                 title = seed.title
                 artist = seed.artist
+                Timber.d(TAG, "search() using seed - title='$title', artist='$artist'")
             } else {
                 // 兜底：从文件读取
+                Timber.d(TAG, "search() no seed, loading from file")
                 val result = audioRepository.getAudioFile(targetPath)
                 result.fold(
                     onSuccess = { audioFile ->
@@ -92,10 +125,12 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
 
                         _searchTitle.value = title
                         _searchArtist.value = artist
+                        Timber.d(TAG, "search() loaded from file - title='$title', artist='$artist'")
 
                         performCoverSearch(title, artist)
                     },
                     onFailure = { error ->
+                        Timber.e(TAG, "search() failed to load audio file: ${error.message}")
                         _errorMessage.value = "Failed to load audio file: ${error.message}"
                         _isLoading.value = false
                     }
@@ -111,41 +146,122 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
     }
 
     private fun performCoverSearch(title: String, artist: String?) {
+        Timber.d(TAG, "performCoverSearch() title='$title', artist='$artist'")
+        
+        // 重置状态
+        _searchProgressState.value = CoverSearchProgressState(isSearching = true)
+        _isLoading.value = true
+        _errorMessage.value = null
+        
         viewModelScope.launch {
-            _searchState.value = CoverSearchState(isSearching = true)
-            _isLoading.value = true
-
             try {
-                val result = aggregatedOnlineMetadataRepository.searchByTrackForCover(title, artist)
-                result.fold(
-                    onSuccess = { recordings ->
-                        // Prefetch cover art bytes in background (fire-and-forget) for all results
-                        recordings.forEach { recording ->
-                            recording.coverArtUrl?.let { prefetchCoverArtBytes(it) }
+                // 获取封面搜索的数据源优先级
+                val sourceConfigs = settingsDataStore.sourceConfigurations.first()
+                val coverPriority = sourceConfigs.cover.sources
+                    .sortedBy { it.order }
+                    .map { it.sourceId }
+                
+                Timber.d(TAG, "performCoverSearch() starting streaming search with priority: $coverPriority")
+                
+                aggregatedOnlineMetadataRepository.searchByTrackForCoverFlow(title, artist)
+                    .collect { result ->
+                        when (result) {
+                            is OnlineSourceResult.RecordingResult -> {
+                                Timber.d(TAG, "Received result from ${result.source}: ${result.recording.title}")
+                                
+                                // 预取封面图片（fire-and-forget，不阻塞）
+                                result.recording.coverArtUrl?.let { url ->
+                                    launch { prefetchCoverArtBytes(url) }
+                                }
+                                
+                                // 更新状态：追加结果并排序
+                                _searchProgressState.update { state ->
+                                    val mergedResults = mergeRecordingIntoList(state.results, result.recording)
+                                    // 使用统一的排序逻辑（与 OnlineMetadata 一致）
+                                    val sortedResults = OnlineSearchSorter.sortRecordings(
+                                        recordings = mergedResults,
+                                        title = title,
+                                        artist = artist,
+                                        sourcePriority = coverPriority
+                                    )
+                                    state.copy(
+                                        results = sortedResults,
+                                        hasAnyResults = sortedResults.isNotEmpty(),
+                                        startedSources = state.startedSources + result.source
+                                    )
+                                }
+                            }
+                            
+                            is OnlineSourceResult.SourceCompleted -> {
+                                Timber.d(TAG, "Source completed: ${result.source}")
+                                _searchProgressState.update { state ->
+                                    state.copy(
+                                        completedSources = state.completedSources + result.source,
+                                        startedSources = state.startedSources + result.source
+                                    )
+                                }
+                            }
+                            
+                            is OnlineSourceResult.Error -> {
+                                Timber.w(TAG, "Source error ${result.source}: ${result.message}")
+                                _searchProgressState.update { state ->
+                                    state.copy(
+                                        errorSources = state.errorSources + (result.source to result.message),
+                                        startedSources = state.startedSources + result.source
+                                    )
+                                }
+                            }
+                            
+                            else -> {
+                                // 其他结果类型忽略
+                            }
                         }
-                        _searchState.update { it.copy(results = recordings, isSearching = false) }
-                        _coverResults.value = recordings
-                    },
-                    onFailure = { error ->
-                        val message = error.message ?: "Cover search failed"
-                        _searchState.update { state ->
-                            state.copy(errorSources = state.errorSources + ("System" to message))
-                        }
-                        _errorMessage.value = message
-                        _searchState.update { it.copy(isSearching = false) }
                     }
-                )
+                
+                Timber.d(TAG, "performCoverSearch() streaming completed")
+                
             } catch (e: Exception) {
-                val message = e.message ?: "Cover search failed"
-                _searchState.update { state ->
-                    state.copy(errorSources = state.errorSources + ("System" to message))
+                Timber.e(TAG, "performCoverSearch() error: ${e.message}")
+                if (e !is CancellationException) {
+                    _errorMessage.value = e.message ?: "Search failed"
                 }
-                _errorMessage.value = message
             } finally {
-                _searchState.update { it.copy(isSearching = false) }
+                _searchProgressState.update { it.copy(isSearching = false) }
                 _isLoading.value = false
             }
         }
+    }
+    
+    /**
+     * 将新 recording 合并到列表中，避免重复
+     */
+    private fun mergeRecordingIntoList(
+        existing: List<OnlineRecording>,
+        newRecording: OnlineRecording
+    ): List<OnlineRecording> {
+        // 检查是否已存在相同 ID 的 recording
+        val existingIndex = existing.indexOfFirst { it.id == newRecording.id }
+        return if (existingIndex >= 0) {
+            // 替换已有的（保留更多信息）
+            existing.toMutableList().apply {
+                this[existingIndex] = mergeRecordings(existing[existingIndex], newRecording)
+            }
+        } else {
+            // 追加新的
+            existing + newRecording
+        }
+    }
+    
+    /**
+     * 合并两个 recording，保留非空字段
+     */
+    private fun mergeRecordings(old: OnlineRecording, new: OnlineRecording): OnlineRecording {
+        return old.copy(
+            title = old.title.takeIf { it.isNotBlank() } ?: new.title,
+            artist = old.artist.takeIf { it.isNotBlank() } ?: new.artist,
+            coverArtUrl = old.coverArtUrl ?: new.coverArtUrl,
+            source = if (old.source == OnlineSource.UNKNOWN) new.source else old.source
+        )
     }
 
     /**

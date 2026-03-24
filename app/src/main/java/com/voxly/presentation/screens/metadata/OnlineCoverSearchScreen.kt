@@ -74,7 +74,8 @@ fun OnlineCoverSearchScreen(
 ) {
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
-    val coverResults by viewModel.coverResults.collectAsState()
+    val searchProgress by viewModel.searchProgressState.collectAsState()
+    val coverResults = searchProgress.results
     var isSelectingCover by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
 

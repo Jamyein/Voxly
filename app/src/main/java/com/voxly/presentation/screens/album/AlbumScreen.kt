@@ -24,7 +24,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +35,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.core.util.SortUtil
+import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.screens.filebrowser.AlbumTabContent
@@ -51,12 +51,20 @@ fun AlbumScreen(
     val context = LocalContext.current
     val albums by viewModel.albums.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val sortOption by viewModel.sortOption.collectAsState(initial = AlbumSortOption.NAME_ASC.name)
     var scrollToTopTrigger by remember { mutableIntStateOf(0) }
-    var sortOption by rememberSaveable { mutableStateOf(AlbumSortOption.NAME_ASC.name) }
-    var isSortExpanded by rememberSaveable { mutableStateOf(false) }
+    var isSortExpanded by remember { mutableStateOf(false) }
 
-    val sortedAlbums = remember(albums, sortOption) {
-        applyAlbumSort(albums, AlbumSortOption.valueOf(sortOption))
+    val currentSortOption = remember(sortOption) {
+        try {
+            AlbumSortOption.valueOf(sortOption)
+        } catch (e: IllegalArgumentException) {
+            AlbumSortOption.NAME_ASC
+        }
+    }
+
+    val sortedAlbums = remember(albums, currentSortOption) {
+        applyAlbumSort(albums, currentSortOption)
     }
 
     val readPermission = remember {
@@ -113,11 +121,11 @@ fun AlbumScreen(
                     SortMenuButton(
                         expanded = isSortExpanded,
                         onExpandedChange = { isSortExpanded = it },
-                        currentSortOption = AlbumSortOption.valueOf(sortOption),
+                        currentSortOption = currentSortOption,
                         options = AlbumSortOption.entries,
                         optionLabelResId = { it.labelResId() },
                         contentDescription = stringResource(R.string.album_sort_label),
-                        onSortOptionChange = { sortOption = it.name }
+                        onSortOptionChange = { viewModel.setSortOption(it.name) }
                     )
                 }
             )
@@ -148,17 +156,11 @@ fun AlbumScreen(
                     isRefreshing = isRefreshing,
                     onRefresh = { viewModel.refresh() },
                     scrollToTopTrigger = scrollToTopTrigger,
-                    sortOption = AlbumSortOption.valueOf(sortOption)
+                    sortOption = currentSortOption
                 )
             }
         }
     }
-}
-
-internal enum class AlbumSortOption {
-    NAME_ASC,
-    TRACK_COUNT_DESC,
-    YEAR_DESC
 }
 
 private fun AlbumSortOption.labelResId(): Int = when (this) {

@@ -290,6 +290,7 @@ fun MP3TagNavHost() {
                         )
                         OnlineCoverSearchScreen(
                             filePath = key.filePath,
+                            viewModel = viewModel,
                             onNavigateBack = { backStack.removeLastOrNull() },
                             onCoverSelected = { coverBytes ->
                                 pendingCoverArt = coverBytes

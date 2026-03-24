@@ -76,6 +76,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.repeatOnLifecycle
 import com.voxly.R
+import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.RootTab
 import com.voxly.domain.usecase.BatchProgress
@@ -143,12 +144,20 @@ fun FileBrowserScreen(
         viewModel.refresh()
     }
 
-    var sortOption by rememberSaveable { mutableStateOf(FileSortOption.NAME_ASC.name) }
-    var isSortExpanded by rememberSaveable { mutableStateOf(false) }
+    // Sort option from persistent storage
+    val sortOption by viewModel.fileBrowserSortOption.collectAsState(initial = FileSortOption.NAME_ASC.name)
+    val currentSortOption = remember(sortOption) {
+        try {
+            FileSortOption.valueOf(sortOption)
+        } catch (e: IllegalArgumentException) {
+            FileSortOption.NAME_ASC
+        }
+    }
+    var isSortExpanded by remember { mutableStateOf(false) }
 
     // Sort All Tab audios
-    val sortedAllAudios = remember(allAudios, sortOption) {
-        applySort(allAudios, FileSortOption.valueOf(sortOption))
+    val sortedAllAudios = remember(allAudios, currentSortOption) {
+        applySort(allAudios, currentSortOption)
     }
 
     // Dialog states
@@ -159,11 +168,11 @@ fun FileBrowserScreen(
     var showSearchSheet by remember { mutableStateOf(false) }
     val searchSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-    val visibleFiles = remember(visibleFilesRaw) {
+    val visibleFiles = remember(visibleFilesRaw, currentSortOption) {
         derivedStateOf {
             applySort(
                 files = visibleFilesRaw,
-                sortOption = FileSortOption.valueOf(sortOption)
+                sortOption = currentSortOption
             )
         }
     }.value
@@ -401,11 +410,11 @@ fun FileBrowserScreen(
                                         SortMenuButton(
                                             expanded = isSortExpanded,
                                             onExpandedChange = { isSortExpanded = it },
-                                            currentSortOption = FileSortOption.valueOf(sortOption),
+                                            currentSortOption = currentSortOption,
                                             options = FileSortOption.entries,
                                             optionLabelResId = { it.labelResId() },
                                             contentDescription = stringResource(R.string.file_sort_label),
-                                            onSortOptionChange = { sortOption = it.name }
+                                            onSortOptionChange = { viewModel.setFileBrowserSortOption(it.name) }
                                         )
                                     }
                                     IconButton(onClick = { viewModel.refresh() }) {
@@ -480,11 +489,11 @@ fun FileBrowserScreen(
                                         SortMenuButton(
                                             expanded = isSortExpanded,
                                             onExpandedChange = { isSortExpanded = it },
-                                            currentSortOption = FileSortOption.valueOf(sortOption),
+                                            currentSortOption = currentSortOption,
                                             options = FileSortOption.entries,
                                             optionLabelResId = { it.labelResId() },
                                             contentDescription = stringResource(R.string.file_sort_label),
-                                            onSortOptionChange = { sortOption = it.name }
+                                            onSortOptionChange = { viewModel.setFileBrowserSortOption(it.name) }
                                         )
                                     }
                                     IconButton(onClick = { viewModel.refresh() }) {
@@ -719,13 +728,6 @@ fun FileBrowserScreen(
 /**
  * Batch Fix Metadata Dialog - extracted to BatchFixMetadataDialog.kt
  */
-
-internal enum class FileSortOption {
-    NAME_ASC,
-    NAME_DESC,
-    SIZE_DESC,
-    DURATION_DESC
-}
 
 private fun applySearchAndSort(
     files: List<AudioFile>,

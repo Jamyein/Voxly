@@ -612,6 +612,16 @@ class SettingsViewModel @Inject constructor(
         )
 
     /**
+     * Lyrics timestamp format enabled state (3-digit to 2-digit format)
+     */
+    val lyricsTimestampFormatEnabled: StateFlow<Boolean> = settingsDataStore.lyricsTimestampFormatEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = true
+        )
+
+    /**
      * Set proxy enabled preference
      */
     fun setProxyEnabled(enabled: Boolean) {
@@ -671,6 +681,15 @@ class SettingsViewModel @Inject constructor(
     fun setArtistSeparators(separators: Set<String>) {
         viewModelScope.launch {
             settingsDataStore.setArtistSeparators(separators)
+        }
+    }
+
+    /**
+     * Set lyrics timestamp format enabled preference
+     */
+    fun setLyricsTimestampFormatEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setLyricsTimestampFormatEnabled(enabled)
         }
     }
 }

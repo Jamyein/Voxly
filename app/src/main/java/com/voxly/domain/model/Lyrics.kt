@@ -132,6 +132,26 @@ data class Lyrics(
                 lyricsText.lines().filter { it.isNotBlank() }
             }
         }
+
+        /**
+         * Formats lyrics timestamps from [mm:ss.xxx] to [mm:ss.xx]
+         * Converts 3-digit milliseconds to 2-digit (e.g., [01:23.456] -> [01:23.45])
+         * @param lrcText LRC formatted lyrics text
+         * @return Formatted lyrics text with 2-digit milliseconds
+         */
+        fun formatTimestamps(lrcText: String): String {
+            // Match [mm:ss.xxx] format (3-digit milliseconds)
+            val threeDigitRegex = Regex("""\[(\d{2}):(\d{2})\.(\d{3})\]""")
+
+            return threeDigitRegex.replace(lrcText) { matchResult ->
+                val minutes = matchResult.groupValues[1]
+                val seconds = matchResult.groupValues[2]
+                val millis = matchResult.groupValues[3]
+                // Take first 2 digits of milliseconds
+                val twoDigitMillis = millis.take(2)
+                "[$minutes:$seconds.$twoDigitMillis]"
+            }
+        }
     }
 }
 

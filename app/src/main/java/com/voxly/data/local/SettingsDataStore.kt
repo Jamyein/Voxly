@@ -84,6 +84,8 @@ class SettingsDataStore @Inject constructor(
         // Artist separator settings
         val ARTIST_SEPARATOR_ENABLED = booleanPreferencesKey("artist_separator_enabled")
         val ARTIST_SEPARATORS = stringPreferencesKey("artist_separators")
+        // Lyrics timestamp format settings
+        val LYRICS_TIMESTAMP_FORMAT_ENABLED = booleanPreferencesKey("lyrics_timestamp_format_enabled")
     }
 
     /**
@@ -896,6 +898,14 @@ class SettingsDataStore @Inject constructor(
         }
 
     /**
+     * Lyrics timestamp format enabled preference flow (3-digit to 2-digit)
+     */
+    val lyricsTimestampFormatEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[LYRICS_TIMESTAMP_FORMAT_ENABLED] ?: true
+        }
+
+    /**
      * Artist separator enabled preference flow
      */
     val artistSeparatorEnabled: Flow<Boolean> = context.settingsDataStore.data
@@ -963,6 +973,15 @@ class SettingsDataStore @Inject constructor(
     suspend fun setArtistSeparatorEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[ARTIST_SEPARATOR_ENABLED] = enabled
+        }
+    }
+
+    /**
+     * Save lyrics timestamp format enabled preference
+     */
+    suspend fun setLyricsTimestampFormatEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[LYRICS_TIMESTAMP_FORMAT_ENABLED] = enabled
         }
     }
 

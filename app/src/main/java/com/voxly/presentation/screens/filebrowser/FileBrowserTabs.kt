@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.Image
 import com.voxly.R
+import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -68,7 +69,7 @@ internal fun AlbumTabContent(
     onRefresh: () -> Unit,
     listState: LazyListState? = null,
     scrollToTopTrigger: Int = 0,
-    sortOption: com.voxly.presentation.screens.album.AlbumSortOption? = null
+    sortOption: AlbumSortOption? = null
 ) {
     // Use key() to force recomposition when scrollToTopTrigger changes (for scroll to top effect)
     key(scrollToTopTrigger) {
@@ -97,7 +98,7 @@ internal fun AlbumTabContent(
                 }
             } else {
                 // Use grouped list view when sorting by year
-                val isYearSort = sortOption == com.voxly.presentation.screens.album.AlbumSortOption.YEAR_DESC
+                val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
                 if (isYearSort) {
                     AlbumYearGroupedContent(
                         albums = albums,

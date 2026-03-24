@@ -14,6 +14,7 @@ import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
+import com.voxly.domain.util.OnlineSearchSorter
 import com.voxly.presentation.navigation.OnlineMetadata
 import com.voxly.presentation.viewmodel.SearchSeedHolder
 import com.voxly.presentation.ui.getCoverArtBytes
@@ -206,7 +207,12 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                             )
                             _searchState.update { state ->
                                 val merged = mergeRelease(state.results, normalized)
-                                val sorted = sortReleases(merged, query)
+                                val sorted = OnlineSearchSorter.sortReleases(
+                                    releases = merged,
+                                    title = query.title,
+                                    artist = query.artist,
+                                    sourcePriority = metadataSourcePriority
+                                )
                                 state.copy(results = sorted, hasAnyResults = sorted.isNotEmpty())
                             }
                             publishLegacySearchState()
@@ -224,7 +230,12 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                             val release = result.recording.toOnlineRelease() ?: return@collect
                             _searchState.update { state ->
                                 val merged = mergeRelease(state.results, release)
-                                val sorted = sortReleases(merged, query)
+                                val sorted = OnlineSearchSorter.sortReleases(
+                                    releases = merged,
+                                    title = query.title,
+                                    artist = query.artist,
+                                    sourcePriority = metadataSourcePriority
+                                )
                                 state.copy(results = sorted, hasAnyResults = sorted.isNotEmpty())
                             }
                             publishLegacySearchState()
@@ -308,92 +319,6 @@ class OnlineMetadataViewModel @AssistedInject constructor(
         return results.toMutableList().also { it[existingIndex] = merged }
     }
 
-    private fun sortReleases(releases: List<OnlineRelease>, query: OnlineSearchQuery): List<OnlineRelease> {
-        if (releases.isEmpty()) return emptyList()
-
-        val titleNeedle = when {
-            query.title.isNotBlank() -> query.title
-            !query.album.isNullOrBlank() -> query.album
-            else -> ""
-        }
-        val artistNeedle = query.artist.orEmpty()
-
-        // 计算每个结果的相关性分数和综合分数
-        // 相关性分数 = 歌曲名匹配分数(1-3) + 歌手名匹配分数(1-3)，范围 2-6
-        val maxPriority = metadataSourcePriority.size.coerceAtLeast(1)
-        val priorityWeight = 25  // 确保优先级差 × 25 > 相关性最大差(4)
-        // 动态计算：取用户设置的优先级数量和3的较小值
-        val priorityGroupCount = minOf(maxPriority, 3)
-
-        val scored = releases.map { release ->
-            val candidateTitle = (release.songTitle ?: release.albumTitle ?: release.title).trim()
-            val titleScore = when {
-                titleNeedle.isBlank() -> 1
-                candidateTitle.equals(titleNeedle, ignoreCase = true) -> 3
-                candidateTitle.contains(titleNeedle, ignoreCase = true) -> 2
-                else -> 1
-            }
-            val artistScore = when {
-                artistNeedle.isBlank() -> 1
-                release.artist.equals(artistNeedle, ignoreCase = true) -> 3
-                release.artist.contains(artistNeedle, ignoreCase = true) -> 2
-                else -> 1
-            }
-            val relevanceScore = titleScore + artistScore  // 2-6 分
-            val sourcePriority = sourcePriorityIndex(release.source, metadataSourcePriority)
-            // 综合分数 = 优先级权重 * 优先级差距 + 相关性分数
-            // 优先级差距 = (maxPriority - 1) - sourcePriority，确保优先级1的权重最高
-            val totalScore = (maxPriority - 1 - sourcePriority.coerceAtLeast(0)) * priorityWeight + relevanceScore
-            ReleaseSortKey(release, relevanceScore, sourcePriority, totalScore)
-        }
-
-        // 策略：前3个位置预留给优先级1、2、3的最佳结果，剩余的按综合分数排序
-        val topByPriority = metadataSourcePriority
-            .take(priorityGroupCount)
-            .mapIndexedNotNull { priorityIndex, _ ->
-                scored
-                    .filter { it.sourcePriority == priorityIndex }
-                    .maxByOrNull { it.relevanceScore }
-            }
-
-        // 排除已使用的前3个
-        val usedReleases = topByPriority.map { it.release }.toSet()
-        val remaining = scored
-            .filter { it.release !in usedReleases }
-            .sortedByDescending { it.totalScore }
-
-        // 最终结果 = 前3名(优先级冠军) + 剩余按综合分数
-        return (topByPriority + remaining).map { it.release }
-    }
-
-    /**
-     * 排序键：包含原始 release、相关性分数、源优先级、综合分数
-     */
-    private data class ReleaseSortKey(
-        val release: OnlineRelease,
-        val relevanceScore: Int,
-        val sourcePriority: Int,
-        val totalScore: Int
-    )
-
-    /**
-     * 根据设置中的元数据源优先级计算排序索引
-     */
-    private fun sourcePriorityIndex(source: OnlineSource, priority: List<String>): Int {
-        // 标准化 source 名称
-        val normalizedSource = when (source) {
-            OnlineSource.ITUNES -> "itunes"
-            OnlineSource.MUSICBRAINZ -> "musicbrainz"
-            OnlineSource.NETEASE -> "netease"
-            OnlineSource.QQ_MUSIC -> "qq_music"
-            OnlineSource.UNKNOWN -> "unknown"
-        }
-
-        // 在优先级列表中查找索引
-        val index = priority.indexOfFirst { it.equals(normalizedSource, ignoreCase = true) }
-        return if (index >= 0) index else Int.MAX_VALUE
-    }
-
     private fun publishLegacySearchState() {
         val state = _searchState.value
         _searchResults.value = state.results
@@ -464,8 +389,14 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                         val updatedResults = state.results.map { release ->
                             release.copy(hasSyncedLyrics = updatedLyricsMap.containsKey(release.id))
                         }
+                        val sorted = OnlineSearchSorter.sortReleases(
+                            releases = updatedResults,
+                            title = query.title,
+                            artist = query.artist,
+                            sourcePriority = metadataSourcePriority
+                        )
                         state.copy(
-                            results = sortReleases(updatedResults, query),
+                            results = sorted,
                             hasAnyResults = updatedResults.isNotEmpty()
                         )
                     }

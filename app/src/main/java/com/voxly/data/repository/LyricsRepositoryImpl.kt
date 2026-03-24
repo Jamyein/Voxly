@@ -7,9 +7,11 @@ import com.voxly.data.remote.tengx.TengxRepository
 import com.voxly.data.remote.wangy.WangyRepository
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.Lyrics
+import com.voxly.domain.model.SyncedLyricLine
 import com.voxly.domain.repository.LyricsException
 import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineLyricsResult
+import com.voxly.domain.util.OnlineSearchSorter
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Deferred
@@ -467,14 +469,13 @@ class LyricsRepositoryImpl @Inject constructor(
         allResults.addAll(neteaseResults)
         allResults.addAll(qqMusicResults)
 
-        // Sort by relevance: prioritize results with synced lyrics and matching artist
-        val sortedResults = allResults.sortedWith(compareBy<OnlineLyricsResult> {
-            sourcePriorityIndex(it.source, settings.priority)
-        }.thenByDescending {
-            it.hasSyncedLyrics
-        }.thenByDescending {
-            isArtistMatch(it.artistName, artistName)
-        })
+        // Sort by relevance: use unified sorting logic with title/artist matching and synced lyrics bonus
+        val sortedResults = OnlineSearchSorter.sortLyrics(
+            lyrics = allResults,
+            title = trackName,
+            artist = artistName,
+            sourcePriority = settings.priority
+        )
 
         Result.success(sortedResults)
     }
@@ -506,13 +507,24 @@ class LyricsRepositoryImpl @Inject constructor(
                     else -> Result.failure(LyricsException("Unsupported lyrics source: ${result.source}"))
                 }
 
+                // Apply timestamp formatting if enabled
+                val finalResult = lyricsResult.map { lyrics ->
+                    val formatEnabled = settingsDataStore.lyricsTimestampFormatEnabled.first()
+                    if (formatEnabled && lyrics.isSynced) {
+                        val formattedLrc = Lyrics.formatTimestamps(lyrics.toLrcFormat())
+                        Lyrics.parseLrc(formattedLrc)
+                    } else {
+                        lyrics
+                    }
+                }
+
                 // Cache the result if successful
-                lyricsResult.getOrNull()?.let { lyrics ->
+                finalResult.getOrNull()?.let { lyrics ->
                     lyricsCache[cacheKey] = lyrics
                     Timber.d("Lyrics cached: $cacheKey")
                 }
 
-                lyricsResult
+                finalResult
             } catch (e: Exception) {
                 Result.failure(LyricsException("Network error", e))
             }
@@ -655,25 +667,9 @@ class LyricsRepositoryImpl @Inject constructor(
             get() = enableNetease || enableQQMusic
     }
 
-    private fun sourcePriorityIndex(source: String, priority: List<String>): Int {
-        val key = when (source) {
-            "NetEase" -> "netease"
-            "QQ Music" -> "qq_music"
-            else -> "unknown"
-        }
-        val idx = priority.indexOf(key)
-        return if (idx >= 0) idx else Int.MAX_VALUE
-    }
-
     private fun normalizeFilePath(filePath: String): String {
         return filePath
             .replace(multipleSlashesRegex, "/")
             .trimEnd('/')
-    }
-
-    private fun isArtistMatch(resultArtistName: String, targetArtistName: String?): Boolean {
-        if (targetArtistName.isNullOrBlank()) return false
-        return resultArtistName.contains(targetArtistName, ignoreCase = true) ||
-            targetArtistName.contains(resultArtistName, ignoreCase = true)
     }
 }

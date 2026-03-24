@@ -51,6 +51,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import kotlinx.coroutines.launch
 import com.voxly.R
 import com.voxly.core.util.SortUtil
+import com.voxly.data.local.DirFileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.SearchBottomSheet
@@ -122,7 +123,14 @@ fun DirectoryContentScreen(
     var searchQuery by remember { mutableStateOf("") }
 
     var isSortExpanded by remember { mutableStateOf(false) }
-    var currentSortOption by remember { mutableStateOf(DirFileSortOption.NAME_ASC) }
+    val sortOption by viewModel.directoryFileSortOption.collectAsState(initial = DirFileSortOption.NAME_ASC.name)
+    val currentSortOption = remember(sortOption) {
+        try {
+            DirFileSortOption.valueOf(sortOption)
+        } catch (e: IllegalArgumentException) {
+            DirFileSortOption.NAME_ASC
+        }
+    }
 
     // Apply search and sort to files
     val displayedFiles = remember(files, searchQuery, currentSortOption) {
@@ -238,7 +246,7 @@ fun DirectoryContentScreen(
                                 optionLabelResId = { it.labelResId() },
                                 contentDescription = stringResource(R.string.sort),
                                 onSortOptionChange = { option ->
-                                    currentSortOption = option
+                                    viewModel.setDirectoryFileSortOption(option.name)
                                 }
                             )
                         }
@@ -802,14 +810,6 @@ fun DirectoryEmptyContent(modifier: Modifier = Modifier) {
             )
         }
     }
-}
-
-// Sort options for directory content
-private enum class DirFileSortOption {
-    NAME_ASC,
-    NAME_DESC,
-    SIZE_DESC,
-    DURATION_DESC
 }
 
 private fun applySearchAndSort(

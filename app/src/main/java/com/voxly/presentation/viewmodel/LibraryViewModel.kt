@@ -6,7 +6,10 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.data.local.DirFileSortOption
+import com.voxly.data.local.FileSortOption
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.UiStateDataStore
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.repository.AlbumCacheRepository
 import com.voxly.data.repository.ArtistCacheRepository
@@ -60,6 +63,7 @@ class LibraryViewModel @Inject constructor(
     private val audioFileScanner: com.voxly.data.local.AudioFileScanner,
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val settingsDataStore: SettingsDataStore,
+    private val uiStateDataStore: UiStateDataStore,
     private val unifiedScanManager: UnifiedScanManager,
     private val safWriteAccessService: SafWriteAccessService,
     private val albumCacheRepository: AlbumCacheRepository,
@@ -1489,6 +1493,36 @@ class LibraryViewModel @Inject constructor(
 
     fun getScrollPosition(listKey: String): ScrollPosition {
         return scrollPositions[listKey] ?: ScrollPosition()
+    }
+
+    // ==================== Sort Options ====================
+
+    /**
+     * File browser (All audios tab) sort option from persistent storage
+     */
+    val fileBrowserSortOption = uiStateDataStore.fileBrowserSortOption
+
+    /**
+     * Directory content screen sort option from persistent storage
+     */
+    val directoryFileSortOption = uiStateDataStore.directoryFileSortOption
+
+    /**
+     * Save file browser sort option to persistent storage
+     */
+    fun setFileBrowserSortOption(option: String) {
+        viewModelScope.launch {
+            uiStateDataStore.setFileBrowserSortOption(option)
+        }
+    }
+
+    /**
+     * Save directory file sort option to persistent storage
+     */
+    fun setDirectoryFileSortOption(option: String) {
+        viewModelScope.launch {
+            uiStateDataStore.setDirectoryFileSortOption(option)
+        }
     }
 }
 
