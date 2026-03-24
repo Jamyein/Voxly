@@ -44,6 +44,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -78,6 +79,9 @@ fun OnlineCoverSearchScreen(
     val coverResults = searchProgress.results
     var isSelectingCover by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
+    
+    // 存储每个封面图片的尺寸
+    val coverDimensions = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
 
     // Start search on screen load
     LaunchedEffect(filePath) {
@@ -142,15 +146,15 @@ fun OnlineCoverSearchScreen(
                 .padding(16.dp)
                 .pointerInput(Unit) { } // Prevent touch events during exit animation
         ) {
-            // Search progress - 使用弹性缩放动画
+            // Search progress - 使用弹性缩放动画（透明背景，不遮挡内容）
             AnimatedVisibility(
-                visible = isLoading,
+                visible = isLoading && coverResults.isEmpty(),
                 enter = ExpressiveAnimations.BottomNavEnterM3E
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(120.dp),
+                        .padding(vertical = 24.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     LoadingIndicator()
@@ -220,7 +224,10 @@ fun OnlineCoverSearchScreen(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
-                    items(coverResults) { item ->
+                    items(
+                        items = coverResults,
+                        key = { it.id }
+                    ) { item ->
                         CoverResultItem(
                             item = item,
                             isLoading = isSelectingCover,
@@ -232,7 +239,11 @@ fun OnlineCoverSearchScreen(
                                     }
                                     isSelectingCover = false
                                 }
-                            }
+                            },
+                            onDimensionsLoaded = { w, h ->
+                                coverDimensions[item.id] = w to h
+                            },
+                            dimensions = coverDimensions[item.id]
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                     }
@@ -247,7 +258,9 @@ fun OnlineCoverSearchScreen(
 private fun CoverResultItem(
     item: OnlineRecording,
     isLoading: Boolean,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null,
+    dimensions: Pair<Int, Int>? = null
 ) {
     // 交替使用不同颜色容器
     val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
@@ -272,7 +285,8 @@ private fun CoverResultItem(
             ) {
                 CoverThumbnail(
                     coverArtUrl = item.coverArtUrl,
-                    modifier = Modifier.size(100.dp)
+                    modifier = Modifier.size(100.dp),
+                    onDimensionsLoaded = onDimensionsLoaded
                 )
                 if (isLoading) {
                     LoadingIndicator(
@@ -307,6 +321,16 @@ private fun CoverResultItem(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     )
                 }
+                // 显示图片尺寸
+                if (dimensions != null) {
+                    Text(
+                        text = "${dimensions.first}×${dimensions.second}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
             }
         }
     }
@@ -315,7 +339,8 @@ private fun CoverResultItem(
 @Composable
 private fun CoverThumbnail(
     coverArtUrl: String?,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null
 ) {
     NetworkAlbumArtImage(
         url = coverArtUrl,
@@ -332,6 +357,7 @@ private fun CoverThumbnail(
                     tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
+        },
+        onDimensionsLoaded = onDimensionsLoaded
     )
 }

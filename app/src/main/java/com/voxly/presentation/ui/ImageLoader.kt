@@ -68,6 +68,7 @@ fun calculateTargetPixels(sizeDp: Int, density: Float): Int {
 /**
  * Loads an image from URL and returns as ImageBitmap.
  * Uses session-scoped cache for search results - cleared after selection.
+ * Also checks prefetch cache (coverArtByteCache) for pre-downloaded images.
  */
 suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
     if (url.isNullOrBlank()) return null
@@ -78,6 +79,19 @@ suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
     cacheLock.unlock()
     if (cached != null) {
         return cached
+    }
+
+    // Check prefetch cache (coverArtByteCache) - this is populated by prefetchCoverArtBytes
+    byteCacheLock.lock()
+    val prefetchedBytes = coverArtByteCache[url]
+    byteCacheLock.unlock()
+    if (prefetchedBytes != null) {
+        val bitmap = decodeBitmapFromBytes(prefetchedBytes)?.asImageBitmap() ?: return null
+        // Store in session cache for faster subsequent access
+        cacheLock.lock()
+        searchResultCache[url] = bitmap
+        cacheLock.unlock()
+        return bitmap
     }
 
     // Load from network

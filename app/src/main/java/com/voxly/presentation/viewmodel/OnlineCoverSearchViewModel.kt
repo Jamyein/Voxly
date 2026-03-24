@@ -21,12 +21,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import com.voxly.data.repository.OnlineSourceResult
 import timber.log.Timber
 import java.io.File
@@ -112,7 +115,10 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                 // 使用编辑中的实时值
                 title = seed.title
                 artist = seed.artist
+                _searchTitle.value = title
+                _searchArtist.value = artist
                 Timber.d(TAG, "search() using seed - title='$title', artist='$artist'")
+                performCoverSearch(title, artist)
             } else {
                 // 兜底：从文件读取
                 Timber.d(TAG, "search() no seed, loading from file")
@@ -135,14 +141,14 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                         _isLoading.value = false
                     }
                 )
-                return@launch
             }
-
-            _searchTitle.value = title
-            _searchArtist.value = artist
-
-            performCoverSearch(title, artist)
         }
+    }
+
+    companion object {
+        private const val IMMEDIATE_DISPLAY_COUNT = 5  // 前5个结果立即显示，不排序
+        private const val BATCH_UPDATE_INTERVAL_MS = 200L  // 批量更新间隔 200ms
+        private const val PREFETCH_CONCURRENCY = 3  // 图片预取并发数限制
     }
 
     private fun performCoverSearch(title: String, artist: String?) {
@@ -163,37 +169,63 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                 
                 Timber.d(TAG, "performCoverSearch() starting streaming search with priority: $coverPriority")
                 
+                // 缓冲列表用于批量处理
+                val pendingRecordings = mutableListOf<OnlineRecording>()
+                val prefetchSemaphore = Semaphore(PREFETCH_CONCURRENCY)
+                var lastUpdateTime = System.currentTimeMillis()
+                var totalReceivedCount = 0
+                
                 aggregatedOnlineMetadataRepository.searchByTrackForCoverFlow(title, artist)
                     .collect { result ->
                         when (result) {
                             is OnlineSourceResult.RecordingResult -> {
                                 Timber.d(TAG, "Received result from ${result.source}: ${result.recording.title}")
+                                totalReceivedCount++
                                 
-                                // 预取封面图片（fire-and-forget，不阻塞）
+                                // 预取封面图片（限制并发数，不阻塞）
                                 result.recording.coverArtUrl?.let { url ->
-                                    launch { prefetchCoverArtBytes(url) }
+                                    launch { 
+                                        prefetchSemaphore.withPermit {
+                                            prefetchCoverArtBytes(url)
+                                        }
+                                    }
                                 }
                                 
-                                // 更新状态：追加结果并排序
-                                _searchProgressState.update { state ->
-                                    val mergedResults = mergeRecordingIntoList(state.results, result.recording)
-                                    // 使用统一的排序逻辑（与 OnlineMetadata 一致）
-                                    val sortedResults = OnlineSearchSorter.sortRecordings(
-                                        recordings = mergedResults,
-                                        title = title,
-                                        artist = artist,
-                                        sourcePriority = coverPriority
-                                    )
-                                    state.copy(
-                                        results = sortedResults,
-                                        hasAnyResults = sortedResults.isNotEmpty(),
-                                        startedSources = state.startedSources + result.source
-                                    )
+                                // 策略：前5个结果立即增量显示（不排序），后续结果批量排序
+                                if (totalReceivedCount <= IMMEDIATE_DISPLAY_COUNT) {
+                                    // 立即显示，不排序
+                                    _searchProgressState.update { state ->
+                                        val mergedResults = mergeRecordingIntoList(state.results, result.recording)
+                                        state.copy(
+                                            results = mergedResults,
+                                            hasAnyResults = true,
+                                            startedSources = state.startedSources + result.source
+                                        )
+                                    }
+                                } else {
+                                    // 加入缓冲列表，批量处理
+                                    pendingRecordings.add(result.recording)
+                                    _searchProgressState.update { state ->
+                                        state.copy(startedSources = state.startedSources + result.source)
+                                    }
+                                    
+                                    // 检查是否需要批量更新（每200ms或缓冲满10个）
+                                    val currentTime = System.currentTimeMillis()
+                                    if (currentTime - lastUpdateTime >= BATCH_UPDATE_INTERVAL_MS || pendingRecordings.size >= 10) {
+                                        processPendingRecordings(pendingRecordings, title, artist, coverPriority)
+                                        pendingRecordings.clear()
+                                        lastUpdateTime = currentTime
+                                    }
                                 }
                             }
                             
                             is OnlineSourceResult.SourceCompleted -> {
                                 Timber.d(TAG, "Source completed: ${result.source}")
+                                // 立即处理剩余缓冲
+                                if (pendingRecordings.isNotEmpty()) {
+                                    processPendingRecordings(pendingRecordings, title, artist, coverPriority)
+                                    pendingRecordings.clear()
+                                }
                                 _searchProgressState.update { state ->
                                     state.copy(
                                         completedSources = state.completedSources + result.source,
@@ -218,7 +250,12 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                         }
                     }
                 
-                Timber.d(TAG, "performCoverSearch() streaming completed")
+                // 处理最后剩余的缓冲结果
+                if (pendingRecordings.isNotEmpty()) {
+                    processPendingRecordings(pendingRecordings, title, artist, coverPriority)
+                }
+                
+                Timber.d(TAG, "performCoverSearch() streaming completed, total results: $totalReceivedCount")
                 
             } catch (e: Exception) {
                 Timber.e(TAG, "performCoverSearch() error: ${e.message}")
@@ -229,6 +266,41 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                 _searchProgressState.update { it.copy(isSearching = false) }
                 _isLoading.value = false
             }
+        }
+    }
+    
+    /**
+     * 批量处理缓冲的结果并排序
+     */
+    private suspend fun processPendingRecordings(
+        pendingRecordings: List<OnlineRecording>,
+        title: String,
+        artist: String?,
+        coverPriority: List<String>
+    ) {
+        _searchProgressState.update { state ->
+            // 合并所有缓冲的结果
+            var mergedResults = state.results
+            pendingRecordings.forEach { recording ->
+                mergedResults = mergeRecordingIntoList(mergedResults, recording)
+            }
+            
+            // 批量排序（只针对超过5个的部分进行完整排序）
+            val sortedResults = if (mergedResults.size > IMMEDIATE_DISPLAY_COUNT) {
+                OnlineSearchSorter.sortRecordings(
+                    recordings = mergedResults,
+                    title = title,
+                    artist = artist,
+                    sourcePriority = coverPriority
+                )
+            } else {
+                mergedResults
+            }
+            
+            state.copy(
+                results = sortedResults,
+                hasAnyResults = sortedResults.isNotEmpty()
+            )
         }
     }
     
