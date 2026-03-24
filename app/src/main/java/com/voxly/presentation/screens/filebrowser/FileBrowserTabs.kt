@@ -2,6 +2,7 @@ package com.voxly.presentation.screens.filebrowser
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -18,6 +19,7 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.LaunchedEffect
@@ -60,6 +62,9 @@ import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.ui.loadLocalAlbumArt
+import com.voxly.presentation.components.M3EScrollbar
+import com.voxly.presentation.components.M3EGridScrollbar
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 
 @Composable
 internal fun AlbumTabContent(
@@ -73,58 +78,73 @@ internal fun AlbumTabContent(
 ) {
     // Use key() to force recomposition when scrollToTopTrigger changes (for scroll to top effect)
     key(scrollToTopTrigger) {
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize(),
-            indicator = {
-                if (isRefreshing) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        LoadingIndicator()
-                    }
-                }
-            }
-        ) {
-            if (albums.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = stringResource(R.string.no_albums_found),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else {
-                // Use grouped list view when sorting by year
-                val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
-                if (isYearSort) {
-                    AlbumYearGroupedContent(
-                        albums = albums,
-                        onAlbumClick = onAlbumClick,
-                        isDescending = true
-                    )
-                } else {
-                    LazyVerticalGrid(
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(
-                            count = albums.size,
-                            key = { index -> albumStableKey(albums[index]) }
-                        ) { index ->
-                            val album = albums[index]
-                            AlbumGridItem(
-                                album = album,
-                                onClick = { onAlbumClick(album) }
-                            )
+        val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
+        val gridState = rememberLazyGridState()
+        
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize(),
+                indicator = {
+                    if (isRefreshing) {
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            LoadingIndicator()
                         }
                     }
                 }
+            ) {
+                if (albums.isEmpty()) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = stringResource(R.string.no_albums_found),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    // Use grouped list view when sorting by year
+                    if (isYearSort) {
+                        AlbumYearGroupedContent(
+                            albums = albums,
+                            onAlbumClick = onAlbumClick,
+                            isDescending = true
+                        )
+                    } else {
+                        LazyVerticalGrid(
+                            state = gridState,
+                            columns = GridCells.Fixed(2),
+                            modifier = Modifier.fillMaxSize(),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(
+                                count = albums.size,
+                                key = { index -> albumStableKey(albums[index]) }
+                            ) { index ->
+                                val album = albums[index]
+                                AlbumGridItem(
+                                    album = album,
+                                    onClick = { onAlbumClick(album) }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Add scrollbar for grid mode only
+            if (!isYearSort && albums.isNotEmpty()) {
+                M3EGridScrollbar(
+                    gridState = gridState,
+                    modifier = Modifier
+                        .align(Alignment.CenterEnd)
+                        .padding(end = 4.dp)
+                )
             }
         }
     }
@@ -137,6 +157,7 @@ internal fun AlbumYearGroupedContent(
     onAlbumClick: (AlbumGroup) -> Unit,
     isDescending: Boolean = false
 ) {
+    val listState = rememberLazyListState()
     val albumsByYear = remember(albums, isDescending) {
         albums.groupBy { album ->
             albumDisplayYearInt(album) ?: 0
@@ -150,105 +171,116 @@ internal fun AlbumYearGroupedContent(
         }
     }
 
-    LazyColumn(
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        yearGroups.forEach { yearGroup ->
-            // Year header - normal title style (like settings page)
-            item(key = "header_${yearGroup.year}") {
-                Text(
-                    text = if (yearGroup.year == 0) "N/A" else yearGroup.year.toString(),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
-                )
-            }
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            yearGroups.forEach { yearGroup ->
+                // Year header - normal title style (like settings page)
+                item(key = "header_${yearGroup.year}") {
+                    Text(
+                        text = if (yearGroup.year == 0) "N/A" else yearGroup.year.toString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                    )
+                }
 
-            // Album items in this year using SegmentedListItem
-            items(
-                count = yearGroup.albums.size,
-                key = { index -> "album_${yearGroup.year}_${albumStableKey(yearGroup.albums[index])}" }
-            ) { albumIndex ->
-                val album = yearGroup.albums[albumIndex]
-                SegmentedListItem(
-                    onClick = { onAlbumClick(album) },
-                    shapes = ListItemDefaults.segmentedShapes(
-                        index = albumIndex,
-                        count = yearGroup.albums.size
-                    ),
-                    colors = ListItemDefaults.segmentedColors(
-                        containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                    ),
-                    leadingContent = {
-                        Box(
-                            modifier = Modifier
-                                .size(40.dp)
-                                .clip(MaterialTheme.shapes.small),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val coverFile = album.files.firstOrNull {
-                                it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
-                            } ?: album.files.firstOrNull()
-                            com.voxly.presentation.components.AlbumArtImage(
-                                filePath = coverFile?.path,
-                                mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
-                                contentDescription = null,
-                                size = 40.dp,
-                                modifier = Modifier.fillMaxSize()
+                // Album items in this year using SegmentedListItem
+                items(
+                    count = yearGroup.albums.size,
+                    key = { index -> "album_${yearGroup.year}_${albumStableKey(yearGroup.albums[index])}" }
+                ) { albumIndex ->
+                    val album = yearGroup.albums[albumIndex]
+                    SegmentedListItem(
+                        onClick = { onAlbumClick(album) },
+                        shapes = ListItemDefaults.segmentedShapes(
+                            index = albumIndex,
+                            count = yearGroup.albums.size
+                        ),
+                        colors = ListItemDefaults.segmentedColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        leadingContent = {
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .clip(MaterialTheme.shapes.small),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Surface(
-                                    modifier = Modifier.fillMaxSize(),
-                                    shape = MaterialTheme.shapes.small,
-                                    color = MaterialTheme.colorScheme.primaryContainer
+                                val coverFile = album.files.firstOrNull {
+                                    it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+                                } ?: album.files.firstOrNull()
+                                com.voxly.presentation.components.AlbumArtImage(
+                                    filePath = coverFile?.path,
+                                    mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
+                                    contentDescription = null,
+                                    size = 40.dp,
+                                    modifier = Modifier.fillMaxSize()
                                 ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.Album,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                            modifier = Modifier.size(20.dp)
-                                        )
+                                    Surface(
+                                        modifier = Modifier.fillMaxSize(),
+                                        shape = MaterialTheme.shapes.small,
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Album,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
-                        }
-                    },
-                    supportingContent = {
-                        Column {
+                        },
+                        supportingContent = {
+                            Column {
+                                Text(
+                                    text = album.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = album.artist ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        },
+                        trailingContent = {
                             Text(
-                                text = album.name,
-                                style = MaterialTheme.typography.bodyMedium,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                text = stringResource(R.string.track_count, album.files.size),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
                             )
-                            Text(
-                                text = album.artist ?: "",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    },
-                    trailingContent = {
-                        Text(
-                            text = stringResource(R.string.track_count, album.files.size),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.outline
-                        )
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                    content = {}
-                )
-            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        content = {}
+                    )
+                }
 
-            // Spacer between year groups (16dp)
-            item(key = "spacer_${yearGroup.year}") {
-                Spacer(modifier = Modifier.height(12.dp))
+                // Spacer between year groups (16dp)
+                item(key = "spacer_${yearGroup.year}") {
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
             }
         }
+        
+        // Add scrollbar for year grouped content
+        M3EScrollbar(
+            listState = listState,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 4.dp)
+        )
     }
 }
 
@@ -287,43 +319,55 @@ internal fun ArtistTabContent(
     listState: LazyListState? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = onRefresh,
-        modifier = Modifier.fillMaxSize(),
-        indicator = {
-            if (isRefreshing) {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+            indicator = {
+                if (isRefreshing) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LoadingIndicator()
+                    }
+                }
+            }
+        ) {
+            if (artists.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = stringResource(R.string.no_artists_found),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = lazyListState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    LoadingIndicator()
+                    items(artists, key = { it.name }) { artist ->
+                        ArtistListItem(
+                            artist = artist,
+                            onClick = { onArtistClick(artist) }
+                        )
+                    }
                 }
             }
         }
-    ) {
-        if (artists.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = stringResource(R.string.no_artists_found),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                state = lazyListState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                items(artists, key = { it.name }) { artist ->
-                    ArtistListItem(
-                        artist = artist,
-                        onClick = { onArtistClick(artist) }
-                    )
-                }
-            }
+        
+        // Add scrollbar
+        if (artists.isNotEmpty()) {
+            M3EScrollbar(
+                listState = lazyListState,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 4.dp)
+            )
         }
     }
 }
@@ -630,53 +674,65 @@ internal fun AllAudiosTabContent(
     listState: LazyListState? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
-    PullToRefreshBox(
-        isRefreshing = isRefreshing,
-        onRefresh = onRefresh,
-        modifier = Modifier.fillMaxSize(),
-        indicator = {
-            if (isRefreshing) {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = onRefresh,
+            modifier = Modifier.fillMaxSize(),
+            indicator = {
+                if (isRefreshing) {
+                    Box(
+                        modifier = Modifier.fillMaxWidth(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        LoadingIndicator()
+                    }
+                }
+            }
+        ) {
+            if (audios.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = stringResource(R.string.no_audio_files),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            } else {
+                LazyColumn(
+                    state = lazyListState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    LoadingIndicator()
+                    items(audios, key = { it.path }) { audioFile ->
+                        val isSelected = audioFile.path in selectedFiles
+                        AudioFileItem(
+                            audioFile = audioFile,
+                            isSelected = isSelected,
+                            onClick = { onFileClick(audioFile) },
+                            onLongClick = { onFileLongClick(audioFile) },
+                            showActions = false,
+                            onEditMetadata = {},
+                            onRename = {},
+                            onDelete = {},
+                            onFetchOnlineMetadata = {},
+                            onFixMetadata = {},
+                            compactMode = true
+                        )
+                    }
                 }
             }
         }
-    ) {
-        if (audios.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text(
-                    text = stringResource(R.string.no_audio_files),
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        } else {
-            LazyColumn(
-                state = lazyListState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                items(audios, key = { it.path }) { audioFile ->
-                    val isSelected = audioFile.path in selectedFiles
-                    AudioFileItem(
-                        audioFile = audioFile,
-                        isSelected = isSelected,
-                        onClick = { onFileClick(audioFile) },
-                        onLongClick = { onFileLongClick(audioFile) },
-                        showActions = false,
-                        onEditMetadata = {},
-                        onRename = {},
-                        onDelete = {},
-                        onFetchOnlineMetadata = {},
-                        onFixMetadata = {},
-                        compactMode = true
-                    )
-                }
-            }
+        
+        // Add scrollbar
+        if (audios.isNotEmpty()) {
+            M3EScrollbar(
+                listState = lazyListState,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 4.dp)
+            )
         }
     }
 }

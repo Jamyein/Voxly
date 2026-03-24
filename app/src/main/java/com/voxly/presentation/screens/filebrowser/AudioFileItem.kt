@@ -13,13 +13,12 @@ import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.AlphabetIndexer
+import com.voxly.presentation.components.AlphabetScrollbarM3E
 import com.voxly.presentation.components.AudioFileStandardRow
 import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
 import com.voxly.presentation.components.getFirstLetter
-import kotlinx.coroutines.launch
 
 @Composable
 internal fun AudioFileItem(
@@ -165,17 +164,10 @@ internal fun AudioFileListWithIndexer(
         )
 
         if (showIndexer) {
-            AlphabetIndexer(
-                groupedFiles = letterToIndex.mapValues { listOf() },
-                onLetterSelected = { letter ->
-                    letterToIndex[letter]?.let { targetIndex ->
-                        coroutineScope.launch {
-                            // Use scrollToItem (instant) instead of animateScrollToItem for better performance
-                            listState.scrollToItem(targetIndex)
-                        }
-                    }
-                },
-                availableHeight = maxHeight * 0.7f,  // Use 70% of screen height
+            AlphabetScrollbarM3E(
+                listState = listState,
+                letterToIndex = letterToIndex,
+                totalItems = files.size,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp)
