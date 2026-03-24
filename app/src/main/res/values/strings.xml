@@ -425,7 +425,7 @@
     <string name="settings_source_group_cover_subtitle">Set priority used when fetching cover artwork</string>
     <string name="settings_source_priority_hint">Higher priority sources are shown first and used first.</string>
     <string name="settings_lyrics_timestamp_format">Format Lyrics Timestamps</string>
-    <string name="settings_lyrics_timestamp_format_subtitle">Convert [mm:ss.xxx] to [mm:ss.xx] when fetching online lyrics</string>
+    <string name="settings_lyrics_timestamp_format_subtitle">Format lyrics timestamps to 2-digit milliseconds</string>
 
     <!-- Logging -->
     <string name="settings_section_logging">Logging</string>

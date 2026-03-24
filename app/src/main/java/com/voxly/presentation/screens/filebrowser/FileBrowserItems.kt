@@ -140,82 +140,79 @@ internal fun AlbumGridItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
-        onClick = onClick
+    Column(
+        modifier = Modifier.fillMaxWidth()
     ) {
-        Column {
-            // Album cover - square aspect ratio
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(MaterialTheme.shapes.medium),
-                contentAlignment = Alignment.Center
+        // Album cover - square aspect ratio with rounded corners, no shadow
+        // Only the cover image area is clickable
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(MaterialTheme.shapes.medium)
+                .clickable(onClick = onClick),
+            contentAlignment = Alignment.Center
+        ) {
+            val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                ?: album.files.firstOrNull()
+            AlbumArtImage(
+                filePath = coverFile?.path,
+                mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
+                contentDescription = null,
+                size = 200.dp,
+                modifier = Modifier.fillMaxSize()
             ) {
-                val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                    ?: album.files.firstOrNull()
-                AlbumArtImage(
-                    filePath = coverFile?.path,
-                    mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
-                    contentDescription = null,
-                    size = 200.dp,
-                    modifier = Modifier.fillMaxSize()
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    shape = MaterialTheme.shapes.medium,
+                    color = MaterialTheme.colorScheme.primaryContainer
                 ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Album,
-                                contentDescription = null,
-                                modifier = Modifier.size(48.dp),
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = Icons.Default.Album,
+                            contentDescription = null,
+                            modifier = Modifier.size(48.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
                     }
                 }
             }
-            // Album info
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 8.dp)
-            ) {
-                Text(
-                    text = album.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                Text(
-                    text = album.artist ?: "",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(modifier = Modifier.height(2.dp))
-                // 直接取第一个文件的年份，与专辑详情保持一致，避免 R8 优化导致的行为差异
-                val albumYear = album.files.firstOrNull()?.metadata?.year
-                Text(
-                    text = if (albumYear != null) {
-                        "$albumYear • ${stringResource(R.string.track_count, album.files.size)}"
-                    } else {
-                        stringResource(R.string.track_count, album.files.size)
-                    },
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.outline
-                )
+        }
+        // Album info - transparent background
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+        ) {
+            // Album name - bold
+            Text(
+                text = album.name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            // Track count, artist, and year in the same row
+            val albumYear = album.files.firstOrNull()?.metadata?.year
+            val infoText = buildString {
+                append(stringResource(R.string.track_count, album.files.size))
+                album.artist?.let {
+                    append(" ")
+                    append(it)
+                }
+                if (albumYear != null) {
+                    append(" ")
+                    append(albumYear)
+                }
             }
+            Text(
+                text = infoText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }

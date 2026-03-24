@@ -3,6 +3,7 @@ package com.voxly.presentation.components
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -53,7 +54,7 @@ fun AlbumArtImage(
     )
 
     Box(
-        modifier = modifier.size(size),
+        modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
         val bitmap = albumArtBitmap.value
@@ -61,11 +62,13 @@ fun AlbumArtImage(
             Image(
                 bitmap = bitmap.asImageBitmap(),
                 contentDescription = contentDescription,
-                modifier = Modifier.size(size),
+                modifier = Modifier.fillMaxSize(),
                 contentScale = contentScale
             )
         } else {
-            placeholder()
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                placeholder()
+            }
         }
     }
 }
