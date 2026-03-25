@@ -1,10 +1,14 @@
 package com.voxly.presentation.components
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.material3.NavigationItemColors
+import androidx.compose.material3.ShortNavigationBar
+import androidx.compose.material3.ShortNavigationBarDefaults
+import androidx.compose.material3.ShortNavigationBarItem
+import androidx.compose.material3.ShortNavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
@@ -18,7 +22,7 @@ import com.voxly.presentation.navigation.Settings
 
 /**
  * Bottom navigation bar for the app using Navigation3.
- * Uses Material 3 NavigationBar component.
+ * Uses Material 3 Expressive ShortNavigationBar component (Flexible navigation bar).
  */
 @Composable
 fun FlexibleBottomAppBar(
@@ -33,14 +37,17 @@ fun FlexibleBottomAppBar(
 
     // Only show bottom bar on bottom nav routes
     if (currentKey in bottomNavKeys) {
-        NavigationBar(
+        ShortNavigationBar(
             modifier = modifier.fillMaxWidth(),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            windowInsets = WindowInsets.navigationBars,
+            arrangement = ShortNavigationBarDefaults.arrangement
         ) {
             bottomNavItems.forEach { item ->
                 val selected = currentKey == item.key
 
-                NavigationBarItem(
+                ShortNavigationBarItem(
                     selected = selected,
                     onClick = {
                         if (!selected) {
@@ -58,18 +65,18 @@ fun FlexibleBottomAppBar(
                             contentDescription = item.label
                         )
                     },
-                    label = if (selected) {
-                        {
-                            Text(
-                                text = item.label,
-                                maxLines = 1
-                            )
-                        }
-                    } else null,
-                    colors = NavigationBarItemDefaults.colors(
+                    label = {
+                        Text(
+                            text = item.label,
+                            maxLines = 1
+                        )
+                    },
+                    colors = ShortNavigationBarItemDefaults.colors(
                         selectedIconColor = MaterialTheme.colorScheme.primary,
                         selectedTextColor = MaterialTheme.colorScheme.primary,
-                        indicatorColor = MaterialTheme.colorScheme.primaryContainer
+                        selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 )
             }
