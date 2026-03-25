@@ -36,6 +36,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 
 /**
  * Material 3 Expressive style standard scrollbar for LazyColumn with drag support.
@@ -103,6 +104,10 @@ fun M3EScrollbar(
             }
         }
     }
+    
+    // Use rememberUpdatedState to ensure lambdas always access latest values
+    val currentScrollProgress = rememberUpdatedState(scrollProgress)
+    val currentListState = rememberUpdatedState(listState)
 
     // Animation for scrollbar visibility
     val scrollbarAlpha by animateFloatAsState(
@@ -139,26 +144,31 @@ fun M3EScrollbar(
         val maxThumbOffset = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
         val thumbOffsetPx = scrollProgress * maxThumbOffset
         val thumbOffset = with(density) { thumbOffsetPx.toDp() }
+        
+        // Store values that need to be accessed in pointerInput lambda
+        val currentThumbOffsetPx = rememberUpdatedState(thumbOffsetPx)
+        val currentMaxThumbOffset = rememberUpdatedState(maxThumbOffset)
+        val currentTrackHeightPx = rememberUpdatedState(trackHeightPx)
+        val currentIsDragging = rememberUpdatedState(isDragging)
 
         // Full height draggable area
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(24.dp)
-                .pointerInput(Unit) {
-                    trackHeightPx = size.height.toFloat()
+                .pointerInput(currentScrollProgress.value, currentMaxThumbOffset.value) {
+                    val updatedTrackHeight = size.height.toFloat()
+                    trackHeightPx = updatedTrackHeight
 
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
-                            // Check if touch is within thumb area
-                            val touchY = offset.y
-                            val thumbTop = thumbOffsetPx
-                            val thumbBottom = thumbOffsetPx + thumbHeightPx
+                            val updatedThumbOffset = currentScrollProgress.value * currentMaxThumbOffset.value
+                            val thumbTop = updatedThumbOffset
+                            val thumbBottom = updatedThumbOffset + thumbHeightPx
                             
-                            if (touchY in thumbTop..thumbBottom) {
-                                isDragging = true
-                                view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
-                            }
+                            // Allow drag if touching anywhere on the scrollbar area
+                            isDragging = true
+                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
                         },
                         onDragEnd = {
                             isDragging = false
@@ -167,22 +177,26 @@ fun M3EScrollbar(
                             isDragging = false
                         },
                         onVerticalDrag = { change, dragAmount ->
-                            if (!isDragging) return@detectVerticalDragGestures
+                            if (!currentIsDragging.value) return@detectVerticalDragGestures
                             
                             change.consume()
                             
+                            // Use updated values for calculations
+                            val updatedMaxOffset = currentMaxThumbOffset.value
+                            val updatedThumbOffset = currentScrollProgress.value * updatedMaxOffset
+                            
                             // Calculate new position based on drag
-                            val newOffsetPx = (thumbOffsetPx + dragAmount).coerceIn(0f, maxThumbOffset)
-                            val newProgress = if (maxThumbOffset > 0) {
-                                newOffsetPx / maxThumbOffset
+                            val newOffsetPx = (updatedThumbOffset + dragAmount).coerceIn(0f, updatedMaxOffset)
+                            val newProgress = if (updatedMaxOffset > 0) {
+                                newOffsetPx / updatedMaxOffset
                             } else 0f
 
-                            val totalItems = listState.layoutInfo.totalItemsCount
+                            val totalItems = currentListState.value.layoutInfo.totalItemsCount
                             val targetIndex = (newProgress * (totalItems - 1)).toInt()
                                 .coerceIn(0, totalItems - 1)
 
                             coroutineScope.launch {
-                                listState.scrollToItem(targetIndex)
+                                currentListState.value.scrollToItem(targetIndex)
                             }
                         }
                     )
@@ -275,6 +289,10 @@ fun M3EGridScrollbar(
             }
         }
     }
+    
+    // Use rememberUpdatedState to ensure lambdas always access latest values
+    val currentScrollProgress = rememberUpdatedState(scrollProgress)
+    val currentGridState = rememberUpdatedState(gridState)
 
     // Animation for scrollbar visibility
     val scrollbarAlpha by animateFloatAsState(
@@ -311,26 +329,31 @@ fun M3EGridScrollbar(
         val maxThumbOffset = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
         val thumbOffsetPx = scrollProgress * maxThumbOffset
         val thumbOffset = with(density) { thumbOffsetPx.toDp() }
+        
+        // Store values that need to be accessed in pointerInput lambda
+        val currentThumbOffsetPx = rememberUpdatedState(thumbOffsetPx)
+        val currentMaxThumbOffset = rememberUpdatedState(maxThumbOffset)
+        val currentTrackHeightPx = rememberUpdatedState(trackHeightPx)
+        val currentIsDragging = rememberUpdatedState(isDragging)
 
         // Full height draggable area
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(24.dp)
-                .pointerInput(Unit) {
-                    trackHeightPx = size.height.toFloat()
+                .pointerInput(currentScrollProgress.value, currentMaxThumbOffset.value) {
+                    val updatedTrackHeight = size.height.toFloat()
+                    trackHeightPx = updatedTrackHeight
 
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
-                            // Check if touch is within thumb area
-                            val touchY = offset.y
-                            val thumbTop = thumbOffsetPx
-                            val thumbBottom = thumbOffsetPx + thumbHeightPx
+                            val updatedThumbOffset = currentScrollProgress.value * currentMaxThumbOffset.value
+                            val thumbTop = updatedThumbOffset
+                            val thumbBottom = updatedThumbOffset + thumbHeightPx
                             
-                            if (touchY in thumbTop..thumbBottom) {
-                                isDragging = true
-                                view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
-                            }
+                            // Allow drag if touching anywhere on the scrollbar area
+                            isDragging = true
+                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
                         },
                         onDragEnd = {
                             isDragging = false
@@ -339,22 +362,26 @@ fun M3EGridScrollbar(
                             isDragging = false
                         },
                         onVerticalDrag = { change, dragAmount ->
-                            if (!isDragging) return@detectVerticalDragGestures
+                            if (!currentIsDragging.value) return@detectVerticalDragGestures
                             
                             change.consume()
                             
+                            // Use updated values for calculations
+                            val updatedMaxOffset = currentMaxThumbOffset.value
+                            val updatedThumbOffset = currentScrollProgress.value * updatedMaxOffset
+                            
                             // Calculate new position based on drag
-                            val newOffsetPx = (thumbOffsetPx + dragAmount).coerceIn(0f, maxThumbOffset)
-                            val newProgress = if (maxThumbOffset > 0) {
-                                newOffsetPx / maxThumbOffset
+                            val newOffsetPx = (updatedThumbOffset + dragAmount).coerceIn(0f, updatedMaxOffset)
+                            val newProgress = if (updatedMaxOffset > 0) {
+                                newOffsetPx / updatedMaxOffset
                             } else 0f
 
-                            val totalItems = gridState.layoutInfo.totalItemsCount
+                            val totalItems = currentGridState.value.layoutInfo.totalItemsCount
                             val targetIndex = (newProgress * (totalItems - 1)).toInt()
                                 .coerceIn(0, totalItems - 1)
 
                             coroutineScope.launch {
-                                gridState.scrollToItem(targetIndex)
+                                currentGridState.value.scrollToItem(targetIndex)
                             }
                         }
                     )

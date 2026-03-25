@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.LaunchedEffect
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.Job
@@ -117,6 +118,12 @@ fun AlphabetScrollbarM3E(
             }
         }
     }
+    
+    // Use rememberUpdatedState to ensure lambdas always access latest values
+    val currentScrollProgress = rememberUpdatedState(scrollProgress)
+    val currentListState = rememberUpdatedState(listState)
+    val currentTotalItems = rememberUpdatedState(totalItems)
+    val currentLetterToIndex = rememberUpdatedState(letterToIndex)
 
     // Get current letter based on scroll position
     val currentLetter by remember {
@@ -181,14 +188,21 @@ fun AlphabetScrollbarM3E(
         val maxThumbOffset = (trackHeightPx - thumbHeightPx).coerceAtLeast(0f)
         val thumbOffsetPx = scrollProgress * maxThumbOffset
         val thumbOffset = with(density) { thumbOffsetPx.toDp() }
+        
+        // Store values that need to be accessed in pointerInput lambda
+        val currentThumbOffsetPx = rememberUpdatedState(thumbOffsetPx)
+        val currentMaxThumbOffset = rememberUpdatedState(maxThumbOffset)
+        val currentTrackHeightPx = rememberUpdatedState(trackHeightPx)
+        val currentIsDragging = rememberUpdatedState(isDragging)
 
         // Scrollbar thumb container with drag detection
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(24.dp)
-                .pointerInput(Unit) {
-                    trackHeightPx = size.height.toFloat()
+                .pointerInput(currentScrollProgress.value, currentMaxThumbOffset.value) {
+                    val updatedTrackHeight = size.height.toFloat()
+                    trackHeightPx = updatedTrackHeight
 
                     detectVerticalDragGestures(
                         onDragStart = {
@@ -203,25 +217,29 @@ fun AlphabetScrollbarM3E(
                         },
                         onVerticalDrag = { change, dragAmount ->
                             change.consume()
+                            
+                            // Use updated values for calculations
+                            val updatedMaxOffset = currentMaxThumbOffset.value
+                            val updatedThumbOffset = currentScrollProgress.value * updatedMaxOffset
 
                             // Calculate new scroll progress based on drag
-                            val newOffsetPx = (thumbOffsetPx + dragAmount).coerceIn(0f, maxThumbOffset)
-                            val newProgress = if (maxThumbOffset > 0) {
-                                newOffsetPx / maxThumbOffset
+                            val newOffsetPx = (updatedThumbOffset + dragAmount).coerceIn(0f, updatedMaxOffset)
+                            val newProgress = if (updatedMaxOffset > 0) {
+                                newOffsetPx / updatedMaxOffset
                             } else 0f
 
-                            val targetIndex = (newProgress * (totalItems - 1)).toInt()
-                                .coerceIn(0, totalItems - 1)
+                            val targetIndex = (newProgress * (currentTotalItems.value - 1)).toInt()
+                                .coerceIn(0, currentTotalItems.value - 1)
 
-                            val newLetter = findLetterForIndex(targetIndex, letterToIndex)
+                            val newLetter = findLetterForIndex(targetIndex, currentLetterToIndex.value)
 
                             // Haptic feedback on letter change
-                            if (newLetter != currentLetter && isDragging) {
+                            if (newLetter != currentLetter && currentIsDragging.value) {
                                 view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
                             }
 
                             coroutineScope.launch {
-                                listState.scrollToItem(targetIndex)
+                                currentListState.value.scrollToItem(targetIndex)
                             }
                         }
                     )
