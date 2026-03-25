@@ -81,8 +81,7 @@ object SharedTransitionConfigs {
  * This is the recommended API in Compose 1.11.0-beta01+ for shared element transitions.
  * It handles both position and shape transformations (e.g., rounded corners to rectangle).
  * 
- * Note: In 1.11.0-beta01, sharedBounds API may be experimental or moved. 
- * This function provides a safe fallback.
+ * Note: APIs are accessed through SharedTransitionScope receiver to ensure correct imports.
  * 
  * @param key Unique key for the shared element
  * @param boundsTransform Animation configuration for the bounds transformation
@@ -94,9 +93,22 @@ fun Modifier.sharedBoundsIfAvailable(
     key: String,
     boundsTransform: BoundsTransform = SharedTransitionConfigs.ContainerTransform
 ): Modifier {
-    // Temporarily disabled until sharedBounds API is fully available
-    // TODO: Enable when rememberSharedContentState and sharedBounds are confirmed available
-    return this
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+
+    return if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        // Use SharedTransitionScope extension functions directly
+        with(sharedTransitionScope) {
+            // Access rememberSharedContentState and sharedBounds through the scope
+            this@sharedBoundsIfAvailable.sharedBounds(
+                sharedContentState = rememberSharedContentState(key = key),
+                animatedVisibilityScope = animatedVisibilityScope,
+                boundsTransform = boundsTransform
+            )
+        }
+    } else {
+        this
+    }
 }
 
 /**
