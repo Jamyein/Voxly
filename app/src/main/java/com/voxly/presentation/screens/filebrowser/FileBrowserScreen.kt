@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -108,14 +109,13 @@ import kotlin.math.abs
 fun FileBrowserScreen(
     outerPadding: PaddingValues = PaddingValues(),
     viewModel: LibraryViewModel = hiltViewModel(),
+    listState: LazyListState = rememberLazyListState(),
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
     onNavigateToDirectory: (String, String) -> Unit,
     onNavigateToSearch: (List<AudioFile>) -> Unit = {},
     onNavigateToAlbum: (String, String?) -> Unit = { _, _ -> },
-    onNavigateToArtist: (String) -> Unit = {},
-    bottomNavScrollProgress: Float = 0f,
-    onBottomBarScrollProgressChange: (Float) -> Unit = {}
+    onNavigateToArtist: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -180,10 +180,8 @@ fun FileBrowserScreen(
     val initialScrollPosition = remember(currentListKey) {
         viewModel.getScrollPosition(currentListKey)
     }
-    val listState = rememberLazyListState(
-        initialFirstVisibleItemIndex = initialScrollPosition.index,
-        initialFirstVisibleItemScrollOffset = initialScrollPosition.offset
-    )
+    // listState is now passed from parent (MP3TagNavHost) to support scroll-to-hide
+    // Note: FileBrowserScreen manages scroll positions per directory via ViewModel
 
     val canScrollToTop by remember {
         derivedStateOf {
@@ -198,12 +196,12 @@ fun FileBrowserScreen(
     // Scroll detection threshold for top bar visibility
     val scrollHideThreshold = 100
 
-    // Track scroll state for hiding top bar and bottom bar
+    // Track scroll state for hiding top bar only (bottom bar scroll-to-hide is handled by FlexibleBottomAppBar)
     var lastScrollIndex by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.index) }
     var lastScrollOffset by remember(currentListKey) { mutableIntStateOf(initialScrollPosition.offset) }
     var accumulatedScrollDelta by remember(currentListKey) { mutableIntStateOf(0) }
 
-    // Track scroll progress using LazyColumn state
+    // Track scroll progress for top bar visibility only
     LaunchedEffect(listState) {
         snapshotFlow {
             Triple(
@@ -215,10 +213,6 @@ fun FileBrowserScreen(
             if (!isScrolling) {
                 lastScrollIndex = index
                 lastScrollOffset = offset
-                // 滚动停止时保持当前状态，不重置 accumulatedScrollDelta
-                if (index == 0 && offset == 0) {
-                    onBottomBarScrollProgressChange(0f)
-                }
                 return@collect
             }
 
@@ -239,28 +233,17 @@ fun FileBrowserScreen(
                 }
             }
 
-            // Calculate progress (0 = fully visible, 1 = fully hidden)
-            val progress = (kotlin.math.abs(accumulatedScrollDelta).toFloat() / (scrollHideThreshold * 8f))
-                .coerceIn(0f, 1f)
-
             when {
                 index == 0 && offset == 0 -> {
-                    onBottomBarScrollProgressChange(0f)
                     isTopBarVisible = true
                     accumulatedScrollDelta = 0
                 }
                 accumulatedScrollDelta > scrollHideThreshold * 2 -> {
-                    onBottomBarScrollProgressChange(1f)
                     isTopBarVisible = false
-                    // 保持隐藏状态，不再重置 accumulatedScrollDelta
                 }
                 accumulatedScrollDelta < -scrollHideThreshold -> {
-                    onBottomBarScrollProgressChange(0f)
                     isTopBarVisible = true
                     accumulatedScrollDelta = 0
-                }
-                else -> {
-                    onBottomBarScrollProgressChange(progress)
                 }
             }
 
@@ -275,7 +258,6 @@ fun FileBrowserScreen(
         lastScrollOffset = initialScrollPosition.offset
         accumulatedScrollDelta = 0
         isTopBarVisible = true
-        onBottomBarScrollProgressChange(0f)
     }
 
     val readPermission = remember {
@@ -320,10 +302,10 @@ fun FileBrowserScreen(
                 listState.firstVisibleItemScrollOffset
             )
         }.distinctUntilChanged().collect { (isScrolling, index, offset) ->
-            val shouldSave = !isScrolling ||
+            val needToSavePosition = !isScrolling ||
                 index != lastSavedIndex ||
                 abs(offset - lastSavedOffset) >= 48
-            if (shouldSave) {
+            if (needToSavePosition) {
                 viewModel.saveScrollPosition(currentListKey, index, offset)
                 lastSavedIndex = index
                 lastSavedOffset = offset

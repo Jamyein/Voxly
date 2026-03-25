@@ -36,6 +36,7 @@ import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
@@ -892,6 +893,7 @@ fun SettingsScreen(
     onNavigateToLogViewer: () -> Unit = {},
     onExportLogs: () -> Unit = {},
     onCleanupLogs: () -> Unit = {},
+    listState: LazyListState = rememberLazyListState(),
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current

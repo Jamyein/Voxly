@@ -1,12 +1,20 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfo
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
@@ -15,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import com.voxly.presentation.components.LocalSharedTransitionScope
 import androidx.lifecycle.viewmodel.navigation3.rememberViewModelStoreNavEntryDecorator
 import androidx.navigation3.runtime.NavEntryDecorator
 import androidx.navigation3.runtime.NavKey
@@ -27,6 +36,9 @@ import com.voxly.R
 import com.voxly.core.util.LogManager
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.presentation.components.FlexibleBottomAppBar
+import com.voxly.presentation.icons.AppIcon
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
 import com.voxly.presentation.screens.ReplayGainScannerScreen
 import com.voxly.presentation.screens.SettingsScreen
 import com.voxly.presentation.screens.album.AlbumDetailScreen
@@ -57,8 +69,10 @@ import com.voxly.presentation.viewmodel.ReplayGainViewModel
 
 /**
  * Main navigation host for the MP3 Tag Editor app using Navigation3.
- * Implements bottom navigation with Material Design 3 components.
+ * Implements adaptive navigation with NavigationSuiteScaffold for M3E Flexible navigation bar.
+ * Automatically switches between NavigationBar (bottom) and NavigationRail (side) based on screen size.
  */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun MP3TagNavHost() {
     val context = LocalContext.current
@@ -88,24 +102,105 @@ fun MP3TagNavHost() {
     @Suppress("UNCHECKED_CAST")
     val sceneStrategy: SceneStrategy<Any> = remember { DialogSceneStrategy<Any>() }
 
-    // Determine if bottom bar should be shown
+    // Determine current screen for navigation
     val currentKey = backStack.lastOrNull()
     val showBottomBar = currentKey == FileBrowser ||
             currentKey == Albums ||
             currentKey == Artists ||
             currentKey == Settings
 
-    Scaffold(
-        bottomBar = {
+    // Get adaptive info for responsive layout
+    val adaptiveInfo = currentWindowAdaptiveInfo()
+
+    // NavigationSuiteScaffold for adaptive navigation (NavigationBar/Rail)
+    NavigationSuiteScaffold(
+        layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo),
+        navigationSuiteItems = {
             if (showBottomBar) {
-                @Suppress("UNCHECKED_CAST")
-                FlexibleBottomAppBar(
-                    backStack = backStack as MutableList<NavKey>,
-                    currentKey = currentKey as NavKey
+                // Files - Filled when selected, Outlined when unselected
+                val isFileSelected = currentKey is FileBrowser
+                item(
+                    icon = { Icon(
+                        imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
+                        contentDescription = "Files"
+                    ) },
+                    label = { Text("Files") },
+                    selected = isFileSelected,
+                    onClick = {
+                        if (!isFileSelected) {
+                            val currentIndex = backStack.indexOfFirst {
+                                it is FileBrowser || it is Albums || it is Artists || it is Settings
+                            }
+                            if (currentIndex >= 0) {
+                                backStack[currentIndex] = FileBrowser
+                            }
+                        }
+                    }
+                )
+                // Albums - Filled when selected, Outlined when unselected
+                val isAlbumsSelected = currentKey is Albums
+                item(
+                    icon = { Icon(
+                        imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
+                        contentDescription = "Albums"
+                    ) },
+                    label = { Text("Albums") },
+                    selected = isAlbumsSelected,
+                    onClick = {
+                        if (!isAlbumsSelected) {
+                            val currentIndex = backStack.indexOfFirst {
+                                it is FileBrowser || it is Albums || it is Artists || it is Settings
+                            }
+                            if (currentIndex >= 0) {
+                                backStack[currentIndex] = Albums
+                            }
+                        }
+                    }
+                )
+                // Artists - Filled when selected, Outlined when unselected
+                val isArtistsSelected = currentKey is Artists
+                item(
+                    icon = { Icon(
+                        imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
+                        contentDescription = "Artists"
+                    ) },
+                    label = { Text("Artists") },
+                    selected = isArtistsSelected,
+                    onClick = {
+                        if (!isArtistsSelected) {
+                            val currentIndex = backStack.indexOfFirst {
+                                it is FileBrowser || it is Albums || it is Artists || it is Settings
+                            }
+                            if (currentIndex >= 0) {
+                                backStack[currentIndex] = Artists
+                            }
+                        }
+                    }
+                )
+                // Settings - Filled when selected, Outlined when unselected
+                val isSettingsSelected = currentKey is Settings
+                item(
+                    icon = { Icon(
+                        imageVector = if (isSettingsSelected) AppIcon.Settings.vector else AppIcon.SettingsOutlined.vector,
+                        contentDescription = "Settings"
+                    ) },
+                    label = { Text("Settings") },
+                    selected = isSettingsSelected,
+                    onClick = {
+                        if (!isSettingsSelected) {
+                            val currentIndex = backStack.indexOfFirst {
+                                it is FileBrowser || it is Albums || it is Artists || it is Settings
+                            }
+                            if (currentIndex >= 0) {
+                                backStack[currentIndex] = Settings
+                            }
+                        }
+                    }
                 )
             }
-        }
-    ) { outerPadding ->
+        },
+        containerColor = MaterialTheme.colorScheme.background
+    ) {
         Box(
             modifier = Modifier.fillMaxSize()
         ) {
@@ -118,7 +213,7 @@ fun MP3TagNavHost() {
                     // Bottom navigation screens
                     entry<FileBrowser> {
                         FileBrowserScreen(
-                            outerPadding = outerPadding,
+                            outerPadding = PaddingValues(),
                             viewModel = libraryViewModel,
                             onNavigateToMetadata = { filePath, coverTag ->
                                 backStack.add(MetadataEditor(filePath, coverTag ?: ""))
@@ -141,7 +236,7 @@ fun MP3TagNavHost() {
 
                     entry<Albums> {
                         AlbumScreen(
-                            outerPadding = outerPadding,
+                            outerPadding = PaddingValues(),
                             onNavigateToAlbumDetail = { albumName, albumArtist ->
                                 backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
                             }
@@ -150,7 +245,7 @@ fun MP3TagNavHost() {
 
                     entry<Artists> {
                         ArtistScreen(
-                            outerPadding = outerPadding,
+                            outerPadding = PaddingValues(),
                             onNavigateToArtistDetail = { artistName ->
                                 backStack.add(ArtistDetail(artistName))
                             }
@@ -159,7 +254,7 @@ fun MP3TagNavHost() {
 
                     entry<Settings> {
                         SettingsScreen(
-                            outerPadding = outerPadding,
+                            outerPadding = PaddingValues(),
                             onNavigateToLogViewer = {
                                 backStack.add(LogViewer)
                             },

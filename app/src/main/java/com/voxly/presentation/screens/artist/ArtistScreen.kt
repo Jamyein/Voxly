@@ -45,12 +45,12 @@ import com.voxly.presentation.viewmodel.ArtistViewModel
 fun ArtistScreen(
     outerPadding: PaddingValues = PaddingValues(),
     onNavigateToArtistDetail: (String) -> Unit,
+    listState: LazyListState = rememberLazyListState(),
     viewModel: ArtistViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val artists by viewModel.artists.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val listState = rememberLazyListState()
     val coroutineScope = rememberCoroutineScope()
 
     val readPermission = remember {

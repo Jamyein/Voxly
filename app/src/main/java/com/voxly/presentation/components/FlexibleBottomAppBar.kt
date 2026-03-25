@@ -3,15 +3,17 @@ package com.voxly.presentation.components
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ShortNavigationBar
-import androidx.compose.material3.ShortNavigationBarDefaults
-import androidx.compose.material3.ShortNavigationBarItem
-import androidx.compose.material3.ShortNavigationBarItemDefaults
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavKey
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.navigation.Albums
@@ -20,35 +22,37 @@ import com.voxly.presentation.navigation.FileBrowser
 import com.voxly.presentation.navigation.Settings
 
 /**
- * Bottom navigation bar for the app using Navigation3.
- * Uses Material 3 Expressive ShortNavigationBar component (Flexible navigation bar).
+ * Flexible navigation bar for NavigationSuiteScaffold.
+ * Uses standard NavigationBar with M3E styling.
+ * Note: NavigationSuiteScaffold manages its own navigation bar internally,
+ * so scroll-to-hide is not implemented here.
  */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun FlexibleBottomAppBar(
     backStack: MutableList<NavKey>,
-    currentKey: NavKey,
+    currentKey: NavKey?,
     modifier: Modifier = Modifier
 ) {
-    // Bottom navigation keys
     val bottomNavKeys = remember {
         listOf(FileBrowser, Albums, Artists, Settings)
     }
 
-    // Only show bottom bar on bottom nav routes
-    if (currentKey in bottomNavKeys) {
-        ShortNavigationBar(
+    // Only show on bottom nav routes
+    if (currentKey != null && currentKey in bottomNavKeys) {
+        // M3E styling: compact NavigationBar with surfaceContainer background
+        NavigationBar(
             modifier = modifier.fillMaxWidth(),
-            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            windowInsets = WindowInsets.navigationBars,
-            arrangement = ShortNavigationBarDefaults.arrangement
+            tonalElevation = 0.dp, // M3E: flat visual hierarchy
+            containerColor = MaterialTheme.colorScheme.surfaceContainer,
+            windowInsets = WindowInsets.navigationBars
         ) {
-            // File Browser
-            val isFileBrowserSelected = currentKey == FileBrowser
-            ShortNavigationBarItem(
-                selected = isFileBrowserSelected,
+            // Files
+            val isFileSelected = currentKey == FileBrowser
+            NavigationBarItem(
+                selected = isFileSelected,
                 onClick = {
-                    if (!isFileBrowserSelected) {
+                    if (!isFileSelected) {
                         val currentIndex = backStack.indexOfFirst { it in bottomNavKeys }
                         if (currentIndex >= 0) {
                             backStack[currentIndex] = FileBrowser
@@ -57,15 +61,16 @@ fun FlexibleBottomAppBar(
                 },
                 icon = {
                     androidx.compose.material3.Icon(
-                        imageVector = if (isFileBrowserSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
+                        imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
                         contentDescription = "Files"
                     )
                 },
                 label = { Text("Files") },
-                colors = ShortNavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                // M3E: secondary container for active indicator
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -73,7 +78,7 @@ fun FlexibleBottomAppBar(
 
             // Albums
             val isAlbumsSelected = currentKey == Albums
-            ShortNavigationBarItem(
+            NavigationBarItem(
                 selected = isAlbumsSelected,
                 onClick = {
                     if (!isAlbumsSelected) {
@@ -90,10 +95,10 @@ fun FlexibleBottomAppBar(
                     )
                 },
                 label = { Text("Albums") },
-                colors = ShortNavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -101,7 +106,7 @@ fun FlexibleBottomAppBar(
 
             // Artists
             val isArtistsSelected = currentKey == Artists
-            ShortNavigationBarItem(
+            NavigationBarItem(
                 selected = isArtistsSelected,
                 onClick = {
                     if (!isArtistsSelected) {
@@ -118,10 +123,10 @@ fun FlexibleBottomAppBar(
                     )
                 },
                 label = { Text("Artists") },
-                colors = ShortNavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -129,7 +134,7 @@ fun FlexibleBottomAppBar(
 
             // Settings
             val isSettingsSelected = currentKey == Settings
-            ShortNavigationBarItem(
+            NavigationBarItem(
                 selected = isSettingsSelected,
                 onClick = {
                     if (!isSettingsSelected) {
@@ -146,10 +151,10 @@ fun FlexibleBottomAppBar(
                     )
                 },
                 label = { Text("Settings") },
-                colors = ShortNavigationBarItemDefaults.colors(
-                    selectedIconColor = MaterialTheme.colorScheme.primary,
-                    selectedTextColor = MaterialTheme.colorScheme.primary,
-                    selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                colors = NavigationBarItemDefaults.colors(
+                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    selectedTextColor = MaterialTheme.colorScheme.onSecondaryContainer,
                     unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                     unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
