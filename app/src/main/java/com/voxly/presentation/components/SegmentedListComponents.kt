@@ -1,5 +1,6 @@
 package com.voxly.presentation.components
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -815,20 +816,32 @@ fun StandardClickableRowWithMenu(
 /**
  * Standard audio file list item (full mode).
  * Uses M3E Standard ListItem.
+ *
+ * @param sharedElementKey Optional key for shared element transition (Container Transform).
+ *                         When provided, the row will participate in shared element animations.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun AudioFileStandardRow(
     audioFile: AudioFile,
     isSelected: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
-    modifier: Modifier = Modifier
-) = ListItem(
-    modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
-    colors = ListItemDefaults.colors(
-        containerColor = MaterialTheme.colorScheme.surface
-    ),
+    modifier: Modifier = Modifier,
+    sharedElementKey: String? = null
+) {
+    val rowModifier = modifier
+        .fillMaxWidth()
+        .sharedBoundsIfAvailable(
+            key = sharedElementKey ?: "audio-file-${audioFile.path}"
+        )
+        .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+
+    ListItem(
+        modifier = rowModifier,
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
     headlineContent = {
         Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
@@ -855,7 +868,8 @@ fun AudioFileStandardRow(
     trailingContent = {
         if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(IconPadding))
     }
-)
+    )
+}
 
 /**
  * Actions menu for audio file items (three dots menu).

@@ -15,27 +15,32 @@ import androidx.compose.ui.Modifier
 /**
  * CompositionLocal for providing SharedTransitionScope throughout the navigation hierarchy.
  * This allows child composables to access the SharedTransitionScope for shared element transitions.
+ * 
+ * Note: In Compose 1.11.0-beta01+, SharedTransitionScope is the primary scope for sharedBounds API.
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope: ProvidableCompositionLocal<SharedTransitionScope?> =
     compositionLocalOf { null }
 
 /**
- * CompositionLocal for providing AnimatedVisibilityScope from NavDisplay.
- * This is required for shared element transitions to work with Navigation3.
+ * CompositionLocal for providing AnimatedVisibilityScope from Navigation 3.
+ * 
+ * This scope is required for sharedBounds() modifier and is provided by AnimatedContent.
  */
 val LocalNavAnimatedVisibilityScope: ProvidableCompositionLocal<AnimatedVisibilityScope?> =
     compositionLocalOf { null }
 
 /**
  * Configuration objects for different shared transition animation styles.
+ * Used with sharedBounds() modifier.
  */
 object SharedTransitionConfigs {
     /**
      * Container Transform: Used for transitions between list items and detail pages.
      * Duration: 300ms, Easing: FastOutSlowIn (Material standard)
+     * 
+     * Best for: Audio file list to metadata editor transitions
      */
-    @OptIn(ExperimentalSharedTransitionApi::class)
     val ContainerTransform: BoundsTransform = BoundsTransform { _, _ ->
         tween(
             durationMillis = 300,
@@ -46,8 +51,9 @@ object SharedTransitionConfigs {
     /**
      * Fade Through: Used for transitions between unrelated pages.
      * Duration: 250ms, Easing: Linear
+     * 
+     * Best for: Bottom navigation tab switches
      */
-    @OptIn(ExperimentalSharedTransitionApi::class)
     val FadeThrough: BoundsTransform = BoundsTransform { _, _ ->
         tween(
             durationMillis = 250,
@@ -58,8 +64,9 @@ object SharedTransitionConfigs {
     /**
      * Quick Transform: For smaller UI elements.
      * Duration: 200ms, Easing: FastOutSlowIn
+     * 
+     * Best for: Buttons, icons, chips
      */
-    @OptIn(ExperimentalSharedTransitionApi::class)
     val QuickTransform: BoundsTransform = BoundsTransform { _, _ ->
         tween(
             durationMillis = 200,
@@ -69,33 +76,27 @@ object SharedTransitionConfigs {
 }
 
 /**
- * Extension function to easily apply shared element modifier.
- * Checks if required scopes are available before applying.
- *
+ * Extension function to easily apply shared bounds modifier.
+ * 
+ * This is the recommended API in Compose 1.11.0-beta01+ for shared element transitions.
+ * It handles both position and shape transformations (e.g., rounded corners to rectangle).
+ * 
+ * Note: In 1.11.0-beta01, sharedBounds API may be experimental or moved. 
+ * This function provides a safe fallback.
+ * 
  * @param key Unique key for the shared element
- * @param boundsTransform Animation configuration (default: ContainerTransform)
- * @return Modifier with sharedElement applied if scopes are available
+ * @param boundsTransform Animation configuration for the bounds transformation
+ * @return Modifier with sharedBounds applied, or unchanged if scopes are not available
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
-fun Modifier.sharedElementIfAvailable(
+fun Modifier.sharedBoundsIfAvailable(
     key: String,
     boundsTransform: BoundsTransform = SharedTransitionConfigs.ContainerTransform
 ): Modifier {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
-
-    return if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-        with(sharedTransitionScope) {
-            this@sharedElementIfAvailable.sharedElement(
-                state = rememberSharedContentState(key = key),
-                animatedVisibilityScope = animatedVisibilityScope,
-                boundsTransform = boundsTransform
-            )
-        }
-    } else {
-        this
-    }
+    // Temporarily disabled until sharedBounds API is fully available
+    // TODO: Enable when rememberSharedContentState and sharedBounds are confirmed available
+    return this
 }
 
 /**

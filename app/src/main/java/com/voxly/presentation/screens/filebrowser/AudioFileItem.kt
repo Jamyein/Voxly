@@ -33,7 +33,8 @@ internal fun AudioFileItem(
     onFetchOnlineMetadata: () -> Unit,
     onFixMetadata: () -> Unit,
     compactMode: Boolean = false,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedElementKey: String? = "audio-file-${audioFile.path}"
 ) {
     if (compactMode) {
         AudioFileStandardRowCompact(
@@ -65,6 +66,7 @@ internal fun AudioFileItem(
             isSelected = isSelected,
             onClick = onClick,
             onLongClick = onLongClick,
+            sharedElementKey = sharedElementKey,
             modifier = modifier
         )
     }

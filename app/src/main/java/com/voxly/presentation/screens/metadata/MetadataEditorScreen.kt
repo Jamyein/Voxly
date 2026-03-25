@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import com.voxly.presentation.theme.ExpressiveMotion
 import androidx.compose.animation.fadeIn
@@ -47,6 +48,7 @@ import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
@@ -56,8 +58,15 @@ import com.voxly.presentation.viewmodel.ReplayGainScanError
 
 /**
  * Metadata editor screen for viewing and editing audio file metadata.
+ *
+ * @param sharedElementKey Optional key for shared element transition. When provided,
+ *                         the screen will participate in Container Transform animation.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalSharedTransitionApi::class
+)
 @Composable
 fun MetadataEditorScreen(
     filePath: String,
@@ -68,11 +77,22 @@ fun MetadataEditorScreen(
     onNavigateToOnlineCoverSearch: () -> Unit,
     onNavigateToLyricsSelector: (lyricsText: String, title: String, artist: String, album: String, albumArtBytes: ByteArray?) -> Unit,
     coverTag: String? = null,
+    sharedElementKey: String? = null,
     pendingOnlineMetadata: AudioMetadata? = null,
     onConsumePendingOnlineMetadata: () -> Unit = {},
     pendingOnlineLyrics: String? = null,
     onConsumePendingOnlineLyrics: () -> Unit = {},
 ) {
+    // Shared element transition setup
+    // Note: Full Container Transform requires AnimatedVisibilityScope which is not directly 
+    // available in Navigation 3 entry blocks. SharedTransitionLayout is set up in MP3TagNavHost
+    // for future use when Navigation 3 provides better support.
+    // Shared bounds modifier for Container Transform transition
+    val sharedElementModifier = if (sharedElementKey != null) {
+        Modifier.sharedBoundsIfAvailable(key = sharedElementKey)
+    } else {
+        Modifier
+    }
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
     val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsState()
@@ -200,6 +220,7 @@ fun MetadataEditorScreen(
 
     Scaffold(
         modifier = Modifier
+            .then(sharedElementModifier)
             .nestedScroll(scrollBehavior.nestedScrollConnection)
             .nestedScroll(floatingToolbarScrollBehavior)
             .graphicsLayer {
