@@ -4,7 +4,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationItemColors
 import androidx.compose.material3.ShortNavigationBar
 import androidx.compose.material3.ShortNavigationBarDefaults
 import androidx.compose.material3.ShortNavigationBarItem
@@ -44,82 +43,117 @@ fun FlexibleBottomAppBar(
             windowInsets = WindowInsets.navigationBars,
             arrangement = ShortNavigationBarDefaults.arrangement
         ) {
-            bottomNavItems.forEach { item ->
-                val selected = currentKey == item.key
-
-                ShortNavigationBarItem(
-                    selected = selected,
-                    onClick = {
-                        if (!selected) {
-                            // Find index of current bottom nav item and replace
-                            val currentIndex = backStack.indexOfFirst { it in bottomNavKeys }
-                            if (currentIndex >= 0) {
-                                // Replace the current bottom nav item
-                                backStack[currentIndex] = item.key
-                            }
+            // File Browser
+            val isFileBrowserSelected = currentKey == FileBrowser
+            ShortNavigationBarItem(
+                selected = isFileBrowserSelected,
+                onClick = {
+                    if (!isFileBrowserSelected) {
+                        val currentIndex = backStack.indexOfFirst { it in bottomNavKeys }
+                        if (currentIndex >= 0) {
+                            backStack[currentIndex] = FileBrowser
                         }
-                    },
-                    icon = {
-                        androidx.compose.material3.Icon(
-                            imageVector = if (selected) item.selectedIcon.vector else item.unselectedIcon.vector,
-                            contentDescription = item.label
-                        )
-                    },
-                    label = {
-                        Text(
-                            text = item.label,
-                            maxLines = 1
-                        )
-                    },
-                    colors = ShortNavigationBarItemDefaults.colors(
-                        selectedIconColor = MaterialTheme.colorScheme.primary,
-                        selectedTextColor = MaterialTheme.colorScheme.primary,
-                        selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
-                        unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                        unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                },
+                icon = {
+                    androidx.compose.material3.Icon(
+                        imageVector = if (isFileBrowserSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
+                        contentDescription = "Files"
                     )
+                },
+                label = { Text("Files") },
+                colors = ShortNavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            }
+            )
+
+            // Albums
+            val isAlbumsSelected = currentKey == Albums
+            ShortNavigationBarItem(
+                selected = isAlbumsSelected,
+                onClick = {
+                    if (!isAlbumsSelected) {
+                        val currentIndex = backStack.indexOfFirst { it in bottomNavKeys }
+                        if (currentIndex >= 0) {
+                            backStack[currentIndex] = Albums
+                        }
+                    }
+                },
+                icon = {
+                    androidx.compose.material3.Icon(
+                        imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
+                        contentDescription = "Albums"
+                    )
+                },
+                label = { Text("Albums") },
+                colors = ShortNavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+
+            // Artists
+            val isArtistsSelected = currentKey == Artists
+            ShortNavigationBarItem(
+                selected = isArtistsSelected,
+                onClick = {
+                    if (!isArtistsSelected) {
+                        val currentIndex = backStack.indexOfFirst { it in bottomNavKeys }
+                        if (currentIndex >= 0) {
+                            backStack[currentIndex] = Artists
+                        }
+                    }
+                },
+                icon = {
+                    androidx.compose.material3.Icon(
+                        imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
+                        contentDescription = "Artists"
+                    )
+                },
+                label = { Text("Artists") },
+                colors = ShortNavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
+
+            // Settings
+            val isSettingsSelected = currentKey == Settings
+            ShortNavigationBarItem(
+                selected = isSettingsSelected,
+                onClick = {
+                    if (!isSettingsSelected) {
+                        val currentIndex = backStack.indexOfFirst { it in bottomNavKeys }
+                        if (currentIndex >= 0) {
+                            backStack[currentIndex] = Settings
+                        }
+                    }
+                },
+                icon = {
+                    androidx.compose.material3.Icon(
+                        imageVector = if (isSettingsSelected) AppIcon.Settings.vector else AppIcon.SettingsOutlined.vector,
+                        contentDescription = "Settings"
+                    )
+                },
+                label = { Text("Settings") },
+                colors = ShortNavigationBarItemDefaults.colors(
+                    selectedIconColor = MaterialTheme.colorScheme.primary,
+                    selectedTextColor = MaterialTheme.colorScheme.primary,
+                    selectedIndicatorColor = MaterialTheme.colorScheme.primaryContainer,
+                    unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                    unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            )
         }
     }
 }
-
-/**
- * Data class representing a bottom navigation item with icons.
- */
-data class FlexibleBottomNavItem(
-    val key: NavKey,
-    val label: String,
-    val selectedIcon: AppIcon,
-    val unselectedIcon: AppIcon
-)
-
-/**
- * List of bottom navigation items.
- */
-private val bottomNavItems = listOf(
-    FlexibleBottomNavItem(
-        key = FileBrowser,
-        label = "Files",
-        selectedIcon = AppIcon.Folder,
-        unselectedIcon = AppIcon.FolderOutlined
-    ),
-    FlexibleBottomNavItem(
-        key = Albums,
-        label = "Albums",
-        selectedIcon = AppIcon.Album,
-        unselectedIcon = AppIcon.AlbumOutlined
-    ),
-    FlexibleBottomNavItem(
-        key = Artists,
-        label = "Artists",
-        selectedIcon = AppIcon.Artist,
-        unselectedIcon = AppIcon.ArtistOutlined
-    ),
-    FlexibleBottomNavItem(
-        key = Settings,
-        label = "Settings",
-        selectedIcon = AppIcon.Settings,
-        unselectedIcon = AppIcon.SettingsOutlined
-    )
-)
