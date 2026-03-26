@@ -489,6 +489,10 @@
     <string name="replay_gain_default_loudness">Default (-14 LUFS)</string>
     <string name="replay_gain_settings">ReplayGain Settings</string>
     <string name="replay_gain_loudness_desc">Adjust the reference loudness level</string>
+    <string name="replay_gain_loudness_ebu_r128">EBU R128 -23 dB</string>
+    <string name="replay_gain_loudness_streaming">Streaming -18 dB</string>
+    <string name="replay_gain_loudness_cd">CD -16 dB</string>
+    <string name="replay_gain_loudness_loud">Loud -14 dB</string>
     <string name="replay_gain_quality">Scan Quality</string>
     <string name="replay_gain_quality_fast">Fast</string>
     <string name="replay_gain_quality_normal">Normal</string>

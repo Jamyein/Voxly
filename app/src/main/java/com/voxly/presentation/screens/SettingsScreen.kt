@@ -111,6 +111,11 @@ data class LanguageOption(
     val languageTag: String?
 )
 
+data class LoudnessOption(
+    val value: Float,
+    @StringRes val labelResId: Int
+)
+
 data class AppleCountryOption(
     val value: String,
     @StringRes val labelResId: Int
@@ -971,7 +976,15 @@ fun SettingsScreen(
     var separatorInput by remember { mutableStateOf("") }
     var pendingDeleteSeparator by remember { mutableStateOf<String?>(null) }
     val separatorTags = remember { mutableStateOf(viewModel.artistSeparatorsSet.value.toList()) }
-    var showLoudnessDialog by remember { mutableStateOf(false) }
+    var loudnessExpanded by remember { mutableStateOf(false) }
+    val loudnessOptions = remember {
+        listOf(
+            LoudnessOption(-23f, R.string.replay_gain_loudness_ebu_r128),
+            LoudnessOption(-18f, R.string.replay_gain_loudness_streaming),
+            LoudnessOption(-16f, R.string.replay_gain_loudness_cd),
+            LoudnessOption(-14f, R.string.replay_gain_loudness_loud)
+        )
+    }
 
     val searchLimitOptions = remember {
         listOf(
@@ -1156,73 +1169,56 @@ fun SettingsScreen(
                     count = 6
                 )
 
-                // ReplayGain target loudness preset values
-                val replayGainOptions = listOf(
-                    SegmentedOption(value = -23f, label = "EBU R128\n-23 dB"),
-                    SegmentedOption(value = -18f, label = "Streaming\n-18 dB"),
-                    SegmentedOption(value = -16f, label = "CD\n-16 dB"),
-                    SegmentedOption(value = -14f, label = "Loud\n-14 dB")
-                )
+                val currentLoudnessOption = loudnessOptions.firstOrNull { it.value == replayGainTargetLoudness }
+                    ?: loudnessOptions.first()
 
                 SegmentedClickableRow(
                     title = stringResource(R.string.replay_gain_target_loudness),
                     subtitle = stringResource(R.string.replay_gain_default_loudness),
                     trailingContent = {
-                        Text(
-                            text = replayGainOptions.find { it.value == replayGainTargetLoudness }?.label?.replace("\n", " ") ?: "",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        val arrowRotation by animateFloatAsState(
+                            targetValue = if (loudnessExpanded) 180f else 0f,
+                            animationSpec = ExpressiveMotion.DefaultSpring,
+                            label = "loudness_dropdown_arrow"
                         )
-                    },
-                    onClick = { showLoudnessDialog = true },
-                    index = 5,
-                    count = 6
-                )
-            }
-
-            // Loudness dialog
-            if (showLoudnessDialog) {
-                val replayGainDialogOptions = listOf(
-                    SegmentedOption(value = -23f, label = "EBU R128 -23 dB"),
-                    SegmentedOption(value = -18f, label = "Streaming -18 dB"),
-                    SegmentedOption(value = -16f, label = "CD -16 dB"),
-                    SegmentedOption(value = -14f, label = "Loud -14 dB")
-                )
-                AlertDialog(
-                    onDismissRequest = { showLoudnessDialog = false },
-                    shape = MaterialTheme.shapes.large,
-                    title = { Text(stringResource(R.string.replay_gain_target_loudness)) },
-                    text = {
-                        Column {
-                            replayGainDialogOptions.forEach { (value, _, label) ->
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .clickable {
-                                            viewModel.setReplayGainTargetLoudness(value)
-                                            showLoudnessDialog = false
-                                        }
-                                        .padding(vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically
+                        SortDropdownMenu(
+                            expanded = loudnessExpanded,
+                            onExpandedChange = { loudnessExpanded = it },
+                            anchor = {
+                                TextButton(
+                                    onClick = {},
+                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
                                 ) {
-                                    RadioButton(
-                                        selected = value == replayGainTargetLoudness,
-                                        onClick = {
-                                            viewModel.setReplayGainTargetLoudness(value)
-                                            showLoudnessDialog = false
-                                        }
+                                    Text(
+                                        text = stringResource(currentLoudnessOption.labelResId),
+                                        style = MaterialTheme.typography.labelLarge
                                     )
-                                    Spacer(Modifier.width(12.dp))
-                                    Text(label ?: "")
+                                    Icon(
+                                        imageVector = Icons.Default.ArrowDropDown,
+                                        contentDescription = null,
+                                        modifier = Modifier.graphicsLayer { rotationZ = arrowRotation }
+                                    )
                                 }
+                            }
+                        ) {
+                            loudnessOptions.forEach { option ->
+                                SortMenuItem(
+                                    option = option,
+                                    labelResId = option.labelResId,
+                                    currentSortOption = currentLoudnessOption,
+                                    onSortOptionChange = { selected ->
+                                        viewModel.setReplayGainTargetLoudness(selected.value)
+                                        loudnessExpanded = false
+                                    },
+                                    onDismiss = { loudnessExpanded = false }
+                                )
                             }
                         }
                     },
-                    confirmButton = {
-                        TextButton(onClick = { showLoudnessDialog = false }) {
-                            Text(stringResource(R.string.dialog_cancel))
-                        }
-                    }
+                    onClick = { },
+                    index = 5,
+                    count = 6
                 )
             }
 
