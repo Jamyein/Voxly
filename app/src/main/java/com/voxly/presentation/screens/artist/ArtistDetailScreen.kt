@@ -385,7 +385,7 @@ fun AlbumCard(
 ) {
     val scale by animateFloatAsState(
         targetValue = 1f,
-        animationSpec = ExpressiveMotion.EmphasizedSpring,
+        animationSpec = ExpressiveMotion.DefaultSpring,
         label = "albumCardScale"
     )
 

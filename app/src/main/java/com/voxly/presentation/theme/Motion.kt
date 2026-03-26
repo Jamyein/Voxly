@@ -552,8 +552,8 @@ object ExpressiveAnimations {
 @Composable
 fun rememberSpringAnimatedFloat(
     targetValue: Float,
-    dampingRatio: Float = ExpressiveMotion.DampingRatioMediumBouncy,
-    stiffness: Float = ExpressiveMotion.StiffnessMedium
+    dampingRatio: Float = ExpressiveMotionTokens.SlowSpatial.dampingRatio,
+    stiffness: Float = ExpressiveMotionTokens.SlowSpatial.stiffness
 ): Float = animateFloatAsState(
     targetValue = targetValue,
     animationSpec = spring(dampingRatio = dampingRatio, stiffness = stiffness),
@@ -606,8 +606,8 @@ fun rememberShimmerOffset(width: Float, durationMillis: Int = 1200): Offset {
 @Composable
 fun Modifier.animateScale(
     targetScale: Float,
-    dampingRatio: Float = ExpressiveMotion.DampingRatioMediumBouncy,
-    stiffness: Float = ExpressiveMotion.StiffnessMedium
+    dampingRatio: Float = ExpressiveMotionTokens.SlowSpatial.dampingRatio,
+    stiffness: Float = ExpressiveMotionTokens.SlowSpatial.stiffness
 ): Modifier = this.then(
     Modifier.animateContentSize(
         animationSpec = spring(dampingRatio = dampingRatio, stiffness = stiffness)
@@ -628,8 +628,8 @@ fun animatedAlpha(
 @Composable
 fun animatedTranslationY(
     targetTranslation: Dp,
-    dampingRatio: Float = ExpressiveMotion.DampingRatioMediumBouncy,
-    stiffness: Float = ExpressiveMotion.StiffnessMedium
+    dampingRatio: Float = ExpressiveMotionTokens.SlowSpatial.dampingRatio,
+    stiffness: Float = ExpressiveMotionTokens.SlowSpatial.stiffness
 ): Dp {
     val animatedValue: Float by animateFloatAsState(
         targetValue = targetTranslation.value,

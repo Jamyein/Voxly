@@ -671,7 +671,7 @@ fun DirectoryBatchOperationsFAB(
 ) {
     val rotation by animateFloatAsState(
         targetValue = if (expanded) 45f else 0f,
-        animationSpec = ExpressiveMotion.EmphasizedSpring,
+        animationSpec = ExpressiveMotion.DefaultSpring,
         label = "fab_rotation"
     )
 

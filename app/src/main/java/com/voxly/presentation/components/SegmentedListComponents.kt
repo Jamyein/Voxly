@@ -124,7 +124,7 @@ private fun <T> rememberConnectedButtonWeights(
 ): List<Float> = options.map { option ->
     val animatedWeight by animateFloatAsState(
         targetValue = if (option == selectedValue) selectedWeight else unselectedWeight,
-        animationSpec = ExpressiveMotion.MediumSpring,
+        animationSpec = ExpressiveMotion.DefaultSpring,
         label = "connected_button_weight"
     )
     animatedWeight

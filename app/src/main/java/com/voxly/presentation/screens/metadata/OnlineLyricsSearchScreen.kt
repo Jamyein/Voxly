@@ -147,7 +147,7 @@ fun OnlineLyricsSearchScreen(
                 item {
                     AnimatedVisibility(
                         visible = true,
-                        enter = ExpressiveAnimations.BottomNavEnterM3E
+                        enter = ExpressiveAnimations.FadeEnter
                     ) {
                         Box(
                             modifier = Modifier
@@ -190,7 +190,7 @@ fun OnlineLyricsSearchScreen(
                 item {
                     AnimatedVisibility(
                         visible = true,
-                        enter = ExpressiveAnimations.BottomNavEnterM3E
+                        enter = ExpressiveAnimations.FadeEnter
                     ) {
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -212,7 +212,7 @@ fun OnlineLyricsSearchScreen(
                 items(lyricsResults, key = { it.id }) { item ->
                     AnimatedVisibility(
                         visible = true,
-                        enter = ExpressiveAnimations.ListItemEnter
+                        enter = ExpressiveAnimations.FadeEnter
                     ) {
                         LyricsResultItem(
                             item = item,

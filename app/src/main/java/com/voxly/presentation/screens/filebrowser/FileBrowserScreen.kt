@@ -348,7 +348,7 @@ fun FileBrowserScreen(
                         modifier = Modifier
                             .fillMaxWidth()
                             .animateContentSize(
-                                animationSpec = ExpressiveMotion.StandardSpringSize
+                                animationSpec = ExpressiveMotion.DefaultSpringSize
                             )
                     ) {
                         if (openedDirectory != null) {

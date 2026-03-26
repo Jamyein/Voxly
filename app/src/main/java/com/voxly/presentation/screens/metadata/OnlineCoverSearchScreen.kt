@@ -149,7 +149,7 @@ fun OnlineCoverSearchScreen(
             // Search progress - 使用弹性缩放动画（透明背景，不遮挡内容）
             AnimatedVisibility(
                 visible = isLoading && coverResults.isEmpty(),
-                enter = ExpressiveAnimations.BottomNavEnterM3E
+                enter = ExpressiveAnimations.FadeEnter
             ) {
                 Box(
                     modifier = Modifier
@@ -186,7 +186,7 @@ fun OnlineCoverSearchScreen(
             // Results - 无结果提示
             AnimatedVisibility(
                 visible = coverResults.isEmpty() && !isLoading && errorMessage == null,
-                enter = ExpressiveAnimations.BottomNavEnterM3E
+                enter = ExpressiveAnimations.FadeEnter
             ) {
                 Surface(
                     modifier = Modifier.fillMaxWidth(),

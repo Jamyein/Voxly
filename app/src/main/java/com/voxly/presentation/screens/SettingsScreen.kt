@@ -204,7 +204,7 @@ private fun <T> ConnectedIconButtonGroup(
     val animatedWeights = options.map { option ->
         val animatedWeight by animateFloatAsState(
             targetValue = if (option.value == selectedValue) selectedWeight else baseWeight,
-            animationSpec = ExpressiveMotion.MediumSpring,
+            animationSpec = ExpressiveMotion.DefaultSpring,
             label = "settings_connected_button_weight"
         )
         animatedWeight
@@ -253,7 +253,7 @@ private fun <T> ConnectedIconButtonGroup(
                                         text = option.text,
                                         style = MaterialTheme.typography.labelLarge,
                                         modifier = Modifier.animateContentSize(
-                                            animationSpec = ExpressiveMotion.EmphasizedSpringSize
+                                            animationSpec = ExpressiveMotion.DefaultSpringSize
                                         )
                                     )
                                 } else {
@@ -261,7 +261,7 @@ private fun <T> ConnectedIconButtonGroup(
                                         imageVector = option.icon!!,
                                         contentDescription = option.tooltip,
                                         modifier = Modifier.animateContentSize(
-                                            animationSpec = ExpressiveMotion.EmphasizedSpringSize
+                                            animationSpec = ExpressiveMotion.DefaultSpringSize
                                         )
                                     )
                                 }
@@ -356,7 +356,7 @@ fun DraggableSourcePriorityDialog(
                     .heightIn(max = 450.dp)
                     .verticalScroll(rememberScrollState())
                     .animateContentSize(
-                        animationSpec = ExpressiveMotion.StandardSpringSize
+                        animationSpec = ExpressiveMotion.DefaultSpringSize
                     ),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -372,12 +372,12 @@ fun DraggableSourcePriorityDialog(
                     // Animated hover effects for dragged item
                     val animatedScale by animateFloatAsState(
                         targetValue = if (isDragging) 1.05f else 1f,
-                        animationSpec = ExpressiveMotion.MediumSpring,
+                        animationSpec = ExpressiveMotion.DefaultSpring,
                         label = "scale"
                     )
                     val animatedElevation by animateDpAsState(
                         targetValue = if (isDragging) 8.dp else 0.dp,
-                        animationSpec = ExpressiveMotion.EmphasizedSpringDp,
+                        animationSpec = ExpressiveMotion.SlowSpringDp,
                         label = "elevation"
                     )
 
@@ -1054,7 +1054,7 @@ fun SettingsScreen(
                     trailingContent = {
                         val arrowRotation by animateFloatAsState(
                             targetValue = if (languageExpanded) 180f else 0f,
-                            animationSpec = ExpressiveMotion.MediumSpring,
+            animationSpec = ExpressiveMotion.DefaultSpring,
                             label = "language_dropdown_arrow"
                         )
                         SortDropdownMenu(
