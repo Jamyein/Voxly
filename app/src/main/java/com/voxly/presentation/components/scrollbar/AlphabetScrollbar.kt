@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -112,30 +111,53 @@ fun AlphabetScrollbarM3E(
         previousLetter = currentLetter
     }
 
-    // Animations
+    // Animations - using high stiffness for snappy response
     val thumbWidth by animateDpAsState(
         targetValue = if (isDragging) config.thumbWidthDragging else config.thumbWidth,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessHigh),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = config.thumbStiffness
+        ),
         label = "thumb_width"
     )
 
     val trackAlpha by animateFloatAsState(
         targetValue = if (isDragging) config.trackAlphaDragging else config.trackAlpha,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = config.visualFeedbackStiffness
+        ),
         label = "track_alpha"
     )
 
     val bubbleAlpha by animateFloatAsState(
         targetValue = if (isDragging) 1f else 0f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = config.visualFeedbackStiffness
+        ),
         label = "bubble_alpha"
     )
 
     val bubbleScale by animateFloatAsState(
-        targetValue = if (isDragging) 1f else 0.7f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        targetValue = if (isDragging) 1f else 0.8f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = config.visualFeedbackStiffness
+        ),
         label = "bubble_scale"
     )
+
+    // Colors - using Material3 color scheme with enhanced contrast
+    val thumbColor = if (isDragging) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f)
+    }
+
+    val trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+    val bubbleColor = MaterialTheme.colorScheme.primaryContainer
+    val bubbleTextColor = MaterialTheme.colorScheme.onPrimaryContainer
 
     Box(
         modifier = modifier
@@ -144,14 +166,14 @@ fun AlphabetScrollbarM3E(
             .padding(end = 4.dp),
         contentAlignment = Alignment.CenterEnd
     ) {
-        // Track
+        // Track background with subtle styling
         Box(
             modifier = Modifier
                 .width(config.thumbWidth)
                 .fillMaxHeight()
                 .alpha(trackAlpha)
                 .clip(RoundedCornerShape(config.thumbCornerRadius))
-                .background(MaterialTheme.colorScheme.outline)
+                .background(trackColor)
         )
 
         // Interactive area
@@ -193,7 +215,7 @@ fun AlphabetScrollbarM3E(
                 }
         )
 
-        // Thumb
+        // Visual thumb with shadow and enhanced styling
         val thumbHeight = with(density) { thumbHeightPx.toDp() }
         val thumbOffset = with(density) { thumbOffsetPx.toDp() }
 
@@ -203,14 +225,16 @@ fun AlphabetScrollbarM3E(
                 .height(thumbHeight)
                 .align(Alignment.TopEnd)
                 .offset(y = thumbOffset)
-                .clip(RoundedCornerShape(config.thumbCornerRadius))
-                .background(
-                    if (isDragging) MaterialTheme.colorScheme.primary
-                    else MaterialTheme.colorScheme.outlineVariant
+                .shadow(
+                    elevation = if (isDragging) config.thumbElevation * 1.5f else config.thumbElevation,
+                    shape = RoundedCornerShape(config.thumbCornerRadius),
+                    clip = false
                 )
+                .clip(RoundedCornerShape(config.thumbCornerRadius))
+                .background(thumbColor)
         )
 
-        // Letter bubble
+        // Preview bubble with enhanced styling
         Box(
             modifier = Modifier
                 .offset {
@@ -222,17 +246,21 @@ fun AlphabetScrollbarM3E(
                 .alpha(bubbleAlpha)
                 .graphicsLayer(scaleX = bubbleScale, scaleY = bubbleScale)
                 .size(config.bubbleSize)
-                .shadow(4.dp, CircleShape)
+                .shadow(
+                    elevation = config.bubbleElevation,
+                    shape = RoundedCornerShape(config.bubbleCornerRadius),
+                    clip = false
+                )
                 .clip(RoundedCornerShape(config.bubbleCornerRadius))
-                .background(MaterialTheme.colorScheme.primaryContainer),
+                .background(bubbleColor),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = currentLetter.uppercase(),
                 fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
-                color = MaterialTheme.colorScheme.onPrimaryContainer
+                color = bubbleTextColor
             )
         }
     }

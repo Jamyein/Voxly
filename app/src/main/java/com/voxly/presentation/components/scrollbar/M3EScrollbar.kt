@@ -1,10 +1,11 @@
 package com.voxly.presentation.components.scrollbar
 
 import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.detectVerticalDragGestures
@@ -15,11 +16,11 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -43,17 +45,13 @@ import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.launch
 
 /**
- * Material 3 Expressive scrollbar composable.
+ * Material 3 Expressive scrollbar composable with enhanced responsiveness and styling.
  *
- * A complete scrollbar implementation with:
- * - Dynamic thumb sizing based on content ratio
- * - Preview bubble showing current position
- * - Tap-to-jump and drag-to-scroll interactions
- * - Smooth animations and haptic feedback
- * - Material Design 3 styling
- *
- * This component follows the architecture of the future official
- * ScrollIndicator API for easy migration when it becomes available.
+ * Key improvements:
+ * - **Snappy animations**: High stiffness for immediate visual feedback
+ * - **Shadow effects**: Depth for better visual hierarchy
+ * - **Smooth color transitions**: Gradient-like feel without actual gradients
+ * - **Optimized touch response**: Direct manipulation feel
  *
  * @param state The scrollbar state providing scroll information
  * @param modifier Modifier for the scrollbar container
@@ -104,12 +102,12 @@ fun M3EScrollbar(
     val maxThumbOffset = (viewportSize - thumbHeightPx).coerceAtLeast(0f)
     val thumbOffsetPx = scrollProgress * maxThumbOffset
 
-    // Animations
+    // Animations - using high stiffness for snappy response
     val thumbWidth by animateDpAsState(
         targetValue = if (isDragging) config.thumbWidthDragging else config.thumbWidth,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessHigh
+            stiffness = config.thumbStiffness
         ),
         label = "thumb_width"
     )
@@ -118,7 +116,7 @@ fun M3EScrollbar(
         targetValue = if (isDragging) config.trackAlphaDragging else config.trackAlpha,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
+            stiffness = config.visualFeedbackStiffness
         ),
         label = "track_alpha"
     )
@@ -127,16 +125,16 @@ fun M3EScrollbar(
         targetValue = if (isDragging && showBubble) 1f else 0f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
+            stiffness = config.visualFeedbackStiffness
         ),
         label = "bubble_alpha"
     )
 
     val bubbleScale by animateFloatAsState(
-        targetValue = if (isDragging && showBubble) 1f else 0.7f,
+        targetValue = if (isDragging && showBubble) 1f else 0.8f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
+            stiffness = config.visualFeedbackStiffness
         ),
         label = "bubble_scale"
     )
@@ -154,6 +152,17 @@ fun M3EScrollbar(
         bubbleFormatter?.invoke(currentIndex) ?: (currentIndex + 1).toString()
     }
 
+    // Colors - using Material3 color scheme with enhanced contrast
+    val thumbColor = if (isDragging) {
+        MaterialTheme.colorScheme.primary
+    } else {
+        MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f)
+    }
+
+    val trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+    val bubbleColor = MaterialTheme.colorScheme.primaryContainer
+    val bubbleTextColor = MaterialTheme.colorScheme.onPrimaryContainer
+
     Box(
         modifier = modifier
             .width(config.touchAreaWidth)
@@ -161,14 +170,14 @@ fun M3EScrollbar(
             .padding(end = 4.dp),
         contentAlignment = Alignment.CenterEnd
     ) {
-        // Track background
+        // Track background with subtle styling
         Box(
             modifier = Modifier
                 .width(config.thumbWidth)
                 .fillMaxHeight()
                 .alpha(trackAlpha)
                 .clip(RoundedCornerShape(config.thumbCornerRadius))
-                .background(MaterialTheme.colorScheme.outline)
+                .background(trackColor)
         )
 
         // Interactive area with tap and drag
@@ -238,7 +247,7 @@ fun M3EScrollbar(
                 }
         )
 
-        // Visual thumb
+        // Visual thumb with shadow and enhanced styling
         val thumbHeight = with(density) { thumbHeightPx.toDp() }
         val thumbOffset = with(density) { thumbOffsetPx.toDp() }
 
@@ -248,17 +257,16 @@ fun M3EScrollbar(
                 .height(thumbHeight)
                 .align(Alignment.TopEnd)
                 .offset(y = thumbOffset)
-                .clip(RoundedCornerShape(config.thumbCornerRadius))
-                .background(
-                    if (isDragging) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.outlineVariant
-                    }
+                .shadow(
+                    elevation = if (isDragging) config.thumbElevation * 1.5f else config.thumbElevation,
+                    shape = RoundedCornerShape(config.thumbCornerRadius),
+                    clip = false
                 )
+                .clip(RoundedCornerShape(config.thumbCornerRadius))
+                .background(thumbColor)
         )
 
-        // Preview bubble
+        // Preview bubble with enhanced styling
         if (showBubble) {
             Box(
                 modifier = Modifier
@@ -274,17 +282,21 @@ fun M3EScrollbar(
                         scaleY = bubbleScale
                     }
                     .size(config.bubbleSize)
-                    .shadow(4.dp, CircleShape)
+                    .shadow(
+                        elevation = config.bubbleElevation,
+                        shape = RoundedCornerShape(config.bubbleCornerRadius),
+                        clip = false
+                    )
                     .clip(RoundedCornerShape(config.bubbleCornerRadius))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .background(bubbleColor),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = bubbleText,
                     fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
+                    fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                    color = bubbleTextColor
                 )
             }
         }

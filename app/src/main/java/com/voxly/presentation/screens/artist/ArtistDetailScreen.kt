@@ -68,6 +68,33 @@ import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 
 /**
+ * Album information for carousel display with year.
+ */
+private data class AlbumInfo(
+    val name: String,
+    val files: List<com.voxly.domain.model.AudioFile>,
+    val year: Int?
+)
+
+/**
+ * Extracts the year from album files (uses the maximum year found).
+ */
+private fun extractAlbumYear(files: List<com.voxly.domain.model.AudioFile>): Int? {
+    return files
+        .mapNotNull { file -> extractYear(file.metadata.year) }
+        .maxOrNull()
+}
+
+/**
+ * Extracts 4-digit year from a string (e.g., "2023" or "2023-01-01").
+ */
+private fun extractYear(rawYear: String?): Int? {
+    val normalized = rawYear?.trim().orEmpty()
+    if (normalized.isEmpty()) return null
+    return Regex("""\d{4}""").find(normalized)?.value?.toIntOrNull()
+}
+
+/**
  * Artist detail screen showing artist info and song list.
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -101,9 +128,24 @@ fun ArtistDetailScreen(
         files.filter { it.metadata.album.isNullOrBlank() }
     }
 
-    val albumsGrouped = remember(files) {
+    // Group albums and sort by year (newest first)
+    val albumsSorted = remember(files) {
         files.filter { !it.metadata.album.isNullOrBlank() }
             .groupBy { it.metadata.album!! }
+            .map { (albumName, albumFiles) ->
+                val year = extractAlbumYear(albumFiles)
+                AlbumInfo(
+                    name = albumName,
+                    files = albumFiles,
+                    year = year
+                )
+            }
+            .sortedByDescending { it.year ?: 0 }
+    }
+
+    // Create a map for easy lookup (maintains sorted order)
+    val albumsGrouped = remember(albumsSorted) {
+        albumsSorted.associate { it.name to it.files }
     }
 
     // Use cached cover path for avatar (performance optimization)
