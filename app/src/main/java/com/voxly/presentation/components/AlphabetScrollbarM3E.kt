@@ -200,7 +200,7 @@ fun AlphabetScrollbarM3E(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(24.dp)
-                .pointerInput(currentScrollProgress.value, currentMaxThumbOffset.value) {
+                .pointerInput(Unit) {
                     val updatedTrackHeight = size.height.toFloat()
                     trackHeightPx = updatedTrackHeight
 

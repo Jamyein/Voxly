@@ -156,7 +156,7 @@ fun M3EScrollbar(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(24.dp)
-                .pointerInput(currentScrollProgress.value, currentMaxThumbOffset.value) {
+                .pointerInput(Unit) {
                     val updatedTrackHeight = size.height.toFloat()
                     trackHeightPx = updatedTrackHeight
 
@@ -341,7 +341,7 @@ fun M3EGridScrollbar(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(24.dp)
-                .pointerInput(currentScrollProgress.value, currentMaxThumbOffset.value) {
+                .pointerInput(Unit) {
                     val updatedTrackHeight = size.height.toFloat()
                     trackHeightPx = updatedTrackHeight
 
