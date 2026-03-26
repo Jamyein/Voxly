@@ -176,7 +176,7 @@ fun M3EScrollbar(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(config.touchAreaWidth)
-                .pointerInput(state) {
+                .pointerInput(Unit) {
                     detectTapGestures { offset ->
                         val tapProgress = (offset.y / size.height).coerceIn(0f, 1f)
 
@@ -196,7 +196,7 @@ fun M3EScrollbar(
                         view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     }
                 }
-                .pointerInput(state) {
+                .pointerInput(Unit) {
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
                             val thumbCenterY = thumbOffsetPx + thumbHeightPx / 2

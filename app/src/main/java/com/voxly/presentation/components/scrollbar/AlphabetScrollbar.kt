@@ -159,7 +159,7 @@ fun AlphabetScrollbarM3E(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(config.touchAreaWidth)
-                .pointerInput(scrollbarState) {
+                .pointerInput(Unit) {
                     detectTapGestures { offset ->
                         val tapProgress = (offset.y / size.height).coerceIn(0f, 1f)
                         coroutineScope.launch {
@@ -168,7 +168,7 @@ fun AlphabetScrollbarM3E(
                         view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     }
                 }
-                .pointerInput(scrollbarState) {
+                .pointerInput(Unit) {
                     detectVerticalDragGestures(
                         onDragStart = { offset ->
                             val thumbCenterY = thumbOffsetPx + thumbHeightPx / 2
