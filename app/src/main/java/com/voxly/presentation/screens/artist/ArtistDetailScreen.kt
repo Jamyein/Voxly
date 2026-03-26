@@ -61,6 +61,8 @@ import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.ui.loadCarouselCoverArt
 import com.voxly.presentation.ui.loadLocalAlbumArt
+import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 
 /**
@@ -145,17 +147,19 @@ fun ArtistDetailScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Header: Circle Avatar + Artist Name
+                // Header: Circle Avatar + Artist Name with shared element transition
                 item {
                     Column(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-                        // Circle Avatar (150dp)
+                        // Circle Avatar (150dp) with shared element transition
+                        val avatarKey = createArtistAvatarSharedElementKey(artistName)
                         Box(
                             modifier = Modifier
                                 .size(150.dp)
-                                .clip(CircleShape),
+                                .clip(CircleShape)
+                                .sharedElementIfAvailable(key = avatarKey),
                             contentAlignment = Alignment.Center
                         ) {
                             if (avatarBitmap != null) {

@@ -41,7 +41,8 @@ internal fun AudioFileItem(
             audioFile = audioFile,
             isSelected = isSelected,
             onClick = onClick,
-            modifier = modifier
+            modifier = modifier,
+            sharedElementKey = sharedElementKey
         )
     } else if (showActions) {
         AudioFileStandardRowWithMenu(

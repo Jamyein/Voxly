@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.filebrowser
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +29,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.theme.MaterialShapes
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.toShape
@@ -135,11 +139,13 @@ internal fun AlbumListItem(
     }
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun AlbumGridItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
+    val coverKey = createAlbumCoverSharedElementKey(album.name, album.artist)
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -160,7 +166,9 @@ internal fun AlbumGridItem(
                 mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
                 contentDescription = null,
                 size = 200.dp,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier
+                    .fillMaxSize()
+                    .sharedElementIfAvailable(key = coverKey)
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -217,12 +225,13 @@ internal fun AlbumGridItem(
     }
 }
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun ArtistListItem(
     artist: ArtistGroup,
     onClick: () -> Unit
 ) {
+    val avatarKey = createArtistAvatarSharedElementKey(artist.name)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -247,7 +256,9 @@ internal fun ArtistListItem(
                     filePath = artist.coverPath,
                     contentDescription = null,
                     size = 48.dp,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .sharedElementIfAvailable(key = avatarKey)
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
