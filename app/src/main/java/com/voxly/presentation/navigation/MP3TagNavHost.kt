@@ -1,6 +1,7 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -110,6 +111,11 @@ fun MP3TagNavHost() {
             currentKey == Settings
 
     val adaptiveInfo = currentWindowAdaptiveInfo()
+
+    // Handle system back navigation - only intercept when on sub-screens
+    BackHandler(enabled = !isMainScreen) {
+        backStack.removeLastOrNull()
+    }
 
     // SharedTransitionLayout wraps everything for shared element transitions
     SharedTransitionLayout {
