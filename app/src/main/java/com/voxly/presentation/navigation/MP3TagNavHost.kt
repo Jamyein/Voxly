@@ -70,15 +70,14 @@ import com.voxly.presentation.viewmodel.ReplayGainViewModel
 /**
  * Main navigation host for the MP3 Tag Editor app using Navigation3.
  * Implements adaptive navigation with NavigationSuiteScaffold for M3E Flexible navigation bar.
- * 
- * This implementation uses SharedTransitionLayout + AnimatedContent architecture for
- * full Container Transform support in Navigation 3.
- * 
+ *
  * Architecture:
  * 1. Navigation 3 maintains the back stack state
- * 2. AnimatedContent handles the physical rendering with lifecycle overlap
- * 3. SharedTransitionLayout provides the scope for sharedBounds transitions
- * 4. Both scopes are injected via CompositionLocal
+ * 2. NavigationSuiteScaffold wraps only main screens (FileBrowser, Albums, Artists, Settings)
+ * 3. Sub-screens (MetadataEditor, DirectoryContent, etc.) are rendered outside NavigationSuiteScaffold
+ * 4. This prevents NavigationSuiteScaffold from adding unwanted padding on sub-screens
+ * 5. SharedTransitionLayout + AnimatedContent for full Container Transform support
+ * 6. Both scopes are injected via CompositionLocal
  */
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -101,27 +100,32 @@ fun MP3TagNavHost() {
     var pendingLyrics by remember { mutableStateOf<String?>(null) }
     var pendingCoverArt by remember { mutableStateOf<ByteArray?>(null) }
 
-    // Current screen for bottom bar visibility
+    // Current screen
     val currentKey = backStack.lastOrNull()
-    val showBottomBar = currentKey == FileBrowser ||
+
+    // Check if current screen is a main screen (has bottom navigation)
+    val isMainScreen = currentKey == FileBrowser ||
             currentKey == Albums ||
             currentKey == Artists ||
             currentKey == Settings
 
     val adaptiveInfo = currentWindowAdaptiveInfo()
 
-    NavigationSuiteScaffold(
-        layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo),
-        navigationSuiteItems = {
-            if (showBottomBar) {
+    // SharedTransitionLayout wraps everything for shared element transitions
+    SharedTransitionLayout {
+        // NavigationSuiteScaffold only for main screens
+        // Sub-screens will be rendered on top of this layer
+        NavigationSuiteScaffold(
+            layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo),
+            navigationSuiteItems = {
                 // Files tab
                 val isFileSelected = currentKey is FileBrowser
                 item(
-                    icon = { 
+                    icon = {
                         Icon(
                             imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
                             contentDescription = "Files"
-                        ) 
+                        )
                     },
                     label = { Text("Files") },
                     selected = isFileSelected,
@@ -140,11 +144,11 @@ fun MP3TagNavHost() {
                 // Albums tab
                 val isAlbumsSelected = currentKey is Albums
                 item(
-                    icon = { 
+                    icon = {
                         Icon(
                             imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
                             contentDescription = "Albums"
-                        ) 
+                        )
                     },
                     label = { Text("Albums") },
                     selected = isAlbumsSelected,
@@ -163,11 +167,11 @@ fun MP3TagNavHost() {
                 // Artists tab
                 val isArtistsSelected = currentKey is Artists
                 item(
-                    icon = { 
+                    icon = {
                         Icon(
                             imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
                             contentDescription = "Artists"
-                        ) 
+                        )
                     },
                     label = { Text("Artists") },
                     selected = isArtistsSelected,
@@ -186,11 +190,11 @@ fun MP3TagNavHost() {
                 // Settings tab
                 val isSettingsSelected = currentKey is Settings
                 item(
-                    icon = { 
+                    icon = {
                         Icon(
                             imageVector = if (isSettingsSelected) AppIcon.Settings.vector else AppIcon.SettingsOutlined.vector,
                             contentDescription = "Settings"
-                        ) 
+                        )
                     },
                     label = { Text("Settings") },
                     selected = isSettingsSelected,
@@ -205,45 +209,64 @@ fun MP3TagNavHost() {
                         }
                     }
                 )
+            },
+            containerColor = MaterialTheme.colorScheme.background
+        ) {
+            // This content is shown underneath sub-screens
+            // We render main screens here, but hide them when showing sub-screens
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (isMainScreen) {
+                    // Provide scopes for shared transitions
+                    CompositionLocalProvider(
+                        LocalSharedTransitionScope provides this@SharedTransitionLayout,
+                        LocalNavAnimatedVisibilityScope provides null
+                    ) {
+                        RenderMainScreen(
+                            currentKey = currentKey,
+                            backStack = backStack,
+                            libraryViewModel = libraryViewModel,
+                            context = context
+                        )
+                    }
+                }
             }
-        },
-        containerColor = MaterialTheme.colorScheme.background
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // SharedTransitionLayout provides the scope for shared element transitions
-            SharedTransitionLayout {
-                // AnimatedContent creates the "lifecycle overlap" needed for shared transitions
-                AnimatedContent(
-                    targetState = backStack.lastOrNull(),
-                    transitionSpec = {
-                        // Determine if this is a push or pop based on back stack size
-                        val isPush = backStack.size > (initialState?.let { backStack.indexOf(it) + 1 } ?: 0)
-                        
-                        if (isPush) {
-                            // Push animation: new page enters from right, old page stays visible briefly
-                            (fadeIn(animationSpec = tween(300)) + 
-                             slideInHorizontally { it / 4 })
-                                .togetherWith(fadeOut(animationSpec = tween(300)))
-                                .apply { targetContentZIndex = 1f }
-                        } else {
-                            // Pop animation: old page exits to right, new page enters from left
-                            fadeIn(animationSpec = tween(300))
-                                .togetherWith(
-                                    fadeOut(animationSpec = tween(300)) + 
+        }
+
+        // Sub-screens layer - rendered on top when not on main screen
+        // These screens do NOT have NavigationSuiteScaffold's padding/bottom bar
+        AnimatedContent(
+            targetState = currentKey,
+            transitionSpec = {
+                // Determine if this is a push or pop based on back stack size
+                val isPush = backStack.size > (initialState?.let { backStack.indexOf(it) + 1 } ?: 0)
+
+                if (isPush) {
+                    // Push animation: new page enters from right
+                    (fadeIn(animationSpec = tween(300)) +
+                            slideInHorizontally { it / 4 })
+                        .togetherWith(fadeOut(animationSpec = tween(300)))
+                        .apply { targetContentZIndex = 1f }
+                } else {
+                    // Pop animation: old page exits to right
+                    fadeIn(animationSpec = tween(300))
+                        .togetherWith(
+                            fadeOut(animationSpec = tween(300)) +
                                     slideOutHorizontally { it / 4 }
-                                )
-                                .apply { targetContentZIndex = -1f }
-                        }
-                    },
-                    label = "SharedTransition_Navigation"
-                ) { targetKey ->
-                    // Provide scopes to child composables
+                        )
+                        .apply { targetContentZIndex = -1f }
+                }
+            },
+            label = "SubScreen_Navigation"
+        ) { targetKey ->
+            // Only render sub-screens (non-main screens)
+            if (!isMainScreen && targetKey != null) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    // Provide scopes for shared transitions
                     CompositionLocalProvider(
                         LocalSharedTransitionScope provides this@SharedTransitionLayout,
                         LocalNavAnimatedVisibilityScope provides this@AnimatedContent
                     ) {
-                        // Render the appropriate screen based on target key
-                        RenderScreen(
+                        RenderSubScreen(
                             targetKey = targetKey,
                             backStack = backStack,
                             libraryViewModel = libraryViewModel,
@@ -263,19 +286,13 @@ fun MP3TagNavHost() {
 }
 
 @Composable
-private fun RenderScreen(
-    targetKey: Any?,
+private fun RenderMainScreen(
+    currentKey: Any?,
     backStack: MutableList<Any>,
     libraryViewModel: LibraryViewModel,
-    pendingMetadata: AudioMetadata?,
-    onPendingMetadataConsumed: () -> Unit,
-    pendingLyrics: String?,
-    onPendingLyricsConsumed: () -> Unit,
-    pendingCoverArt: ByteArray?,
-    onPendingCoverArtConsumed: () -> Unit,
     context: android.content.Context
 ) {
-    when (val key = targetKey) {
+    when (val key = currentKey) {
         is FileBrowser -> {
             FileBrowserScreen(
                 outerPadding = PaddingValues(),
@@ -352,6 +369,27 @@ private fun RenderScreen(
             )
         }
 
+        else -> {
+            // Not a main screen, render empty
+            Box(modifier = Modifier.fillMaxSize())
+        }
+    }
+}
+
+@Composable
+private fun RenderSubScreen(
+    targetKey: Any?,
+    backStack: MutableList<Any>,
+    libraryViewModel: LibraryViewModel,
+    pendingMetadata: AudioMetadata?,
+    onPendingMetadataConsumed: () -> Unit,
+    pendingLyrics: String?,
+    onPendingLyricsConsumed: () -> Unit,
+    pendingCoverArt: ByteArray?,
+    onPendingCoverArtConsumed: () -> Unit,
+    context: android.content.Context
+) {
+    when (val key = targetKey) {
         is DirectoryContent -> {
             DirectoryContentScreen(
                 directoryUri = key.directoryUri,
@@ -540,12 +578,12 @@ private fun RenderScreen(
         }
 
         null -> {
-            // Empty state or initial loading
+            // Empty state
             Box(modifier = Modifier.fillMaxSize())
         }
 
         else -> {
-            // Unknown screen type
+            // Unknown screen type - might be a main screen, don't render here
             Box(modifier = Modifier.fillMaxSize())
         }
     }
