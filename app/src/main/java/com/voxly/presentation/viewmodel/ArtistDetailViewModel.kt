@@ -55,11 +55,15 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private val _albumCovers = MutableStateFlow<Map<String, String?>>(emptyMap())
     val albumCovers: StateFlow<Map<String, String?>> = _albumCovers.asStateFlow()
 
+    private val _albumYears = MutableStateFlow<Map<String, String?>>(emptyMap())
+    val albumYears: StateFlow<Map<String, String?>> = _albumYears.asStateFlow()
+
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private var preloadJob: Job? = null
     private var refreshJob: Job? = null
+    private var albumYearJob: Job? = null
     private val preloadMutex = kotlinx.coroutines.sync.Mutex()
 
     init {
@@ -82,6 +86,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     _coverPath.value = cachedArtist.coverPath
                     calculateStats(cachedArtist.files)
                     precomputeAlbumCovers(cachedArtist.files)
+                    loadAlbumYears(cachedArtist.files)
                 } else {
                     // Cache miss: look up from AudioFileScanner (source of truth)
                     val scannerArtist = audioFileScanner.artists.first()
@@ -114,6 +119,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
         _files.value = files
         calculateStats(files)
         precomputeAlbumCovers(files)
+        loadAlbumYears(files)
     }
 
     private fun calculateStats(files: List<AudioFile>) {
@@ -123,6 +129,42 @@ class ArtistDetailViewModel @AssistedInject constructor(
 
         // Calculate total duration
         _totalDuration.value = files.sumOf { it.duration }
+    }
+
+    /**
+     * Load album years from metadata with fallback to TagLib.
+     * This is done asynchronously to avoid blocking UI.
+     */
+    private fun loadAlbumYears(files: List<AudioFile>) {
+        albumYearJob?.cancel()
+        albumYearJob = viewModelScope.launch {
+            val albumGroups = files.filter { !it.metadata.album.isNullOrBlank() }
+                .groupBy { it.metadata.album!! }
+
+            val yearsMap = mutableMapOf<String, String?>()
+
+            albumGroups.forEach { (albumName, albumFiles) ->
+                // First try to get year from MediaStore metadata
+                val mediaStoreYear = albumFiles
+                    .mapNotNull { file -> file.metadata.year?.takeIf { it.isNotBlank() } }
+                    .maxOrNull()
+
+                yearsMap[albumName] = if (mediaStoreYear != null) {
+                    mediaStoreYear
+                } else {
+                    // Fallback: read from file using TagLib (expensive operation)
+                    albumFiles.firstOrNull()?.let { firstFile ->
+                        try {
+                            audioFileScanner.loadDetailedMetadata(firstFile.path)?.year
+                        } catch (e: Exception) {
+                            null
+                        }
+                    }
+                }
+            }
+
+            _albumYears.value = yearsMap
+        }
     }
 
     /**

@@ -65,7 +65,10 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.components.M3EScrollbar
 import com.voxly.presentation.components.M3EGridScrollbar
+import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 
 @Composable
 internal fun AlbumTabContent(
@@ -149,7 +152,7 @@ internal fun AlbumTabContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun AlbumYearGroupedContent(
     albums: List<AlbumGroup>,
@@ -204,10 +207,12 @@ internal fun AlbumYearGroupedContent(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                         ),
                         leadingContent = {
+                            val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.artist)
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .clip(MaterialTheme.shapes.small),
+                                    .clip(MaterialTheme.shapes.small)
+                                    .sharedElementIfAvailable(key = albumCoverKey),
                                 contentAlignment = Alignment.Center
                             ) {
                                 val coverFile = album.files.firstOrNull {

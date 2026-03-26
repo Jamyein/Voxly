@@ -116,6 +116,7 @@ fun ArtistDetailScreen(
     val files by viewModel.files.collectAsState()
     val coverPath by viewModel.coverPath.collectAsState()
     val albumCovers by viewModel.albumCovers.collectAsState()
+    val albumYears by viewModel.albumYears.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     // Pull-to-refresh callback
@@ -129,11 +130,14 @@ fun ArtistDetailScreen(
     }
 
     // Group albums and sort by year (newest first)
-    val albumsSorted = remember(files) {
+    // Use albumYears from ViewModel which includes fallback to TagLib for missing years
+    val albumsSorted = remember(files, albumYears) {
         files.filter { !it.metadata.album.isNullOrBlank() }
             .groupBy { it.metadata.album!! }
             .map { (albumName, albumFiles) ->
-                val year = extractAlbumYear(albumFiles)
+                // Get year from ViewModel's albumYears (includes TagLib fallback)
+                val yearStr = albumYears[albumName]
+                val year = yearStr?.let { extractYear(it) }
                 AlbumInfo(
                     name = albumName,
                     files = albumFiles,
@@ -272,7 +276,7 @@ fun ArtistDetailScreen(
                 }
 
                 // Albums Section
-                if (albumsGrouped.isNotEmpty()) {
+                if (albumsSorted.isNotEmpty()) {
                     item {
                         Text(
                             text = stringResource(R.string.albums),
@@ -284,61 +288,59 @@ fun ArtistDetailScreen(
 
                     // Album cards in carousel
                     item {
-                        val albumList = albumsGrouped.keys.toList()
-                        if (albumList.isNotEmpty()) {
-                            val carouselState = rememberCarouselState { albumList.size }
+                        val carouselState = rememberCarouselState { albumsSorted.size }
 
-                            // 封面数据首次填充时立即预加载（解决首屏空白问题）
-                            LaunchedEffect(albumCovers) {
-                                if (albumCovers.isNotEmpty()) {
-                                    viewModel.preloadAdjacentAlbumCovers(0)
-                                }
+                        // 封面数据首次填充时立即预加载（解决首屏空白问题）
+                        LaunchedEffect(albumCovers) {
+                            if (albumCovers.isNotEmpty()) {
+                                viewModel.preloadAdjacentAlbumCovers(0)
                             }
+                        }
 
-                            // 滚动监听：滚动停止时预加载相邻专辑封面
-                            LaunchedEffect(carouselState) {
-                                snapshotFlow { carouselState.currentItem }.collect { page ->
-                                    viewModel.preloadAdjacentAlbumCovers(page)
-                                }
+                        // 滚动监听：滚动停止时预加载相邻专辑封面
+                        LaunchedEffect(carouselState) {
+                            snapshotFlow { carouselState.currentItem }.collect { page ->
+                                viewModel.preloadAdjacentAlbumCovers(page)
                             }
+                        }
 
-                            HorizontalMultiBrowseCarousel(
-                                state = carouselState,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .wrapContentHeight(),
-                                preferredItemWidth = 140.dp,
-                                itemSpacing = 12.dp,
-                                contentPadding = PaddingValues(horizontal = 40.dp)
-                            ) { page ->
-                                val albumName = albumList[page]
-                                val albumFiles = albumsGrouped[albumName] ?: emptyList()
-                                val albumArtPath = albumCovers[albumName]
+                        HorizontalMultiBrowseCarousel(
+                            state = carouselState,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(221.dp),
+                            preferredItemWidth = 160.dp,
+                            itemSpacing = 12.dp,
+                            contentPadding = PaddingValues(horizontal = 16.dp)
+                        ) { page ->
+                            val albumInfo = albumsSorted[page]
+                            val albumArtPath = albumCovers[albumInfo.name]
 
-                                AlbumCard(
-                                    albumName = albumName,
-                                    albumArtist = artistName,
-                                    trackCount = albumFiles.size,
-                                    albumArtPath = albumArtPath,
-                                    onClick = { onNavigateToAlbumDetail(albumName, artistName) },
-                                    modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
-                                )
-                            }
+                            AlbumCard(
+                                albumName = albumInfo.name,
+                                albumArtist = artistName,
+                                trackCount = albumInfo.files.size,
+                                albumYear = albumInfo.year,
+                                albumArtPath = albumArtPath,
+                                onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
+                                modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
+                            )
                         }
                     }
 
-                    // Show songs grouped by album below
-                    albumsGrouped.forEach { (albumName, albumFiles) ->
+                    // Show songs grouped by album below (sorted by year)
+                    albumsSorted.forEach { albumInfo ->
                         item {
+                            val yearText = albumInfo.year?.let { " ($it)" } ?: ""
                             Text(
-                                text = albumName,
+                                text = albumInfo.name + yearText,
                                 style = MaterialTheme.typography.titleSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(top = 8.dp)
                             )
                         }
 
-                        items(albumFiles.take(3), key = { "album_${albumName}_${it.path}" }) { audioFile ->
+                        items(albumInfo.files.take(3), key = { "album_${albumInfo.name}_${it.path}" }) { audioFile ->
                             AudioFileItem(
                                 audioFile = audioFile,
                                 isSelected = false,
@@ -354,10 +356,10 @@ fun ArtistDetailScreen(
                             )
                         }
 
-                        if (albumFiles.size > 3) {
+                        if (albumInfo.files.size > 3) {
                             item {
                                 Text(
-                                    text = "+${albumFiles.size - 3} more",
+                                    text = "+${albumInfo.files.size - 3} more",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(start = 16.dp)
@@ -432,6 +434,7 @@ fun AlbumCard(
     albumName: String,
     albumArtist: String?,
     trackCount: Int,
+    albumYear: Int?,
     albumArtPath: String?,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
@@ -445,8 +448,8 @@ fun AlbumCard(
     Card(
         onClick = onClick,
         modifier = modifier
-            .width(140.dp)
-            .height(170.dp)
+            .width(160.dp)
+            .height(205.dp)
             .scale(scale),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -478,7 +481,7 @@ fun AlbumCard(
                             imageVector = Icons.Default.Album,
                             contentDescription = null,
                             modifier = Modifier
-                                .padding(24.dp)
+                                .padding(32.dp)
                                 .fillMaxSize(),
                             tint = MaterialTheme.colorScheme.onSecondaryContainer
                         )
@@ -486,13 +489,13 @@ fun AlbumCard(
                 }
             }
 
-            // Album name and track count
+            // Album name, year and track count
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Column(
-                    modifier = Modifier.padding(8.dp)
+                    modifier = Modifier.padding(12.dp)
                 ) {
                     Text(
                         text = albumName,
@@ -500,8 +503,9 @@ fun AlbumCard(
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    val yearText = albumYear?.let { " • $it" } ?: ""
                     Text(
-                        text = stringResource(R.string.track_count, trackCount),
+                        text = stringResource(R.string.track_count, trackCount) + yearText,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
