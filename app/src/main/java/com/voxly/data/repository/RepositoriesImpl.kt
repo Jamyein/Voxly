@@ -60,7 +60,11 @@ class AudioRepositoryImpl @Inject constructor(
                 val javaFile = java.io.File(filePath)
                 val extension = filePath.substringAfterLast('.').lowercase()
 
-                // Try to get duration and bitrate from MediaStore first
+                // OPTIMIZATION: Use readAllMetadata() for single TagLib call instead of multiple calls
+                // This reads metadata + audio info + album art in one operation with cache support
+                val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
+
+                // Try to get duration and bitrate from MediaStore first (faster than TagLib)
                 var duration = 0L
                 var bitrate = 0
                 try {
@@ -86,23 +90,19 @@ class AudioRepositoryImpl @Inject constructor(
                     Timber.w(e, "Failed to query MediaStore for: $filePath")
                 }
 
-                // Fallback: if MediaStore has no data, use TagLib to read audio properties
+                // Use TagLib data as fallback if MediaStore doesn't have complete info
                 var sampleRate = 0
                 var channels = 0
-                if (duration == 0L) {
-                    val audioInfo = metadataProcessor.readAudioInfo(filePath)
-                    duration = audioInfo?.durationMs ?: 0L
+                completeMetadata?.audioInfo?.let { audioInfo ->
+                    if (duration == 0L) {
+                        duration = audioInfo.durationMs
+                    }
                     if (bitrate == 0) {
                         // TagLib returns bitrate in bps, convert to kbps
-                        bitrate = (audioInfo?.bitrate ?: 0) / 1000
+                        bitrate = audioInfo.bitrate / 1000
                     }
-                    sampleRate = audioInfo?.sampleRate ?: 0
-                    channels = audioInfo?.channels ?: 0
-                } else {
-                    // MediaStore doesn't provide sampleRate and channels, always need to read from file
-                    val audioInfo = metadataProcessor.readAudioInfo(filePath)
-                    sampleRate = audioInfo?.sampleRate ?: 0
-                    channels = audioInfo?.channels ?: 0
+                    sampleRate = audioInfo.sampleRate
+                    channels = audioInfo.channels
                 }
 
                 val audioFile = AudioFile(
@@ -115,14 +115,12 @@ class AudioRepositoryImpl @Inject constructor(
                     bitrate = bitrate,
                     sampleRate = sampleRate,
                     channels = channels,
-                    metadata = AudioMetadata()
+                    metadata = completeMetadata?.metadata ?: AudioMetadata()
                 )
 
+                // Merge with MediaStore metadata if needed
                 val mediaStoreFallbackMetadata = readMediaStoreBasicMetadata(filePath)
-
-                // Read detailed metadata
-                val detailedMetadata = metadataProcessor.readMetadata(filePath)
-                val mergedMetadata = mergeWithFallback(detailedMetadata, mediaStoreFallbackMetadata)
+                val mergedMetadata = mergeWithFallback(audioFile.metadata, mediaStoreFallbackMetadata)
 
                 val enhancedAudioFile = audioFile.copy(
                     metadata = mergedMetadata ?: AudioMetadata()

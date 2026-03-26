@@ -162,7 +162,7 @@ class BatchEngineTest {
                 Result.success(Unit)
             },
             itemName = { it }
-        ).collect()
+        ).collect { }
 
         assertEquals(1, maxObservedConcurrency.get())
     }

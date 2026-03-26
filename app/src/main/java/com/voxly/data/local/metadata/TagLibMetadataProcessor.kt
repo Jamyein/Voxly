@@ -7,8 +7,10 @@ import android.os.Environment
 import android.os.ParcelFileDescriptor
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import android.util.LruCache
 import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
+import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SafPermissionCache
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioMetadata
@@ -58,27 +60,79 @@ private val SEARCH_DIRECTORIES = listOf(
 class TagLibMetadataProcessor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val safPermissionCache: SafPermissionCache,
-    private val safWriteAccessService: SafWriteAccessService
+    private val safWriteAccessService: SafWriteAccessService,
+    private val musicLibraryCache: MusicLibraryCache
 ) {
     companion object {
         private const val TAG = "TagLibProcessor"
-        
+
         // Custom field keys
         const val CUSTOM_RECORD_LABEL = "RECORD_LABEL"
         const val CUSTOM_ENCODER = "ENCODER"
         const val CUSTOM_ISRC = "ISRC"
         const val CUSTOM_COPYRIGHT = "COPYRIGHT"
-        
+
         // ReplayGain field keys
         const val CUSTOM_REPLAYGAIN_TRACK_GAIN = "REPLAYGAIN_TRACK_GAIN"
         const val CUSTOM_REPLAYGAIN_TRACK_PEAK = "REPLAYGAIN_TRACK_PEAK"
         const val CUSTOM_REPLAYGAIN_ALBUM_GAIN = "REPLAYGAIN_ALBUM_GAIN"
         const val CUSTOM_REPLAYGAIN_ALBUM_PEAK = "REPLAYGAIN_ALBUM_PEAK"
-        
+
         // Supported extensions
         private val SUPPORTED_EXTENSIONS = setOf(
             "mp3", "flac", "ogg", "m4a", "mp4", "wav", "wma", "ape", "opus", "wv"
         )
+
+        // Memory cache for hot data (50 entries, ~2-5MB)
+        private const val MEMORY_CACHE_SIZE = 50
+        private val memoryCache = LruCache<String, MetadataCacheEntry>(MEMORY_CACHE_SIZE)
+
+        // Path resolution cache to avoid repeated file system searches
+        private const val PATH_CACHE_SIZE = 100
+        private val pathResolutionCache = LruCache<String, String?>(PATH_CACHE_SIZE)
+    }
+
+    /**
+     * Cache entry for metadata + audio info + album art
+     */
+    data class MetadataCacheEntry(
+        val filePath: String,
+        val lastModified: Long,
+        val metadata: AudioMetadata,
+        val audioInfo: AudioInfo?,
+        val albumArt: ByteArray?
+    ) {
+        override fun equals(other: Any?): Boolean {
+            if (this === other) return true
+            if (javaClass != other?.javaClass) return false
+            other as MetadataCacheEntry
+            return filePath == other.filePath && lastModified == other.lastModified
+        }
+
+        override fun hashCode(): Int {
+            var result = filePath.hashCode()
+            result = 31 * result + lastModified.hashCode()
+            return result
+        }
+    }
+
+    /**
+     * Complete metadata result including all data from a single read operation
+     */
+    data class CompleteMetadata(
+        val metadata: AudioMetadata,
+        val audioInfo: AudioInfo?,
+        val albumArt: ByteArray?
+    ) {
+        fun toCacheEntry(filePath: String, lastModified: Long): MetadataCacheEntry {
+            return MetadataCacheEntry(
+                filePath = filePath,
+                lastModified = lastModified,
+                metadata = metadata,
+                audioInfo = audioInfo,
+                albumArt = albumArt
+            )
+        }
     }
 
     /**
@@ -90,6 +144,79 @@ class TagLibMetadataProcessor @Inject constructor(
         val channels: Int,
         val durationMs: Long
     )
+
+    // ==================== Cache Management ====================
+
+    /**
+     * Clears the memory cache. Call this when memory is low or after bulk operations.
+     */
+    fun clearMemoryCache() {
+        memoryCache.evictAll()
+        pathResolutionCache.evictAll()
+        Timber.tag(TAG).d("Memory cache cleared")
+    }
+
+    /**
+     * Gets cache statistics for debugging.
+     */
+    fun getCacheStats(): CacheStats {
+        return CacheStats(
+            memoryCacheHits = memoryCache.hitCount(),
+            memoryCacheMisses = memoryCache.missCount(),
+            pathCacheHits = pathResolutionCache.hitCount(),
+            pathCacheMisses = pathResolutionCache.missCount()
+        )
+    }
+
+    data class CacheStats(
+        val memoryCacheHits: Int,
+        val memoryCacheMisses: Int,
+        val pathCacheHits: Int,
+        val pathCacheMisses: Int
+    )
+
+    /**
+     * Checks if cache entry is valid (file hasn't been modified).
+     */
+    private fun isCacheValid(cacheEntry: MetadataCacheEntry): Boolean {
+        return try {
+            val file = File(cacheEntry.filePath)
+            file.exists() && file.lastModified() == cacheEntry.lastModified
+        } catch (e: Exception) {
+            false
+        }
+    }
+
+    /**
+     * Gets cache key for a file path.
+     */
+    private fun getCacheKey(filePath: String): String {
+        return PathUtils.normalizeFilePath(filePath)
+    }
+
+    /**
+     * Puts entry into memory cache.
+     */
+    private fun putInMemoryCache(entry: MetadataCacheEntry) {
+        memoryCache.put(getCacheKey(entry.filePath), entry)
+    }
+
+    /**
+     * Gets entry from memory cache if valid.
+     */
+    private fun getFromMemoryCache(filePath: String): MetadataCacheEntry? {
+        val key = getCacheKey(filePath)
+        val entry = memoryCache.get(key)
+        return if (entry != null && isCacheValid(entry)) {
+            entry
+        } else {
+            if (entry != null) {
+                // Entry exists but is stale, remove it
+                memoryCache.remove(key)
+            }
+            null
+        }
+    }
 
 
     /**
@@ -123,7 +250,145 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
-     * Reads metadata from an audio file.
+     * Reads complete metadata (metadata + audio info + album art) in a single operation.
+     * This is the recommended method for loading all data at once.
+     * Uses cache first (memory -> database -> file).
+     * @param filePath Path to the audio file
+     * @param includeAlbumArt Whether to include album art bytes
+     * @return CompleteMetadata or null if reading fails
+     */
+    suspend fun readAllMetadata(
+        filePath: String,
+        includeAlbumArt: Boolean = true
+    ): CompleteMetadata? = withContext(Dispatchers.IO) {
+        try {
+            val normalizedPath = PathUtils.normalizeFilePath(filePath)
+            val file = File(normalizedPath)
+
+            // Check memory cache first (fastest)
+            getFromMemoryCache(normalizedPath)?.let { cached ->
+                Timber.tag(TAG).d("Memory cache hit for: $filePath")
+                return@withContext CompleteMetadata(
+                    metadata = cached.metadata,
+                    audioInfo = cached.audioInfo,
+                    albumArt = if (includeAlbumArt) cached.albumArt else null
+                )
+            }
+
+            // Check database cache
+            val cachedFile = musicLibraryCache.getCachedFile(normalizedPath)
+            if (cachedFile != null) {
+                val file = File(normalizedPath)
+                // Check if file exists and hasn't been modified since cache
+                if (file.exists()) {
+                    // If we need album art, read from file directly
+                    // Otherwise use cached data (no file read needed)
+                    if (!includeAlbumArt) {
+                        Timber.tag(TAG).d("Database cache hit for: $filePath")
+                        val cachedMetadata = CompleteMetadata(
+                            metadata = cachedFile.metadata,
+                            audioInfo = AudioInfo(
+                                bitrate = cachedFile.bitrate * 1000, // Convert back to bps
+                                sampleRate = cachedFile.sampleRate,
+                                channels = cachedFile.channels,
+                                durationMs = cachedFile.duration
+                            ),
+                            albumArt = null // No album art needed
+                        )
+                        return@withContext cachedMetadata
+                    }
+                    // If album art is needed, we still need to read from file
+                    // Fall through to read all data including album art
+                }
+            }
+
+            // Cache miss - read from file
+            val resolvedFile = if (file.exists()) {
+                file
+            } else {
+                // Try alternative path resolution
+                val resolvedPath = resolveFilePath(filePath, file.name)
+                if (resolvedPath != null) File(resolvedPath) else null
+            }
+
+            if (resolvedFile == null || !resolvedFile.exists()) {
+                Timber.tag(TAG).w("File does not exist: $filePath")
+                return@withContext null
+            }
+
+            // Read all data in one operation
+            val completeMetadata = readAllFromFile(resolvedFile, includeAlbumArt)
+
+            // Cache the result
+            completeMetadata?.let { metadata ->
+                val entry = metadata.toCacheEntry(resolvedFile.absolutePath, resolvedFile.lastModified())
+                putInMemoryCache(entry)
+            }
+
+            completeMetadata
+        } catch (e: Exception) {
+            Timber.tag(TAG).e("Failed to read complete metadata: $filePath", e)
+            null
+        }
+    }
+
+    /**
+     * Reads all metadata from a file in a single operation.
+     */
+    private fun readAllFromFile(file: File, includeAlbumArt: Boolean): CompleteMetadata? {
+        val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        val fdForTagLib = pfd.dup().detachFd()
+
+        return try {
+            // Read metadata and pictures
+            val taglibMetadata = TagLib.getMetadata(fdForTagLib, readPictures = includeAlbumArt)
+
+            // Reopen for audio properties (TagLib requires separate call)
+            val pfd2 = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+            val fdForTagLib2 = pfd2.dup().detachFd()
+            val audioProperties = try {
+                TagLib.getAudioProperties(fdForTagLib2)
+            } finally {
+                pfd2.close()
+            }
+
+            pfd.close()
+
+            if (taglibMetadata == null) {
+                Timber.tag(TAG).w("Failed to read metadata from: ${file.absolutePath}")
+                return null
+            }
+
+            val metadata = parseTagLibMetadata(taglibMetadata, includeAlbumArt)
+            val audioInfo = audioProperties?.let {
+                AudioInfo(
+                    bitrate = it.bitrate,
+                    sampleRate = it.sampleRate,
+                    channels = it.channels,
+                    durationMs = it.length.toLong() * 1000
+                )
+            }
+
+            CompleteMetadata(
+                metadata = metadata,
+                audioInfo = audioInfo,
+                albumArt = if (includeAlbumArt) {
+                    try {
+                        taglibMetadata.pictures.firstOrNull()?.data
+                    } catch (e: Exception) {
+                        null
+                    }
+                } else null
+            )
+        } catch (e: Exception) {
+            pfd.close()
+            Timber.tag(TAG).e("Error reading from file: ${file.absolutePath}", e)
+            null
+        }
+    }
+
+    /**
+     * Reads metadata from an audio file with caching support.
      * @param filePath Path to the audio file
      * @param includeAlbumArt Whether to include album art bytes
      * @return AudioMetadata object or null if reading fails
@@ -133,14 +398,30 @@ class TagLibMetadataProcessor @Inject constructor(
         includeAlbumArt: Boolean = true
     ): AudioMetadata? = withContext(Dispatchers.IO) {
         try {
-            // Normalize the file path first
+            // Check memory cache first
+            getFromMemoryCache(filePath)?.let { cached ->
+                return@withContext cached.metadata
+            }
+
+            // Check database cache
+            val cachedFile = musicLibraryCache.getCachedFile(filePath)
+            if (cachedFile != null) {
+                // CachedAudioFile has metadata, we can use it directly
+                return@withContext cachedFile.metadata
+            }
+
+            // Try complete metadata read (will cache result)
+            readAllMetadata(filePath, includeAlbumArt)?.let {
+                return@withContext it.metadata
+            }
+
+            // Fallback to original logic
             val normalizedPath = PathUtils.normalizeFilePath(filePath)
             val file = File(normalizedPath)
-            
+
             if (!file.exists()) {
                 readMetadataFromMediaStore(filePath, includeAlbumArt)?.let { return@withContext it }
 
-                // Try alternative path resolution strategies
                 val resolvedPath = resolveFilePath(filePath, file.name)
                 if (resolvedPath != null) {
                     val resolvedFile = File(resolvedPath)
@@ -148,13 +429,13 @@ class TagLibMetadataProcessor @Inject constructor(
                         return@withContext readMetadataFromFile(resolvedFile, includeAlbumArt)
                     }
                 }
-                Timber.tag(TAG).w( "File does not exist: $filePath (normalized: $normalizedPath)")
+                Timber.tag(TAG).w("File does not exist: $filePath (normalized: $normalizedPath)")
                 return@withContext null
             }
 
             readMetadataFromFile(file, includeAlbumArt)
         } catch (e: Exception) {
-            Timber.tag(TAG).e( "Failed to read metadata: $filePath", e)
+            Timber.tag(TAG).e("Failed to read metadata: $filePath", e)
             null
         }
     }
@@ -221,32 +502,16 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
-     * Reads metadata from a File object.
+     * Parses TagLib metadata into AudioMetadata.
+     * Extracted as a separate function to avoid code duplication.
      */
-    private fun readMetadataFromFile(file: File, includeAlbumArt: Boolean): AudioMetadata? {
-        // Get file descriptor - use dup.detachFd to give TagLib its own copy
-        // TagLib will close its copy, we close our ParcelFileDescriptor
-        val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-        val fdForTagLib = pfd.dup().detachFd()
-        
-        // Read metadata using TagLib - TagLib takes ownership and closes its copy
-        val metadata = try {
-            TagLib.getMetadata(fdForTagLib, readPictures = includeAlbumArt)
-        } catch (e: Exception) {
-            Timber.tag(TAG).w( "TagLib.getMetadata failed", e)
-            null
-        }
-
-        pfd.close()
-
-        if (metadata == null) {
-            Timber.tag(TAG).w( "Failed to read metadata: ${file.absolutePath}")
-            return null
-        }
-
+    private fun parseTagLibMetadata(
+        metadata: com.kyant.taglib.Metadata,
+        includeAlbumArt: Boolean
+    ): AudioMetadata {
         val propertyMap = metadata.propertyMap
 
-        // Helper function to find property key case-insensitively (for FLAC/Vorbis Comments compatibility)
+        // Helper function to find property key case-insensitively
         fun findKeyIgnoreCase(map: Map<String, Array<String>>, targetKey: String): String? {
             val lowerTarget = targetKey.lowercase()
             return map.keys.find { it.lowercase() == lowerTarget }
@@ -258,8 +523,8 @@ class TagLibMetadataProcessor @Inject constructor(
         propertyMap[CUSTOM_ENCODER]?.firstOrNull()?.let { customFields[CUSTOM_ENCODER] = it }
         propertyMap[CUSTOM_ISRC]?.firstOrNull()?.let { customFields[CUSTOM_ISRC] = it }
         propertyMap[CUSTOM_COPYRIGHT]?.firstOrNull()?.let { customFields[CUSTOM_COPYRIGHT] = it }
-        
-        // Read ReplayGain fields (case-insensitive for FLAC/Vorbis Comments compatibility)
+
+        // Read ReplayGain fields
         findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_TRACK_GAIN)?.let { actualKey ->
             propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN] = it }
         }
@@ -273,30 +538,15 @@ class TagLibMetadataProcessor @Inject constructor(
             propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
         }
 
-        // Get album art from pictures
-        val albumArt = if (includeAlbumArt) {
-            try {
-                metadata.pictures.firstOrNull()?.data
-            } catch (e: Exception) {
-                Timber.tag(TAG).w( "Failed to get album art: ${file.absolutePath}", e)
-                null
-            }
-        } else null
-
-        // Normalize track number: some sources incorrectly add 1000 offset
-        // e.g., "1001" should be "1", "1012" should be "12"
-        // Uses shared implementation from domain model
+        // Normalize track number
         fun normalizeTrackNumber(track: Int): Int {
             val (normalized, _) = parseMediaStoreTrackField(track)
             return normalized ?: track
         }
 
-        // Helper function to parse track field - handles both "1" and "1/10" formats
-        // Also handles corrupted track values like "1001" which should be "1"
+        // Parse track field
         fun parseTrackField(value: String?): Pair<Int?, Int?> {
             if (value.isNullOrBlank()) return Pair(null, null)
-            
-            // Handle ID3v2 format: "1/10" where 10 is total tracks
             return if (value.contains('/')) {
                 val parts = value.split('/')
                 val track = parts.getOrNull(0)?.toIntOrNull()?.let { normalizeTrackNumber(it) }
@@ -308,9 +558,8 @@ class TagLibMetadataProcessor @Inject constructor(
             }
         }
 
-        // Read TRACKNUMBER field (case-insensitive for FLAC/Vorbis Comments compatibility)
         val trackKey = findKeyIgnoreCase(propertyMap, "TRACKNUMBER")
-            ?: findKeyIgnoreCase(propertyMap, "TRACK") // Fallback to TRACK for older files
+            ?: findKeyIgnoreCase(propertyMap, "TRACK")
         val trackValue = trackKey?.let { propertyMap[it]?.firstOrNull() }
         val (parsedTrack, parsedTotalFromTrack) = parseTrackField(trackValue)
 
@@ -329,16 +578,49 @@ class TagLibMetadataProcessor @Inject constructor(
             discNumber = findKeyIgnoreCase(propertyMap, "DISCNUMBER")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { d -> d > 0 } },
             totalDiscs = findKeyIgnoreCase(propertyMap, "DISCTOTAL")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } }
                 ?: findKeyIgnoreCase(propertyMap, "TOTALDISCS")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } },
-            composer = propertyMap["COMPOSER"]?.firstOrNull()?.takeIf { it.isNotBlank() } 
+            composer = propertyMap["COMPOSER"]?.firstOrNull()?.takeIf { it.isNotBlank() }
                 ?: propertyMap["AUTHOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             lyricist = propertyMap["LYRICIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             conductor = propertyMap["CONDUCTOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             originalArtist = propertyMap["ORIGINALARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             comment = propertyMap["COMMENT"]?.firstOrNull()?.takeIf { it.isNotBlank() },
             lyrics = propertyMap["LYRICS"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-            albumArt = albumArt,
+            albumArt = if (includeAlbumArt) {
+                try {
+                    metadata.pictures.firstOrNull()?.data
+                } catch (e: Exception) {
+                    null
+                }
+            } else null,
             customFields = customFields
         )
+    }
+
+    /**
+     * Reads metadata from a File object.
+     */
+    private fun readMetadataFromFile(file: File, includeAlbumArt: Boolean): AudioMetadata? {
+        // Get file descriptor - use dup.detachFd to give TagLib its own copy
+        // TagLib will close its copy, we close our ParcelFileDescriptor
+        val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
+        val fdForTagLib = pfd.dup().detachFd()
+
+        // Read metadata using TagLib - TagLib takes ownership and closes its copy
+        val metadata = try {
+            TagLib.getMetadata(fdForTagLib, readPictures = includeAlbumArt)
+        } catch (e: Exception) {
+            Timber.tag(TAG).w( "TagLib.getMetadata failed", e)
+            null
+        }
+
+        pfd.close()
+
+        if (metadata == null) {
+            Timber.tag(TAG).w( "Failed to read metadata: ${file.absolutePath}")
+            return null
+        }
+
+        return parseTagLibMetadata(metadata, includeAlbumArt)
     }
 
     private fun readMetadataFromMediaStore(filePath: String, includeAlbumArt: Boolean): AudioMetadata? {
