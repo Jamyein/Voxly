@@ -91,12 +91,12 @@ fun AlphabetScrollbarM3E(
     val scrollRange = (contentSize - viewportSize).coerceAtLeast(1)
     val scrollProgress = (scrollOffset.toFloat() / scrollRange).coerceIn(0f, 1f)
 
-    val thumbHeightPx = if (contentSize > 0) {
+    val minThumbHeightPx = with(density) { config.minThumbHeight.toPx() }
+    val maxThumbHeightPx = (viewportSize * 0.5f).coerceAtLeast(minThumbHeightPx)
+
+    val thumbHeightPx = if (contentSize > 0 && viewportSize > 0) {
         (viewportSize.toFloat() / contentSize * viewportSize)
-            .coerceIn(
-                with(density) { config.minThumbHeight.toPx() },
-                viewportSize * 0.5f
-            )
+            .coerceIn(minThumbHeightPx, maxThumbHeightPx)
     } else {
         with(density) { config.thumbHeight.toPx() }
     }
