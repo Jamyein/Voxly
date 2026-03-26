@@ -18,7 +18,7 @@ import com.voxly.presentation.components.AudioFileStandardRow
 import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
-import com.voxly.presentation.components.getFirstLetter
+import com.voxly.presentation.components.scrollbar.getFirstLetter
 
 @Composable
 internal fun AudioFileItem(
