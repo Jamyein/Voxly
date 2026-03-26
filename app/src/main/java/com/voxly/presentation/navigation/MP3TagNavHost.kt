@@ -412,7 +412,9 @@ private fun RenderSubScreen(
         }
 
         is MetadataEditor -> {
+            // 使用filePath作为key，确保切换歌曲时创建新的ViewModel实例
             val viewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
+                key = key.filePath,
                 creationCallback = { factory -> factory.create(key) }
             )
             MetadataEditorScreen(

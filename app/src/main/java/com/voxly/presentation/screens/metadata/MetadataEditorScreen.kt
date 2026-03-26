@@ -113,7 +113,8 @@ fun MetadataEditorScreen(
     // ReplayGain state from ViewModel
     val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsState()
     val pendingReplayGainInfo by viewModel.pendingReplayGainInfo.collectAsState()
-    var currentReplayGainInfo by remember { mutableStateOf<ReplayGainInfo?>(null) }
+    // 使用filePath作为key，确保切换歌曲时重置状态
+    var currentReplayGainInfo by remember(filePath) { mutableStateOf<ReplayGainInfo?>(null) }
     val replayGainScanError by viewModel.replayGainScanError.collectAsState()
 
     // EditHistory state - filter to current file only
@@ -288,10 +289,10 @@ fun MetadataEditorScreen(
                     }
                 }
                 is MetadataEditorUiState.Success -> {
-                    LaunchedEffect(state.audioFile.path) {
-                        if (currentReplayGainInfo == null && pendingReplayGainInfo == null) {
-                            currentReplayGainInfo = state.audioFile.replayGainInfo
-                        }
+                    // 使用filePath作为key，确保切换歌曲时正确更新ReplayGain信息
+                    LaunchedEffect(filePath, state.audioFile.path) {
+                        // 当歌曲改变时，重置并加载当前歌曲的ReplayGain信息
+                        currentReplayGainInfo = state.audioFile.replayGainInfo
                     }
 
                     // Box with FloatingToolbar at bottom
