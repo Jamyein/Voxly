@@ -35,6 +35,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -63,6 +64,7 @@ import com.voxly.presentation.ui.loadCarouselCoverArt
 import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.components.sharedElementIfAvailable
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 
 /**
@@ -75,6 +77,7 @@ fun ArtistDetailScreen(
     artistName: String,
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit,
+    onNavigateToAlbumDetail: (String, String?) -> Unit,
     viewModel: ArtistDetailViewModel = hiltViewModel()
 ) {
     // Load artist from cache
@@ -272,9 +275,10 @@ fun ArtistDetailScreen(
 
                                 AlbumCard(
                                     albumName = albumName,
+                                    albumArtist = artistName,
                                     trackCount = albumFiles.size,
                                     albumArtPath = albumArtPath,
-                                    onClick = { /* Could navigate to album detail */ },
+                                    onClick = { onNavigateToAlbumDetail(albumName, artistName) },
                                     modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
                                 )
                             }
@@ -378,10 +382,13 @@ fun CarouselAlbumArtImage(
 
 /**
  * Album card for carousel with responsive sizing and spring animation.
+ * Supports Container Transform transition to album detail screen.
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumCard(
     albumName: String,
+    albumArtist: String?,
     trackCount: Int,
     albumArtPath: String?,
     onClick: () -> Unit,
@@ -407,11 +414,13 @@ fun AlbumCard(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Album art
+            // Album art with Container Transform shared element transition
+            val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f),
+                    .weight(1f)
+                    .sharedElementIfAvailable(key = albumCoverKey),
                 contentAlignment = Alignment.Center
             ) {
                 CarouselAlbumArtImage(

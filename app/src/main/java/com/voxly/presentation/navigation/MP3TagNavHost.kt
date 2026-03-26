@@ -590,6 +590,9 @@ private fun RenderSubScreen(
                 onNavigateBack = { backStack.removeLastOrNull() },
                 onNavigateToMetadata = { filePath, coverTag ->
                     backStack.add(MetadataEditor(filePath, coverTag ?: ""))
+                },
+                onNavigateToAlbumDetail = { albumName, albumArtist ->
+                    backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
                 }
             )
         }
