@@ -6,11 +6,14 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Shape
 
 /**
  * CompositionLocal for providing SharedTransitionScope throughout the navigation hierarchy.
@@ -37,13 +40,26 @@ val LocalNavAnimatedVisibilityScope: ProvidableCompositionLocal<AnimatedVisibili
 object SharedTransitionConfigs {
     /**
      * Container Transform: Used for transitions between list items and detail pages.
-     * Duration: 300ms, Easing: FastOutSlowIn (Material standard)
-     * 
+     * Uses spring animation for smoother, more natural motion with better performance.
+     *
      * Best for: Audio file list to metadata editor transitions
      */
     val ContainerTransform: BoundsTransform = BoundsTransform { _, _ ->
+        spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessMedium
+        )
+    }
+
+    /**
+     * Container Transform Tween: Fallback using tween for more control.
+     * Duration: 350ms for smoother transition, Easing: FastOutSlowIn
+     *
+     * Use this if spring animation feels too bouncy.
+     */
+    val ContainerTransformTween: BoundsTransform = BoundsTransform { _, _ ->
         tween(
-            durationMillis = 300,
+            durationMillis = 350,
             easing = FastOutSlowInEasing
         )
     }
@@ -51,7 +67,7 @@ object SharedTransitionConfigs {
     /**
      * Fade Through: Used for transitions between unrelated pages.
      * Duration: 250ms, Easing: Linear
-     * 
+     *
      * Best for: Bottom navigation tab switches
      */
     val FadeThrough: BoundsTransform = BoundsTransform { _, _ ->
@@ -64,7 +80,7 @@ object SharedTransitionConfigs {
     /**
      * Quick Transform: For smaller UI elements.
      * Duration: 200ms, Easing: FastOutSlowIn
-     * 
+     *
      * Best for: Buttons, icons, chips
      */
     val QuickTransform: BoundsTransform = BoundsTransform { _, _ ->
@@ -176,25 +192,34 @@ fun createArtistAvatarSharedElementKey(artistName: String): String = "artist-ava
  * Extension function to easily apply shared element modifier for non-container elements.
  * Used for hero elements like album art that transform from list to detail.
  *
- * This is different from sharedBounds - it maintains the actual content (not bounds)
- * during the transition, ideal for images that should morph from one size to another.
+ * This version uses sharedBounds which naturally handles bounds transformations including
+ * shape changes when both start and end composables use consistent clipping.
+ *
+ * Key improvements:
+ * 1. Uses ResizeMode.RemeasureToBounds for smoother transitions
+ * 2. Applies spring animation by default for more natural motion
+ * 3. Compatible with clip() modifier applied after sharedBounds
  *
  * @param key Unique key for the shared element
- * @return Modifier with sharedElement applied, or unchanged if scopes are not available
+ * @param boundsTransform Animation configuration for the bounds transformation
+ * @return Modifier with sharedBounds applied, or unchanged if scopes are not available
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun Modifier.sharedElementIfAvailable(
-    key: String
+    key: String,
+    boundsTransform: BoundsTransform = SharedTransitionConfigs.ContainerTransform
 ): Modifier {
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
 
     return if (sharedTransitionScope != null && animatedVisibilityScope != null) {
         with(sharedTransitionScope) {
-            this@sharedElementIfAvailable.sharedElement(
+            this@sharedElementIfAvailable.sharedBounds(
                 sharedContentState = rememberSharedContentState(key = key),
-                animatedVisibilityScope = animatedVisibilityScope
+                animatedVisibilityScope = animatedVisibilityScope,
+                boundsTransform = boundsTransform,
+                resizeMode = SharedTransitionScope.ResizeMode.RemeasureToBounds
             )
         }
     } else {

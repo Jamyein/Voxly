@@ -67,6 +67,7 @@ import com.voxly.presentation.components.M3EScrollbar
 import com.voxly.presentation.components.M3EGridScrollbar
 import com.voxly.presentation.components.sharedElementIfAvailable
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 
@@ -558,7 +559,7 @@ internal fun AlbumDetailContent(
                 AudioFileItem(
                     audioFile = audioFile,
                     isSelected = false,
-                    onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
+                    onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
                     onLongClick = {},
                     showActions = false,
                     onEditMetadata = {},
@@ -647,7 +648,7 @@ internal fun ArtistDetailContent(
                             AudioFileItem(
                                 audioFile = audioFile,
                                 isSelected = false,
-                                onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
+                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
                                 onLongClick = {},
                                 showActions = false,
                                 onEditMetadata = {},

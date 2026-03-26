@@ -65,6 +65,7 @@ import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.components.sharedElementIfAvailable
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 
 /**
@@ -262,7 +263,7 @@ fun ArtistDetailScreen(
                         AudioFileItem(
                             audioFile = audioFile,
                             isSelected = false,
-                            onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
+                            onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
                             onLongClick = {},
                             showActions = false,
                             onEditMetadata = {},
@@ -344,7 +345,7 @@ fun ArtistDetailScreen(
                             AudioFileItem(
                                 audioFile = audioFile,
                                 isSelected = false,
-                                onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
+                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
                                 onLongClick = {},
                                 showActions = false,
                                 onEditMetadata = {},

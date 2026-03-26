@@ -95,6 +95,7 @@ import com.voxly.presentation.ui.loadLocalAlbumArt
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.FileBrowserUiState
 import com.voxly.presentation.viewmodel.LibraryViewModel
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.viewmodel.SelectedDirectory
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.Dispatchers
@@ -546,7 +547,7 @@ fun FileBrowserScreen(
                                     if (selectedFiles.isNotEmpty()) {
                                         viewModel.toggleFileSelection(audioFile.path)
                                     } else {
-                                        onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
+                                        onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
                                     }
                                 },
                                 onFileLongClick = { audioFile ->
@@ -599,14 +600,14 @@ fun FileBrowserScreen(
                                                 if (selectedFiles.isNotEmpty()) {
                                                     viewModel.toggleFileSelection(audioFile.path)
                                                 } else {
-                                                    onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
+                                                    onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
                                                 }
                                             },
                                             onFileLongClick = { audioFile ->
                                                 viewModel.toggleFileSelection(audioFile.path)
                                             },
                                             onEditFileMetadata = { audioFile ->
-                                                onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
+                                                onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
                                             },
                                             onRenameFile = { audioFile ->
                                                 renameTargetFile = audioFile

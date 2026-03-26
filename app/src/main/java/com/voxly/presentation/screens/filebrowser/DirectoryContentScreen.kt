@@ -57,6 +57,7 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.screens.filebrowser.FixMetadataOptions
@@ -283,7 +284,7 @@ fun DirectoryContentScreen(
                 allFiles = files,
                 onFileClick = { audioFile ->
                     showSearchSheet = false
-                    onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
+                    onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
                 }
             )
         }
@@ -305,7 +306,7 @@ fun DirectoryContentScreen(
                     if (isSelectionMode) {
                         viewModel.toggleFileSelection(audioFile.path)
                     } else {
-                        onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
+                        onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
                     }
                 },
                 onFileLongClick = { audioFile ->
@@ -371,7 +372,7 @@ fun DirectoryContentScreen(
         // Navigate to metadata editor
         LaunchedEffect(currentActionFile) {
             showSingleEditMetadataDialog = false
-            onNavigateToMetadata(currentActionFile!!.path, "cover_${currentActionFile!!.path.hashCode()}")
+            onNavigateToMetadata(currentActionFile!!.path, createAlbumArtSharedElementKey(currentActionFile!!.path))
             currentActionFile = null
         }
     }

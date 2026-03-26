@@ -858,6 +858,7 @@ fun AudioFileStandardRow(
     },
     leadingContent = {
         val albumArtKey = createAlbumArtSharedElementKey(audioFile.path)
+        val cookieShape = MaterialShapes.Cookie9Sided.toShape()
         AlbumArtImage(
             filePath = audioFile.path,
             mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
@@ -865,8 +866,8 @@ fun AudioFileStandardRow(
             size = AlbumArtSizeLarge,
             modifier = Modifier
                 .size(AlbumArtSizeLarge)
-                .clip(MaterialShapes.Cookie9Sided.toShape())
                 .sharedElementIfAvailable(key = albumArtKey)
+                .clip(cookieShape)
         ) {
             Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
         }
@@ -1079,7 +1080,8 @@ fun AudioFileStandardRowCompact(
     },
     leadingContent = {
         val albumArtKey = sharedElementKey?.let { createAlbumArtSharedElementKey(audioFile.path) }
-        Box(modifier = Modifier.size(AlbumArtSizeSmall).clip(MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
+        val cookieShape = MaterialShapes.Cookie9Sided.toShape()
+        Box(modifier = Modifier.size(AlbumArtSizeSmall).clip(cookieShape), contentAlignment = Alignment.Center) {
             AlbumArtImage(
                 filePath = audioFile.path,
                 mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
@@ -1095,7 +1097,7 @@ fun AudioFileStandardRowCompact(
                         }
                     )
             ) {
-                Surface(modifier = Modifier.fillMaxSize(), shape = MaterialShapes.Cookie9Sided.toShape(), color = MaterialTheme.colorScheme.surfaceVariant) {
+                Surface(modifier = Modifier.fillMaxSize(), shape = cookieShape, color = MaterialTheme.colorScheme.surfaceVariant) {
                     Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(IconSizeSmall)) }
                 }
             }

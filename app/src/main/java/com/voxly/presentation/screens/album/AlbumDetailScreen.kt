@@ -306,7 +306,7 @@ fun AlbumDetailScreen(
                     ) {
                         discFiles.forEachIndexed { index, audioFile ->
                             SegmentedListItem(
-                                onClick = { onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}") },
+                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
                                 shapes = ListItemDefaults.segmentedShapes(
                                     index = index,
                                     count = discFiles.size
