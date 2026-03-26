@@ -217,17 +217,29 @@ fun MP3TagNavHost() {
             // We render main screens here, but hide them when showing sub-screens
             Box(modifier = Modifier.fillMaxSize()) {
                 if (isMainScreen) {
-                    // Provide scopes for shared transitions
-                    CompositionLocalProvider(
-                        LocalSharedTransitionScope provides this@SharedTransitionLayout,
-                        LocalNavAnimatedVisibilityScope provides null
-                    ) {
-                        RenderMainScreen(
-                            currentKey = currentKey,
-                            backStack = backStack,
-                            libraryViewModel = libraryViewModel,
-                            context = context
-                        )
+                    // Use AnimatedContent to provide AnimatedVisibilityScope for shared transitions
+                    // This enables Container Transform from main screens to sub-screens
+                    AnimatedContent(
+                        targetState = currentKey,
+                        transitionSpec = {
+                            // Fade through for bottom navigation tab switches
+                            ExpressiveAnimations.FadeThroughEnter.togetherWith(ExpressiveAnimations.FadeThroughExit)
+                        },
+                        label = "MainScreen_Navigation"
+                    ) { mainScreenKey ->
+                        // Provide scopes for shared transitions
+                        // Both SharedTransitionScope and AnimatedVisibilityScope are now available
+                        CompositionLocalProvider(
+                            LocalSharedTransitionScope provides this@SharedTransitionLayout,
+                            LocalNavAnimatedVisibilityScope provides this@AnimatedContent
+                        ) {
+                            RenderMainScreen(
+                                currentKey = mainScreenKey,
+                                backStack = backStack,
+                                libraryViewModel = libraryViewModel,
+                                context = context
+                            )
+                        }
                     }
                 }
             }
