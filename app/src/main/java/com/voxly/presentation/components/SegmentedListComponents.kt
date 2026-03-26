@@ -64,8 +64,10 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.theme.ExpressiveMotion
+import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import kotlinx.coroutines.launch
 
 // ============ Constants ============
@@ -855,12 +857,16 @@ fun AudioFileStandardRow(
         }
     },
     leadingContent = {
+        val albumArtKey = createAlbumArtSharedElementKey(audioFile.path)
         AlbumArtImage(
             filePath = audioFile.path,
             mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
             contentDescription = null,
             size = AlbumArtSizeLarge,
-            modifier = Modifier.size(AlbumArtSizeLarge).clip(MaterialShapes.Cookie9Sided.toShape())
+            modifier = Modifier
+                .size(AlbumArtSizeLarge)
+                .clip(MaterialShapes.Cookie9Sided.toShape())
+                .sharedElementIfAvailable(key = albumArtKey)
         ) {
             Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
         }
@@ -1031,13 +1037,14 @@ fun AudioFileStandardRowWithMenu(
  * Standard audio file list item (compact mode).
  * Uses Surface with smaller layout.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun AudioFileStandardRowCompact(
     audioFile: AudioFile,
     isSelected: Boolean = false,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedElementKey: String? = null
 ) = ListItem(
     modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick),
     colors = ListItemDefaults.colors(
@@ -1071,8 +1078,23 @@ fun AudioFileStandardRowCompact(
         }
     },
     leadingContent = {
+        val albumArtKey = sharedElementKey?.let { createAlbumArtSharedElementKey(audioFile.path) }
         Box(modifier = Modifier.size(AlbumArtSizeSmall).clip(MaterialShapes.Cookie9Sided.toShape()), contentAlignment = Alignment.Center) {
-            AlbumArtImage(filePath = audioFile.path, mediaStoreAlbumId = audioFile.mediaStoreAlbumId, contentDescription = null, size = AlbumArtSizeSmall, modifier = Modifier.fillMaxSize()) {
+            AlbumArtImage(
+                filePath = audioFile.path,
+                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                contentDescription = null,
+                size = AlbumArtSizeSmall,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .then(
+                        if (albumArtKey != null) {
+                            Modifier.sharedElementIfAvailable(key = albumArtKey)
+                        } else {
+                            Modifier
+                        }
+                    )
+            ) {
                 Surface(modifier = Modifier.fillMaxSize(), shape = MaterialShapes.Cookie9Sided.toShape(), color = MaterialTheme.colorScheme.surfaceVariant) {
                     Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(IconSizeSmall)) }
                 }

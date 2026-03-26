@@ -141,3 +141,63 @@ fun createAlbumSharedElementKey(albumName: String, albumArtist: String? = null):
  * @return Unique key string
  */
 fun createArtistSharedElementKey(artistName: String): String = "artist-$artistName"
+
+/**
+ * Helper function to create unique keys for album art shared elements.
+ * Used for Container Transform transitions between list items and detail pages.
+ *
+ * @param filePath The audio file path
+ * @return Unique key string for the album art shared element
+ */
+fun createAlbumArtSharedElementKey(filePath: String): String = "album-art-$filePath"
+
+/**
+ * Helper function to create unique keys for album cover shared elements.
+ * Used for Container Transform transitions from AlbumScreen to AlbumDetailScreen.
+ *
+ * @param albumName The album name
+ * @param albumArtist The album artist (optional, for disambiguation)
+ * @return Unique key string for the album cover shared element
+ */
+fun createAlbumCoverSharedElementKey(albumName: String, albumArtist: String?): String {
+    return "album-cover-$albumName-${albumArtist ?: "unknown"}"
+}
+
+/**
+ * Helper function to create unique keys for artist avatar shared elements.
+ * Used for Container Transform transitions from ArtistScreen to ArtistDetailScreen.
+ *
+ * @param artistName The artist name
+ * @return Unique key string for the artist avatar shared element
+ */
+fun createArtistAvatarSharedElementKey(artistName: String): String = "artist-avatar-$artistName"
+
+/**
+ * Extension function to easily apply shared element modifier for non-container elements.
+ * Used for hero elements like album art that transform from list to detail.
+ *
+ * This is different from sharedBounds - it maintains the actual content (not bounds)
+ * during the transition, ideal for images that should morph from one size to another.
+ *
+ * @param key Unique key for the shared element
+ * @return Modifier with sharedElement applied, or unchanged if scopes are not available
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+fun Modifier.sharedElementIfAvailable(
+    key: String
+): Modifier {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedVisibilityScope.current
+
+    return if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+        with(sharedTransitionScope) {
+            this@sharedElementIfAvailable.sharedElement(
+                sharedContentState = rememberSharedContentState(key = key),
+                animatedVisibilityScope = animatedVisibilityScope
+            )
+        }
+    } else {
+        this
+    }
+}

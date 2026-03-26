@@ -622,14 +622,15 @@ private fun MetadataFormContent(
             .verticalScroll(scrollState)
             .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomPadding)
     ) {
-        // Album Art Section
+        // Album Art Section with shared element transition support
         AlbumArtSection(
             albumArt = metadata.albumArt,
             onPickAlbumArt = onPickAlbumArt,
             coverTag = coverTag,
             onZoomAlbumArt = onZoomAlbumArt,
             onRotateAlbumArt = onRotateAlbumArt,
-            onRemoveAlbumArt = onRemoveAlbumArt
+            onRemoveAlbumArt = onRemoveAlbumArt,
+            filePath = audioFile.path
         )
 
         Spacer(modifier = Modifier.height(16.dp))

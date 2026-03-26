@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.album
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -47,6 +48,9 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 
 /**
@@ -158,8 +162,9 @@ fun AlbumDetailScreen(
                                 .padding(16.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            // Left: Cover image using AlbumArtImage composable
+                            // Left: Cover image using AlbumArtImage composable with shared element transition
                             val firstFile = files.firstOrNull()
+                            val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
                             AlbumArtImage(
                                 filePath = coverPath ?: firstFile?.path,
                                 mediaStoreAlbumId = firstFile?.mediaStoreAlbumId,
@@ -168,6 +173,7 @@ fun AlbumDetailScreen(
                                 modifier = Modifier
                                     .size(120.dp)
                                     .clip(MaterialTheme.shapes.medium)
+                                    .sharedElementIfAvailable(key = albumCoverKey)
                             ) {
                                 Surface(
                                     modifier = Modifier.fillMaxSize(),

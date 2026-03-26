@@ -1,19 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<resources>
+<resources xmlns:tools="http://schemas.android.com/tools">
     <string name="app_name">Voxly</string>
 
     <!-- Navigation -->
     <string name="nav_file_browser">音乐库</string>
     <string name="nav_albums">专辑</string>
-    <string name="nav_recent_edits">最近</string>
-    <string name="nav_statistics">统计</string>
     <string name="nav_settings">设置</string>
 
     <!-- File Browser -->
     <string name="select_directory">选择目录</string>
     <string name="no_audio_files">未找到音频文件</string>
     <string name="file_count">%d 个文件</string>
-    <string name="loading">加载中...</string>
+    <string name="loading">加载中…</string>
 
     <!-- Metadata -->
     <string name="metadata_title">标题</string>
@@ -124,7 +122,7 @@
     <string name="clear_selection">清除选择</string>
     <string name="select_all">全选</string>
     <string name="replay_gain">ReplayGain</string>
-    <string name="selected">已选</string>
+    <string name="selected" tools:ignore="PrivateResource">已选</string>
     <string name="unknown_artist">未知艺术家</string>
 
     <!-- Batch Operations -->
@@ -235,28 +233,6 @@
     <string name="no_album_art">没有专辑封面</string>
     <string name="saving_metadata">正在保存元数据...</string>
 
-    <!-- Statistics -->
-    <string name="statistics_title">统计</string>
-    <string name="statistics_subtitle">查看音乐库统计信息</string>
-    <string name="statistics_overview">概览</string>
-    <string name="statistics_format_distribution">格式分布</string>
-    <string name="statistics_top_artists">热门艺术家</string>
-    <string name="statistics_top_albums">热门专辑</string>
-    <string name="statistics_recent_activity">近期活动</string>
-    <string name="statistics_empty_title">暂无统计数据</string>
-    <string name="statistics_empty_subtitle">编辑一些音频文件以查看你的音乐库统计</string>
-    <string name="total_files">文件总数</string>
-    <string name="total_duration">总时长</string>
-    <string name="total_size">总大小</string>
-    <string name="edited_files">已编辑文件</string>
-    <string name="today">今天</string>
-    <string name="this_week">本周</string>
-    <string name="this_month">本月</string>
-
-    <!-- Recent Edits -->
-    <string name="recent_edits_title">最近编辑</string>
-    <string name="recent_edits_placeholder">你最近编辑的文件会显示在这里</string>
-
     <!-- Lyrics Editor -->
     <string name="save_lyrics">保存歌词</string>
     <string name="search_online">在线搜索</string>
@@ -291,7 +267,7 @@
     <string name="settings_dynamic_color_subtitle">使用来自壁纸的颜色（Android 12+）</string>
     <string name="settings_scan_quality_subtitle">质量越高，扫描越慢</string>
     <string name="settings_scan_mode">扫描模式</string>
-    <string name="settings_scan_mode_subtitle">兼容 foobar2000：单轨、单专辑、多专辑</string>
+    <string name="settings_scan_mode_subtitle">单轨、单专辑、多专辑</string>
     <string name="settings_scan_mode_track_only">单轨增益</string>
     <string name="settings_scan_mode_album_only">单专辑扫描</string>
     <string name="settings_scan_mode_track_and_album">多专辑扫描</string>
@@ -424,7 +400,7 @@
     <string name="replay_gain_scan_track_only">仅曲目增益</string>
     <string name="replay_gain_scan_album">曲目 + 专辑增益</string>
     <string name="replay_gain_target_loudness">目标响度</string>
-    <string name="replay_gain_default_loudness">默认 (-18 LUFS)</string>
+    <string name="replay_gain_default_loudness">默认 (-14 LUFS)</string>
     <string name="replay_gain_settings">回放增益设置</string>
     <string name="replay_gain_loudness_desc">调整参考响度级别</string>
     <string name="replay_gain_loudness_ebu_r128">EBU R128 -23 dB</string>
