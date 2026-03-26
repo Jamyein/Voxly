@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -101,14 +102,12 @@ fun DirectoryOverviewContent(
         onRefresh = onRefresh,
         modifier = Modifier.fillMaxSize(),
         indicator = {
-            if (isRefreshing) {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    LoadingIndicator()
-                }
-            }
+            val pullToRefreshState = rememberPullToRefreshState()
+            androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator(
+                state = pullToRefreshState,
+                isRefreshing = isRefreshing,
+                modifier = Modifier
+            )
         }
     ) {
         Column(modifier = Modifier.fillMaxSize()) {

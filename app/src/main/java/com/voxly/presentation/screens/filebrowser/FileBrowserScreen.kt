@@ -40,6 +40,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Surface
@@ -579,14 +580,12 @@ fun FileBrowserScreen(
                                     onRefresh = onRefresh,
                                     modifier = Modifier.fillMaxSize(),
                                     indicator = {
-                                        if (isRefreshing) {
-                                            Box(
-                                                modifier = Modifier.fillMaxWidth(),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                LoadingIndicator()
-                                            }
-                                        }
+                                        val pullToRefreshState = rememberPullToRefreshState()
+                                        LoadingIndicator(
+                                            state = pullToRefreshState,
+                                            isRefreshing = isRefreshing,
+                                            modifier = Modifier
+                                        )
                                     }
                                 ) {
                                     Column(

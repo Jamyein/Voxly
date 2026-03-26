@@ -36,13 +36,14 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
-import androidx.compose.material3.LoadingIndicator
+
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
@@ -87,14 +88,12 @@ internal fun AlbumTabContent(
                 onRefresh = onRefresh,
                 modifier = Modifier.fillMaxSize(),
                 indicator = {
-                    if (isRefreshing) {
-                        Box(
-                            modifier = Modifier.fillMaxWidth(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            LoadingIndicator()
-                        }
-                    }
+                    val pullToRefreshState = rememberPullToRefreshState()
+                    LoadingIndicator(
+                        state = pullToRefreshState,
+                        isRefreshing = isRefreshing,
+                        modifier = Modifier
+                    )
                 }
             ) {
                 if (albums.isEmpty()) {
@@ -325,14 +324,12 @@ internal fun ArtistTabContent(
             onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize(),
             indicator = {
-                if (isRefreshing) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        LoadingIndicator()
-                    }
-                }
+                val pullToRefreshState = rememberPullToRefreshState()
+                LoadingIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = isRefreshing,
+                    modifier = Modifier
+                )
             }
         ) {
             if (artists.isEmpty()) {
@@ -680,14 +677,12 @@ internal fun AllAudiosTabContent(
             onRefresh = onRefresh,
             modifier = Modifier.fillMaxSize(),
             indicator = {
-                if (isRefreshing) {
-                    Box(
-                        modifier = Modifier.fillMaxWidth(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        LoadingIndicator()
-                    }
-                }
+                val pullToRefreshState = rememberPullToRefreshState()
+                LoadingIndicator(
+                    state = pullToRefreshState,
+                    isRefreshing = isRefreshing,
+                    modifier = Modifier
+                )
             }
         ) {
             if (audios.isEmpty()) {

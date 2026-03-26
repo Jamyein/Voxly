@@ -29,6 +29,7 @@ import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarExitDirection
 import androidx.compose.material3.FloatingToolbarScrollBehavior
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.*
@@ -264,14 +265,12 @@ fun DirectoryContentScreen(
             .fillMaxSize()
             .padding(innerPadding),
         indicator = {
-            if (isRefreshing) {
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    LoadingIndicator()
-                }
-            }
+            val pullToRefreshState = rememberPullToRefreshState()
+            LoadingIndicator(
+                state = pullToRefreshState,
+                isRefreshing = isRefreshing,
+                modifier = Modifier
+            )
         }
     ) {
         // Search BottomSheet
