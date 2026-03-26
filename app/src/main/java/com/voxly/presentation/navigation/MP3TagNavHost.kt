@@ -7,13 +7,7 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
-import androidx.compose.animation.with
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -67,6 +61,7 @@ import com.voxly.presentation.viewmodel.OnlineCoverSearchViewModel
 import com.voxly.presentation.viewmodel.OnlineLyricsSearchViewModel
 import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
 import com.voxly.presentation.viewmodel.ReplayGainViewModel
+import com.voxly.presentation.theme.ExpressiveAnimations
 
 /**
  * Main navigation host for the MP3 Tag Editor app using Navigation3.
@@ -246,21 +241,35 @@ fun MP3TagNavHost() {
                 // Determine if this is a push or pop based on back stack size
                 val isPush = backStack.size > (initialState?.let { backStack.indexOf(it) + 1 } ?: 0)
 
-                if (isPush) {
-                    // Push animation: new page enters from right
-                    (fadeIn(animationSpec = tween(300)) +
-                            slideInHorizontally { it / 4 })
-                        .togetherWith(fadeOut(animationSpec = tween(300)))
-                        .apply { targetContentZIndex = 1f }
-                } else {
-                    // Pop animation: old page exits to right
-                    fadeIn(animationSpec = tween(300))
-                        .togetherWith(
-                            fadeOut(animationSpec = tween(300)) +
-                                    slideOutHorizontally { it / 4 }
-                        )
-                        .apply { targetContentZIndex = -1f }
+                // Select transition type based on screen type
+                val (enterAnim, exitAnim) = when {
+                    // Container Transform: FileBrowser/Album/Artist → MetadataEditor (list item to detail)
+                    targetState is MetadataEditor || initialState is MetadataEditor -> Pair(
+                        if (isPush) ExpressiveAnimations.ContainerTransformEnter else ExpressiveAnimations.ContainerTransformPopEnter,
+                        if (isPush) ExpressiveAnimations.ContainerTransformExit else ExpressiveAnimations.ContainerTransformPopExit
+                    )
+
+                    // Shared Axis Z: AlbumScreen/ArtistScreen → Detail pages (parent-child navigation)
+                    targetState is AlbumDetail || targetState is ArtistDetail -> Pair(
+                        if (isPush) ExpressiveAnimations.SharedAxisZEnter else ExpressiveAnimations.SharedAxisZEnter,
+                        if (isPush) ExpressiveAnimations.SharedAxisZExit else ExpressiveAnimations.SharedAxisZExit
+                    )
+
+                    // Shared Axis X: Settings sub-pages (lateral navigation like LogViewer)
+                    targetState is LogViewer || targetState is ScanDirectorySettings -> Pair(
+                        if (isPush) ExpressiveAnimations.SharedAxisXEnter else ExpressiveAnimations.SharedAxisXPopEnter,
+                        if (isPush) ExpressiveAnimations.SharedAxisXExit else ExpressiveAnimations.SharedAxisXPopExit
+                    )
+
+                    // Default: Shared Axis X for other sub-screens
+                    else -> Pair(
+                        if (isPush) ExpressiveAnimations.SharedAxisXEnter else ExpressiveAnimations.SharedAxisXPopEnter,
+                        if (isPush) ExpressiveAnimations.SharedAxisXExit else ExpressiveAnimations.SharedAxisXPopExit
+                    )
                 }
+
+                enterAnim.togetherWith(exitAnim)
+                    .apply { targetContentZIndex = if (isPush) 1f else -1f }
             },
             label = "SubScreen_Navigation"
         ) { targetKey ->
