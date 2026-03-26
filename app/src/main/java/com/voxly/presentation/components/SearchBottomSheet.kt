@@ -1,5 +1,6 @@
 package com.voxly.presentation.components
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 /**
  * Reusable search bottom sheet component for searching audio files.
@@ -170,17 +173,20 @@ fun SearchBottomSheet(
 
 /**
  * Search result item composable for displaying audio file in search results.
+ * Supports Container Transform transition to metadata editor.
  *
  * @param audioFile The audio file to display
  * @param onClick Callback when the item is clicked
  * @param modifier Modifier for the item
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SearchResultItem(
     audioFile: AudioFile,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val albumArtKey = createAlbumArtSharedElementKey(audioFile.path)
     Surface(
         onClick = onClick,
         color = MaterialTheme.colorScheme.surfaceContainerLow,
@@ -193,13 +199,15 @@ fun SearchResultItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Album artwork
+            // Album artwork with shared element transition
             AlbumArtImage(
                 filePath = audioFile.path,
                 mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
                 contentDescription = stringResource(R.string.cd_album_art),
                 size = 48.dp,
-                modifier = Modifier.clip(MaterialTheme.shapes.small)
+                modifier = Modifier
+                    .clip(MaterialTheme.shapes.small)
+                    .sharedElementIfAvailable(key = albumArtKey)
             ) {
                 Icon(
                     imageVector = Icons.Default.MusicNote,

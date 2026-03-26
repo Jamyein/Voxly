@@ -65,11 +65,13 @@ internal fun BatchMenuItem(
     )
 }
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun AlbumListItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
+    val coverKey = createAlbumCoverSharedElementKey(album.name, album.artist)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -97,7 +99,9 @@ internal fun AlbumListItem(
                     mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
                     contentDescription = null,
                     size = 48.dp,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .sharedElementIfAvailable(key = coverKey)
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
