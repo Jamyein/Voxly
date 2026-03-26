@@ -283,7 +283,7 @@ fun DirectoryContentScreen(
                 allFiles = files,
                 onFileClick = { audioFile ->
                     showSearchSheet = false
-                    onNavigateToMetadata(audioFile.path, null)
+                    onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
                 }
             )
         }
@@ -305,7 +305,7 @@ fun DirectoryContentScreen(
                     if (isSelectionMode) {
                         viewModel.toggleFileSelection(audioFile.path)
                     } else {
-                        onNavigateToMetadata(audioFile.path, null)
+                        onNavigateToMetadata(audioFile.path, "cover_${audioFile.path.hashCode()}")
                     }
                 },
                 onFileLongClick = { audioFile ->
@@ -371,7 +371,7 @@ fun DirectoryContentScreen(
         // Navigate to metadata editor
         LaunchedEffect(currentActionFile) {
             showSingleEditMetadataDialog = false
-            onNavigateToMetadata(currentActionFile!!.path, null)
+            onNavigateToMetadata(currentActionFile!!.path, "cover_${currentActionFile!!.path.hashCode()}")
             currentActionFile = null
         }
     }

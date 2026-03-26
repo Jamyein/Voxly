@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +41,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.max
 
@@ -76,6 +78,41 @@ fun AlphabetScrollbarM3E(
     var isDragging by remember { mutableStateOf(false) }
     var dragOffsetFromThumb by remember { mutableFloatStateOf(0f) }
     var previousLetter by remember { mutableStateOf('A') }
+    
+    // Auto-hide state - track previous scroll offset to detect scroll changes
+    var previousScrollOffset by remember { mutableStateOf(state.firstVisibleItemScrollOffset) }
+    var isVisible by remember { mutableStateOf(false) }
+    
+    // Monitor scroll changes to show scrollbar
+    LaunchedEffect(state.firstVisibleItemScrollOffset, state.firstVisibleItemIndex) {
+        val currentOffset = state.firstVisibleItemScrollOffset
+        val currentIndex = state.firstVisibleItemIndex
+        val combinedOffset = currentIndex * 10000 + currentOffset // Combine index and offset for detection
+        val previousCombined = previousScrollOffset
+        
+        if (combinedOffset != previousCombined) {
+            // Scroll position changed, show scrollbar
+            isVisible = true
+            previousScrollOffset = combinedOffset
+            
+            // Hide after delay
+            delay(config.hideDelayMillis)
+            if (!isDragging) {
+                isVisible = false
+            }
+        }
+    }
+    
+    // Keep visible while dragging
+    LaunchedEffect(isDragging) {
+        if (isDragging) {
+            isVisible = true
+        } else {
+            // Drag ended, start hide timer
+            delay(config.hideDelayMillis)
+            isVisible = false
+        }
+    }
 
     val scrollbarState = remember(state, letterToIndex, totalItems) {
         AlphabetScrollbarState(state, letterToIndex, totalItems)
@@ -147,6 +184,16 @@ fun AlphabetScrollbarM3E(
         ),
         label = "bubble_scale"
     )
+    
+    // Overall scrollbar visibility animation
+    val scrollbarAlpha by animateFloatAsState(
+        targetValue = if (isVisible || isDragging) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "scrollbar_alpha"
+    )
 
     // Colors - using Material3 color scheme with enhanced contrast
     val thumbColor = if (isDragging) {
@@ -163,7 +210,8 @@ fun AlphabetScrollbarM3E(
         modifier = modifier
             .width(config.touchAreaWidth)
             .fillMaxHeight()
-            .padding(end = 4.dp),
+            .padding(end = 4.dp)
+            .alpha(scrollbarAlpha),
         contentAlignment = Alignment.CenterEnd
     ) {
         // Track background with subtle styling

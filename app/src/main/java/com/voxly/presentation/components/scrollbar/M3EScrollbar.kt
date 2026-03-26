@@ -1,7 +1,6 @@
 package com.voxly.presentation.components.scrollbar
 
 import android.view.HapticFeedbackConstants
-import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
@@ -32,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -42,6 +40,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /**
@@ -74,6 +73,37 @@ fun M3EScrollbar(
     // Drag state
     var isDragging by remember { mutableStateOf(false) }
     var dragOffsetFromThumb by remember { mutableFloatStateOf(0f) }
+    
+    // Auto-hide state - track previous scroll offset to detect scroll changes
+    var previousScrollOffset by remember { mutableStateOf(state.scrollOffset) }
+    var isVisible by remember { mutableStateOf(false) }
+    
+    // Monitor scroll changes to show scrollbar
+    LaunchedEffect(state.scrollOffset) {
+        val currentOffset = state.scrollOffset
+        if (currentOffset != previousScrollOffset) {
+            // Scroll position changed, show scrollbar
+            isVisible = true
+            previousScrollOffset = currentOffset
+            
+            // Hide after delay
+            delay(config.hideDelayMillis)
+            if (!isDragging) {
+                isVisible = false
+            }
+        }
+    }
+    
+    // Keep visible while dragging
+    LaunchedEffect(isDragging) {
+        if (isDragging) {
+            isVisible = true
+        } else if (state.scrollOffset == previousScrollOffset) {
+            // Drag ended, start hide timer
+            delay(config.hideDelayMillis)
+            isVisible = false
+        }
+    }
 
     // Calculate dimensions
     val contentSize = state.contentSize
@@ -138,6 +168,16 @@ fun M3EScrollbar(
         ),
         label = "bubble_scale"
     )
+    
+    // Overall scrollbar visibility animation
+    val scrollbarAlpha by animateFloatAsState(
+        targetValue = if (isVisible || isDragging) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "scrollbar_alpha"
+    )
 
     // Get current item index for bubble
     val currentIndex = remember(scrollProgress, state) {
@@ -167,7 +207,8 @@ fun M3EScrollbar(
         modifier = modifier
             .width(config.touchAreaWidth)
             .fillMaxHeight()
-            .padding(end = 4.dp),
+            .padding(end = 4.dp)
+            .alpha(scrollbarAlpha),
         contentAlignment = Alignment.CenterEnd
     ) {
         // Track background with subtle styling
