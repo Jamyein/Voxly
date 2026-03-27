@@ -1524,6 +1524,22 @@ class LibraryViewModel @Inject constructor(
             uiStateDataStore.setDirectoryFileSortOption(option)
         }
     }
+
+    // ==================== Root Tab ====================
+
+    /**
+     * File browser root tab from persistent storage (DIRECTORIES or ALL)
+     */
+    val fileBrowserRootTab = settingsDataStore.fileBrowserRootTab
+
+    /**
+     * Save file browser root tab to persistent storage
+     */
+    fun setFileBrowserRootTab(tab: String) {
+        viewModelScope.launch {
+            settingsDataStore.setFileBrowserRootTab(tab)
+        }
+    }
 }
 
 data class SelectedDirectory(

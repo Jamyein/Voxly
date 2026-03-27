@@ -136,7 +136,14 @@ fun FileBrowserScreen(
 
     // Tab states
     val allAudios by viewModel.allAudios.collectAsState()
-    var selectedRootTab by rememberSaveable { mutableStateOf(RootTab.DIRECTORIES) }
+    val rootTabString by viewModel.fileBrowserRootTab.collectAsState(initial = "DIRECTORIES")
+    val selectedRootTab = remember(rootTabString) {
+        try {
+            RootTab.valueOf(rootTabString)
+        } catch (e: IllegalArgumentException) {
+            RootTab.DIRECTORIES
+        }
+    }
     val isAudioFileView = !isDirectoryListLevel || selectedRootTab == RootTab.ALL
 
     // Pull-to-refresh state
@@ -447,10 +454,11 @@ fun FileBrowserScreen(
                                     }
                                     IconButton(
                                         onClick = {
-                                            selectedRootTab = if (selectedRootTab == RootTab.DIRECTORIES)
-                                                RootTab.ALL
+                                            val newTab = if (selectedRootTab == RootTab.DIRECTORIES)
+                                                RootTab.ALL.name
                                             else
-                                                RootTab.DIRECTORIES
+                                                RootTab.DIRECTORIES.name
+                                            viewModel.setFileBrowserRootTab(newTab)
                                         }
                                     ) {
                                         Icon(

@@ -21,6 +21,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -118,9 +119,9 @@ fun AlphabetScrollbarM3E(
         AlphabetScrollbarState(state, letterToIndex, totalItems)
     }
 
-    val contentSize = scrollbarState.contentSize
-    val viewportSize = scrollbarState.viewportSize
-    val scrollOffset = scrollbarState.scrollOffset
+    val contentSize by remember { derivedStateOf { scrollbarState.contentSize } }
+    val viewportSize by remember { derivedStateOf { scrollbarState.viewportSize } }
+    val scrollOffset by remember { derivedStateOf { scrollbarState.scrollOffset } }
 
     if (contentSize <= 0 || viewportSize <= 0) return
 
@@ -140,7 +141,7 @@ fun AlphabetScrollbarM3E(
     val maxThumbOffset = (viewportSize - thumbHeightPx).coerceAtLeast(0f)
     val thumbOffsetPx = scrollProgress * maxThumbOffset
 
-    val currentLetter = scrollbarState.getCurrentLetter()
+    val currentLetter by remember { derivedStateOf { scrollbarState.getCurrentLetter() } }
 
     // Haptic feedback on letter change
     if (isDragging && currentLetter != previousLetter) {

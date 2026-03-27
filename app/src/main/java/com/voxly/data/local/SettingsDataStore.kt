@@ -86,6 +86,8 @@ class SettingsDataStore @Inject constructor(
         val ARTIST_SEPARATORS = stringPreferencesKey("artist_separators")
         // Lyrics timestamp format settings
         val LYRICS_TIMESTAMP_FORMAT_ENABLED = booleanPreferencesKey("lyrics_timestamp_format_enabled")
+        // File browser root tab setting
+        val FILE_BROWSER_ROOT_TAB = stringPreferencesKey("file_browser_root_tab")
     }
 
     /**
@@ -1020,6 +1022,25 @@ class SettingsDataStore @Inject constructor(
         } else {
             // Old format: split by character (filter whitespace)
             raw.toCharArray().filter { !it.isWhitespace() }.map { it.toString() }.toSet()
+        }
+    }
+
+    // ==================== File Browser Settings ====================
+
+    /**
+     * File browser root tab preference flow (DIRECTORIES or ALL)
+     */
+    val fileBrowserRootTab: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[FILE_BROWSER_ROOT_TAB] ?: "DIRECTORIES"
+        }
+
+    /**
+     * Save file browser root tab preference
+     */
+    suspend fun setFileBrowserRootTab(tab: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[FILE_BROWSER_ROOT_TAB] = tab
         }
     }
 }

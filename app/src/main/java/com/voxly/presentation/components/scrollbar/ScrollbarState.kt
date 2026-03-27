@@ -2,6 +2,8 @@ package com.voxly.presentation.components.scrollbar
 
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
 import kotlin.math.max
 
 /**
@@ -32,14 +34,17 @@ class LazyListScrollbarState(
     private val listState: LazyListState
 ) : ScrollbarState {
 
-    override val contentSize: Int
-        get() = calculateContentSize()
+    override val contentSize: Int by derivedStateOf {
+        calculateContentSize()
+    }
 
-    override val scrollOffset: Int
-        get() = calculateScrollOffset()
+    override val scrollOffset: Int by derivedStateOf {
+        calculateScrollOffset()
+    }
 
-    override val viewportSize: Int
-        get() = calculateViewportSize()
+    override val viewportSize: Int by derivedStateOf {
+        calculateViewportSize()
+    }
 
     private fun calculateContentSize(): Int {
         val layoutInfo = listState.layoutInfo
@@ -117,14 +122,17 @@ class LazyGridScrollbarState(
     private val gridState: LazyGridState
 ) : ScrollbarState {
 
-    override val contentSize: Int
-        get() = calculateContentSize()
+    override val contentSize: Int by derivedStateOf {
+        calculateContentSize()
+    }
 
-    override val scrollOffset: Int
-        get() = calculateScrollOffset()
+    override val scrollOffset: Int by derivedStateOf {
+        calculateScrollOffset()
+    }
 
-    override val viewportSize: Int
-        get() = calculateViewportSize()
+    override val viewportSize: Int by derivedStateOf {
+        calculateViewportSize()
+    }
 
     private fun calculateContentSize(): Int {
         val layoutInfo = gridState.layoutInfo

@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -105,10 +106,10 @@ fun M3EScrollbar(
         }
     }
 
-    // Calculate dimensions
-    val contentSize = state.contentSize
-    val viewportSize = state.viewportSize
-    val scrollOffset = state.scrollOffset
+    // Calculate dimensions - using derivedStateOf for proper recomposition
+    val contentSize by remember { derivedStateOf { state.contentSize } }
+    val viewportSize by remember { derivedStateOf { state.viewportSize } }
+    val scrollOffset by remember { derivedStateOf { state.scrollOffset } }
 
     // Skip if not ready
     if (contentSize <= 0 || viewportSize <= 0) {
@@ -180,16 +181,20 @@ fun M3EScrollbar(
     )
 
     // Get current item index for bubble
-    val currentIndex = remember(scrollProgress, state) {
-        when (state) {
-            is LazyListScrollbarState -> state.getCurrentItemIndex()
-            is LazyGridScrollbarState -> state.getCurrentItemIndex()
-            else -> 0
+    val currentIndex by remember(state) {
+        derivedStateOf {
+            when (state) {
+                is LazyListScrollbarState -> state.getCurrentItemIndex()
+                is LazyGridScrollbarState -> state.getCurrentItemIndex()
+                else -> 0
+            }
         }
     }
 
-    val bubbleText = remember(currentIndex) {
-        bubbleFormatter?.invoke(currentIndex) ?: (currentIndex + 1).toString()
+    val bubbleText by remember(currentIndex) {
+        derivedStateOf {
+            bubbleFormatter?.invoke(currentIndex) ?: (currentIndex + 1).toString()
+        }
     }
 
     // Colors - using Material3 color scheme with enhanced contrast
