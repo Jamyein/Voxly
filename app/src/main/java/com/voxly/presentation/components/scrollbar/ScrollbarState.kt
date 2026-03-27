@@ -109,6 +109,20 @@ class LazyListScrollbarState(
 
         listState.scrollToItem(targetIndex)
     }
+
+    /**
+     * Smooth scroll to a specific progress using animated scroll.
+     * This provides smoother dragging experience.
+     */
+    suspend fun animateScrollToProgress(progress: Float, velocity: Float = 0f) {
+        val totalItems = listState.layoutInfo.totalItemsCount
+        if (totalItems <= 0) return
+
+        val targetIndex = (progress * (totalItems - 1)).toInt()
+            .coerceIn(0, totalItems - 1)
+
+        listState.animateScrollToItem(targetIndex)
+    }
 }
 
 /**
@@ -196,5 +210,19 @@ class LazyGridScrollbarState(
             .coerceIn(0, totalItems - 1)
 
         gridState.scrollToItem(targetIndex)
+    }
+
+    /**
+     * Smooth scroll to a specific progress using animated scroll.
+     * This provides smoother dragging experience.
+     */
+    suspend fun animateScrollToProgress(progress: Float, velocity: Float = 0f) {
+        val totalItems = gridState.layoutInfo.totalItemsCount
+        if (totalItems <= 0) return
+
+        val targetIndex = (progress * (totalItems - 1)).toInt()
+            .coerceIn(0, totalItems - 1)
+
+        gridState.animateScrollToItem(targetIndex)
     }
 }

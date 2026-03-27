@@ -6,8 +6,10 @@ import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.detectVerticalDragGestures
+import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -33,6 +35,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalView
@@ -73,7 +76,12 @@ fun M3EScrollbar(
 
     // Drag state
     var isDragging by remember { mutableStateOf(false) }
-    var dragOffsetFromThumb by remember { mutableFloatStateOf(0f) }
+    var dragStartY by remember { mutableFloatStateOf(0f) }
+    var dragStartProgress by remember { mutableFloatStateOf(0f) }
+    
+    // Track thumb bounds for drag detection
+    var thumbTopPx by remember { mutableFloatStateOf(0f) }
+    var thumbBottomPx by remember { mutableFloatStateOf(0f) }
     
     // Auto-hide state - track previous scroll offset to detect scroll changes
     var previousScrollOffset by remember { mutableStateOf(state.scrollOffset) }
@@ -132,6 +140,10 @@ fun M3EScrollbar(
 
     val maxThumbOffset = (viewportSize - thumbHeightPx).coerceAtLeast(0f)
     val thumbOffsetPx = scrollProgress * maxThumbOffset
+    
+    // Update thumb bounds for gesture detection
+    thumbTopPx = thumbOffsetPx
+    thumbBottomPx = thumbOffsetPx + thumbHeightPx
 
     // Animations - using high stiffness for snappy response
     val thumbWidth by animateDpAsState(
@@ -226,74 +238,36 @@ fun M3EScrollbar(
                 .background(trackColor)
         )
 
-        // Interactive area with tap and drag
+        // Track area - tap to jump
         Box(
             modifier = Modifier
                 .fillMaxHeight()
                 .width(config.touchAreaWidth)
                 .pointerInput(Unit) {
                     detectTapGestures { offset ->
-                        val tapProgress = (offset.y / size.height).coerceIn(0f, 1f)
-
-                        when (val s = state) {
-                            is LazyListScrollbarState -> {
-                                coroutineScope.launch {
-                                    s.scrollToProgress(tapProgress)
-                                }
-                            }
-                            is LazyGridScrollbarState -> {
-                                coroutineScope.launch {
-                                    s.scrollToProgress(tapProgress)
-                                }
-                            }
-                        }
-
-                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                    }
-                }
-                .pointerInput(Unit) {
-                    detectVerticalDragGestures(
-                        onDragStart = { offset ->
-                            val thumbCenterY = thumbOffsetPx + thumbHeightPx / 2
-                            dragOffsetFromThumb = offset.y - thumbCenterY
-                            isDragging = true
-                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
-                        },
-                        onDragEnd = {
-                            isDragging = false
-                        },
-                        onDragCancel = {
-                            isDragging = false
-                        },
-                        onVerticalDrag = { change, _ ->
-                            change.consume()
-
-                            val targetCenterY = change.position.y - dragOffsetFromThumb
-                            val targetThumbTop = (targetCenterY - thumbHeightPx / 2)
-                                .coerceIn(0f, maxThumbOffset)
-
-                            val newProgress = if (maxThumbOffset > 0) {
-                                targetThumbTop / maxThumbOffset
-                            } else 0f
+                        if (!isDragging) {
+                            val tapProgress = (offset.y / size.height).coerceIn(0f, 1f)
 
                             when (val s = state) {
                                 is LazyListScrollbarState -> {
                                     coroutineScope.launch {
-                                        s.scrollToProgress(newProgress)
+                                        s.scrollToProgress(tapProgress)
                                     }
                                 }
                                 is LazyGridScrollbarState -> {
                                     coroutineScope.launch {
-                                        s.scrollToProgress(newProgress)
+                                        s.scrollToProgress(tapProgress)
                                     }
                                 }
                             }
+
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                         }
-                    )
+                    }
                 }
         )
 
-        // Visual thumb with shadow and enhanced styling
+        // Visual thumb with shadow, enhanced styling and drag handling
         val thumbHeight = with(density) { thumbHeightPx.toDp() }
         val thumbOffset = with(density) { thumbOffsetPx.toDp() }
 
@@ -310,6 +284,54 @@ fun M3EScrollbar(
                 )
                 .clip(RoundedCornerShape(config.thumbCornerRadius))
                 .background(thumbColor)
+                .pointerInput(maxThumbOffset, thumbHeightPx) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(
+                            pass = PointerEventPass.Initial,
+                            requireUnconsumed = false
+                        )
+
+                        val touchY = down.position.y
+                        val grabPadding = 40f // Extra touch area for easier grabbing
+                        
+                        // Check if touch is on or near thumb (with generous padding)
+                        if (touchY >= thumbTopPx - grabPadding && touchY <= thumbBottomPx + grabPadding) {
+                            isDragging = true
+                            dragStartY = touchY
+                            dragStartProgress = scrollProgress
+                            down.consume()
+                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
+
+                            // Handle continuous drag
+                            drag(down.id) { change ->
+                                change.consume()
+                                
+                                val deltaY = change.position.y - dragStartY
+                                val deltaProgress = if (maxThumbOffset > 0) {
+                                    deltaY / maxThumbOffset
+                                } else 0f
+                                
+                                val newProgress = (dragStartProgress + deltaProgress).coerceIn(0f, 1f)
+
+                                when (val s = state) {
+                                    is LazyListScrollbarState -> {
+                                        coroutineScope.launch {
+                                            s.scrollToProgress(newProgress)
+                                        }
+                                    }
+                                    is LazyGridScrollbarState -> {
+                                        coroutineScope.launch {
+                                            s.scrollToProgress(newProgress)
+                                        }
+                                    }
+                                }
+                            }
+
+                            isDragging = false
+                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
+                        }
+                    }
+                }
         )
 
         // Preview bubble with enhanced styling
