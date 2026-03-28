@@ -7,9 +7,8 @@ updates:
       day: "monday"
     open-pull-requests-limit: 10
     groups:
-      patch-updates:
-        update-types: ["patch"]
-      minor-updates:
-        update-types: ["minor"]
+      security:
+        applies-to: security-updates
+        patterns: ["*"]
     labels:
       - "dependencies"
