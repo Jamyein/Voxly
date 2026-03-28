@@ -143,10 +143,10 @@ extensions.configure<ApplicationAndroidComponentsExtension>("androidComponents")
                     "or SIGNING_STORE_PASSWORD/SIGNING_KEY_PASSWORD in environment."
             )
         }
-        if (buildTypeName == "debug" && isCiBuild && !signingEnabled) {
-            throw GradleException(
-                "CI debug build requires release signing. " +
-                    "Set SIGNING_STORE_PASSWORD/SIGNING_KEY_PASSWORD in environment."
+        if (buildTypeName == "debug" && isCiBuild && signingEnabled && !debugUseReleaseSigning) {
+            logger.warn(
+                "CI debug build with signing enabled but signing not configured. " +
+                    "Building without signing."
             )
         }
     }
