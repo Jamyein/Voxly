@@ -35,7 +35,7 @@ android {
 
     defaultConfig {
         applicationId = "com.voxly"
-        minSdk = 28
+        minSdk = 30
         targetSdk = 36
         versionCode = 35
         versionName = "1.5.3"
@@ -90,13 +90,13 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 
     //noinspection WrongGradleMethod
     kotlin {
-        jvmToolchain(17)
+        jvmToolchain(21)
         compilerOptions {
             freeCompilerArgs.addAll(
                 "-Xannotation-default-target=param-property",
@@ -162,26 +162,26 @@ dependencies {
     // Chinese conversion (ICU4J)
 
     // Compose BOM (用于其他 Compose 依赖)
-    implementation(platform("androidx.compose:compose-bom:2026.03.00"))
+    implementation(platform("androidx.compose:compose-bom:2026.03.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
     // 使用 Kotlin 2.3.10 配合 Compose alpha 版本
-    implementation("androidx.compose.animation:animation:1.11.0-beta01")
-    implementation("androidx.compose.animation:animation-core:1.11.0-beta01")
-    implementation("androidx.compose.animation:animation-graphics:1.11.0-beta01")
+    implementation("androidx.compose.animation:animation:1.11.0-beta02")
+    implementation("androidx.compose.animation:animation-core:1.11.0-beta02")
+    implementation("androidx.compose.animation:animation-graphics:1.11.0-beta02")
     // Material3 Alpha 版本 - 覆盖 BOM 中的稳定版以使用最新特性
-    implementation("androidx.compose.material3:material3:1.5.0-alpha15")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha16")
     // Material Design 3 Expressive - RoundedPolygon 形状支持
     implementation("androidx.graphics:graphics-shapes:1.1.0")
-    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha15")
-    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha15")
+    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha16")
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha16")
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
 
     // Google Fonts - Variable Font支持 (使用Compose BOM中的版本)
-    implementation("androidx.compose.ui:ui-text-google-fonts")
+    implementation("androidx.compose.ui:ui-text-google-fonts:1.11.0-beta02")
     implementation("androidx.appcompat:appcompat:1.7.1")
 
     // Navigation 3 - 使用新的导航架构解决退出页面点击穿透问题
@@ -248,7 +248,7 @@ dependencies {
 
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2026.03.00"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.03.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     // Keep preview tooling out of runtime APK.
