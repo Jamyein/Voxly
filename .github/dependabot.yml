@@ -6,3 +6,15 @@ updates:
       interval: "weekly"
       day: "monday"
     open-pull-requests-limit: 10
+    groups:
+      patch-updates:
+        update-types: ["patch"]
+      minor-updates:
+        update-types: ["minor"]
+    auto-merge:
+      enabled: true
+      update-types:
+        - "patch"
+        - "minor"
+    labels:
+      - "dependencies"
