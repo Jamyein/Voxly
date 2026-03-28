@@ -22,7 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.M3EScrollbar
+import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 @Composable
@@ -86,8 +86,8 @@ internal fun AllAudiosTabContent(
         }
         
         if (audios.isNotEmpty()) {
-            M3EScrollbar(
-                listState = lazyListState,
+            LazyColumnScrollbar(
+                state = lazyListState,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp)

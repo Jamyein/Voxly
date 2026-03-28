@@ -45,7 +45,7 @@ import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.ArtistGroup
-import com.voxly.presentation.components.M3EScrollbar
+import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.screens.filebrowser.ArtistListItem
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import kotlinx.coroutines.launch
@@ -198,8 +198,8 @@ private fun ArtistTabContent(
         }
         
         if (artists.isNotEmpty()) {
-            M3EScrollbar(
-                listState = lazyListState,
+            LazyColumnScrollbar(
+                state = lazyListState,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp)

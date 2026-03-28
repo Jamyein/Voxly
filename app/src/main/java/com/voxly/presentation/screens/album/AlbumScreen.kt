@@ -65,8 +65,8 @@ import com.voxly.core.util.SortUtil
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.components.M3EGridScrollbar
-import com.voxly.presentation.components.M3EScrollbar
+import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
+import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.sharedElementIfAvailable
@@ -264,8 +264,8 @@ private fun AlbumTabContent(
             }
             
             if (!isYearSort && albums.isNotEmpty()) {
-                M3EGridScrollbar(
-                    gridState = gridState,
+                LazyVerticalGridScrollbar(
+                    state = gridState,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 4.dp)
@@ -397,8 +397,8 @@ private fun AlbumYearGroupedContent(
             }
         }
         
-        M3EScrollbar(
-            listState = listState,
+        LazyColumnScrollbar(
+            state = listState,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 4.dp)

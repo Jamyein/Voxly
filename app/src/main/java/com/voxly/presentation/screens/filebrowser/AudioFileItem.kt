@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.AlphabetScrollbarM3E
+import com.voxly.presentation.components.scrollbar.AlphabetScrollbarM3E
 import com.voxly.presentation.components.AudioFileStandardRow
 import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
@@ -172,7 +172,7 @@ internal fun AudioFileListWithIndexer(
 
         if (showIndexer) {
             AlphabetScrollbarM3E(
-                listState = listState,
+                state = listState,
                 letterToIndex = letterToIndex,
                 totalItems = files.size,
                 modifier = Modifier
