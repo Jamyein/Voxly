@@ -96,7 +96,7 @@ android {
 
     //noinspection WrongGradleMethod
     kotlin {
-        jvmToolchain(21)
+        jvmToolchain(25)
         compilerOptions {
             freeCompilerArgs.addAll(
                 "-Xannotation-default-target=param-property",
