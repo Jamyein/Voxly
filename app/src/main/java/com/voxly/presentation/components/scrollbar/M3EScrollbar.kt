@@ -1,15 +1,12 @@
 package com.voxly.presentation.components.scrollbar
 
-import android.view.HapticFeedbackConstants
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -17,6 +14,7 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -25,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -34,11 +33,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -46,15 +46,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Material 3 Expressive scrollbar composable with enhanced responsiveness and styling.
  *
- * Key improvements:
- * - **Snappy animations**: High stiffness for immediate visual feedback
- * - **Shadow effects**: Depth for better visual hierarchy
- * - **Smooth color transitions**: Gradient-like feel without actual gradients
- * - **Optimized touch response**: Direct manipulation feel
+ * M3E features:
+ * - Spring-based bouncy animations for thumb width and bubble scale
+ * - VelocityTracker-based inertia on drag release
+ * - Compose HapticFeedback for grab and per-item tick sensations
+ * - Auto-hide with configurable delay
+ * - 48dp touch target area following M3 accessibility guidelines
+ * - CircleShape pill thumb for M3E aesthetic
  *
  * @param state The scrollbar state providing scroll information
  * @param modifier Modifier for the scrollbar container
@@ -71,63 +75,36 @@ fun M3EScrollbar(
     bubbleFormatter: ((Int) -> String)? = null
 ) {
     val density = LocalDensity.current
-    val view = LocalView.current
+    val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
+    val velocityTracker = remember { VelocityTracker() }
 
-    // Drag state
     var isDragging by remember { mutableStateOf(false) }
-    var dragStartY by remember { mutableFloatStateOf(0f) }
-    var dragStartProgress by remember { mutableFloatStateOf(0f) }
-    
-    // Track thumb bounds for drag detection
-    var thumbTopPx by remember { mutableFloatStateOf(0f) }
-    var thumbBottomPx by remember { mutableFloatStateOf(0f) }
-    
-    // Auto-hide state - track previous scroll offset to detect scroll changes
-    var previousScrollOffset by remember { mutableStateOf(state.scrollOffset) }
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var containerHeight by remember { mutableFloatStateOf(0f) }
     var isVisible by remember { mutableStateOf(false) }
-    
-    // Monitor scroll changes to show scrollbar
-    LaunchedEffect(state.scrollOffset) {
-        val currentOffset = state.scrollOffset
-        if (currentOffset != previousScrollOffset) {
-            // Scroll position changed, show scrollbar
+    var lastHapticIndex by remember { mutableIntStateOf(-1) }
+
+    val contentSize by remember { derivedStateOf { state.contentSize } }
+    val viewportSize by remember { derivedStateOf { state.viewportSize } }
+    val scrollOffset by remember { derivedStateOf { state.scrollOffset } }
+
+    if (contentSize <= 0 || viewportSize <= 0) return
+
+    val scrollRange = (contentSize - viewportSize).coerceAtLeast(1)
+    val scrollProgress = (scrollOffset.toFloat() / scrollRange).coerceIn(0f, 1f)
+
+    // Smart auto-hide
+    LaunchedEffect(state.isScrollInProgress, isDragging) {
+        if (state.isScrollInProgress || isDragging) {
             isVisible = true
-            previousScrollOffset = currentOffset
-            
-            // Hide after delay
-            delay(config.hideDelayMillis)
-            if (!isDragging) {
-                isVisible = false
-            }
-        }
-    }
-    
-    // Keep visible while dragging
-    LaunchedEffect(isDragging) {
-        if (isDragging) {
-            isVisible = true
-        } else if (state.scrollOffset == previousScrollOffset) {
-            // Drag ended, start hide timer
+        } else {
             delay(config.hideDelayMillis)
             isVisible = false
         }
     }
 
-    // Calculate dimensions - using derivedStateOf for proper recomposition
-    val contentSize by remember { derivedStateOf { state.contentSize } }
-    val viewportSize by remember { derivedStateOf { state.viewportSize } }
-    val scrollOffset by remember { derivedStateOf { state.scrollOffset } }
-
-    // Skip if not ready
-    if (contentSize <= 0 || viewportSize <= 0) {
-        return
-    }
-
-    val scrollRange = (contentSize - viewportSize).coerceAtLeast(1)
-    val scrollProgress = (scrollOffset.toFloat() / scrollRange).coerceIn(0f, 1f)
-
-    // Calculate thumb dimensions
+    // Thumb dimensions
     val thumbHeightPx = if (contentSize > 0) {
         (viewportSize.toFloat() / contentSize * viewportSize)
             .coerceIn(
@@ -139,17 +116,17 @@ fun M3EScrollbar(
     }
 
     val maxThumbOffset = (viewportSize - thumbHeightPx).coerceAtLeast(0f)
-    val thumbOffsetPx = scrollProgress * maxThumbOffset
-    
-    // Update thumb bounds for gesture detection
-    thumbTopPx = thumbOffsetPx
-    thumbBottomPx = thumbOffsetPx + thumbHeightPx
+    val thumbOffsetPx = if (isDragging) {
+        dragY.coerceIn(0f, maxThumbOffset)
+    } else {
+        scrollProgress * maxThumbOffset
+    }
 
-    // Animations - using high stiffness for snappy response
+    // --- M3E spring animations ---
     val thumbWidth by animateDpAsState(
         targetValue = if (isDragging) config.thumbWidthDragging else config.thumbWidth,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
+            dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = config.thumbStiffness
         ),
         label = "thumb_width"
@@ -164,35 +141,24 @@ fun M3EScrollbar(
         label = "track_alpha"
     )
 
+    val bubbleScale by animateFloatAsState(
+        targetValue = if (isDragging && showBubble) 1f else 0.5f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "bubble_scale"
+    )
+
     val bubbleAlpha by animateFloatAsState(
         targetValue = if (isDragging && showBubble) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = config.visualFeedbackStiffness
-        ),
         label = "bubble_alpha"
     )
 
-    val bubbleScale by animateFloatAsState(
-        targetValue = if (isDragging && showBubble) 1f else 0.8f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = config.visualFeedbackStiffness
-        ),
-        label = "bubble_scale"
-    )
-    
-    // Overall scrollbar visibility animation
     val scrollbarAlpha by animateFloatAsState(
         targetValue = if (isVisible || isDragging) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "scrollbar_alpha"
     )
 
-    // Get current item index for bubble
+    // Current index for bubble text
     val currentIndex by remember(state) {
         derivedStateOf {
             when (state) {
@@ -209,13 +175,12 @@ fun M3EScrollbar(
         }
     }
 
-    // Colors - using Material3 color scheme with enhanced contrast
+    // M3E colors
     val thumbColor = if (isDragging) {
         MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f)
     }
-
     val trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
     val bubbleColor = MaterialTheme.colorScheme.primaryContainer
     val bubbleTextColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -228,7 +193,7 @@ fun M3EScrollbar(
             .alpha(scrollbarAlpha),
         contentAlignment = Alignment.CenterEnd
     ) {
-        // Track background with subtle styling
+        // Track background
         Box(
             modifier = Modifier
                 .width(config.thumbWidth)
@@ -238,7 +203,7 @@ fun M3EScrollbar(
                 .background(trackColor)
         )
 
-        // Track area - tap to jump
+        // Touch area: tap to jump + drag to scroll
         Box(
             modifier = Modifier
                 .fillMaxHeight()
@@ -247,27 +212,70 @@ fun M3EScrollbar(
                     detectTapGestures { offset ->
                         if (!isDragging) {
                             val tapProgress = (offset.y / size.height).coerceIn(0f, 1f)
-
                             when (val s = state) {
                                 is LazyListScrollbarState -> {
-                                    coroutineScope.launch {
-                                        s.scrollToProgress(tapProgress)
-                                    }
+                                    coroutineScope.launch { s.scrollToProgress(tapProgress) }
                                 }
                                 is LazyGridScrollbarState -> {
-                                    coroutineScope.launch {
-                                        s.scrollToProgress(tapProgress)
-                                    }
+                                    coroutineScope.launch { s.scrollToProgress(tapProgress) }
                                 }
                             }
-
-                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
                     }
                 }
+                .pointerInput(maxThumbOffset) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            dragY = offset.y
+                            velocityTracker.resetTracking()
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            velocityTracker.addPointerInputChange(change)
+                            dragY = change.position.y.coerceIn(0f, maxThumbOffset)
+
+                            val fraction = (dragY / maxThumbOffset).coerceIn(0f, 1f)
+                            val targetIndex = (fraction * (state.totalItemsCount - 1))
+                                .toInt()
+                                .coerceIn(0, (state.totalItemsCount - 1).coerceAtLeast(0))
+
+                            // Per-item haptic tick
+                            if (targetIndex != lastHapticIndex) {
+                                haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                lastHapticIndex = targetIndex
+                            }
+
+                            when (val s = state) {
+                                is LazyListScrollbarState -> {
+                                    coroutineScope.launch { s.scrollToProgress(fraction) }
+                                }
+                                is LazyGridScrollbarState -> {
+                                    coroutineScope.launch { s.scrollToProgress(fraction) }
+                                }
+                            }
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                            lastHapticIndex = -1
+                            val velocity = velocityTracker.calculateVelocity().y
+                            if (abs(velocity) > 500f) {
+                                coroutineScope.launch {
+                                    state.scrollByVelocity(velocity)
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            isDragging = false
+                            lastHapticIndex = -1
+                        }
+                    )
+                }
         )
 
-        // Visual thumb with shadow, enhanced styling and drag handling
+        // Thumb (pill shape for M3E)
         val thumbHeight = with(density) { thumbHeightPx.toDp() }
         val thumbOffset = with(density) { thumbOffsetPx.toDp() }
 
@@ -279,83 +287,27 @@ fun M3EScrollbar(
                 .offset(y = thumbOffset)
                 .shadow(
                     elevation = if (isDragging) config.thumbElevation * 1.5f else config.thumbElevation,
-                    shape = RoundedCornerShape(config.thumbCornerRadius),
+                    shape = CircleShape,
                     clip = false
                 )
-                .clip(RoundedCornerShape(config.thumbCornerRadius))
+                .clip(CircleShape)
                 .background(thumbColor)
-                .pointerInput(maxThumbOffset, thumbHeightPx) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(
-                            pass = PointerEventPass.Initial,
-                            requireUnconsumed = false
-                        )
-
-                        val touchY = down.position.y
-                        val grabPadding = 40f // Extra touch area for easier grabbing
-                        
-                        // Check if touch is on or near thumb (with generous padding)
-                        if (touchY >= thumbTopPx - grabPadding && touchY <= thumbBottomPx + grabPadding) {
-                            isDragging = true
-                            dragStartY = touchY
-                            dragStartProgress = scrollProgress
-                            down.consume()
-                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
-
-                            // Handle continuous drag
-                            drag(down.id) { change ->
-                                change.consume()
-                                
-                                val deltaY = change.position.y - dragStartY
-                                val deltaProgress = if (maxThumbOffset > 0) {
-                                    deltaY / maxThumbOffset
-                                } else 0f
-                                
-                                val newProgress = (dragStartProgress + deltaProgress).coerceIn(0f, 1f)
-
-                                when (val s = state) {
-                                    is LazyListScrollbarState -> {
-                                        coroutineScope.launch {
-                                            s.scrollToProgress(newProgress)
-                                        }
-                                    }
-                                    is LazyGridScrollbarState -> {
-                                        coroutineScope.launch {
-                                            s.scrollToProgress(newProgress)
-                                        }
-                                    }
-                                }
-                            }
-
-                            isDragging = false
-                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
-                        }
-                    }
-                }
         )
 
-        // Preview bubble with enhanced styling
+        // Preview bubble (M3E spring bounce)
         if (showBubble) {
             Box(
                 modifier = Modifier
                     .offset {
                         IntOffset(
                             x = -(config.touchAreaWidth + 8.dp).roundToPx(),
-                            y = (thumbOffsetPx + thumbHeightPx / 2 - config.bubbleSize.toPx() / 2).toInt()
+                            y = (thumbOffsetPx + thumbHeightPx / 2 - config.bubbleSize.toPx() / 2).roundToInt()
                         )
                     }
                     .alpha(bubbleAlpha)
-                    .graphicsLayer {
-                        scaleX = bubbleScale
-                        scaleY = bubbleScale
-                    }
-                    .size(config.bubbleSize)
-                    .shadow(
-                        elevation = config.bubbleElevation,
-                        shape = RoundedCornerShape(config.bubbleCornerRadius),
-                        clip = false
-                    )
-                    .clip(RoundedCornerShape(config.bubbleCornerRadius))
+                    .size(config.bubbleSize * bubbleScale)
+                    .shadow(elevation = config.bubbleElevation, shape = CircleShape)
+                    .clip(CircleShape)
                     .background(bubbleColor),
                 contentAlignment = Alignment.Center
             ) {

@@ -10,10 +10,21 @@ import androidx.compose.ui.Modifier
  * Creates a Material 3 Expressive scrollbar for a LazyColumn.
  *
  * This is a convenience function that creates the appropriate ScrollbarState
- * and renders the scrollbar. Use this when you want a standalone scrollbar
- * composable (as a sibling to your LazyColumn).
+ * and renders the scrollbar. Use this as a sibling composable to your LazyColumn
+ * inside a Box.
  *
- * For Modifier-based approach, use [Modifier.m3eScrollbar] instead.
+ * Usage:
+ * ```kotlin
+ * Box(modifier = Modifier.fillMaxSize()) {
+ *     LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+ *         // items
+ *     }
+ *     LazyColumnScrollbar(
+ *         state = listState,
+ *         modifier = Modifier.align(Alignment.CenterEnd)
+ *     )
+ * }
+ * ```
  *
  * @param state The LazyListState of the LazyColumn
  * @param modifier Modifier for the scrollbar container
@@ -70,53 +81,4 @@ fun LazyVerticalGridScrollbar(
         showBubble = showBubble,
         bubbleFormatter = bubbleFormatter
     )
-}
-
-/**
- * Modifier extension to add a Material 3 Expressive scrollbar to a LazyColumn.
- *
- * Usage:
- * ```kotlin
- * LazyColumn(
- *     state = listState,
- *     modifier = Modifier.fillMaxSize().m3eScrollbar(listState)
- * ) {
- *     // items
- * }
- * ```
- *
- * @param state The LazyListState of the LazyColumn
- * @param showBubble Whether to show the preview bubble
- * @param bubbleFormatter Optional formatter for bubble text
- * @param config Optional scrollbar configuration
- */
-@Composable
-fun Modifier.m3eScrollbar(
-    state: LazyListState,
-    showBubble: Boolean = true,
-    bubbleFormatter: ((Int) -> String)? = null,
-    config: ScrollbarConfig = ScrollbarConfig.Default
-): Modifier {
-    // This is a placeholder - Modifier-based approach requires custom layout
-    // For now, use LazyColumnScrollbar composable instead
-    return this
-}
-
-/**
- * Modifier extension to add a Material 3 Expressive scrollbar to a LazyVerticalGrid.
- *
- * @param state The LazyGridState of the LazyVerticalGrid
- * @param showBubble Whether to show the preview bubble
- * @param bubbleFormatter Optional formatter for bubble text
- * @param config Optional scrollbar configuration
- */
-@Composable
-fun Modifier.m3eGridScrollbar(
-    state: LazyGridState,
-    showBubble: Boolean = true,
-    bubbleFormatter: ((Int) -> String)? = null,
-    config: ScrollbarConfig = ScrollbarConfig.Default
-): Modifier {
-    // Placeholder - use LazyVerticalGridScrollbar composable instead
-    return this
 }

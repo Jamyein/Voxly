@@ -1,5 +1,9 @@
 package com.voxly.presentation.components.scrollbar
 
+import androidx.compose.animation.core.exponentialDecay
+import androidx.compose.foundation.MutatePriority
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.derivedStateOf
@@ -9,7 +13,7 @@ import kotlin.math.max
 /**
  * Interface representing the state of a scrollbar.
  *
- * This mimics the official [androidx.compose.foundation.ScrollIndicatorState] API
+ * Mimics the official [androidx.compose.foundation.ScrollIndicatorState] API
  * for future compatibility, while working with current Compose versions.
  */
 interface ScrollbarState {
@@ -21,6 +25,15 @@ interface ScrollbarState {
 
     /** The size of the visible portion of the scrollable content, typically in pixels */
     val viewportSize: Int
+
+    /** Whether the list is currently scrolling */
+    val isScrollInProgress: Boolean
+
+    /** Total number of items in the list */
+    val totalItemsCount: Int
+
+    /** Scroll by velocity for inertia effect */
+    suspend fun scrollByVelocity(velocity: Float)
 }
 
 /**
@@ -31,7 +44,7 @@ interface ScrollbarState {
  * @param listState The LazyListState to track
  */
 class LazyListScrollbarState(
-    private val listState: LazyListState
+    val listState: LazyListState
 ) : ScrollbarState {
 
     override val contentSize: Int by derivedStateOf {
@@ -44,6 +57,14 @@ class LazyListScrollbarState(
 
     override val viewportSize: Int by derivedStateOf {
         calculateViewportSize()
+    }
+
+    override val isScrollInProgress: Boolean by derivedStateOf {
+        listState.isScrollInProgress
+    }
+
+    override val totalItemsCount: Int by derivedStateOf {
+        listState.layoutInfo.totalItemsCount
     }
 
     private fun calculateContentSize(): Int {
@@ -82,9 +103,6 @@ class LazyListScrollbarState(
         return max(0, layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset)
     }
 
-    /**
-     * Get the current item index based on scroll progress.
-     */
     fun getCurrentItemIndex(): Int {
         val totalItems = listState.layoutInfo.totalItemsCount
         if (totalItems <= 0) return 0
@@ -97,9 +115,6 @@ class LazyListScrollbarState(
         return (progress * (totalItems - 1)).toInt().coerceIn(0, totalItems - 1)
     }
 
-    /**
-     * Scroll to a specific progress (0.0 to 1.0).
-     */
     suspend fun scrollToProgress(progress: Float) {
         val totalItems = listState.layoutInfo.totalItemsCount
         if (totalItems <= 0) return
@@ -110,18 +125,10 @@ class LazyListScrollbarState(
         listState.scrollToItem(targetIndex)
     }
 
-    /**
-     * Smooth scroll to a specific progress using animated scroll.
-     * This provides smoother dragging experience.
-     */
-    suspend fun animateScrollToProgress(progress: Float, velocity: Float = 0f) {
-        val totalItems = listState.layoutInfo.totalItemsCount
-        if (totalItems <= 0) return
-
-        val targetIndex = (progress * (totalItems - 1)).toInt()
-            .coerceIn(0, totalItems - 1)
-
-        listState.animateScrollToItem(targetIndex)
+    override suspend fun scrollByVelocity(velocity: Float) {
+        listState.scroll {
+            scrollBy(velocity / 5f)
+        }
     }
 }
 
@@ -133,7 +140,7 @@ class LazyListScrollbarState(
  * @param gridState The LazyGridState to track
  */
 class LazyGridScrollbarState(
-    private val gridState: LazyGridState
+    val gridState: LazyGridState
 ) : ScrollbarState {
 
     override val contentSize: Int by derivedStateOf {
@@ -146,6 +153,14 @@ class LazyGridScrollbarState(
 
     override val viewportSize: Int by derivedStateOf {
         calculateViewportSize()
+    }
+
+    override val isScrollInProgress: Boolean by derivedStateOf {
+        gridState.isScrollInProgress
+    }
+
+    override val totalItemsCount: Int by derivedStateOf {
+        gridState.layoutInfo.totalItemsCount
     }
 
     private fun calculateContentSize(): Int {
@@ -184,9 +199,6 @@ class LazyGridScrollbarState(
         return max(0, layoutInfo.viewportEndOffset - layoutInfo.viewportStartOffset)
     }
 
-    /**
-     * Get the current item index based on scroll progress.
-     */
     fun getCurrentItemIndex(): Int {
         val totalItems = gridState.layoutInfo.totalItemsCount
         if (totalItems <= 0) return 0
@@ -199,9 +211,6 @@ class LazyGridScrollbarState(
         return (progress * (totalItems - 1)).toInt().coerceIn(0, totalItems - 1)
     }
 
-    /**
-     * Scroll to a specific progress (0.0 to 1.0).
-     */
     suspend fun scrollToProgress(progress: Float) {
         val totalItems = gridState.layoutInfo.totalItemsCount
         if (totalItems <= 0) return
@@ -212,17 +221,9 @@ class LazyGridScrollbarState(
         gridState.scrollToItem(targetIndex)
     }
 
-    /**
-     * Smooth scroll to a specific progress using animated scroll.
-     * This provides smoother dragging experience.
-     */
-    suspend fun animateScrollToProgress(progress: Float, velocity: Float = 0f) {
-        val totalItems = gridState.layoutInfo.totalItemsCount
-        if (totalItems <= 0) return
-
-        val targetIndex = (progress * (totalItems - 1)).toInt()
-            .coerceIn(0, totalItems - 1)
-
-        gridState.animateScrollToItem(targetIndex)
+    override suspend fun scrollByVelocity(velocity: Float) {
+        gridState.scroll {
+            scrollBy(velocity / 5f)
+        }
     }
 }

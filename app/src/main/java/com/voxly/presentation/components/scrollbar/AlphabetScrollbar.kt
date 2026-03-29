@@ -1,15 +1,12 @@
 package com.voxly.presentation.components.scrollbar
 
-import android.view.HapticFeedbackConstants
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.awaitEachGesture
-import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
-import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
@@ -18,6 +15,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -35,11 +33,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.input.pointer.util.addPointerInputChange
 import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -47,17 +46,19 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.roundToInt
 
 /**
  * Material 3 Expressive scrollbar with alphabet preview for alphabetically sorted lists.
  *
- * Features:
- * - Letter preview bubble when dragging
- * - Haptic feedback on letter change
- * - Tap-to-jump to letter section
- * - Drag-to-scroll through alphabet
- * - Chinese pinyin support
+ * M3E features:
+ * - Letter preview bubble with spring bounce animation
+ * - Per-letter haptic feedback (CLOCK_TICK) on letter change
+ * - VelocityTracker-based inertia on drag release
+ * - Tap-to-jump and drag-to-scroll through alphabet
+ * - Chinese pinyin initial support via ICU Transliterator
  *
  * @param state The LazyListState of the LazyColumn
  * @param letterToIndex Map of first letter to first occurrence index
@@ -75,49 +76,22 @@ fun AlphabetScrollbarM3E(
 ) {
     if (totalItems <= 0) return
 
-    val view = LocalView.current
+    val haptic = LocalHapticFeedback.current
     val coroutineScope = rememberCoroutineScope()
     val density = LocalDensity.current
+    val velocityTracker = remember { VelocityTracker() }
 
     var isDragging by remember { mutableStateOf(false) }
-    var dragStartY by remember { mutableFloatStateOf(0f) }
-    var dragStartProgress by remember { mutableFloatStateOf(0f) }
-    var previousLetter by remember { mutableStateOf('A') }
-    
-    // Track thumb bounds for drag detection
-    var thumbTopPx by remember { mutableFloatStateOf(0f) }
-    var thumbBottomPx by remember { mutableFloatStateOf(0f) }
-    
-    // Auto-hide state - track previous scroll offset to detect scroll changes
-    var previousScrollOffset by remember { mutableStateOf(state.firstVisibleItemScrollOffset) }
+    var dragY by remember { mutableFloatStateOf(0f) }
+    var containerHeight by remember { mutableFloatStateOf(0f) }
+    var previousLetter by remember { mutableStateOf(' ') }
     var isVisible by remember { mutableStateOf(false) }
-    
-    // Monitor scroll changes to show scrollbar
-    LaunchedEffect(state.firstVisibleItemScrollOffset, state.firstVisibleItemIndex) {
-        val currentOffset = state.firstVisibleItemScrollOffset
-        val currentIndex = state.firstVisibleItemIndex
-        val combinedOffset = currentIndex * 10000 + currentOffset // Combine index and offset for detection
-        val previousCombined = previousScrollOffset
-        
-        if (combinedOffset != previousCombined) {
-            // Scroll position changed, show scrollbar
-            isVisible = true
-            previousScrollOffset = combinedOffset
-            
-            // Hide after delay
-            delay(config.hideDelayMillis)
-            if (!isDragging) {
-                isVisible = false
-            }
-        }
-    }
-    
-    // Keep visible while dragging
-    LaunchedEffect(isDragging) {
-        if (isDragging) {
+
+    // Smart auto-hide using scroll progress
+    LaunchedEffect(state.isScrollInProgress, isDragging) {
+        if (state.isScrollInProgress || isDragging) {
             isVisible = true
         } else {
-            // Drag ended, start hide timer
             delay(config.hideDelayMillis)
             isVisible = false
         }
@@ -147,25 +121,25 @@ fun AlphabetScrollbarM3E(
     }
 
     val maxThumbOffset = (viewportSize - thumbHeightPx).coerceAtLeast(0f)
-    val thumbOffsetPx = scrollProgress * maxThumbOffset
-    
-    // Update thumb bounds for gesture detection
-    thumbTopPx = thumbOffsetPx
-    thumbBottomPx = thumbOffsetPx + thumbHeightPx
+    val thumbOffsetPx = if (isDragging) {
+        dragY.coerceIn(0f, maxThumbOffset)
+    } else {
+        scrollProgress * maxThumbOffset
+    }
 
     val currentLetter by remember { derivedStateOf { scrollbarState.getCurrentLetter() } }
 
-    // Haptic feedback on letter change
+    // Per-letter haptic tick
     if (isDragging && currentLetter != previousLetter) {
-        view.performHapticFeedback(HapticFeedbackConstants.CLOCK_TICK)
+        haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
         previousLetter = currentLetter
     }
 
-    // Animations - using high stiffness for snappy response
+    // --- M3E spring animations ---
     val thumbWidth by animateDpAsState(
         targetValue = if (isDragging) config.thumbWidthDragging else config.thumbWidth,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
+            dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = config.thumbStiffness
         ),
         label = "thumb_width"
@@ -180,41 +154,29 @@ fun AlphabetScrollbarM3E(
         label = "track_alpha"
     )
 
+    val bubbleScale by animateFloatAsState(
+        targetValue = if (isDragging) 1f else 0.5f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "bubble_scale"
+    )
+
     val bubbleAlpha by animateFloatAsState(
         targetValue = if (isDragging) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = config.visualFeedbackStiffness
-        ),
         label = "bubble_alpha"
     )
 
-    val bubbleScale by animateFloatAsState(
-        targetValue = if (isDragging) 1f else 0.8f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = config.visualFeedbackStiffness
-        ),
-        label = "bubble_scale"
-    )
-    
-    // Overall scrollbar visibility animation
     val scrollbarAlpha by animateFloatAsState(
         targetValue = if (isVisible || isDragging) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
+        animationSpec = spring(stiffness = Spring.StiffnessMedium),
         label = "scrollbar_alpha"
     )
 
-    // Colors - using Material3 color scheme with enhanced contrast
+    // M3E colors
     val thumbColor = if (isDragging) {
         MaterialTheme.colorScheme.primary
     } else {
         MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.8f)
     }
-
     val trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
     val bubbleColor = MaterialTheme.colorScheme.primaryContainer
     val bubbleTextColor = MaterialTheme.colorScheme.onPrimaryContainer
@@ -227,7 +189,7 @@ fun AlphabetScrollbarM3E(
             .alpha(scrollbarAlpha),
         contentAlignment = Alignment.CenterEnd
     ) {
-        // Track background with subtle styling
+        // Track background
         Box(
             modifier = Modifier
                 .width(config.thumbWidth)
@@ -237,7 +199,7 @@ fun AlphabetScrollbarM3E(
                 .background(trackColor)
         )
 
-        // Track area - tap to jump
+        // Touch area: tap to jump + drag to scroll
         Box(
             modifier = Modifier
                 .fillMaxHeight()
@@ -249,13 +211,48 @@ fun AlphabetScrollbarM3E(
                             coroutineScope.launch {
                                 scrollbarState.scrollToProgress(tapProgress)
                             }
-                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
                     }
                 }
+                .pointerInput(maxThumbOffset) {
+                    detectDragGestures(
+                        onDragStart = { offset ->
+                            isDragging = true
+                            dragY = offset.y
+                            velocityTracker.resetTracking()
+                            previousLetter = currentLetter
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onDrag = { change, _ ->
+                            change.consume()
+                            velocityTracker.addPointerInputChange(change)
+                            dragY = change.position.y.coerceIn(0f, maxThumbOffset)
+
+                            val fraction = (dragY / maxThumbOffset).coerceIn(0f, 1f)
+                            coroutineScope.launch {
+                                scrollbarState.scrollToProgress(fraction)
+                            }
+                        },
+                        onDragEnd = {
+                            isDragging = false
+                            val velocity = velocityTracker.calculateVelocity().y
+                            if (abs(velocity) > 500f) {
+                                coroutineScope.launch {
+                                    state.scroll {
+                                        scrollBy(velocity / 5f)
+                                    }
+                                }
+                            }
+                        },
+                        onDragCancel = {
+                            isDragging = false
+                        }
+                    )
+                }
         )
 
-        // Visual thumb with shadow, enhanced styling and drag handling
+        // Thumb (pill shape)
         val thumbHeight = with(density) { thumbHeightPx.toDp() }
         val thumbOffset = with(density) { thumbOffsetPx.toDp() }
 
@@ -267,69 +264,26 @@ fun AlphabetScrollbarM3E(
                 .offset(y = thumbOffset)
                 .shadow(
                     elevation = if (isDragging) config.thumbElevation * 1.5f else config.thumbElevation,
-                    shape = RoundedCornerShape(config.thumbCornerRadius),
+                    shape = CircleShape,
                     clip = false
                 )
-                .clip(RoundedCornerShape(config.thumbCornerRadius))
+                .clip(CircleShape)
                 .background(thumbColor)
-                .pointerInput(maxThumbOffset, thumbHeightPx) {
-                    awaitEachGesture {
-                        val down = awaitFirstDown(
-                            pass = PointerEventPass.Initial,
-                            requireUnconsumed = false
-                        )
-
-                        val touchY = down.position.y
-                        val grabPadding = 40f
-                        
-                        if (touchY >= thumbTopPx - grabPadding && touchY <= thumbBottomPx + grabPadding) {
-                            isDragging = true
-                            previousLetter = currentLetter
-                            dragStartY = touchY
-                            dragStartProgress = scrollProgress
-                            down.consume()
-                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_START)
-
-                            drag(down.id) { change ->
-                                change.consume()
-                                
-                                val deltaY = change.position.y - dragStartY
-                                val deltaProgress = if (maxThumbOffset > 0) {
-                                    deltaY / maxThumbOffset
-                                } else 0f
-                                
-                                val newProgress = (dragStartProgress + deltaProgress).coerceIn(0f, 1f)
-                                
-                                coroutineScope.launch {
-                                    scrollbarState.scrollToProgress(newProgress)
-                                }
-                            }
-
-                            isDragging = false
-                            view.performHapticFeedback(HapticFeedbackConstants.GESTURE_END)
-                        }
-                    }
-                }
         )
 
-        // Preview bubble with enhanced styling
+        // Alphabet preview bubble
         Box(
             modifier = Modifier
                 .offset {
                     IntOffset(
                         x = -(config.touchAreaWidth + 8.dp).roundToPx(),
-                        y = (thumbOffsetPx + thumbHeightPx / 2 - config.bubbleSize.toPx() / 2).toInt()
+                        y = (thumbOffsetPx + thumbHeightPx / 2 - config.bubbleSize.toPx() / 2).roundToInt()
                     )
                 }
                 .alpha(bubbleAlpha)
-                .graphicsLayer(scaleX = bubbleScale, scaleY = bubbleScale)
-                .size(config.bubbleSize)
-                .shadow(
-                    elevation = config.bubbleElevation,
-                    shape = RoundedCornerShape(config.bubbleCornerRadius),
-                    clip = false
-                )
-                .clip(RoundedCornerShape(config.bubbleCornerRadius))
+                .size(config.bubbleSize * bubbleScale)
+                .shadow(elevation = config.bubbleElevation, shape = CircleShape)
+                .clip(CircleShape)
                 .background(bubbleColor),
             contentAlignment = Alignment.Center
         ) {
@@ -361,6 +315,12 @@ private class AlphabetScrollbarState(
 
     override val viewportSize: Int
         get() = calculateViewportSize()
+
+    override val isScrollInProgress: Boolean
+        get() = listState.isScrollInProgress
+
+    override val totalItemsCount: Int
+        get() = totalItems
 
     private fun calculateContentSize(): Int {
         val layoutInfo = listState.layoutInfo
@@ -405,6 +365,12 @@ private class AlphabetScrollbarState(
         listState.scrollToItem(targetIndex)
     }
 
+    override suspend fun scrollByVelocity(velocity: Float) {
+        listState.scroll {
+            scrollBy(velocity / 5f)
+        }
+    }
+
     private fun findLetterForIndex(targetIndex: Int): Char {
         if (letterToIndex.isEmpty()) return '#'
         val sorted = letterToIndex.toList().sortedBy { it.second }
@@ -430,17 +396,9 @@ fun getFirstLetter(text: String): Char {
     val firstChar = text.trim().first()
 
     return when {
-        // ASCII letters (A-Z, a-z)
-        firstChar.isLetter() && firstChar.code < 128 -> {
-            firstChar.uppercaseChar()
-        }
-        // Chinese characters - use ICU Transliterator for pinyin
-        firstChar.code > 127 -> {
-            getPinyinInitial(firstChar)
-        }
-        // Digits
+        firstChar.isLetter() && firstChar.code < 128 -> firstChar.uppercaseChar()
+        firstChar.code > 127 -> getPinyinInitial(firstChar)
         firstChar.isDigit() -> '0'
-        // Other symbols
         else -> '#'
     }
 }
@@ -448,27 +406,17 @@ fun getFirstLetter(text: String): Char {
 /**
  * Get pinyin initial for a Chinese character using ICU Transliterator.
  * Falls back to '#' if conversion fails.
- *
- * @param char The Chinese character
- * @return The pinyin initial letter or '#' if conversion fails
  */
 private fun getPinyinInitial(char: Char): Char {
     return try {
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.Q) {
-            // Use ICU Transliterator to convert Chinese to Latin/Pinyin
             val transliterator = android.icu.text.Transliterator.getInstance("Han-Latin")
             val pinyin = transliterator.transliterate(char.toString())
-
-            // Get first letter and uppercase it
-            pinyin.firstOrNull { it.isLetter() }
-                ?.uppercaseChar()
-                ?: '#'
+            pinyin.firstOrNull { it.isLetter() }?.uppercaseChar() ?: '#'
         } else {
-            // Fallback for older Android versions
             if (char.isLetter()) char.uppercaseChar() else '#'
         }
     } catch (e: Exception) {
-        // If conversion fails, check if it's a letter
         if (char.isLetter()) char.uppercaseChar() else '#'
     }
 }
