@@ -158,12 +158,19 @@ fun M3EScrollbar(
         label = "scrollbar_alpha"
     )
 
+    // Fraction for scroll position (used by both thumb position and index calculation)
+    val scrollFraction by remember(contentSize, viewportSize, scrollOffset) {
+        derivedStateOf {
+            if (scrollRange > 0) (scrollOffset.toFloat() / scrollRange).coerceIn(0f, 1f) else 0f
+        }
+    }
+
     // Current index for bubble text
     val currentIndex: Int by remember(state, isDragging, dragY, maxThumbOffset) {
         derivedStateOf {
             if (isDragging && maxThumbOffset > 0) {
                 val fraction = (dragY / maxThumbOffset).coerceIn(0f, 1f)
-                (fraction * (state.totalItemsCount - 1)).toInt().coerceIn(0, state.totalItemsCount - 1)
+                (fraction * (state.totalItemsCount - 1)).toInt().coerceIn(0, (state.totalItemsCount - 1).coerceAtLeast(0))
             } else {
                 when (state) {
                     is LazyListScrollbarState -> state.getCurrentItemIndex()
@@ -174,9 +181,9 @@ fun M3EScrollbar(
         }
     }
 
-    val bubbleText by remember(currentIndex) {
+    val bubbleText by remember(currentIndex, bubbleFormatter) {
         derivedStateOf {
-            bubbleFormatter?.invoke(currentIndex) ?: (currentIndex + 1).toString()
+            bubbleFormatter?.invoke(currentIndex) ?: currentIndex.toString()
         }
     }
 
@@ -229,11 +236,11 @@ fun M3EScrollbar(
                         }
                     }
                 }
-                .pointerInput(maxThumbOffset, scrollProgress) {
+                .pointerInput(viewportSize, contentSize) {
                     detectDragGestures(
                         onDragStart = { offset ->
                             isDragging = true
-                            dragY = (scrollProgress * maxThumbOffset).coerceIn(0f, maxThumbOffset)
+                            dragY = (scrollFraction * maxThumbOffset).coerceIn(0f, maxThumbOffset)
                             velocityTracker.resetTracking()
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         },
@@ -303,12 +310,14 @@ fun M3EScrollbar(
 
         // Preview bubble (M3E spring bounce)
         if (showBubble) {
+            val bubbleSizePx = with(density) { config.bubbleSize.toPx() }
             Box(
                 modifier = Modifier
+                    .align(Alignment.TopEnd)
                     .offset {
                         IntOffset(
                             x = -(config.touchAreaWidth + 8.dp).roundToPx(),
-                            y = (thumbOffsetPx + thumbHeightPx / 2 - config.bubbleSize.toPx() / 2).roundToInt()
+                            y = (thumbOffsetPx + thumbHeightPx / 2 - bubbleSizePx / 2).roundToInt()
                         )
                     }
                     .alpha(bubbleAlpha)

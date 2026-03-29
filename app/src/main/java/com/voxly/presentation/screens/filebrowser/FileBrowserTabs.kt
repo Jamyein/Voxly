@@ -25,6 +25,16 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
+private fun getLeadingCharacter(text: String): String {
+    val firstChar = text.trimStart().firstOrNull() ?: return "#"
+    return when {
+        firstChar.isDigit() -> "#"
+        firstChar in 'a'..'z' -> firstChar.uppercaseChar().toString()
+        firstChar in 'A'..'Z' -> firstChar.toString()
+        else -> firstChar.toString()
+    }
+}
+
 @Composable
 internal fun AllAudiosTabContent(
     audios: List<AudioFile>,
@@ -90,7 +100,12 @@ internal fun AllAudiosTabContent(
                 state = lazyListState,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(end = 4.dp)
+                    .padding(end = 4.dp),
+                bubbleFormatter = { index ->
+                    audios.getOrNull(index)?.let { audio ->
+                        getLeadingCharacter(audio.metadata.getDisplayTitle(audio.name))
+                    } ?: "#"
+                }
             )
         }
     }

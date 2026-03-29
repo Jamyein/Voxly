@@ -71,6 +71,7 @@ import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.sharedElementIfAvailable
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
+import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -268,7 +269,10 @@ private fun AlbumTabContent(
                     state = gridState,
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
-                        .padding(end = 4.dp)
+                        .padding(end = 4.dp),
+                    bubbleFormatter = { index ->
+                        albums.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
+                    }
                 )
             }
         }
@@ -401,7 +405,12 @@ private fun AlbumYearGroupedContent(
             state = listState,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
-                .padding(end = 4.dp)
+                .padding(end = 4.dp),
+            bubbleFormatter = { index ->
+                yearGroups.getOrNull(index)?.let { group ->
+                    if (group.year == 0) "N/A" else group.year.toString()
+                } ?: "#"
+            }
         )
     }
 }

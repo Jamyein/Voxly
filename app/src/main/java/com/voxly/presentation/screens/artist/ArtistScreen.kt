@@ -47,6 +47,7 @@ import com.voxly.R
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.screens.filebrowser.ArtistListItem
+import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import kotlinx.coroutines.launch
 
@@ -202,7 +203,10 @@ private fun ArtistTabContent(
                 state = lazyListState,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(end = 4.dp)
+                    .padding(end = 4.dp),
+                bubbleFormatter = { index ->
+                    artists.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
+                }
             )
         }
     }
