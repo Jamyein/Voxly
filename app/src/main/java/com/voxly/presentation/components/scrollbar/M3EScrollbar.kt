@@ -159,12 +159,17 @@ fun M3EScrollbar(
     )
 
     // Current index for bubble text
-    val currentIndex by remember(state) {
+    val currentIndex: Int by remember(state, isDragging, dragY, maxThumbOffset) {
         derivedStateOf {
-            when (state) {
-                is LazyListScrollbarState -> state.getCurrentItemIndex()
-                is LazyGridScrollbarState -> state.getCurrentItemIndex()
-                else -> 0
+            if (isDragging && maxThumbOffset > 0) {
+                val fraction = (dragY / maxThumbOffset).coerceIn(0f, 1f)
+                (fraction * (state.totalItemsCount - 1)).toInt().coerceIn(0, state.totalItemsCount - 1)
+            } else {
+                when (state) {
+                    is LazyListScrollbarState -> state.getCurrentItemIndex()
+                    is LazyGridScrollbarState -> state.getCurrentItemIndex()
+                    else -> 0
+                }
             }
         }
     }
@@ -224,25 +229,27 @@ fun M3EScrollbar(
                         }
                     }
                 }
-                .pointerInput(maxThumbOffset) {
+                .pointerInput(maxThumbOffset, scrollProgress) {
                     detectDragGestures(
                         onDragStart = { offset ->
                             isDragging = true
-                            dragY = offset.y
+                            dragY = (scrollProgress * maxThumbOffset).coerceIn(0f, maxThumbOffset)
                             velocityTracker.resetTracking()
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         },
-                        onDrag = { change, _ ->
+                        onDrag = { change, dragAmount ->
                             change.consume()
                             velocityTracker.addPointerInputChange(change)
-                            dragY = change.position.y.coerceIn(0f, maxThumbOffset)
+                            dragY = (dragY + dragAmount.y).coerceIn(0f, maxThumbOffset)
 
-                            val fraction = (dragY / maxThumbOffset).coerceIn(0f, 1f)
+                            val fraction = if (maxThumbOffset > 0) {
+                                (dragY / maxThumbOffset).coerceIn(0f, 1f)
+                            } else 0f
+                            
                             val targetIndex = (fraction * (state.totalItemsCount - 1))
                                 .toInt()
                                 .coerceIn(0, (state.totalItemsCount - 1).coerceAtLeast(0))
 
-                            // Per-item haptic tick
                             if (targetIndex != lastHapticIndex) {
                                 haptic.performHapticFeedback(HapticFeedbackType.TextHandleMove)
                                 lastHapticIndex = targetIndex
