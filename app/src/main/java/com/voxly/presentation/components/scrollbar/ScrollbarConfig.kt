@@ -30,10 +30,10 @@ import androidx.compose.ui.unit.dp
  * @property visualFeedbackStiffness Spring stiffness for visual feedback
  */
 data class ScrollbarConfig(
-    val thumbWidth: Dp = 4.dp,
-    val thumbWidthDragging: Dp = 12.dp,
+    val thumbWidth: Dp = 8.dp,
+    val thumbWidthDragging: Dp = 8.dp,
     val thumbHeight: Dp = 48.dp,
-    val minThumbHeight: Dp = 32.dp,
+    val minThumbHeight: Dp = 48.dp,
     val touchAreaWidth: Dp = 48.dp,
     val thumbCornerRadius: Dp = 2.dp,
     val bubbleSize: Dp = 56.dp,
@@ -53,7 +53,8 @@ data class ScrollbarConfig(
         /** Compact config with smaller touch area for dense UIs */
         val Compact = ScrollbarConfig(
             touchAreaWidth = 24.dp,
-            thumbWidthDragging = 10.dp,
+            thumbWidth = 8.dp,
+            thumbWidthDragging = 8.dp,
             bubbleSize = 48.dp,
             hideDelayMillis = 1200L
         )
