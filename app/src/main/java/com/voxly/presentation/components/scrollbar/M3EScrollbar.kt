@@ -188,8 +188,8 @@ fun M3EScrollbar(
     }
 
     // M3E colors
-    val thumbColor = MaterialTheme.colorScheme.primaryContainer
-    val trackColor = MaterialTheme.colorScheme.outline
+    val thumbColor = MaterialTheme.colorScheme.primary
+    val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val bubbleColor = MaterialTheme.colorScheme.primaryContainer
     val bubbleTextColor = MaterialTheme.colorScheme.onPrimaryContainer
 
