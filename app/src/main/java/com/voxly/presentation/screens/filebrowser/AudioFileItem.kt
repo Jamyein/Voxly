@@ -13,7 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.scrollbar.AlphabetScrollbarM3E
+import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.AudioFileStandardRow
 import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
@@ -141,19 +141,6 @@ internal fun AudioFileListWithIndexer(
     onFixMetadata: (AudioFile) -> Unit,
     bottomPadding: Dp = 0.dp
 ) {
-    val coroutineScope = rememberCoroutineScope()
-
-    // Create letter to index mapping for fast navigation
-    // Groups files by their first letter and keeps the first occurrence index for each letter
-    val letterToIndex = remember(files) {
-        files
-            .mapIndexed { index, file ->
-                getFirstLetter(file.metadata.getDisplayTitle(file.name)) to index
-            }
-            .groupBy { it.first }
-            .mapValues { it.value.minOf { pair -> pair.second } }
-    }
-
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         AudioFileList(
             files = files,
@@ -171,13 +158,16 @@ internal fun AudioFileListWithIndexer(
         )
 
         if (showIndexer) {
-            AlphabetScrollbarM3E(
+            LazyColumnScrollbar(
                 state = listState,
-                letterToIndex = letterToIndex,
-                totalItems = files.size,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
-                    .padding(end = 4.dp)
+                    .padding(end = 4.dp),
+                bubbleFormatter = { index ->
+                    files.getOrNull(index)?.let { audio ->
+                        getLeadingCharacter(audio.metadata.getDisplayTitle(audio.name))
+                    } ?: "#"
+                }
             )
         }
     }

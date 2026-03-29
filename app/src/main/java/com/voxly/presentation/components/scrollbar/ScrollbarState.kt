@@ -67,7 +67,7 @@ class LazyListScrollbarState(
         listState.layoutInfo.totalItemsCount
     }
 
-    private fun calculateContentSize(): Int {
+    private fun calculateScrollOffset(): Int {
         val layoutInfo = listState.layoutInfo
         val visibleItems = layoutInfo.visibleItemsInfo
 
@@ -75,27 +75,25 @@ class LazyListScrollbarState(
             return 0
         }
 
-        val avgItemSize = if (visibleItems.size > 1) {
-            val first = visibleItems.first()
-            val last = visibleItems.last()
-            (last.offset + last.size - first.offset) / visibleItems.size
-        } else {
-            visibleItems.firstOrNull()?.size ?: 100
-        }
-
-        return avgItemSize * layoutInfo.totalItemsCount
+        val firstVisible = visibleItems.first()
+        val avgItemSize = calculateAvgItemSize()
+        
+        // Global offset = (index * avgSize) + internal offset within the item
+        return (listState.firstVisibleItemIndex * avgItemSize) + listState.firstVisibleItemScrollOffset
     }
 
-    private fun calculateScrollOffset(): Int {
+    private fun calculateAvgItemSize(): Int {
         val layoutInfo = listState.layoutInfo
         val visibleItems = layoutInfo.visibleItemsInfo
+        if (visibleItems.isEmpty()) return 100
+        
+        return (visibleItems.last().offset + visibleItems.last().size - visibleItems.first().offset) / visibleItems.size
+    }
 
-        if (visibleItems.isEmpty()) {
-            return 0
-        }
-
-        val firstVisible = visibleItems.first()
-        return firstVisible.offset + listState.firstVisibleItemScrollOffset
+    private fun calculateContentSize(): Int {
+        val layoutInfo = listState.layoutInfo
+        if (layoutInfo.totalItemsCount == 0) return 0
+        return calculateAvgItemSize() * layoutInfo.totalItemsCount
     }
 
     private fun calculateViewportSize(): Int {
@@ -163,7 +161,7 @@ class LazyGridScrollbarState(
         gridState.layoutInfo.totalItemsCount
     }
 
-    private fun calculateContentSize(): Int {
+    private fun calculateScrollOffset(): Int {
         val layoutInfo = gridState.layoutInfo
         val visibleItems = layoutInfo.visibleItemsInfo
 
@@ -171,27 +169,42 @@ class LazyGridScrollbarState(
             return 0
         }
 
-        val avgItemHeight = if (visibleItems.size > 1) {
-            val first = visibleItems.first()
-            val last = visibleItems.last()
-            (last.offset.y + last.size.height - first.offset.y) / visibleItems.size
-        } else {
-            visibleItems.firstOrNull()?.size?.height ?: 100
-        }
+        val firstVisible = visibleItems.first()
+        val avgItemHeight = calculateAvgItemHeight()
+        
+        // Items are in rows (assume rows are uniform height)
+        val rowSize = if (layoutInfo.visibleItemsInfo.size > 1) {
+             val first = layoutInfo.visibleItemsInfo.first()
+             val last = layoutInfo.visibleItemsInfo.last()
+             val rows = (last.row - first.row).coerceAtLeast(1)
+             (last.offset.y + last.size.height - first.offset.y) / rows
+        } else 100
 
-        return avgItemHeight * layoutInfo.totalItemsCount
+        return (gridState.firstVisibleItemIndex / maxOf(1, layoutInfo.visibleItemsInfo.size / (layoutInfo.visibleItemsInfo.last().row - layoutInfo.visibleItemsInfo.first().row + 1)) * rowSize) + gridState.firstVisibleItemScrollOffset
     }
 
-    private fun calculateScrollOffset(): Int {
+    private fun calculateAvgItemHeight(): Int {
         val layoutInfo = gridState.layoutInfo
         val visibleItems = layoutInfo.visibleItemsInfo
+        if (visibleItems.isEmpty()) return 100
+        
+        val first = visibleItems.first()
+        val last = visibleItems.last()
+        val rows = (last.row - first.row).coerceAtLeast(1)
+        return (last.offset.y + last.size.height - first.offset.y) / rows
+    }
 
-        if (visibleItems.isEmpty()) {
-            return 0
-        }
-
-        val firstVisible = visibleItems.first()
-        return firstVisible.offset.y + gridState.firstVisibleItemScrollOffset
+    private fun calculateContentSize(): Int {
+        val layoutInfo = gridState.layoutInfo
+        if (layoutInfo.totalItemsCount == 0) return 0
+        
+        // Grid size is (rows * avgRowHeight)
+        val spanCount = if (layoutInfo.visibleItemsInfo.isNotEmpty()) {
+            layoutInfo.visibleItemsInfo.groupBy { it.row }.values.first().size
+        } else 1
+        val rowCount = (layoutInfo.totalItemsCount + spanCount - 1) / spanCount
+        
+        return calculateAvgItemHeight() * rowCount
     }
 
     private fun calculateViewportSize(): Int {
