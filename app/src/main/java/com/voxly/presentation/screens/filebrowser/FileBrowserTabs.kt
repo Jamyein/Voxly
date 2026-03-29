@@ -25,7 +25,7 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
-private fun getLeadingCharacter(text: String): String {
+internal fun getLeadingCharacter(text: String): String {
     val firstChar = text.trimStart().firstOrNull() ?: return "#"
     return when {
         firstChar.isDigit() -> "#"
