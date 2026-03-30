@@ -37,12 +37,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import com.voxly.presentation.screens.ReplayGainScannerScreen
 import com.voxly.presentation.screens.SettingsScreen
+import com.voxly.presentation.screens.album.AlbumAdaptiveScreen
 import com.voxly.presentation.screens.album.AlbumDetailScreen
-import com.voxly.presentation.screens.album.AlbumScreen
+import com.voxly.presentation.screens.artist.ArtistAdaptiveScreen
 import com.voxly.presentation.screens.artist.ArtistDetailScreen
-import com.voxly.presentation.screens.artist.ArtistScreen
-import com.voxly.presentation.screens.filebrowser.DirectoryContentScreen
-import com.voxly.presentation.screens.filebrowser.FileBrowserScreen
+import com.voxly.presentation.screens.filebrowser.DirectoryContentAdaptiveScreen
+import com.voxly.presentation.screens.filebrowser.FileBrowserAdaptiveScreen
 import com.voxly.presentation.screens.log.LogViewerScreen
 import com.voxly.presentation.screens.metadata.MetadataEditorScreen
 import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
@@ -318,43 +318,48 @@ private fun RenderMainScreen(
 ) {
     when (val key = currentKey) {
         is FileBrowser -> {
-            FileBrowserScreen(
-                outerPadding = PaddingValues(),
+            FileBrowserAdaptiveScreen(
                 viewModel = libraryViewModel,
-                onNavigateToMetadata = { filePath, coverTag ->
-                    backStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                },
-                onNavigateToReplayGain = { filePaths ->
-                    backStack.add(ReplayGainScanner(filePaths))
-                },
                 onNavigateToDirectory = { directoryUri, directoryName ->
                     backStack.add(DirectoryContent(directoryUri, directoryName))
                 },
-                onNavigateToSearch = {},
-                onNavigateToAlbum = { albumName, albumArtist ->
-                    backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
+                onNavigateToMetadata = { filePath, coverTag ->
+                    backStack.add(MetadataEditor(filePath, coverTag ?: ""))
                 },
-                onNavigateToArtist = { artistName ->
-                    backStack.add(ArtistDetail(artistName))
-                }
+                onNavigateToOnlineMetadata = {
+                    // Not used in this context - online metadata is accessed from MetadataEditor
+                },
+                onNavigateToOnlineLyricsSearch = {
+                    // Not used in this context
+                },
+                onNavigateToOnlineCoverSearch = {
+                    // Not used in this context
+                },
+                onNavigateToLyricsSelector = { _, _, _, _, _ ->
+                    // Not used in this context
+                },
+                onNavigateBack = {}
             )
         }
 
         is Albums -> {
-            AlbumScreen(
-                outerPadding = PaddingValues(),
-                onNavigateToAlbumDetail = { albumName, albumArtist ->
+            AlbumAdaptiveScreen(
+                onNavigateToMetadata = { albumName, albumArtist ->
                     backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
-                }
+                },
+                onNavigateBack = {}
             )
         }
 
         is Artists -> {
-            ArtistScreen(
-                outerPadding = PaddingValues(),
-                onNavigateToArtistDetail = { artistName ->
+            ArtistAdaptiveScreen(
+                onNavigateToMetadata = { artistName, _ ->
                     backStack.add(ArtistDetail(artistName))
-                }
+                },
+                onNavigateToAlbumDetail = { albumName, albumArtist ->
+                    backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
+                },
+                onNavigateBack = {}
             )
         }
 
@@ -415,16 +420,30 @@ private fun RenderSubScreen(
 ) {
     when (val key = targetKey) {
         is DirectoryContent -> {
-            DirectoryContentScreen(
+            DirectoryContentAdaptiveScreen(
                 directoryUri = key.directoryUri,
                 directoryName = key.directoryName,
                 viewModel = libraryViewModel,
                 onNavigateBack = { backStack.removeLastOrNull() },
-                onNavigateToMetadata = { filePath, coverTag ->
-                    backStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                },
                 onNavigateToReplayGain = { filePaths ->
                     backStack.add(ReplayGainScanner(filePaths))
+                },
+                onNavigateToOnlineMetadata = {
+                    backStack.add(OnlineMetadata(key.directoryUri))
+                },
+                onNavigateToOnlineLyricsSearch = {
+                    backStack.add(OnlineLyricsSearch(key.directoryUri))
+                },
+                onNavigateToOnlineCoverSearch = {
+                    backStack.add(OnlineCoverSearch(key.directoryUri))
+                },
+                onNavigateToLyricsSelector = { _, title, artist, album, _ ->
+                    backStack.add(LyricsSelector(
+                        filePath = key.directoryUri,
+                        title = title,
+                        artist = artist,
+                        album = album
+                    ))
                 }
             )
         }

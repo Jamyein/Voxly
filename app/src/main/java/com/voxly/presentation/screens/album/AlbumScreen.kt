@@ -197,91 +197,9 @@ fun AlbumScreen(
     }
 }
 
-@Composable
-private fun AlbumTabContent(
-    albums: List<AlbumGroup>,
-    onAlbumClick: (AlbumGroup) -> Unit,
-    isRefreshing: Boolean,
-    onRefresh: () -> Unit,
-    listState: LazyListState? = null,
-    scrollToTopTrigger: Int = 0,
-    sortOption: AlbumSortOption? = null
-) {
-    key(scrollToTopTrigger) {
-        val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
-        val gridState = rememberLazyGridState()
-        
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = onRefresh,
-                modifier = Modifier.fillMaxSize(),
-                indicator = {
-                    val pullToRefreshState = rememberPullToRefreshState()
-                    LoadingIndicator(
-                        state = pullToRefreshState,
-                        isRefreshing = isRefreshing,
-                        modifier = Modifier
-                    )
-                }
-            ) {
-                if (albums.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = stringResource(R.string.no_albums_found),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                } else {
-                    if (isYearSort) {
-                        AlbumYearGroupedContent(
-                            albums = albums,
-                            onAlbumClick = onAlbumClick,
-                            isDescending = true
-                        )
-                    } else {
-                        LazyVerticalGrid(
-                            state = gridState,
-                            columns = GridCells.Fixed(2),
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(
-                                count = albums.size,
-                                key = { index -> albumStableKey(albums[index]) }
-                            ) { index ->
-                                val album = albums[index]
-                                AlbumGridItem(
-                                    album = album,
-                                    onClick = { onAlbumClick(album) }
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-            
-            if (!isYearSort && albums.isNotEmpty()) {
-                LazyVerticalGridScrollbar(
-                    state = gridState,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 4.dp),
-                    bubbleFormatter = { index ->
-                        albums.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
-                    }
-                )
-            }
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
-private fun AlbumYearGroupedContent(
+internal fun AlbumYearGroupedContent(
     albums: List<AlbumGroup>,
     onAlbumClick: (AlbumGroup) -> Unit,
     isDescending: Boolean = false
@@ -415,49 +333,4 @@ private fun AlbumYearGroupedContent(
     }
 }
 
-private data class YearGroup(
-    val year: Int,
-    val albums: List<AlbumGroup>
-)
 
-private fun albumDisplayYearInt(album: AlbumGroup): Int? {
-    return album.files
-        .mapNotNull { audioFile -> extractYear(audioFile.metadata.year) }
-        .maxOrNull()
-}
-
-private fun albumStableKey(album: AlbumGroup): String {
-    val representativePath = album.files.firstOrNull()?.path.orEmpty()
-    return "${album.name}|${album.artist.orEmpty()}|$representativePath"
-}
-
-private fun extractYear(rawYear: String?): Int? {
-    val normalized = rawYear?.trim().orEmpty()
-    if (normalized.isEmpty()) return null
-    return Regex("""\d{4}""").find(normalized)?.value?.toIntOrNull()
-}
-
-private fun AlbumSortOption.labelResId(): Int = when (this) {
-    AlbumSortOption.NAME_ASC -> R.string.album_sort_name_asc
-    AlbumSortOption.TRACK_COUNT_DESC -> R.string.album_sort_track_count_desc
-    AlbumSortOption.YEAR_DESC -> R.string.album_sort_year_desc
-}
-
-private fun applyAlbumSort(
-    albums: List<AlbumGroup>,
-    sortOption: AlbumSortOption
-): List<AlbumGroup> {
-    return when (sortOption) {
-        AlbumSortOption.NAME_ASC -> albums.sortedWith(
-            compareBy { SortUtil.toSortablePinyin(it.name) }
-        )
-        AlbumSortOption.TRACK_COUNT_DESC -> albums.sortedByDescending { it.files.size }
-        AlbumSortOption.YEAR_DESC -> albums.sortedByDescending { album ->
-            album.files.mapNotNull { audioFile ->
-                audioFile.metadata.year
-                    ?.let { Regex("""\d{4}""").find(it)?.value }
-                    ?.toIntOrNull()
-            }.maxOrNull() ?: Int.MIN_VALUE
-        }
-    }
-}
