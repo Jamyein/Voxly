@@ -325,8 +325,7 @@ fun M3EScrollbar(
             ) {
                 Text(
                     text = bubbleText,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    style = MaterialTheme.typography.labelLarge,
                     textAlign = TextAlign.Center,
                     color = bubbleTextColor
                 )

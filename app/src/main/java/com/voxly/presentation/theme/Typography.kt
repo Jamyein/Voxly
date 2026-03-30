@@ -69,7 +69,7 @@ object ExpressiveTypography {
         lineHeight = 64.sp,
         letterSpacing = (-0.5).sp
     )
-    
+
     // 强调标题
     val EmphasizedHeadline = TextStyle(
         fontFamily = DefaultFontFamily,
@@ -78,7 +78,7 @@ object ExpressiveTypography {
         lineHeight = 40.sp,
         letterSpacing = 0.sp
     )
-    
+
     // 紧凑标签
     val CompactLabel = TextStyle(
         fontFamily = DefaultFontFamily,
@@ -87,13 +87,58 @@ object ExpressiveTypography {
         lineHeight = 16.sp,
         letterSpacing = 0.5.sp
     )
-    
+
     // 强调正文
     val EmphasizedBody = TextStyle(
         fontFamily = DefaultFontFamily,
         fontWeight = FontWeight.Medium,
         fontSize = 16.sp,
         lineHeight = 24.sp,
+        letterSpacing = 0.25.sp
+    )
+
+    // 卡片标题 - 用于列表项、卡片标题
+    val CardTitle = TextStyle(
+        fontFamily = DefaultFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 16.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.15.sp
+    )
+
+    // 按钮标签 - 用于主要按钮文字
+    val ButtonLabel = TextStyle(
+        fontFamily = DefaultFontFamily,
+        fontWeight = FontWeight.SemiBold,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.1.sp
+    )
+
+    // 小字说明 - 用于辅助信息、时间戳
+    val Caption = TextStyle(
+        fontFamily = DefaultFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 12.sp,
+        lineHeight = 16.sp,
+        letterSpacing = 0.4.sp
+    )
+
+    // 列表项标题 - 用于歌曲名、文件名
+    val ListItemTitle = TextStyle(
+        fontFamily = DefaultFontFamily,
+        fontWeight = FontWeight.Medium,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
+        letterSpacing = 0.25.sp
+    )
+
+    // 副标题 - 用于艺术家、专辑名
+    val Subtitle = TextStyle(
+        fontFamily = DefaultFontFamily,
+        fontWeight = FontWeight.Normal,
+        fontSize = 14.sp,
+        lineHeight = 20.sp,
         letterSpacing = 0.25.sp
     )
 }

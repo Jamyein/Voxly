@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialShapes
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -276,8 +277,7 @@ private fun Watermark(
     ) {
         Text(
             text = "Voxly",
-            fontSize = 16.sp,
-            fontWeight = FontWeight.Normal,
+            style = MaterialTheme.typography.bodyLarge,
             color = contentColor.copy(alpha = 0.5f)
         )
     }
