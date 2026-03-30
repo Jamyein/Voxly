@@ -1,6 +1,6 @@
 package com.voxly.presentation.screens.filebrowser
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.expandVertically
@@ -159,7 +159,8 @@ fun DirectoryContentScreen(
     val batchProgress by viewModel.batchProgress.collectAsState()
     val batchError by viewModel.batchError.collectAsState()
 
-    BackHandler(enabled = isSelectionMode) {
+    PredictiveBackHandler(enabled = isSelectionMode) { progress ->
+        progress.collect { }
         viewModel.clearSelection()
     }
 

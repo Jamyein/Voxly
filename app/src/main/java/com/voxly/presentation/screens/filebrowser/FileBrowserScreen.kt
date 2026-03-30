@@ -6,7 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
 import androidx.compose.foundation.Image
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
@@ -321,7 +321,8 @@ fun FileBrowserScreen(
             }
         }
     }
-    BackHandler(enabled = openedDirectory != null) {
+    PredictiveBackHandler(enabled = openedDirectory != null) { progress ->
+        progress.collect { }
         if (selectedFiles.isNotEmpty()) {
             viewModel.clearSelection()
         } else {

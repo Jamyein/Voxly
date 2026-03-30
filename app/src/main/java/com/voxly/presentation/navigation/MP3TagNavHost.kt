@@ -1,7 +1,7 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
@@ -17,12 +17,14 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.presentation.components.LocalNavAnimatedVisibilityScope
@@ -59,6 +61,8 @@ import com.voxly.presentation.viewmodel.OnlineLyricsSearchViewModel
 import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
 import com.voxly.presentation.viewmodel.ReplayGainViewModel
 import com.voxly.presentation.theme.ExpressiveAnimations
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.collect
 
 /**
  * Main navigation host for the MP3 Tag Editor app using Navigation3.
@@ -100,9 +104,21 @@ fun MP3TagNavHost() {
 
     val adaptiveInfo = currentWindowAdaptiveInfo()
 
-    // Handle system back navigation - only intercept when on sub-screens
-    BackHandler(enabled = !isMainScreen) {
-        backStack.removeLastOrNull()
+    var backProgress by remember { mutableFloatStateOf(0f) }
+    val backScale = 1f - (0.04f * backProgress)
+
+    // Handle system back navigation - predictive back for sub-screens
+    PredictiveBackHandler(enabled = !isMainScreen) { progress ->
+        try {
+            progress.collect { backEvent ->
+                backProgress = backEvent.progress
+            }
+            backStack.removeLastOrNull()
+        } catch (e: CancellationException) {
+            // Gesture cancelled, reset progress
+        } finally {
+            backProgress = 0f
+        }
     }
 
     // SharedTransitionLayout wraps navigation for shared element transitions
@@ -265,7 +281,15 @@ fun MP3TagNavHost() {
                         )
                     }
                 } else if (targetKey != null) {
-                    Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .graphicsLayer {
+                                scaleX = backScale
+                                scaleY = backScale
+                                alpha = 1f - (0.05f * backProgress)
+                            }
+                    ) {
                         RenderSubScreen(
                             targetKey = targetKey,
                             backStack = backStack,
