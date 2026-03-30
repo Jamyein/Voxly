@@ -1001,7 +1001,12 @@ fun AudioFileStandardRowWithMenu(
     onAction: (AudioFileAction) -> Unit,
     modifier: Modifier = Modifier
 ) = ListItem(
-    modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    modifier = modifier
+        .fillMaxWidth()
+        .sharedBoundsIfAvailable(
+            key = "audio-file-${audioFile.path}"
+        )
+        .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     colors = ListItemDefaults.colors(
         containerColor = MaterialTheme.colorScheme.surface
     ),
@@ -1023,7 +1028,7 @@ fun AudioFileStandardRowWithMenu(
             mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
             contentDescription = null,
             size = AlbumArtSizeLarge,
-            modifier = Modifier.size(AlbumArtSizeLarge).clip(MaterialShapes.Cookie9Sided.toShape())
+    modifier = Modifier.size(AlbumArtSizeLarge).clip(MaterialShapes.Cookie9Sided.toShape())
         ) {
             Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
         }

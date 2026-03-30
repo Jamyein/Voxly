@@ -3,10 +3,8 @@ package com.voxly.presentation.navigation
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
@@ -51,7 +49,6 @@ import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 import com.voxly.presentation.screens.metadata.LyricsSelectorScreen
 import com.voxly.presentation.screens.metadata.LyricsPosterScreen
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
-import com.voxly.presentation.viewmodel.AppViewModel
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 import com.voxly.presentation.viewmodel.LibraryViewModel
 import com.voxly.presentation.viewmodel.LyricsPosterViewModel
@@ -83,7 +80,6 @@ import com.voxly.presentation.theme.ExpressiveAnimations
 @Composable
 fun MP3TagNavHost() {
     val context = LocalContext.current
-    val appViewModel: AppViewModel = hiltViewModel()
     val libraryViewModel: LibraryViewModel = hiltViewModel()
 
     // Navigation 3 back stack
@@ -100,10 +96,7 @@ fun MP3TagNavHost() {
     val currentKey = backStack.lastOrNull()
 
     // Check if current screen is a main screen (has bottom navigation)
-    val isMainScreen = currentKey == FileBrowser ||
-            currentKey == Albums ||
-            currentKey == Artists ||
-            currentKey == Settings
+    val isMainScreen = isMainScreenKey(currentKey)
 
     val adaptiveInfo = currentWindowAdaptiveInfo()
 
@@ -112,168 +105,44 @@ fun MP3TagNavHost() {
         backStack.removeLastOrNull()
     }
 
-    // SharedTransitionLayout wraps everything for shared element transitions
+    // SharedTransitionLayout wraps navigation for shared element transitions
     SharedTransitionLayout {
-        // NavigationSuiteScaffold only for main screens
-        // Sub-screens will be rendered on top of this layer
-        NavigationSuiteScaffold(
-            layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo),
-            navigationSuiteItems = {
-                // Files tab
-                val isFileSelected = currentKey is FileBrowser
-                item(
-                    icon = {
-                        Icon(
-                            imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
-                            contentDescription = "Files"
-                        )
-                    },
-                    label = { Text("Files") },
-                    selected = isFileSelected,
-                    onClick = {
-                        if (!isFileSelected) {
-                            val currentIndex = backStack.indexOfFirst {
-                                it is FileBrowser || it is Albums || it is Artists || it is Settings
-                            }
-                            if (currentIndex >= 0) {
-                                backStack[currentIndex] = FileBrowser
-                            }
-                        }
-                    }
-                )
-
-                // Albums tab
-                val isAlbumsSelected = currentKey is Albums
-                item(
-                    icon = {
-                        Icon(
-                            imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
-                            contentDescription = "Albums"
-                        )
-                    },
-                    label = { Text("Albums") },
-                    selected = isAlbumsSelected,
-                    onClick = {
-                        if (!isAlbumsSelected) {
-                            val currentIndex = backStack.indexOfFirst {
-                                it is FileBrowser || it is Albums || it is Artists || it is Settings
-                            }
-                            if (currentIndex >= 0) {
-                                backStack[currentIndex] = Albums
-                            }
-                        }
-                    }
-                )
-
-                // Artists tab
-                val isArtistsSelected = currentKey is Artists
-                item(
-                    icon = {
-                        Icon(
-                            imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
-                            contentDescription = "Artists"
-                        )
-                    },
-                    label = { Text("Artists") },
-                    selected = isArtistsSelected,
-                    onClick = {
-                        if (!isArtistsSelected) {
-                            val currentIndex = backStack.indexOfFirst {
-                                it is FileBrowser || it is Albums || it is Artists || it is Settings
-                            }
-                            if (currentIndex >= 0) {
-                                backStack[currentIndex] = Artists
-                            }
-                        }
-                    }
-                )
-
-                // Settings tab
-                val isSettingsSelected = currentKey is Settings
-                item(
-                    icon = {
-                        Icon(
-                            imageVector = if (isSettingsSelected) AppIcon.Settings.vector else AppIcon.SettingsOutlined.vector,
-                            contentDescription = "Settings"
-                        )
-                    },
-                    label = { Text("Settings") },
-                    selected = isSettingsSelected,
-                    onClick = {
-                        if (!isSettingsSelected) {
-                            val currentIndex = backStack.indexOfFirst {
-                                it is FileBrowser || it is Albums || it is Artists || it is Settings
-                            }
-                            if (currentIndex >= 0) {
-                                backStack[currentIndex] = Settings
-                            }
-                        }
-                    }
-                )
-            },
-            containerColor = MaterialTheme.colorScheme.background
-        ) {
-            // This content is shown underneath sub-screens
-            // We render main screens here, but hide them when showing sub-screens
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (isMainScreen) {
-                    // Use AnimatedContent to provide AnimatedVisibilityScope for shared transitions
-                    // This enables Container Transform from main screens to sub-screens
-                    AnimatedContent(
-                        targetState = currentKey,
-                        transitionSpec = {
-                            // Fade through for bottom navigation tab switches
-                            ExpressiveAnimations.FadeThroughEnter.togetherWith(ExpressiveAnimations.FadeThroughExit)
-                        },
-                        label = "MainScreen_Navigation"
-                    ) { mainScreenKey ->
-                        // Provide scopes for shared transitions
-                        // Both SharedTransitionScope and AnimatedVisibilityScope are now available
-                        CompositionLocalProvider(
-                            LocalSharedTransitionScope provides this@SharedTransitionLayout,
-                            LocalNavAnimatedVisibilityScope provides this@AnimatedContent
-                        ) {
-                            RenderMainScreen(
-                                currentKey = mainScreenKey,
-                                backStack = backStack,
-                                libraryViewModel = libraryViewModel,
-                                context = context
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        // Sub-screens layer - rendered on top when not on main screen
-        // These screens do NOT have NavigationSuiteScaffold's padding/bottom bar
+        // Single AnimatedContent for main + sub screens
+        // Ensures both cover source (list) and cover target (MetadataEditor)
+        // share the same AnimatedVisibilityScope for sharedBounds morph animation
         AnimatedContent(
             targetState = currentKey,
             transitionSpec = {
-                // Determine if this is a push or pop based on back stack size
                 val isPush = backStack.size > (initialState?.let { backStack.indexOf(it) + 1 } ?: 0)
+                val isMainToMain = isMainScreenKey(initialState) && isMainScreenKey(targetState)
 
-                // Select transition type based on screen type
                 val (enterAnim, exitAnim) = when {
-                    // Container Transform: FileBrowser/Album/Artist → MetadataEditor (list item to detail)
+                    // Main tab switching
+                    isMainToMain -> Pair(
+                        ExpressiveAnimations.FadeThroughEnter,
+                        ExpressiveAnimations.FadeThroughExit
+                    )
+
+                    // Container Transform: Album/Artist list → detail pages
+                    targetState is AlbumDetail || targetState is ArtistDetail ||
+                        initialState is AlbumDetail || initialState is ArtistDetail -> Pair(
+                        if (isPush) ExpressiveAnimations.ContainerTransformEnter else ExpressiveAnimations.ContainerTransformPopEnter,
+                        if (isPush) ExpressiveAnimations.ContainerTransformExit else ExpressiveAnimations.ContainerTransformPopExit
+                    )
+
+                    // Container Transform: list item → MetadataEditor (existing behavior)
                     targetState is MetadataEditor || initialState is MetadataEditor -> Pair(
                         if (isPush) ExpressiveAnimations.ContainerTransformEnter else ExpressiveAnimations.ContainerTransformPopEnter,
                         if (isPush) ExpressiveAnimations.ContainerTransformExit else ExpressiveAnimations.ContainerTransformPopExit
                     )
 
-                    // Shared Axis Z: AlbumScreen/ArtistScreen → Detail pages (parent-child navigation)
-                    targetState is AlbumDetail || targetState is ArtistDetail -> Pair(
-                        if (isPush) ExpressiveAnimations.SharedAxisZEnter else ExpressiveAnimations.SharedAxisZEnter,
-                        if (isPush) ExpressiveAnimations.SharedAxisZExit else ExpressiveAnimations.SharedAxisZExit
-                    )
-
-                    // Shared Axis X: Settings sub-pages (lateral navigation like LogViewer)
+                    // Shared Axis X: Settings sub-pages
                     targetState is LogViewer || targetState is ScanDirectorySettings -> Pair(
                         if (isPush) ExpressiveAnimations.SharedAxisXEnter else ExpressiveAnimations.SharedAxisXPopEnter,
                         if (isPush) ExpressiveAnimations.SharedAxisXExit else ExpressiveAnimations.SharedAxisXPopExit
                     )
 
-                    // Default: Shared Axis X for other sub-screens
+                    // Default: Shared Axis X for other transitions
                     else -> Pair(
                         if (isPush) ExpressiveAnimations.SharedAxisXEnter else ExpressiveAnimations.SharedAxisXPopEnter,
                         if (isPush) ExpressiveAnimations.SharedAxisXExit else ExpressiveAnimations.SharedAxisXPopExit
@@ -283,16 +152,120 @@ fun MP3TagNavHost() {
                 enterAnim.togetherWith(exitAnim)
                     .apply { targetContentZIndex = if (isPush) 1f else -1f }
             },
-            label = "SubScreen_Navigation"
+            contentKey = { it },
+            label = "Unified_Navigation"
         ) { targetKey ->
-            // Only render sub-screens (non-main screens)
-            if (!isMainScreen && targetKey != null) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    // Provide scopes for shared transitions
-                    CompositionLocalProvider(
-                        LocalSharedTransitionScope provides this@SharedTransitionLayout,
-                        LocalNavAnimatedVisibilityScope provides this@AnimatedContent
+            CompositionLocalProvider(
+                LocalSharedTransitionScope provides this@SharedTransitionLayout,
+                LocalNavAnimatedVisibilityScope provides this@AnimatedContent
+            ) {
+                if (isMainScreenKey(targetKey)) {
+                    NavigationSuiteScaffold(
+                        layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo),
+                        navigationSuiteItems = {
+                            // Files tab
+                            val isFileSelected = targetKey is FileBrowser
+                            item(
+                                icon = {
+                                    Icon(
+                                        imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
+                                        contentDescription = "Files"
+                                    )
+                                },
+                                label = { Text("Files") },
+                                selected = isFileSelected,
+                                onClick = {
+                                    if (!isFileSelected) {
+                                        val currentIndex = backStack.indexOfFirst {
+                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
+                                        }
+                                        if (currentIndex >= 0) {
+                                            backStack[currentIndex] = FileBrowser
+                                        }
+                                    }
+                                }
+                            )
+
+                            // Albums tab
+                            val isAlbumsSelected = targetKey is Albums
+                            item(
+                                icon = {
+                                    Icon(
+                                        imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
+                                        contentDescription = "Albums"
+                                    )
+                                },
+                                label = { Text("Albums") },
+                                selected = isAlbumsSelected,
+                                onClick = {
+                                    if (!isAlbumsSelected) {
+                                        val currentIndex = backStack.indexOfFirst {
+                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
+                                        }
+                                        if (currentIndex >= 0) {
+                                            backStack[currentIndex] = Albums
+                                        }
+                                    }
+                                }
+                            )
+
+                            // Artists tab
+                            val isArtistsSelected = targetKey is Artists
+                            item(
+                                icon = {
+                                    Icon(
+                                        imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
+                                        contentDescription = "Artists"
+                                    )
+                                },
+                                label = { Text("Artists") },
+                                selected = isArtistsSelected,
+                                onClick = {
+                                    if (!isArtistsSelected) {
+                                        val currentIndex = backStack.indexOfFirst {
+                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
+                                        }
+                                        if (currentIndex >= 0) {
+                                            backStack[currentIndex] = Artists
+                                        }
+                                    }
+                                }
+                            )
+
+                            // Settings tab
+                            val isSettingsSelected = targetKey is Settings
+                            item(
+                                icon = {
+                                    Icon(
+                                        imageVector = if (isSettingsSelected) AppIcon.Settings.vector else AppIcon.SettingsOutlined.vector,
+                                        contentDescription = "Settings"
+                                    )
+                                },
+                                label = { Text("Settings") },
+                                selected = isSettingsSelected,
+                                onClick = {
+                                    if (!isSettingsSelected) {
+                                        val currentIndex = backStack.indexOfFirst {
+                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
+                                        }
+                                        if (currentIndex >= 0) {
+                                            backStack[currentIndex] = Settings
+                                        }
+                                    }
+                                }
+                            )
+                        },
+                        containerColor = MaterialTheme.colorScheme.background
                     ) {
+                        RenderMainScreen(
+                            currentKey = targetKey,
+                            backStack = backStack,
+                            libraryViewModel = libraryViewModel,
+                            context = context
+                        )
+                    }
+                } else if (targetKey != null) {
+                    Box(modifier = Modifier.fillMaxSize()) {
                         RenderSubScreen(
                             targetKey = targetKey,
                             backStack = backStack,
@@ -620,3 +593,8 @@ private fun RenderSubScreen(
         }
     }
 }
+
+private fun isMainScreenKey(key: Any?): Boolean = key == FileBrowser ||
+        key == Albums ||
+        key == Artists ||
+        key == Settings
