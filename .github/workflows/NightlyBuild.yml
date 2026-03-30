@@ -1,0 +1,282 @@
+name: Nightly Build
+
+on:
+  push:
+    branches: [ dev ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate nightly version
+        id: version
+        run: |
+          DATE=$(date +'%Y%m%d')
+          SHORT_SHA="${GITHUB_SHA::7}"
+          VERSION="nightly-${DATE}-${SHORT_SHA}"
+          echo "VERSION=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "VERSION=$VERSION"
+
+      - name: Generate changelog
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          # Find previous nightly tag
+          PREV_TAG=$(git tag -l "nightly-*" --sort=-creatordate | head -n 1)
+          if [ -n "$PREV_TAG" ]; then
+            echo "Previous nightly tag: $PREV_TAG"
+            COMMIT_RANGE="${PREV_TAG}..HEAD"
+          else
+            echo "No previous nightly tag found, using last 20 commits"
+            COMMIT_RANGE="HEAD~20..HEAD"
+          fi
+
+          # Define sections
+          declare -A SECTIONS
+          SECTIONS=(
+            ["feat"]="✨ 新功能"
+            ["fix"]="🐛 修复"
+            ["refactor"]="♻️ 重构"
+            ["docs"]="📝 文档"
+            ["chore"]="🔧 杂项"
+            ["perf"]="⚡ 性能优化"
+            ["style"]="💄 样式"
+            ["test"]="✅ 测试"
+          )
+
+          ORDER=("feat" "fix" "refactor" "perf" "docs" "chore" "test" "style")
+          
+          # Initialize temp files for each section
+          TEMP_DIR=$(mktemp -d)
+          for type in "${ORDER[@]}"; do
+            touch "${TEMP_DIR}/${type}.txt"
+          done
+          touch "${TEMP_DIR}/others.txt"
+
+          # Parse commits
+          while IFS= read -r line; do
+            [ -z "$line" ] && continue
+            
+            # Extract message (remove hash prefix)
+            msg=$(echo "$line" | sed 's/^[a-f0-9]* //')
+            
+            # Parse conventional commit format: type(scope): subject or type: subject
+            if [[ "$msg" =~ ^([a-z]+)(\([^\)]+\))?!?:[[:space:]]*(.+)$ ]]; then
+              type="${BASH_REMATCH[1]}"
+              scope="${BASH_REMATCH[2]}"
+              subject="${BASH_REMATCH[3]}"
+              
+              # Remove parentheses from scope
+              scope="${scope//[\(\)]/}"
+              
+              # Format message
+              if [ -n "$scope" ]; then
+                formatted="**${scope}**: ${subject}"
+              else
+                formatted="${subject}"
+              fi
+              
+              # Categorize
+              matched=false
+              for t in "${ORDER[@]}"; do
+                if [ "$type" = "$t" ]; then
+                  echo "- ${formatted}" >> "${TEMP_DIR}/${t}.txt"
+                  matched=true
+                  break
+                fi
+              done
+              
+              if [ "$matched" = false ]; then
+                echo "- ${msg}" >> "${TEMP_DIR}/others.txt"
+              fi
+            else
+              # Non-conventional commit
+              echo "- ${msg}" >> "${TEMP_DIR}/others.txt"
+            fi
+          done < <(git log --pretty=format:"%H %s" $COMMIT_RANGE)
+
+          # Build markdown output
+          AUTO_CHANGELOG=""
+          
+          for type in "${ORDER[@]}"; do
+            if [ -s "${TEMP_DIR}/${type}.txt" ]; then
+              AUTO_CHANGELOG+="### ${SECTIONS[$type]}"$'\n\n'
+              AUTO_CHANGELOG+=$(cat "${TEMP_DIR}/${type}.txt")$'\n\n'
+            fi
+          done
+          
+          if [ -s "${TEMP_DIR}/others.txt" ]; then
+            AUTO_CHANGELOG+="### 📦 其他"$'\n\n'
+            AUTO_CHANGELOG+=$(cat "${TEMP_DIR}/others.txt")$'\n\n'
+          fi
+
+          # Clean up
+          rm -rf "$TEMP_DIR"
+
+          # Save to env
+          echo "AUTO_CHANGELOG<<GITHUB_ENV_EOF" >> "$GITHUB_ENV"
+          echo "$AUTO_CHANGELOG" >> "$GITHUB_ENV"
+          echo "GITHUB_ENV_EOF" >> "$GITHUB_ENV"
+
+      - name: Assemble release body
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          AUTO="${AUTO_CHANGELOG}"
+          BODY="## 🌙 Nightly Build - ${{ steps.version.outputs.VERSION }}"$'\n\n'
+          BODY+="**Commit:** \`${GITHUB_SHA::7}\`"$'\n\n'
+          BODY+="**Branch:** dev"$'\n\n'
+          BODY+="---"$'\n\n'
+
+          if [ -n "$AUTO" ]; then
+            BODY+="## 🔄 变更日志"$'\n\n'
+            BODY+="${AUTO}"
+          else
+            BODY+="暂无变更记录"$'\n\n'
+          fi
+
+          echo "RELEASE_BODY<<GITHUB_ENV_EOF" >> "$GITHUB_ENV"
+          echo "$BODY" >> "$GITHUB_ENV"
+          echo "GITHUB_ENV_EOF" >> "$GITHUB_ENV"
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: gradle
+
+      - name: Decode signing keystore
+        env:
+          SIGNING_KEYSTORE_BASE64: ${{ secrets.SIGNING_KEYSTORE_BASE64 || vars.SIGNING_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "${SIGNING_KEYSTORE_BASE64}" ]; then
+            echo "Missing SIGNING_KEYSTORE_BASE64"
+            exit 1
+          fi
+          echo "${SIGNING_KEYSTORE_BASE64}" | base64 -d > app/voxly-release.keystore
+
+      - name: Make Gradle wrapper executable
+        run: chmod +x gradlew
+
+      - name: Build with Gradle
+        env:
+          CI: true
+          SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || vars.SIGNING_STORE_PASSWORD }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || vars.SIGNING_KEY_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || vars.SIGNING_KEY_ALIAS || 'voxly' }}
+        run: ./gradlew assembleGithubRelease
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f app/voxly-release.keystore
+
+      - name: Prepare release artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          
+          # Find APK (github flavor + release build type)
+          APK_PATH="$(find app/build -type f -name "*arm64*.apk" | head -n 1)"
+          if [ -z "${APK_PATH}" ]; then
+            echo "No APK found"
+            exit 1
+          fi
+
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          OUT_DIR="app/build/outputs/nightly-assets"
+          mkdir -p "${OUT_DIR}"
+          OUT_NAME="Voxly-${VERSION}.apk"
+          cp "${APK_PATH}" "${OUT_DIR}/${OUT_NAME}"
+          echo "NIGHTLY_APK=${OUT_DIR}/${OUT_NAME}" >> "$GITHUB_ENV"
+
+      - name: Update or create nightly release
+        uses: actions/github-script@v7
+        env:
+          NIGHTLY_APK: ${{ env.NIGHTLY_APK }}
+          RELEASE_BODY: ${{ env.RELEASE_BODY }}
+        with:
+          script: |
+            const fs = require('fs');
+            const apkPath = process.env.NIGHTLY_APK;
+            const body = process.env.RELEASE_BODY;
+            
+            // Delete old APK assets from existing release
+            try {
+              const release = await github.rest.repos.getReleaseByTag({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                tag: 'nightly'
+              });
+              
+              // Delete old APK files
+              const assets = release.data.assets;
+              for (const asset of assets) {
+                if (asset.name.endsWith('.apk')) {
+                  await github.rest.repos.deleteReleaseAsset({
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    asset_id: asset.id
+                  });
+                  console.log(`Deleted old asset: ${asset.name}`);
+                }
+              }
+              
+              // Update release
+              await github.rest.repos.updateRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id,
+                body: body
+              });
+              
+              // Upload new APK
+              await github.rest.repos.uploadReleaseAsset({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.data.id,
+                name: `Voxly-nightly.apk`,
+                data: fs.readFileSync(apkPath)
+              });
+              
+              console.log('Updated existing nightly release');
+              
+            } catch (error) {
+              if (error.status === 404) {
+                // Create new release
+                const release = await github.rest.repos.createRelease({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  tag_name: 'nightly',
+                  name: '🌙 Voxly Nightly',
+                  body: body,
+                  prerelease: true,
+                  make_latest: false
+                });
+                
+                // Upload APK
+                await github.rest.repos.uploadReleaseAsset({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  release_id: release.data.id,
+                  name: `Voxly-nightly.apk`,
+                  data: fs.readFileSync(apkPath)
+                });
+                
+                console.log('Created new nightly release');
+              } else {
+                throw error;
+              }
+            }
