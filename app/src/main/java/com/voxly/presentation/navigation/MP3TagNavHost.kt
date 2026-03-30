@@ -415,7 +415,7 @@ private fun RenderSubScreen(
                 filePath = key.filePath,
                 viewModel = viewModel,
                 coverTag = key.coverTag.takeIf { it.isNotEmpty() },
-                sharedElementKey = "audio-file-${key.filePath}",
+                sharedElementKey = null,
                 onNavigateBack = { backStack.removeLastOrNull() },
                 onNavigateToOnlineMetadata = {
                     backStack.add(OnlineMetadata(key.filePath))

@@ -69,7 +69,7 @@ import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
@@ -335,8 +335,8 @@ private fun AlbumYearGroupedContent(
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .clip(MaterialTheme.shapes.small)
-                                    .sharedElementIfAvailable(key = albumCoverKey),
+                                    .sharedBoundsIfAvailable(key = albumCoverKey)
+                                    .clip(MaterialTheme.shapes.small),
                                 contentAlignment = Alignment.Center
                             ) {
                                 val coverFile = album.files.firstOrNull {

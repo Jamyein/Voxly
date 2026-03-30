@@ -29,7 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.theme.MaterialShapes
@@ -89,6 +89,7 @@ internal fun AlbumListItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
+                    .sharedBoundsIfAvailable(key = coverKey)
                     .clip(MaterialTheme.shapes.small),
                 contentAlignment = Alignment.Center
             ) {
@@ -99,9 +100,7 @@ internal fun AlbumListItem(
                     mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
                     contentDescription = null,
                     size = 48.dp,
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .sharedElementIfAvailable(key = coverKey)
+                    modifier = Modifier.fillMaxSize()
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),
@@ -159,6 +158,7 @@ internal fun AlbumGridItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
+                .sharedBoundsIfAvailable(key = coverKey)
                 .clip(MaterialTheme.shapes.medium)
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
@@ -170,9 +170,7 @@ internal fun AlbumGridItem(
                 mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
                 contentDescription = null,
                 size = 200.dp,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .sharedElementIfAvailable(key = coverKey)
+                modifier = Modifier.fillMaxSize()
             ) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
@@ -253,6 +251,7 @@ internal fun ArtistListItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
+                    .sharedBoundsIfAvailable(key = avatarKey)
                     .clip(MaterialShapes.Sunny.toShape()),
                 contentAlignment = Alignment.Center
             ) {
@@ -262,7 +261,6 @@ internal fun ArtistListItem(
                     size = 48.dp,
                     modifier = Modifier
                         .fillMaxSize()
-                        .sharedElementIfAvailable(key = avatarKey)
                 ) {
                     Surface(
                         modifier = Modifier.fillMaxSize(),

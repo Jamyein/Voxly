@@ -40,26 +40,26 @@ val LocalNavAnimatedVisibilityScope: ProvidableCompositionLocal<AnimatedVisibili
 object SharedTransitionConfigs {
     /**
      * Container Transform: Used for transitions between list items and detail pages.
-     * Uses spring animation for smoother, more natural motion with better performance.
+     * Uses a lightly damped spring for subtle motion without visible overshoot.
      *
      * Best for: Audio file list to metadata editor transitions
      */
     val ContainerTransform: BoundsTransform = BoundsTransform { _, _ ->
         spring(
-            dampingRatio = Spring.DampingRatioLowBouncy,
-            stiffness = Spring.StiffnessMedium
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessLow
         )
     }
 
     /**
-     * Container Transform Tween: Fallback using tween for more control.
-     * Duration: 350ms for smoother transition, Easing: FastOutSlowIn
+     * Container Transform Tween: Alternate using tween for tighter transitions.
+     * Duration: 320ms for snappier transition, Easing: FastOutSlowIn
      *
      * Use this if spring animation feels too bouncy.
      */
     val ContainerTransformTween: BoundsTransform = BoundsTransform { _, _ ->
         tween(
-            durationMillis = 350,
+            durationMillis = 320,
             easing = FastOutSlowInEasing
         )
     }

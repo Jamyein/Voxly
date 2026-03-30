@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -48,7 +49,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
@@ -165,28 +166,33 @@ fun AlbumDetailScreen(
                             // Left: Cover image using AlbumArtImage composable with shared element transition
                             val firstFile = files.firstOrNull()
                             val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
-                            AlbumArtImage(
-                                filePath = coverPath ?: firstFile?.path,
-                                mediaStoreAlbumId = firstFile?.mediaStoreAlbumId,
-                                contentDescription = stringResource(R.string.album_cover),
-                                size = 120.dp,
+                            Box(
                                 modifier = Modifier
                                     .size(120.dp)
-                                    .clip(MaterialTheme.shapes.medium)
-                                    .sharedElementIfAvailable(key = albumCoverKey)
+                                    .sharedBoundsIfAvailable(key = albumCoverKey)
+                                    .clip(MaterialTheme.shapes.medium),
+                                contentAlignment = Alignment.Center
                             ) {
-                                Surface(
-                                    modifier = Modifier.fillMaxSize(),
-                                    color = MaterialTheme.colorScheme.surfaceVariant
+                                AlbumArtImage(
+                                    filePath = coverPath ?: firstFile?.path,
+                                    mediaStoreAlbumId = firstFile?.mediaStoreAlbumId,
+                                    contentDescription = stringResource(R.string.album_cover),
+                                    size = 120.dp,
+                                    modifier = Modifier.fillMaxSize()
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Album,
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .padding(24.dp)
-                                            .fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                                    Surface(
+                                        modifier = Modifier.fillMaxSize(),
+                                        color = MaterialTheme.colorScheme.surfaceVariant
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Album,
+                                            contentDescription = null,
+                                            modifier = Modifier
+                                                .padding(24.dp)
+                                                .fillMaxSize(),
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
                             }
 
@@ -315,12 +321,37 @@ fun AlbumDetailScreen(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                                 ),
                                 leadingContent = {
-                                    Text(
-                                        text = audioFile.metadata.trackNumber?.toString() ?: "-",
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.width(32.dp)
-                                    )
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        val albumArtKey = createAlbumArtSharedElementKey(audioFile.path)
+                                        Box(
+                                            modifier = Modifier
+                                                .size(32.dp)
+                                                .sharedBoundsIfAvailable(key = albumArtKey)
+                                                .clip(MaterialTheme.shapes.small),
+                                            contentAlignment = Alignment.Center
+                                        ) {
+                                            AlbumArtImage(
+                                                filePath = audioFile.path,
+                                                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                                                contentDescription = null,
+                                                size = 32.dp,
+                                                modifier = Modifier.fillMaxSize()
+                                            ) {
+                                                Icon(
+                                                    imageVector = Icons.Default.MusicNote,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                                    modifier = Modifier.size(16.dp)
+                                                )
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(8.dp))
+                                        Text(
+                                            text = audioFile.metadata.trackNumber?.toString() ?: "-",
+                                            style = MaterialTheme.typography.titleMedium,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
                                 },
                                 supportingContent = {
                                     Column {

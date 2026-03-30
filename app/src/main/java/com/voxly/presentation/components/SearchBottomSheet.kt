@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -41,7 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 /**
@@ -199,22 +200,28 @@ fun SearchResultItem(
                 .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            // Album artwork with shared element transition
-            AlbumArtImage(
-                filePath = audioFile.path,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
-                contentDescription = stringResource(R.string.cd_album_art),
-                size = 48.dp,
+            // Album artwork with shared container transition
+            Box(
                 modifier = Modifier
-                    .clip(MaterialTheme.shapes.small)
-                    .sharedElementIfAvailable(key = albumArtKey)
+                    .size(48.dp)
+                    .sharedBoundsIfAvailable(key = albumArtKey)
+                    .clip(MaterialTheme.shapes.small),
+                contentAlignment = Alignment.Center
             ) {
-                Icon(
-                    imageVector = Icons.Default.MusicNote,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.outline,
-                    modifier = Modifier.size(24.dp)
-                )
+                AlbumArtImage(
+                    filePath = audioFile.path,
+                    mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                    contentDescription = stringResource(R.string.cd_album_art),
+                    size = 48.dp,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.MusicNote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.outline,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.width(12.dp))

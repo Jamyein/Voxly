@@ -16,7 +16,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.presentation.components.NetworkAlbumArtImage
-import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.theme.MaterialShapes
 
@@ -38,10 +38,18 @@ fun AlbumArtSection(
 ) {
     // Detail page uses rounded rectangle shape (different from list item's cookie shape)
     // The sharedBounds transition will smoothly morph between these shapes
+    val coverKey = filePath?.let { createAlbumArtSharedElementKey(it) }
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
+            .then(
+                if (coverKey != null) {
+                    Modifier.sharedBoundsIfAvailable(key = coverKey)
+                } else {
+                    Modifier
+                }
+            )
             .clickable(onClick = onPickAlbumArt),
         shape = MaterialTheme.shapes.extraLarge
     ) {
@@ -60,14 +68,7 @@ fun AlbumArtSection(
                         decodeAlbumArtPreview(albumArt)
                     }
                     if (bitmap != null) {
-                        val albumArtModifier = if (filePath != null) {
-                            val albumArtKey = createAlbumArtSharedElementKey(filePath)
-                            Modifier
-                                .fillMaxSize()
-                                .sharedElementIfAvailable(key = albumArtKey)
-                        } else {
-                            Modifier.fillMaxSize()
-                        }
+                        val albumArtModifier = Modifier.fillMaxSize()
                         Image(
                             bitmap = bitmap.asImageBitmap(),
                             contentDescription = stringResource(R.string.cd_album_art),

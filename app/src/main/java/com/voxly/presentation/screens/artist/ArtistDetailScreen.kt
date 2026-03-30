@@ -62,7 +62,7 @@ import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.ui.loadCarouselCoverArt
 import com.voxly.presentation.ui.loadLocalAlbumArt
-import com.voxly.presentation.components.sharedElementIfAvailable
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
@@ -208,8 +208,8 @@ fun ArtistDetailScreen(
                         Box(
                             modifier = Modifier
                                 .size(150.dp)
-                                .clip(CircleShape)
-                                .sharedElementIfAvailable(key = avatarKey),
+                                .sharedBoundsIfAvailable(key = avatarKey)
+                                .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
                             if (avatarBitmap != null) {
@@ -466,7 +466,8 @@ fun AlbumCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .sharedElementIfAvailable(key = albumCoverKey),
+                    .sharedBoundsIfAvailable(key = albumCoverKey)
+                    .clip(MaterialTheme.shapes.medium),
                 contentAlignment = Alignment.Center
             ) {
                 CarouselAlbumArtImage(

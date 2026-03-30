@@ -19,6 +19,7 @@ import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
 import com.voxly.presentation.components.scrollbar.getFirstLetter
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 @Composable
 internal fun AudioFileItem(
@@ -34,7 +35,7 @@ internal fun AudioFileItem(
     onFixMetadata: () -> Unit,
     compactMode: Boolean = false,
     modifier: Modifier = Modifier,
-    sharedElementKey: String? = "audio-file-${audioFile.path}"
+    sharedElementKey: String? = createAlbumArtSharedElementKey(audioFile.path)
 ) {
     if (compactMode) {
         AudioFileStandardRowCompact(
