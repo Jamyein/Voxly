@@ -1,20 +1,33 @@
 package com.voxly.presentation.screens.album
 
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -29,16 +42,22 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.components.SortMenuButton
+import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
+import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
@@ -202,5 +221,141 @@ internal fun AlbumTabContent(
                 )
             }
         }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+internal fun AlbumYearGroupedContent(
+    albums: List<AlbumGroup>,
+    onAlbumClick: (AlbumGroup) -> Unit,
+    isDescending: Boolean = false
+) {
+    val listState = rememberLazyListState()
+    val albumsByYear = remember(albums, isDescending) {
+        albums.groupBy { album ->
+            albumDisplayYearInt(album) ?: 0
+        }.toSortedMap(if (isDescending) compareByDescending { it } else compareBy { it })
+    }
+
+    val yearGroups = remember(albumsByYear) {
+        albumsByYear.map { (year, yearAlbums) ->
+            YearGroup(year, yearAlbums)
+        }
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            yearGroups.forEach { yearGroup ->
+                item(key = "header_${yearGroup.year}") {
+                    Text(
+                        text = if (yearGroup.year == 0) "N/A" else yearGroup.year.toString(),
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
+                    )
+                }
+
+                items(
+                    count = yearGroup.albums.size,
+                    key = { index -> "album_${yearGroup.year}_${albumStableKey(yearGroup.albums[index])}" }
+                ) { albumIndex ->
+                    val album = yearGroup.albums[albumIndex]
+                    SegmentedListItem(
+                        onClick = { onAlbumClick(album) },
+                        shapes = ListItemDefaults.segmentedShapes(
+                            index = albumIndex,
+                            count = yearGroup.albums.size
+                        ),
+                        colors = ListItemDefaults.segmentedColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
+                        ),
+                        leadingContent = {
+                            val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.artist)
+                            Box(
+                                modifier = Modifier
+                                    .size(40.dp)
+                                    .sharedBoundsIfAvailable(key = albumCoverKey)
+                                    .clip(MaterialTheme.shapes.small),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val coverFile = album.files.firstOrNull {
+                                    it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+                                } ?: album.files.firstOrNull()
+                                AlbumArtImage(
+                                    filePath = coverFile?.path,
+                                    mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
+                                    contentDescription = null,
+                                    size = 40.dp,
+                                    modifier = Modifier.fillMaxSize()
+                                ) {
+                                    Surface(
+                                        modifier = Modifier.fillMaxSize(),
+                                        shape = MaterialTheme.shapes.small,
+                                        color = MaterialTheme.colorScheme.primaryContainer
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Icon(
+                                                imageVector = Icons.Default.Album,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.size(20.dp)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                        supportingContent = {
+                            Column {
+                                Text(
+                                    text = album.name,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Text(
+                                    text = album.artist ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        },
+                        trailingContent = {
+                            Text(
+                                text = stringResource(R.string.track_count, album.files.size),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.outline
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        content = {}
+                    )
+                }
+
+                item(key = "spacer_${yearGroup.year}") {
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
+        }
+        
+        LazyColumnScrollbar(
+            state = listState,
+            modifier = Modifier
+                .align(Alignment.CenterEnd)
+                .padding(end = 4.dp),
+            bubbleFormatter = { index ->
+                yearGroups.getOrNull(index)?.let { group ->
+                    if (group.year == 0) "N/A" else group.year.toString()
+                } ?: "#"
+            }
+        )
     }
 }
