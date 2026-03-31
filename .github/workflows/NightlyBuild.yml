@@ -263,7 +263,7 @@ jobs:
                   name: '🌙 Voxly Nightly',
                   body: body,
                   prerelease: true,
-                  make_latest: false
+                  make_latest: "false"
                 });
                 
                 // Upload APK
