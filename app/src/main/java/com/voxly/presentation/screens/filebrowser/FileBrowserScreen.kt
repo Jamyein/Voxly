@@ -585,16 +585,17 @@ fun FileBrowserScreen(
                             EmptyContent()
                         } else {
                             Box(modifier = Modifier.fillMaxSize()) {
+                                val pullToRefreshState = rememberPullToRefreshState()
                                 PullToRefreshBox(
                                     isRefreshing = isRefreshing,
                                     onRefresh = onRefresh,
+                                    state = pullToRefreshState,
                                     modifier = Modifier.fillMaxSize(),
                                     indicator = {
-                                        val pullToRefreshState = rememberPullToRefreshState()
                                         LoadingIndicator(
                                             state = pullToRefreshState,
                                             isRefreshing = isRefreshing,
-                                            modifier = Modifier
+                                            modifier = Modifier.align(Alignment.TopCenter)
                                         )
                                     }
                                 ) {

@@ -165,9 +165,7 @@ fun DirectoryContentScreen(
     }
 
     Scaffold(
-        modifier = Modifier
-            .nestedScroll(scrollBehavior.nestedScrollConnection)
-            .nestedScroll(floatingToolbarScrollBehavior),
+        modifier = Modifier,
         topBar = {
             LargeTopAppBar(
                 title = {
@@ -258,20 +256,21 @@ fun DirectoryContentScreen(
             )
         },
     ) { innerPadding ->
+    val pullToRefreshState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = {
             viewModel.refresh()
         },
+        state = pullToRefreshState,
         modifier = Modifier
             .fillMaxSize()
             .padding(innerPadding),
         indicator = {
-            val pullToRefreshState = rememberPullToRefreshState()
             LoadingIndicator(
                 state = pullToRefreshState,
                 isRefreshing = isRefreshing,
-                modifier = Modifier
+                modifier = Modifier.align(Alignment.TopCenter)
             )
         }
     ) {

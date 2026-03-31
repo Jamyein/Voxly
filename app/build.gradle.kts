@@ -177,6 +177,9 @@ dependencies {
     implementation("androidx.graphics:graphics-shapes:1.1.0")
     implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha16")
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha16")
+    // Material3 Adaptive Layout - for dual-pane and three-pane layouts
+    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.1.0")
+    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.1.0")
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
 
@@ -189,6 +192,7 @@ dependencies {
     implementation("androidx.navigation3:navigation3-ui:1.0.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-navigation3:2.10.0")
     // Navigation3 Scene Strategies (BottomSheet, ListDetail)
+    // Using 1.3.0-alpha09 (latest available version with Navigation 3 + Adaptive integration)
     implementation("androidx.compose.material3.adaptive:adaptive-navigation3:1.3.0-alpha09")
     implementation("androidx.window:window:1.5.1")
 

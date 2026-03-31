@@ -46,17 +46,18 @@ internal fun AllAudiosTabContent(
     listState: LazyListState? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
+    val pullToRefreshState = rememberPullToRefreshState()
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
+            state = pullToRefreshState,
             modifier = Modifier.fillMaxSize(),
             indicator = {
-                val pullToRefreshState = rememberPullToRefreshState()
                 LoadingIndicator(
                     state = pullToRefreshState,
                     isRefreshing = isRefreshing,
-                    modifier = Modifier
+                    modifier = Modifier.align(Alignment.TopCenter)
                 )
             }
         ) {

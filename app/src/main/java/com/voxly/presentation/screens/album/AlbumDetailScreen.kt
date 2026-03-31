@@ -45,7 +45,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
@@ -63,11 +62,9 @@ fun AlbumDetailScreen(
     albumName: String,
     albumArtist: String?,
     onNavigateBack: () -> Unit,
-    onNavigateToMetadata: (String, String?) -> Unit
+    onNavigateToMetadata: (String, String?) -> Unit,
+    viewModel: AlbumDetailViewModel
 ) {
-    @Suppress("DEPRECATION")
-    val viewModel: AlbumDetailViewModel = hiltViewModel()
-
     // Load album from cache
     LaunchedEffect(albumName, albumArtist) {
         viewModel.loadAlbum(albumName, albumArtist)

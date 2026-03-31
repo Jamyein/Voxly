@@ -4,9 +4,11 @@ import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.ArcMode
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.runtime.Composable
@@ -88,6 +90,22 @@ object SharedTransitionConfigs {
             durationMillis = 200,
             easing = FastOutSlowInEasing
         )
+    }
+
+    /**
+     * Expressive Container Transform: M3 Expressive recommended animation.
+     * Uses keyframes with ArcMode.ArcBelow + FastOutSlowInEasing for more natural motion.
+     * Duration: 450ms
+     *
+     * Best for: List item to detail page transitions in Material 3 Expressive
+     */
+    @OptIn(ExperimentalSharedTransitionApi::class)
+    val ExpressiveContainerTransform: BoundsTransform = BoundsTransform { initial, target ->
+        keyframes {
+            durationMillis = 450
+            initial at 0 using ArcMode.ArcBelow using FastOutSlowInEasing
+            target at 450
+        }
     }
 }
 

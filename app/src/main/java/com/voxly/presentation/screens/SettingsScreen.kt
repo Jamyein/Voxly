@@ -975,7 +975,8 @@ fun SettingsScreen(
     var showSeparatorDialog by remember { mutableStateOf(false) }
     var separatorInput by remember { mutableStateOf("") }
     var pendingDeleteSeparator by remember { mutableStateOf<String?>(null) }
-    val separatorTags = remember { mutableStateOf(viewModel.artistSeparatorsSet.value.toList()) }
+    // Local mutable state for dialog editing - initialized from ViewModel when dialog opens
+    var dialogSeparatorTags by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loudnessExpanded by remember { mutableStateOf(false) }
     val loudnessOptions = remember {
         listOf(
@@ -1117,10 +1118,6 @@ fun SettingsScreen(
 
             // Media Settings Section (Scan Directory + Artist Separator + Min Duration + Scan Mode + ReplayGain)
             SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
-                LaunchedEffect(viewModel.artistSeparatorsSet.value) {
-                    separatorTags.value = viewModel.artistSeparatorsSet.value.toList()
-                }
-
                 SegmentedClickableRow(
                     title = stringResource(R.string.settings_scan_directory_settings),
                     subtitle = stringResource(R.string.settings_scan_directory_settings_subtitle),
@@ -1129,11 +1126,12 @@ fun SettingsScreen(
                     count = 6
                 )
 
+                val currentSeparators by viewModel.artistSeparatorsSet.collectAsState()
                 SegmentedClickableRow(
                     title = stringResource(R.string.artist_separators),
-                    subtitle = viewModel.artistSeparatorsSet.value.joinToString(" "),
+                    subtitle = currentSeparators.joinToString(" "),
                     onClick = {
-                        separatorTags.value = viewModel.artistSeparatorsSet.value.toList()
+                        dialogSeparatorTags = currentSeparators
                         separatorInput = ""
                         showSeparatorDialog = true
                     },
@@ -1226,7 +1224,7 @@ fun SettingsScreen(
             if (showSeparatorDialog) {
                 AlertDialog(
                     onDismissRequest = {
-                        separatorTags.value = viewModel.artistSeparatorsSet.value.toList()
+                        dialogSeparatorTags = emptySet()
                         showSeparatorDialog = false
                     },
                     shape = MaterialTheme.shapes.large,
@@ -1242,10 +1240,10 @@ fun SettingsScreen(
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                separatorTags.value.forEach { separator ->
+                                dialogSeparatorTags.forEach { separator ->
                                     SeparatorChip(
                                         separator = separator,
-                                        onDelete = { separatorTags.value = separatorTags.value - separator },
+                                        onDelete = { dialogSeparatorTags = dialogSeparatorTags - separator },
                                         onLongPress = { pendingDeleteSeparator = separator }
                                     )
                                 }
@@ -1267,8 +1265,8 @@ fun SettingsScreen(
                                 FilledTonalButton(
                                     onClick = {
                                         val trimmed = separatorInput.trim()
-                                        if (trimmed.isNotBlank() && trimmed !in separatorTags.value) {
-                                            separatorTags.value = separatorTags.value + trimmed
+                                        if (trimmed.isNotBlank() && trimmed !in dialogSeparatorTags) {
+                                            dialogSeparatorTags = dialogSeparatorTags + trimmed
                                             separatorInput = ""
                                         }
                                     },
@@ -1282,7 +1280,7 @@ fun SettingsScreen(
                     confirmButton = {
                         TextButton(
                             onClick = {
-                                viewModel.setArtistSeparators(separatorTags.value.toSet())
+                                viewModel.setArtistSeparators(dialogSeparatorTags)
                                 showSeparatorDialog = false
                             }
                         ) {
@@ -1291,7 +1289,7 @@ fun SettingsScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = {
-                            separatorTags.value = viewModel.artistSeparatorsSet.value.toList()
+                            dialogSeparatorTags = emptySet()
                             showSeparatorDialog = false
                         }) {
                             Text(stringResource(R.string.dialog_cancel))
@@ -1310,7 +1308,7 @@ fun SettingsScreen(
                     confirmButton = {
                         TextButton(
                             onClick = {
-                                separatorTags.value = separatorTags.value - pendingDeleteSeparator!!
+                                dialogSeparatorTags = dialogSeparatorTags - pendingDeleteSeparator!!
                                 pendingDeleteSeparator = null
                             }
                         ) {
