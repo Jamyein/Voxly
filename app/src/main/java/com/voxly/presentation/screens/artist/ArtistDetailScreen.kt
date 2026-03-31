@@ -56,7 +56,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.theme.ExpressiveMotion
@@ -99,14 +98,13 @@ private fun extractYear(rawYear: String?): Int? {
  * Artist detail screen showing artist info and song list.
  */
 @OptIn(ExperimentalMaterial3Api::class)
-@Suppress("DEPRECATION")
 @Composable
 fun ArtistDetailScreen(
     artistName: String,
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToAlbumDetail: (String, String?) -> Unit,
-    viewModel: ArtistDetailViewModel = hiltViewModel()
+    viewModel: ArtistDetailViewModel
 ) {
     // Load artist from cache
     LaunchedEffect(artistName) {

@@ -46,8 +46,10 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryViewModel
+import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import kotlinx.coroutines.launch
 
 /**
@@ -283,8 +285,19 @@ fun DirectoryContentAdaptiveScreen(
             AnimatedPane {
                 val currentFile = navigator.currentDestination?.contentKey
                 if (currentFile != null) {
+                    // Create navKey for MetadataEditor
+                    val navKey = MetadataEditor(
+                        filePath = currentFile.path,
+                        coverTag = createAlbumArtSharedElementKey(currentFile.path)
+                    )
+                    // Create ViewModel with proper factory
+                    val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
+                        key = currentFile.path,
+                        creationCallback = { factory -> factory.create(navKey) }
+                    )
                     AdaptiveMetadataEditorContainer(
                         filePath = currentFile.path,
+                        viewModel = metadataViewModel,
                         coverTag = createAlbumArtSharedElementKey(currentFile.path),
                         sharedElementKey = null,
                         onNavigateBack = {

@@ -344,8 +344,8 @@ private fun RenderMainScreen(
 
         is Albums -> {
             AlbumAdaptiveScreen(
-                onNavigateToMetadata = { albumName, albumArtist ->
-                    backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
+                onNavigateToMetadata = { filePath, coverTag ->
+                    backStack.add(MetadataEditor(filePath, coverTag ?: ""))
                 },
                 onNavigateBack = {}
             )
@@ -353,8 +353,8 @@ private fun RenderMainScreen(
 
         is Artists -> {
             ArtistAdaptiveScreen(
-                onNavigateToMetadata = { artistName, _ ->
-                    backStack.add(ArtistDetail(artistName))
+                onNavigateToMetadata = { filePath, coverTag ->
+                    backStack.add(MetadataEditor(filePath, coverTag ?: ""))
                 },
                 onNavigateToAlbumDetail = { albumName, albumArtist ->
                     backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
@@ -593,7 +593,8 @@ private fun RenderSubScreen(
                 onNavigateBack = { backStack.removeLastOrNull() },
                 onNavigateToMetadata = { filePath, coverTag ->
                     backStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                }
+                },
+                viewModel = viewModel
             )
         }
 
@@ -609,7 +610,8 @@ private fun RenderSubScreen(
                 },
                 onNavigateToAlbumDetail = { albumName, albumArtist ->
                     backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
-                }
+                },
+                viewModel = viewModel
             )
         }
 

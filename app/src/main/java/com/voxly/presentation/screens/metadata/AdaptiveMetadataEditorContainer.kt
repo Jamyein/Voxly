@@ -2,8 +2,8 @@ package com.voxly.presentation.screens.metadata
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.domain.model.AudioMetadata
+import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 
 /**
  * Adaptive container for MetadataEditorScreen that handles both
@@ -15,6 +15,7 @@ import com.voxly.domain.model.AudioMetadata
 @Composable
 fun AdaptiveMetadataEditorContainer(
     filePath: String,
+    viewModel: MetadataEditorViewModel,
     coverTag: String? = null,
     sharedElementKey: String? = null,
     pendingOnlineMetadata: AudioMetadata? = null,
@@ -29,7 +30,7 @@ fun AdaptiveMetadataEditorContainer(
 ) {
     MetadataEditorScreen(
         filePath = filePath,
-        viewModel = hiltViewModel(),
+        viewModel = viewModel,
         coverTag = coverTag,
         sharedElementKey = sharedElementKey,
         onNavigateBack = onNavigateBack,

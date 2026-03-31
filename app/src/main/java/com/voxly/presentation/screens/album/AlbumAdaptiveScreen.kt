@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
+import com.voxly.presentation.navigation.AlbumDetail
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.AlbumViewModel
 import kotlinx.coroutines.launch
@@ -36,7 +37,7 @@ fun AlbumAdaptiveScreen(
     viewModel: AlbumViewModel = hiltViewModel()
 ) {
     val coroutineScope = rememberCoroutineScope()
-    
+
     // Material3 Adaptive Navigator - automatically handles all screen sizes
     val navigator = rememberListDetailPaneScaffoldNavigator<AlbumGroup>()
 
@@ -63,6 +64,16 @@ fun AlbumAdaptiveScreen(
             AnimatedPane {
                 val currentAlbum = navigator.currentDestination?.contentKey
                 if (currentAlbum != null) {
+                    // Create navKey for the detail view
+                    val navKey = AlbumDetail(
+                        albumName = currentAlbum.name,
+                        albumArtist = currentAlbum.artist ?: ""
+                    )
+                    // Create ViewModel with proper factory
+                    val detailViewModel = hiltViewModel<AlbumDetailViewModel, AlbumDetailViewModel.Factory>(
+                        key = currentAlbum.name + (currentAlbum.artist ?: ""),
+                        creationCallback = { factory -> factory.create(navKey) }
+                    )
                     // Album detail pane
                     AlbumDetailScreen(
                         albumName = currentAlbum.name,
@@ -73,7 +84,8 @@ fun AlbumAdaptiveScreen(
                                 navigator.navigateBack()
                             }
                         },
-                        onNavigateToMetadata = onNavigateToMetadata
+                        onNavigateToMetadata = onNavigateToMetadata,
+                        viewModel = detailViewModel
                     )
                 } else {
                     EmptyDetailPane(

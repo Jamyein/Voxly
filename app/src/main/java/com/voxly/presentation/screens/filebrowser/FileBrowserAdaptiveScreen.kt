@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
@@ -51,11 +50,17 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.RootTab
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryViewModel
+import com.voxly.presentation.viewmodel.MetadataEditorViewModel
+import com.voxly.presentation.viewmodel.SelectedDirectory
 import kotlinx.coroutines.launch
 
 /**
@@ -90,8 +95,20 @@ fun FileBrowserAdaptiveScreen(
     // State collections - use correct property names
     val allAudios by viewModel.allAudios.collectAsState()
     val selectedFiles by viewModel.selectedFiles.collectAsState()
+    val selectedDirectories by viewModel.selectedDirectories.collectAsState()
+    val directoryFiles by viewModel.directoryFiles.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
-    
+
+    // Root tab state (Directories / All)
+    val rootTabString by viewModel.fileBrowserRootTab.collectAsState(initial = RootTab.DIRECTORIES.name)
+    val selectedRootTab = remember(rootTabString) {
+        try {
+            RootTab.valueOf(rootTabString)
+        } catch (e: IllegalArgumentException) {
+            RootTab.DIRECTORIES
+        }
+    }
+
     // Search and sort
     var searchQuery by remember { mutableStateOf("") }
     var isSortExpanded by remember { mutableStateOf(false) }
@@ -178,14 +195,6 @@ fun FileBrowserAdaptiveScreen(
                             scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                             titleContentColor = MaterialTheme.colorScheme.onSurface
                         ),
-                        navigationIcon = {
-                            IconButton(onClick = onNavigateBack) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = stringResource(R.string.back)
-                                )
-                            }
-                        },
                         actions = {
                             IconButton(onClick = { /* Show search */ }) {
                                 Icon(
@@ -193,15 +202,43 @@ fun FileBrowserAdaptiveScreen(
                                     contentDescription = "Search"
                                 )
                             }
-                            SortMenuButton(
-                                expanded = isSortExpanded,
-                                onExpandedChange = { isSortExpanded = it },
-                                currentSortOption = currentSortOption,
-                                options = FileSortOption.entries,
-                                optionLabelResId = { it.labelResId() },
-                                contentDescription = "Sort",
-                                onSortOptionChange = { viewModel.setFileBrowserSortOption(it.name) }
-                            )
+                            // Toggle between Directories and All modes
+                            IconButton(
+                                onClick = {
+                                    val newTab = if (selectedRootTab == RootTab.DIRECTORIES)
+                                        RootTab.ALL.name
+                                    else
+                                        RootTab.DIRECTORIES.name
+                                    viewModel.setFileBrowserRootTab(newTab)
+                                }
+                            ) {
+                                Icon(
+                                    painter = appIconPainter(
+                                        if (selectedRootTab == RootTab.DIRECTORIES)
+                                            AppIcon.MusicNote
+                                        else
+                                            AppIcon.Folder
+                                    ),
+                                    contentDescription = stringResource(
+                                        if (selectedRootTab == RootTab.DIRECTORIES)
+                                            R.string.switch_to_all_audios
+                                        else
+                                            R.string.switch_to_directories
+                                    )
+                                )
+                            }
+                            // Only show sort button in All mode
+                            if (selectedRootTab == RootTab.ALL) {
+                                SortMenuButton(
+                                    expanded = isSortExpanded,
+                                    onExpandedChange = { isSortExpanded = it },
+                                    currentSortOption = currentSortOption,
+                                    options = FileSortOption.entries,
+                                    optionLabelResId = { it.labelResId() },
+                                    contentDescription = "Sort",
+                                    onSortOptionChange = { viewModel.setFileBrowserSortOption(it.name) }
+                                )
+                            }
                             IconButton(onClick = { viewModel.refresh() }) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
@@ -211,36 +248,58 @@ fun FileBrowserAdaptiveScreen(
                         }
                     )
 
-                    // File list content
+                    // Content based on selected tab
                     Surface(
                         modifier = Modifier
                             .fillMaxSize()
                             .nestedScroll(scrollBehavior.nestedScrollConnection)
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                            AllAudiosTabContent(
-                                audios = displayedFiles,
-                                selectedFiles = selectedFiles,
-                                onFileClick = { audioFile ->
-                                    if (isSelectionMode) {
-                                        viewModel.toggleFileSelection(audioFile.path)
-                                    } else {
-                                        // Navigate to detail - use coroutine for suspend function
-                                        coroutineScope.launch {
-                                            navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                            if (selectedRootTab == RootTab.DIRECTORIES) {
+                                // Show directory list
+                                DirectoryOverviewContent(
+                                    directories = selectedDirectories,
+                                    directoryFiles = directoryFiles,
+                                    onOpenDirectory = { directoryUri, directoryName ->
+                                        onNavigateToDirectory(directoryUri, directoryName)
+                                    },
+                                    isRefreshing = isRefreshing,
+                                    onRefresh = { viewModel.refresh() },
+                                    listState = listState,
+                                    bottomPadding = 16.dp
+                                )
+                            } else {
+                                // Show all files
+                                AllAudiosTabContent(
+                                    audios = displayedFiles,
+                                    selectedFiles = selectedFiles,
+                                    onFileClick = { audioFile ->
+                                        if (isSelectionMode) {
+                                            viewModel.toggleFileSelection(audioFile.path)
+                                        } else {
+                                            // Navigate to detail - use coroutine for suspend function
+                                            coroutineScope.launch {
+                                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                                            }
                                         }
-                                    }
-                                },
-                                onFileLongClick = { audioFile ->
-                                    viewModel.toggleFileSelection(audioFile.path)
-                                },
-                                isRefreshing = isRefreshing,
-                                onRefresh = { viewModel.refresh() },
-                                listState = listState
-                            )
+                                    },
+                                    onFileLongClick = { audioFile ->
+                                        viewModel.toggleFileSelection(audioFile.path)
+                                    },
+                                    isRefreshing = isRefreshing,
+                                    onRefresh = { viewModel.refresh() },
+                                    listState = listState
+                                )
+                            }
 
                             // Back to top FAB
-                            if (canScrollToTop && displayedFiles.isNotEmpty()) {
+                            val showFab = canScrollToTop && 
+                                if (selectedRootTab == RootTab.DIRECTORIES) {
+                                    selectedDirectories.isNotEmpty()
+                                } else {
+                                    displayedFiles.isNotEmpty()
+                                }
+                            if (showFab) {
                                 SmallFloatingActionButton(
                                     onClick = {
                                         coroutineScope.launch {
@@ -269,8 +328,19 @@ fun FileBrowserAdaptiveScreen(
             AnimatedPane {
                 val currentFile = navigator.currentDestination?.contentKey
                 if (currentFile != null) {
+                    // Create navKey for MetadataEditor
+                    val navKey = MetadataEditor(
+                        filePath = currentFile.path,
+                        coverTag = createAlbumArtSharedElementKey(currentFile.path)
+                    )
+                    // Create ViewModel with proper factory
+                    val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
+                        key = currentFile.path,
+                        creationCallback = { factory -> factory.create(navKey) }
+                    )
                     AdaptiveMetadataEditorContainer(
                         filePath = currentFile.path,
+                        viewModel = metadataViewModel,
                         coverTag = createAlbumArtSharedElementKey(currentFile.path),
                         sharedElementKey = null,
                         onNavigateBack = {

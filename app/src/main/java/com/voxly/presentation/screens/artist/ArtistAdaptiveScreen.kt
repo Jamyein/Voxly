@@ -13,6 +13,8 @@ import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
+import com.voxly.presentation.navigation.ArtistDetail
+import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import kotlinx.coroutines.launch
 
@@ -36,7 +38,7 @@ fun ArtistAdaptiveScreen(
     viewModel: ArtistViewModel = hiltViewModel()
 ) {
     val coroutineScope = rememberCoroutineScope()
-    
+
     // Material3 Adaptive Navigator - automatically handles all screen sizes
     val navigator = rememberListDetailPaneScaffoldNavigator<ArtistGroup>()
 
@@ -63,6 +65,15 @@ fun ArtistAdaptiveScreen(
             AnimatedPane {
                 val currentArtist = navigator.currentDestination?.contentKey
                 if (currentArtist != null) {
+                    // Create navKey for the detail view
+                    val navKey = ArtistDetail(
+                        artistName = currentArtist.name
+                    )
+                    // Create ViewModel with proper factory
+                    val detailViewModel = hiltViewModel<ArtistDetailViewModel, ArtistDetailViewModel.Factory>(
+                        key = currentArtist.name,
+                        creationCallback = { factory -> factory.create(navKey) }
+                    )
                     // Artist detail pane
                     ArtistDetailScreen(
                         artistName = currentArtist.name,
@@ -73,7 +84,8 @@ fun ArtistAdaptiveScreen(
                             }
                         },
                         onNavigateToMetadata = onNavigateToMetadata,
-                        onNavigateToAlbumDetail = onNavigateToAlbumDetail
+                        onNavigateToAlbumDetail = onNavigateToAlbumDetail,
+                        viewModel = detailViewModel
                     )
                 } else {
                     EmptyDetailPane(
