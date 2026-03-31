@@ -101,11 +101,18 @@ fun FileBrowserAdaptiveScreen(
 
     // Root tab state (Directories / All)
     val rootTabString by viewModel.fileBrowserRootTab.collectAsState(initial = RootTab.DIRECTORIES.name)
-    val selectedRootTab = remember(rootTabString) {
+    var selectedRootTab = remember(rootTabString) {
         try {
             RootTab.valueOf(rootTabString)
         } catch (e: IllegalArgumentException) {
             RootTab.DIRECTORIES
+        }
+    }
+
+    // Auto-switch to ALL mode when no directories are selected
+    LaunchedEffect(selectedDirectories, selectedRootTab) {
+        if (selectedDirectories.isEmpty() && selectedRootTab == RootTab.DIRECTORIES) {
+            viewModel.setFileBrowserRootTab(RootTab.ALL.name)
         }
     }
 

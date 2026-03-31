@@ -318,9 +318,10 @@ class LibraryViewModel @Inject constructor(
                             )
                         }
                         audioFileScanner.updateAlbumsAndArtistsFromFiles(result.files)
-                        if (isIncremental) {
-                            aggregateData()
-                        }
+                        // Aggregate data for global scan (no selected directories)
+                        // This ensures allAudios, albums, and artists are populated
+                        _allAudios.value = result.files
+                        aggregateData()
                     }
                     is ScanResult.Error -> {
                         Timber.tag(TAG).e("Audio scan failed: ${result.message}")
@@ -1296,7 +1297,13 @@ class LibraryViewModel @Inject constructor(
      * Aggregates audio files into albums and artists groups.
      */
     private fun aggregateData() {
-        val allFiles = _directoryFiles.value.values.flatten()
+        val allFiles = if (_directoryFiles.value.isNotEmpty()) {
+            // Use directory files if directories are selected
+            _directoryFiles.value.values.flatten()
+        } else {
+            // Fall back to global files when no directories are selected
+            cachedGlobalFiles ?: emptyList()
+        }
 
         // Aggregate all audios
         _allAudios.value = allFiles
