@@ -344,21 +344,12 @@ private fun RenderMainScreen(
 
         is Albums -> {
             AlbumAdaptiveScreen(
-                onNavigateToMetadata = { filePath, coverTag ->
-                    backStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                },
                 onNavigateBack = {}
             )
         }
 
         is Artists -> {
             ArtistAdaptiveScreen(
-                onNavigateToMetadata = { filePath, coverTag ->
-                    backStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                },
-                onNavigateToAlbumDetail = { albumName, albumArtist ->
-                    backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
-                },
                 onNavigateBack = {}
             )
         }

@@ -8,51 +8,58 @@ import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.navigation.AlbumDetail
+import com.voxly.presentation.navigation.MetadataEditor
+import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.AlbumViewModel
+import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import kotlinx.coroutines.launch
 
 /**
- * Adaptive Album screen using Material3 ListDetailPaneScaffold.
+ * Adaptive Album screen using Material3 ListDetailPaneScaffold with conditional three-pane support.
  *
- * This is true adaptive design - Material3 automatically manages:
- * - Small screens: Single pane with full-screen navigation
- * - Medium screens: Dual pane with adjustable ratio
- * - Large screens: Dual pane with 40:60 split
- *
- * No conditional logic needed - Material3 handles all screen sizes.
+ * Layout behavior:
+ * - Initial state: Two-pane layout (Album list | Album detail)
+ * - After clicking track: Three-pane layout on tablets (Album list | Album detail | Metadata editor)
+ * - On phones: Single pane with navigation
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumAdaptiveScreen(
-    onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: AlbumViewModel = hiltViewModel()
 ) {
     val coroutineScope = rememberCoroutineScope()
 
-    // Material3 Adaptive Navigator - automatically handles all screen sizes
+    // Navigator for list-detail layout
     val navigator = rememberListDetailPaneScaffoldNavigator<AlbumGroup>()
+    
+    // Track selected file for metadata editing
+    var selectedFileForEditing by remember { mutableStateOf<String?>(null) }
 
-    // Material3 ListDetailPaneScaffold - handles all screen sizes automatically
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
         listPane = {
+            // Album list pane
             AnimatedPane {
-                // Album list pane - same content for all screen sizes
                 AlbumScreenContent(
                     viewModel = viewModel,
                     onAlbumClick = { album ->
-                        // Navigate to detail - use coroutine for suspend function
                         coroutineScope.launch {
+                            selectedFileForEditing = null
                             navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, album)
                         }
                     },
@@ -61,35 +68,94 @@ fun AlbumAdaptiveScreen(
             }
         },
         detailPane = {
+            // Detail pane: either Album detail or Metadata editor
             AnimatedPane {
                 val currentAlbum = navigator.currentDestination?.contentKey
-                if (currentAlbum != null) {
-                    // Create navKey for the detail view
+                
+                if (selectedFileForEditing != null) {
+                    // Show metadata editor in detail pane (for small/medium screens)
+                    val navKey = MetadataEditor(
+                        filePath = selectedFileForEditing!!,
+                        coverTag = createAlbumArtSharedElementKey(selectedFileForEditing!!)
+                    )
+                    val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
+                        key = selectedFileForEditing!!,
+                        creationCallback = { factory -> factory.create(navKey) }
+                    )
+                    AdaptiveMetadataEditorContainer(
+                        filePath = selectedFileForEditing!!,
+                        viewModel = metadataViewModel,
+                        coverTag = createAlbumArtSharedElementKey(selectedFileForEditing!!),
+                        sharedElementKey = null,
+                        onNavigateBack = {
+                            selectedFileForEditing = null
+                        },
+                        onNavigateToOnlineMetadata = { /* TODO */ },
+                        onNavigateToOnlineLyricsSearch = { /* TODO */ },
+                        onNavigateToOnlineCoverSearch = { /* TODO */ },
+                        onNavigateToLyricsSelector = { _, _, _, _, _ -> /* TODO */ }
+                    )
+                } else if (currentAlbum != null) {
+                    // Show album detail
                     val navKey = AlbumDetail(
                         albumName = currentAlbum.name,
                         albumArtist = currentAlbum.artist ?: ""
                     )
-                    // Create ViewModel with proper factory
                     val detailViewModel = hiltViewModel<AlbumDetailViewModel, AlbumDetailViewModel.Factory>(
                         key = currentAlbum.name + (currentAlbum.artist ?: ""),
                         creationCallback = { factory -> factory.create(navKey) }
                     )
-                    // Album detail pane
                     AlbumDetailScreen(
                         albumName = currentAlbum.name,
                         albumArtist = currentAlbum.artist,
                         onNavigateBack = {
-                            // Use coroutine for suspend function
                             coroutineScope.launch {
                                 navigator.navigateBack()
                             }
                         },
-                        onNavigateToMetadata = onNavigateToMetadata,
+                        onNavigateToMetadata = { filePath, _ ->
+                            selectedFileForEditing = filePath
+                        },
                         viewModel = detailViewModel
                     )
                 } else {
                     EmptyDetailPane(
                         message = "Select an album to view details"
+                    )
+                }
+            }
+        },
+        extraPane = {
+            // Extra pane: conditionally show metadata editor for large screens (tablets)
+            AnimatedPane {
+                // Only show metadata editor in extra pane when a file is selected
+                // and we're in a large screen configuration (tablet)
+                if (selectedFileForEditing != null) {
+                    val navKey = MetadataEditor(
+                        filePath = selectedFileForEditing!!,
+                        coverTag = createAlbumArtSharedElementKey(selectedFileForEditing!!)
+                    )
+                    val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
+                        key = selectedFileForEditing!!,
+                        creationCallback = { factory -> factory.create(navKey) }
+                    )
+                    AdaptiveMetadataEditorContainer(
+                        filePath = selectedFileForEditing!!,
+                        viewModel = metadataViewModel,
+                        coverTag = createAlbumArtSharedElementKey(selectedFileForEditing!!),
+                        sharedElementKey = null,
+                        onNavigateBack = {
+                            selectedFileForEditing = null
+                        },
+                        onNavigateToOnlineMetadata = { /* TODO */ },
+                        onNavigateToOnlineLyricsSearch = { /* TODO */ },
+                        onNavigateToOnlineCoverSearch = { /* TODO */ },
+                        onNavigateToLyricsSelector = { _, _, _, _, _ -> /* TODO */ }
+                    )
+                } else {
+                    // Show empty placeholder when no file is selected
+                    EmptyDetailPane(
+                        message = "Select a track to edit metadata"
                     )
                 }
             }
