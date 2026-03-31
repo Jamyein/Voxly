@@ -97,16 +97,17 @@ fun DirectoryOverviewContent(
     bottomPadding: Dp = 0.dp
 ) {
     val lazyListState = listState ?: rememberLazyListState()
+    val pullToRefreshState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = isRefreshing,
         onRefresh = onRefresh,
+        state = pullToRefreshState,
         modifier = Modifier.fillMaxSize(),
         indicator = {
-            val pullToRefreshState = rememberPullToRefreshState()
             androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator(
                 state = pullToRefreshState,
                 isRefreshing = isRefreshing,
-                modifier = Modifier
+                modifier = Modifier.align(Alignment.TopCenter)
             )
         }
     ) {

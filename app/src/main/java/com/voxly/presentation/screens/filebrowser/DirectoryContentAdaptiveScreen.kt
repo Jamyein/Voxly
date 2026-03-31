@@ -11,6 +11,9 @@ import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
+import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,6 +49,8 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.screens.filebrowser.LoadingContent
+import com.voxly.presentation.screens.filebrowser.DirectoryEmptyContent
 import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryViewModel
@@ -214,66 +219,79 @@ fun DirectoryContentAdaptiveScreen(
                         }
                     )
 
-                    // File list content
+                    // File list content with PullToRefresh
                     Surface(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .nestedScroll(scrollBehavior.nestedScrollConnection)
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            if (files.isEmpty() && isDirectoryLoading) {
-                                LoadingContent()
-                            } else if (files.isEmpty()) {
-                                DirectoryEmptyContent(
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                AudioFileListWithIndexer(
-                                    files = displayedFiles,
-                                    listState = listState,
-                                    modifier = Modifier.fillMaxSize(),
-                                    selectedFiles = selectedFiles,
-                                    onFileClick = { audioFile ->
-                                        if (isSelectionMode) {
-                                            viewModel.toggleFileSelection(audioFile.path)
-                                        } else {
-                                            // Navigate to detail - use coroutine for suspend function
-                                            coroutineScope.launch {
-                                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
-                                            }
-                                        }
-                                    },
-                                    onFileLongClick = { audioFile ->
-                                        viewModel.toggleFileSelection(audioFile.path)
-                                    },
-                                    onEditFileMetadata = { /* Not used in adaptive mode */ },
-                                    onRenameFile = { /* Not used in adaptive mode */ },
-                                    onDeleteFile = { /* Not used in adaptive mode */ },
-                                    onFetchOnlineMetadata = { /* Not used in adaptive mode */ },
-                                    onFixMetadata = { /* Not used in adaptive mode */ },
-                                    bottomPadding = 16.dp
+                        val pullToRefreshState = rememberPullToRefreshState()
+                        PullToRefreshBox(
+                            isRefreshing = isRefreshing,
+                            onRefresh = { viewModel.refresh() },
+                            state = pullToRefreshState,
+                            modifier = Modifier.fillMaxSize(),
+                            indicator = {
+                                LoadingIndicator(
+                                    state = pullToRefreshState,
+                                    isRefreshing = isRefreshing,
+                                    modifier = Modifier.align(Alignment.TopCenter)
                                 )
                             }
-
-                            // Back to top FAB
-                            if (canScrollToTop && displayedFiles.isNotEmpty()) {
-                                SmallFloatingActionButton(
-                                    onClick = {
-                                        coroutineScope.launch {
-                                            listState.animateScrollToItem(0)
-                                        }
-                                    },
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    shape = MaterialTheme.shapes.extraLarge,
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .padding(16.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.KeyboardArrowUp,
-                                        contentDescription = "Back to top"
+                        ) {
+                            Box(modifier = Modifier.fillMaxSize()) {
+                                if (files.isEmpty() && isDirectoryLoading) {
+                                    LoadingContent()
+                                } else if (files.isEmpty()) {
+                                    DirectoryEmptyContent(
+                                        modifier = Modifier.fillMaxSize()
                                     )
+                                } else {
+                                    AudioFileListWithIndexer(
+                                        files = displayedFiles,
+                                        listState = listState,
+                                        modifier = Modifier.fillMaxSize(),
+                                        selectedFiles = selectedFiles,
+                                        onFileClick = { audioFile ->
+                                            if (isSelectionMode) {
+                                                viewModel.toggleFileSelection(audioFile.path)
+                                            } else {
+                                                // Navigate to detail - use coroutine for suspend function
+                                                coroutineScope.launch {
+                                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                                                }
+                                            }
+                                        },
+                                        onFileLongClick = { audioFile ->
+                                            viewModel.toggleFileSelection(audioFile.path)
+                                        },
+                                        onEditFileMetadata = { /* Not used in adaptive mode */ },
+                                        onRenameFile = { /* Not used in adaptive mode */ },
+                                        onDeleteFile = { /* Not used in adaptive mode */ },
+                                        onFetchOnlineMetadata = { /* Not used in adaptive mode */ },
+                                        onFixMetadata = { /* Not used in adaptive mode */ },
+                                        bottomPadding = 16.dp
+                                    )
+                                }
+
+                                // Back to top FAB
+                                if (canScrollToTop && displayedFiles.isNotEmpty()) {
+                                    SmallFloatingActionButton(
+                                        onClick = {
+                                            coroutineScope.launch {
+                                                listState.animateScrollToItem(0)
+                                            }
+                                        },
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                        shape = MaterialTheme.shapes.extraLarge,
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .padding(16.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.KeyboardArrowUp,
+                                            contentDescription = "Back to top"
+                                        )
+                                    }
                                 }
                             }
                         }

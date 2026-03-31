@@ -257,9 +257,7 @@ fun FileBrowserAdaptiveScreen(
 
                     // Content based on selected tab
                     Surface(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .nestedScroll(scrollBehavior.nestedScrollConnection)
+                        modifier = Modifier.fillMaxSize()
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
                             if (selectedRootTab == RootTab.DIRECTORIES) {
