@@ -76,11 +76,6 @@ class LibraryViewModel @Inject constructor(
         private const val STATE_FLOW_TIMEOUT_MS = 5000L
     }
 
-    private data class AlbumAggregationKey(
-        val album: String,
-        val albumArtist: String
-    )
-
     private val _uiState = MutableStateFlow<FileBrowserUiState>(FileBrowserUiState.Loading)
     val uiState: StateFlow<FileBrowserUiState> = _uiState.asStateFlow()
 
@@ -103,15 +98,20 @@ class LibraryViewModel @Inject constructor(
     private val _openedDirectoryUri = MutableStateFlow<String?>(null)
     val openedDirectoryUri: StateFlow<String?> = _openedDirectoryUri.asStateFlow()
 
-    // Aggregated data for tabs
-    private val _allAudios = MutableStateFlow<List<AudioFile>>(emptyList())
-    val allAudios: StateFlow<List<AudioFile>> = _allAudios.asStateFlow()
+    // Audio data - sourced from AudioFileScanner (single source of truth)
+    // File browser uses this for "All" mode
+    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.getCachedAudioFiles()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = emptyList()
+        )
 
-    private val _albums = MutableStateFlow<List<AlbumGroup>>(emptyList())
-    val albums: StateFlow<List<AlbumGroup>> = _albums.asStateFlow()
+    // Albums - sourced from AudioFileScanner
+    val albums: StateFlow<List<AlbumGroup>> = audioFileScanner.albums
 
-    private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
-    val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
+    // Artists - sourced from AudioFileScanner
+    val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
 
     val artistSeparatorEnabled: StateFlow<Boolean> = settingsDataStore.artistSeparatorEnabled
         .stateIn(viewModelScope, SharingStarted.Eagerly, true)
@@ -158,7 +158,6 @@ class LibraryViewModel @Inject constructor(
 
     private var scanJob: Job? = null
     private var batchJob: Job? = null
-    private var cachedGlobalFiles: List<AudioFile>? = null
     private val scrollPositions = mutableMapOf<String, ScrollPosition>()
 
     // Scan filter settings - observe changes to trigger auto-refresh
@@ -221,114 +220,32 @@ class LibraryViewModel @Inject constructor(
                 syncSelectedDirectoriesFromStorage()
 
                 if (_selectedDirectories.value.isNotEmpty()) {
-                    if (!forceRefresh && !isIncremental) {
-                        var cachedDirectoryFiles = _directoryFiles.value
-                        if (cachedDirectoryFiles.isEmpty() && audioFileScanner.hasCachedData()) {
-                            cachedDirectoryFiles = buildDirectoryFilesFromCache(_selectedDirectories.value)
-                            if (cachedDirectoryFiles.isNotEmpty()) {
-                                _directoryFiles.value = cachedDirectoryFiles
-                                val mergedFiles = cachedDirectoryFiles.values.flatten().distinctBy { it.path }
-                                _uiState.value = if (mergedFiles.isEmpty()) {
-                                    FileBrowserUiState.Empty
-                                } else {
-                                    FileBrowserUiState.Success(
-                                        files = mergedFiles,
-                                        selectedCount = _selectedFiles.value.size
-                                    )
-                                }
-                                aggregateData()
-                                audioFileScanner.updateAlbumsAndArtistsFromFiles(mergedFiles)
-                            }
-                        }
-                        val hasAllDirectoryEntries = _selectedDirectories.value.all { selected ->
-                            selected.uri in cachedDirectoryFiles
-                        }
-                        if (hasAllDirectoryEntries) {
-                            val mergedFiles = cachedDirectoryFiles.values.flatten().distinctBy { it.path }
-                            _uiState.value = if (mergedFiles.isEmpty()) {
-                                FileBrowserUiState.Empty
-                            } else {
-                                FileBrowserUiState.Success(
-                                    files = mergedFiles,
-                                    selectedCount = _selectedFiles.value.size
-                                )
-                            }
-                            return@launch
-                        }
-                    }
-
-                    if (isIncremental) {
-                        scanSelectedDirectoriesIncremental(_selectedDirectories.value)
-                    } else {
-                        scanSelectedDirectoriesIncremental(_selectedDirectories.value)
-                    }
+                    // Directory mode: scan selected directories
+                    scanSelectedDirectories(_selectedDirectories.value, isIncremental, forceRefresh)
                     return@launch
                 }
 
-                // No selected directories - handle global/all files case
-                if (!forceRefresh && !isIncremental && audioFileScanner.hasCachedData()) {
-                    val cachedFiles = audioFileScanner.getCachedAudioFiles().first()
-                    if (cachedFiles.isNotEmpty()) {
-                        cachedGlobalFiles = cachedFiles
-                        _directoryFiles.value = emptyMap()
-                        _uiState.value = FileBrowserUiState.Success(
-                            files = cachedFiles,
-                            selectedCount = _selectedFiles.value.size
-                        )
-                        Timber.d(TAG, "Loaded ${cachedFiles.size} files from cache")
-                        return@launch
-                    }
+                // No selected directories - use global scan via AudioFileScanner
+                // All mode data comes from audioFileScanner.getCachedAudioFiles() StateFlow
+                if (forceRefresh || isIncremental || !audioFileScanner.hasCachedData()) {
+                    // Trigger scan to populate AudioFileScanner's cache
+                    // Albums and artists are auto-updated by AudioFileScanner
+                    audioFileScanner.scan(
+                        directoryPaths = emptyList(),
+                        incremental = isIncremental,
+                        forceRefresh = forceRefresh
+                    )
                 }
 
-                if (!forceRefresh && !isIncremental) {
-                    cachedGlobalFiles?.let { files ->
-                        _directoryFiles.value = emptyMap()
-                        _uiState.value = if (files.isEmpty()) {
-                            FileBrowserUiState.Empty
-                        } else {
-                            FileBrowserUiState.Success(
-                                files = files,
-                                selectedCount = _selectedFiles.value.size
-                            )
-                        }
-                        return@launch
-                    }
-                }
-
-                if (forceRefresh || isIncremental || _uiState.value !is FileBrowserUiState.Success) {
-                    _uiState.value = FileBrowserUiState.Loading
-                }
-
-                val result = if (isIncremental) {
-                    unifiedScanManager.scan(target = ScanTarget.Incremental, force = true)
-                } else {
-                    unifiedScanManager.scan(target = ScanTarget.Global, force = forceRefresh)
-                }
-
-                when (result) {
-                    is ScanResult.Success -> {
-                        cachedGlobalFiles = result.files
-                        _directoryFiles.value = emptyMap()
-                        _uiState.value = if (result.files.isEmpty()) {
-                            FileBrowserUiState.Empty
-                        } else {
-                            FileBrowserUiState.Success(
-                                files = result.files,
-                                selectedCount = _selectedFiles.value.size
-                            )
-                        }
-                        audioFileScanner.updateAlbumsAndArtistsFromFiles(result.files)
-                        // Aggregate data for global scan (no selected directories)
-                        // This ensures allAudios, albums, and artists are populated
-                        _allAudios.value = result.files
-                        aggregateData()
-                    }
-                    is ScanResult.Error -> {
-                        Timber.tag(TAG).e("Audio scan failed: ${result.message}")
-                        _uiState.value = FileBrowserUiState.Error(result.message)
-                    }
-                    is ScanResult.Cancelled -> Unit
-                }
+                // UI state for directory mode (empty when in All mode)
+                _directoryFiles.value = emptyMap()
+                _uiState.value = FileBrowserUiState.Success(
+                    files = emptyList(), // All mode uses allAudios StateFlow directly
+                    selectedCount = _selectedFiles.value.size
+                )
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Failed to load audio files")
+                _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
             } finally {
                 if (shouldShowRefresh) {
                     _isRefreshing.value = false
@@ -347,32 +264,52 @@ class LibraryViewModel @Inject constructor(
     }
 
     /**
-     * Performs incremental scan on selected directories.
-     * Detects new/modified files by comparing modification times with cache.
+     * Scans selected directories.
      */
-    private suspend fun scanSelectedDirectoriesIncremental(directories: List<SelectedDirectory>) {
-        Timber.d(TAG, "Performing incremental scan on ${directories.size} directories")
+    private suspend fun scanSelectedDirectories(
+        directories: List<SelectedDirectory>,
+        isIncremental: Boolean = false,
+        forceRefresh: Boolean = false
+    ) {
+        Timber.d(TAG, "Scanning ${directories.size} directories (incremental=$isIncremental, force=$forceRefresh)")
+
+        val dirUris = directories.map { it.uri }.toSet()
+        _directoryLoadingState.value = _directoryLoadingState.value + dirUris
+
+        if (forceRefresh || _uiState.value !is FileBrowserUiState.Success) {
+            _uiState.value = FileBrowserUiState.Loading
+        }
 
         runCatching {
             val paths = directories.map { it.path }.filter { it.isNotBlank() }
             if (paths.isEmpty()) {
-                emptyMap()
+                emptyMap<String, List<AudioFile>>()
             } else {
-                val resultFiles = audioFileScanner.scanIncrementalForDirectories(paths).first()
+                // Use unified scan API
+                val files = audioFileScanner.scan(
+                    directoryPaths = paths,
+                    incremental = isIncremental,
+                    forceRefresh = forceRefresh
+                )
+
+                // Group files by directory
                 val filesByDir = mutableMapOf<String, List<AudioFile>>()
                 directories.forEach { dir ->
-                    val dirFiles = resultFiles.filter { isFileInDirectory(it.path, dir.path) }
+                    val dirFiles = files.filter { isFileInDirectory(it.path, dir.path) }
                     filesByDir[dir.uri] = dirFiles
                 }
                 filesByDir
             }
         }.onSuccess { filesByDirectory ->
+            _isRefreshing.value = false
             _directoryFiles.value = filesByDirectory
             _currentDirectory.value = directories.firstOrNull()?.path
+
             if (_openedDirectoryUri.value != null && _openedDirectoryUri.value !in filesByDirectory.keys) {
                 _openedDirectoryUri.value = null
                 clearSelection()
             }
+
             val mergedFiles = filesByDirectory.values.flatten().distinctBy { it.path }
             _uiState.value = if (mergedFiles.isEmpty()) {
                 FileBrowserUiState.Empty
@@ -382,16 +319,16 @@ class LibraryViewModel @Inject constructor(
                     selectedCount = _selectedFiles.value.size
                 )
             }
-            aggregateData()
-            // Sync to AudioFileScanner so Album/Artist screens see the data
-            audioFileScanner.updateAlbumsAndArtistsFromFiles(mergedFiles)
+            // Note: AudioFileScanner automatically updates albums/artists from cache
         }.onFailure { error ->
+            _isRefreshing.value = false
             if (error is CancellationException) {
                 return@onFailure
             }
-            Timber.tag(TAG).e("Incremental directory scan failed for ${directories.joinToString { it.path }}", error)
-            // Fall back to full scan on error
-            scanSelectedDirectories(directories, forceRefresh = true)
+            Timber.tag(TAG).e("Directory scan failed for ${directories.joinToString { it.path }}", error)
+            _uiState.value = FileBrowserUiState.Error(error.message ?: "Unknown error")
+        }.also {
+            _directoryLoadingState.value = _directoryLoadingState.value - dirUris
         }
     }
 
@@ -489,11 +426,12 @@ class LibraryViewModel @Inject constructor(
         persistSelectedDirectories(updatedDirectories)
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            if (alreadyLoaded) {
-                scanSelectedDirectoriesIncremental(updatedDirectories)
-            } else {
-                scanSelectedDirectories(updatedDirectories)
-            }
+            // Use unified scan method - incremental if already loaded, full scan otherwise
+            scanSelectedDirectories(
+                directories = updatedDirectories,
+                isIncremental = alreadyLoaded,
+                forceRefresh = !alreadyLoaded
+            )
         }
     }
 
@@ -1274,113 +1212,6 @@ class LibraryViewModel @Inject constructor(
         }
     }
 
-    /**
-     * Split artist string by separators
-     * @param artist The artist string to split
-     * @param separators Set of separator strings (e.g., setOf("&", "/", "\\"))
-     * @return List of split artist names (empty strings filtered out)
-     */
-    private fun splitArtist(artist: String, separators: Set<String>): List<String> {
-        if (artist.isBlank()) return emptyList()
-        if (separators.isEmpty()) return listOf(artist)
-
-        // Sort by length descending to avoid short separators matching before long ones
-        val sortedSeparators = separators.sortedByDescending { it.length }
-        val regex = sortedSeparators.joinToString("|") { Regex.escape(it) }
-
-        return artist.split(Regex(regex))
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-    }
-
-    /**
-     * Aggregates audio files into albums and artists groups.
-     */
-    private fun aggregateData() {
-        val allFiles = if (_directoryFiles.value.isNotEmpty()) {
-            // Use directory files if directories are selected
-            _directoryFiles.value.values.flatten()
-        } else {
-            // Fall back to global files when no directories are selected
-            cachedGlobalFiles ?: emptyList()
-        }
-
-        // Aggregate all audios
-        _allAudios.value = allFiles
-
-        // Aggregate albums
-        val albumsMap = allFiles
-            .filter { it.metadata.album?.isNotBlank() == true }
-            .groupBy { file ->
-                AlbumAggregationKey(
-                    album = file.metadata.album!!,
-                    albumArtist = file.metadata.albumArtist
-                        ?.takeIf { it.isNotBlank() }
-                        ?: file.metadata.artist.orEmpty()
-                )
-            }
-            .map { (key, files) ->
-                val coverFile = files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                    ?: files.firstOrNull()
-                AlbumGroup(
-                    name = key.album,
-                    artist = key.albumArtist.ifBlank { files.firstOrNull()?.metadata?.artist },
-                    files = files.sortedBy { it.metadata.trackNumber },
-                    coverPath = coverFile?.path
-                )
-            }
-            .sortedBy { SortUtil.toSortablePinyin(it.name) }
-
-        _albums.value = albumsMap
-
-        // Aggregate artists
-        val isSeparatorEnabled = artistSeparatorEnabled.value
-        val customSeparators = artistSeparatorsSet.value
-
-        val artistsMap = mutableMapOf<String, MutableList<AudioFile>>()
-
-        allFiles
-            .filter { it.metadata.artist?.isNotBlank() == true }
-            .forEach { file ->
-                val artistField = file.metadata.artist!!
-
-                if (isSeparatorEnabled && customSeparators.isNotEmpty()) {
-                    // Split artist field
-                    val splitArtists = splitArtist(artistField, customSeparators)
-                    splitArtists.forEach { artistName ->
-                        artistsMap.getOrPut(artistName) { mutableListOf() }.add(file)
-                    }
-                } else {
-                    // No splitting, use original artist field
-                    artistsMap.getOrPut(artistField) { mutableListOf() }.add(file)
-                }
-            }
-
-        val artistsList = artistsMap.map { (artistName, files) ->
-            // 固定选择封面：优先选择有专辑封面的文件，否则使用第一个文件
-            val coverFile = files.firstOrNull { it.metadata.album?.isNotBlank() == true }
-                ?: files.firstOrNull()
-            ArtistGroup(
-                name = artistName,
-                albums = files.mapNotNull { it.metadata.album }.distinct().sorted(),
-                files = files.sortedBy { it.metadata.album },
-                coverPath = coverFile?.path
-            )
-        }.sortedBy { SortUtil.toSortablePinyin(it.name) }
-
-        _artists.value = artistsList
-
-        // Cache artists for detail screen
-        artistsList.forEach { artist ->
-            val repoArtist = RepoArtistGroup(
-                name = artist.name,
-                files = artist.files,
-                coverPath = artist.coverPath
-            )
-            artistCacheRepository.cacheArtist(repoArtist)
-        }
-    }
-
     private fun restoreSelectedDirectories() {
         viewModelScope.launch {
             val uris = settingsDataStore.selectedDirectoryUris.first()
@@ -1412,77 +1243,6 @@ class LibraryViewModel @Inject constructor(
             directory.uri to cachedFiles.filter { file ->
                 isFileInDirectory(file.path, directory.path)
             }
-        }
-    }
-
-    private suspend fun scanSelectedDirectories(
-        directories: List<SelectedDirectory>,
-        forceRefresh: Boolean = false
-    ) {
-        // Set loading state for all directories being scanned
-        val dirUris = directories.map { it.uri }.toSet()
-        _directoryLoadingState.value = _directoryLoadingState.value + dirUris
-
-        if (forceRefresh || _uiState.value !is FileBrowserUiState.Success) {
-            _uiState.value = FileBrowserUiState.Loading
-        }
-
-        val previousDirectoryFiles = _directoryFiles.value
-
-        runCatching {
-            val paths = directories.map { it.path }.filter { it.isNotBlank() }
-            if (paths.isEmpty()) {
-                emptyMap()
-            } else {
-                // Use unifiedScanManager to scan directories
-                val result = unifiedScanManager.scan(
-                    target = ScanTarget.Directories(paths),
-                    force = forceRefresh
-                )
-                when (result) {
-                    is ScanResult.Success -> {
-                        // Group files by directory URI
-                        val filesByDir = mutableMapOf<String, List<AudioFile>>()
-                        directories.forEach { dir ->
-                            val dirFiles = result.files.filter { it.path.startsWith(dir.path) }
-                            filesByDir[dir.uri] = dirFiles
-                        }
-                        filesByDir
-                    }
-                    is ScanResult.Error -> throw IllegalStateException(result.message)
-                    is ScanResult.Cancelled -> emptyMap()
-                }
-            }
-        }.onSuccess { filesByDirectory ->
-            _isRefreshing.value = false
-            _directoryFiles.value = filesByDirectory
-            _currentDirectory.value = directories.firstOrNull()?.path
-            if (_openedDirectoryUri.value != null && _openedDirectoryUri.value !in filesByDirectory.keys) {
-                _openedDirectoryUri.value = null
-                clearSelection()
-            }
-            val mergedFiles = filesByDirectory.values.flatten().distinctBy { it.path }
-            _uiState.value = if (mergedFiles.isEmpty()) {
-                FileBrowserUiState.Empty
-            } else {
-                FileBrowserUiState.Success(
-                    files = mergedFiles,
-                    selectedCount = _selectedFiles.value.size
-                )
-            }
-            aggregateData()
-            // Sync to AudioFileScanner so Album/Artist screens see the data
-            audioFileScanner.updateAlbumsAndArtistsFromFiles(mergedFiles)
-        }.onFailure { error ->
-            _isRefreshing.value = false
-            if (error is CancellationException) {
-                return@onFailure
-            }
-            Timber.tag(TAG).e( "Directory scan failed for ${directories.joinToString { it.path }}", error)
-            _uiState.value = FileBrowserUiState.Error(error.message ?: "Unknown error")
-        }.also {
-            // Clear loading state when scan completes (success or failure)
-            _directoryLoadingState.value = _directoryLoadingState.value - dirUris
         }
     }
 

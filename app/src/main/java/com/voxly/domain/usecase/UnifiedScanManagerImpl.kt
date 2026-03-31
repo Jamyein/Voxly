@@ -205,40 +205,34 @@ class UnifiedScanManagerImpl @Inject constructor(
             }
         }
 
-        // Perform full scan
-        val files = mutableListOf<AudioFile>()
-        audioFileScanner.scanAudioFilesOptimized(forceRefresh = force).collect { scanned ->
-            files.clear()
-            files.addAll(scanned)
-        }
-        return files
+        // Perform full scan using unified API
+        return audioFileScanner.scan(
+            directoryPaths = emptyList(),
+            incremental = false,
+            forceRefresh = force
+        )
     }
 
     /**
      * Performs an incremental scan (only new/modified files)
      */
     private suspend fun performIncrementalScan(): List<AudioFile> {
-        val files = mutableListOf<AudioFile>()
-        audioFileScanner.scanIncremental().collect { scanned ->
-            files.clear()
-            files.addAll(scanned)
-        }
-        return files
+        return audioFileScanner.scan(
+            directoryPaths = emptyList(),
+            incremental = true,
+            forceRefresh = false
+        )
     }
 
     /**
      * Scans specific directories only
      */
     private suspend fun performDirectoryScan(paths: List<String>, force: Boolean): List<AudioFile> {
-        val allFiles = mutableListOf<AudioFile>()
-
-        for (path in paths) {
-            audioFileScanner.scanDirectory(path, forceRefresh = force).collect { files ->
-                allFiles.addAll(files)
-            }
-        }
-
-        return allFiles.distinctBy { it.path }
+        return audioFileScanner.scan(
+            directoryPaths = paths,
+            incremental = false,
+            forceRefresh = force
+        )
     }
 
     /**

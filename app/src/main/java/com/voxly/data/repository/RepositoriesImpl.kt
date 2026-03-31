@@ -16,6 +16,7 @@ import com.voxly.domain.repository.ScanQuality
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -38,15 +39,15 @@ class AudioRepositoryImpl @Inject constructor(
     override fun scanAudioFiles(
         directoryPath: String?,
         forceRefresh: Boolean
-    ): Flow<List<AudioFile>> {
-        return if (directoryPath == null) {
-            // Use optimized scanning with cache
-            audioFileScanner.scanAudioFilesOptimized(forceRefresh = forceRefresh)
-        } else {
-            // Use directory scan, forceRefresh forces MediaStore re-query
-            audioFileScanner.scanDirectory(directoryPath, forceRefresh)
-        }.flowOn(Dispatchers.IO)
-    }
+    ): Flow<List<AudioFile>> = flow {
+        // Use unified scan API
+        val files = audioFileScanner.scan(
+            directoryPaths = directoryPath?.let { listOf(it) } ?: emptyList(),
+            incremental = false,
+            forceRefresh = forceRefresh
+        )
+        emit(files)
+    }.flowOn(Dispatchers.IO)
 
     override suspend fun hasCachedData(): Boolean = audioFileScanner.hasCachedData()
 
