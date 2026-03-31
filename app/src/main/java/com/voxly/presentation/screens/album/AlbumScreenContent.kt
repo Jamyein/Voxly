@@ -12,20 +12,13 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
-import androidx.compose.material3.Surface
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -40,7 +33,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
@@ -115,12 +108,6 @@ internal fun AlbumScreenContent(
                         contentDescription = stringResource(R.string.album_sort_label),
                         onSortOptionChange = { viewModel.setSortOption(it.name) }
                     )
-                    IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(
-                            imageVector = Icons.Default.Refresh,
-                            contentDescription = stringResource(R.string.refresh_files)
-                        )
-                    }
                 }
             )
         }
@@ -143,8 +130,6 @@ internal fun AlbumScreenContent(
                     AlbumTabContent(
                         albums = sortedAlbums,
                         onAlbumClick = onAlbumClick,
-                        isRefreshing = isRefreshing,
-                        onRefresh = { viewModel.refresh() },
                         scrollToTopTrigger = scrollToTopTrigger,
                         sortOption = currentSortOption
                     )
@@ -158,8 +143,6 @@ internal fun AlbumScreenContent(
 internal fun AlbumTabContent(
     albums: List<AlbumGroup>,
     onAlbumClick: (AlbumGroup) -> Unit,
-    isRefreshing: Boolean,
-    onRefresh: () -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState? = null,
     scrollToTopTrigger: Int = 0,
     sortOption: AlbumSortOption? = null
@@ -169,53 +152,39 @@ internal fun AlbumTabContent(
         val gridState = rememberLazyGridState()
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            PullToRefreshBox(
-                isRefreshing = isRefreshing,
-                onRefresh = onRefresh,
-                modifier = Modifier.fillMaxSize(),
-                indicator = {
-                    val pullToRefreshState = rememberPullToRefreshState()
-                    LoadingIndicator(
-                        state = pullToRefreshState,
-                        isRefreshing = isRefreshing,
-                        modifier = Modifier
+            if (albums.isEmpty()) {
+                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                    Text(
+                        text = stringResource(R.string.no_albums_found),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-            ) {
-                if (albums.isEmpty()) {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        Text(
-                            text = stringResource(R.string.no_albums_found),
-                            style = MaterialTheme.typography.bodyLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+            } else {
+                if (isYearSort) {
+                    AlbumYearGroupedContent(
+                        albums = albums,
+                        onAlbumClick = onAlbumClick,
+                        isDescending = true
+                    )
                 } else {
-                    if (isYearSort) {
-                        AlbumYearGroupedContent(
-                            albums = albums,
-                            onAlbumClick = onAlbumClick,
-                            isDescending = true
-                        )
-                    } else {
-                        LazyVerticalGrid(
-                            state = gridState,
-                            columns = GridCells.Fixed(2),
-                            modifier = Modifier.fillMaxSize(),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                            horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-                            verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
-                        ) {
-                            items(
-                                count = albums.size,
-                                key = { index -> albumStableKey(albums[index]) }
-                            ) { index ->
-                                val album = albums[index]
-                                AlbumGridItem(
-                                    album = album,
-                                    onClick = { onAlbumClick(album) }
-                                )
-                            }
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Fixed(2),
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(
+                            count = albums.size,
+                            key = { index -> albumStableKey(albums[index]) }
+                        ) { index ->
+                            val album = albums[index]
+                            AlbumGridItem(
+                                album = album,
+                                onClick = { onAlbumClick(album) }
+                            )
                         }
                     }
                 }

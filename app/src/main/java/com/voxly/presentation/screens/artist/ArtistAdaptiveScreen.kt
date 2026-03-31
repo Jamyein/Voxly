@@ -14,7 +14,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey

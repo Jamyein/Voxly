@@ -187,8 +187,6 @@ fun AlbumScreen(
                     onAlbumClick = { album ->
                         onNavigateToAlbumDetail(album.name, album.artist)
                     },
-                    isRefreshing = isRefreshing,
-                    onRefresh = { viewModel.refresh() },
                     scrollToTopTrigger = scrollToTopTrigger,
                     sortOption = currentSortOption
                 )

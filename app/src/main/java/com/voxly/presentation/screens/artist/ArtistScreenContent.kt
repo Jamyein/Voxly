@@ -18,9 +18,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -31,7 +28,7 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
@@ -106,8 +103,6 @@ internal fun ArtistScreenContent(
                 ArtistTabContent(
                     artists = artists,
                     onArtistClick = onArtistClick,
-                    isRefreshing = isRefreshing,
-                    onRefresh = { viewModel.refresh() },
                     listState = listState
                 )
             }
@@ -119,46 +114,30 @@ internal fun ArtistScreenContent(
 internal fun ArtistTabContent(
     artists: List<ArtistGroup>,
     onArtistClick: (ArtistGroup) -> Unit,
-    isRefreshing: Boolean,
-    onRefresh: () -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize(),
-            indicator = {
-                val pullToRefreshState = rememberPullToRefreshState()
-                LoadingIndicator(
-                    state = pullToRefreshState,
-                    isRefreshing = isRefreshing,
-                    modifier = Modifier
+        if (artists.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(R.string.no_artists_found),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        ) {
-            if (artists.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = stringResource(R.string.no_artists_found),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            LazyColumn(
+                state = lazyListState,
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(artists, key = { it.name }) { artist ->
+                    ArtistListItem(
+                        artist = artist,
+                        onClick = { onArtistClick(artist) }
                     )
-                }
-            } else {
-                LazyColumn(
-                    state = lazyListState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(artists, key = { it.name }) { artist ->
-                        ArtistListItem(
-                            artist = artist,
-                            onClick = { onArtistClick(artist) }
-                        )
-                    }
                 }
             }
         }

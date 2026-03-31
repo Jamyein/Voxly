@@ -301,7 +301,6 @@ class LibraryViewModel @Inject constructor(
                 filesByDir
             }
         }.onSuccess { filesByDirectory ->
-            _isRefreshing.value = false
             _directoryFiles.value = filesByDirectory
             _currentDirectory.value = directories.firstOrNull()?.path
 
@@ -321,7 +320,6 @@ class LibraryViewModel @Inject constructor(
             }
             // Note: AudioFileScanner automatically updates albums/artists from cache
         }.onFailure { error ->
-            _isRefreshing.value = false
             if (error is CancellationException) {
                 return@onFailure
             }

@@ -141,8 +141,6 @@ fun ArtistScreen(
                     onArtistClick = { artist ->
                         onNavigateToArtistDetail(artist.name)
                     },
-                    isRefreshing = isRefreshing,
-                    onRefresh = { viewModel.refresh() },
                     listState = listState
                 )
             }
