@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -34,6 +35,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -61,6 +64,7 @@ import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -152,29 +156,21 @@ fun FileBrowserAdaptiveScreen(
     val canScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
-
-    // Permission handling
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions()
-    ) { permissions ->
-        val allGranted = permissions.entries.all { it.value }
-        if (allGranted) {
-            viewModel.refresh()
-        }
-    }
-
-    LaunchedEffect(Unit) {
-        // Check permission on launch
-        val permissions = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            arrayOf(Manifest.permission.READ_MEDIA_AUDIO)
-        } else {
-            arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
-        }
-        val needsRequest = permissions.any {
-            ContextCompat.checkSelfPermission(context, it) != PackageManager.PERMISSION_GRANTED
-        }
-        if (needsRequest) {
-            permissionLauncher.launch(permissions)
+    
+    // Track file switch counter for proper ViewModel recreation
+    var fileSwitchCounter by remember { mutableIntStateOf(0) }
+    
+    // Handle back gesture when in detail pane
+    val isInDetailPane = navigator.currentDestination?.contentKey != null
+    PredictiveBackHandler(enabled = isInDetailPane) { progress ->
+        try {
+            progress.collect { /* Handle progress if needed */ }
+            // Navigate back from detail pane
+            coroutineScope.launch {
+                navigator.navigateBack()
+            }
+        } catch (e: CancellationException) {
+            // Gesture cancelled, do nothing
         }
     }
 
@@ -282,8 +278,9 @@ fun FileBrowserAdaptiveScreen(
                                         if (isSelectionMode) {
                                             viewModel.toggleFileSelection(audioFile.path)
                                         } else {
-                                            // Navigate to detail - use coroutine for suspend function
+                                            // Navigate to detail - increment counter and use coroutine
                                             coroutineScope.launch {
+                                                fileSwitchCounter++
                                                 navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
                                             }
                                         }
@@ -333,32 +330,35 @@ fun FileBrowserAdaptiveScreen(
             AnimatedPane {
                 val currentFile = navigator.currentDestination?.contentKey
                 if (currentFile != null) {
-                    // Create navKey for MetadataEditor
-                    val navKey = MetadataEditor(
-                        filePath = currentFile.path,
-                        coverTag = createAlbumArtSharedElementKey(currentFile.path)
-                    )
-                    // Create ViewModel with proper factory
-                    val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
-                        key = currentFile.path,
-                        creationCallback = { factory -> factory.create(navKey) }
-                    )
-                    AdaptiveMetadataEditorContainer(
-                        filePath = currentFile.path,
-                        viewModel = metadataViewModel,
-                        coverTag = createAlbumArtSharedElementKey(currentFile.path),
-                        sharedElementKey = null,
-                        onNavigateBack = {
-                            // Use coroutine for suspend function
-                            coroutineScope.launch {
-                                navigator.navigateBack()
-                            }
-                        },
-                        onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
-                        onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
-                        onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
-                        onNavigateToLyricsSelector = onNavigateToLyricsSelector
-                    )
+                    key(currentFile.path, fileSwitchCounter) {
+                        // Create navKey for MetadataEditor
+                        val navKey = MetadataEditor(
+                            filePath = currentFile.path,
+                            coverTag = createAlbumArtSharedElementKey(currentFile.path)
+                        )
+                        // Create ViewModel with proper factory and unique key
+                        val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
+                            key = "${currentFile.path}_$fileSwitchCounter",
+                            creationCallback = { factory -> factory.create(navKey) }
+                        )
+                        AdaptiveMetadataEditorContainer(
+                            filePath = currentFile.path,
+                            viewModel = metadataViewModel,
+                            coverTag = createAlbumArtSharedElementKey(currentFile.path),
+                            sharedElementKey = null,
+                            onNavigateBack = {
+                                // Use coroutine for suspend function
+                                coroutineScope.launch {
+                                    fileSwitchCounter++
+                                    navigator.navigateBack()
+                                }
+                            },
+                            onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
+                            onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
+                            onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
+                            onNavigateToLyricsSelector = onNavigateToLyricsSelector
+                        )
+                    }
                 } else {
                     EmptyDetailPane()
                 }

@@ -23,6 +23,10 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -615,6 +619,9 @@ private fun MetadataFormContent(
     scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     nestedScrollModifier: Modifier = Modifier
 ) {
+    // Create a FocusRequester to prevent auto-focus on TextFields
+    val focusRequester = remember { FocusRequester() }
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -622,6 +629,14 @@ private fun MetadataFormContent(
             .verticalScroll(scrollState)
             .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomPadding)
     ) {
+        // Hidden element to capture initial focus and prevent auto-focus on TextFields
+        Box(
+            modifier = Modifier
+                .size(0.dp)
+                .focusRequester(focusRequester)
+                .focusProperties { canFocus = true }
+        )
+        
         // Album Art Section with shared element transition support
         AlbumArtSection(
             albumArt = metadata.albumArt,
@@ -644,7 +659,8 @@ private fun MetadataFormContent(
             label = { Text(fieldLabel(MetadataField.TITLE, R.string.metadata_title, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            shape = MaterialTheme.shapes.extraLarge
+            shape = MaterialTheme.shapes.extraLarge,
+            enabled = true
         )
 
         Spacer(modifier = Modifier.height(8.dp))

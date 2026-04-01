@@ -152,8 +152,11 @@ fun ArtistDetailScreen(
     }
 
     // Use cached cover path for avatar (performance optimization)
-    val avatarBitmap = remember(coverPath) {
-        coverPath?.let { loadLocalAlbumArt(it) }
+    // Fixed: Use produceState to properly load bitmap asynchronously
+    val avatarBitmap by produceState<Bitmap?>(initialValue = null, key1 = coverPath) {
+        value = withContext(Dispatchers.IO) {
+            coverPath?.let { loadLocalAlbumArt(it) }
+        }
     }
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()

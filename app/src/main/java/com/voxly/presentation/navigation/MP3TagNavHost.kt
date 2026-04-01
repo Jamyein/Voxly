@@ -129,11 +129,14 @@ fun MP3TagNavHost() {
         AnimatedContent(
             targetState = currentKey,
             transitionSpec = {
-                val isPush = backStack.size > (initialState?.let { backStack.indexOf(it) + 1 } ?: 0)
+                val isPush = targetState?.let { backStack.contains(it) } ?: false &&
+                    (initialState?.let { backStack.indexOf(it) } ?: -1) < (targetState?.let { backStack.indexOf(it) } ?: 0)
+                val isPop = initialState?.let { backStack.contains(it) } ?: false &&
+                    (targetState?.let { backStack.indexOf(it) } ?: -1) < (initialState?.let { backStack.indexOf(it) } ?: 0)
                 val isMainToMain = isMainScreenKey(initialState) && isMainScreenKey(targetState)
 
                 val (enterAnim, exitAnim) = when {
-                    // Main tab switching
+                    // Main tab switching - use FadeThrough for smooth tab transitions
                     isMainToMain -> Pair(
                         ExpressiveAnimations.FadeThroughEnter,
                         ExpressiveAnimations.FadeThroughExit
@@ -166,9 +169,17 @@ fun MP3TagNavHost() {
                 }
 
                 enterAnim.togetherWith(exitAnim)
-                    .apply { targetContentZIndex = if (isPush) 1f else -1f }
+                    .apply { 
+                        // Ensure proper zIndex for push/pop transitions
+                        targetContentZIndex = when {
+                            isMainToMain -> 0f
+                            isPush -> 1f
+                            isPop -> 0f
+                            else -> 1f
+                        }
+                    }
             },
-            contentKey = { it },
+            contentKey = { it?.javaClass?.name ?: "null" },
             label = "Unified_Navigation"
         ) { targetKey ->
             CompositionLocalProvider(

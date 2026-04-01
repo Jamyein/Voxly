@@ -100,6 +100,7 @@ class LibraryViewModel @Inject constructor(
 
     // Audio data - sourced from AudioFileScanner (single source of truth)
     // File browser uses this for "All" mode - applies whitelist/blacklist filtering
+    // Note: filteredAudioFiles already handles background thread and distinctUntilChanged
     val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredAudioFiles
         .stateIn(
             scope = viewModelScope,
