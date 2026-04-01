@@ -27,12 +27,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -78,13 +80,30 @@ class AudioFileScanner @Inject constructor(
     private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
     val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
 
+    // Filtered audio files - applies all filters and reacts to settings changes
+    val filteredAudioFiles: Flow<List<AudioFile>> = combine(
+        libraryCache.getCachedAudioFiles(),
+        settingsDataStore.whitelistEnabled,
+        settingsDataStore.blacklistEnabled,
+        settingsDataStore.minDurationFilterEnabled,
+        settingsDataStore.selectedDirectoryUris,
+        settingsDataStore.blacklistDirectoryUris,
+        settingsDataStore.minDurationFilterThresholdMs
+    ) { array ->
+        @Suppress("UNCHECKED_CAST")
+        val files = array[0] as List<AudioFile>
+        // Trigger re-filtering when any setting changes
+        // applyFilters will read the latest settings values
+        runBlocking { applyFilters(files) }
+    }.catch { e ->
+        Timber.e(e, "Error observing filtered audio files")
+        emit(emptyList())
+    }
+
     init {
-        // Auto-update albums and artists when cache changes
+        // Auto-update albums and artists when filtered data changes
         scope.launch {
-            libraryCache.getCachedAudioFiles()
-                .catch { e ->
-                    Timber.e(e, "Error observing cached audio files")
-                }
+            filteredAudioFiles
                 .collectLatest { files ->
                     updateAlbumsAndArtistsFromFiles(files)
                 }
@@ -383,11 +402,12 @@ class AudioFileScanner @Inject constructor(
             val albumId = cursor.getLong(columns.albumId).takeIf { it > 0L }
             val (trackNum, totalTracks) = parseTrackField(cursor.getInt(columns.track))
 
+            val yearInt = cursor.getInt(columns.year)
             val metadata = com.voxly.domain.model.AudioMetadata(
                 title = cursor.getString(columns.title)?.takeIf { it.isNotBlank() },
                 artist = cursor.getString(columns.artist)?.takeIf { it.isNotBlank() },
                 album = cursor.getString(columns.album)?.takeIf { it.isNotBlank() },
-                year = extractYearValue(cursor.getString(columns.year)),
+                year = if (yearInt > 0) yearInt.toString() else null,
                 trackNumber = trackNum,
                 totalTracks = totalTracks,
                 albumArt = null,
@@ -591,10 +611,74 @@ class AudioFileScanner @Inject constructor(
     /**
      * Updates albums and artists from audio files.
      * Called automatically when cache changes.
+     * Applies whitelist/blacklist filtering before aggregation.
      */
     private suspend fun updateAlbumsAndArtistsFromFiles(files: List<AudioFile>) {
-        updateAlbumsFromFiles(files)
-        updateArtistsFromFiles(files)
+        val filteredFiles = applyFilters(files)
+        updateAlbumsFromFiles(filteredFiles)
+        updateArtistsFromFiles(filteredFiles)
+    }
+
+    /**
+     * Applies all filters (whitelist, blacklist, min duration) to audio files.
+     * @param files List of audio files to filter
+     * @return Filtered list of audio files
+     */
+    private suspend fun applyFilters(files: List<AudioFile>): List<AudioFile> {
+        val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
+        val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
+        val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
+        val whitelistUris = settingsDataStore.selectedDirectoryUris.first()
+        val blacklistUris = settingsDataStore.blacklistDirectoryUris.first()
+        val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
+
+        // If no filters are enabled, return all files
+        if (!whitelistEnabled && !blacklistEnabled && !minDurationEnabled) {
+            return files
+        }
+
+        return files.filter { file ->
+            val path = file.path
+            var isIncluded = true
+
+            // Apply whitelist filter: file must be in one of the whitelist directories
+            if (whitelistEnabled && whitelistUris.isNotEmpty()) {
+                val whitelistPaths = whitelistUris.map { getPathFromUriString(it) }
+                isIncluded = whitelistPaths.any { whitelistPath ->
+                    isPathInsideDirectory(path, whitelistPath)
+                }
+            }
+
+            // Apply blacklist filter: file must NOT be in any blacklist directory
+            if (isIncluded && blacklistEnabled && blacklistUris.isNotEmpty()) {
+                val blacklistPaths = blacklistUris.map { getPathFromUriString(it) }
+                val isBlacklisted = blacklistPaths.any { blacklistPath ->
+                    isPathInsideDirectory(path, blacklistPath)
+                }
+                if (isBlacklisted) {
+                    isIncluded = false
+                }
+            }
+
+            // Apply min duration filter: file duration must be >= minDurationMs
+            if (isIncluded && minDurationEnabled && file.duration > 0) {
+                if (file.duration < minDurationMs) {
+                    isIncluded = false
+                }
+            }
+
+            isIncluded
+        }
+    }
+
+    /**
+     * Convert URI string to filesystem path.
+     */
+    private fun getPathFromUriString(uriString: String): String {
+        return runCatching {
+            val uri = Uri.parse(uriString)
+            getPathFromUri(uri)
+        }.getOrElse { uriString }
     }
 
     /**

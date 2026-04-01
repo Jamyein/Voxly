@@ -99,8 +99,8 @@ class LibraryViewModel @Inject constructor(
     val openedDirectoryUri: StateFlow<String?> = _openedDirectoryUri.asStateFlow()
 
     // Audio data - sourced from AudioFileScanner (single source of truth)
-    // File browser uses this for "All" mode
-    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.getCachedAudioFiles()
+    // File browser uses this for "All" mode - applies whitelist/blacklist filtering
+    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredAudioFiles
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
