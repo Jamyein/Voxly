@@ -65,6 +65,7 @@ import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.ui.loadAlbumArtOriginalBitmap
 import com.voxly.presentation.ui.loadAlbumArtThumbnail
+import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
@@ -335,6 +336,10 @@ fun ArtistDetailScreen(
                         ) { page ->
                             val albumInfo = albumsSorted[page]
                             val albumArtPath = albumCovers[albumInfo.name]
+                            // Get mediaStoreAlbumId from the first file in the album that has one
+                            val mediaStoreAlbumId = albumInfo.files.firstOrNull { 
+                                it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
+                            }?.mediaStoreAlbumId
 
                             AlbumCard(
                                 albumName = albumInfo.name,
@@ -342,6 +347,7 @@ fun ArtistDetailScreen(
                                 trackCount = albumInfo.files.size,
                                 albumYear = albumInfo.year,
                                 albumArtPath = albumArtPath,
+                                mediaStoreAlbumId = mediaStoreAlbumId,
                                 onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
                                 modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
                             )
@@ -414,11 +420,12 @@ fun ArtistDetailScreen(
 /**
  * 轮播封面专用图片组件（384px）。
  * 使用produceState在IO线程加载，避免主线程阻塞。
- * key1 = filePath确保路径变化时重新加载。
+ * key1 = filePath, key2 = mediaStoreAlbumId 确保任一变化时重新加载。
  */
 @Composable
 fun CarouselAlbumArtImage(
     filePath: String?,
+    mediaStoreAlbumId: Long? = null,
     contentDescription: String?,
     modifier: Modifier = Modifier,
     placeholder: @Composable () -> Unit = {}
@@ -426,25 +433,39 @@ fun CarouselAlbumArtImage(
     val context = LocalContext.current
     val density = LocalDensity.current
     val targetSizePx = max(CAROUSEL_ART_TARGET_PX, with(density) { 160.dp.toPx().toInt() })
-    var thumbnail by remember(filePath) { mutableStateOf<Bitmap?>(null) }
-    var original by remember(filePath) { mutableStateOf<Bitmap?>(null) }
+    var thumbnail by remember(filePath, mediaStoreAlbumId) { mutableStateOf<Bitmap?>(null) }
+    var original by remember(filePath, mediaStoreAlbumId) { mutableStateOf<Bitmap?>(null) }
 
-    LaunchedEffect(filePath) {
+    LaunchedEffect(filePath, mediaStoreAlbumId) {
         thumbnail = null
         original = null
 
-        if (filePath.isNullOrBlank()) return@LaunchedEffect
-
-        // 1) Load high-quality thumbnail for instant display
-        thumbnail = withContext(Dispatchers.IO) {
-            loadAlbumArtThumbnail(
-                context = context,
-                filePath = filePath,
-                targetSizePx = targetSizePx
-            )
+        // 1) Try MediaStore first (fastest, system-level cache)
+        if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
+            val mediaStoreBitmap = withContext(Dispatchers.IO) {
+                loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
+            }
+            if (mediaStoreBitmap != null) {
+                thumbnail = mediaStoreBitmap
+                original = mediaStoreBitmap
+                return@LaunchedEffect
+            }
         }
 
-        // 2) Load original and replace without layout changes
+        if (filePath.isNullOrBlank()) return@LaunchedEffect
+
+        // 2) Load high-quality thumbnail for instant display (if MediaStore failed)
+        if (thumbnail == null) {
+            thumbnail = withContext(Dispatchers.IO) {
+                loadAlbumArtThumbnail(
+                    context = context,
+                    filePath = filePath,
+                    targetSizePx = targetSizePx
+                )
+            }
+        }
+
+        // 3) Load original and replace without layout changes
         val full = withContext(Dispatchers.IO) {
             loadAlbumArtOriginalBitmap(
                 context = context,
@@ -484,6 +505,7 @@ fun AlbumCard(
     trackCount: Int,
     albumYear: Int?,
     albumArtPath: String?,
+    mediaStoreAlbumId: Long? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -519,6 +541,7 @@ fun AlbumCard(
             ) {
                 CarouselAlbumArtImage(
                     filePath = albumArtPath,
+                    mediaStoreAlbumId = mediaStoreAlbumId,
                     contentDescription = albumName,
                     modifier = Modifier.fillMaxSize()
                 ) {

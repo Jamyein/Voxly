@@ -31,6 +31,7 @@ import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.io.File
 
 /**
  * Unified album art image composable that supports multiple sources:
@@ -153,7 +154,7 @@ private fun produceAlbumArtBitmap(
         key2 = mediaStoreAlbumId
     ) {
         value = withContext(Dispatchers.IO) {
-            // First try: MediaStore album art (default path)
+            // First try: MediaStore album art (default path, fastest)
             if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
                 val mediaStoreArt = loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
                 if (mediaStoreArt != null) {
@@ -161,7 +162,7 @@ private fun produceAlbumArtBitmap(
                 }
             }
 
-            // Second try: file-level cached thumbnail (TagLib fallback)
+            // Second try: file-level cached thumbnail (embedded art)
             if (!filePath.isNullOrBlank()) {
                 val localArt = loadAlbumArtThumbnail(
                     context = context,
@@ -173,10 +174,55 @@ private fun produceAlbumArtBitmap(
                 }
             }
 
-            // Third try: folder cover art (already included in loadLocalAlbumArt)
-            // If filePath is provided, loadLocalAlbumArt already tried folder covers
+            // Third try: folder cover art (cover.jpg, folder.jpg, etc.)
+            if (!filePath.isNullOrBlank()) {
+                val folderArt = loadFolderCoverArt(filePath, targetSizePx)
+                if (folderArt != null) {
+                    return@withContext folderArt
+                }
+            }
 
             null
         }
     }
+}
+
+/**
+ * Loads folder cover art from the parent directory of the audio file.
+ */
+private fun loadFolderCoverArt(filePath: String, targetSizePx: Int): Bitmap? {
+    val folder = File(filePath).parentFile ?: return null
+    val coverFileNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
+
+    for (fileName in coverFileNames) {
+        val coverFile = File(folder, fileName)
+        if (coverFile.exists()) {
+            return try {
+                decodeBitmapFromFile(coverFile.absolutePath, targetSizePx)
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+    return null
+}
+
+/**
+ * Decodes a bitmap from file with sampling to reduce memory usage.
+ */
+private fun decodeBitmapFromFile(filePath: String, targetSize: Int): Bitmap? {
+    val options = android.graphics.BitmapFactory.Options().apply {
+        inJustDecodeBounds = true
+    }
+    android.graphics.BitmapFactory.decodeFile(filePath, options)
+
+    var sampleSize = 1
+    while (options.outWidth / sampleSize > targetSize || options.outHeight / sampleSize > targetSize) {
+        sampleSize *= 2
+    }
+
+    val decodeOptions = android.graphics.BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+    }
+    return android.graphics.BitmapFactory.decodeFile(filePath, decodeOptions)
 }

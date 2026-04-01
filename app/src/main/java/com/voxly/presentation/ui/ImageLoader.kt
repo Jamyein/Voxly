@@ -287,6 +287,7 @@ fun loadLocalAlbumArt(filePath: String, targetSizePx: Int = 300): Bitmap? {
 
 /**
  * Loads album art thumbnail via AlbumArtCacheManager (preferred path for UI).
+ * Falls back to folder cover art (cover.jpg, folder.jpg, etc.) if no embedded art found.
  */
 suspend fun loadAlbumArtThumbnail(
     context: Context,
@@ -303,17 +304,22 @@ suspend fun loadAlbumArtThumbnail(
     )
     val cacheManager = entryPoint.albumArtCacheManager()
 
+    // 1. Check AlbumArtCacheManager (L1 memory, L2 Room, L3 file embedded)
     cacheManager.getThumbnail(filePath)?.let { return it }
 
-    // Fallback: read from TagLib to seed cache
+    // 2. Fallback: read from TagLib to seed cache (embedded art only)
     val metadataProcessor = entryPoint.tagLibMetadataProcessor()
     val complete = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
     complete?.albumArt?.let { artBytes ->
         cacheManager.cacheAlbumArt(filePath, artBytes)
     }
 
-    return cacheManager.getThumbnail(filePath)
-        ?: complete?.albumArt?.let { decodeHighQualityBitmapFromBytes(it, safeTargetSize) }
+    // 3. Return embedded art if found
+    cacheManager.getThumbnail(filePath)?.let { return it }
+    complete?.albumArt?.let { return decodeHighQualityBitmapFromBytes(it, safeTargetSize) }
+
+    // 4. Final fallback: folder cover art (cover.jpg, folder.jpg, etc.)
+    return loadFolderCoverArt(filePath, safeTargetSize)
 }
 
 /**
