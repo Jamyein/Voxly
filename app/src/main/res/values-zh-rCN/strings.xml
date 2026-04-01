@@ -400,7 +400,7 @@
     <string name="replay_gain_scan_track_only">仅曲目增益</string>
     <string name="replay_gain_scan_album">曲目 + 专辑增益</string>
     <string name="replay_gain_target_loudness">目标响度</string>
-    <string name="replay_gain_default_loudness">默认 (-14 LUFS)</string>
+    <string name="replay_gain_default_loudness">默认 (-18 LUFS)</string>
     <string name="replay_gain_settings">回放增益设置</string>
     <string name="replay_gain_loudness_desc">调整参考响度级别</string>
     <string name="replay_gain_loudness_ebu_r128">EBU R128 -23 dB</string>

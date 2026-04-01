@@ -486,7 +486,7 @@
     <string name="replay_gain_scan_track_only">Track Gain Only</string>
     <string name="replay_gain_scan_album">Track + Album Gain</string>
     <string name="replay_gain_target_loudness">Target Loudness</string>
-    <string name="replay_gain_default_loudness">Default (-14 LUFS)</string>
+    <string name="replay_gain_default_loudness">Default (-18 LUFS)</string>
     <string name="replay_gain_settings">ReplayGain Settings</string>
     <string name="replay_gain_loudness_desc">Adjust the reference loudness level</string>
     <string name="replay_gain_loudness_ebu_r128">EBU R128 -23 dB</string>

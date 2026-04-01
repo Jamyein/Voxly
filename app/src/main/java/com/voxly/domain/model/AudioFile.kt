@@ -174,7 +174,8 @@ data class ReplayGainInfo(
     val trackGain: Float = 0f,
     val trackPeak: Float = 0f,
     val albumGain: Float? = null,
-    val albumPeak: Float? = null
+    val albumPeak: Float? = null,
+    val truePeak: Float? = null
 ) {
     /**
      * Returns track gain in dB format.
@@ -195,6 +196,13 @@ data class ReplayGainInfo(
      */
     fun getFormattedTrackPeak(): String {
         return String.format("%.4f", trackPeak)
+    }
+    
+    /**
+     * Returns true peak as a percentage.
+     */
+    fun getFormattedTruePeak(): String {
+        return truePeak?.let { String.format("%.4f", it) } ?: "N/A"
     }
 }
 

@@ -4,7 +4,7 @@ import android.content.Context
 import android.provider.MediaStore
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
-import com.voxly.data.local.replaygain.ReplayGainScanner
+import com.voxly.data.local.replaygain.Ebur128ReplayGainScanner
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
@@ -281,13 +281,13 @@ class AudioRepositoryImpl @Inject constructor(
 
 /**
  * Implementation of ReplayGainRepository.
- * Uses ReplayGainScanner for audio analysis and jaudiotagger for tag writing.
+ * Uses EBU R128 scanner (libebur128) for audio analysis and TagLib for tag writing.
  */
 @Singleton
 class ReplayGainRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val metadataProcessor: TagLibMetadataProcessor,
-    private val replayGainScanner: ReplayGainScanner
+    private val replayGainScanner: Ebur128ReplayGainScanner
 ) : ReplayGainRepository {
 
     override fun scanReplayGain(

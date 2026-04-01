@@ -5,7 +5,6 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.voxly.core.util.Constants
 import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafGrantType
@@ -335,14 +334,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     /**
-     * Scans the current file for ReplayGain.
-     * Uses dynamic sample rate handling - high-resolution audio (>48kHz) 
+     * Scans the current file for ReplayGain using EBU R128.
+     * Uses dynamic sample rate handling - high-resolution audio (>48kHz)
      * will be automatically downsampled for optimal performance.
-     * 
-     * When scan mode is ALBUM_ONLY or TRACK_AND_ALBUM, this will:
-     * 1. Find other files in the same album from MediaStore
-     * 2. Scan all album files
-     * 3. Calculate album gain from all tracks
      */
     fun scanReplayGain() {
         viewModelScope.launch {
@@ -374,26 +368,32 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 // Get target loudness from settings
                 val targetLoudness = settingsDataStore.replayGainTargetLoudness.first()
 
-                // Scan all files
-                replayGainRepository.scanReplayGain(
-                    filesToScan,
-                    scanQuality,
-                    targetLoudness
-                ).collect { progress ->
+                val scanFlow = when (currentScanMode) {
+                    ScanMode.TRACK_ONLY -> replayGainRepository.scanReplayGain(
+                        filesToScan,
+                        scanQuality,
+                        targetLoudness
+                    )
+                    ScanMode.SINGLE_ALBUM -> replayGainRepository.scanReplayGainByAlbum(
+                        mapOf("single_album" to filesToScan),
+                        scanQuality,
+                        targetLoudness
+                    )
+                    ScanMode.ALBUMS -> replayGainRepository.scanReplayGainWithAlbumGrouping(
+                        filesToScan,
+                        scanQuality,
+                        targetLoudness
+                    )
+                }
+
+                scanFlow.collect { progress ->
                     when (progress.status) {
                         com.voxly.domain.repository.ScanStatus.COMPLETED -> {
                             _replayGainScanError.value = null
                             // Read the scanned ReplayGain info for current file
                             val replayGainReadResult = replayGainRepository.readReplayGain(filePath)
                             replayGainReadResult.getOrNull()?.let { info ->
-                                // For album modes (SINGLE_ALBUM, ALBUMS), always calculate album gain
-                                val finalInfo = if (currentScanMode != ScanMode.TRACK_ONLY) {
-                                    calculateAlbumGainFromScannedFiles(filesToScan)
-                                } else {
-                                    info
-                                }
-
-                                _pendingReplayGainInfo.value = finalInfo
+                                _pendingReplayGainInfo.value = info
                                 _hasUnsavedChanges.value = true
                             }
                             _isScanningReplayGain.value = false
@@ -481,65 +481,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
         files
     }
     
-    /**
-     * Calculates album gain from multiple scanned files using energy average.
-     * Matches foobar2000 ReplayGain album gain calculation:
-     * album_rms = sqrt(mean(track_rms²))
-     *
-     * This prevents loud tracks from dominating the album gain calculation.
-     */
-    private suspend fun calculateAlbumGainFromScannedFiles(filePaths: List<String>): ReplayGainInfo? {
-        if (filePaths.isEmpty()) return null
-
-        val trackGains = mutableListOf<ReplayGainInfo>()
-
-        for (path in filePaths) {
-            val replayGainResult = replayGainRepository.readReplayGain(path)
-            replayGainResult.getOrNull()?.let { trackGains.add(it) }
-        }
-
-        if (trackGains.isEmpty()) return null
-
-        // Reference loudness: -14 dB = 10^(-14/20) ≈ 0.1995
-        // This must match ReplayGainScanner.REFERENCE_LUFS
-        val referenceLufs = Constants.REPLAYGAIN_REFERENCE_LOUDNESS_LUFS
-        val rmsReference = Constants.REPLAYGAIN_RMS_REFERENCE
-
-        // Convert track gains back to RMS values for energy average
-        // track_gain = target - measured
-        // measured = target - track_gain
-        // measured_db = 20 * log10(rms / reference)
-        // => rms = reference * 10^(measured_db / 20)
-        // => rms = reference * 10^((target - track_gain) / 20)
-        val trackRmsValues = trackGains.map { trackGain ->
-            rmsReference * 10.0.pow((referenceLufs - trackGain.trackGain) / 20.0)
-        }
-
-        // Energy average: sqrt(mean(rms²))
-        val energyMean = trackRmsValues.map { it * it }.average()
-        val albumRmsLinear = sqrt(energyMean)
-
-        // Convert back to dB gain: album_gain = target - 20 * log10(album_rms / reference)
-        val albumGainDb = if (albumRmsLinear > 0) {
-            (referenceLufs - 20 * log10(albumRmsLinear / rmsReference)).toFloat()
-        } else {
-            0f
-        }
-
-        val maxPeak = trackGains.maxOfOrNull { it.trackPeak } ?: 0f
-
-        // Get current file's track gain, or use album gain if not found
-        val currentFileResult = replayGainRepository.readReplayGain(filePath)
-        val currentTrackGain = currentFileResult.getOrNull()?.trackGain ?: albumGainDb
-        val currentTrackPeak = currentFileResult.getOrNull()?.trackPeak ?: maxPeak
-
-        return ReplayGainInfo(
-            trackGain = currentTrackGain,
-            trackPeak = currentTrackPeak,
-            albumGain = albumGainDb,
-            albumPeak = maxPeak
-        )
-    }
 
     /**
      * Saves the edited metadata and ReplayGain to the file.

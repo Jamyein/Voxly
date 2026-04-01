@@ -130,6 +130,22 @@ android {
         abortOnError = false
         checkDependencies = true
     }
+    
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+    
+    defaultConfig {
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-O3"
+                cFlags += "-O3"
+            }
+        }
+    }
 }
 
 // Fail fast: never produce unsigned dist/release APKs by mistake.

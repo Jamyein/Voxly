@@ -86,13 +86,13 @@ interface ReplayGainRepository {
      * Scans audio files and calculates ReplayGain values.
      * @param filePaths List of file paths to scan
      * @param scanQuality The quality level for scanning (determines max sample rate)
-     * @param targetLoudness Target loudness in LUFS (default -14.0, standard ReplayGain)
+     * @param targetLoudness Target loudness in LUFS (default -18.0, foobar2000 modern)
      * @return Flow emitting scan progress (0.0 to 1.0)
      */
     fun scanReplayGain(
         filePaths: List<String>,
         scanQuality: ScanQuality = ScanQuality.NORMAL,
-        targetLoudness: Float = -14f
+        targetLoudness: Float = -18f
     ): Flow<ScanProgress>
 
     /**
@@ -102,13 +102,13 @@ interface ReplayGainRepository {
      *
      * @param filesByAlbum Map of album key to list of file paths in that album
      * @param scanQuality The quality level for scanning
-     * @param targetLoudness Target loudness in LUFS (default -14.0)
+     * @param targetLoudness Target loudness in LUFS (default -18.0)
      * @return Flow emitting scan progress
      */
     fun scanReplayGainByAlbum(
         filesByAlbum: Map<String, List<String>>,
         scanQuality: ScanQuality = ScanQuality.NORMAL,
-        targetLoudness: Float = -14f
+        targetLoudness: Float = -18f
     ): Flow<ScanProgress>
 
     /**
@@ -118,13 +118,13 @@ interface ReplayGainRepository {
      *
      * @param filePaths Flat list of file paths to scan
      * @param scanQuality The quality level for scanning
-     * @param targetLoudness Target loudness in LUFS (default -14.0)
+     * @param targetLoudness Target loudness in LUFS (default -18.0)
      * @return Flow emitting scan progress
      */
     fun scanReplayGainWithAlbumGrouping(
         filePaths: List<String>,
         scanQuality: ScanQuality = ScanQuality.NORMAL,
-        targetLoudness: Float = -14f
+        targetLoudness: Float = -18f
     ): Flow<ScanProgress>
 
     /**

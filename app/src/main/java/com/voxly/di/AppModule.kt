@@ -7,7 +7,7 @@ import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
-import com.voxly.data.local.replaygain.ReplayGainScanner
+import com.voxly.data.local.replaygain.Ebur128ReplayGainScanner
 import com.voxly.data.remote.itunes.ITunesApi
 import com.voxly.data.remote.itunes.ITunesRepository
 
