@@ -27,6 +27,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -641,8 +642,12 @@ private fun MetadataFormContent(
     scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     nestedScrollModifier: Modifier = Modifier
 ) {
-    // Create a FocusRequester to prevent auto-focus on TextFields
-    val focusRequester = remember { FocusRequester() }
+    // Use LaunchedEffect to clear focus when the screen is first composed
+    // This prevents any TextField from automatically receiving focus
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(Unit) {
+        focusManager.clearFocus()
+    }
     
     Column(
         modifier = Modifier
@@ -650,15 +655,7 @@ private fun MetadataFormContent(
             .then(nestedScrollModifier)
             .verticalScroll(scrollState)
             .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomPadding)
-    ) {
-        // Hidden element to capture initial focus and prevent auto-focus on TextFields
-        Box(
-            modifier = Modifier
-                .size(0.dp)
-                .focusRequester(focusRequester)
-                .focusProperties { canFocus = true }
-        )
-        
+    {
         // Album Art Section with shared element transition support
         AlbumArtSection(
             albumArt = metadata.albumArt,

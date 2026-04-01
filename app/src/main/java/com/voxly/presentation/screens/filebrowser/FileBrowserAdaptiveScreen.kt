@@ -29,7 +29,7 @@ import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
-import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
+import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -189,9 +189,11 @@ fun FileBrowserAdaptiveScreen(
     // Track file switch counter for proper ViewModel recreation
     var fileSwitchCounter by remember { mutableIntStateOf(0) }
     
-    // Handle back gesture when in detail pane
-    val isInDetailPane = navigator.currentDestination?.contentKey != null
-    PredictiveBackHandler(enabled = isInDetailPane) { progress ->
+    // Determine if we're in single-pane mode (small screens)
+    val isSinglePane = navigator.scaffoldValue.detailPane == PaneAdaptedValue.Hidden
+    
+    // Handle back gesture when in detail pane (only in multi-pane mode)
+    PredictiveBackHandler(enabled = !isSinglePane && navigator.currentDestination?.contentKey != null) { progress ->
         try {
             progress.collect { /* Handle progress if needed */ }
             // Navigate back from detail pane
@@ -315,17 +317,20 @@ fun FileBrowserAdaptiveScreen(
                                 AllAudiosTabContent(
                                     audios = displayedFiles,
                                     selectedFiles = selectedFiles,
-                                    onFileClick = { audioFile ->
-                                        if (isSelectionMode) {
-                                            viewModel.toggleFileSelection(audioFile.path)
-                                        } else {
-                                            // Navigate to detail - increment counter and use coroutine
-                                            coroutineScope.launch {
-                                                fileSwitchCounter++
-                                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
-                                            }
+                                onFileClick = { audioFile ->
+                                    if (isSelectionMode) {
+                                        viewModel.toggleFileSelection(audioFile.path)
+                                    } else if (isSinglePane) {
+                                        // Small screen: navigate to independent MetadataEditor
+                                        onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                                    } else {
+                                        // Multi-pane: show in detail pane
+                                        coroutineScope.launch {
+                                            fileSwitchCounter++
+                                            navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
                                         }
-                                    },
+                                    }
+                                },
                                     onFileLongClick = { audioFile ->
                                         viewModel.toggleFileSelection(audioFile.path)
                                     },

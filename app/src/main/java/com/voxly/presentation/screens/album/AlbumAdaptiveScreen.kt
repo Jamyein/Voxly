@@ -7,6 +7,7 @@ import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
+import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.key
@@ -34,14 +35,20 @@ import kotlinx.coroutines.launch
  * Adaptive Album screen using Material3 ListDetailPaneScaffold with conditional three-pane support.
  *
  * Layout behavior:
- * - Initial state: Two-pane layout (Album list | Album detail)
- * - After clicking track: Three-pane layout on tablets (Album list | Album detail | Metadata editor)
- * - On phones: Single pane with navigation
+ * - Large screens: Three-pane layout (Album list | Album detail | Metadata editor)  
+ * - Medium screens: Two-pane layout (Album list | Album detail OR Metadata editor)
+ * - Small screens: Single pane with navigation to independent MetadataEditor via onNavigateToMetadata
+ *
+ * @param onNavigateBack Callback when user wants to navigate back
+ * @param onNavigateToMetadata Callback to navigate to independent MetadataEditor screen (used on small screens)
+ * @param modifier Modifier for the screen
+ * @param viewModel AlbumViewModel for the list
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun AlbumAdaptiveScreen(
     onNavigateBack: () -> Unit,
+    onNavigateToMetadata: ((String, String?) -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: AlbumViewModel = hiltViewModel()
 ) {
@@ -54,10 +61,15 @@ fun AlbumAdaptiveScreen(
     var selectedFileForEditing by remember { mutableStateOf<String?>(null) }
     
     // Force ViewModel recreation when switching files by using a counter
-    var fileSwitchCounter by remember { mutableStateOf(0) }
+    var fileSwitchCounter by remember { mutableIntStateOf(0) }
     
-    // Handle back gesture when in metadata editor sub-screen
-    PredictiveBackHandler(enabled = selectedFileForEditing != null) { progress ->
+    // Determine if we're in single-pane mode (small screens)
+    // In single-pane mode, we should navigate to independent MetadataEditor
+    val isSinglePane = navigator.scaffoldValue.detailPane == PaneAdaptedValue.Hidden && 
+                       navigator.scaffoldValue.extraPane == PaneAdaptedValue.Hidden
+    
+    // Handle back gesture when in metadata editor sub-screen (only in multi-pane mode)
+    PredictiveBackHandler(enabled = selectedFileForEditing != null && !isSinglePane) { progress ->
         try {
             progress.collect { /* Handle progress if needed */ }
             // Exit metadata editor when back gesture completes
@@ -88,13 +100,14 @@ fun AlbumAdaptiveScreen(
             }
         },
         detailPane = {
-            // Detail pane: either Album detail or Metadata editor
+            // Detail pane: either Album detail or Metadata editor (only in multi-pane mode)
             AnimatedPane {
                 val currentAlbum = navigator.currentDestination?.contentKey
                 
-                if (selectedFileForEditing != null) {
-                    // Show metadata editor in detail pane (for small/medium screens)
-                    // Use fileSwitchCounter in key to force recomposition when switching files
+                // In single-pane mode, always show Album detail if available
+                // Metadata editor is shown via onNavigateToMetadata callback
+                if (!isSinglePane && selectedFileForEditing != null) {
+                    // Show metadata editor in detail pane (for medium screens)
                     key(selectedFileForEditing, fileSwitchCounter) {
                         val navKey = MetadataEditor(
                             filePath = selectedFileForEditing!!,
@@ -137,10 +150,15 @@ fun AlbumAdaptiveScreen(
                                 navigator.navigateBack()
                             }
                         },
-                        onNavigateToMetadata = { filePath, _ ->
-                            // Increment counter to force ViewModel recreation
-                            fileSwitchCounter++
-                            selectedFileForEditing = filePath
+                        onNavigateToMetadata = { filePath, coverTag ->
+                            // In single-pane mode, navigate to independent MetadataEditor
+                            // In multi-pane mode, show in detail/extra pane
+                            if (isSinglePane && onNavigateToMetadata != null) {
+                                onNavigateToMetadata(filePath, coverTag)
+                            } else {
+                                fileSwitchCounter++
+                                selectedFileForEditing = filePath
+                            }
                         },
                         viewModel = detailViewModel
                     )
@@ -152,10 +170,11 @@ fun AlbumAdaptiveScreen(
             }
         },
         extraPane = {
-            // Extra pane: conditionally show metadata editor for large screens (tablets)
+            // Extra pane: show metadata editor for large screens (tablets)
             AnimatedPane {
-                // Only show metadata editor in extra pane when a file is selected
-                // and we're in a large screen configuration (tablet)
+                // Only show metadata editor in extra pane when:
+                // 1. A file is selected
+                // 2. We're in a large screen configuration with extra pane visible
                 if (selectedFileForEditing != null) {
                     key(selectedFileForEditing, fileSwitchCounter) {
                         val navKey = MetadataEditor(
