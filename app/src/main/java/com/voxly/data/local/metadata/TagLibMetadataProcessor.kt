@@ -12,6 +12,7 @@ import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SafPermissionCache
+import com.voxly.data.local.cache.AlbumArtCacheManager
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.parseMediaStoreTrackField
@@ -61,7 +62,8 @@ class TagLibMetadataProcessor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val safPermissionCache: SafPermissionCache,
     private val safWriteAccessService: SafWriteAccessService,
-    private val musicLibraryCache: MusicLibraryCache
+    private val musicLibraryCache: MusicLibraryCache,
+    private val albumArtCacheManager: AlbumArtCacheManager
 ) {
     companion object {
         private const val TAG = "TagLibProcessor"
@@ -93,14 +95,14 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
-     * Cache entry for metadata + audio info + album art
+     * Cache entry for metadata + audio info (album art stored separately in AlbumArtCacheManager)
      */
     data class MetadataCacheEntry(
         val filePath: String,
         val lastModified: Long,
         val metadata: AudioMetadata,
-        val audioInfo: AudioInfo?,
-        val albumArt: ByteArray?
+        val audioInfo: AudioInfo?
+        // Note: albumArt is no longer stored here - use AlbumArtCacheManager instead
     ) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -129,8 +131,8 @@ class TagLibMetadataProcessor @Inject constructor(
                 filePath = filePath,
                 lastModified = lastModified,
                 metadata = metadata,
-                audioInfo = audioInfo,
-                albumArt = albumArt
+                audioInfo = audioInfo
+                // albumArt is not stored in memory cache - use AlbumArtCacheManager
             )
         }
     }
@@ -250,6 +252,45 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
+     * Builds TagLib properties map from AudioMetadata.
+     */
+    private fun buildPropertiesMap(metadata: AudioMetadata): java.util.HashMap<String, Array<String>> {
+        val properties = java.util.HashMap<String, Array<String>>()
+
+        metadata.title?.let { properties["TITLE"] = arrayOf(it) }
+        metadata.artist?.let { properties["ARTIST"] = arrayOf(it) }
+        metadata.album?.let { properties["ALBUM"] = arrayOf(it) }
+        metadata.year?.let { properties["DATE"] = arrayOf(it) }
+        metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
+        metadata.trackNumber?.let { properties["TRACKNUMBER"] = arrayOf(it.toString()) }
+        metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
+        metadata.lyrics?.let { properties["LYRICS"] = arrayOf(it) }
+
+        metadata.albumArtist?.let { properties["ALBUMARTIST"] = arrayOf(it) }
+        metadata.discNumber?.let { properties["DISCNUMBER"] = arrayOf(it.toString()) }
+        metadata.composer?.let { properties["COMPOSER"] = arrayOf(it) }
+
+        metadata.customFields[CUSTOM_RECORD_LABEL]?.let { properties[CUSTOM_RECORD_LABEL] = arrayOf(it) }
+        metadata.customFields[CUSTOM_ENCODER]?.let { properties[CUSTOM_ENCODER] = arrayOf(it) }
+        metadata.customFields[CUSTOM_ISRC]?.let { properties[CUSTOM_ISRC] = arrayOf(it) }
+        metadata.customFields[CUSTOM_COPYRIGHT]?.let { properties[CUSTOM_COPYRIGHT] = arrayOf(it) }
+        metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.let {
+            properties[CUSTOM_REPLAYGAIN_TRACK_GAIN] = arrayOf(it)
+        }
+        metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.let {
+            properties[CUSTOM_REPLAYGAIN_TRACK_PEAK] = arrayOf(it)
+        }
+        metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.let {
+            properties[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = arrayOf(it)
+        }
+        metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.let {
+            properties[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = arrayOf(it)
+        }
+
+        return properties
+    }
+
+    /**
      * Reads complete metadata (metadata + audio info + album art) in a single operation.
      * This is the recommended method for loading all data at once.
      * Uses cache first (memory -> database -> file).
@@ -268,10 +309,13 @@ class TagLibMetadataProcessor @Inject constructor(
             // Check memory cache first (fastest)
             getFromMemoryCache(normalizedPath)?.let { cached ->
                 Timber.tag(TAG).d("Memory cache hit for: $filePath")
+                val albumArt = if (includeAlbumArt) {
+                    albumArtCacheManager.getOriginalArt(normalizedPath)
+                } else null
                 return@withContext CompleteMetadata(
                     metadata = cached.metadata,
                     audioInfo = cached.audioInfo,
-                    albumArt = if (includeAlbumArt) cached.albumArt else null
+                    albumArt = albumArt
                 )
             }
 
@@ -281,7 +325,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 val file = File(normalizedPath)
                 // Check if file exists and hasn't been modified since cache
                 if (file.exists()) {
-                    // If we need album art, read from file directly
+                    // If we need album art, try cache first
                     // Otherwise use cached data (no file read needed)
                     if (!includeAlbumArt) {
                         Timber.tag(TAG).d("Database cache hit for: $filePath")
@@ -296,8 +340,23 @@ class TagLibMetadataProcessor @Inject constructor(
                             albumArt = null // No album art needed
                         )
                         return@withContext cachedMetadata
+                    } else {
+                        val cachedAlbumArt = albumArtCacheManager.getOriginalArt(normalizedPath)
+                        if (cachedAlbumArt != null) {
+                            Timber.tag(TAG).d("Album art cache hit for: $filePath")
+                            val cachedMetadata = CompleteMetadata(
+                                metadata = cachedFile.metadata,
+                                audioInfo = AudioInfo(
+                                    bitrate = cachedFile.bitrate * 1000,
+                                    sampleRate = cachedFile.sampleRate,
+                                    channels = cachedFile.channels,
+                                    durationMs = cachedFile.duration
+                                ),
+                                albumArt = cachedAlbumArt
+                            )
+                            return@withContext cachedMetadata
+                        }
                     }
-                    // If album art is needed, we still need to read from file
                     // Fall through to read all data including album art
                 }
             }
@@ -319,10 +378,19 @@ class TagLibMetadataProcessor @Inject constructor(
             // Read all data in one operation
             val completeMetadata = readAllFromFile(resolvedFile, includeAlbumArt)
 
-            // Cache the result
+            // Cache the result (without album art in memory cache)
             completeMetadata?.let { metadata ->
                 val entry = metadata.toCacheEntry(resolvedFile.absolutePath, resolvedFile.lastModified())
                 putInMemoryCache(entry)
+                
+                // OPTIMIZATION: Cache album art in three-tier cache system
+                metadata.albumArt?.let { artBytes ->
+                    albumArtCacheManager.cacheAlbumArt(
+                        filePath = resolvedFile.absolutePath,
+                        artBytes = artBytes,
+                        lastModified = resolvedFile.lastModified()
+                    )
+                }
             }
 
             completeMetadata
@@ -334,25 +402,25 @@ class TagLibMetadataProcessor @Inject constructor(
 
     /**
      * Reads all metadata from a file in a single operation.
+     * Optimized: Reuses file descriptor to reduce file open operations by 50%.
      */
     private fun readAllFromFile(file: File, includeAlbumArt: Boolean): CompleteMetadata? {
+        // OPTIMIZATION: Open file only once, then use dup() for multiple operations
         val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-        val fdForTagLib = pfd.dup().detachFd()
 
         return try {
-            // Read metadata and pictures
-            val taglibMetadata = TagLib.getMetadata(fdForTagLib, readPictures = includeAlbumArt)
+            // First use: Read metadata and pictures
+            val fdForMetadata = pfd.dup().detachFd()
+            val taglibMetadata = TagLib.getMetadata(fdForMetadata, readPictures = includeAlbumArt)
 
-            // Reopen for audio properties (TagLib requires separate call)
-            val pfd2 = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-            val fdForTagLib2 = pfd2.dup().detachFd()
+            // Second use: Reuse same pfd to get audio properties (avoids reopening file)
+            val fdForAudio = pfd.dup().detachFd()
             val audioProperties = try {
-                TagLib.getAudioProperties(fdForTagLib2)
-            } finally {
-                pfd2.close()
+                TagLib.getAudioProperties(fdForAudio)
+            } catch (e: Exception) {
+                Timber.tag(TAG).w("Failed to read audio properties", e)
+                null
             }
-
-            pfd.close()
 
             if (taglibMetadata == null) {
                 Timber.tag(TAG).w("Failed to read metadata from: ${file.absolutePath}")
@@ -381,9 +449,11 @@ class TagLibMetadataProcessor @Inject constructor(
                 } else null
             )
         } catch (e: Exception) {
-            pfd.close()
             Timber.tag(TAG).e("Error reading from file: ${file.absolutePath}", e)
             null
+        } finally {
+            // Only close once - all dup() descriptors are owned by TagLib
+            pfd.close()
         }
     }
 
@@ -783,37 +853,7 @@ class TagLibMetadataProcessor @Inject constructor(
             val fdForTagLib = pfd.dup().detachFd()
 
             // Build properties map - TagLib uses Map<String, Array<String>>
-            val properties = java.util.HashMap<String, Array<String>>()
-            
-            metadata.title?.let { properties["TITLE"] = arrayOf(it) }
-            metadata.artist?.let { properties["ARTIST"] = arrayOf(it) }
-            metadata.album?.let { properties["ALBUM"] = arrayOf(it) }
-            metadata.year?.let { properties["DATE"] = arrayOf(it) }
-            metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
-            metadata.trackNumber?.let { properties["TRACKNUMBER"] = arrayOf(it.toString()) }
-            metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
-            metadata.lyrics?.let { properties["LYRICS"] = arrayOf(it) }
-
-            metadata.albumArtist?.let { properties["ALBUMARTIST"] = arrayOf(it) }
-            metadata.discNumber?.let { properties["DISCNUMBER"] = arrayOf(it.toString()) }
-            metadata.composer?.let { properties["COMPOSER"] = arrayOf(it) }
-
-            metadata.customFields[CUSTOM_RECORD_LABEL]?.let { properties[CUSTOM_RECORD_LABEL] = arrayOf(it) }
-            metadata.customFields[CUSTOM_ENCODER]?.let { properties[CUSTOM_ENCODER] = arrayOf(it) }
-            metadata.customFields[CUSTOM_ISRC]?.let { properties[CUSTOM_ISRC] = arrayOf(it) }
-            metadata.customFields[CUSTOM_COPYRIGHT]?.let { properties[CUSTOM_COPYRIGHT] = arrayOf(it) }
-            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.let {
-                properties[CUSTOM_REPLAYGAIN_TRACK_GAIN] = arrayOf(it)
-            }
-            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.let {
-                properties[CUSTOM_REPLAYGAIN_TRACK_PEAK] = arrayOf(it)
-            }
-            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.let {
-                properties[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = arrayOf(it)
-            }
-            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.let {
-                properties[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = arrayOf(it)
-            }
+            val properties = buildPropertiesMap(metadata)
 
             // Write metadata using TagLib - TagLib takes ownership and closes its copy
             val success = TagLib.savePropertyMap(fdForTagLib, properties)
@@ -861,35 +901,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 ?: return Result.failure(IllegalStateException("Cannot open MediaStore file descriptor"))
             val fdForTagLib = pfd.dup().detachFd()
 
-            val properties = java.util.HashMap<String, Array<String>>()
-            metadata.title?.let { properties["TITLE"] = arrayOf(it) }
-            metadata.artist?.let { properties["ARTIST"] = arrayOf(it) }
-            metadata.album?.let { properties["ALBUM"] = arrayOf(it) }
-            metadata.year?.let { properties["DATE"] = arrayOf(it) }
-            metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
-            metadata.trackNumber?.let { properties["TRACKNUMBER"] = arrayOf(it.toString()) }
-            metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
-            metadata.lyrics?.let { properties["LYRICS"] = arrayOf(it) }
-
-            metadata.albumArtist?.let { properties["ALBUMARTIST"] = arrayOf(it) }
-            metadata.discNumber?.let { properties["DISCNUMBER"] = arrayOf(it.toString()) }
-            metadata.composer?.let { properties["COMPOSER"] = arrayOf(it) }
-            metadata.customFields[CUSTOM_RECORD_LABEL]?.let { properties[CUSTOM_RECORD_LABEL] = arrayOf(it) }
-            metadata.customFields[CUSTOM_ENCODER]?.let { properties[CUSTOM_ENCODER] = arrayOf(it) }
-            metadata.customFields[CUSTOM_ISRC]?.let { properties[CUSTOM_ISRC] = arrayOf(it) }
-            metadata.customFields[CUSTOM_COPYRIGHT]?.let { properties[CUSTOM_COPYRIGHT] = arrayOf(it) }
-            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.let {
-                properties[CUSTOM_REPLAYGAIN_TRACK_GAIN] = arrayOf(it)
-            }
-            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.let {
-                properties[CUSTOM_REPLAYGAIN_TRACK_PEAK] = arrayOf(it)
-            }
-            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.let {
-                properties[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = arrayOf(it)
-            }
-            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.let {
-                properties[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = arrayOf(it)
-            }
+            val properties = buildPropertiesMap(metadata)
 
             val success = try {
                 TagLib.savePropertyMap(fdForTagLib, properties)
@@ -954,6 +966,18 @@ class TagLibMetadataProcessor @Inject constructor(
         }
 
         Timber.d(TAG, "Found document URI: $targetDocUri for file: $filePath")
+
+        // OPTIMIZATION: Try direct SAF write first (avoids temp file copy)
+        val directResult = tryUpdateMetadataViaSafDirect(targetDocUri, metadata, filePath)
+        if (directResult.isSuccess) {
+            Timber.d(TAG, "Direct SAF write successful: $filePath")
+            return@withContext directResult
+        }
+        Timber.w(
+            TAG,
+            "Direct SAF write failed, falling back to temp file: $filePath, reason=${directResult.exceptionOrNull()?.message}",
+            directResult.exceptionOrNull()
+        )
 
         // Create temp file for editing
         val fileExtension = File(filePath).extension.lowercase()
@@ -1023,36 +1047,7 @@ class TagLibMetadataProcessor @Inject constructor(
             val fdForTagLib = pfd.dup().detachFd()
 
             // Build properties map
-            val properties = java.util.HashMap<String, Array<String>>()
-            metadata.title?.let { properties["TITLE"] = arrayOf(it) }
-            metadata.artist?.let { properties["ARTIST"] = arrayOf(it) }
-            metadata.album?.let { properties["ALBUM"] = arrayOf(it) }
-            metadata.year?.let { properties["DATE"] = arrayOf(it) }
-            metadata.genre?.let { properties["GENRE"] = arrayOf(it) }
-            metadata.trackNumber?.let { properties["TRACKNUMBER"] = arrayOf(it.toString()) }
-            metadata.comment?.let { properties["COMMENT"] = arrayOf(it) }
-            metadata.lyrics?.let { properties["LYRICS"] = arrayOf(it) }
-
-            metadata.albumArtist?.let { properties["ALBUMARTIST"] = arrayOf(it) }
-            metadata.discNumber?.let { properties["DISCNUMBER"] = arrayOf(it.toString()) }
-            metadata.composer?.let { properties["COMPOSER"] = arrayOf(it) }
-            
-            metadata.customFields[CUSTOM_RECORD_LABEL]?.let { properties[CUSTOM_RECORD_LABEL] = arrayOf(it) }
-            metadata.customFields[CUSTOM_ENCODER]?.let { properties[CUSTOM_ENCODER] = arrayOf(it) }
-            metadata.customFields[CUSTOM_ISRC]?.let { properties[CUSTOM_ISRC] = arrayOf(it) }
-            metadata.customFields[CUSTOM_COPYRIGHT]?.let { properties[CUSTOM_COPYRIGHT] = arrayOf(it) }
-            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN]?.let {
-                properties[CUSTOM_REPLAYGAIN_TRACK_GAIN] = arrayOf(it)
-            }
-            metadata.customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK]?.let {
-                properties[CUSTOM_REPLAYGAIN_TRACK_PEAK] = arrayOf(it)
-            }
-            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN]?.let {
-                properties[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = arrayOf(it)
-            }
-            metadata.customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK]?.let {
-                properties[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = arrayOf(it)
-            }
+            val properties = buildPropertiesMap(metadata)
 
             // TagLib takes ownership and closes its copy
             val success = TagLib.savePropertyMap(fdForTagLib, properties)
@@ -1165,6 +1160,58 @@ class TagLibMetadataProcessor @Inject constructor(
             Result.success(Unit)
         } catch (e: Exception) {
             Timber.tag(TAG).e( "SAF write operation failed: $filePath", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Attempts direct SAF write without temp file copy.
+     */
+    private fun tryUpdateMetadataViaSafDirect(
+        targetDocUri: Uri,
+        metadata: AudioMetadata,
+        filePath: String
+    ): Result<Unit> {
+        return runCatching {
+            val pfd = context.contentResolver.openFileDescriptor(targetDocUri, "rw")
+                ?: return Result.failure(IllegalStateException("Cannot open SAF file descriptor"))
+            val fdForTagLib = pfd.dup().detachFd()
+
+            val properties = buildPropertiesMap(metadata)
+            val success = try {
+                TagLib.savePropertyMap(fdForTagLib, properties)
+            } finally {
+                pfd.close()
+            }
+
+            // Save album art if provided (requires new FD since TagLib closes its copy)
+            metadata.albumArt?.let { albumArtBytes ->
+                val mimeType = detectImageMimeType(albumArtBytes)
+                val picture = Picture(
+                    data = albumArtBytes,
+                    description = "Front Cover",
+                    pictureType = "Front Cover",
+                    mimeType = mimeType
+                )
+                val pfd2 = context.contentResolver.openFileDescriptor(targetDocUri, "rw")
+                    ?: return Result.failure(IllegalStateException("Cannot reopen SAF file descriptor for picture save"))
+                val fdForTagLib2 = pfd2.dup().detachFd()
+                try {
+                    val pictureSaved = TagLib.savePictures(fdForTagLib2, arrayOf(picture))
+                    if (!pictureSaved) {
+                        Timber.tag(TAG).w("Failed to save album art for: $filePath")
+                    }
+                } finally {
+                    pfd2.close()
+                }
+            }
+
+            if (!success) {
+                return Result.failure(IllegalStateException("TagLib.savePropertyMap() returned false"))
+            }
+
+            Result.success(Unit)
+        }.getOrElse { e ->
             Result.failure(e)
         }
     }

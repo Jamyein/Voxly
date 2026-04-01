@@ -51,6 +51,9 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.ui.loadMediaStoreAlbumArt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.theme.ExpressiveAnimations
@@ -304,9 +307,27 @@ fun MetadataEditorScreen(
                         // Create scroll state for FloatingToolbarScrollBehavior
                         val scrollState = rememberScrollState()
 
+                        val mediaStoreFallbackBitmap by produceState<Bitmap?>(
+                            initialValue = null,
+                            key1 = state.audioFile.mediaStoreAlbumId,
+                            key2 = state.editedMetadata.albumArt
+                        ) {
+                            value = if (state.editedMetadata.albumArt == null &&
+                                state.audioFile.mediaStoreAlbumId != null &&
+                                state.audioFile.mediaStoreAlbumId > 0
+                            ) {
+                                withContext(Dispatchers.IO) {
+                                    loadMediaStoreAlbumArt(context, state.audioFile.mediaStoreAlbumId)
+                                }
+                            } else {
+                                null
+                            }
+                        }
+
                         MetadataFormContent(
                             metadata = state.editedMetadata,
                             audioFile = state.audioFile,
+                            albumArtFallback = mediaStoreFallbackBitmap,
                             bottomPadding = innerPadding.calculateBottomPadding() + 80.dp, // Extra space for toolbar
                             scrollState = scrollState,
                             nestedScrollModifier = Modifier,
@@ -592,6 +613,7 @@ private fun fieldLabel(field: MetadataField, baseLabelResId: Int, modifiedFields
 private fun MetadataFormContent(
     metadata: AudioMetadata,
     audioFile: com.voxly.domain.model.AudioFile,
+    albumArtFallback: Bitmap? = null,
     modifiedFields: Set<MetadataField>,
     onTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
@@ -640,6 +662,7 @@ private fun MetadataFormContent(
         // Album Art Section with shared element transition support
         AlbumArtSection(
             albumArt = metadata.albumArt,
+            fallbackBitmap = albumArtFallback,
             onPickAlbumArt = onPickAlbumArt,
             coverTag = coverTag,
             onZoomAlbumArt = onZoomAlbumArt,

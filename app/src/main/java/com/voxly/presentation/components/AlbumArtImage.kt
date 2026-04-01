@@ -19,15 +19,15 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.ui.findCachedAlbumArt
 import com.voxly.presentation.ui.loadImageBitmapFromUrl
-import com.voxly.presentation.ui.loadLocalAlbumArt
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -48,9 +48,11 @@ fun AlbumArtImage(
     contentScale: ContentScale = ContentScale.Crop,
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
+    val density = LocalDensity.current
     val albumArtBitmap = produceAlbumArtBitmap(
         filePath = filePath,
-        mediaStoreAlbumId = mediaStoreAlbumId
+        mediaStoreAlbumId = mediaStoreAlbumId,
+        targetSizePx = with(density) { size.toPx().toInt() }
     )
 
     Box(
@@ -141,7 +143,8 @@ fun DefaultAlbumArtPlaceholder(
 @Composable
 private fun produceAlbumArtBitmap(
     filePath: String?,
-    mediaStoreAlbumId: Long?
+    mediaStoreAlbumId: Long?,
+    targetSizePx: Int
 ): androidx.compose.runtime.State<Bitmap?> {
     val context = LocalContext.current
     return androidx.compose.runtime.produceState<Bitmap?>(
@@ -150,19 +153,23 @@ private fun produceAlbumArtBitmap(
         key2 = mediaStoreAlbumId
     ) {
         value = withContext(Dispatchers.IO) {
-            // First try: local file embedded album art
-            if (!filePath.isNullOrBlank()) {
-                val localArt = loadLocalAlbumArt(filePath)
-                if (localArt != null) {
-                    return@withContext localArt
-                }
-            }
-
-            // Second try: MediaStore album art
+            // First try: MediaStore album art (default path)
             if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
                 val mediaStoreArt = loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
                 if (mediaStoreArt != null) {
                     return@withContext mediaStoreArt
+                }
+            }
+
+            // Second try: file-level cached thumbnail (TagLib fallback)
+            if (!filePath.isNullOrBlank()) {
+                val localArt = loadAlbumArtThumbnail(
+                    context = context,
+                    filePath = filePath,
+                    targetSizePx = targetSizePx
+                )
+                if (localArt != null) {
+                    return@withContext localArt
                 }
             }
 

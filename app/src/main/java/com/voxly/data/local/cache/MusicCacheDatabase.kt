@@ -20,9 +20,10 @@ import javax.inject.Singleton
     entities = [
         CachedAudioFileEntity::class,
         AlbumThumbnailEntity::class,
-        RecentEditEntity::class
+        RecentEditEntity::class,
+        AlbumArtFileCacheEntity::class  // Added for three-tier album art caching
     ],
-    version = 3,
+    version = 4,  // Bumped from 3 to 4
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -30,6 +31,7 @@ abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun audioFileDao(): CachedAudioFileDao
     abstract fun albumThumbnailDao(): AlbumThumbnailDao
     abstract fun recentEditDao(): RecentEditDao
+    abstract fun albumArtFileCacheDao(): AlbumArtFileCacheDao  // New DAO for file-level art cache
 
     companion object {
         const val DATABASE_NAME = "music_cache.db"
@@ -106,6 +108,25 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_year` ON `cached_audio_files` (`year`)")
                     }
                 })
+                // Migration from version 3 to 4: adds album art file cache table
+                .addMigrations(object : Migration(3, 4) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        // Create album art file cache table
+                        db.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `album_art_file_cache` (
+                                `filePath` TEXT PRIMARY KEY NOT NULL,
+                                `originalArtBytes` BLOB,
+                                `thumbnailBytes` BLOB,
+                                `lastModified` INTEGER NOT NULL,
+                                `cacheTime` INTEGER NOT NULL DEFAULT 0,
+                                `accessCount` INTEGER NOT NULL DEFAULT 0,
+                                `lastAccessTime` INTEGER NOT NULL DEFAULT 0
+                            )
+                        """)
+                        // Create indices for LRU queries
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_album_art_file_cache_access` ON `album_art_file_cache` (`accessCount`, `lastAccessTime`)")
+                    }
+                })
 
             val newInstance = builder.build()
             prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
@@ -130,6 +151,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
     companion object {
         private const val PREFS_NAME = "music_cache_meta"
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
-        private const val CURRENT_DATA_FORMAT_VERSION = 3
+        private const val CURRENT_DATA_FORMAT_VERSION = 4
     }
 }

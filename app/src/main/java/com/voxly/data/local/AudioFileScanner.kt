@@ -1,4 +1,4 @@
-: "com.voxly.data.local",
+package com.voxly.data.local
 
 import android.content.ContentResolver
 import android.content.Context
@@ -23,6 +23,7 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
@@ -80,7 +81,7 @@ class AudioFileScanner @Inject constructor(
     val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
 
     // Raw cached audio files from database
-    val cachedAudioFiles: Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
+    val cachedAudioFilesFlow: Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
         .catch { e ->
             Timber.e(e, "Error observing cached audio files")
         }
@@ -88,7 +89,7 @@ class AudioFileScanner @Inject constructor(
     // Filtered audio files - applies all filters and reacts to settings changes
     // Optimized: settings collected once per emission, no runBlocking needed
     val filteredAudioFiles: Flow<List<AudioFile>> = combine(
-        cachedAudioFiles,
+        cachedAudioFilesFlow,
         settingsDataStore.whitelistEnabled,
         settingsDataStore.blacklistEnabled,
         settingsDataStore.minDurationFilterEnabled,
@@ -579,8 +580,9 @@ class AudioFileScanner @Inject constructor(
         val file = File(filePath)
         val extension = file.extension.lowercase()
 
-        val fullMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
-            ?: com.voxly.domain.model.AudioMetadata()
+        // OPTIMIZATION: Read metadata + audio info in one TagLib call when possible
+        val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = false)
+        val fullMetadata = completeMetadata?.metadata ?: com.voxly.domain.model.AudioMetadata()
 
         // Try MediaStore first for duration
         var duration = 0L
@@ -598,8 +600,8 @@ class AudioFileScanner @Inject constructor(
             }
         }
 
-        // Fallback to TagLib
-        val audioInfo = metadataProcessor.readAudioInfo(filePath)
+        // Fallback to TagLib audio info if not provided by complete metadata
+        val audioInfo = completeMetadata?.audioInfo ?: metadataProcessor.readAudioInfo(filePath)
         if (duration == 0L) duration = audioInfo?.durationMs ?: 0L
         if (bitrate == 0) bitrate = (audioInfo?.bitrate ?: 0) / 1000
 

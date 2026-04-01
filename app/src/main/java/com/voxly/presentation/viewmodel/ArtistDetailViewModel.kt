@@ -1,7 +1,6 @@
 package com.voxly.presentation.viewmodel
 
 import android.content.Context
-import android.media.MediaMetadataRetriever
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
@@ -10,7 +9,7 @@ import com.voxly.data.repository.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.navigation.ArtistDetail
 import com.voxly.presentation.ui.extractAndCacheCoverBytes
-import com.voxly.presentation.ui.loadCarouselCoverArt
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
@@ -220,7 +219,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
                         val albumName = albumList[index]
                         val path = _albumCovers.value[albumName]
                         if (path != null) {
-                            loadCarouselCoverArt(path)
+                            loadAlbumArtThumbnail(context, path)
                         }
                     }
                 }

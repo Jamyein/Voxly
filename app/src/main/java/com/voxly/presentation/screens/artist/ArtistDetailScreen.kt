@@ -41,9 +41,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.compose.ui.Alignment
@@ -53,19 +55,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.theme.ExpressiveMotion
-import com.voxly.presentation.ui.loadCarouselCoverArt
-import com.voxly.presentation.ui.loadLocalAlbumArt
+import com.voxly.presentation.ui.loadAlbumArtOriginalBitmap
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
+import kotlin.math.max
 
 /**
  * Album information for carousel display with year.
@@ -75,6 +80,8 @@ private data class AlbumInfo(
     val files: List<com.voxly.domain.model.AudioFile>,
     val year: Int?
 )
+
+private const val CAROUSEL_ART_TARGET_PX = 384
 
 /**
  * Extracts the year from album files (uses the maximum year found).
@@ -153,9 +160,19 @@ fun ArtistDetailScreen(
 
     // Use cached cover path for avatar (performance optimization)
     // Fixed: Use produceState to properly load bitmap asynchronously
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val targetSizePx = max(CAROUSEL_ART_TARGET_PX, with(density) { 160.dp.toPx().toInt() })
+    val avatarTargetPx = with(density) { 150.dp.toPx().toInt() }
     val avatarBitmap by produceState<Bitmap?>(initialValue = null, key1 = coverPath) {
         value = withContext(Dispatchers.IO) {
-            coverPath?.let { loadLocalAlbumArt(it) }
+            coverPath?.let { path ->
+                loadAlbumArtThumbnail(
+                    context = context,
+                    filePath = path,
+                    targetSizePx = avatarTargetPx
+                )
+            }
         }
     }
 
@@ -213,9 +230,10 @@ fun ArtistDetailScreen(
                                 .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (avatarBitmap != null) {
+                            val avatar = avatarBitmap
+                            if (avatar != null) {
                                 Image(
-                                    bitmap = avatarBitmap.asImageBitmap(),
+                                    bitmap = avatar.asImageBitmap(),
                                     contentDescription = stringResource(R.string.artist_cover),
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
@@ -405,14 +423,42 @@ fun CarouselAlbumArtImage(
     modifier: Modifier = Modifier,
     placeholder: @Composable () -> Unit = {}
 ) {
-    val bitmap = produceState<Bitmap?>(initialValue = null, key1 = filePath) {
-        value = withContext(Dispatchers.IO) {
-            filePath?.let { loadCarouselCoverArt(it) }
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val targetSizePx = max(CAROUSEL_ART_TARGET_PX, with(density) { 160.dp.toPx().toInt() })
+    var thumbnail by remember(filePath) { mutableStateOf<Bitmap?>(null) }
+    var original by remember(filePath) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(filePath) {
+        thumbnail = null
+        original = null
+
+        if (filePath.isNullOrBlank()) return@LaunchedEffect
+
+        // 1) Load high-quality thumbnail for instant display
+        thumbnail = withContext(Dispatchers.IO) {
+            loadAlbumArtThumbnail(
+                context = context,
+                filePath = filePath,
+                targetSizePx = targetSizePx
+            )
+        }
+
+        // 2) Load original and replace without layout changes
+        val full = withContext(Dispatchers.IO) {
+            loadAlbumArtOriginalBitmap(
+                context = context,
+                filePath = filePath,
+                targetSizePx = targetSizePx
+            )
+        }
+        if (full != null) {
+            original = full
         }
     }
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        val loadedBitmap = bitmap.value
+        val loadedBitmap = original ?: thumbnail
         if (loadedBitmap != null) {
             Image(
                 bitmap = loadedBitmap.asImageBitmap(),

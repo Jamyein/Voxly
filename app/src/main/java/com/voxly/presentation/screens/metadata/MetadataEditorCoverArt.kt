@@ -29,6 +29,7 @@ import com.voxly.presentation.theme.MaterialShapes
 @Composable
 fun AlbumArtSection(
     albumArt: ByteArray?,
+    fallbackBitmap: android.graphics.Bitmap? = null,
     onPickAlbumArt: () -> Unit,
     coverTag: String? = null,
     onZoomAlbumArt: () -> Unit,
@@ -59,13 +60,17 @@ fun AlbumArtSection(
         ) {
             // Use Crossfade for smooth album art transitions
             // Note: Shared element transition is applied outside Crossfade for proper animation
+            val hasAnyArt = albumArt != null || fallbackBitmap != null
             androidx.compose.animation.Crossfade(
-                targetState = albumArt != null,
+                targetState = hasAnyArt,
                 label = "album_art_crossfade"
             ) { hasArt ->
-                if (hasArt && albumArt != null) {
-                    val bitmap = remember(albumArt.contentHashCode()) {
-                        decodeAlbumArtPreview(albumArt)
+                if (hasArt) {
+                    val bitmap = when {
+                        albumArt != null -> remember(albumArt.contentHashCode()) {
+                            decodeAlbumArtPreview(albumArt)
+                        }
+                        else -> fallbackBitmap
                     }
                     if (bitmap != null) {
                         val albumArtModifier = Modifier.fillMaxSize()
