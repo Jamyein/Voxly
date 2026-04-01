@@ -1,9 +1,9 @@
 package com.voxly.presentation.screens.filebrowser
 
-import android.Manifest
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
+import android.widget.Toast
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
+import com.voxly.core.util.MediaPermission
 import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.RootTab
@@ -92,6 +93,34 @@ fun FileBrowserAdaptiveScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val audioPermission = remember { MediaPermission.audioReadPermission(Build.VERSION.SDK_INT) }
+    var hasAudioPermission by remember {
+        mutableStateOf(
+            ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED
+        )
+    }
+    var permissionRequested by remember { mutableStateOf(false) }
+    val requestAudioPermission = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasAudioPermission = granted
+        if (granted) {
+            viewModel.refresh(forceRefresh = true)
+        } else {
+            Toast.makeText(
+                context,
+                context.getString(R.string.permission_storage_message),
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    LaunchedEffect(hasAudioPermission, permissionRequested) {
+        if (!hasAudioPermission && !permissionRequested) {
+            permissionRequested = true
+            requestAudioPermission.launch(audioPermission)
+        }
+    }
 
     // Material3 Adaptive Navigator - automatically handles all screen sizes
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
@@ -242,7 +271,13 @@ fun FileBrowserAdaptiveScreen(
                                     onSortOptionChange = { viewModel.setFileBrowserSortOption(it.name) }
                                 )
                             }
-                            IconButton(onClick = { viewModel.refresh() }) {
+                            IconButton(onClick = {
+                                if (hasAudioPermission) {
+                                    viewModel.refresh()
+                                } else {
+                                    requestAudioPermission.launch(audioPermission)
+                                }
+                            }) {
                                 Icon(
                                     imageVector = Icons.Default.Refresh,
                                     contentDescription = stringResource(R.string.refresh_files)
@@ -265,7 +300,13 @@ fun FileBrowserAdaptiveScreen(
                                         onNavigateToDirectory(directoryUri, directoryName)
                                     },
                                     isRefreshing = isRefreshing,
-                                    onRefresh = { viewModel.refresh() },
+                                    onRefresh = {
+                                        if (hasAudioPermission) {
+                                            viewModel.refresh()
+                                        } else {
+                                            requestAudioPermission.launch(audioPermission)
+                                        }
+                                    },
                                     listState = listState,
                                     bottomPadding = 16.dp
                                 )
@@ -289,7 +330,13 @@ fun FileBrowserAdaptiveScreen(
                                         viewModel.toggleFileSelection(audioFile.path)
                                     },
                                     isRefreshing = isRefreshing,
-                                    onRefresh = { viewModel.refresh() },
+                                    onRefresh = {
+                                        if (hasAudioPermission) {
+                                            viewModel.refresh()
+                                        } else {
+                                            requestAudioPermission.launch(audioPermission)
+                                        }
+                                    },
                                     listState = listState
                                 )
                             }
