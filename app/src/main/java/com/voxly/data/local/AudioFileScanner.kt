@@ -1,4 +1,4 @@
-package com.voxly.data.local
+: "com.voxly.data.local",
 
 import android.content.ContentResolver
 import android.content.Context
@@ -34,7 +34,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -80,9 +79,16 @@ class AudioFileScanner @Inject constructor(
     private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
     val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
 
+    // Raw cached audio files from database
+    val cachedAudioFiles: Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
+        .catch { e ->
+            Timber.e(e, "Error observing cached audio files")
+        }
+
     // Filtered audio files - applies all filters and reacts to settings changes
+    // Optimized: settings collected once per emission, no runBlocking needed
     val filteredAudioFiles: Flow<List<AudioFile>> = combine(
-        libraryCache.getCachedAudioFiles(),
+        cachedAudioFiles,
         settingsDataStore.whitelistEnabled,
         settingsDataStore.blacklistEnabled,
         settingsDataStore.minDurationFilterEnabled,
@@ -92,13 +98,40 @@ class AudioFileScanner @Inject constructor(
     ) { array ->
         @Suppress("UNCHECKED_CAST")
         val files = array[0] as List<AudioFile>
-        // Trigger re-filtering when any setting changes
-        // applyFilters will read the latest settings values
-        runBlocking { applyFilters(files) }
-    }.catch { e ->
-        Timber.e(e, "Error observing filtered audio files")
-        emit(emptyList())
+        val whitelistEnabled = array[1] as Boolean
+        val blacklistEnabled = array[2] as Boolean
+        val minDurationEnabled = array[3] as Boolean
+        val whitelistUris = array[4] as List<String>
+        val blacklistUris = array[5] as List<String>
+        val minDurationMs = (array[6] as Int).toLong()
+
+        // Apply filters with pre-collected settings (no suspend calls, no I/O)
+        applyFilters(
+            files,
+            FilterSettings(
+                whitelistEnabled = whitelistEnabled,
+                blacklistEnabled = blacklistEnabled,
+                minDurationEnabled = minDurationEnabled,
+                whitelistUris = whitelistUris,
+                blacklistUris = blacklistUris,
+                minDurationMs = minDurationMs
+            )
+        )
     }
+        .distinctUntilChanged { old, new ->
+            // Fast path: if sizes differ, they are definitely different
+            if (old.size != new.size) return@distinctUntilChanged false
+            // Both empty: they are the same
+            if (old.isEmpty()) return@distinctUntilChanged true
+            // Compare first and last items for quick check
+            // For sorted lists (by path), this should be sufficient
+            old.first().path == new.first().path && old.last().path == new.last().path
+        }
+        .flowOn(Dispatchers.Default)
+        .catch { e ->
+            Timber.e(e, "Error observing filtered audio files")
+            emit(emptyList())
+        }
 
     init {
         // Auto-update albums and artists when filtered data changes
@@ -614,17 +647,7 @@ class AudioFileScanner @Inject constructor(
      * Applies whitelist/blacklist filtering before aggregation.
      */
     private suspend fun updateAlbumsAndArtistsFromFiles(files: List<AudioFile>) {
-        val filteredFiles = applyFilters(files)
-        updateAlbumsFromFiles(filteredFiles)
-        updateArtistsFromFiles(filteredFiles)
-    }
-
-    /**
-     * Applies all filters (whitelist, blacklist, min duration) to audio files.
-     * @param files List of audio files to filter
-     * @return Filtered list of audio files
-     */
-    private suspend fun applyFilters(files: List<AudioFile>): List<AudioFile> {
+        // Load current filter settings
         val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
         val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
         val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
@@ -632,42 +655,80 @@ class AudioFileScanner @Inject constructor(
         val blacklistUris = settingsDataStore.blacklistDirectoryUris.first()
         val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
 
+        val filteredFiles = applyFilters(
+            files,
+            FilterSettings(
+                whitelistEnabled = whitelistEnabled,
+                blacklistEnabled = blacklistEnabled,
+                minDurationEnabled = minDurationEnabled,
+                whitelistUris = whitelistUris,
+                blacklistUris = blacklistUris,
+                minDurationMs = minDurationMs
+            )
+        )
+        updateAlbumsFromFiles(filteredFiles)
+        updateArtistsFromFiles(filteredFiles)
+    }
+
+    /**
+     * Data class to hold filter settings.
+     * Prevents multiple I/O operations by collecting settings once.
+     */
+    private data class FilterSettings(
+        val whitelistEnabled: Boolean,
+        val blacklistEnabled: Boolean,
+        val minDurationEnabled: Boolean,
+        val whitelistUris: List<String>,
+        val blacklistUris: List<String>,
+        val minDurationMs: Long
+    )
+
+    /**
+     * Applies all filters (whitelist, blacklist, min duration) to audio files.
+     * @param files List of audio files to filter
+     * @param settings Pre-collected filter settings (no I/O within this method)
+     * @return Filtered list of audio files
+     */
+    private fun applyFilters(files: List<AudioFile>, settings: FilterSettings): List<AudioFile> {
         // If no filters are enabled, return all files
-        if (!whitelistEnabled && !blacklistEnabled && !minDurationEnabled) {
+        if (!settings.whitelistEnabled && !settings.blacklistEnabled && !settings.minDurationEnabled) {
             return files
         }
 
+        // Pre-compute whitelist and blacklist paths once (avoid repeated computation)
+        val whitelistPaths = if (settings.whitelistEnabled && settings.whitelistUris.isNotEmpty()) {
+            settings.whitelistUris.map { getPathFromUriString(it) }
+        } else null
+
+        val blacklistPaths = if (settings.blacklistEnabled && settings.blacklistUris.isNotEmpty()) {
+            settings.blacklistUris.map { getPathFromUriString(it) }
+        } else null
+
         return files.filter { file ->
             val path = file.path
-            var isIncluded = true
 
             // Apply whitelist filter: file must be in one of the whitelist directories
-            if (whitelistEnabled && whitelistUris.isNotEmpty()) {
-                val whitelistPaths = whitelistUris.map { getPathFromUriString(it) }
-                isIncluded = whitelistPaths.any { whitelistPath ->
+            if (whitelistPaths != null) {
+                val isInWhitelist = whitelistPaths.any { whitelistPath ->
                     isPathInsideDirectory(path, whitelistPath)
                 }
+                if (!isInWhitelist) return@filter false
             }
 
             // Apply blacklist filter: file must NOT be in any blacklist directory
-            if (isIncluded && blacklistEnabled && blacklistUris.isNotEmpty()) {
-                val blacklistPaths = blacklistUris.map { getPathFromUriString(it) }
+            if (blacklistPaths != null) {
                 val isBlacklisted = blacklistPaths.any { blacklistPath ->
                     isPathInsideDirectory(path, blacklistPath)
                 }
-                if (isBlacklisted) {
-                    isIncluded = false
-                }
+                if (isBlacklisted) return@filter false
             }
 
             // Apply min duration filter: file duration must be >= minDurationMs
-            if (isIncluded && minDurationEnabled && file.duration > 0) {
-                if (file.duration < minDurationMs) {
-                    isIncluded = false
-                }
+            if (settings.minDurationEnabled && file.duration > 0 && file.duration < settings.minDurationMs) {
+                return@filter false
             }
 
-            isIncluded
+            true
         }
     }
 
