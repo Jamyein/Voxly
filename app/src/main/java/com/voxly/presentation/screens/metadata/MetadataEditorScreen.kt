@@ -570,9 +570,12 @@ fun MetadataEditorScreen(
     }
 
     if (showAlbumArtPreview) {
-        val previewBytes = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt
+        val successState = uiState as? MetadataEditorUiState.Success
+        val previewBytes = successState?.editedMetadata?.albumArt
+        val audioFilePath = successState?.audioFile?.path
         AlbumArtPreviewDialog(
             albumArt = previewBytes,
+            filePath = audioFilePath,
             onDismiss = { showAlbumArtPreview = false }
         )
     }

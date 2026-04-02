@@ -206,36 +206,54 @@ fun AlbumArtOptionsSheet(
 
 /**
  * Dialog for previewing album art.
+ * Supports both edited album art bytes and file-based original art.
  */
 @Composable
 fun AlbumArtPreviewDialog(
     albumArt: ByteArray?,
+    filePath: String? = null,
     onDismiss: () -> Unit
 ) {
-    if (albumArt != null) {
-        val preview = remember(albumArt.contentHashCode()) { decodeAlbumArtPreview(albumArt, 2048) }
-        AlertDialog(
-            onDismissRequest = onDismiss,
-            shape = MaterialTheme.shapes.large,
-            title = { Text(stringResource(R.string.metadata_album_art)) },
-            text = {
-                if (preview != null) {
-                    androidx.compose.foundation.Image(
-                        bitmap = preview.asImageBitmap(),
-                        contentDescription = stringResource(R.string.cd_album_art),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                } else {
-                    Text(stringResource(R.string.no_album_art))
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = onDismiss) {
-                    Text(stringResource(R.string.dialog_close))
-                }
+    val context = androidx.compose.ui.platform.LocalContext.current
+
+    val previewBitmap = remember(albumArt?.contentHashCode(), filePath) {
+        when {
+            albumArt != null -> decodeAlbumArtPreview(albumArt, 2048)
+            !filePath.isNullOrBlank() -> {
+                // Synchronous load from cache for preview dialog.
+                // Acceptable because the dialog is shown on user action,
+                // and the cover art should already be cached by AlbumArtSection.
+                runCatching {
+                    kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
+                        com.voxly.presentation.ui.loadAlbumArtOriginalBitmap(context, filePath, 2048)
+                    }
+                }.getOrNull()
             }
-        )
+            else -> null
+        }
     }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        shape = MaterialTheme.shapes.large,
+        title = { Text(stringResource(R.string.metadata_album_art)) },
+        text = {
+            if (previewBitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = previewBitmap.asImageBitmap(),
+                    contentDescription = stringResource(R.string.cd_album_art),
+                    modifier = Modifier.fillMaxWidth()
+                )
+            } else {
+                Text(stringResource(R.string.no_album_art))
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.dialog_close))
+            }
+        }
+    )
 }
 
 /**

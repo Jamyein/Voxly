@@ -22,11 +22,14 @@ import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.theme.MaterialShapes
 import com.voxly.presentation.ui.loadAlbumArtThumbnail
+import com.voxly.presentation.ui.loadAlbumArtOriginalBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Album art section component with click to pick.
+ * Album art section component with progressive loading.
+ * Displays thumbnail first for fast shared element transition,
+ * then crossfades to original resolution once loaded.
  *
  * @param filePath The file path used for shared element transition key.
  *                 When provided, enables Container Transform animation from list to detail.
@@ -45,15 +48,30 @@ fun AlbumArtSection(
     val coverKey = filePath?.let { createAlbumArtSharedElementKey(it) }
     val context = LocalContext.current
 
+    // Layer 1: Thumbnail for fast display and shared element transition
     val cachedThumbnail by produceState<Bitmap?>(
         initialValue = null,
-        key1 = filePath,
-        key2 = albumArt
+        key1 = filePath
     ) {
         value = withContext(Dispatchers.IO) {
             if (!filePath.isNullOrBlank()) {
                 loadAlbumArtThumbnail(context, filePath, 512)
             } else null
+        }
+    }
+
+    // Layer 2: Original resolution for detail display
+    val originalBitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = filePath,
+        key2 = albumArt
+    ) {
+        value = withContext(Dispatchers.IO) {
+            when {
+                albumArt != null -> decodeAlbumArtPreview(albumArt, 2048)
+                !filePath.isNullOrBlank() -> loadAlbumArtOriginalBitmap(context, filePath, 2048)
+                else -> null
+            }
         }
     }
 
@@ -75,32 +93,25 @@ fun AlbumArtSection(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            val hasAnyArt = albumArt != null || fallbackBitmap != null || cachedThumbnail != null
-            androidx.compose.animation.Crossfade(
-                targetState = hasAnyArt,
-                label = "album_art_crossfade"
-            ) { hasArt ->
-                if (hasArt) {
-                    val bitmap = when {
-                        albumArt != null -> remember(albumArt.contentHashCode()) {
-                            decodeAlbumArtPreview(albumArt)
-                        }
-                        cachedThumbnail != null -> cachedThumbnail
-                        else -> fallbackBitmap
+            // Progressive display: original > edited albumArt > thumbnail > fallback
+            val displayBitmap = originalBitmap ?: run {
+                when {
+                    albumArt != null -> remember(albumArt.contentHashCode()) {
+                        decodeAlbumArtPreview(albumArt)
                     }
-                    if (bitmap != null) {
-                        val albumArtModifier = Modifier.fillMaxSize()
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = stringResource(R.string.cd_album_art),
-                            modifier = albumArtModifier
-                        )
-                    } else {
-                        EmptyAlbumArtContent()
-                    }
-                } else {
-                    EmptyAlbumArtContent()
+                    cachedThumbnail != null -> cachedThumbnail
+                    else -> fallbackBitmap
                 }
+            }
+
+            if (displayBitmap != null) {
+                Image(
+                    bitmap = displayBitmap.asImageBitmap(),
+                    contentDescription = stringResource(R.string.cd_album_art),
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                EmptyAlbumArtContent()
             }
         }
     }

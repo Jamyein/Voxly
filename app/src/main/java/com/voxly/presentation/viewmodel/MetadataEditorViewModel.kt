@@ -186,22 +186,44 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     /**
      * Loads the audio file and its metadata.
+     * Fast path: reads metadata without cover art bytes for instant page load.
+     * Cover art is loaded asynchronously via loadCoverArtAsync().
      */
     private fun loadAudioFile() {
         viewModelScope.launch {
             _uiState.value = MetadataEditorUiState.Loading
 
-            val audioFileResult = audioRepository.getAudioFile(filePath)
+            // Fast path: read metadata without cover art bytes
+            val metadataResult = audioRepository.readMetadata(filePath)
 
-            audioFileResult.fold(
-                onSuccess = { audioFile ->
-                    _editedMetadata.value = audioFile.metadata
-                    _originalMetadata = audioFile.metadata
+            metadataResult.fold(
+                onSuccess = { metadata ->
+                    _editedMetadata.value = metadata
+                    _originalMetadata = metadata
+
+                    // Build minimal AudioFile from metadata + file info
+                    val file = File(filePath)
+                    val audioFile = AudioFile(
+                        id = "",
+                        path = filePath,
+                        name = file.nameWithoutExtension,
+                        size = file.length(),
+                        duration = 0L,
+                        format = "",
+                        bitrate = 0,
+                        sampleRate = 0,
+                        channels = 0,
+                        metadata = metadata,
+                        replayGainInfo = null
+                    )
 
                     _uiState.value = MetadataEditorUiState.Success(
                         audioFile = audioFile,
-                        editedMetadata = audioFile.metadata
+                        editedMetadata = metadata
                     )
+
+                    // Load cover art asynchronously — don't block UI
+                    loadCoverArtAsync(filePath)
 
                     // Load ReplayGain asynchronously — don't block UI
                     viewModelScope.launch {
@@ -217,6 +239,31 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     )
                 }
             )
+        }
+    }
+
+    /**
+     * Loads cover art bytes asynchronously and updates the edited metadata.
+     * This runs in parallel with UI rendering for fast page load.
+     * Uses getLocalCoverBytes which checks byte cache first, then extracts from file.
+     */
+    private fun loadCoverArtAsync(filePath: String) {
+        viewModelScope.launch {
+            val coverBytes = withContext(Dispatchers.IO) {
+                com.voxly.presentation.ui.getLocalCoverBytes(filePath)
+            }
+            coverBytes?.let { bytes ->
+                val currentMetadata = _editedMetadata.value ?: return@let
+                if (currentMetadata.albumArt == null) {
+                    _editedMetadata.value = currentMetadata.copy(albumArt = bytes)
+                    val currentState = _uiState.value
+                    if (currentState is MetadataEditorUiState.Success) {
+                        _uiState.value = currentState.copy(
+                            editedMetadata = currentMetadata.copy(albumArt = bytes)
+                        )
+                    }
+                }
+            }
         }
     }
 
