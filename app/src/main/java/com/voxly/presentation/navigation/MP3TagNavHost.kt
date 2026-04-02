@@ -32,6 +32,8 @@ import com.voxly.presentation.components.LocalSharedTransitionScope
 import com.voxly.R
 import com.voxly.core.util.LogManager
 import com.voxly.domain.model.AudioMetadata
+import com.voxly.domain.model.AlbumGroup
+import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.icons.AppIcon
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -358,6 +360,9 @@ private fun RenderMainScreen(
                 onNavigateBack = {},
                 onNavigateToMetadata = { filePath, coverTag ->
                     backStack.add(MetadataEditor(filePath, coverTag ?: ""))
+                },
+                onNavigateToAlbumDetail = { albumGroup ->
+                    backStack.add(AlbumDetail(albumGroup.name, albumGroup.artist ?: ""))
                 }
             )
         }
@@ -367,6 +372,9 @@ private fun RenderMainScreen(
                 onNavigateBack = {},
                 onNavigateToMetadata = { filePath, coverTag ->
                     backStack.add(MetadataEditor(filePath, coverTag ?: ""))
+                },
+                onNavigateToArtistDetail = { artistGroup ->
+                    backStack.add(ArtistDetail(artistGroup.name))
                 }
             )
         }

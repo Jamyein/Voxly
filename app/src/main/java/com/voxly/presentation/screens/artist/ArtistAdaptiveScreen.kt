@@ -52,6 +52,7 @@ import kotlinx.coroutines.launch
 fun ArtistAdaptiveScreen(
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: ((String, String?) -> Unit)? = null,
+    onNavigateToArtistDetail: ((ArtistGroup) -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: ArtistViewModel = hiltViewModel()
 ) {
@@ -116,7 +117,11 @@ fun ArtistAdaptiveScreen(
                             selectedAlbumNavKey = null
                             fileSwitchCounter++
                             val navKey = ArtistDetail(artistName = artist.name)
-                            navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, navKey)
+                            if (isSinglePane && onNavigateToArtistDetail != null) {
+                                onNavigateToArtistDetail(artist)
+                            } else {
+                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, navKey)
+                            }
                         }
                     },
                     modifier = Modifier.fillMaxSize()

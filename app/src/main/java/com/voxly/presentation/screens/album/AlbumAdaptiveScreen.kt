@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 fun AlbumAdaptiveScreen(
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: ((String, String?) -> Unit)? = null,
+    onNavigateToAlbumDetail: ((AlbumGroup) -> Unit)? = null,
     modifier: Modifier = Modifier,
     viewModel: AlbumViewModel = hiltViewModel()
 ) {
@@ -88,13 +89,17 @@ fun AlbumAdaptiveScreen(
             AnimatedPane {
                 AlbumScreenContent(
                     viewModel = viewModel,
-                    onAlbumClick = { album ->
-                        coroutineScope.launch {
-                            selectedFileForEditing = null
-                            fileSwitchCounter++
+                onAlbumClick = { album ->
+                    coroutineScope.launch {
+                        selectedFileForEditing = null
+                        fileSwitchCounter++
+                        if (isSinglePane && onNavigateToAlbumDetail != null) {
+                            onNavigateToAlbumDetail(album)
+                        } else {
                             navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, album)
                         }
-                    },
+                    }
+                },
                     modifier = Modifier.fillMaxSize()
                 )
             }
