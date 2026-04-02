@@ -1309,7 +1309,12 @@ class LibraryViewModel @Inject constructor(
     /**
      * File browser root tab from persistent storage (DIRECTORIES or ALL)
      */
-    val fileBrowserRootTab = settingsDataStore.fileBrowserRootTab
+    val fileBrowserRootTab: StateFlow<String> = settingsDataStore.fileBrowserRootTab
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = "DIRECTORIES"
+        )
 
     /**
      * Save file browser root tab to persistent storage

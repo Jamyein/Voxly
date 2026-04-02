@@ -151,13 +151,6 @@ fun FileBrowserAdaptiveScreen(
         // No whitelist: force ALL mode
         RootTab.ALL
     }
-    
-    // Auto-switch to ALL mode when directories become empty (user removed all whitelist directories)
-    LaunchedEffect(hasWhitelistDirectories) {
-        if (!hasWhitelistDirectories && rootTabString != RootTab.ALL.name) {
-            viewModel.setFileBrowserRootTab(RootTab.ALL.name)
-        }
-    }
 
     // Search and sort
     var searchQuery by remember { mutableStateOf("") }
