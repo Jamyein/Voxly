@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.metadata
 
+import android.graphics.Bitmap
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -12,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
@@ -19,6 +21,9 @@ import com.voxly.presentation.components.NetworkAlbumArtImage
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Album art section component with click to pick.
@@ -29,7 +34,7 @@ import com.voxly.presentation.theme.MaterialShapes
 @Composable
 fun AlbumArtSection(
     albumArt: ByteArray?,
-    fallbackBitmap: android.graphics.Bitmap? = null,
+    fallbackBitmap: Bitmap? = null,
     onPickAlbumArt: () -> Unit,
     coverTag: String? = null,
     onZoomAlbumArt: () -> Unit,
@@ -37,9 +42,21 @@ fun AlbumArtSection(
     onRemoveAlbumArt: () -> Unit,
     filePath: String? = null
 ) {
-    // Detail page uses rounded rectangle shape (different from list item's cookie shape)
-    // The sharedBounds transition will smoothly morph between these shapes
     val coverKey = filePath?.let { createAlbumArtSharedElementKey(it) }
+    val context = LocalContext.current
+
+    val cachedThumbnail by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = filePath,
+        key2 = albumArt
+    ) {
+        value = withContext(Dispatchers.IO) {
+            if (!filePath.isNullOrBlank()) {
+                loadAlbumArtThumbnail(context, filePath, 512)
+            } else null
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -58,9 +75,7 @@ fun AlbumArtSection(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            // Use Crossfade for smooth album art transitions
-            // Note: Shared element transition is applied outside Crossfade for proper animation
-            val hasAnyArt = albumArt != null || fallbackBitmap != null
+            val hasAnyArt = albumArt != null || fallbackBitmap != null || cachedThumbnail != null
             androidx.compose.animation.Crossfade(
                 targetState = hasAnyArt,
                 label = "album_art_crossfade"
@@ -70,6 +85,7 @@ fun AlbumArtSection(
                         albumArt != null -> remember(albumArt.contentHashCode()) {
                             decodeAlbumArtPreview(albumArt)
                         }
+                        cachedThumbnail != null -> cachedThumbnail
                         else -> fallbackBitmap
                     }
                     if (bitmap != null) {
