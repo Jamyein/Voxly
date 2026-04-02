@@ -12,7 +12,6 @@ import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
 import com.voxly.domain.repository.ScanStatus
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
@@ -113,8 +112,6 @@ class Ebur128ReplayGainScanner @Inject constructor(
                 Logger.e("Track scan error: ${File(filePath).name}", e, "Ebur128ReplayGainScanner")
                 emitProgress(index + 1, totalFiles, filePath, ScanStatus.FAILED)
             }
-
-            delay(50)
         }
 
         emitCompleteProgress(totalFiles)
@@ -187,7 +184,6 @@ class Ebur128ReplayGainScanner @Inject constructor(
                         Logger.e("Single track scan error: $filePath", e, "Ebur128ReplayGainScanner")
                     }
                     processedFiles++
-                    delay(50)
                 }
                 continue
             }
@@ -212,7 +208,6 @@ class Ebur128ReplayGainScanner @Inject constructor(
 
                 processedFiles++
                 emitProgress(processedFiles, totalFiles, filePath, ScanStatus.SCANNING)
-                delay(50)
             }
 
             // Second pass: calculate album gain using libebur128 multiple
@@ -390,8 +385,8 @@ class Ebur128ReplayGainScanner @Inject constructor(
 
             val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-            // EBU R128 requires correct sample rate; no resampling is applied here.
-            val targetSampleRate = sampleRate
+            // Apply ScanQuality-based sample rate limiting for performance
+            val targetSampleRate = minOf(sampleRate, scanQuality.maxSampleRate)
 
             val mode = Ebur128Scanner.MODE_I or 
                       Ebur128Scanner.MODE_TRUE_PEAK or

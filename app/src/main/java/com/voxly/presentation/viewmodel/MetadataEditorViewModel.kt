@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.SharingStarted
@@ -90,21 +91,20 @@ class MetadataEditorViewModel @AssistedInject constructor(
     // Get filePath from NavKey instead of SavedStateHandle
     private val filePath: String = navKey.filePath
 
-    // Scan mode setting
-    private val _scanMode = MutableStateFlow(ScanMode.TRACK_ONLY)
-    val scanMode: StateFlow<ScanMode> = _scanMode.asStateFlow()
-
-    // Initialize scan mode from settings
-    init {
-        viewModelScope.launch {
-            val mode = settingsDataStore.scanMode.first()
-            _scanMode.value = when (mode) {
+    // Scan mode setting - continuously synced with DataStore
+    val scanMode: StateFlow<ScanMode> = settingsDataStore.scanMode
+        .map { mode ->
+            when (mode) {
                 ScanModeConstants.SINGLE_ALBUM -> ScanMode.SINGLE_ALBUM
                 ScanModeConstants.ALBUMS -> ScanMode.ALBUMS
                 else -> ScanMode.TRACK_ONLY
             }
         }
-    }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = ScanMode.TRACK_ONLY
+        )
 
     private val _uiState = MutableStateFlow<MetadataEditorUiState>(MetadataEditorUiState.Loading)
     val uiState: StateFlow<MetadataEditorUiState> = _uiState.asStateFlow()
@@ -396,7 +396,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
             val scanQuality = com.voxly.domain.repository.ScanQuality.ACCURATE
             
             try {
-                val currentScanMode = _scanMode.value
+                val currentScanMode = scanMode.value
                 val filesToScan: List<String>
                 
                 // Determine which files to scan based on scan mode (foobar2000 compatible)
