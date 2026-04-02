@@ -93,7 +93,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
 
                     if (scannerArtist != null) {
                         // Populate cache and ViewModel state
-                        cacheArtistData(scannerArtist.name, scannerArtist.files)
+                        cacheArtistData(scannerArtist.name, scannerArtist.files, scannerArtist.coverPath)
                     } else {
                         _artistName.value = artistName
                         _files.value = emptyList()
@@ -109,13 +109,14 @@ class ArtistDetailViewModel @AssistedInject constructor(
     /**
      * Cache artist data for navigation.
      */
-    fun cacheArtistData(artistName: String, files: List<AudioFile>) {
-        val artistGroup = ArtistGroup(name = artistName, files = files)
+    fun cacheArtistData(artistName: String, files: List<AudioFile>, coverPath: String? = null) {
+        val artistGroup = ArtistGroup(name = artistName, files = files, coverPath = coverPath)
         artistCacheRepository.cacheArtist(artistGroup)
 
         // Also update ViewModel state
         _artistName.value = artistName
         _files.value = files
+        _coverPath.value = coverPath
         calculateStats(files)
         precomputeAlbumCovers(files)
         loadAlbumYears(files)

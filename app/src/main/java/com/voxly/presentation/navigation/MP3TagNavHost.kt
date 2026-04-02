@@ -17,14 +17,12 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.presentation.components.LocalNavAnimatedVisibilityScope
@@ -64,7 +62,6 @@ import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
 import com.voxly.presentation.viewmodel.ReplayGainViewModel
 import com.voxly.presentation.theme.ExpressiveAnimations
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.flow.collect
 
 /**
  * Main navigation host for the MP3 Tag Editor app using Navigation3.
@@ -77,6 +74,7 @@ import kotlinx.coroutines.flow.collect
  * 4. This prevents NavigationSuiteScaffold from adding unwanted padding on sub-screens
  * 5. SharedTransitionLayout + AnimatedContent for full Container Transform support
  * 6. Both scopes are injected via CompositionLocal
+ * 7. PredictiveBackHandler integrates with AnimatedContent for native predictive back gesture
  */
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -106,20 +104,20 @@ fun MP3TagNavHost() {
 
     val adaptiveInfo = currentWindowAdaptiveInfo()
 
-    var backProgress by remember { mutableFloatStateOf(0f) }
-    val backScale = 1f - (0.04f * backProgress)
-
-    // Handle system back navigation - predictive back for sub-screens
+    // Official Predictive Back Handler - integrates with AnimatedContent transitions
+    // Uses system-level animation and touch interception (Android 14+)
     PredictiveBackHandler(enabled = !isMainScreen) { progress ->
         try {
-            progress.collect { backEvent ->
-                backProgress = backEvent.progress
+            // Collect progress events - system handles visual feedback
+            progress.collect { _ ->
+                // No manual animation needed; system handles Window-level animations
+                // Touch events are automatically intercepted during gesture
             }
+            // Gesture completed - navigate back
             backStack.removeLastOrNull()
         } catch (e: CancellationException) {
-            // Gesture cancelled, reset progress
-        } finally {
-            backProgress = 0f
+            // Gesture cancelled by user - system automatically reverts animation
+            // No manual cleanup needed
         }
     }
 
@@ -294,15 +292,10 @@ fun MP3TagNavHost() {
                         )
                     }
                 } else if (targetKey != null) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .graphicsLayer {
-                                scaleX = backScale
-                                scaleY = backScale
-                                alpha = 1f - (0.05f * backProgress)
-                            }
-                    ) {
+                    // Removed manual graphicsLayer animation
+                    // System-level PredictiveBackHandler now handles visual feedback
+                    // AnimatedContent handles the pop exit animation when back completes
+                    Box(modifier = Modifier.fillMaxSize()) {
                         RenderSubScreen(
                             targetKey = targetKey,
                             backStack = backStack,
