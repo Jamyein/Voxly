@@ -95,11 +95,20 @@ class Ebur128ReplayGainScanner @Inject constructor(
                         "elapsed=${SystemClock.elapsedRealtime() - fileStartedAt}ms",
                         "Ebur128ReplayGainScanner"
                     )
+                    emit(
+                        ScanProgress(
+                            currentFile = index + 1,
+                            totalFiles = totalFiles,
+                            percentage = (index + 1).toFloat() / totalFiles,
+                            currentFilePath = filePath,
+                            status = ScanStatus.COMPLETED,
+                            replayGainInfo = replayGainInfo
+                        )
+                    )
                 } else {
                     Logger.w("Track scan failed: ${File(filePath).name}", "Ebur128ReplayGainScanner")
+                    emitProgress(index + 1, totalFiles, filePath, ScanStatus.FAILED)
                 }
-
-                emitProgress(index + 1, totalFiles, filePath, ScanStatus.COMPLETED)
             } catch (e: Exception) {
                 Logger.e("Track scan error: ${File(filePath).name}", e, "Ebur128ReplayGainScanner")
                 emitProgress(index + 1, totalFiles, filePath, ScanStatus.FAILED)
@@ -163,12 +172,21 @@ class Ebur128ReplayGainScanner @Inject constructor(
                         val info = analyzeSingleTrack(filePath, scanQuality, targetLoudness)
                         if (info != null) {
                             saveReplayGainToFile(filePath, info)
+                            emit(
+                                ScanProgress(
+                                    currentFile = processedFiles + 1,
+                                    totalFiles = totalFiles,
+                                    percentage = (processedFiles + 1).toFloat() / totalFiles,
+                                    currentFilePath = filePath,
+                                    status = ScanStatus.COMPLETED,
+                                    replayGainInfo = info
+                                )
+                            )
                         }
                     } catch (e: Exception) {
                         Logger.e("Single track scan error: $filePath", e, "Ebur128ReplayGainScanner")
                     }
                     processedFiles++
-                    emitProgress(processedFiles, totalFiles, filePath, ScanStatus.COMPLETED)
                     delay(50)
                 }
                 continue
@@ -227,6 +245,20 @@ class Ebur128ReplayGainScanner @Inject constructor(
                         albumPeak = maxSamplePeak.toFloat()
                     )
                     saveReplayGainToFile(filePath, combinedInfo)
+                    
+                    // Emit result with ReplayGainInfo for the last file
+                    if (filePath == trackResults.last().first) {
+                        emit(
+                            ScanProgress(
+                                currentFile = processedFiles,
+                                totalFiles = totalFiles,
+                                percentage = processedFiles.toFloat() / totalFiles,
+                                currentFilePath = filePath,
+                                status = ScanStatus.COMPLETED,
+                                replayGainInfo = combinedInfo
+                            )
+                        )
+                    }
                 }
             }
 
@@ -400,6 +432,7 @@ class Ebur128ReplayGainScanner @Inject constructor(
 
     /**
      * Decodes audio and feeds it to the EBU R128 scanner.
+     * Optimized: passes ShortArray directly to scanner without Float conversion.
      */
     private fun decodeAndAnalyze(
         extractor: MediaExtractor,
@@ -452,16 +485,12 @@ class Ebur128ReplayGainScanner @Inject constructor(
                             outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
 
                             val shortBuffer = outputBuffer.asShortBuffer()
-                            val samples = ShortArray(shortBuffer.remaining())
-                            shortBuffer.get(samples)
-
-                            // Convert to float for EBU R128 scanner
-                            val floatSamples = FloatArray(samples.size) { i ->
-                                samples[i].toFloat() / 32768.0f
+                            val frames = shortBuffer.remaining() / channelCount
+                            if (frames > 0) {
+                                val samples = ShortArray(shortBuffer.remaining())
+                                shortBuffer.get(samples)
+                                scanner.addFrames(samples, frames)
                             }
-
-                            val frames = samples.size / channelCount
-                            scanner.addFrames(floatSamples, frames)
                         }
 
                         codec.releaseOutputBuffer(outputIndex, false)
@@ -471,7 +500,6 @@ class Ebur128ReplayGainScanner @Inject constructor(
                     }
                     
                     outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        // Format changed, continue
                     }
                 }
             }

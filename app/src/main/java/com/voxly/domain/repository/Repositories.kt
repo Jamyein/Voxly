@@ -266,7 +266,8 @@ data class ScanProgress(
     val totalFiles: Int,
     val percentage: Float,
     val currentFilePath: String,
-    val status: ScanStatus
+    val status: ScanStatus,
+    val replayGainInfo: com.voxly.domain.model.ReplayGainInfo? = null
 )
 
 /**
