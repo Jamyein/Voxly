@@ -198,16 +198,18 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     _editedMetadata.value = audioFile.metadata
                     _originalMetadata = audioFile.metadata
 
-                    // Load existing ReplayGain info if available
-                    val replayGainResult = replayGainRepository.readReplayGain(filePath)
-                    replayGainResult.getOrNull()?.let { replayGainInfo ->
-                        _pendingReplayGainInfo.value = replayGainInfo
-                    }
-                    
                     _uiState.value = MetadataEditorUiState.Success(
                         audioFile = audioFile,
                         editedMetadata = audioFile.metadata
                     )
+
+                    // Load ReplayGain asynchronously — don't block UI
+                    viewModelScope.launch {
+                        val replayGainResult = replayGainRepository.readReplayGain(filePath)
+                        replayGainResult.getOrNull()?.let { replayGainInfo ->
+                            _pendingReplayGainInfo.value = replayGainInfo
+                        }
+                    }
                 },
                 onFailure = { error ->
                     _uiState.value = MetadataEditorUiState.Error(
@@ -390,14 +392,22 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     when (progress.status) {
                         com.voxly.domain.repository.ScanStatus.COMPLETED -> {
                             _replayGainScanError.value = null
-                            // Read the scanned ReplayGain info for current file
-                            val replayGainReadResult = replayGainRepository.readReplayGain(filePath)
-                            replayGainReadResult.getOrNull()?.let { info ->
+                            // Use ReplayGainInfo directly from progress if available
+                            val info = progress.replayGainInfo
+                            if (info != null) {
                                 _pendingReplayGainInfo.value = info
                                 _hasUnsavedChanges.value = true
+                                Logger.i("ReplayGain scan completed (from progress). mode=${currentScanMode.name}", "MetadataEditor")
+                            } else {
+                                // Fallback: read from file if not in progress
+                                val replayGainReadResult = replayGainRepository.readReplayGain(filePath)
+                                replayGainReadResult.getOrNull()?.let { readInfo ->
+                                    _pendingReplayGainInfo.value = readInfo
+                                    _hasUnsavedChanges.value = true
+                                }
+                                Logger.i("ReplayGain scan completed (from file). mode=${currentScanMode.name}", "MetadataEditor")
                             }
                             _isScanningReplayGain.value = false
-                            Logger.i("ReplayGain scan completed. mode=${currentScanMode.name}", "MetadataEditor")
                         }
                         com.voxly.domain.repository.ScanStatus.FAILED -> {
                             // Determine error type based on reason

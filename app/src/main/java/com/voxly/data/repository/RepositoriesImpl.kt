@@ -3,6 +3,7 @@ package com.voxly.data.repository
 import android.content.Context
 import android.provider.MediaStore
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.replaygain.Ebur128ReplayGainScanner
 import com.voxly.domain.model.AudioFile
@@ -15,11 +16,14 @@ import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -30,7 +34,8 @@ import javax.inject.Singleton
 class AudioRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val audioFileScanner: AudioFileScanner,
-    private val metadataProcessor: TagLibMetadataProcessor
+    private val metadataProcessor: TagLibMetadataProcessor,
+    private val libraryCache: MusicLibraryCache
 ) : AudioRepository {
     companion object {
         private const val TAG = "AudioRepositoryImpl"
@@ -57,53 +62,52 @@ class AudioRepositoryImpl @Inject constructor(
     override suspend fun getAudioFile(filePath: String): Result<AudioFile> =
         withContext(Dispatchers.IO) {
             try {
-                // Read basic info from file
                 val javaFile = java.io.File(filePath)
                 val extension = filePath.substringAfterLast('.').lowercase()
+                val fileLastModified = javaFile.lastModified()
 
-                // OPTIMIZATION: Use readAllMetadata() for single TagLib call instead of multiple calls
-                // This reads metadata + audio info + album art in one operation with cache support
-                val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
-
-                // Try to get duration and bitrate from MediaStore first (faster than TagLib)
-                var duration = 0L
-                var bitrate = 0
-                try {
-                    val selection = "${MediaStore.Audio.Media.DATA} = ?"
-                    val selectionArgs = arrayOf(filePath)
-                    val cursor = context.contentResolver.query(
-                        MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                        arrayOf(MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.BITRATE),
-                        selection,
-                        selectionArgs,
-                        null
-                    )
-                    cursor?.use {
-                        if (it.moveToFirst()) {
-                            val durationCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
-                            val bitrateCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
-                            duration = it.getLong(durationCol)
-                            // MediaStore returns bitrate in bps, convert to kbps
-                            bitrate = it.getInt(bitrateCol) / 1000
-                        }
+                // Try Room cache first — skip TagLib I/O if cache is valid
+                val cachedFile = libraryCache.getCachedFile(filePath)
+                if (cachedFile != null && javaFile.exists() &&
+                    fileLastModified <= cachedFile.path.hashCode().toLong()
+                ) {
+                    // Cache hit: only need album art bytes
+                    val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
+                    val mergedMeta = if (completeMetadata?.metadata != null) {
+                        mergeWithFallback(completeMetadata.metadata, cachedFile.metadata)
+                            ?: completeMetadata.metadata
+                    } else {
+                        cachedFile.metadata
                     }
-                } catch (e: Exception) {
-                    Timber.w(e, "Failed to query MediaStore for: $filePath")
+                    return@withContext Result.success(
+                        cachedFile.copy(
+                            metadata = mergedMeta,
+                            replayGainInfo = cachedFile.replayGainInfo
+                        )
+                    )
                 }
 
-                // Use TagLib data as fallback if MediaStore doesn't have complete info
-                var sampleRate = 0
-                var channels = 0
+                // Cache miss: run independent I/O operations in parallel
+                val (completeMetadata, mediaStoreInfo) = coroutineScope {
+                    val tagLibDeferred = async {
+                        metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
+                    }
+                    val mediaStoreDeferred = async {
+                        queryMediaStoreAudioInfo(filePath)
+                    }
+                    Pair(tagLibDeferred.await(), mediaStoreDeferred.await())
+                }
+
+                var finalDuration = mediaStoreInfo.duration
+                var finalBitrate = mediaStoreInfo.bitrate
+                var finalSampleRate = 0
+                var finalChannels = 0
+
                 completeMetadata?.audioInfo?.let { audioInfo ->
-                    if (duration == 0L) {
-                        duration = audioInfo.durationMs
-                    }
-                    if (bitrate == 0) {
-                        // TagLib returns bitrate in bps, convert to kbps
-                        bitrate = audioInfo.bitrate / 1000
-                    }
-                    sampleRate = audioInfo.sampleRate
-                    channels = audioInfo.channels
+                    if (finalDuration == 0L) finalDuration = audioInfo.durationMs
+                    if (finalBitrate == 0) finalBitrate = audioInfo.bitrate / 1000
+                    finalSampleRate = audioInfo.sampleRate
+                    finalChannels = audioInfo.channels
                 }
 
                 val audioFile = AudioFile(
@@ -111,29 +115,59 @@ class AudioRepositoryImpl @Inject constructor(
                     path = filePath,
                     name = javaFile.name,
                     size = javaFile.length(),
-                    duration = duration,
+                    duration = finalDuration,
                     format = extension.uppercase(),
-                    bitrate = bitrate,
-                    sampleRate = sampleRate,
-                    channels = channels,
+                    bitrate = finalBitrate,
+                    sampleRate = finalSampleRate,
+                    channels = finalChannels,
                     metadata = completeMetadata?.metadata ?: AudioMetadata()
                 )
 
-                // Merge with MediaStore metadata if needed
                 val mediaStoreFallbackMetadata = readMediaStoreBasicMetadata(filePath)
                 val mergedMetadata = mergeWithFallback(audioFile.metadata, mediaStoreFallbackMetadata)
 
-                val enhancedAudioFile = audioFile.copy(
-                    metadata = mergedMetadata ?: AudioMetadata()
-                )
-
-                Result.success(enhancedAudioFile)
+                Result.success(audioFile.copy(metadata = mergedMetadata ?: AudioMetadata()))
             } catch (e: SecurityException) {
                 Result.failure(Exception("File not accessible due to storage permission/scope: $filePath", e))
             } catch (e: Exception) {
                 Result.failure(e)
             }
         }
+
+    private fun queryMediaStoreAudioInfo(filePath: String): AudioInfo {
+        var duration = 0L
+        var bitrate = 0
+        try {
+            val selection = "${MediaStore.Audio.Media.DATA} = ?"
+            val selectionArgs = arrayOf(filePath)
+            val cursor = context.contentResolver.query(
+                MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                arrayOf(
+                    MediaStore.Audio.Media.DURATION,
+                    MediaStore.Audio.Media.BITRATE
+                ),
+                selection,
+                selectionArgs,
+                null
+            )
+            cursor?.use {
+                if (it.moveToFirst()) {
+                    val durationCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
+                    val bitrateCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
+                    duration = it.getLong(durationCol)
+                    bitrate = it.getInt(bitrateCol) / 1000
+                }
+            }
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to query MediaStore audio info for: $filePath")
+        }
+        return AudioInfo(duration, bitrate)
+    }
+
+    private data class AudioInfo(
+        val duration: Long,
+        val bitrate: Int
+    )
 
     override suspend fun readMetadata(filePath: String): Result<AudioMetadata> =
         withContext(Dispatchers.IO) {
