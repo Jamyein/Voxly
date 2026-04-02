@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -181,7 +182,7 @@ internal fun AlbumScreenContent(
 internal fun AlbumTabContent(
     albums: List<AlbumGroup>,
     onAlbumClick: (AlbumGroup) -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState? = null,
+    listState: LazyListState? = null,
     scrollToTopTrigger: Int = 0,
     sortOption: AlbumSortOption? = null
 ) {

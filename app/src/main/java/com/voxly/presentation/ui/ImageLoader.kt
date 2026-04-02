@@ -530,7 +530,7 @@ private fun decodeBitmapFromBytes(bytes: ByteArray): Bitmap? {
 
 /**
  * Preloads multiple album arts in the background (fire-and-forget).
- * Uses parallel dispatch with limited concurrency for faster loading.
+ * Uses parallel dispatch for faster loading.
  */
 fun preloadLocalAlbumArts(context: Context, filePaths: List<String>) {
     if (filePaths.isEmpty()) return
