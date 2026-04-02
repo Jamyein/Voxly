@@ -88,6 +88,7 @@ class AudioFileScanner @Inject constructor(
 
     // Filtered audio files - applies all filters and reacts to settings changes
     // Optimized: settings collected once per emission, no runBlocking needed
+    // Uses conflate() to drop intermediate values during rapid settings changes
     val filteredAudioFiles: Flow<List<AudioFile>> = combine(
         cachedAudioFilesFlow,
         settingsDataStore.whitelistEnabled,
@@ -119,6 +120,7 @@ class AudioFileScanner @Inject constructor(
             )
         )
     }
+        .conflate()
         .distinctUntilChanged { old, new ->
             // Fast path: if sizes differ, they are definitely different
             if (old.size != new.size) return@distinctUntilChanged false
@@ -136,9 +138,11 @@ class AudioFileScanner @Inject constructor(
 
     init {
         // Auto-update albums and artists when filtered data changes
+        // Uses debounce to prevent rapid recomputation during incremental scans
         scope.launch {
             filteredAudioFiles
                 .collectLatest { files ->
+                    kotlinx.coroutines.delay(50) // Debounce: wait 50ms to batch rapid updates
                     updateAlbumsAndArtistsFromFiles(files)
                 }
         }
@@ -706,21 +710,29 @@ class AudioFileScanner @Inject constructor(
             settings.blacklistUris.map { getPathFromUriString(it) }
         } else null
 
+        // Optimization: Pre-compute directory prefixes for faster matching
+        val whitelistPrefixes = whitelistPaths?.map { it.trimEnd('/', '\\') }
+        val blacklistPrefixes = blacklistPaths?.map { it.trimEnd('/', '\\') }
+
         return files.filter { file ->
             val path = file.path
 
             // Apply whitelist filter: file must be in one of the whitelist directories
-            if (whitelistPaths != null) {
-                val isInWhitelist = whitelistPaths.any { whitelistPath ->
-                    isPathInsideDirectory(path, whitelistPath)
+            if (whitelistPrefixes != null) {
+                val isInWhitelist = whitelistPrefixes.any { whitelistPath ->
+                    path == whitelistPath ||
+                    path.startsWith("$whitelistPath/") ||
+                    path.startsWith("$whitelistPath\\")
                 }
                 if (!isInWhitelist) return@filter false
             }
 
             // Apply blacklist filter: file must NOT be in any blacklist directory
-            if (blacklistPaths != null) {
-                val isBlacklisted = blacklistPaths.any { blacklistPath ->
-                    isPathInsideDirectory(path, blacklistPath)
+            if (blacklistPrefixes != null) {
+                val isBlacklisted = blacklistPrefixes.any { blacklistPath ->
+                    path == blacklistPath ||
+                    path.startsWith("$blacklistPath/") ||
+                    path.startsWith("$blacklistPath\\")
                 }
                 if (isBlacklisted) return@filter false
             }

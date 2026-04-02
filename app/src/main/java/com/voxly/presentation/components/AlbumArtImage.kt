@@ -30,6 +30,8 @@ import com.voxly.presentation.ui.loadImageBitmapFromUrl
 import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -107,9 +109,10 @@ fun NetworkAlbumArtImage(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        if (bitmap != null) {
+        val currentBitmap = bitmap
+        if (currentBitmap != null) {
             Image(
-                bitmap = bitmap!!.asImageBitmap(),
+                bitmap = currentBitmap.asImageBitmap(),
                 contentDescription = contentDescription,
                 modifier = modifier,
                 contentScale = contentScale
@@ -140,6 +143,7 @@ fun DefaultAlbumArtPlaceholder(
 
 /**
  * Internal helper to produce album art bitmap from multiple sources.
+ * Uses parallel loading for faster results - returns first available non-null result.
  */
 @Composable
 private fun produceAlbumArtBitmap(
@@ -154,35 +158,34 @@ private fun produceAlbumArtBitmap(
         key2 = mediaStoreAlbumId
     ) {
         value = withContext(Dispatchers.IO) {
-            // First try: MediaStore album art (default path, fastest)
-            if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
-                val mediaStoreArt = loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
-                if (mediaStoreArt != null) {
-                    return@withContext mediaStoreArt
-                }
+            if (filePath.isNullOrBlank() && (mediaStoreAlbumId == null || mediaStoreAlbumId <= 0)) {
+                return@withContext null
             }
 
-            // Second try: file-level cached thumbnail (embedded art)
-            if (!filePath.isNullOrBlank()) {
-                val localArt = loadAlbumArtThumbnail(
-                    context = context,
-                    filePath = filePath,
-                    targetSizePx = targetSizePx
-                )
-                if (localArt != null) {
-                    return@withContext localArt
-                }
-            }
+            coroutineScope {
+                val mediaStoreDeferred = if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
+                    async { loadMediaStoreAlbumArt(context, mediaStoreAlbumId) }
+                } else null
 
-            // Third try: folder cover art (cover.jpg, folder.jpg, etc.)
-            if (!filePath.isNullOrBlank()) {
-                val folderArt = loadFolderCoverArt(filePath, targetSizePx)
-                if (folderArt != null) {
-                    return@withContext folderArt
-                }
-            }
+                val localArtDeferred = if (!filePath.isNullOrBlank()) {
+                    async {
+                        loadAlbumArtThumbnail(
+                            context = context,
+                            filePath = filePath,
+                            targetSizePx = targetSizePx
+                        )
+                    }
+                } else null
 
-            null
+                val folderArtDeferred = if (!filePath.isNullOrBlank()) {
+                    async { loadFolderCoverArt(filePath, targetSizePx) }
+                } else null
+
+                // Return first available non-null result (MediaStore is typically fastest)
+                mediaStoreDeferred?.await()
+                    ?: localArtDeferred?.await()
+                    ?: folderArtDeferred?.await()
+            }
         }
     }
 }

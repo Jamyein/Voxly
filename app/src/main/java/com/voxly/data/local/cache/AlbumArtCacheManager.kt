@@ -35,12 +35,12 @@ class AlbumArtCacheManager @Inject constructor(
         private const val TAG = "AlbumArtCache"
         private const val THUMBNAIL_SIZE = 384
         private const val THUMBNAIL_QUALITY = 92
-        private const val MAX_MEMORY_ENTRIES = 30
-        private const val MAX_ROOM_CACHE_ENTRIES = 200
+        private const val MAX_MEMORY_ENTRIES = 80
+        private const val MAX_ROOM_CACHE_ENTRIES = 300
         private const val MAX_ROOM_CACHE_SIZE_MB = 500L
         private const val MAX_ORIGINAL_ART_SIZE_MB = 5L  // Only cache originals < 5MB
-        private const val CORE_MEMORY_ENTRIES = 12
-        private const val ESSENTIAL_MEMORY_ENTRIES = 6
+        private const val CORE_MEMORY_ENTRIES = 30
+        private const val ESSENTIAL_MEMORY_ENTRIES = 15
     }
 
     /**

@@ -58,9 +58,28 @@ import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.sharedBoundsIfAvailable
+import com.voxly.presentation.components.LazyGridCoverPreloader
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
+
+/**
+ * Extracts the best cover file path for an album.
+ * Prefers files with MediaStore album ID, falls back to first file.
+ */
+private fun AlbumGroup.coverFilePath(): String? {
+    return coverFile()?.path
+}
+
+/**
+ * Extracts the best cover file for an album.
+ * Prefers files with MediaStore album ID, falls back to first file.
+ */
+private fun AlbumGroup.coverFile(): com.voxly.domain.model.AudioFile? {
+    return files.firstOrNull {
+        it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+    } ?: files.firstOrNull()
+}
 
 /**
  * Album screen content (list/grid) without navigation.
@@ -187,6 +206,10 @@ internal fun AlbumTabContent(
                         isDescending = true
                     )
                 } else {
+                    val albumFilePaths = remember(albums) {
+                        albums.mapNotNull { it.coverFilePath() }
+                    }
+                    LazyGridCoverPreloader(gridState = gridState, filePaths = albumFilePaths)
                     LazyVerticalGrid(
                         state = gridState,
                         columns = GridCells.Fixed(2),
@@ -277,6 +300,7 @@ internal fun AlbumYearGroupedContent(
                         ),
                         leadingContent = {
                             val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.artist)
+                            val coverFile = album.coverFile()
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
@@ -284,9 +308,6 @@ internal fun AlbumYearGroupedContent(
                                     .clip(MaterialTheme.shapes.small),
                                 contentAlignment = Alignment.Center
                             ) {
-                                val coverFile = album.files.firstOrNull {
-                                    it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
-                                } ?: album.files.firstOrNull()
                                 AlbumArtImage(
                                     filePath = coverFile?.path,
                                     mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,

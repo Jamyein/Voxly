@@ -530,16 +530,43 @@ private fun decodeBitmapFromBytes(bytes: ByteArray): Bitmap? {
 
 /**
  * Preloads multiple album arts in the background (fire-and-forget).
+ * Uses parallel dispatch with limited concurrency for faster loading.
  */
 fun preloadLocalAlbumArts(context: Context, filePaths: List<String>) {
+    if (filePaths.isEmpty()) return
     CoroutineScope(Dispatchers.IO).launch {
-        filePaths.forEach { path ->
-            try {
-                loadAlbumArtThumbnail(context, path)
-            } catch (e: Exception) {
-                // Silently ignore preload failures
+        val jobs = filePaths.map { path ->
+            launch {
+                try {
+                    loadAlbumArtThumbnail(context, path)
+                } catch (e: Exception) {
+                    // Silently ignore preload failures
+                }
             }
         }
+        jobs.forEach { it.join() }
+    }
+}
+
+/**
+ * Preloads album arts for a specific range of items in a list.
+ * Used by LazyList to preload items coming into view.
+ */
+fun preloadAlbumArtRange(
+    context: Context,
+    filePaths: List<String>,
+    startIndex: Int,
+    endIndex: Int
+) {
+    if (filePaths.isEmpty() || startIndex > endIndex) return
+    val safeStart = startIndex.coerceAtLeast(0)
+    val safeEnd = endIndex.coerceAtMost(filePaths.lastIndex)
+    if (safeStart > safeEnd) return
+
+    val pathsToPreload = filePaths.subList(safeStart, safeEnd + 1)
+        .filter { it.isNotBlank() }
+    if (pathsToPreload.isNotEmpty()) {
+        preloadLocalAlbumArts(context, pathsToPreload)
     }
 }
 

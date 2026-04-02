@@ -134,18 +134,27 @@ fun FileBrowserAdaptiveScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
 
     // Root tab state (Directories / All)
+    // When user has whitelist directories: default to DIRECTORIES mode, but remember user's choice
+    // When user has no whitelist directories: force ALL mode and hide toggle button
+    val hasWhitelistDirectories by viewModel.hasWhitelistDirectories.collectAsState()
     val rootTabString by viewModel.fileBrowserRootTab.collectAsState(initial = RootTab.DIRECTORIES.name)
-    var selectedRootTab = remember(rootTabString) {
+    
+    // Determine effective root tab based on whitelist state
+    val effectiveRootTab = if (hasWhitelistDirectories) {
+        // User has whitelist: respect their saved preference
         try {
             RootTab.valueOf(rootTabString)
         } catch (e: IllegalArgumentException) {
             RootTab.DIRECTORIES
         }
+    } else {
+        // No whitelist: force ALL mode
+        RootTab.ALL
     }
-
-    // Auto-switch to ALL mode when no directories are selected
-    LaunchedEffect(selectedDirectories, selectedRootTab) {
-        if (selectedDirectories.isEmpty() && selectedRootTab == RootTab.DIRECTORIES) {
+    
+    // Auto-switch to ALL mode when directories become empty (user removed all whitelist directories)
+    LaunchedEffect(hasWhitelistDirectories) {
+        if (!hasWhitelistDirectories && rootTabString != RootTab.ALL.name) {
             viewModel.setFileBrowserRootTab(RootTab.ALL.name)
         }
     }
@@ -237,33 +246,35 @@ fun FileBrowserAdaptiveScreen(
                                     contentDescription = "Search"
                                 )
                             }
-                            // Toggle between Directories and All modes
-                            IconButton(
-                                onClick = {
-                                    val newTab = if (selectedRootTab == RootTab.DIRECTORIES)
-                                        RootTab.ALL.name
-                                    else
-                                        RootTab.DIRECTORIES.name
-                                    viewModel.setFileBrowserRootTab(newTab)
-                                }
-                            ) {
-                                Icon(
-                                    painter = appIconPainter(
-                                        if (selectedRootTab == RootTab.DIRECTORIES)
-                                            AppIcon.MusicNote
+                            // Toggle between Directories and All modes (only show when whitelist directories exist)
+                            if (hasWhitelistDirectories) {
+                                IconButton(
+                                    onClick = {
+                                        val newTab = if (effectiveRootTab == RootTab.DIRECTORIES)
+                                            RootTab.ALL.name
                                         else
-                                            AppIcon.Folder
-                                    ),
-                                    contentDescription = stringResource(
-                                        if (selectedRootTab == RootTab.DIRECTORIES)
-                                            R.string.switch_to_all_audios
-                                        else
-                                            R.string.switch_to_directories
+                                            RootTab.DIRECTORIES.name
+                                        viewModel.setFileBrowserRootTab(newTab)
+                                    }
+                                ) {
+                                    Icon(
+                                        painter = appIconPainter(
+                                            if (effectiveRootTab == RootTab.DIRECTORIES)
+                                                AppIcon.MusicNote
+                                            else
+                                                AppIcon.Folder
+                                        ),
+                                        contentDescription = stringResource(
+                                            if (effectiveRootTab == RootTab.DIRECTORIES)
+                                                R.string.switch_to_all_audios
+                                            else
+                                                R.string.switch_to_directories
+                                        )
                                     )
-                                )
+                                }
                             }
                             // Only show sort button in All mode
-                            if (selectedRootTab == RootTab.ALL) {
+                            if (effectiveRootTab == RootTab.ALL) {
                                 SortMenuButton(
                                     expanded = isSortExpanded,
                                     onExpandedChange = { isSortExpanded = it },
@@ -294,7 +305,7 @@ fun FileBrowserAdaptiveScreen(
                         modifier = Modifier.fillMaxSize()
                     ) {
                         Box(modifier = Modifier.fillMaxSize()) {
-                            if (selectedRootTab == RootTab.DIRECTORIES) {
+                            if (effectiveRootTab == RootTab.DIRECTORIES) {
                                 // Show directory list
                                 DirectoryOverviewContent(
                                     directories = selectedDirectories,
@@ -349,7 +360,7 @@ fun FileBrowserAdaptiveScreen(
 
                             // Back to top FAB
                             val showFab = canScrollToTop && 
-                                if (selectedRootTab == RootTab.DIRECTORIES) {
+                                if (effectiveRootTab == RootTab.DIRECTORIES) {
                                     selectedDirectories.isNotEmpty()
                                 } else {
                                     displayedFiles.isNotEmpty()
