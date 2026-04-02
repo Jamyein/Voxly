@@ -29,6 +29,7 @@ import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
+import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -190,7 +191,7 @@ fun FileBrowserAdaptiveScreen(
     var fileSwitchCounter by remember { mutableIntStateOf(0) }
     
     // Determine if we're in single-pane mode (small screens)
-    val isSinglePane = navigator.scaffoldValue.detailPane == PaneAdaptedValue.Hidden
+    val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
     
     // Handle back gesture when in detail pane (only in multi-pane mode)
     PredictiveBackHandler(enabled = !isSinglePane && navigator.currentDestination?.contentKey != null) { progress ->
@@ -380,7 +381,7 @@ fun FileBrowserAdaptiveScreen(
         },
         detailPane = {
             AnimatedPane {
-                val currentFile = navigator.currentDestination?.contentKey
+                val currentFile = navigator.currentDestination?.contentKey as? AudioFile
                 if (currentFile != null) {
                     key(currentFile.path, fileSwitchCounter) {
                         // Create navKey for MetadataEditor

@@ -65,8 +65,8 @@ fun AlbumAdaptiveScreen(
     
     // Determine if we're in single-pane mode (small screens)
     // In single-pane mode, we should navigate to independent MetadataEditor
-    val isSinglePane = navigator.scaffoldValue.detailPane == PaneAdaptedValue.Hidden && 
-                       navigator.scaffoldValue.extraPane == PaneAdaptedValue.Hidden
+    val scaffoldValue = navigator.scaffoldValue
+    val isSinglePane = scaffoldValue.primary == PaneAdaptedValue.Hidden
     
     // Handle back gesture when in metadata editor sub-screen (only in multi-pane mode)
     PredictiveBackHandler(enabled = selectedFileForEditing != null && !isSinglePane) { progress ->

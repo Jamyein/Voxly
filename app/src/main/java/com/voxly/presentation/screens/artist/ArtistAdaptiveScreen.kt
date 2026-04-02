@@ -68,8 +68,8 @@ fun ArtistAdaptiveScreen(
     var fileSwitchCounter by remember { mutableIntStateOf(0) }
     
     // Determine if we're in single-pane mode (small screens)
-    val isSinglePane = navigator.scaffoldValue.detailPane == PaneAdaptedValue.Hidden && 
-                       navigator.scaffoldValue.extraPane == PaneAdaptedValue.Hidden
+    val scaffoldValue = navigator.scaffoldValue
+    val isSinglePane = scaffoldValue.primary == PaneAdaptedValue.Hidden
     
     // Check if currently in a sub-screen (metadata editor or album detail from artist)
     val isInSubScreen = selectedFileForEditing != null || selectedAlbumNavKey != null || 

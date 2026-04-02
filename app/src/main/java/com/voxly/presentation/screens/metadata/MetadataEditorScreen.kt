@@ -655,7 +655,7 @@ private fun MetadataFormContent(
             .then(nestedScrollModifier)
             .verticalScroll(scrollState)
             .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomPadding)
-    {
+    ) {
         // Album Art Section with shared element transition support
         AlbumArtSection(
             albumArt = metadata.albumArt,
