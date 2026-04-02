@@ -6,6 +6,7 @@ import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
+import com.voxly.domain.repository.ScanMode
 import com.voxly.presentation.navigation.ReplayGainScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.assisted.Assisted
@@ -61,8 +62,31 @@ class ReplayGainViewModel @AssistedInject constructor(
                 // Get target loudness from settings
                 val targetLoudness = settingsDataStore.replayGainTargetLoudness.first()
 
-                replayGainRepository.scanReplayGain(filePaths, scanQuality, targetLoudness)
-                    .collect { progress ->
+                val scanMode = settingsDataStore.scanMode.first()
+                val scanFlow = when (scanMode) {
+                    ScanMode.TRACK_ONLY.name -> replayGainRepository.scanReplayGain(
+                        filePaths,
+                        scanQuality,
+                        targetLoudness
+                    )
+                    ScanMode.SINGLE_ALBUM.name -> replayGainRepository.scanReplayGainByAlbum(
+                        mapOf("single_album" to filePaths),
+                        scanQuality,
+                        targetLoudness
+                    )
+                    ScanMode.ALBUMS.name -> replayGainRepository.scanReplayGainWithAlbumGrouping(
+                        filePaths,
+                        scanQuality,
+                        targetLoudness
+                    )
+                    else -> replayGainRepository.scanReplayGain(
+                        filePaths,
+                        scanQuality,
+                        targetLoudness
+                    )
+                }
+
+                scanFlow.collect { progress ->
                         _scanProgress.value = progress
 
                         if (progress.status.name == "COMPLETED") {

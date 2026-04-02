@@ -23,6 +23,11 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -47,6 +52,9 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.ui.loadMediaStoreAlbumArt
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.theme.ExpressiveAnimations
@@ -300,9 +308,27 @@ fun MetadataEditorScreen(
                         // Create scroll state for FloatingToolbarScrollBehavior
                         val scrollState = rememberScrollState()
 
+                        val mediaStoreFallbackBitmap by produceState<Bitmap?>(
+                            initialValue = null,
+                            key1 = state.audioFile.mediaStoreAlbumId,
+                            key2 = state.editedMetadata.albumArt
+                        ) {
+                            value = if (state.editedMetadata.albumArt == null &&
+                                state.audioFile.mediaStoreAlbumId != null &&
+                                state.audioFile.mediaStoreAlbumId > 0
+                            ) {
+                                withContext(Dispatchers.IO) {
+                                    loadMediaStoreAlbumArt(context, state.audioFile.mediaStoreAlbumId)
+                                }
+                            } else {
+                                null
+                            }
+                        }
+
                         MetadataFormContent(
                             metadata = state.editedMetadata,
                             audioFile = state.audioFile,
+                            albumArtFallback = mediaStoreFallbackBitmap,
                             bottomPadding = innerPadding.calculateBottomPadding() + 80.dp, // Extra space for toolbar
                             scrollState = scrollState,
                             nestedScrollModifier = Modifier,
@@ -544,9 +570,12 @@ fun MetadataEditorScreen(
     }
 
     if (showAlbumArtPreview) {
-        val previewBytes = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt
+        val successState = uiState as? MetadataEditorUiState.Success
+        val previewBytes = successState?.editedMetadata?.albumArt
+        val audioFilePath = successState?.audioFile?.path
         AlbumArtPreviewDialog(
             albumArt = previewBytes,
+            filePath = audioFilePath,
             onDismiss = { showAlbumArtPreview = false }
         )
     }
@@ -588,6 +617,7 @@ private fun fieldLabel(field: MetadataField, baseLabelResId: Int, modifiedFields
 private fun MetadataFormContent(
     metadata: AudioMetadata,
     audioFile: com.voxly.domain.model.AudioFile,
+    albumArtFallback: Bitmap? = null,
     modifiedFields: Set<MetadataField>,
     onTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
@@ -615,6 +645,13 @@ private fun MetadataFormContent(
     scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     nestedScrollModifier: Modifier = Modifier
 ) {
+    // Use LaunchedEffect to clear focus when the screen is first composed
+    // This prevents any TextField from automatically receiving focus
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(Unit) {
+        focusManager.clearFocus()
+    }
+    
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -625,6 +662,7 @@ private fun MetadataFormContent(
         // Album Art Section with shared element transition support
         AlbumArtSection(
             albumArt = metadata.albumArt,
+            fallbackBitmap = albumArtFallback,
             onPickAlbumArt = onPickAlbumArt,
             coverTag = coverTag,
             onZoomAlbumArt = onZoomAlbumArt,
@@ -644,7 +682,8 @@ private fun MetadataFormContent(
             label = { Text(fieldLabel(MetadataField.TITLE, R.string.metadata_title, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
-            shape = MaterialTheme.shapes.extraLarge
+            shape = MaterialTheme.shapes.extraLarge,
+            enabled = true
         )
 
         Spacer(modifier = Modifier.height(8.dp))

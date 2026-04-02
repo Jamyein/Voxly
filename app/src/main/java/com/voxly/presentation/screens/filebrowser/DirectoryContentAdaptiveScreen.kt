@@ -2,15 +2,23 @@ package com.voxly.presentation.screens.filebrowser
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.FloatingToolbarExitDirection
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
@@ -50,7 +58,6 @@ import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.screens.filebrowser.LoadingContent
-import com.voxly.presentation.screens.filebrowser.DirectoryEmptyContent
 import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryViewModel
@@ -67,7 +74,7 @@ import kotlinx.coroutines.launch
  *
  * No conditional logic needed - Material3 handles all screen sizes.
  */
-@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun DirectoryContentAdaptiveScreen(
     directoryUri: String,
@@ -131,6 +138,21 @@ fun DirectoryContentAdaptiveScreen(
     val canScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
+
+    // FloatingToolbar scroll behavior for batch operations
+    val floatingToolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
+        exitDirection = FloatingToolbarExitDirection.Bottom
+    )
+    val scrollState = rememberScrollState()
+
+    // Dialog states for batch operations
+    var showBatchOperationsMenu by remember { mutableStateOf(false) }
+    var showUnifiedFieldDialog by remember { mutableStateOf(false) }
+    var showReplaceTextDialog by remember { mutableStateOf(false) }
+    var showAutoNumberDialog by remember { mutableStateOf(false) }
+    var showRenameFilesDialog by remember { mutableStateOf(false) }
+    var showFixMetadataDialog by remember { mutableStateOf(false) }
+    var showOnlineMetadataDialog by remember { mutableStateOf(false) }
 
     // Material3 ListDetailPaneScaffold - handles all screen sizes automatically
     ListDetailPaneScaffold(
@@ -221,7 +243,9 @@ fun DirectoryContentAdaptiveScreen(
 
                     // File list content with PullToRefresh
                     Surface(
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .nestedScroll(floatingToolbarScrollBehavior)
                     ) {
                         val pullToRefreshState = rememberPullToRefreshState()
                         PullToRefreshBox(
@@ -268,12 +292,27 @@ fun DirectoryContentAdaptiveScreen(
                                         onDeleteFile = { /* Not used in adaptive mode */ },
                                         onFetchOnlineMetadata = { /* Not used in adaptive mode */ },
                                         onFixMetadata = { /* Not used in adaptive mode */ },
-                                        bottomPadding = 16.dp
+                                        bottomPadding = if (isSelectionMode) 80.dp else 16.dp
+                                    )
+                                }
+
+                                // Batch Operations FloatingToolbar (only in selection mode)
+                                if (isSelectionMode) {
+                                    BatchOperationsToolbar(
+                                        expanded = true,
+                                        scrollBehavior = floatingToolbarScrollBehavior,
+                                        onOnlineMetadata = { showOnlineMetadataDialog = true },
+                                        onUnifiedField = { showUnifiedFieldDialog = true },
+                                        onReplaceText = { showReplaceTextDialog = true },
+                                        onAutoNumber = { showAutoNumberDialog = true },
+                                        onRenameFiles = { showRenameFilesDialog = true },
+                                        onFixMetadata = { showFixMetadataDialog = true },
+                                        onReplayGain = { onNavigateToReplayGain(selectedFiles.toList()) }
                                     )
                                 }
 
                                 // Back to top FAB
-                                if (canScrollToTop && displayedFiles.isNotEmpty()) {
+                                if (canScrollToTop && displayedFiles.isNotEmpty() && !isSelectionMode) {
                                     SmallFloatingActionButton(
                                         onClick = {
                                             coroutineScope.launch {
@@ -336,6 +375,101 @@ fun DirectoryContentAdaptiveScreen(
         },
         modifier = modifier
     )
+
+    // Batch Operation Dialogs
+    if (showBatchOperationsMenu) {
+        BatchOperationsMenuDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showBatchOperationsMenu = false },
+            onOnlineMetadata = {
+                showBatchOperationsMenu = false
+                showOnlineMetadataDialog = true
+            },
+            onUnifiedField = {
+                showBatchOperationsMenu = false
+                showUnifiedFieldDialog = true
+            },
+            onReplaceText = {
+                showBatchOperationsMenu = false
+                showReplaceTextDialog = true
+            },
+            onAutoNumber = {
+                showBatchOperationsMenu = false
+                showAutoNumberDialog = true
+            },
+            onRenameFiles = {
+                showBatchOperationsMenu = false
+                showRenameFilesDialog = true
+            },
+            onFixMetadata = {
+                showBatchOperationsMenu = false
+                showFixMetadataDialog = true
+            }
+        )
+    }
+
+    if (showOnlineMetadataDialog) {
+        BatchOnlineMetadataDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showOnlineMetadataDialog = false },
+            onConfirm = { /* TODO: Implement batch online metadata */ }
+        )
+    }
+
+    if (showUnifiedFieldDialog) {
+        UnifiedFieldDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showUnifiedFieldDialog = false },
+            onConfirm = { field, value ->
+                showUnifiedFieldDialog = false
+                // TODO: Implement batch unified field edit
+            }
+        )
+    }
+
+    if (showReplaceTextDialog) {
+        ReplaceTextDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showReplaceTextDialog = false },
+            onConfirm = { field, searchText, replaceText, useRegex ->
+                showReplaceTextDialog = false
+                // TODO: Implement batch replace text
+            }
+        )
+    }
+
+    if (showAutoNumberDialog) {
+        AutoNumberDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showAutoNumberDialog = false },
+            onConfirm = { startNumber, step, totalTracks ->
+                showAutoNumberDialog = false
+                // TODO: Implement batch auto number
+            }
+        )
+    }
+
+    if (showRenameFilesDialog) {
+        BatchRenameDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showRenameFilesDialog = false },
+            onConfirm = { pattern, startNumber ->
+                showRenameFilesDialog = false
+                // TODO: Implement batch rename
+            }
+        )
+    }
+
+    if (showFixMetadataDialog) {
+        BatchFixMetadataDialog(
+            targetFilesCount = selectedFiles.size,
+            onDismiss = { showFixMetadataDialog = false },
+            onConfirm = { options ->
+                showFixMetadataDialog = false
+                // TODO: Implement batch fix metadata
+            }
+        )
+    }
 }
 
 /**
@@ -384,4 +518,27 @@ private fun DirFileSortOption.labelResId(): Int = when (this) {
     DirFileSortOption.NAME_DESC -> R.string.file_sort_name_desc
     DirFileSortOption.SIZE_DESC -> R.string.file_sort_size_desc
     DirFileSortOption.DURATION_DESC -> R.string.file_sort_duration_desc
+}
+
+@Composable
+fun DirectoryEmptyContent(modifier: Modifier = Modifier) {
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(
+                imageVector = Icons.Default.MusicNote,
+                contentDescription = null,
+                modifier = Modifier.size(64.dp),
+                tint = MaterialTheme.colorScheme.outline
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = stringResource(R.string.no_audio_files_in_directory),
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    }
 }

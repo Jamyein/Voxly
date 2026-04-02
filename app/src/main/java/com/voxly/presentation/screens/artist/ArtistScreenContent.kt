@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,6 +22,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -32,6 +34,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
+import com.voxly.presentation.components.LazyListCoverPreloader
 import com.voxly.presentation.screens.filebrowser.ArtistListItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.ArtistViewModel
@@ -114,9 +117,13 @@ internal fun ArtistScreenContent(
 internal fun ArtistTabContent(
     artists: List<ArtistGroup>,
     onArtistClick: (ArtistGroup) -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState? = null
+    listState: LazyListState? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
+    val artistFilePaths = remember(artists) {
+        artists.mapNotNull { it.coverPath }
+    }
+    LazyListCoverPreloader(listState = lazyListState, filePaths = artistFilePaths)
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         if (artists.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

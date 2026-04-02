@@ -4,15 +4,24 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarScrollBehavior
 import androidx.compose.material3.HorizontalFloatingToolbar
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.voxly.R
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 
@@ -21,7 +30,12 @@ import com.voxly.presentation.icons.appIconPainter
  * Uses FloatingToolbarScrollBehavior for scroll-to-hide animation
  * Automatically expands/collapses based on selection mode
  *
- * Official API usage: IconButton in content slot (no FAB)
+ * Merged items:
+ * - Online Metadata (independent)
+ * - Edit Metadata (dropdown: Unified Field, Replace Text, Fix Metadata)
+ * - Auto Number (independent)
+ * - Rename Files (independent)
+ * - ReplayGain (independent)
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -34,8 +48,11 @@ fun BatchOperationsToolbar(
     onReplaceText: () -> Unit,
     onAutoNumber: () -> Unit,
     onRenameFiles: () -> Unit,
-    onFixMetadata: () -> Unit
+    onFixMetadata: () -> Unit,
+    onReplayGain: () -> Unit
 ) {
+    var editMenuExpanded by remember { mutableStateOf(false) }
+
     Box(
         modifier = modifier.fillMaxWidth(),
         contentAlignment = androidx.compose.ui.Alignment.BottomCenter
@@ -52,25 +69,66 @@ fun BatchOperationsToolbar(
             scrollBehavior = scrollBehavior,
             colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
         ) {
-            // Using IconButton per official M3E FloatingToolbar API
-            // IconButton should be used in content slot when no FAB is needed
+            // Online Metadata
             IconButton(onClick = onOnlineMetadata) {
-                Icon(appIconPainter(AppIcon.CloudDownload), contentDescription = null)
+                Icon(appIconPainter(AppIcon.CloudDownload), contentDescription = stringResource(R.string.batch_online_metadata))
             }
-            IconButton(onClick = onUnifiedField) {
-                Icon(appIconPainter(AppIcon.Edit), contentDescription = null)
+
+            // Edit Metadata (dropdown with merged items)
+            Box {
+                IconButton(onClick = { editMenuExpanded = true }) {
+                    Icon(appIconPainter(AppIcon.Edit), contentDescription = stringResource(R.string.batch_edit_metadata_title))
+                }
+                DropdownMenu(
+                    expanded = editMenuExpanded,
+                    onDismissRequest = { editMenuExpanded = false }
+                ) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.batch_unified_field)) },
+                        onClick = {
+                            editMenuExpanded = false
+                            onUnifiedField()
+                        },
+                        leadingIcon = {
+                            Icon(appIconPainter(AppIcon.Edit), contentDescription = null)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.batch_replace_text)) },
+                        onClick = {
+                            editMenuExpanded = false
+                            onReplaceText()
+                        },
+                        leadingIcon = {
+                            Icon(appIconPainter(AppIcon.AutoFix), contentDescription = null)
+                        }
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.batch_fix_metadata)) },
+                        onClick = {
+                            editMenuExpanded = false
+                            onFixMetadata()
+                        },
+                        leadingIcon = {
+                            Icon(appIconPainter(AppIcon.Check), contentDescription = null)
+                        }
+                    )
+                }
             }
-            IconButton(onClick = onReplaceText) {
-                Icon(appIconPainter(AppIcon.AutoFix), contentDescription = null)
-            }
+
+            // Auto Number
             IconButton(onClick = onAutoNumber) {
-                Icon(appIconPainter(AppIcon.Schedule), contentDescription = null)
+                Icon(appIconPainter(AppIcon.Schedule), contentDescription = stringResource(R.string.batch_auto_number))
             }
+
+            // Rename Files
             IconButton(onClick = onRenameFiles) {
-                Icon(appIconPainter(AppIcon.Rename), contentDescription = null)
+                Icon(appIconPainter(AppIcon.Rename), contentDescription = stringResource(R.string.batch_rename_files))
             }
-            IconButton(onClick = onFixMetadata) {
-                Icon(appIconPainter(AppIcon.AutoFix), contentDescription = null)
+
+            // ReplayGain Scan
+            IconButton(onClick = onReplayGain) {
+                Icon(appIconPainter(AppIcon.Equalizer), contentDescription = stringResource(R.string.replay_gain_scanner_title))
             }
         }
     }

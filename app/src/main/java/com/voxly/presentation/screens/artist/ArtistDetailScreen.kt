@@ -41,30 +41,36 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlin.math.max
+import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.theme.ExpressiveMotion
-import com.voxly.presentation.ui.loadCarouselCoverArt
-import com.voxly.presentation.ui.loadLocalAlbumArt
-import com.voxly.presentation.components.sharedBoundsIfAvailable
-import com.voxly.presentation.components.createArtistAvatarSharedElementKey
-import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.ui.loadAlbumArtOriginalBitmap
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
+import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 
 /**
@@ -75,6 +81,8 @@ private data class AlbumInfo(
     val files: List<com.voxly.domain.model.AudioFile>,
     val year: Int?
 )
+
+private const val CAROUSEL_ART_TARGET_PX = 384
 
 /**
  * Extracts the year from album files (uses the maximum year found).
@@ -151,11 +159,10 @@ fun ArtistDetailScreen(
         albumsSorted.associate { it.name to it.files }
     }
 
-    // Use cached cover path for avatar (performance optimization)
-    val avatarBitmap = remember(coverPath) {
-        coverPath?.let { loadLocalAlbumArt(it) }
-    }
-
+    // Use the same AlbumArtImage component as ArtistListItem for consistency
+    // This ensures the avatar displays the same way as in the artist list
+    val avatarKey = createArtistAvatarSharedElementKey(artistName)
+    
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
@@ -202,7 +209,7 @@ fun ArtistDetailScreen(
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         // Circle Avatar (150dp) with shared element transition
-                        val avatarKey = createArtistAvatarSharedElementKey(artistName)
+                        // Using AlbumArtImage like ArtistListItem for consistent display
                         Box(
                             modifier = Modifier
                                 .size(150.dp)
@@ -210,26 +217,24 @@ fun ArtistDetailScreen(
                                 .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (avatarBitmap != null) {
-                                Image(
-                                    bitmap = avatarBitmap.asImageBitmap(),
-                                    contentDescription = stringResource(R.string.artist_cover),
-                                    modifier = Modifier.fillMaxSize(),
-                                    contentScale = ContentScale.Crop
-                                )
-                            } else {
+                            AlbumArtImage(
+                                filePath = coverPath,
+                                contentDescription = stringResource(R.string.artist_cover),
+                                size = 150.dp,
+                                modifier = Modifier.fillMaxSize()
+                            ) {
                                 Surface(
                                     modifier = Modifier.fillMaxSize(),
                                     color = MaterialTheme.colorScheme.primaryContainer
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Person,
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .padding(40.dp)
-                                            .fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
+                                    Box(contentAlignment = Alignment.Center) {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(80.dp),
+                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -314,6 +319,10 @@ fun ArtistDetailScreen(
                         ) { page ->
                             val albumInfo = albumsSorted[page]
                             val albumArtPath = albumCovers[albumInfo.name]
+                            // Get mediaStoreAlbumId from the first file in the album that has one
+                            val mediaStoreAlbumId = albumInfo.files.firstOrNull { 
+                                it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
+                            }?.mediaStoreAlbumId
 
                             AlbumCard(
                                 albumName = albumInfo.name,
@@ -321,6 +330,7 @@ fun ArtistDetailScreen(
                                 trackCount = albumInfo.files.size,
                                 albumYear = albumInfo.year,
                                 albumArtPath = albumArtPath,
+                                mediaStoreAlbumId = mediaStoreAlbumId,
                                 onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
                                 modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
                             )
@@ -393,23 +403,66 @@ fun ArtistDetailScreen(
 /**
  * 轮播封面专用图片组件（384px）。
  * 使用produceState在IO线程加载，避免主线程阻塞。
- * key1 = filePath确保路径变化时重新加载。
+ * key1 = filePath, key2 = mediaStoreAlbumId 确保任一变化时重新加载。
  */
 @Composable
 fun CarouselAlbumArtImage(
     filePath: String?,
+    mediaStoreAlbumId: Long? = null,
     contentDescription: String?,
     modifier: Modifier = Modifier,
     placeholder: @Composable () -> Unit = {}
 ) {
-    val bitmap = produceState<Bitmap?>(initialValue = null, key1 = filePath) {
-        value = withContext(Dispatchers.IO) {
-            filePath?.let { loadCarouselCoverArt(it) }
+    val context = LocalContext.current
+    val density = LocalDensity.current
+    val targetSizePx = max(CAROUSEL_ART_TARGET_PX, with(density) { 160.dp.toPx().toInt() })
+    var thumbnail by remember(filePath, mediaStoreAlbumId) { mutableStateOf<Bitmap?>(null) }
+    var original by remember(filePath, mediaStoreAlbumId) { mutableStateOf<Bitmap?>(null) }
+
+    LaunchedEffect(filePath, mediaStoreAlbumId) {
+        thumbnail = null
+        original = null
+
+        // 1) Try MediaStore first (fastest, system-level cache)
+        if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
+            val mediaStoreBitmap = withContext(Dispatchers.IO) {
+                loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
+            }
+            if (mediaStoreBitmap != null) {
+                thumbnail = mediaStoreBitmap
+                original = mediaStoreBitmap
+                return@LaunchedEffect
+            }
+        }
+
+        if (filePath.isNullOrBlank()) return@LaunchedEffect
+
+        // 2) Load high-quality thumbnail for instant display (if MediaStore failed)
+        if (thumbnail == null) {
+            thumbnail = withContext(Dispatchers.IO) {
+                loadAlbumArtThumbnail(
+                    context = context,
+                    filePath = filePath,
+                    targetSizePx = targetSizePx
+                )
+            }
+        }
+
+        // 3) Load original and replace without layout changes
+        val full = withContext(Dispatchers.IO) {
+            loadAlbumArtOriginalBitmap(
+                context = context,
+                filePath = filePath,
+                targetSizePx = targetSizePx
+            )
+        }
+        if (full != null) {
+            original = full
         }
     }
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        val loadedBitmap = bitmap.value
+        val loadedBitmap = original ?: thumbnail
         if (loadedBitmap != null) {
             Image(
                 bitmap = loadedBitmap.asImageBitmap(),
@@ -435,6 +488,7 @@ fun AlbumCard(
     trackCount: Int,
     albumYear: Int?,
     albumArtPath: String?,
+    mediaStoreAlbumId: Long? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -470,6 +524,7 @@ fun AlbumCard(
             ) {
                 CarouselAlbumArtImage(
                     filePath = albumArtPath,
+                    mediaStoreAlbumId = mediaStoreAlbumId,
                     contentDescription = albumName,
                     modifier = Modifier.fillMaxSize()
                 ) {

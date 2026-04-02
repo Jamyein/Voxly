@@ -40,17 +40,17 @@ class MP3TagApplication : Application() {
             TRIM_MEMORY_RUNNING_LOW,
             TRIM_MEMORY_RUNNING_CRITICAL -> {
                 Timber.d(TAG, "Low memory, trimming to core cache")
-                trimToCoreCache()
+                trimToCoreCache(this)
             }
             TRIM_MEMORY_UI_HIDDEN -> {
                 // User switched to another app, release non-essential caches
                 Timber.d(TAG, "UI hidden, trimming to essential")
-                trimToEssentialCache()
+                trimToEssentialCache(this)
             }
             TRIM_MEMORY_COMPLETE,
             TRIM_MEMORY_MODERATE -> {
                 Timber.d(TAG, "Memory pressure, clearing caches")
-                clearAllCaches()
+                clearAllCaches(this)
             }
         }
     }

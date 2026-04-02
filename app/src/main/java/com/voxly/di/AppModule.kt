@@ -7,7 +7,7 @@ import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
-import com.voxly.data.local.replaygain.ReplayGainScanner
+import com.voxly.data.local.replaygain.Ebur128ReplayGainScanner
 import com.voxly.data.remote.itunes.ITunesApi
 import com.voxly.data.remote.itunes.ITunesRepository
 
@@ -63,6 +63,17 @@ import javax.inject.Singleton
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
+
+    /**
+     * Provides the application-level CoroutineScope.
+     * Used for long-running operations that should outlive individual screens.
+     */
+    @Provides
+    @Singleton
+    @Named("ApplicationScope")
+    fun provideApplicationCoroutineScope(): CoroutineScope {
+        return CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    }
 
     @Provides
     @Singleton
@@ -310,9 +321,9 @@ object AppModule {
     fun provideUnifiedScanManager(
         audioFileScanner: AudioFileScanner,
         settingsDataStore: SettingsDataStore,
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
+        @Named("ApplicationScope") scope: CoroutineScope
     ): UnifiedScanManager {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         return UnifiedScanManagerImpl(audioFileScanner, settingsDataStore, scope)
     }
 }

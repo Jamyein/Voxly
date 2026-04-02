@@ -9,9 +9,13 @@ import android.provider.MediaStore
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.voxly.data.remote.NetworkConstants
+import com.voxly.di.AlbumArtCacheEntryPoint
+import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
@@ -20,6 +24,10 @@ import java.util.Base64
 import java.util.LinkedHashMap
 import java.util.concurrent.locks.ReentrantLock
 import timber.log.Timber
+
+// Semaphore for limiting concurrent album art preloading
+// Prevents thread pool exhaustion when preloading large lists
+private val preloadSemaphore = Semaphore(4)
 
 // Session-scoped LRU cache for search result album covers (ImageBitmap)
 private val searchResultCache = mutableMapOf<String, ImageBitmap>()
@@ -241,13 +249,13 @@ suspend fun loadImageBytesFromUrl(url: String?): ByteArray? {
 }
 
 /**
- * Loads local album art from file path with LRU cache.
- * Uses embedded album art from MediaMetadataRetriever.
- *
- * @param filePath The path to the audio file
- * @param targetSizePx Target size in pixels for memory-efficient decoding (default 300)
- * @return Bitmap of the album art, or null if not found
+ * Legacy fallback for local album art loading.
+ * Prefer loadAlbumArtThumbnail() which uses AlbumArtCacheManager.
  */
+@Deprecated(
+    message = "Use loadAlbumArtThumbnail() for consistent cache-backed loading",
+    replaceWith = ReplaceWith("loadAlbumArtThumbnail(context, filePath, targetSizePx)")
+)
 fun loadLocalAlbumArt(filePath: String, targetSizePx: Int = 300): Bitmap? {
     if (filePath.isBlank()) return null
 
@@ -284,8 +292,78 @@ fun loadLocalAlbumArt(filePath: String, targetSizePx: Int = 300): Bitmap? {
 }
 
 /**
- * Loads local album art with explicit target size (Chunk 2 API).
+ * Loads album art thumbnail via AlbumArtCacheManager (preferred path for UI).
+ * Falls back to folder cover art (cover.jpg, folder.jpg, etc.) if no embedded art found.
  */
+suspend fun loadAlbumArtThumbnail(
+    context: Context,
+    filePath: String,
+    targetSizePx: Int = 300
+): Bitmap? {
+    if (filePath.isBlank()) return null
+
+    val safeTargetSize = if (targetSizePx > 0) targetSizePx else 300
+
+    val entryPoint = EntryPointAccessors.fromApplication(
+        context.applicationContext,
+        AlbumArtCacheEntryPoint::class.java
+    )
+    val cacheManager = entryPoint.albumArtCacheManager()
+
+    // 1. Check AlbumArtCacheManager (L1 memory, L2 Room, L3 file embedded)
+    cacheManager.getThumbnail(filePath)?.let { return it }
+
+    // 2. Fallback: read from TagLib to seed cache (embedded art only)
+    val metadataProcessor = entryPoint.tagLibMetadataProcessor()
+    val complete = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
+    complete?.albumArt?.let { artBytes ->
+        cacheManager.cacheAlbumArt(filePath, artBytes)
+    }
+
+    // 3. Return embedded art if found
+    cacheManager.getThumbnail(filePath)?.let { return it }
+    complete?.albumArt?.let { return decodeHighQualityBitmapFromBytes(it, safeTargetSize) }
+
+    // 4. Final fallback: folder cover art (cover.jpg, folder.jpg, etc.)
+    return loadFolderCoverArt(filePath, safeTargetSize)
+}
+
+/**
+ * Loads full-resolution album art and decodes to target size.
+ */
+suspend fun loadAlbumArtOriginalBitmap(
+    context: Context,
+    filePath: String,
+    targetSizePx: Int
+): Bitmap? {
+    if (filePath.isBlank()) return null
+
+    val safeTargetSize = if (targetSizePx > 0) targetSizePx else 384
+
+    val entryPoint = EntryPointAccessors.fromApplication(
+        context.applicationContext,
+        AlbumArtCacheEntryPoint::class.java
+    )
+    val cacheManager = entryPoint.albumArtCacheManager()
+
+    val originalBytes = cacheManager.getOriginalArt(filePath)
+        ?: run {
+            val metadataProcessor = entryPoint.tagLibMetadataProcessor()
+            val complete = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
+            complete?.albumArt?.also { cacheManager.cacheAlbumArt(filePath, it) }
+        }
+
+    return originalBytes?.let { decodeHighQualityBitmapFromBytes(it, safeTargetSize) }
+}
+
+/**
+ * Legacy fallback for local album art loading.
+ * Prefer loadAlbumArtThumbnail() which uses AlbumArtCacheManager.
+ */
+@Deprecated(
+    message = "Use loadAlbumArtThumbnail() for consistent cache-backed loading",
+    replaceWith = ReplaceWith("loadAlbumArtThumbnail(context, filePath, targetSizePx)")
+)
 fun loadLocalAlbumArtSized(filePath: String, targetSizePx: Int): Bitmap? {
     return loadLocalAlbumArt(filePath, targetSizePx)
 }
@@ -399,6 +477,37 @@ private fun decodeSampledBitmapFromBytes(bytes: ByteArray, targetSize: Int): Bit
 }
 
 /**
+ * High-quality decode: coarse sample + precise scale with filtering.
+ */
+private fun decodeHighQualityBitmapFromBytes(bytes: ByteArray, targetSize: Int): Bitmap? {
+    val options = BitmapFactory.Options().apply {
+        inJustDecodeBounds = true
+    }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+
+    var sampleSize = 1
+    while (options.outWidth / sampleSize > targetSize * 2 || options.outHeight / sampleSize > targetSize * 2) {
+        sampleSize *= 2
+    }
+
+    val decodeOptions = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+        inPreferredConfig = Bitmap.Config.ARGB_8888
+    }
+    val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions) ?: return null
+
+    val maxDim = maxOf(decoded.width, decoded.height)
+    if (maxDim <= targetSize) return decoded
+
+    val scale = targetSize.toFloat() / maxDim.toFloat()
+    val targetWidth = (decoded.width * scale).toInt().coerceAtLeast(1)
+    val targetHeight = (decoded.height * scale).toInt().coerceAtLeast(1)
+    val scaled = Bitmap.createScaledBitmap(decoded, targetWidth, targetHeight, true)
+    if (scaled != decoded) decoded.recycle()
+    return scaled
+}
+
+/**
  * Decodes a sampled bitmap from file path to reduce memory usage.
  */
 private fun decodeSampledBitmapFromFile(filePath: String, targetSize: Int): Bitmap? {
@@ -427,16 +536,45 @@ private fun decodeBitmapFromBytes(bytes: ByteArray): Bitmap? {
 
 /**
  * Preloads multiple album arts in the background (fire-and-forget).
+ * Uses parallel dispatch with limited concurrency for faster loading.
+ * Semaphore limits concurrent loads to prevent thread pool exhaustion.
  */
-fun preloadLocalAlbumArts(filePaths: List<String>) {
+fun preloadLocalAlbumArts(context: Context, filePaths: List<String>) {
+    if (filePaths.isEmpty()) return
     CoroutineScope(Dispatchers.IO).launch {
         filePaths.forEach { path ->
-            try {
-                loadLocalAlbumArt(path)
-            } catch (e: Exception) {
-                // Silently ignore preload failures
+            launch {
+                preloadSemaphore.withPermit {
+                    try {
+                        loadAlbumArtThumbnail(context, path)
+                    } catch (e: Exception) {
+                        // Silently ignore preload failures
+                    }
+                }
             }
         }
+    }
+}
+
+/**
+ * Preloads album arts for a specific range of items in a list.
+ * Used by LazyList to preload items coming into view.
+ */
+fun preloadAlbumArtRange(
+    context: Context,
+    filePaths: List<String>,
+    startIndex: Int,
+    endIndex: Int
+) {
+    if (filePaths.isEmpty() || startIndex > endIndex) return
+    val safeStart = startIndex.coerceAtLeast(0)
+    val safeEnd = endIndex.coerceAtMost(filePaths.lastIndex)
+    if (safeStart > safeEnd) return
+
+    val pathsToPreload = filePaths.subList(safeStart, safeEnd + 1)
+        .filter { it.isNotBlank() }
+    if (pathsToPreload.isNotEmpty()) {
+        preloadLocalAlbumArts(context, pathsToPreload)
     }
 }
 
@@ -517,7 +655,7 @@ fun clearMediaStoreAlbumCache() {
  * Releases non-core cache, keeping core cache (detail page covers).
  * Triggered by: TRIM_MEMORY_RUNNING_LOW
  */
-fun trimToCoreCache() {
+fun trimToCoreCache(context: Context) {
     localCacheLock.lock()
     try {
         // Keep first CORE_CACHE_SIZE entries
@@ -531,6 +669,13 @@ fun trimToCoreCache() {
         val keysToRemove = mediaStoreAlbumCache.keys.drop(CORE_CACHE_SIZE)
         keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
     }
+    runCatching {
+        val entryPoint = EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            AlbumArtCacheEntryPoint::class.java
+        )
+        entryPoint.albumArtCacheManager().trimToCoreCache()
+    }
     Timber.d(TAG, "Trimmed to core cache: $CORE_CACHE_SIZE entries retained")
 }
 
@@ -538,7 +683,7 @@ fun trimToCoreCache() {
  * Releases non-core cache, keeping minimal cache (currently visible items).
  * Triggered by: TRIM_MEMORY_UI_HIDDEN
  */
-fun trimToEssentialCache() {
+fun trimToEssentialCache(context: Context) {
     localCacheLock.lock()
     try {
         val keysToRemove = localAlbumArtCache.keys.drop(ESSENTIAL_CACHE_SIZE)
@@ -550,6 +695,13 @@ fun trimToEssentialCache() {
         val keysToRemove = mediaStoreAlbumCache.keys.drop(ESSENTIAL_CACHE_SIZE)
         keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
     }
+    runCatching {
+        val entryPoint = EntryPointAccessors.fromApplication(
+            context.applicationContext,
+            AlbumArtCacheEntryPoint::class.java
+        )
+        entryPoint.albumArtCacheManager().trimToEssentialCache()
+    }
     Timber.d(TAG, "Trimmed to essential cache: $ESSENTIAL_CACHE_SIZE entries retained")
 }
 
@@ -557,7 +709,7 @@ fun trimToEssentialCache() {
  * Releases all caches.
  * Triggered by: TRIM_MEMORY_COMPLETE
  */
-fun clearAllCaches() {
+fun clearAllCaches(context: Context) {
     localCacheLock.lock()
     try {
         localAlbumArtCache.clear()
@@ -566,6 +718,15 @@ fun clearAllCaches() {
     }
     synchronized(mediaStoreAlbumCache) {
         mediaStoreAlbumCache.clear()
+    }
+    CoroutineScope(Dispatchers.IO).launch {
+        runCatching {
+            val entryPoint = EntryPointAccessors.fromApplication(
+                context.applicationContext,
+                AlbumArtCacheEntryPoint::class.java
+            )
+            entryPoint.albumArtCacheManager().clearAllCache()
+        }
     }
     Timber.d(TAG, "Cleared all album art caches")
 }
@@ -633,11 +794,13 @@ suspend fun getLocalCoverBytes(filePath: String): ByteArray? {
 }
 
 /**
- * 加载轮播封面Bitmap（384px）。
- * 1. 检查carouselCache
- * 2. 从Bytes Cache decode
- * 3. 未缓存则提取+decode
+ * Legacy fallback for carousel cover loading.
+ * Prefer loadAlbumArtThumbnail() + loadAlbumArtOriginalBitmap() for seamless replace.
  */
+@Deprecated(
+    message = "Use loadAlbumArtThumbnail()/loadAlbumArtOriginalBitmap() for carousel",
+    replaceWith = ReplaceWith("loadAlbumArtThumbnail(context, filePath)")
+)
 suspend fun loadCarouselCoverArt(filePath: String): Bitmap? {
     if (filePath.isBlank()) return null
 

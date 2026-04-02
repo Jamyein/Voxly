@@ -44,6 +44,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.last
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -99,12 +100,25 @@ class LibraryViewModel @Inject constructor(
     val openedDirectoryUri: StateFlow<String?> = _openedDirectoryUri.asStateFlow()
 
     // Audio data - sourced from AudioFileScanner (single source of truth)
-    // File browser uses this for "All" mode
-    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.getCachedAudioFiles()
+    // File browser uses this for "All" mode - applies whitelist/blacklist filtering
+    // Note: filteredAudioFiles already handles background thread and distinctUntilChanged
+    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredAudioFiles
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
             initialValue = emptyList()
+        )
+
+    /**
+     * Whether user has whitelist directories configured.
+     * This is derived directly from settings to avoid async loading issues.
+     */
+    val hasWhitelistDirectories: StateFlow<Boolean> = settingsDataStore.selectedDirectoryUris
+        .map { uris -> uris.isNotEmpty() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = false
         )
 
     // Albums - sourced from AudioFileScanner
@@ -1295,7 +1309,12 @@ class LibraryViewModel @Inject constructor(
     /**
      * File browser root tab from persistent storage (DIRECTORIES or ALL)
      */
-    val fileBrowserRootTab = settingsDataStore.fileBrowserRootTab
+    val fileBrowserRootTab: StateFlow<String> = settingsDataStore.fileBrowserRootTab
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = "DIRECTORIES"
+        )
 
     /**
      * Save file browser root tab to persistent storage

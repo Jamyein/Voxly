@@ -1,93 +1,58 @@
 package com.voxly.presentation.screens.filebrowser
 
-import android.net.Uri
-import android.util.LruCache
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.ui.decodeBitmapFromBytes
-import com.voxly.presentation.ui.loadLocalAlbumArt
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
-
-/**
- * LRU cache for embedded album art to avoid repeated file reads.
- * Max 50 entries to balance memory usage with performance.
- */
-private val embeddedArtCache = LruCache<String, android.graphics.Bitmap>(50)
+import java.io.File
 
 /**
  * Loads album art from multiple sources:
- * 1. LRU cache for embedded art
- * 2. Embedded album art from the audio file
- * 3. MediaStore album art
+ * 1. MediaStore album art (fastest, system cache)
+ * 2. AlbumArtCacheManager thumbnail (file-level embedded art)
+ * 3. Folder cover art (cover.jpg, folder.jpg, etc.)
  * Returns null if no album art is found.
  */
-fun loadAlbumArt(
+suspend fun loadAlbumArt(
     context: android.content.Context,
     audioFile: AudioFile
 ): android.graphics.Bitmap? {
-    // 1. First check global cache (embedded + folder cover)
-    loadLocalAlbumArt(audioFile.path)?.let { return it }
-
-    // 2. Try embedded album art from the file (with LRU cache)
-    val cached = embeddedArtCache.get(audioFile.path)
-    if (cached != null) return cached
-
-    val embeddedArt = loadEmbeddedAlbumArt(context, audioFile.path)
-    if (embeddedArt != null) {
-        embeddedArtCache.put(audioFile.path, embeddedArt)
-        return embeddedArt
+    // 1. First try: MediaStore (fastest, system-level cache)
+    if (audioFile.mediaStoreAlbumId != null && audioFile.mediaStoreAlbumId > 0) {
+        loadMediaStoreAlbumArt(context, audioFile.mediaStoreAlbumId)?.let { return it }
     }
 
-    // 3. Try MediaStore album art (with global caching)
-    if (audioFile.mediaStoreAlbumId != null && audioFile.mediaStoreAlbumId > 0L) {
-        val mediaStoreArt = loadMediaStoreAlbumArt(context, audioFile.mediaStoreAlbumId)
-        if (mediaStoreArt != null) {
-            return mediaStoreArt
-        }
-    }
+    // 2. Second try: AlbumArtCacheManager (file-level embedded art)
+    loadAlbumArtThumbnail(context, audioFile.path)?.let { return it }
+
+    // 3. Third try: folder cover art (cover.jpg, folder.jpg, etc.)
+    loadFolderCoverArt(audioFile.path)?.let { return it }
 
     return null
 }
 
 /**
- * Loads embedded album art directly from the audio file using MediaMetadataRetriever.
+ * Loads folder cover art from the parent directory of the audio file.
  */
-private fun loadEmbeddedAlbumArt(context: android.content.Context, filePath: String): android.graphics.Bitmap? {
-    return runCatching {
-        val retriever = android.media.MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(filePath)
-            val artBytes = retriever.embeddedPicture
-            if (artBytes != null) {
-                decodeThumbnailBitmap(artBytes)
-            } else {
+private fun loadFolderCoverArt(filePath: String): android.graphics.Bitmap? {
+    val folder = File(filePath).parentFile ?: return null
+    val coverFileNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
+
+    for (fileName in coverFileNames) {
+        val coverFile = File(folder, fileName)
+        if (coverFile.exists()) {
+            return try {
+                decodeBitmapFromFile(coverFile.absolutePath)
+            } catch (e: Exception) {
                 null
             }
-        } finally {
-            retriever.release()
         }
-    }.getOrNull()
+    }
+    return null
 }
 
-private fun loadMediaStoreAlbumBitmap(
-    context: android.content.Context,
-    albumId: Long?
-): android.graphics.Bitmap? {
-    if (albumId == null || albumId <= 0L) return null
-    val uri = Uri.withAppendedPath(
-        Uri.parse("content://media/external/audio/albumart"),
-        albumId.toString()
-    )
-    return runCatching {
-        context.contentResolver.openInputStream(uri)?.use { stream ->
-            val bytes = stream.readBytes()
-            decodeThumbnailBitmap(bytes)
-        }
-    }.getOrNull()
-}
-
-private fun decodeThumbnailBitmap(
-    bytes: ByteArray,
-    targetSizePx: Int = 96
-): android.graphics.Bitmap? {
-    return decodeBitmapFromBytes(bytes, targetSizePx)
+/**
+ * Decodes a bitmap from file without downsampling.
+ */
+private fun decodeBitmapFromFile(filePath: String): android.graphics.Bitmap? {
+    return android.graphics.BitmapFactory.decodeFile(filePath)
 }

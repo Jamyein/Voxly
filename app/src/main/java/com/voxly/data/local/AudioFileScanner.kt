@@ -23,10 +23,12 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
@@ -78,14 +80,69 @@ class AudioFileScanner @Inject constructor(
     private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
     val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
 
+    // Raw cached audio files from database
+    val cachedAudioFilesFlow: Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
+        .catch { e ->
+            Timber.e(e, "Error observing cached audio files")
+        }
+
+    // Filtered audio files - applies all filters and reacts to settings changes
+    // Optimized: settings collected once per emission, no runBlocking needed
+    // Uses conflate() to drop intermediate values during rapid settings changes
+    val filteredAudioFiles: Flow<List<AudioFile>> = combine(
+        cachedAudioFilesFlow,
+        settingsDataStore.whitelistEnabled,
+        settingsDataStore.blacklistEnabled,
+        settingsDataStore.minDurationFilterEnabled,
+        settingsDataStore.selectedDirectoryUris,
+        settingsDataStore.blacklistDirectoryUris,
+        settingsDataStore.minDurationFilterThresholdMs
+    ) { array ->
+        @Suppress("UNCHECKED_CAST")
+        val files = array[0] as List<AudioFile>
+        val whitelistEnabled = array[1] as Boolean
+        val blacklistEnabled = array[2] as Boolean
+        val minDurationEnabled = array[3] as Boolean
+        val whitelistUris = array[4] as List<String>
+        val blacklistUris = array[5] as List<String>
+        val minDurationMs = (array[6] as Int).toLong()
+
+        // Apply filters with pre-collected settings (no suspend calls, no I/O)
+        applyFilters(
+            files,
+            FilterSettings(
+                whitelistEnabled = whitelistEnabled,
+                blacklistEnabled = blacklistEnabled,
+                minDurationEnabled = minDurationEnabled,
+                whitelistUris = whitelistUris,
+                blacklistUris = blacklistUris,
+                minDurationMs = minDurationMs
+            )
+        )
+    }
+        .conflate()
+        .distinctUntilChanged { old, new ->
+            // Fast path: if sizes differ, they are definitely different
+            if (old.size != new.size) return@distinctUntilChanged false
+            // Both empty: they are the same
+            if (old.isEmpty()) return@distinctUntilChanged true
+            // Compare first and last items for quick check
+            // For sorted lists (by path), this should be sufficient
+            old.first().path == new.first().path && old.last().path == new.last().path
+        }
+        .flowOn(Dispatchers.Default)
+        .catch { e ->
+            Timber.e(e, "Error observing filtered audio files")
+            emit(emptyList())
+        }
+
     init {
-        // Auto-update albums and artists when cache changes
+        // Auto-update albums and artists when filtered data changes
+        // Uses debounce to prevent rapid recomputation during incremental scans
         scope.launch {
-            libraryCache.getCachedAudioFiles()
-                .catch { e ->
-                    Timber.e(e, "Error observing cached audio files")
-                }
+            filteredAudioFiles
                 .collectLatest { files ->
+                    kotlinx.coroutines.delay(50) // Debounce: wait 50ms to batch rapid updates
                     updateAlbumsAndArtistsFromFiles(files)
                 }
         }
@@ -383,11 +440,12 @@ class AudioFileScanner @Inject constructor(
             val albumId = cursor.getLong(columns.albumId).takeIf { it > 0L }
             val (trackNum, totalTracks) = parseTrackField(cursor.getInt(columns.track))
 
+            val yearInt = cursor.getInt(columns.year)
             val metadata = com.voxly.domain.model.AudioMetadata(
                 title = cursor.getString(columns.title)?.takeIf { it.isNotBlank() },
                 artist = cursor.getString(columns.artist)?.takeIf { it.isNotBlank() },
                 album = cursor.getString(columns.album)?.takeIf { it.isNotBlank() },
-                year = extractYearValue(cursor.getString(columns.year)),
+                year = if (yearInt > 0) yearInt.toString() else null,
                 trackNumber = trackNum,
                 totalTracks = totalTracks,
                 albumArt = null,
@@ -526,8 +584,9 @@ class AudioFileScanner @Inject constructor(
         val file = File(filePath)
         val extension = file.extension.lowercase()
 
-        val fullMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
-            ?: com.voxly.domain.model.AudioMetadata()
+        // OPTIMIZATION: Read metadata + audio info in one TagLib call when possible
+        val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = false)
+        val fullMetadata = completeMetadata?.metadata ?: com.voxly.domain.model.AudioMetadata()
 
         // Try MediaStore first for duration
         var duration = 0L
@@ -545,8 +604,8 @@ class AudioFileScanner @Inject constructor(
             }
         }
 
-        // Fallback to TagLib
-        val audioInfo = metadataProcessor.readAudioInfo(filePath)
+        // Fallback to TagLib audio info if not provided by complete metadata
+        val audioInfo = completeMetadata?.audioInfo ?: metadataProcessor.readAudioInfo(filePath)
         if (duration == 0L) duration = audioInfo?.durationMs ?: 0L
         if (bitrate == 0) bitrate = (audioInfo?.bitrate ?: 0) / 1000
 
@@ -591,10 +650,110 @@ class AudioFileScanner @Inject constructor(
     /**
      * Updates albums and artists from audio files.
      * Called automatically when cache changes.
+     * Applies whitelist/blacklist filtering before aggregation.
      */
     private suspend fun updateAlbumsAndArtistsFromFiles(files: List<AudioFile>) {
-        updateAlbumsFromFiles(files)
-        updateArtistsFromFiles(files)
+        // Load current filter settings
+        val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
+        val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
+        val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
+        val whitelistUris = settingsDataStore.selectedDirectoryUris.first()
+        val blacklistUris = settingsDataStore.blacklistDirectoryUris.first()
+        val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
+
+        val filteredFiles = applyFilters(
+            files,
+            FilterSettings(
+                whitelistEnabled = whitelistEnabled,
+                blacklistEnabled = blacklistEnabled,
+                minDurationEnabled = minDurationEnabled,
+                whitelistUris = whitelistUris,
+                blacklistUris = blacklistUris,
+                minDurationMs = minDurationMs
+            )
+        )
+        updateAlbumsFromFiles(filteredFiles)
+        updateArtistsFromFiles(filteredFiles)
+    }
+
+    /**
+     * Data class to hold filter settings.
+     * Prevents multiple I/O operations by collecting settings once.
+     */
+    private data class FilterSettings(
+        val whitelistEnabled: Boolean,
+        val blacklistEnabled: Boolean,
+        val minDurationEnabled: Boolean,
+        val whitelistUris: List<String>,
+        val blacklistUris: List<String>,
+        val minDurationMs: Long
+    )
+
+    /**
+     * Applies all filters (whitelist, blacklist, min duration) to audio files.
+     * @param files List of audio files to filter
+     * @param settings Pre-collected filter settings (no I/O within this method)
+     * @return Filtered list of audio files
+     */
+    private fun applyFilters(files: List<AudioFile>, settings: FilterSettings): List<AudioFile> {
+        // If no filters are enabled, return all files
+        if (!settings.whitelistEnabled && !settings.blacklistEnabled && !settings.minDurationEnabled) {
+            return files
+        }
+
+        // Pre-compute whitelist and blacklist paths once (avoid repeated computation)
+        val whitelistPaths = if (settings.whitelistEnabled && settings.whitelistUris.isNotEmpty()) {
+            settings.whitelistUris.map { getPathFromUriString(it) }
+        } else null
+
+        val blacklistPaths = if (settings.blacklistEnabled && settings.blacklistUris.isNotEmpty()) {
+            settings.blacklistUris.map { getPathFromUriString(it) }
+        } else null
+
+        // Optimization: Pre-compute directory prefixes for faster matching
+        val whitelistPrefixes = whitelistPaths?.map { it.trimEnd('/', '\\') }
+        val blacklistPrefixes = blacklistPaths?.map { it.trimEnd('/', '\\') }
+
+        return files.filter { file ->
+            val path = file.path
+
+            // Apply whitelist filter: file must be in one of the whitelist directories
+            if (whitelistPrefixes != null) {
+                val isInWhitelist = whitelistPrefixes.any { whitelistPath ->
+                    path == whitelistPath ||
+                    path.startsWith("$whitelistPath/") ||
+                    path.startsWith("$whitelistPath\\")
+                }
+                if (!isInWhitelist) return@filter false
+            }
+
+            // Apply blacklist filter: file must NOT be in any blacklist directory
+            if (blacklistPrefixes != null) {
+                val isBlacklisted = blacklistPrefixes.any { blacklistPath ->
+                    path == blacklistPath ||
+                    path.startsWith("$blacklistPath/") ||
+                    path.startsWith("$blacklistPath\\")
+                }
+                if (isBlacklisted) return@filter false
+            }
+
+            // Apply min duration filter: file duration must be >= minDurationMs
+            if (settings.minDurationEnabled && file.duration > 0 && file.duration < settings.minDurationMs) {
+                return@filter false
+            }
+
+            true
+        }
+    }
+
+    /**
+     * Convert URI string to filesystem path.
+     */
+    private fun getPathFromUriString(uriString: String): String {
+        return runCatching {
+            val uri = Uri.parse(uriString)
+            getPathFromUri(uri)
+        }.getOrElse { uriString }
     }
 
     /**

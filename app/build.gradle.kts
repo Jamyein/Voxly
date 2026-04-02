@@ -37,8 +37,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 30
         targetSdk = 36
-        versionCode = 37
-        versionName = "1.5.5"
+        versionCode = 38
+        versionName = "1.6.0"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -129,6 +129,22 @@ android {
         warningsAsErrors = false
         abortOnError = false
         checkDependencies = true
+    }
+    
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+    
+    defaultConfig {
+        externalNativeBuild {
+            cmake {
+                cppFlags += "-O3"
+                cFlags += "-O3"
+            }
+        }
     }
 }
 

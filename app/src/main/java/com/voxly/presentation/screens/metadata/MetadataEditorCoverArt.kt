@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.metadata
 
+import android.graphics.Bitmap
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -12,6 +13,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
@@ -19,9 +21,15 @@ import com.voxly.presentation.components.NetworkAlbumArtImage
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
+import com.voxly.presentation.ui.loadAlbumArtOriginalBitmap
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
- * Album art section component with click to pick.
+ * Album art section component with progressive loading.
+ * Displays thumbnail first for fast shared element transition,
+ * then crossfades to original resolution once loaded.
  *
  * @param filePath The file path used for shared element transition key.
  *                 When provided, enables Container Transform animation from list to detail.
@@ -29,6 +37,7 @@ import com.voxly.presentation.theme.MaterialShapes
 @Composable
 fun AlbumArtSection(
     albumArt: ByteArray?,
+    fallbackBitmap: Bitmap? = null,
     onPickAlbumArt: () -> Unit,
     coverTag: String? = null,
     onZoomAlbumArt: () -> Unit,
@@ -36,9 +45,36 @@ fun AlbumArtSection(
     onRemoveAlbumArt: () -> Unit,
     filePath: String? = null
 ) {
-    // Detail page uses rounded rectangle shape (different from list item's cookie shape)
-    // The sharedBounds transition will smoothly morph between these shapes
     val coverKey = filePath?.let { createAlbumArtSharedElementKey(it) }
+    val context = LocalContext.current
+
+    // Layer 1: Thumbnail for fast display and shared element transition
+    val cachedThumbnail by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = filePath
+    ) {
+        value = withContext(Dispatchers.IO) {
+            if (!filePath.isNullOrBlank()) {
+                loadAlbumArtThumbnail(context, filePath, 512)
+            } else null
+        }
+    }
+
+    // Layer 2: Original resolution for detail display
+    val originalBitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = filePath,
+        key2 = albumArt
+    ) {
+        value = withContext(Dispatchers.IO) {
+            when {
+                albumArt != null -> decodeAlbumArtPreview(albumArt, 2048)
+                !filePath.isNullOrBlank() -> loadAlbumArtOriginalBitmap(context, filePath, 2048)
+                else -> null
+            }
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -57,29 +93,25 @@ fun AlbumArtSection(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            // Use Crossfade for smooth album art transitions
-            // Note: Shared element transition is applied outside Crossfade for proper animation
-            androidx.compose.animation.Crossfade(
-                targetState = albumArt != null,
-                label = "album_art_crossfade"
-            ) { hasArt ->
-                if (hasArt && albumArt != null) {
-                    val bitmap = remember(albumArt.contentHashCode()) {
+            // Progressive display: original > edited albumArt > thumbnail > fallback
+            val displayBitmap = originalBitmap ?: run {
+                when {
+                    albumArt != null -> remember(albumArt.contentHashCode()) {
                         decodeAlbumArtPreview(albumArt)
                     }
-                    if (bitmap != null) {
-                        val albumArtModifier = Modifier.fillMaxSize()
-                        Image(
-                            bitmap = bitmap.asImageBitmap(),
-                            contentDescription = stringResource(R.string.cd_album_art),
-                            modifier = albumArtModifier
-                        )
-                    } else {
-                        EmptyAlbumArtContent()
-                    }
-                } else {
-                    EmptyAlbumArtContent()
+                    cachedThumbnail != null -> cachedThumbnail
+                    else -> fallbackBitmap
                 }
+            }
+
+            if (displayBitmap != null) {
+                Image(
+                    bitmap = displayBitmap.asImageBitmap(),
+                    contentDescription = stringResource(R.string.cd_album_art),
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                EmptyAlbumArtContent()
             }
         }
     }
