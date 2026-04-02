@@ -14,6 +14,8 @@ import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.HttpURLConnection
@@ -22,6 +24,10 @@ import java.util.Base64
 import java.util.LinkedHashMap
 import java.util.concurrent.locks.ReentrantLock
 import timber.log.Timber
+
+// Semaphore for limiting concurrent album art preloading
+// Prevents thread pool exhaustion when preloading large lists
+private val preloadSemaphore = Semaphore(4)
 
 // Session-scoped LRU cache for search result album covers (ImageBitmap)
 private val searchResultCache = mutableMapOf<String, ImageBitmap>()
@@ -530,21 +536,23 @@ private fun decodeBitmapFromBytes(bytes: ByteArray): Bitmap? {
 
 /**
  * Preloads multiple album arts in the background (fire-and-forget).
- * Uses parallel dispatch for faster loading.
+ * Uses parallel dispatch with limited concurrency for faster loading.
+ * Semaphore limits concurrent loads to prevent thread pool exhaustion.
  */
 fun preloadLocalAlbumArts(context: Context, filePaths: List<String>) {
     if (filePaths.isEmpty()) return
     CoroutineScope(Dispatchers.IO).launch {
-        val jobs = filePaths.map { path ->
+        filePaths.forEach { path ->
             launch {
-                try {
-                    loadAlbumArtThumbnail(context, path)
-                } catch (e: Exception) {
-                    // Silently ignore preload failures
+                preloadSemaphore.withPermit {
+                    try {
+                        loadAlbumArtThumbnail(context, path)
+                    } catch (e: Exception) {
+                        // Silently ignore preload failures
+                    }
                 }
             }
         }
-        jobs.forEach { it.join() }
     }
 }
 

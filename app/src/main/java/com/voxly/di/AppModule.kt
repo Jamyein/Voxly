@@ -64,6 +64,17 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
+    /**
+     * Provides the application-level CoroutineScope.
+     * Used for long-running operations that should outlive individual screens.
+     */
+    @Provides
+    @Singleton
+    @Named("ApplicationScope")
+    fun provideApplicationCoroutineScope(): CoroutineScope {
+        return CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    }
+
     @Provides
     @Singleton
     fun provideOkHttpClient(
@@ -310,9 +321,9 @@ object AppModule {
     fun provideUnifiedScanManager(
         audioFileScanner: AudioFileScanner,
         settingsDataStore: SettingsDataStore,
-        @ApplicationContext context: Context
+        @ApplicationContext context: Context,
+        @Named("ApplicationScope") scope: CoroutineScope
     ): UnifiedScanManager {
-        val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
         return UnifiedScanManagerImpl(audioFileScanner, settingsDataStore, scope)
     }
 }
