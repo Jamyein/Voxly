@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens.metadata
 
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -11,29 +12,34 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
 import com.voxly.R
-import com.voxly.presentation.components.NetworkAlbumArtImage
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
-import com.voxly.presentation.theme.MaterialShapes
-import com.voxly.presentation.ui.loadAlbumArtThumbnail
-import com.voxly.presentation.ui.loadAlbumArtOriginalBitmap
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /**
- * Album art section component with progressive loading.
- * Displays thumbnail first for fast shared element transition,
- * then crossfades to original resolution once loaded.
- *
- * @param filePath The file path used for shared element transition key.
- *                 When provided, enables Container Transform animation from list to detail.
+ * Album art section for metadata editor.
+ * 
+ * Displays the original cover art from the audio file without any caching
+ * or compression. Shows the exact bytes stored in the file's metadata.
+ * 
+ * @param albumArt Raw cover art bytes from ViewModel (direct from audio file)
+ * @param fallbackBitmap MediaStore fallback bitmap (shown if no embedded cover)
+ * @param onPickAlbumArt Callback to open album art picker
+ * @param coverTag Optional shared element transition tag
+ * @param onZoomAlbumArt Callback to zoom/view the cover art
+ * @param onRotateAlbumArt Callback to rotate the cover art
+ * @param onRemoveAlbumArt Callback to remove the cover art
+ * @param filePath File path for shared element transition key
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumArtSection(
     albumArt: ByteArray?,
@@ -46,34 +52,6 @@ fun AlbumArtSection(
     filePath: String? = null
 ) {
     val coverKey = filePath?.let { createAlbumArtSharedElementKey(it) }
-    val context = LocalContext.current
-
-    // Layer 1: Thumbnail for fast display and shared element transition
-    val cachedThumbnail by produceState<Bitmap?>(
-        initialValue = null,
-        key1 = filePath
-    ) {
-        value = withContext(Dispatchers.IO) {
-            if (!filePath.isNullOrBlank()) {
-                loadAlbumArtThumbnail(context, filePath, 512)
-            } else null
-        }
-    }
-
-    // Layer 2: Original resolution for detail display
-    val originalBitmap by produceState<Bitmap?>(
-        initialValue = null,
-        key1 = filePath,
-        key2 = albumArt
-    ) {
-        value = withContext(Dispatchers.IO) {
-            when {
-                albumArt != null -> decodeAlbumArtPreview(albumArt, 2048)
-                !filePath.isNullOrBlank() -> loadAlbumArtOriginalBitmap(context, filePath, 2048)
-                else -> null
-            }
-        }
-    }
 
     Card(
         modifier = Modifier
@@ -93,15 +71,14 @@ fun AlbumArtSection(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            // Progressive display: original > edited albumArt > thumbnail > fallback
-            val displayBitmap = originalBitmap ?: run {
-                when {
-                    albumArt != null -> remember(albumArt.contentHashCode()) {
-                        decodeAlbumArtPreview(albumArt)
-                    }
-                    cachedThumbnail != null -> cachedThumbnail
-                    else -> fallbackBitmap
+            // Display original cover art from audio file
+            val displayBitmap = when {
+                // 1. Use edited albumArt bytes (from ViewModel state)
+                albumArt != null -> remember(albumArt) {
+                    BitmapFactory.decodeByteArray(albumArt, 0, albumArt.size)
                 }
+                // 2. Fallback to MediaStore bitmap
+                else -> fallbackBitmap
             }
 
             if (displayBitmap != null) {
@@ -149,21 +126,13 @@ fun CoverCandidateThumbnail(
     coverArtUrl: String?,
     modifier: Modifier = Modifier
 ) {
-    NetworkAlbumArtImage(
-        url = coverArtUrl,
+    AsyncImage(
+        model = ImageRequest.Builder(LocalPlatformContext.current)
+            .data(coverArtUrl)
+            .crossfade(true)
+            .build(),
         contentDescription = stringResource(R.string.cd_cover_thumbnail),
         modifier = modifier,
-        placeholder = {
-            Box(
-                modifier = modifier,
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Image,
-                    contentDescription = stringResource(R.string.cd_no_cover),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
+        contentScale = ContentScale.Crop,
     )
 }

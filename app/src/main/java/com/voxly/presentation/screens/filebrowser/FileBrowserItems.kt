@@ -42,6 +42,7 @@ import com.voxly.R
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 
@@ -95,26 +96,16 @@ internal fun AlbumListItem(
             ) {
                 val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
                     ?: album.files.firstOrNull()
-                AlbumArtImage(
-                    filePath = coverFile?.path,
-                    mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
-                    contentDescription = null,
-                    size = 48.dp,
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = MaterialTheme.shapes.small,
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Album,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                    }
+                if (coverFile != null) {
+                    AlbumArtImage(
+                        filePath = coverFile.path,
+                        albumId = coverFile.mediaStoreAlbumId,
+                        contentDescription = null,
+                        size = 48.dp,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    DefaultAlbumArtPlaceholder(size = 48.dp)
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
@@ -160,32 +151,21 @@ internal fun AlbumGridItem(
                 .aspectRatio(1f)
                 .sharedBoundsIfAvailable(key = coverKey)
                 .clip(MaterialTheme.shapes.medium)
-                .clickable(onClick = onClick),
+            .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
             val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
                 ?: album.files.firstOrNull()
-            AlbumArtImage(
-                filePath = coverFile?.path,
-                mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
-                contentDescription = null,
-                size = 200.dp,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxSize(),
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.primaryContainer
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            imageVector = Icons.Default.Album,
-                            contentDescription = null,
-                            modifier = Modifier.size(48.dp),
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                    }
-                }
+            if (coverFile != null) {
+                AlbumArtImage(
+                    filePath = coverFile.path,
+                    albumId = coverFile.mediaStoreAlbumId,
+                    contentDescription = null,
+                    size = 200.dp,
+                    modifier = Modifier.fillMaxSize()
+                )
+            } else {
+                DefaultAlbumArtPlaceholder(size = 200.dp)
             }
         }
         // Album info - transparent background
@@ -255,26 +235,16 @@ internal fun ArtistListItem(
                     .clip(MaterialShapes.Sunny.toShape()),
                 contentAlignment = Alignment.Center
             ) {
-                AlbumArtImage(
-                    filePath = artist.coverPath,
-                    contentDescription = null,
-                    size = 48.dp,
-                    modifier = Modifier
-                        .fillMaxSize()
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        shape = MaterialShapes.Sunny.toShape(),
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Default.Person,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        }
-                    }
+                if (!artist.coverPath.isNullOrBlank()) {
+                    AlbumArtImage(
+                        filePath = artist.coverPath,
+                        contentDescription = null,
+                        size = 48.dp,
+                        modifier = Modifier
+                            .fillMaxSize()
+                    )
+                } else {
+                    DefaultAlbumArtPlaceholder(size = 48.dp)
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))

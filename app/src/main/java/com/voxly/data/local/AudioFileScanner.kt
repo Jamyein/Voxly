@@ -56,13 +56,16 @@ import javax.inject.Singleton
  * - Parallel metadata reading
  * - Lazy metadata loading
  * - Auto-aggregation of albums and artists
+ * 
+ * Note: Cover art is loaded on-demand via MediaStore URIs and folder cover files.
+ * No local WebP cache is maintained.
  */
 @Singleton
 class AudioFileScanner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val metadataProcessor: TagLibMetadataProcessor,
     private val libraryCache: MusicLibraryCache,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -205,6 +208,9 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Unified scan method - handles all scan scenarios.
+     *
+     * Cover art is not extracted during scanning. It's loaded on-demand
+     * via MediaStore URIs and folder cover files.
      *
      * @param directoryPaths Optional list of specific directories to scan. If null/empty, scans all audio files.
      * @param incremental If true, only scans changed files. If false, full scan.

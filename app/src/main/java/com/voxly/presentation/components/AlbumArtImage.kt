@@ -1,231 +1,111 @@
 package com.voxly.presentation.components
 
-import android.graphics.Bitmap
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import coil3.size.Scale
 import com.voxly.R
+import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.ui.loadImageBitmapFromUrl
-import com.voxly.presentation.ui.loadAlbumArtThumbnail
-import com.voxly.presentation.ui.loadMediaStoreAlbumArt
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.withContext
-import java.io.File
 
 /**
- * Unified album art image composable that supports multiple sources:
- * 1. Local file embedded album art
- * 2. MediaStore album art (if albumId provided)
- * 3. Folder cover art (cover.jpg, folder.jpg, etc.)
+ * Gramophone-style album art image component using Coil 3.
+ * 
+ * Loading priority:
+ * 1. MediaStore album art URI (fast, system cached)
+ * 2. Folder cover files (cover.jpg, folder.jpg, etc.)
+ * 
+ * Note: This is for list/playback screens only. Metadata editor uses OriginalCoverImage
+ * to display raw cover art from audio files.
+ *
+ * @param albumId MediaStore album ID for MediaStore lookup
+ * @param filePath Audio file path for folder cover lookup
+ * @param size Target display size (used for Coil's size-aware decoding)
+ * @param crossfade Enable crossfade animation (default: true for lists, false for playback)
  */
 @Composable
 fun AlbumArtImage(
-    filePath: String?,
-    mediaStoreAlbumId: Long? = null,
-    contentDescription: String?,
+    albumId: Long? = null,
+    filePath: String? = null,
+    contentDescription: String? = null,
     modifier: Modifier = Modifier,
     size: Dp = 64.dp,
     contentScale: ContentScale = ContentScale.Crop,
+    crossfade: Boolean = true,
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
+    val context = LocalContext.current
     val density = LocalDensity.current
-    val albumArtBitmap = produceAlbumArtBitmap(
-        filePath = filePath,
-        mediaStoreAlbumId = mediaStoreAlbumId,
-        targetSizePx = with(density) { size.toPx().toInt() }
-    )
-
+    val targetSizePx = with(density) { size.roundToPx() }
+    
+    // Get cover URI (MediaStore or folder cover)
+    val coverUri = remember(albumId, filePath) {
+        val provider = CoverUriProvider(context)
+        provider.getCoverUri(albumId = albumId, filePath = filePath)
+    }
+    
+    var loadFailed by remember { mutableStateOf(false) }
+    
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        val bitmap = albumArtBitmap.value
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
+        if (coverUri != null && !loadFailed) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalPlatformContext.current)
+                    .data(coverUri)
+                    .size(targetSizePx)
+                    .scale(Scale.FILL)
+                    .crossfade(crossfade)
+                    .build(),
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
-                contentScale = contentScale
+                contentScale = contentScale,
+                onError = { loadFailed = true }
             )
         } else {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                placeholder()
-            }
+            placeholder()
         }
     }
 }
 
 /**
- * Network album art image composable for loading covers from URLs.
- */
-@Composable
-fun NetworkAlbumArtImage(
-    url: String?,
-    contentDescription: String?,
-    modifier: Modifier = Modifier,
-    size: Dp = 64.dp,
-    contentScale: ContentScale = ContentScale.Crop,
-    placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) },
-    onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null
-) {
-    var bitmap by remember(url) { mutableStateOf<Bitmap?>(null) }
-
-    LaunchedEffect(url) {
-        if (!url.isNullOrBlank()) {
-            val loaded = withContext(Dispatchers.IO) {
-                loadImageBitmapFromUrl(url)?.asAndroidBitmap()
-            }
-            bitmap = loaded
-            if (loaded != null) {
-                onDimensionsLoaded?.invoke(loaded.width, loaded.height)
-            }
-        }
-    }
-
-    Box(
-        modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        val currentBitmap = bitmap
-        if (currentBitmap != null) {
-            Image(
-                bitmap = currentBitmap.asImageBitmap(),
-                contentDescription = contentDescription,
-                modifier = modifier,
-                contentScale = contentScale
-            )
-        } else {
-            Box(modifier = modifier, contentAlignment = Alignment.Center) {
-                placeholder()
-            }
-        }
-    }
-}
-
-/**
- * Default placeholder for album art when no image is available.
+ * Placeholder for album art when no image is available.
  */
 @Composable
 fun DefaultAlbumArtPlaceholder(
     modifier: Modifier = Modifier,
     size: Dp = 64.dp
 ) {
-    Icon(
-        painter = appIconPainter(AppIcon.MusicNote),
-        contentDescription = stringResource(R.string.cd_no_cover),
-        tint = MaterialTheme.colorScheme.outline,
-        modifier = modifier.size(size.coerceAtMost(24.dp))
-    )
-}
-
-/**
- * Internal helper to produce album art bitmap from multiple sources.
- * Uses parallel loading for faster results - returns first available non-null result.
- */
-@Composable
-private fun produceAlbumArtBitmap(
-    filePath: String?,
-    mediaStoreAlbumId: Long?,
-    targetSizePx: Int
-): androidx.compose.runtime.State<Bitmap?> {
-    val context = LocalContext.current
-    return androidx.compose.runtime.produceState<Bitmap?>(
-        initialValue = null,
-        key1 = filePath,
-        key2 = mediaStoreAlbumId
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
     ) {
-        value = withContext(Dispatchers.IO) {
-            if (filePath.isNullOrBlank() && (mediaStoreAlbumId == null || mediaStoreAlbumId <= 0)) {
-                return@withContext null
-            }
-
-            coroutineScope {
-                val mediaStoreDeferred = if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
-                    async { loadMediaStoreAlbumArt(context, mediaStoreAlbumId) }
-                } else null
-
-                val localArtDeferred = if (!filePath.isNullOrBlank()) {
-                    async {
-                        loadAlbumArtThumbnail(
-                            context = context,
-                            filePath = filePath,
-                            targetSizePx = targetSizePx
-                        )
-                    }
-                } else null
-
-                val folderArtDeferred = if (!filePath.isNullOrBlank()) {
-                    async { loadFolderCoverArt(filePath, targetSizePx) }
-                } else null
-
-                // Return first available non-null result (MediaStore is typically fastest)
-                mediaStoreDeferred?.await()
-                    ?: localArtDeferred?.await()
-                    ?: folderArtDeferred?.await()
-            }
-        }
+        Icon(
+            painter = appIconPainter(AppIcon.MusicNote),
+            contentDescription = stringResource(R.string.cd_no_cover),
+            tint = MaterialTheme.colorScheme.outline,
+            modifier = Modifier.size(size.coerceAtMost(24.dp))
+        )
     }
-}
-
-/**
- * Loads folder cover art from the parent directory of the audio file.
- */
-private fun loadFolderCoverArt(filePath: String, targetSizePx: Int): Bitmap? {
-    val folder = File(filePath).parentFile ?: return null
-    val coverFileNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
-
-    for (fileName in coverFileNames) {
-        val coverFile = File(folder, fileName)
-        if (coverFile.exists()) {
-            return try {
-                decodeBitmapFromFile(coverFile.absolutePath, targetSizePx)
-            } catch (e: Exception) {
-                null
-            }
-        }
-    }
-    return null
-}
-
-/**
- * Decodes a bitmap from file with sampling to reduce memory usage.
- */
-private fun decodeBitmapFromFile(filePath: String, targetSize: Int): Bitmap? {
-    val options = android.graphics.BitmapFactory.Options().apply {
-        inJustDecodeBounds = true
-    }
-    android.graphics.BitmapFactory.decodeFile(filePath, options)
-
-    var sampleSize = 1
-    while (options.outWidth / sampleSize > targetSize || options.outHeight / sampleSize > targetSize) {
-        sampleSize *= 2
-    }
-
-    val decodeOptions = android.graphics.BitmapFactory.Options().apply {
-        inSampleSize = sampleSize
-    }
-    return android.graphics.BitmapFactory.decodeFile(filePath, decodeOptions)
 }
