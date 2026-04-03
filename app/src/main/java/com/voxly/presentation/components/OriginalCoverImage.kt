@@ -5,25 +5,13 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
-import coil3.request.crossfade
-import coil3.size.Scale
-import com.voxly.data.local.cover.CoverUriProvider
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /**
  * Displays the original cover art from the audio file.
@@ -53,8 +41,6 @@ fun OriginalCoverImage(
     contentScale: ContentScale = ContentScale.Fit,
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
-    val context = LocalContext.current
-    
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
@@ -105,26 +91,23 @@ fun OriginalCoverImageZoomable(
     contentDescription: String? = null,
     modifier: Modifier = Modifier
 ) {
+    val bitmap = albumArtBytes?.let { bytes ->
+        remember(bytes) {
+            BitmapFactory.decodeByteArray(bytes, 0, bytes.size)?.asImageBitmap()
+        }
+    }
+
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        if (albumArtBytes != null) {
-            val bitmap = remember(albumArtBytes) {
-                BitmapFactory.decodeByteArray(albumArtBytes, 0, albumArtBytes.size)
-                    ?.asImageBitmap()
-            }
-            
-            if (bitmap != null) {
-                Image(
-                    bitmap = bitmap,
-                    contentDescription = contentDescription,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
-            } else {
-                DefaultAlbumArtPlaceholder(size = 200.dp)
-            }
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap,
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Fit
+            )
         } else {
             DefaultAlbumArtPlaceholder(size = 200.dp)
         }

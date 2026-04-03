@@ -4,14 +4,10 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
-import android.provider.MediaStore
 import dagger.hilt.android.qualifiers.ApplicationContext
-import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
-
-private const val TAG = "CoverUriProvider"
 
 /**
  * Provides album art URIs for list and playback screens.

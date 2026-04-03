@@ -34,9 +34,6 @@ data class ReplayGainConfig(
         val STREAMING = ReplayGainConfig(
             clipMode = ClipMode.ALWAYS,
             truePeak = true,
-            dualMono = false,
-            albumAsAes77 = false,
-            skipExisting = false,
             maxPeakLevel = -1.0
         )
         
@@ -44,12 +41,10 @@ data class ReplayGainConfig(
         val ARCHIVAL = ReplayGainConfig(
             clipMode = ClipMode.ALWAYS,
             truePeak = true,
-            dualMono = true,
-            albumAsAes77 = false,
-            skipExisting = false,
-            maxPeakLevel = 0.0
+            dualMono = true
         )
     }
+}
 }
 
 /**

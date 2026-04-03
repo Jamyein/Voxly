@@ -13,14 +13,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,7 +33,6 @@ import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -48,19 +44,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlin.math.max
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
@@ -68,7 +59,6 @@ import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
-import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 import coil3.compose.AsyncImage
@@ -86,15 +76,6 @@ private data class AlbumInfo(
     val files: List<com.voxly.domain.model.AudioFile>,
     val year: Int?
 )
-
-/**
- * Extracts the year from album files (uses the maximum year found).
- */
-private fun extractAlbumYear(files: List<com.voxly.domain.model.AudioFile>): Int? {
-    return files
-        .mapNotNull { file -> extractYear(file.metadata.year) }
-        .maxOrNull()
-}
 
 /**
  * Extracts 4-digit year from a string (e.g., "2023" or "2023-01-01").
@@ -155,11 +136,6 @@ fun ArtistDetailScreen(
                 )
             }
             .sortedByDescending { it.year ?: 0 }
-    }
-
-    // Create a map for easy lookup (maintains sorted order)
-    val albumsGrouped = remember(albumsSorted) {
-        albumsSorted.associate { it.name to it.files }
     }
 
     // Use the same AlbumArtImage component as ArtistListItem for consistency
@@ -408,11 +384,10 @@ fun CarouselAlbumArtImage(
 ) {
     val context = LocalContext.current
     var fallbackMediaStoreBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var showFallback by remember { mutableStateOf(false) }
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         when {
-            showFallback && fallbackMediaStoreBitmap != null -> {
+            fallbackMediaStoreBitmap != null -> {
                 Image(
                     bitmap = fallbackMediaStoreBitmap!!.asImageBitmap(),
                     contentDescription = contentDescription,
@@ -432,10 +407,8 @@ fun CarouselAlbumArtImage(
                         .listener(
                             onError = { _, _ ->
                                 if (albumId != null && albumId > 0) {
-                                    val bitmap = loadMediaStoreAlbumArt(context, albumId)
-                                    if (bitmap != null) {
-                                        fallbackMediaStoreBitmap = bitmap
-                                        showFallback = true
+                                    loadMediaStoreAlbumArt(context, albumId)?.let {
+                                        fallbackMediaStoreBitmap = it
                                     }
                                 }
                             }
@@ -452,16 +425,14 @@ fun CarouselAlbumArtImage(
                 LaunchedEffect(albumId) {
                     msBitmap = loadMediaStoreAlbumArt(context, albumId)
                 }
-                if (msBitmap != null) {
+                msBitmap?.let { bitmap ->
                     Image(
-                        bitmap = msBitmap!!.asImageBitmap(),
+                        bitmap = bitmap.asImageBitmap(),
                         contentDescription = contentDescription,
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
-                } else {
-                    placeholder()
-                }
+                } ?: placeholder()
             }
 
             else -> {
@@ -487,18 +458,11 @@ fun AlbumCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = ExpressiveMotion.DefaultSpring,
-        label = "albumCardScale"
-    )
-
     Card(
         onClick = onClick,
         modifier = modifier
             .width(160.dp)
-            .height(205.dp)
-            .scale(scale),
+            .height(205.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
