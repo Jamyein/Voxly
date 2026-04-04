@@ -33,9 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.ArtistGroup
+import com.voxly.domain.model.ArtistListItemState
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.LazyListCoverPreloader
-import com.voxly.presentation.screens.filebrowser.ArtistListItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import kotlinx.coroutines.launch
@@ -48,6 +48,7 @@ internal fun ArtistScreenContent(
     modifier: Modifier = Modifier
 ) {
     val artists by viewModel.artists.collectAsState()
+    val artistListItems by viewModel.artistListItems.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val coroutineScope = rememberCoroutineScope()
 
@@ -101,6 +102,7 @@ internal fun ArtistScreenContent(
             } else {
                 ArtistTabContent(
                     artists = artists,
+                    artistListItems = artistListItems,
                     onArtistClick = onArtistClick,
                     listState = listState
                 )
@@ -112,21 +114,25 @@ internal fun ArtistScreenContent(
 @Composable
 internal fun ArtistTabContent(
     artists: List<ArtistGroup>,
+    artistListItems: List<ArtistListItemState>,
     onArtistClick: (ArtistGroup) -> Unit,
     listState: LazyListState? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
-    val artistFilePaths = remember(artists) {
-        artists.mapNotNull { it.coverPath }
+    val artistFilePaths = remember(artistListItems) {
+        artistListItems.mapNotNull { it.coverPath }
     }
-    val bubbleFormatter: ((Int) -> String) = remember(artists) {
+    val bubbleFormatter: ((Int) -> String) = remember(artistListItems) {
         { index: Int ->
-            artists.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
+            artistListItems.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
         }
+    }
+    val artistMap = remember(artists) {
+        artists.associateBy { it.name }
     }
     LazyListCoverPreloader(listState = lazyListState, filePaths = artistFilePaths)
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        if (artists.isEmpty()) {
+        if (artistListItems.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 Text(
                     text = stringResource(R.string.no_artists_found),
@@ -141,16 +147,18 @@ internal fun ArtistTabContent(
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(artists, key = { it.name }) { artist ->
+                items(artistListItems, key = { it.name }) { listItem ->
                     ArtistListItem(
-                        artist = artist,
-                        onClick = { onArtistClick(artist) }
+                        artist = listItem,
+                        onClick = {
+                            artistMap[listItem.name]?.let { onArtistClick(it) }
+                        }
                     )
                 }
             }
         }
 
-        if (artists.isNotEmpty()) {
+        if (artistListItems.isNotEmpty()) {
             LazyColumnScrollbar(
                 state = lazyListState,
                 modifier = Modifier
