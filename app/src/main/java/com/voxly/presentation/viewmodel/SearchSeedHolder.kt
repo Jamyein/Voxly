@@ -28,6 +28,11 @@ class SearchSeedHolder @Inject constructor() : ViewModel() {
     }
 
     /**
+     * 读取搜索种子但不清除（多屏幕共享）
+     */
+    fun peekSeed(): SearchSeed? = _editedSearchSeed.value
+
+    /**
      * 获取并清除搜索种子（由 Online Search ViewModel 调用）
      * 读取后自动清除，避免下次进入时残留旧数据。
      */
