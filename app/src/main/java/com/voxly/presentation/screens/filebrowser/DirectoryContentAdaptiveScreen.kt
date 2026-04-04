@@ -54,6 +54,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.DirFileSortOption
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
@@ -115,7 +116,7 @@ fun DirectoryContentAdaptiveScreen(
     }
 
     // Search and sort
-    var searchQuery by remember { mutableStateOf("") }
+    var showSearchSheet by remember { mutableStateOf(false) }
     var isSortExpanded by remember { mutableStateOf(false) }
     val sortOption by viewModel.directoryFileSortOption.collectAsState(initial = DirFileSortOption.NAME_ASC.name)
     val currentSortOption = remember(sortOption) {
@@ -126,9 +127,9 @@ fun DirectoryContentAdaptiveScreen(
         }
     }
 
-    // Apply search and sort
-    val displayedFiles = remember(files, searchQuery, currentSortOption) {
-        applySearchAndSort(files, searchQuery, currentSortOption)
+    // Apply sort only (search handled by SearchBottomSheet)
+    val displayedFiles = remember(files, currentSortOption) {
+        applySort(files, currentSortOption)
     }
 
     // List pane state
@@ -216,7 +217,7 @@ fun DirectoryContentAdaptiveScreen(
                                 }
                             } else {
                                 // Search and Sort buttons
-                                IconButton(onClick = { /* Show search */ }) {
+                                IconButton(onClick = { showSearchSheet = true }) {
                                     Icon(
                                         imageVector = Icons.Default.Search,
                                         contentDescription = "Search"
@@ -470,31 +471,20 @@ fun DirectoryContentAdaptiveScreen(
             }
         )
     }
-}
 
-/**
- * Applies search and sort to directory files.
- */
-private fun applySearchAndSort(
-    files: List<AudioFile>,
-    query: String,
-    sortOption: DirFileSortOption
-): List<AudioFile> {
-    val normalizedQuery = query.trim().lowercase()
-    val filtered = if (normalizedQuery.isBlank()) {
-        files
-    } else {
-        files.filter { audioFile ->
-            val title = audioFile.metadata.title.orEmpty()
-            val artist = audioFile.metadata.artist.orEmpty()
-            val album = audioFile.metadata.album.orEmpty()
-            listOf(audioFile.name, title, artist, album).any { text ->
-                text.lowercase().contains(normalizedQuery)
+    if (showSearchSheet) {
+        SearchBottomSheet(
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
+            onDismiss = { showSearchSheet = false },
+            allFiles = files,
+            onFileClick = { audioFile ->
+                showSearchSheet = false
+                coroutineScope.launch {
+                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                }
             }
-        }
+        )
     }
-
-    return applySort(filtered, sortOption)
 }
 
 /**

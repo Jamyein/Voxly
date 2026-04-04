@@ -56,6 +56,7 @@ import com.voxly.core.util.MediaPermission
 import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.RootTab
+import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
@@ -153,7 +154,7 @@ fun FileBrowserAdaptiveScreen(
     }
 
     // Search and sort
-    var searchQuery by remember { mutableStateOf("") }
+    var showSearchSheet by remember { mutableStateOf(false) }
     var isSortExpanded by remember { mutableStateOf(false) }
     val sortOption by viewModel.fileBrowserSortOption.collectAsState(initial = FileSortOption.NAME_ASC.name)
     val currentSortOption = remember(sortOption) {
@@ -164,21 +165,9 @@ fun FileBrowserAdaptiveScreen(
         }
     }
 
-    // Filter and sort audio files
-    val displayedFiles = remember(allAudios, searchQuery, currentSortOption) {
-        val filtered = if (searchQuery.isBlank()) {
-            allAudios
-        } else {
-            allAudios.filter { audioFile ->
-                val title = audioFile.metadata.title.orEmpty()
-                val artist = audioFile.metadata.artist.orEmpty()
-                val album = audioFile.metadata.album.orEmpty()
-                listOf(audioFile.name, title, artist, album).any { text ->
-                    text.lowercase().contains(searchQuery.lowercase())
-                }
-            }
-        }
-        applyFileSort(filtered, currentSortOption)
+    // Sort audio files (search handled by SearchBottomSheet)
+    val displayedFiles = remember(allAudios, currentSortOption) {
+        applyFileSort(allAudios, currentSortOption)
     }
 
     // List pane state
@@ -233,7 +222,7 @@ fun FileBrowserAdaptiveScreen(
                             titleContentColor = MaterialTheme.colorScheme.onSurface
                         ),
                         actions = {
-                            IconButton(onClick = { /* Show search */ }) {
+                            IconButton(onClick = { showSearchSheet = true }) {
                                 Icon(
                                     imageVector = Icons.Default.Search,
                                     contentDescription = "Search"
@@ -385,7 +374,7 @@ fun FileBrowserAdaptiveScreen(
         },
         detailPane = {
             AnimatedPane {
-                val currentFile = navigator.currentDestination?.contentKey as? AudioFile
+                val currentFile = navigator.currentDestination?.contentKey
                 if (currentFile != null) {
                     key(currentFile.path, fileSwitchCounter) {
                         // Create navKey for MetadataEditor
@@ -423,6 +412,25 @@ fun FileBrowserAdaptiveScreen(
         },
         modifier = modifier
     )
+
+    if (showSearchSheet) {
+        SearchBottomSheet(
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
+            onDismiss = { showSearchSheet = false },
+            allFiles = allAudios,
+            onFileClick = { audioFile ->
+                showSearchSheet = false
+                if (isSinglePane) {
+                    onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                } else {
+                    coroutineScope.launch {
+                        fileSwitchCounter++
+                        navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                    }
+                }
+            }
+        )
+    }
 }
 
 /**
