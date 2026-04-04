@@ -295,68 +295,72 @@ class TagLibMetadataProcessor @Inject constructor(
      * Uses cache first (memory -> database -> file).
      * @param filePath Path to the audio file
      * @param includeAlbumArt Whether to include album art bytes
+     * @param bypassCache If true, always reads from file (ignores all caches)
      * @return CompleteMetadata or null if reading fails
      */
     suspend fun readAllMetadata(
         filePath: String,
-        includeAlbumArt: Boolean = true
+        includeAlbumArt: Boolean = true,
+        bypassCache: Boolean = false
     ): CompleteMetadata? = withContext(Dispatchers.IO) {
         try {
             val normalizedPath = PathUtils.normalizeFilePath(filePath)
             val file = File(normalizedPath)
 
-            // Check memory cache first (fastest)
-            getFromMemoryCache(normalizedPath)?.let { cached ->
-                Timber.tag(TAG).d("Memory cache hit for: $filePath")
-                val albumArt = if (includeAlbumArt) {
-                    extractAndCacheCoverBytes(normalizedPath)
-                } else null
-                return@withContext CompleteMetadata(
-                    metadata = cached.metadata,
-                    audioInfo = cached.audioInfo,
-                    albumArt = albumArt
-                )
-            }
+            // Check memory cache first (fastest) - skip if bypassing cache
+            if (!bypassCache) {
+                getFromMemoryCache(normalizedPath)?.let { cached ->
+                    Timber.tag(TAG).d("Memory cache hit for: $filePath")
+                    val albumArt = if (includeAlbumArt) {
+                        extractAndCacheCoverBytes(normalizedPath)
+                    } else null
+                    return@withContext CompleteMetadata(
+                        metadata = cached.metadata,
+                        audioInfo = cached.audioInfo,
+                        albumArt = albumArt
+                    )
+                }
 
-            // Check database cache
-            val cachedFile = musicLibraryCache.getCachedFile(normalizedPath)
-            if (cachedFile != null) {
-                val file = File(normalizedPath)
-                // Check if file exists and hasn't been modified since cache
-                if (file.exists()) {
-                    // If we need album art, try cache first
-                    // Otherwise use cached data (no file read needed)
-                    if (!includeAlbumArt) {
-                        Timber.tag(TAG).d("Database cache hit for: $filePath")
-                        val cachedMetadata = CompleteMetadata(
-                            metadata = cachedFile.metadata,
-                            audioInfo = AudioInfo(
-                                bitrate = cachedFile.bitrate * 1000, // Convert back to bps
-                                sampleRate = cachedFile.sampleRate,
-                                channels = cachedFile.channels,
-                                durationMs = cachedFile.duration
-                            ),
-                            albumArt = null // No album art needed
-                        )
-                        return@withContext cachedMetadata
-                    } else {
-                        val cachedAlbumArt = extractAndCacheCoverBytes(normalizedPath)
-                        if (cachedAlbumArt != null) {
-                            Timber.tag(TAG).d("Album art cache hit for: $filePath")
+                // Check database cache
+                val cachedFile = musicLibraryCache.getCachedFile(normalizedPath)
+                if (cachedFile != null) {
+                    val file = File(normalizedPath)
+                    // Check if file exists and hasn't been modified since cache
+                    if (file.exists()) {
+                        // If we need album art, try cache first
+                        // Otherwise use cached data (no file read needed)
+                        if (!includeAlbumArt) {
+                            Timber.tag(TAG).d("Database cache hit for: $filePath")
                             val cachedMetadata = CompleteMetadata(
                                 metadata = cachedFile.metadata,
                                 audioInfo = AudioInfo(
-                                    bitrate = cachedFile.bitrate * 1000,
+                                    bitrate = cachedFile.bitrate * 1000, // Convert back to bps
                                     sampleRate = cachedFile.sampleRate,
                                     channels = cachedFile.channels,
                                     durationMs = cachedFile.duration
                                 ),
-                                albumArt = cachedAlbumArt
+                                albumArt = null // No album art needed
                             )
                             return@withContext cachedMetadata
+                        } else {
+                            val cachedAlbumArt = extractAndCacheCoverBytes(normalizedPath)
+                            if (cachedAlbumArt != null) {
+                                Timber.tag(TAG).d("Album art cache hit for: $filePath")
+                                val cachedMetadata = CompleteMetadata(
+                                    metadata = cachedFile.metadata,
+                                    audioInfo = AudioInfo(
+                                        bitrate = cachedFile.bitrate * 1000,
+                                        sampleRate = cachedFile.sampleRate,
+                                        channels = cachedFile.channels,
+                                        durationMs = cachedFile.duration
+                                    ),
+                                    albumArt = cachedAlbumArt
+                                )
+                                return@withContext cachedMetadata
+                            }
                         }
+                        // Fall through to read all data including album art
                     }
-                    // Fall through to read all data including album art
                 }
             }
 
@@ -575,6 +579,13 @@ class TagLibMetadataProcessor @Inject constructor(
         includeAlbumArt: Boolean
     ): AudioMetadata {
         val propertyMap = metadata.propertyMap
+
+        Timber.tag(TAG).d("TagLib propertyMap keys: ${propertyMap.keys}")
+        Timber.tag(TAG).d("TagLib albumArtist: ${propertyMap["ALBUMARTIST"]?.firstOrNull()}")
+        Timber.tag(TAG).d("TagLib date: ${propertyMap["DATE"]?.firstOrNull()}, year: ${propertyMap["YEAR"]?.firstOrNull()}")
+        Timber.tag(TAG).d("TagLib genre: ${propertyMap["GENRE"]?.firstOrNull()}")
+        Timber.tag(TAG).d("TagLib discNumber: ${propertyMap["DISCNUMBER"]?.firstOrNull()}")
+        Timber.tag(TAG).d("TagLib lyrics: ${propertyMap["LYRICS"]?.firstOrNull()?.take(30)}")
 
         // Helper function to find property key case-insensitively
         fun findKeyIgnoreCase(map: Map<String, Array<String>>, targetKey: String): String? {

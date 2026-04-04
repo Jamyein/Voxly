@@ -68,11 +68,9 @@ class AudioRepositoryImpl @Inject constructor(
 
                 // Try Room cache first — skip TagLib I/O if cache is valid
                 val cachedFile = libraryCache.getCachedFile(filePath)
-                if (cachedFile != null && javaFile.exists() &&
-                    fileLastModified <= cachedFile.path.hashCode().toLong()
-                ) {
-                    // Cache hit: only need album art bytes
-                    val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
+                if (cachedFile != null && javaFile.exists()) {
+                    // Cache hit: always read from file to get complete metadata
+                    val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true, bypassCache = true)
                     val mergedMeta = if (completeMetadata?.metadata != null) {
                         mergeWithFallback(completeMetadata.metadata, cachedFile.metadata)
                             ?: completeMetadata.metadata
@@ -90,7 +88,7 @@ class AudioRepositoryImpl @Inject constructor(
                 // Cache miss: run independent I/O operations in parallel
                 val (completeMetadata, mediaStoreInfo) = coroutineScope {
                     val tagLibDeferred = async {
-                        metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
+                        metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true, bypassCache = true)
                     }
                     val mediaStoreDeferred = async {
                         queryMediaStoreAudioInfo(filePath)
