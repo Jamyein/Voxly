@@ -136,11 +136,6 @@ data class ScanModeOption(
     @StringRes val labelResId: Int
 )
 
-data class ScanEngineOption(
-    val value: String,
-    @StringRes val labelResId: Int
-)
-
 data class ConnectedIconOption<T>(
     val value: T,
     val icon: ImageVector? = null,
@@ -939,7 +934,6 @@ fun SettingsScreen(
     val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
     val replayGainTargetLoudness by viewModel.replayGainTargetLoudness.collectAsState()
     val scanMode by viewModel.scanMode.collectAsState()
-    val scanEngine by viewModel.scanEngine.collectAsState()
     val minDurationFilterEnabled by viewModel.minDurationFilterEnabled.collectAsState()
     val lyricsTimestampFormatEnabled by viewModel.lyricsTimestampFormatEnabled.collectAsState()
 
@@ -984,7 +978,6 @@ fun SettingsScreen(
     // Local mutable state for dialog editing - initialized from ViewModel when dialog opens
     var dialogSeparatorTags by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loudnessExpanded by remember { mutableStateOf(false) }
-    var scanEngineExpanded by remember { mutableStateOf(false) }
     val loudnessOptions = remember {
         listOf(
             LoudnessOption(-23f, R.string.replay_gain_loudness_ebu_r128),
@@ -1021,13 +1014,6 @@ fun SettingsScreen(
             ScanModeOption("TRACK_ONLY", R.string.settings_scan_mode_track_only),
             ScanModeOption("SINGLE_ALBUM", R.string.settings_scan_mode_album_only),
             ScanModeOption("ALBUMS", R.string.settings_scan_mode_track_and_album)
-        )
-    }
-
-    val scanEngineOptions = remember {
-        listOf(
-            ScanEngineOption("NATIVE", R.string.settings_scan_engine_native),
-            ScanEngineOption("KOTLIN", R.string.settings_scan_engine_kotlin)
         )
     }
 
@@ -1178,60 +1164,7 @@ fun SettingsScreen(
                     selectedValue = scanMode,
                     onSelected = viewModel::setScanMode,
                     index = 4,
-                    count = 7
-                )
-
-                val currentScanEngineOption = scanEngineOptions.firstOrNull { it.value == scanEngine }
-                    ?: scanEngineOptions.first()
-
-                SegmentedClickableRow(
-                    title = stringResource(R.string.settings_scan_engine),
-                    subtitle = stringResource(currentScanEngineOption.labelResId),
-                    trailingContent = {
-                        val arrowRotation by animateFloatAsState(
-                            targetValue = if (scanEngineExpanded) 180f else 0f,
-                            animationSpec = ExpressiveMotion.DefaultSpring,
-                            label = "scan_engine_dropdown_arrow"
-                        )
-                        SortDropdownMenu(
-                            expanded = scanEngineExpanded,
-                            onExpandedChange = { scanEngineExpanded = it },
-                            anchor = {
-                                TextButton(
-                                    onClick = {},
-                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                                ) {
-                                    Text(
-                                        text = stringResource(currentScanEngineOption.labelResId),
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.graphicsLayer { rotationZ = arrowRotation }
-                                    )
-                                }
-                            }
-                        ) {
-                            scanEngineOptions.forEach { option ->
-                                SortMenuItem(
-                                    option = option,
-                                    labelResId = option.labelResId,
-                                    currentSortOption = currentScanEngineOption,
-                                    onSortOptionChange = { selected ->
-                                        viewModel.setScanEngine(selected.value)
-                                        scanEngineExpanded = false
-                                    },
-                                    onDismiss = { scanEngineExpanded = false }
-                                )
-                            }
-                        }
-                    },
-                    onClick = { },
-                    index = 5,
-                    count = 7,
-                    modifier = Modifier.fillMaxWidth()
+                    count = 6
                 )
 
                 val currentLoudnessOption = loudnessOptions.firstOrNull { it.value == replayGainTargetLoudness }
@@ -1282,8 +1215,8 @@ fun SettingsScreen(
                         }
                     },
                     onClick = { },
-                    index = 6,
-                    count = 7
+                    index = 5,
+                    count = 6
                 )
             }
 

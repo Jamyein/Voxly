@@ -93,8 +93,7 @@ interface ReplayGainRepository {
         filePaths: List<String>,
         scanQuality: ScanQuality = ScanQuality.NORMAL,
         targetLoudness: Float = -18f,
-        config: com.voxly.domain.model.ReplayGainConfig = com.voxly.domain.model.ReplayGainConfig.DEFAULT,
-        useNative: Boolean = false
+        config: com.voxly.domain.model.ReplayGainConfig = com.voxly.domain.model.ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress>
 
     /**
@@ -112,8 +111,7 @@ interface ReplayGainRepository {
         filesByAlbum: Map<String, List<String>>,
         scanQuality: ScanQuality = ScanQuality.NORMAL,
         targetLoudness: Float = -18f,
-        config: com.voxly.domain.model.ReplayGainConfig = com.voxly.domain.model.ReplayGainConfig.DEFAULT,
-        useNative: Boolean = false
+        config: com.voxly.domain.model.ReplayGainConfig = com.voxly.domain.model.ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress>
 
     /**
@@ -131,8 +129,7 @@ interface ReplayGainRepository {
         filePaths: List<String>,
         scanQuality: ScanQuality = ScanQuality.NORMAL,
         targetLoudness: Float = -18f,
-        config: com.voxly.domain.model.ReplayGainConfig = com.voxly.domain.model.ReplayGainConfig.DEFAULT,
-        useNative: Boolean = false
+        config: com.voxly.domain.model.ReplayGainConfig = com.voxly.domain.model.ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress>
 
     /**

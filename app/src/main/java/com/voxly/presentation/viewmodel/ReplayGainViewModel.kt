@@ -75,37 +75,31 @@ class ReplayGainViewModel @AssistedInject constructor(
                 )
 
                 val scanMode = settingsDataStore.scanMode.first()
-                val scanEngine = settingsDataStore.scanEngine.first()
-                val useNative = scanEngine.equals("NATIVE", ignoreCase = true)
 
                 val scanFlow = when (scanMode) {
                     ScanMode.TRACK_ONLY.name -> replayGainRepository.scanReplayGain(
                         filePaths,
                         scanQuality,
                         targetLoudness,
-                        scanConfig,
-                        useNative = useNative
+                        scanConfig
                     )
                     ScanMode.SINGLE_ALBUM.name -> replayGainRepository.scanReplayGainByAlbum(
                         mapOf("single_album" to filePaths),
                         scanQuality,
                         targetLoudness,
-                        scanConfig,
-                        useNative = useNative
+                        scanConfig
                     )
                     ScanMode.ALBUMS.name -> replayGainRepository.scanReplayGainWithAlbumGrouping(
                         filePaths,
                         scanQuality,
                         targetLoudness,
-                        scanConfig,
-                        useNative = useNative
+                        scanConfig
                     )
                     else -> replayGainRepository.scanReplayGain(
                         filePaths,
                         scanQuality,
                         targetLoudness,
-                        scanConfig,
-                        useNative = useNative
+                        scanConfig
                     )
                 }
 

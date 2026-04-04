@@ -137,24 +137,22 @@ class BatchReplayGainUseCase @Inject constructor(
      * @param targetLoudness Target loudness in LUFS (default -14.0, standard ReplayGain)
      * @return Flow emitting scan progress
      */
-    operator fun invoke(
-        filePaths: List<String>,
-        scanQuality: ScanQuality = ScanQuality.ACCURATE,
-        targetLoudness: Float = -14f,
-        useNative: Boolean = false
-    ): Flow<com.voxly.domain.repository.ScanProgress> = flow {
-        batchEngine.execute(
-            items = filePaths,
-            operation = { filePath ->
-                replayGainRepository.scanReplayGain(
-                    listOf(filePath),
-                    scanQuality,
-                    targetLoudness,
-                    com.voxly.domain.model.ReplayGainConfig.DEFAULT,
-                    useNative = useNative
-                )
-                Result.success(Unit)
-            },
+     operator fun invoke(
+         filePaths: List<String>,
+         scanQuality: ScanQuality = ScanQuality.ACCURATE,
+         targetLoudness: Float = -14f
+     ): Flow<com.voxly.domain.repository.ScanProgress> = flow {
+         batchEngine.execute(
+             items = filePaths,
+             operation = { filePath ->
+                 replayGainRepository.scanReplayGain(
+                     listOf(filePath),
+                     scanQuality,
+                     targetLoudness,
+                     com.voxly.domain.model.ReplayGainConfig.DEFAULT
+                 )
+                 Result.success(Unit)
+             },
             itemName = { it }
         ).collect { result ->
             emit(

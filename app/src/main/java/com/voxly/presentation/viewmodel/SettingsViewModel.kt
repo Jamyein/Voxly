@@ -233,18 +233,6 @@ class SettingsViewModel @Inject constructor(
     )
 
     /**
-     * Scan engine state (KOTLIN or NATIVE)
-     * NATIVE uses libebur128 via JNI (recommended)
-     * KOTLIN uses pure Kotlin EbuR128Analyzer (legacy)
-     */
-    val scanEngine: StateFlow<String> = settingsDataStore.scanEngine
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = "NATIVE"
-    )
-
-    /**
      * ReplayGain clip mode state (n=none, p=positive, a=always)
      */
     val replayGainClipMode: StateFlow<String> = settingsDataStore.replayGainClipMode
@@ -540,15 +528,6 @@ class SettingsViewModel @Inject constructor(
     fun setScanMode(mode: String) {
         viewModelScope.launch {
             settingsDataStore.setScanMode(mode)
-        }
-    }
-
-    /**
-     * Set scan engine preference
-     */
-    fun setScanEngine(engine: String) {
-        viewModelScope.launch {
-            settingsDataStore.setScanEngine(engine)
         }
     }
 

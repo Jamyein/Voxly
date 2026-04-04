@@ -203,6 +203,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     _editedMetadata.value = metadata
                     _originalMetadata = metadata
 
+                    // 初始化搜索种子，供 Online Search 屏幕使用
+                    searchSeedHolder.updateSeed(
+                        title = metadata.title.orEmpty(),
+                        artist = metadata.artist,
+                        album = metadata.album
+                    )
+
                     _uiState.value = MetadataEditorUiState.Success(
                         audioFile = audioFile,
                         editedMetadata = metadata
@@ -332,9 +339,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
         // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
         searchSeedHolder.updateSeed(
-            title = updatedMetadata.title?.takeIf { it.isNotBlank() } ?: File(filePath).nameWithoutExtension,
-            artist = updatedMetadata.artist?.takeIf { it.isNotBlank() },
-            album = updatedMetadata.album?.takeIf { it.isNotBlank() }
+            title = updatedMetadata.title.orEmpty(),
+            artist = updatedMetadata.artist,
+            album = updatedMetadata.album
         )
 
         val currentState = _uiState.value
@@ -413,30 +420,24 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     maxPeakLevel = 0.0
                 )
 
-                val scanEngine = settingsDataStore.scanEngine.first()
-                val useNative = scanEngine.equals("NATIVE", ignoreCase = true)
-
                 val scanFlow = when (currentScanMode) {
                     ScanMode.TRACK_ONLY -> replayGainRepository.scanReplayGain(
                         filesToScan,
                         scanQuality,
                         targetLoudness,
-                        scanConfig,
-                        useNative = useNative
+                        scanConfig
                     )
                     ScanMode.SINGLE_ALBUM -> replayGainRepository.scanReplayGainByAlbum(
                         mapOf("single_album" to filesToScan),
                         scanQuality,
                         targetLoudness,
-                        scanConfig,
-                        useNative = useNative
+                        scanConfig
                     )
                     ScanMode.ALBUMS -> replayGainRepository.scanReplayGainWithAlbumGrouping(
                         filesToScan,
                         scanQuality,
                         targetLoudness,
-                        scanConfig,
-                        useNative = useNative
+                        scanConfig
                     )
                 }
 
@@ -790,7 +791,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     fun searchOnlineCoverCandidates() {
         val metadata = _editedMetadata.value ?: return
-        val title = metadata.title?.takeIf { it.isNotBlank() } ?: File(filePath).nameWithoutExtension
+        val title = metadata.title.orEmpty()
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
 
         // Cancel previous search before starting new one (flatMapLatest pattern)
@@ -917,7 +918,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     fun searchOnlineLyrics() {
         val metadata = _editedMetadata.value ?: return
-        val track = metadata.title?.takeIf { it.isNotBlank() } ?: File(filePath).nameWithoutExtension
+        val track = metadata.title.orEmpty()
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
         val album = metadata.album?.takeIf { it.isNotBlank() }
         val flowLyricsRepository = lyricsRepository as? LyricsRepositoryImpl ?: return
