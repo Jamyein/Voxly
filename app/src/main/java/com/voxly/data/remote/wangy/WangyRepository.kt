@@ -14,15 +14,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Singleton
 
 private const val TAG = "WangyRepository"
-
-// 错误追踪：防止无限循环 (线程安全)
-private val consecutiveErrorCount = AtomicInteger(0)
 private const val MAX_CONSECUTIVE_ERRORS = 5
-private const val ERROR_RESET_TIMEOUT_MS = 30_000L  // 30秒后重置错误计数
+private const val ERROR_RESET_TIMEOUT_MS = 30_000L  // 30 seconds to reset error count
 
 /**
  * Repository for WangY Music API operations.
@@ -95,15 +93,25 @@ class WangyRepositoryImpl @Inject constructor(
     private val api: WangyApi
 ) : WangyRepository {
 
+    // Error tracking: prevent infinite loops (thread-safe, per-instance)
+    private val consecutiveErrorCount = AtomicInteger(0)
+    private val lastErrorTime = AtomicLong(0L)
+
     override suspend fun searchSongs(
         keywords: String,
         page: Int,
         limit: Int
     ): Result<WangySearchResponse> = withContext(Dispatchers.IO) {
-        // 电路保护：如果连续错误太多，暂时跳过请求
+        // Circuit breaker: skip if too many consecutive errors
+        val now = System.currentTimeMillis()
         if (consecutiveErrorCount.get() >= MAX_CONSECUTIVE_ERRORS) {
-            Timber.w(TAG, "Circuit breaker activated: too many consecutive errors (${consecutiveErrorCount.get()}), skipping request")
-            return@withContext Result.failure(Exception("Circuit breaker: too many consecutive errors"))
+            if (now - lastErrorTime.get() < ERROR_RESET_TIMEOUT_MS) {
+                Timber.w(TAG, "Circuit breaker activated: too many consecutive errors (${consecutiveErrorCount.get()}), skipping request")
+                return@withContext Result.failure(Exception("Circuit breaker: too many consecutive errors"))
+            } else {
+                // Reset after timeout
+                consecutiveErrorCount.set(0)
+            }
         }
 
         val normalizedPage = if (page <= 0) 1 else page
@@ -170,18 +178,16 @@ class WangyRepositoryImpl @Inject constructor(
 
             if (code == 200 && !parsedResponse.result?.songs.isNullOrEmpty()) {
                 Timber.d(TAG, "NetEase found ${parsedResponse.result.songs.size} songs for '$keywords'")
-                // 成功：重置错误计数
                 consecutiveErrorCount.set(0)
                 return@withContext Result.success(parsedResponse)
             }
 
             Timber.w(TAG, "NetEase API returned empty result for '$keywords'")
-            // 成功：重置错误计数
             consecutiveErrorCount.set(0)
             Result.success(parsedResponse)
         } catch (e: Exception) {
-            // 失败：增加错误计数
             consecutiveErrorCount.incrementAndGet()
+            lastErrorTime.set(System.currentTimeMillis())
             Timber.e(TAG, "Exception during API call: ${e.message}", e)
             Result.failure(e)
         }
@@ -305,13 +311,13 @@ class WangyRepositoryImpl @Inject constructor(
 
     override suspend fun getSongDetail(songId: Long): Result<WangySongDetail> = withContext(Dispatchers.IO) {
         try {
-            // Make API call directly with parameters (no encryption needed)
             val response = api.getSongDetail(
                 songIds = "[$songId]"
             )
 
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                Result.success(body)
             } else {
                 Result.failure(Exception("Get song detail failed: ${response.code()}"))
             }
@@ -322,13 +328,13 @@ class WangyRepositoryImpl @Inject constructor(
 
     override suspend fun getLyrics(songId: Long): Result<WangyLyricsResponse> = withContext(Dispatchers.IO) {
         try {
-            // Make API call directly with parameters (no encryption needed)
             val response = api.getLyrics(
                 songId = songId
             )
 
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                Result.success(body)
             } else {
                 Result.failure(Exception("Get lyrics failed: ${response.code()}"))
             }
@@ -339,13 +345,13 @@ class WangyRepositoryImpl @Inject constructor(
 
     override suspend fun getAlbumDetail(albumId: Long): Result<WangyAlbumDetail> = withContext(Dispatchers.IO) {
         try {
-            // Make API call directly with parameters (no encryption needed)
             val response = api.getAlbumDetail(
                 albumId = albumId
             )
 
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                Result.success(body)
             } else {
                 Result.failure(Exception("Get album detail failed: ${response.code()}"))
             }
@@ -360,8 +366,9 @@ class WangyRepositoryImpl @Inject constructor(
                 songIds = "[$songId]"
             )
 
-            if (response.isSuccessful && response.body() != null) {
-                val song = response.body()!!.songs.firstOrNull()
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                val song = body.songs.firstOrNull()
                 val coverUrl = song?.album?.picUrl ?: song?.al?.picUrl
                 if (coverUrl != null) {
                     Result.success("$coverUrl?param=500y500")
@@ -377,7 +384,6 @@ class WangyRepositoryImpl @Inject constructor(
     }
 
     override suspend fun getEnhancedLyrics(songId: Long): Result<WangyLyricsResponse> = withContext(Dispatchers.IO) {
-        // 使用简单API获取歌词（不再支持EAPI增强歌词）
         try {
             val response = api.getLyrics(
                 songId = songId,
@@ -386,8 +392,9 @@ class WangyRepositoryImpl @Inject constructor(
                 tv = -1
             )
 
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            val body = response.body()
+            if (response.isSuccessful && body != null) {
+                Result.success(body)
             } else {
                 Result.failure(Exception("Get lyrics failed: ${response.code()}"))
             }

@@ -507,6 +507,15 @@
     <string name="settings_min_duration_threshold">Minimum Duration Filter</string>
     <string name="settings_min_duration_threshold_subtitle">Skip files shorter than this</string>
     <string name="settings_drag_handle">Drag to reorder</string>
+    <string name="settings_drag_hint">Long press and drag to reorder</string>
+    <string name="settings_source_disable">Disable</string>
+    <string name="settings_source_enable">Enable</string>
+    <string name="settings_separator_add">Add</string>
+    <string name="settings_separator_delete_title">Delete Separator</string>
+    <string name="settings_separator_delete_message">Are you sure you want to delete the separator "%s"?</string>
+    <string name="settings_separator_delete">Delete</string>
+    <string name="settings_separator_cancel">Cancel</string>
+    <string name="settings_separator_delete_cd">Delete separator</string>
     <string name="settings_scan_directory_settings">Scan Directory Settings</string>
     <string name="settings_scan_directory_settings_subtitle">Configure whitelist and blacklist for scanning</string>
     <string name="settings_whitelist_mode">Whitelist Mode</string>

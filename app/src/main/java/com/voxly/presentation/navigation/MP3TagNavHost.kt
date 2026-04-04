@@ -130,9 +130,9 @@ fun MP3TagNavHost() {
         AnimatedContent(
             targetState = currentKey,
             transitionSpec = {
-                val isPush = targetState?.let { backStack.contains(it) } ?: false &&
+                val isPush = (targetState?.let { backStack.contains(it) } ?: false) &&
                     (initialState?.let { backStack.indexOf(it) } ?: -1) < (targetState?.let { backStack.indexOf(it) } ?: 0)
-                val isPop = initialState?.let { backStack.contains(it) } ?: false &&
+                val isPop = (initialState?.let { backStack.contains(it) } ?: false) &&
                     (targetState?.let { backStack.indexOf(it) } ?: -1) < (initialState?.let { backStack.indexOf(it) } ?: 0)
                 val isMainToMain = isMainScreenKey(initialState) && isMainScreenKey(targetState)
 
@@ -354,14 +354,14 @@ private fun RenderMainScreen(
         }
 
         is Settings -> {
+            val logViewerViewModel = hiltViewModel<com.voxly.presentation.screens.log.LogViewerViewModel>()
             SettingsScreen(
                 outerPadding = PaddingValues(),
                 onNavigateToLogViewer = {
                     backStack.add(LogViewer)
                 },
                 onExportLogs = {
-                    val viewModel = com.voxly.presentation.screens.log.LogViewerViewModel()
-                    viewModel.exportLogs(context) { uri ->
+                    logViewerViewModel.exportLogs(context) { uri ->
                         if (uri != null) {
                             val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                 type = "application/zip"

@@ -15,11 +15,6 @@ class BatchEngine<T>(
     private val memoryPressureMonitor: MemoryPressureMonitor,
     private val throttlePercent: Float = 0.05f
 ) {
-    private val _failedItems = mutableListOf<FailedItem>()
-    private var lastEmittedPercent = -1f
-    private var lastEmitTime = 0L
-    private val minEmitIntervalMs = 200L
-
     fun execute(
         items: List<T>,
         operation: suspend (T) -> Result<Unit>,
@@ -28,12 +23,12 @@ class BatchEngine<T>(
         val totalFiles = items.size
         var successCount = 0
         var failureCount = 0
-        _failedItems.clear()
-        lastEmittedPercent = -1f
-        lastEmitTime = 0L
+        val failedItems = mutableListOf<FailedItem>()
+        var lastEmittedPercent = -1f
+        var lastEmitTime = 0L
+        val minEmitIntervalMs = 200L
 
         try {
-            // Emit initial state before processing begins
             emit(
                 BatchResult(
                     totalFiles = totalFiles,
@@ -50,7 +45,6 @@ class BatchEngine<T>(
             coroutineScope {
                 var nextIndex = 0
                 while (nextIndex < items.size) {
-                    // Check memory pressure between chunks
                     val concurrency = memoryPressureMonitor.getCurrentConcurrency(maxConcurrency)
                         .coerceIn(1, maxConcurrency)
                     val batch = items.subList(nextIndex, minOf(nextIndex + concurrency, items.size))
@@ -66,7 +60,7 @@ class BatchEngine<T>(
                                     Pair(item, result.exceptionOrNull()?.message ?: "Unknown error")
                                 }
                             } catch (e: CancellationException) {
-                                throw e  // Re-throw cancellation
+                                throw e
                             } catch (e: Exception) {
                                 Pair(item, e.message ?: "Unknown error")
                             }
@@ -78,11 +72,10 @@ class BatchEngine<T>(
                             successCount++
                         } else {
                             failureCount++
-                            _failedItems.add(FailedItem(itemName(item), error))
+                            failedItems.add(FailedItem(itemName(item), error))
                         }
                     }
 
-                    // Throttle check: emit only if 5% more or 200ms passed
                     val processedCount = successCount + failureCount
                     val currentPercent = if (totalFiles > 0) {
                         processedCount.toFloat() / totalFiles
@@ -99,7 +92,7 @@ class BatchEngine<T>(
                                 totalFiles = totalFiles,
                                 successCount = successCount,
                                 failedCount = failureCount,
-                                failedItems = _failedItems.toList(),
+                                failedItems = failedItems.toList(),
                                 status = BatchStatus.PROCESSING,
                                 lastUpdatedFile = itemName(batch.last())
                             )
@@ -115,7 +108,7 @@ class BatchEngine<T>(
                     totalFiles = totalFiles,
                     successCount = successCount,
                     failedCount = failureCount,
-                    failedItems = _failedItems.toList(),
+                    failedItems = failedItems.toList(),
                     status = BatchStatus.COMPLETED
                 )
             )
@@ -125,20 +118,20 @@ class BatchEngine<T>(
     }
 
     fun retry(
-        failedItems: List<FailedItem>,
+        failedItemsInput: List<FailedItem>,
         operation: suspend (String) -> Result<Unit>
     ): Flow<BatchResult> = flow {
-        val originalFailedItems = failedItems.toList()
-        val itemsToRetry = failedItems.map { it.filePath }
+        val originalFailedItems = failedItemsInput.toList()
+        val itemsToRetry = failedItemsInput.map { it.filePath }
         val totalFiles = itemsToRetry.size
         var successCount = 0
         var failureCount = 0
-        _failedItems.clear()
-        lastEmittedPercent = -1f
-        lastEmitTime = 0L
+        val retryFailedItems = mutableListOf<FailedItem>()
+        var lastEmittedPercent = -1f
+        var lastEmitTime = 0L
+        val minEmitIntervalMs = 200L
 
         try {
-            // Emit initial state before processing begins
             emit(
                 BatchResult(
                     totalFiles = totalFiles,
@@ -182,7 +175,7 @@ class BatchEngine<T>(
                             successCount++
                         } else {
                             failureCount++
-                            _failedItems.add(FailedItem(item, error))
+                            retryFailedItems.add(FailedItem(item, error))
                         }
                     }
 
@@ -201,8 +194,8 @@ class BatchEngine<T>(
                             BatchResult(
                                 totalFiles = totalFiles,
                                 successCount = successCount,
-                                failedCount = failureCount,
-                                failedItems = _failedItems.toList(),
+                                failedCount = retryFailedItems.size,
+                                failedItems = retryFailedItems.toList(),
                                 status = BatchStatus.PROCESSING,
                                 lastUpdatedFile = batch.last()
                             )
@@ -213,7 +206,7 @@ class BatchEngine<T>(
                 }
             }
 
-            val finalFailedItems = _failedItems + originalFailedItems
+            val finalFailedItems = retryFailedItems + originalFailedItems
 
             emit(
                 BatchResult(
@@ -228,6 +221,4 @@ class BatchEngine<T>(
             throw e
         }
     }
-
-    fun getFailedItems(): List<FailedItem> = _failedItems.toList()
 }

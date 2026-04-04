@@ -135,6 +135,7 @@ fun MetadataEditorScreen(
     }
 
     val coverFetchMessage by viewModel.coverFetchMessage.collectAsState()
+    val isLyricsTimestampFormatted by viewModel.isLyricsTimestampFormatted.collectAsState()
 
     LaunchedEffect(coverFetchMessage) {
         coverFetchMessage?.let {
@@ -500,7 +501,7 @@ fun MetadataEditorScreen(
                 showMoreOptionsSheet = false
                 viewModel.toggleLyricsTimestampFormat()
             },
-            isLyricsTimestampFormatted = viewModel.isLyricsTimestampFormatted,
+            isLyricsTimestampFormatted = isLyricsTimestampFormatted,
             hasLyrics = hasLyrics
         )
     }

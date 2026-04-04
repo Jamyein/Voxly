@@ -165,6 +165,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private var _lyricsSearchJob: kotlinx.coroutines.Job? = null
     private var _coverSearchJob: kotlinx.coroutines.Job? = null
 
+    // Lyrics timestamp format state
+    private val _isLyricsTimestampFormatted = MutableStateFlow(false)
+    val isLyricsTimestampFormatted: StateFlow<Boolean> = _isLyricsTimestampFormatted.asStateFlow()
+
     // Combined edit state using combine() - reduces multiple StateFlow updates to single UI recomposition
     val editState: StateFlow<EditState> = combine(
         _hasUnsavedChanges,
@@ -1016,12 +1020,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     /**
-     * Track whether lyrics timestamps are currently in 2-digit format (xx) or 3-digit format (xxx)
-     */
-    var isLyricsTimestampFormatted: Boolean = false
-        private set
-
-    /**
      * Toggles lyrics timestamp format between [mm:ss.xxx] and [mm:ss.xx]
      */
     fun toggleLyricsTimestampFormat() {
@@ -1030,16 +1028,17 @@ class MetadataEditorViewModel @AssistedInject constructor(
         
         viewModelScope.launch {
             val hasThreeDigit = currentLyrics.contains(Regex("""\[\d{2}:\d{2}\.\d{3}\]"""))
+            val currentFormatted = _isLyricsTimestampFormatted.value
             
             val newLyrics: String
-            if (hasThreeDigit && !isLyricsTimestampFormatted) {
+            if (hasThreeDigit && !currentFormatted) {
                 // If currently has 3-digit, convert to 2-digit
-                isLyricsTimestampFormatted = true
+                _isLyricsTimestampFormatted.value = true
                 newLyrics = Lyrics.formatTimestamps(currentLyrics)
             } else {
                 // If currently has 2-digit (manually formatted), we can't easily convert back
                 // So just toggle the flag
-                isLyricsTimestampFormatted = !isLyricsTimestampFormatted
+                _isLyricsTimestampFormatted.value = !currentFormatted
                 newLyrics = currentLyrics
             }
             
