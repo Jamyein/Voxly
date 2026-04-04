@@ -1,7 +1,6 @@
 package com.voxly.presentation.screens.metadata
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.Image
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,14 +13,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Search
 import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.MaterialShapes
 import androidx.compose.material3.toShape
@@ -30,6 +28,8 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LinearWavyProgressIndicator
 import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -52,7 +52,7 @@ import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
@@ -67,6 +67,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Scale
+import com.voxly.presentation.viewmodel.CoverSearchProgressState
 import com.voxly.presentation.viewmodel.OnlineCoverSearchViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
@@ -81,13 +82,13 @@ fun OnlineCoverSearchScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val searchProgress by viewModel.searchProgressState.collectAsState()
     val coverResults = searchProgress.results
+    val searchTitle by viewModel.searchTitle.collectAsState()
+    val searchArtist by viewModel.searchArtist.collectAsState()
     var isSelectingCover by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     
-    // 存储每个封面图片的尺寸
     val coverDimensions = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
 
-    // Start search on screen load
     LaunchedEffect(filePath) {
         viewModel.search(filePath)
     }
@@ -101,12 +102,12 @@ fun OnlineCoverSearchScreen(
                 title = {
                     Column {
                         Text(
-                            text = viewModel.searchTitle,
+                            text = searchTitle,
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
-                        viewModel.searchArtist?.takeIf { it.isNotBlank() }?.let { artist ->
+                        searchArtist?.takeIf { it.isNotBlank() }?.let { artist ->
                             Text(
                                 text = artist,
                                 style = MaterialTheme.typography.bodySmall,
@@ -142,15 +143,13 @@ fun OnlineCoverSearchScreen(
             )
         }
     ) { innerPadding ->
-        // Content with innerPadding from Scaffold
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(top = innerPadding.calculateTopPadding())
                 .padding(16.dp)
-                .pointerInput(Unit) { } // Prevent touch events during exit animation
+                .pointerInput(Unit) { }
         ) {
-            // Search progress - 使用弹性缩放动画（透明背景，不遮挡内容）
             AnimatedVisibility(
                 visible = isLoading && coverResults.isEmpty(),
                 enter = ExpressiveAnimations.FadeEnter
@@ -165,7 +164,16 @@ fun OnlineCoverSearchScreen(
                 }
             }
 
-            // Error message - 使用 Surface 容器
+            AnimatedVisibility(
+                visible = coverResults.isNotEmpty(),
+                enter = ExpressiveAnimations.ListItemEnter
+            ) {
+                SearchProgressIndicatorForCover(
+                    searchState = searchProgress,
+                    modifier = Modifier.padding(bottom = 8.dp)
+                )
+            }
+
             AnimatedVisibility(
                 visible = errorMessage != null,
                 enter = ExpressiveAnimations.ListItemEnter
@@ -187,7 +195,6 @@ fun OnlineCoverSearchScreen(
                 }
             }
 
-            // Results - 无结果提示
             AnimatedVisibility(
                 visible = coverResults.isEmpty() && !isLoading && errorMessage == null,
                 enter = ExpressiveAnimations.FadeEnter
@@ -219,7 +226,6 @@ fun OnlineCoverSearchScreen(
                 }
             }
 
-            // Results - 封面列表
             AnimatedVisibility(
                 visible = coverResults.isNotEmpty(),
                 enter = ExpressiveAnimations.ListItemEnter
@@ -266,7 +272,6 @@ private fun CoverResultItem(
     onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null,
     dimensions: Pair<Int, Int>? = null
 ) {
-    // 交替使用不同颜色容器
     val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
 
     Card(
@@ -313,7 +318,6 @@ private fun CoverResultItem(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                // 来源标签使用 tertiary 颜色
                 Surface(
                     shape = MaterialTheme.shapes.small,
                     color = MaterialTheme.colorScheme.tertiaryContainer
@@ -325,7 +329,6 @@ private fun CoverResultItem(
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     )
                 }
-                // 显示图片尺寸
                 if (dimensions != null) {
                     Text(
                         text = "${dimensions.first}×${dimensions.second}",
@@ -365,5 +368,134 @@ private fun CoverThumbnail(
             .build(),
         contentDescription = "Album cover",
         modifier = modifier.clip(MaterialShapes.SoftBurst.toShape()),
+    )
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun SearchProgressIndicatorForCover(
+    searchState: CoverSearchProgressState,
+    modifier: Modifier = Modifier
+) {
+    val allSources = listOf(OnlineSource.ITUNES, OnlineSource.QQ_MUSIC, OnlineSource.NETEASE, OnlineSource.MUSICBRAINZ)
+    val startedSources = searchState.startedSources
+    val completedSources = searchState.completedSources
+    val errorSources = searchState.errorSources
+    val isSearching = searchState.isSearching
+    val resultCount = searchState.results.size
+
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant
+        )
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                allSources.forEach { source ->
+                    val isCompleted = source in completedSources
+                    val hasError = source in errorSources
+
+                    SourceStatusChipForCover(
+                        name = source.toDisplayString(),
+                        isCompleted = isCompleted,
+                        hasError = hasError
+                    )
+
+                    if (source != allSources.last()) {
+                        Text(
+                            text = " ",
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+
+            val statusText = buildString {
+                append("已找到 $resultCount 个结果")
+                if (isSearching) {
+                    append("，正在搜索更多...")
+                }
+            }
+
+            val hasKnownProgress = completedSources.isNotEmpty() || errorSources.isNotEmpty()
+            val linearProgress = if (hasKnownProgress && startedSources.isNotEmpty()) {
+                (completedSources.size + errorSources.size).toFloat() / startedSources.size.coerceAtLeast(1)
+            } else {
+                0f
+            }
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                if (hasKnownProgress) {
+                    LinearProgressIndicator(
+                        progress = { linearProgress },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .clip(MaterialTheme.shapes.extraSmall),
+                        color = MaterialTheme.colorScheme.primary,
+                        strokeCap = StrokeCap.Round,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
+                    )
+                } else {
+                    LinearWavyProgressIndicator(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(6.dp)
+                            .clip(MaterialTheme.shapes.extraSmall),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                        wavelength = 20.dp
+                    )
+                }
+
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.widthIn(max = 150.dp)
+                )
+            }
+
+            if (errorSources.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                errorSources.forEach { (source, error) ->
+                    Text(
+                        text = "$source: $error",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SourceStatusChipForCover(
+    name: String,
+    isCompleted: Boolean,
+    hasError: Boolean
+) {
+    val color = when {
+        hasError -> MaterialTheme.colorScheme.error
+        isCompleted -> MaterialTheme.colorScheme.primary
+        else -> MaterialTheme.colorScheme.outline
+    }
+
+    Text(
+        text = if (hasError) "$name ✗" else if (isCompleted) "$name ✓" else "$name...",
+        style = MaterialTheme.typography.labelSmall,
+        color = color
     )
 }

@@ -32,24 +32,7 @@ import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.ui.loadAlbumArtThumbnail
-import java.io.File
 
-/**
- * Gramophone-style album art image component using Coil 3.
- * 
- * Loading priority:
- * 1. MediaStore album art URI (fast, system cached)
- * 2. Folder cover files (cover.jpg, folder.jpg, etc.)
- * 3. Embedded album art from audio file (MediaMetadataRetriever)
- * 
- * Note: This is for list/playback screens only. Metadata editor uses OriginalCoverImage
- * to display raw cover art from audio files.
- *
- * @param albumId MediaStore album ID for MediaStore lookup
- * @param filePath Audio file path for folder cover lookup
- * @param size Target display size (used for Coil's size-aware decoding)
- * @param crossfade Enable crossfade animation (default: true for lists, false for playback)
- */
 @Composable
 fun AlbumArtImage(
     albumId: Long? = null,
@@ -64,21 +47,19 @@ fun AlbumArtImage(
     val context = LocalContext.current
     val density = LocalDensity.current
     val targetSizePx = with(density) { size.roundToPx() }
+    val coverUriProvider = remember { CoverUriProvider(context) }
     
-    // Get cover URI (MediaStore or folder cover)
     val coverUri = remember(albumId, filePath) {
-        val provider = CoverUriProvider(context)
-        provider.getCoverUri(albumId = albumId, filePath = filePath)
+        coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
     }
     
-    // Fallback: extract embedded art from audio file
     val embeddedBitmap by produceState<Bitmap?>(
         initialValue = null,
         key1 = filePath,
         key2 = targetSizePx
     ) {
         value = if (coverUri == null && !filePath.isNullOrBlank()) {
-            loadAlbumArtThumbnail(context, filePath!!, targetSizePx)
+            loadAlbumArtThumbnail(context, filePath, targetSizePx)
         } else null
     }
     
@@ -89,7 +70,6 @@ fun AlbumArtImage(
         contentAlignment = Alignment.Center
     ) {
         when {
-            // Primary: MediaStore or folder cover via Coil
             coverUri != null && !loadFailed -> {
                 AsyncImage(
                     model = ImageRequest.Builder(LocalPlatformContext.current)
@@ -104,7 +84,6 @@ fun AlbumArtImage(
                     onError = { loadFailed = true }
                 )
             }
-            // Fallback: embedded art from audio file
             embeddedBitmap != null -> {
                 Image(
                     bitmap = embeddedBitmap!!.asImageBitmap(),
@@ -113,7 +92,6 @@ fun AlbumArtImage(
                     contentScale = contentScale
                 )
             }
-            // Placeholder
             else -> {
                 placeholder()
             }
@@ -121,9 +99,6 @@ fun AlbumArtImage(
     }
 }
 
-/**
- * Placeholder for album art when no image is available.
- */
 @Composable
 fun DefaultAlbumArtPlaceholder(
     modifier: Modifier = Modifier,

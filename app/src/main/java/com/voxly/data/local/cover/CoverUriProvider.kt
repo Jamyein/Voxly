@@ -9,16 +9,6 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-/**
- * Provides album art URIs for list and playback screens.
- * 
- * Loading priority:
- * 1. MediaStore album art URI (fast, cached by system)
- * 2. Folder cover files (cover.jpg, folder.jpg, etc.)
- * 
- * Note: Metadata editor uses original cover art directly from audio files,
- * not through this provider.
- */
 @Singleton
 class CoverUriProvider @Inject constructor(
     @ApplicationContext private val context: Context,
@@ -27,72 +17,61 @@ class CoverUriProvider @Inject constructor(
     
     private val albumArtUri = Uri.parse("content://media/external/audio/albumart")
     
-    /**
-     * Get cover URI for display in lists and playback screens.
-     * 
-     * @param albumId MediaStore album ID
-     * @param filePath Audio file path (for folder cover lookup)
-     * @return Cover URI or null
-     */
+    private val uriExistsCache = mutableMapOf<Uri, Boolean>()
+    private val folderCoverCache = mutableMapOf<String, Uri?>()
+
     fun getCoverUri(
         albumId: Long?,
         filePath: String? = null
     ): Uri? {
-        // 1. Try MediaStore first (fastest)
         if (albumId != null && albumId > 0) {
             val mediaStoreUri = ContentUris.withAppendedId(albumArtUri, albumId)
-            if (uriExists(mediaStoreUri)) {
+            if (uriExistsCached(mediaStoreUri)) {
                 return mediaStoreUri
             }
         }
         
-        // 2. Try folder cover lookup
         if (!filePath.isNullOrBlank()) {
-            findFolderCover(filePath)?.let { return it }
+            findFolderCoverCached(filePath)?.let { return it }
         }
         
         return null
     }
-    
-    /**
-     * Check if URI exists without loading the image.
-     */
-    private fun uriExists(uri: Uri): Boolean {
-        return try {
-            contentResolver.openInputStream(uri)?.use { true } ?: false
-        } catch (e: Exception) {
-            false
-        }
-    }
-    
-    /**
-     * Find cover file in the same folder as the audio file.
-     */
-    private fun findFolderCover(filePath: String): Uri? {
-        val folder = File(filePath).parentFile ?: return null
-        if (!folder.exists() || !folder.isDirectory) return null
-        
-        val coverNames = listOf(
-            "cover.jpg", "folder.jpg", "cover.png", "folder.png",
-            "album.jpg", "album.png", "cover.webp", "folder.webp"
-        )
-        
-        for (name in coverNames) {
-            val file = File(folder, name)
-            if (file.exists()) {
-                return Uri.fromFile(file)
+
+    private fun uriExistsCached(uri: Uri): Boolean {
+        return uriExistsCache.getOrPut(uri) {
+            try {
+                contentResolver.openInputStream(uri)?.use { true } ?: false
+            } catch (e: Exception) {
+                false
             }
         }
-        
-        return null
+    }
+
+    private fun findFolderCoverCached(filePath: String): Uri? {
+        return folderCoverCache.getOrPut(filePath) {
+            val folder = File(filePath).parentFile ?: return@getOrPut null
+            if (!folder.exists() || !folder.isDirectory) return@getOrPut null
+            
+            val coverNames = listOf(
+                "cover.jpg", "folder.jpg", "cover.png", "folder.png",
+                "album.jpg", "album.png", "cover.webp", "folder.webp"
+            )
+            
+            for (name in coverNames) {
+                val file = File(folder, name)
+                if (file.exists()) {
+                    return@getOrPut Uri.fromFile(file)
+                }
+            }
+            
+            return@getOrPut null
+        }
     }
     
-    /**
-     * Get MediaStore album art URI directly.
-     */
     fun getMediaStoreUri(albumId: Long): Uri? {
         if (albumId <= 0) return null
         val uri = ContentUris.withAppendedId(albumArtUri, albumId)
-        return if (uriExists(uri)) uri else null
+        return if (uriExistsCached(uri)) uri else null
     }
 }

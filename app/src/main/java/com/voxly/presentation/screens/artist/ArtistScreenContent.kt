@@ -21,6 +21,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -40,10 +41,6 @@ import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import kotlinx.coroutines.launch
 
-/**
- * Artist screen content (list) without navigation.
- * Used as the list pane in dual-pane layout.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ArtistScreenContent(
@@ -120,8 +117,15 @@ internal fun ArtistTabContent(
     listState: LazyListState? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
-    val artistFilePaths = remember(artists) {
-        artists.mapNotNull { it.coverPath }
+    val artistFilePaths by remember(artists) {
+        derivedStateOf { artists.mapNotNull { it.coverPath } }
+    }
+    val bubbleFormatter by remember(artists) {
+        derivedStateOf {
+            { index: Int ->
+                artists.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
+            }
+        }
     }
     LazyListCoverPreloader(listState = lazyListState, filePaths = artistFilePaths)
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
@@ -155,9 +159,7 @@ internal fun ArtistTabContent(
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp),
-                bubbleFormatter = { index ->
-                    artists.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
-                }
+                bubbleFormatter = bubbleFormatter
             )
         }
     }

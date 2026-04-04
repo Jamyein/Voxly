@@ -64,6 +64,9 @@ fun OnlineLyricsSearchScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val lyricsResults by viewModel.lyricsResults.collectAsState()
     val searchState by viewModel.searchState.collectAsState()
+    val searchTitle by viewModel.searchTitle.collectAsState()
+    val searchArtist by viewModel.searchArtist.collectAsState()
+    val searchAlbum by viewModel.searchAlbum.collectAsState()
 
     var isFetchingLyrics by remember { mutableStateOf(false) }
     var fetchingItemId by remember { mutableStateOf<Long?>(null) }
@@ -83,14 +86,14 @@ fun OnlineLyricsSearchScreen(
                 title = {
                     Column {
                         Text(
-                            text = viewModel.searchTitle,
+                            text = searchTitle,
                             style = MaterialTheme.typography.titleMedium,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
                         )
                         val subtitle = listOfNotNull(
-                            viewModel.searchArtist?.takeIf { it.isNotBlank() },
-                            viewModel.searchAlbum?.takeIf { it.isNotBlank() }
+                            searchArtist?.takeIf { it.isNotBlank() },
+                            searchAlbum?.takeIf { it.isNotBlank() }
                         ).joinToString(" • ")
                         if (subtitle.isNotBlank()) {
                             Text(
