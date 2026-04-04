@@ -21,7 +21,6 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -117,14 +116,12 @@ internal fun ArtistTabContent(
     listState: LazyListState? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
-    val artistFilePaths by remember(artists) {
-        derivedStateOf { artists.mapNotNull { it.coverPath } }
+    val artistFilePaths = remember(artists) {
+        artists.mapNotNull { it.coverPath }
     }
-    val bubbleFormatter by remember(artists) {
-        derivedStateOf {
-            { index: Int ->
-                artists.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
-            }
+    val bubbleFormatter: ((Int) -> String) = remember(artists) {
+        { index: Int ->
+            artists.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
         }
     }
     LazyListCoverPreloader(listState = lazyListState, filePaths = artistFilePaths)
