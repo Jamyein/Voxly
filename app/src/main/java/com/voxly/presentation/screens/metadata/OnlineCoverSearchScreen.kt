@@ -53,7 +53,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -61,11 +60,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
-import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
-import coil3.request.crossfade
-import coil3.size.Scale
+import com.voxly.presentation.components.NetworkCoverImage
 import com.voxly.presentation.viewmodel.CoverSearchProgressState
 import com.voxly.presentation.viewmodel.OnlineCoverSearchViewModel
 
@@ -348,25 +343,11 @@ private fun CoverThumbnail(
     modifier: Modifier = Modifier,
     onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null
 ) {
-    AsyncImage(
-        model = ImageRequest.Builder(LocalPlatformContext.current)
-            .data(coverArtUrl)
-            .scale(Scale.FILL)
-            .crossfade(true)
-            .listener(
-                onSuccess = { _, result ->
-                    result.image?.let { image ->
-                        val w = image.width
-                        val h = image.height
-                        if (w > 0 && h > 0) {
-                            onDimensionsLoaded?.invoke(w, h)
-                        }
-                    }
-                }
-            )
-            .build(),
+    NetworkCoverImage(
+        url = coverArtUrl,
         contentDescription = "Album cover",
         modifier = modifier.clip(MaterialShapes.SoftBurst.toShape()),
+        onDimensionsLoaded = onDimensionsLoaded
     )
 }
 

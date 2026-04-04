@@ -58,6 +58,34 @@ private const val ESSENTIAL_CACHE_SIZE = 20  // Minimal cache: currently visible
 private const val TAG = "ImageLoader"
 
 /**
+ * Transforms a cover art URL to request the highest resolution (3000x3000).
+ * Handles provider-specific URL patterns:
+ * - iTunes: replaces size segment (e.g., 100x100 → 3000x3000)
+ * - NetEase: appends ?param=3000y3000 if not present
+ * - QQ Music: replaces R500x500 with R3000x3000
+ * - MusicBrainz: returned as-is (already high-res)
+ */
+fun toHighResCoverUrl(url: String?): String? {
+    if (url.isNullOrBlank()) return null
+    return when {
+        url.contains("mzstatic.com") || url.contains("appleusercontent.com") || url.contains("itunes.apple.com") -> {
+            url.replace(Regex("\\d+x\\d+"), "3000x3000")
+                .replace("http://", "https://")
+        }
+        url.contains("music.126.net") || url.contains("p1.music.126.net") -> {
+            if (url.contains("param=")) url else "$url?param=3000y3000"
+        }
+        url.contains("y.gtimg.cn") -> {
+            url.replace("R500x500", "R3000x3000")
+                .replace("R300x300", "R3000x3000")
+                .replace("R150x150", "R3000x3000")
+                .replace("http://", "https://")
+        }
+        else -> url
+    }
+}
+
+/**
  * Generates a size-aware cache key for album art
  */
 private fun getAlbumArtCacheKey(filePath: String, albumId: Long?, sizePx: Int): String {
@@ -79,9 +107,11 @@ fun calculateTargetPixels(sizeDp: Int, density: Float): Int {
 suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
     if (url.isNullOrBlank()) return null
 
+    val highResUrl = toHighResCoverUrl(url) ?: url
+
     // Check session cache first
     cacheLock.lock()
-    val cached = searchResultCache[url]
+    val cached = searchResultCache[highResUrl]
     cacheLock.unlock()
     if (cached != null) {
         return cached
@@ -89,24 +119,24 @@ suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
 
     // Check prefetch cache (coverArtByteCache) - this is populated by prefetchCoverArtBytes
     byteCacheLock.lock()
-    val prefetchedBytes = coverArtByteCache[url]
+    val prefetchedBytes = coverArtByteCache[highResUrl]
     byteCacheLock.unlock()
     if (prefetchedBytes != null) {
         val bitmap = decodeBitmapFromBytes(prefetchedBytes)?.asImageBitmap() ?: return null
         // Store in session cache for faster subsequent access
         cacheLock.lock()
-        searchResultCache[url] = bitmap
+        searchResultCache[highResUrl] = bitmap
         cacheLock.unlock()
         return bitmap
     }
 
     // Load from network
-    val bytes = loadImageBytesFromUrl(url) ?: return null
+    val bytes = loadImageBytesFromUrl(highResUrl) ?: return null
     val bitmap = decodeBitmapFromBytes(bytes)?.asImageBitmap() ?: return null
 
     // Store in session cache
     cacheLock.lock()
-    searchResultCache[url] = bitmap
+    searchResultCache[highResUrl] = bitmap
     cacheLock.unlock()
 
     return bitmap
@@ -141,26 +171,27 @@ fun clearCoverArtByteCache() {
 fun prefetchCoverArtBytes(url: String?) {
     if (url.isNullOrBlank()) return
 
+    val highResUrl = toHighResCoverUrl(url) ?: url
+
     // Check if already in cache
     byteCacheLock.lock()
-    val alreadyCached = coverArtByteCache.containsKey(url)
+    val alreadyCached = coverArtByteCache.containsKey(highResUrl)
     byteCacheLock.unlock()
     if (alreadyCached) return
 
     // Fire-and-forget: download in background
     CoroutineScope(Dispatchers.IO).launch {
         try {
-            val bytes = loadImageBytesFromUrl(url)
+            val bytes = loadImageBytesFromUrl(highResUrl)
             if (bytes != null) {
                 // Store in cache with LRU eviction
                 byteCacheLock.lock()
                 try {
-                    // Remove oldest entries if at capacity
                     while (coverArtByteCache.size >= MAX_BYTE_CACHE_SIZE) {
                         val oldestKey = coverArtByteCache.keys.first()
                         coverArtByteCache.remove(oldestKey)
                     }
-                    coverArtByteCache[url] = bytes
+                    coverArtByteCache[highResUrl] = bytes
                 } finally {
                     byteCacheLock.unlock()
                 }
@@ -178,16 +209,18 @@ fun prefetchCoverArtBytes(url: String?) {
 suspend fun getCoverArtBytes(url: String?): ByteArray? {
     if (url.isNullOrBlank()) return null
 
+    val highResUrl = toHighResCoverUrl(url) ?: url
+
     // Try cache first
     byteCacheLock.lock()
-    val cached = coverArtByteCache[url]
+    val cached = coverArtByteCache[highResUrl]
     byteCacheLock.unlock()
     if (cached != null) {
         return cached
     }
 
     // Download from network
-    val bytes = loadImageBytesFromUrl(url) ?: return null
+    val bytes = loadImageBytesFromUrl(highResUrl) ?: return null
 
     // Store in cache with LRU eviction
     byteCacheLock.lock()
@@ -196,7 +229,7 @@ suspend fun getCoverArtBytes(url: String?): ByteArray? {
             val oldestKey = coverArtByteCache.keys.first()
             coverArtByteCache.remove(oldestKey)
         }
-        coverArtByteCache[url] = bytes
+        coverArtByteCache[highResUrl] = bytes
     } finally {
         byteCacheLock.unlock()
     }

@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -32,6 +33,67 @@ import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.ui.loadAlbumArtThumbnail
+import com.voxly.presentation.ui.loadImageBitmapFromUrl
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+@Composable
+fun NetworkCoverImage(
+    url: String?,
+    contentDescription: String? = null,
+    modifier: Modifier = Modifier,
+    contentScale: ContentScale = ContentScale.Crop,
+    onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null,
+    placeholder: @Composable () -> Unit = {
+        Box(
+            modifier = modifier,
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                painter = appIconPainter(AppIcon.MusicNote),
+                contentDescription = stringResource(R.string.cd_no_cover),
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(24.dp)
+            )
+        }
+    }
+) {
+    val imageBitmap by produceState<android.graphics.Bitmap?>(
+        initialValue = null,
+        key1 = url
+    ) {
+        value = withContext(Dispatchers.IO) {
+            loadImageBitmapFromUrl(url)?.let { imageBitmap ->
+                onDimensionsLoaded?.invoke(imageBitmap.width, imageBitmap.height)
+                val bitmap = android.graphics.Bitmap.createBitmap(
+                    imageBitmap.width,
+                    imageBitmap.height,
+                    android.graphics.Bitmap.Config.ARGB_8888
+                )
+                val canvas = android.graphics.Canvas(bitmap)
+                canvas.drawBitmap(imageBitmap.asAndroidBitmap(), 0f, 0f, null)
+                bitmap
+            }
+        }
+    }
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.Center
+    ) {
+        val bitmap = imageBitmap
+        if (bitmap != null) {
+            Image(
+                bitmap = bitmap.asImageBitmap(),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale
+            )
+        } else {
+            placeholder()
+        }
+    }
+}
 
 @Composable
 fun AlbumArtImage(
