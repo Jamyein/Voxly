@@ -5,7 +5,7 @@ import android.provider.MediaStore
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
-import com.voxly.data.local.replaygain.Ebur128ReplayGainScanner
+import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
@@ -326,26 +326,29 @@ class AudioRepositoryImpl @Inject constructor(
 class ReplayGainRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val metadataProcessor: TagLibMetadataProcessor,
-    private val replayGainScanner: Ebur128ReplayGainScanner
+    private val replayGainScanner: ReplayGainScanner
 ) : ReplayGainRepository {
 
     override fun scanReplayGain(
         filePaths: List<String>,
         scanQuality: ScanQuality,
-        targetLoudness: Float
-    ): Flow<ScanProgress> = replayGainScanner.scanReplayGain(filePaths, scanQuality, targetLoudness)
+        targetLoudness: Float,
+        config: com.voxly.domain.model.ReplayGainConfig
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGain(filePaths, scanQuality, targetLoudness, config)
 
     override fun scanReplayGainByAlbum(
         filesByAlbum: Map<String, List<String>>,
         scanQuality: ScanQuality,
-        targetLoudness: Float
-    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness)
+        targetLoudness: Float,
+        config: com.voxly.domain.model.ReplayGainConfig
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness, config)
 
     override fun scanReplayGainWithAlbumGrouping(
         filePaths: List<String>,
         scanQuality: ScanQuality,
-        targetLoudness: Float
-    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainWithAlbumGrouping(filePaths, scanQuality, targetLoudness)
+        targetLoudness: Float,
+        config: com.voxly.domain.model.ReplayGainConfig
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainWithAlbumGrouping(filePaths, scanQuality, targetLoudness, config)
 
     override suspend fun applyReplayGain(
         filePaths: List<String>,

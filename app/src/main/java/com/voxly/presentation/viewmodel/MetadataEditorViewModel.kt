@@ -16,6 +16,8 @@ import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.Lyrics
+import com.voxly.domain.model.ClipMode
+import com.voxly.domain.model.ReplayGainConfig
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.domain.model.ScanModeConstants
 import com.voxly.domain.repository.AudioRepository
@@ -398,24 +400,37 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 
                 Logger.i("ReplayGain scan started. mode=${currentScanMode.name} files=${filesToScan.size}", "MetadataEditor")
 
-                // Get target loudness from settings
+                // Get target loudness and clip mode from settings
                 val targetLoudness = settingsDataStore.replayGainTargetLoudness.first()
+                val clipModeStr = settingsDataStore.replayGainClipMode.first()
+                val clipMode = ClipMode.fromString(clipModeStr)
+                val scanConfig = ReplayGainConfig(
+                    clipMode = clipMode,
+                    truePeak = false,
+                    dualMono = false,
+                    albumAsAes77 = false,
+                    skipExisting = false,
+                    maxPeakLevel = 0.0
+                )
 
                 val scanFlow = when (currentScanMode) {
                     ScanMode.TRACK_ONLY -> replayGainRepository.scanReplayGain(
                         filesToScan,
                         scanQuality,
-                        targetLoudness
+                        targetLoudness,
+                        scanConfig
                     )
                     ScanMode.SINGLE_ALBUM -> replayGainRepository.scanReplayGainByAlbum(
                         mapOf("single_album" to filesToScan),
                         scanQuality,
-                        targetLoudness
+                        targetLoudness,
+                        scanConfig
                     )
                     ScanMode.ALBUMS -> replayGainRepository.scanReplayGainWithAlbumGrouping(
                         filesToScan,
                         scanQuality,
-                        targetLoudness
+                        targetLoudness,
+                        scanConfig
                     )
                 }
 

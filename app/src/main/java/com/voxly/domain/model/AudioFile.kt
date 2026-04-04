@@ -169,13 +169,20 @@ data class AudioMetadata(
 
 /**
  * Domain model representing ReplayGain information.
+ * Supports both ReplayGain 1.0 (gain/peak) and 2.0 (loudness/range/reference).
  */
 data class ReplayGainInfo(
     val trackGain: Float = 0f,
     val trackPeak: Float = 0f,
     val albumGain: Float? = null,
     val albumPeak: Float? = null,
-    val truePeak: Float? = null
+    val truePeak: Float? = null,
+    // ReplayGain 2.0 fields (EBU R128)
+    val trackLoudness: Float? = null,
+    val albumLoudness: Float? = null,
+    val trackRange: Float? = null,
+    val albumRange: Float? = null,
+    val referenceLoudness: Float = -18f
 ) {
     /**
      * Returns track gain in dB format.
@@ -203,6 +210,34 @@ data class ReplayGainInfo(
      */
     fun getFormattedTruePeak(): String {
         return truePeak?.let { String.format("%.4f", it) } ?: "N/A"
+    }
+
+    /**
+     * Returns track loudness in LUFS format.
+     */
+    fun getFormattedTrackLoudness(): String {
+        return trackLoudness?.let { String.format("%.2f LUFS", it) } ?: "N/A"
+    }
+
+    /**
+     * Returns album loudness in LUFS format.
+     */
+    fun getFormattedAlbumLoudness(): String {
+        return albumLoudness?.let { String.format("%.2f LUFS", it) } ?: "N/A"
+    }
+
+    /**
+     * Returns track loudness range in LU format.
+     */
+    fun getFormattedTrackRange(): String {
+        return trackRange?.let { String.format("%.2f LU", it) } ?: "N/A"
+    }
+
+    /**
+     * Returns album loudness range in LU format.
+     */
+    fun getFormattedAlbumRange(): String {
+        return albumRange?.let { String.format("%.2f LU", it) } ?: "N/A"
     }
 }
 

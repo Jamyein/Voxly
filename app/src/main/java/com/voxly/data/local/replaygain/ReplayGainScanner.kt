@@ -8,6 +8,8 @@ import android.os.SystemClock
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.core.util.Logger
 import com.voxly.domain.model.AudioMetadata
+import com.voxly.domain.model.ClipMode
+import com.voxly.domain.model.ReplayGainConfig
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
@@ -44,7 +46,13 @@ enum class DecodeResult {
 
 /**
  * ReplayGain scanner using Android's MediaExtractor for audio analysis.
- * Implements the EBU R128 loudness standard for accurate gain calculation.
+ * Implements the EBU R128 loudness standard (ITU-R BS.1770-4) for accurate gain calculation.
+ *
+ * Based on rsgain architecture:
+ * - Uses EbuR128Analyzer for loudness measurement (port of libebur128)
+ * - Supports clip_mode (none/positive/always) for clipping protection
+ * - Supports ReplayGain 2.0 tags (TRACK_RANGE, ALBUM_RANGE, REFERENCE_LOUDNESS)
+ * - Supports album gain calculation with energy averaging
  */
 @Singleton
 class ReplayGainScanner @Inject constructor(
@@ -53,19 +61,8 @@ class ReplayGainScanner @Inject constructor(
 ) {
 
     companion object {
-        // Reference loudness level
-        // foobar2000 Classic ReplayGain: -14 dB RMS relative to full-scale sinusoid = 89 dB SPL
-        // This is the standard ReplayGain reference level
-        const val REFERENCE_LUFS = -14.0
-
-        // RMS reference for gain calculation
-        // Full-scale sinusoid = 1.0
-        // -14 dB relative to full-scale = 10^(-14/20) ≈ 0.1995
-        const val RMS_REFERENCE = 0.1995262314968879
-
-        // Block duration for 95th percentile RMS calculation
-        // foobar2000 uses 50ms blocks as per ReplayGain 1.0 spec
-        const val BLOCK_DURATION_MS = 50
+        // Reference loudness level (rsgain default: -18 LUFS)
+        const val REFERENCE_LUFS = -18.0
 
         // Number of samples to process per chunk (for progress updates)
         const val SAMPLES_PER_CHUNK = 4096
@@ -75,15 +72,19 @@ class ReplayGainScanner @Inject constructor(
         // Fallback config
         const val MAX_RETRY_ATTEMPTS = 3
         const val RETRY_DELAY_MS = 100L
-        const val MIN_VALID_SAMPLES = 1000L // ~20ms @ 48kHz
+        const val MIN_VALID_SAMPLES = 1000L
         const val MIN_AUDIO_DURATION_MS = 100L
+
+        // Gain clamping range
+        const val MIN_GAIN_DB = -50f
+        const val MAX_GAIN_DB = 50f
     }
 
     /**
      * Result of decode operation with status.
      */
     private data class DecodeOperationResult(
-        val stats: SampleStats?,
+        val analyzer: EbuR128Analyzer?,
         val result: DecodeResult,
         val cause: Throwable?
     )
@@ -92,13 +93,15 @@ class ReplayGainScanner @Inject constructor(
      * Attempts to decode audio with retry mechanism.
      * Creates a fresh MediaExtractor for each retry attempt to avoid
      * extractor release issues on subsequent retries.
-     * @return DecodeOperationResult containing stats and decode status
+     * @return DecodeOperationResult containing analyzer and decode status
      */
     private suspend fun attemptDecodeWithRetry(
         filePath: String,
         format: MediaFormat,
         targetSampleRate: Int,
-        channelCount: Int
+        channelCount: Int,
+        targetLoudness: Double,
+        dualMono: Boolean
     ): DecodeOperationResult {
         var lastCause: Throwable? = null
 
@@ -124,18 +127,20 @@ class ReplayGainScanner @Inject constructor(
 
                 extractor.selectTrack(audioTrackIndex)
 
-                val stats = decodeAndAccumulateStats(
+                val analyzer = decodeAndAccumulateStats(
                     extractor = extractor,
                     format = format,
                     targetSampleRate = targetSampleRate,
-                    channelCount = channelCount
+                    channelCount = channelCount,
+                    targetLoudness = targetLoudness,
+                    dualMono = dualMono
                 )
 
-                if (stats.sampleCount <= 0) {
+                if (analyzer.getBlockCount() <= 0) {
                     return DecodeOperationResult(null, DecodeResult.SAMPLE_COUNT_ZERO, null)
                 }
 
-                return DecodeOperationResult(stats, DecodeResult.SUCCESS, null)
+                return DecodeOperationResult(analyzer, DecodeResult.SUCCESS, null)
             } catch (e: Exception) {
                 lastCause = e
                 Logger.w(
@@ -147,7 +152,6 @@ class ReplayGainScanner @Inject constructor(
             }
 
             if (attempt < MAX_RETRY_ATTEMPTS - 1) {
-                // Wait before retry (using coroutine delay, not blocking Thread.sleep)
                 delay(RETRY_DELAY_MS)
             }
         }
@@ -165,70 +169,63 @@ class ReplayGainScanner @Inject constructor(
      *
      * @param filePath Path to the audio file
      * @param channelCount Number of audio channels
-     * @return SampleStats extracted from raw PCM, or null if failed
+     * @param targetLoudness Target loudness for analyzer
+     * @return EbuR128Analyzer with processed samples, or null if failed
      */
     private fun fallbackReadRawPcm(
         filePath: String,
-        channelCount: Int
-    ): SampleStats? {
-        return try {
+        channelCount: Int,
+        targetLoudness: Double
+    ): EbuR128Analyzer? {
+        try {
             val file = File(filePath)
             if (!file.exists() || !file.canRead()) {
                 Logger.w("Fallback PCM read failed: file not accessible $filePath", "ReplayGainScanner")
                 return null
             }
 
-            // Get file extension to determine format
             val extension = file.extension.lowercase()
 
-            // Only attempt raw read for formats we can handle
             if (extension !in listOf("wav", "flac", "ogg", "mp3")) {
                 Logger.w("Fallback PCM read: unsupported format $extension", "ReplayGainScanner")
                 return null
             }
 
-            // For WAV files, we can directly read PCM data
             if (extension == "wav") {
-                return fallbackReadWavPcm(file, channelCount)
+                return fallbackReadWavPcm(file, channelCount, targetLoudness)
             }
 
-            // For other formats, this is a best-effort fallback
             Logger.w("Fallback PCM read: format $extension not fully supported", "ReplayGainScanner")
-            null
+            return null
         } catch (e: Exception) {
             Logger.e("Fallback PCM read error: ${e.message}", e, "ReplayGainScanner")
-            null
+            return null
         }
     }
 
     /**
      * Reads WAV file directly as PCM fallback.
      */
-    private fun fallbackReadWavPcm(file: File, channelCount: Int): SampleStats? {
+    private fun fallbackReadWavPcm(file: File, channelCount: Int, targetLoudness: Double): EbuR128Analyzer? {
         try {
             val bytes = file.readBytes()
 
-            // Parse WAV header (44 bytes for standard WAV)
             if (bytes.size < 44) return null
 
-            // Check RIFF header
-            if (bytes[0] != 0x52.toByte() || // R
-                bytes[1] != 0x49.toByte() || // I
-                bytes[2] != 0x46.toByte() || // F
-                bytes[3] != 0x46.toByte()) {  // F
+            if (bytes[0] != 0x52.toByte() ||
+                bytes[1] != 0x49.toByte() ||
+                bytes[2] != 0x46.toByte() ||
+                bytes[3] != 0x46.toByte()) {
                 return null
             }
 
-            // Verify WAVE format at bytes 8-11
-            if (bytes[8] != 0x57.toByte() || // W
-                bytes[9] != 0x41.toByte() || // A
-                bytes[10] != 0x56.toByte() || // V
-                bytes[11] != 0x45.toByte()) { // E
+            if (bytes[8] != 0x57.toByte() ||
+                bytes[9] != 0x41.toByte() ||
+                bytes[10] != 0x56.toByte() ||
+                bytes[11] != 0x45.toByte()) {
                 return null
             }
 
-            // Check for 16-bit PCM in fmt chunk
-            // Read bits per sample from bytes 34-35 (standard WAV header layout)
             if (bytes.size < 36) return null
             val bitsPerSample = (bytes[35].toInt() and 0xFF) or ((bytes[34].toInt() and 0xFF) shl 8)
             if (bitsPerSample != 16) {
@@ -236,7 +233,6 @@ class ReplayGainScanner @Inject constructor(
                 return null
             }
 
-            // Find data chunk
             var dataOffset = 12
             var dataSize = 0L
             while (dataOffset + 8 <= bytes.size) {
@@ -251,19 +247,16 @@ class ReplayGainScanner @Inject constructor(
                     dataOffset += 8
                     break
                 }
-                // Handle WAV chunk padding: chunks are padded to 2-byte boundaries
                 val padding = if (chunkSize % 2 == 1) 1 else 0
                 dataOffset += 8 + chunkSize + padding
             }
 
             if (dataSize <= 0 || dataOffset >= bytes.size) return null
 
-            // Convert bytes to float samples
             val sampleData = bytes.sliceArray(dataOffset until minOf(dataOffset + dataSize.toInt(), bytes.size))
             val floatSamples = mutableListOf<Float>()
             var i = 0
             while (i + 1 < sampleData.size) {
-                // 16-bit PCM
                 val sample = ((sampleData[i + 1].toInt() shl 8) or (sampleData[i].toInt() and 0xFF)).toShort()
                 floatSamples.add(sample.toFloat() / 32768.0f)
                 i += 2
@@ -271,21 +264,15 @@ class ReplayGainScanner @Inject constructor(
 
             if (floatSamples.isEmpty()) return null
 
-            // Calculate stats
-            var peak = 0f
-            var sumSquares = 0.0
-            floatSamples.forEach { sample ->
-                val abs = kotlin.math.abs(sample)
-                if (abs > peak) peak = abs
-                sumSquares += sample.toDouble().pow(2.0)
-            }
-
-            return SampleStats(
-                sampleCount = floatSamples.size.toLong(),
-                sumSquares = sumSquares,
-                peak = peak,
-                blockRmsValues = emptyList() // Skip block calculation for fallback
+            // Create analyzer and process samples
+            val analyzer = EbuR128Analyzer(
+                channels = channelCount,
+                sampleRate = 44100,
+                targetLoudness = targetLoudness
             )
+            analyzer.processBlock(floatSamples.toFloatArray(), floatSamples.size)
+
+            return analyzer
         } catch (e: Exception) {
             Logger.e("WAV fallback read error: ${e.message}", e, "ReplayGainScanner")
             return null
@@ -294,11 +281,6 @@ class ReplayGainScanner @Inject constructor(
 
     /**
      * Fallback Level 3: Estimate gain based on file metadata when all decode attempts fail.
-     * Uses file size and format to provide a reasoned default value.
-     *
-     * @param filePath Path to the audio file
-     * @param targetLoudness Target loudness in LUFS
-     * @return Estimated ReplayGainInfo, or null if cannot estimate
      */
     private fun fallbackEstimateGain(
         filePath: String,
@@ -311,31 +293,25 @@ class ReplayGainScanner @Inject constructor(
             val fileSizeBytes = file.length()
             val extension = file.extension.lowercase()
 
-            // Estimate duration based on file size and format
-            // Bitrate estimates per format (bits per second):
             val estimatedBitrate = when (extension) {
-                "flac" -> 800_000 // ~800 kbps for FLAC
-                "wav" -> 1_411_200 // 1411.2 kbps for 44.1kHz 16-bit stereo
-                "mp3" -> 320_000 // 320 kbps for high-quality MP3
-                "m4a", "aac" -> 256_000 // 256 kbps for AAC
-                "ogg" -> 256_000 // 256 kbps for Ogg Vorbis
-                "ape" -> 800_000 // ~800 kbps for APE
-                else -> 320_000 // Default estimate
+                "flac" -> 800_000
+                "wav" -> 1_411_200
+                "mp3" -> 320_000
+                "m4a", "aac" -> 256_000
+                "ogg" -> 256_000
+                "ape" -> 800_000
+                else -> 320_000
             }
 
             val estimatedDurationSeconds = (fileSizeBytes * 8.0) / estimatedBitrate
-            val estimatedSamples = (estimatedDurationSeconds * 44100).toLong()
 
-            // Only provide estimation if file is reasonable size (> 100KB)
             if (fileSizeBytes < 100_000) {
                 Logger.w("File too small for estimation: $filePath", "ReplayGainScanner")
                 return null
             }
 
-            // For estimation, use a neutral gain (0 dB) with moderate peak
-            // This indicates "unable to analyze" rather than wrong value
-            val estimatedGain = 0f // Neutral
-            val estimatedPeak = 0.5f // Safe default below clipping
+            val estimatedGain = 0f
+            val estimatedPeak = 0.5f
 
             Logger.w(
                 "Level 3 fallback estimation for $filePath: " +
@@ -347,7 +323,8 @@ class ReplayGainScanner @Inject constructor(
                 trackGain = estimatedGain,
                 trackPeak = estimatedPeak,
                 albumGain = null,
-                albumPeak = null
+                albumPeak = null,
+                referenceLoudness = targetLoudness
             )
         } catch (e: Exception) {
             Logger.e("Level 3 estimation failed: ${e.message}", e, "ReplayGainScanner")
@@ -359,19 +336,21 @@ class ReplayGainScanner @Inject constructor(
      * Scans audio files and calculates ReplayGain values.
      * @param filePaths List of file paths to scan
      * @param scanQuality Quality level affecting sample rate
-     * @param targetLoudness Target loudness in LUFS (default -14.0, standard ReplayGain)
+     * @param targetLoudness Target loudness in LUFS (default -18.0, rsgain standard)
+     * @param config ReplayGain configuration (clip mode, dual mono, etc.)
      * @return Flow emitting scan progress
      */
     fun scanReplayGain(
         filePaths: List<String>,
         scanQuality: ScanQuality,
-        targetLoudness: Float = -14f
+        targetLoudness: Float = -18f,
+        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress> = flow {
         val totalFiles = filePaths.size
         var processedFiles = 0
         val scanStartedAt = SystemClock.elapsedRealtime()
         Logger.i(
-            "ReplayGain scan started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS",
+            "ReplayGain scan started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS clipMode=${config.clipMode}",
             "ReplayGainScanner"
         )
 
@@ -409,10 +388,9 @@ class ReplayGainScanner @Inject constructor(
                     "Analyzing ReplayGain file=${File(filePath).name} path=$filePath",
                     "ReplayGainScanner"
                 )
-                val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness)
+                val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness, config)
 
                 if (replayGainInfo != null) {
-                    // Save ReplayGain info to file metadata
                     val saved = saveReplayGainToFile(filePath, replayGainInfo)
                     if (saved) {
                         Logger.i(
@@ -440,7 +418,8 @@ class ReplayGainScanner @Inject constructor(
                         totalFiles = totalFiles,
                         percentage = (index + 1).toFloat() / totalFiles,
                         currentFilePath = filePath,
-                        status = ScanStatus.COMPLETED
+                        status = ScanStatus.COMPLETED,
+                        replayGainInfo = replayGainInfo
                     )
                 )
             } catch (e: Exception) {
@@ -460,7 +439,6 @@ class ReplayGainScanner @Inject constructor(
                 )
             }
 
-            // Small delay to prevent UI freezing
             delay(50)
         }
 
@@ -482,18 +460,18 @@ class ReplayGainScanner @Inject constructor(
     /**
      * Scans audio files with album grouping.
      * Reads metadata from each file to group by album, then calculates both track and album gain.
-     * For ALBUMS mode - groups files by album+artist metadata and calculates album gain
-     * using energy average of all tracks in each album.
      *
      * @param filePaths Flat list of file paths to scan
      * @param scanQuality Quality level affecting sample rate
-     * @param targetLoudness Target loudness in LUFS (default -14.0)
+     * @param targetLoudness Target loudness in LUFS (default -18.0)
+     * @param config ReplayGain configuration
      * @return Flow emitting scan progress
      */
     fun scanReplayGainWithAlbumGrouping(
         filePaths: List<String>,
         scanQuality: ScanQuality,
-        targetLoudness: Float = -14f
+        targetLoudness: Float = -18f,
+        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress> = flow {
         val scanStartedAt = SystemClock.elapsedRealtime()
         val totalFiles = filePaths.size
@@ -503,7 +481,6 @@ class ReplayGainScanner @Inject constructor(
             "ReplayGainScanner"
         )
 
-        // Phase 1: Read metadata and group files by album
         emit(
             ScanProgress(
                 currentFile = 0,
@@ -520,24 +497,19 @@ class ReplayGainScanner @Inject constructor(
         for (filePath in filePaths) {
             try {
                 val metadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
-                // Use album + artist as the grouping key
                 val album = metadata?.album?.trim() ?: ""
                 val artist = metadata?.artist?.trim() ?: ""
                 val albumKey = "${album}_$artist"
 
                 if (album.isEmpty() && artist.isEmpty()) {
-                    // No album info - treat as single track (singleton album)
                     val singletonKey = "singleton_${singletonIndex++}"
                     filesByAlbum.getOrPut(singletonKey) { mutableListOf() }.add(filePath)
                 } else if (album.isNotEmpty()) {
-                    // Has album - group by album+artist
                     filesByAlbum.getOrPut(albumKey) { mutableListOf() }.add(filePath)
                 } else {
-                    // Has artist but no album - group by artist (various artists)
                     filesByAlbum.getOrPut(albumKey) { mutableListOf() }.add(filePath)
                 }
             } catch (e: Exception) {
-                // If metadata read fails, treat as single track
                 val singletonKey = "singleton_${singletonIndex++}"
                 filesByAlbum.getOrPut(singletonKey) { mutableListOf() }.add(filePath)
                 Logger.w("Failed to read metadata for grouping: $filePath", "ReplayGainScanner")
@@ -550,8 +522,7 @@ class ReplayGainScanner @Inject constructor(
             "ReplayGainScanner"
         )
 
-        // Now delegate to the main album scanning method
-        scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness).collect { progress ->
+        scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness, config).collect { progress ->
             emit(progress)
         }
 
@@ -563,18 +534,18 @@ class ReplayGainScanner @Inject constructor(
 
     /**
      * Scans audio files grouped by album and calculates both track and album gain.
-     * For ALBUMS mode - groups files by album metadata and calculates album gain
-     * using energy average of all tracks in each album.
      *
      * @param filesByAlbum Map of album key to list of file paths in that album
      * @param scanQuality Quality level affecting sample rate
-     * @param targetLoudness Target loudness in LUFS (default -14.0)
+     * @param targetLoudness Target loudness in LUFS (default -18.0)
+     * @param config ReplayGain configuration
      * @return Flow emitting scan progress
      */
     fun scanReplayGainByAlbum(
         filesByAlbum: Map<String, List<String>>,
         scanQuality: ScanQuality,
-        targetLoudness: Float = -14f
+        targetLoudness: Float = -18f,
+        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress> = flow {
         val totalAlbums = filesByAlbum.size
         val totalFiles = filesByAlbum.values.flatten().size
@@ -605,13 +576,11 @@ class ReplayGainScanner @Inject constructor(
                 return@flow
             }
 
-            // Skip albums with only one track - no album gain needed
             if (albumFiles.size <= 1) {
                 Logger.v(
                     "Skipping album gain for album=$albumKey - only ${albumFiles.size} track(s)",
                     "ReplayGainScanner"
                 )
-                // Still scan as single track
                 for (filePath in albumFiles) {
                     emit(
                         ScanProgress(
@@ -624,7 +593,7 @@ class ReplayGainScanner @Inject constructor(
                     )
 
                     try {
-                        val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness)
+                        val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness, config)
                         if (replayGainInfo != null) {
                             saveReplayGainToFile(filePath, replayGainInfo)
                         }
@@ -647,7 +616,6 @@ class ReplayGainScanner @Inject constructor(
                 continue
             }
 
-            // First pass: scan all tracks in the album to get track gains
             val trackGains = mutableListOf<Pair<String, ReplayGainInfo>>()
 
             for ((index, filePath) in albumFiles.withIndex()) {
@@ -663,7 +631,7 @@ class ReplayGainScanner @Inject constructor(
 
                 try {
                     val fileStartedAt = SystemClock.elapsedRealtime()
-                    val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness)
+                    val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness, config)
 
                     if (replayGainInfo != null) {
                         trackGains.add(filePath to replayGainInfo)
@@ -699,23 +667,26 @@ class ReplayGainScanner @Inject constructor(
                 delay(50)
             }
 
-            // Second pass: calculate album gain and save to all files in the album
             if (trackGains.isNotEmpty()) {
-                val albumGainInfo = calculateAlbumGain(trackGains.map { it.second })
+                val albumGainInfo = calculateAlbumGain(trackGains.map { it.second }, config)
                 Logger.i(
                     "Album gain calculated album=$albumKey tracks=${trackGains.size} albumGain=${albumGainInfo.albumGain} albumPeak=${albumGainInfo.albumPeak}",
                     "ReplayGainScanner"
                 )
 
-                // Save album gain to each track
                 for ((filePath, trackInfo) in trackGains) {
                     try {
-                        // Combine track gain with album gain
                         val combinedInfo = ReplayGainInfo(
                             trackGain = trackInfo.trackGain,
                             trackPeak = trackInfo.trackPeak,
                             albumGain = albumGainInfo.albumGain,
-                            albumPeak = albumGainInfo.albumPeak
+                            albumPeak = albumGainInfo.albumPeak,
+                            truePeak = trackInfo.truePeak,
+                            trackLoudness = trackInfo.trackLoudness,
+                            albumLoudness = albumGainInfo.albumLoudness,
+                            trackRange = trackInfo.trackRange,
+                            albumRange = albumGainInfo.albumRange,
+                            referenceLoudness = trackInfo.referenceLoudness
                         )
                         saveReplayGainToFile(filePath, combinedInfo)
                     } catch (e: Exception) {
@@ -747,16 +718,19 @@ class ReplayGainScanner @Inject constructor(
     }
 
     /**
-     * Analyzes a single audio file and calculates ReplayGain.
+     * Analyzes a single audio file and calculates ReplayGain using EBU R128.
+     *
      * @param filePath Path to the audio file
      * @param scanQuality Quality level
      * @param targetLoudness Target loudness in LUFS
+     * @param config ReplayGain configuration (clip mode, dual mono, etc.)
      * @return ReplayGainInfo or null if analysis fails
      */
     private suspend fun analyzeAudioFile(
         filePath: String,
         scanQuality: ScanQuality,
-        targetLoudness: Float
+        targetLoudness: Float,
+        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): ReplayGainInfo? = withContext(Dispatchers.IO) {
         try {
             val file = File(filePath)
@@ -765,7 +739,6 @@ class ReplayGainScanner @Inject constructor(
             val extractor = MediaExtractor()
             extractor.setDataSource(filePath)
 
-            // Find audio track
             var audioTrackIndex = -1
             for (i in 0 until extractor.trackCount) {
                 val format = extractor.getTrackFormat(i)
@@ -787,36 +760,31 @@ class ReplayGainScanner @Inject constructor(
             val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
             val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
-            // Calculate target sample rate based on scan quality
-            // Dynamic sample rate handling:
-            // - If file sample rate <= maxSampleRate: use original sample rate
-            // - If file sample rate > maxSampleRate: downsample to maxSampleRate
             val targetSampleRate = minOf(sampleRate, scanQuality.maxSampleRate)
 
             val decodeResult = attemptDecodeWithRetry(
                 filePath = filePath,
                 format = format,
                 targetSampleRate = targetSampleRate,
-                channelCount = channelCount
+                channelCount = channelCount,
+                targetLoudness = targetLoudness.toDouble(),
+                dualMono = config.dualMono
             )
 
-            // Determine which stats to use - normal decode or fallback
-            val stats = when (decodeResult.result) {
-                DecodeResult.SUCCESS -> decodeResult.stats ?: run {
-                    Logger.e("Decode succeeded without stats for $filePath", null, "ReplayGainScanner")
+            val analyzer = when (decodeResult.result) {
+                DecodeResult.SUCCESS -> decodeResult.analyzer ?: run {
+                    Logger.e("Decode succeeded without analyzer for $filePath", null, "ReplayGainScanner")
                     extractor.release()
                     return@withContext null
                 }
                 DecodeResult.SAMPLE_COUNT_ZERO -> {
-                    // Trigger Level 2 fallback first
                     Logger.w("Level 1 retry returned zero samples, attempting Level 2 fallback", "ReplayGainScanner")
-                    val fallbackStats = fallbackReadRawPcm(filePath, channelCount)
-                    if (fallbackStats != null && fallbackStats.sampleCount > 0) {
+                    val fallbackAnalyzer = fallbackReadRawPcm(filePath, channelCount, targetLoudness.toDouble())
+                    if (fallbackAnalyzer != null && fallbackAnalyzer.getBlockCount() > 0) {
                         Logger.i("Level 2 fallback successful for $filePath", "ReplayGainScanner")
                         extractor.release()
-                        fallbackStats
+                        fallbackAnalyzer
                     } else {
-                        // Trigger Level 3 estimation
                         Logger.w("Level 2 fallback failed, attempting Level 3 estimation", "ReplayGainScanner")
                         val estimatedGain = fallbackEstimateGain(filePath, targetLoudness)
                         if (estimatedGain != null) {
@@ -829,14 +797,12 @@ class ReplayGainScanner @Inject constructor(
                     }
                 }
                 DecodeResult.DECODER_INIT_FAILED -> {
-                    // Trigger Level 2 fallback
                     Logger.w("Level 1 retry exhausted, attempting Level 2 fallback", "ReplayGainScanner")
-                    val fallbackStats = fallbackReadRawPcm(filePath, channelCount)
-                    if (fallbackStats != null && fallbackStats.sampleCount > 0) {
+                    val fallbackAnalyzer = fallbackReadRawPcm(filePath, channelCount, targetLoudness.toDouble())
+                    if (fallbackAnalyzer != null && fallbackAnalyzer.getBlockCount() > 0) {
                         Logger.i("Level 2 fallback successful for $filePath", "ReplayGainScanner")
-                        fallbackStats
+                        fallbackAnalyzer
                     } else {
-                        // After Level 2 fallback also fails:
                         Logger.w("Level 2 fallback failed, attempting Level 3 estimation", "ReplayGainScanner")
                         val estimatedGain = fallbackEstimateGain(filePath, targetLoudness)
                         if (estimatedGain != null) {
@@ -844,8 +810,6 @@ class ReplayGainScanner @Inject constructor(
                             extractor.release()
                             return@withContext estimatedGain
                         }
-
-                        // All fallbacks exhausted
                         Logger.e("All fallbacks exhausted for $filePath", null, "ReplayGainScanner")
                         extractor.release()
                         return@withContext null
@@ -857,115 +821,147 @@ class ReplayGainScanner @Inject constructor(
                 }
             }
 
-            // Calculate 95th percentile RMS from block RMS values
-            // foobar2000 uses 95th percentile for better human perception matching
-            val blockRmsValues = stats.blockRmsValues
-            val rms = if (blockRmsValues.isNotEmpty()) {
-                calculate95thPercentileRms(blockRmsValues)
-            } else {
-                // Fallback: calculate from mean square if block calculation failed
-                sqrt(stats.sumSquares / stats.sampleCount).toFloat()
-            }
-            val peak = stats.peak // Peak from UNFILTERED audio (foobar2000 behavior)
+            // Calculate loudness and gain using EBU R128
+            val loudness = analyzer.getGlobalLoudness()
+            val gainDb = analyzer.calculateGain(targetLoudness.toDouble())
 
-            if (peak > 1.0f) {
-                Logger.w(
-                    "Peak clipping detected: peak=$peak (${peak * 100}% of max)",
-                    "ReplayGainScanner"
-                )
+            if (loudness == null || gainDb == null) {
+                Logger.w("Could not calculate loudness for $filePath", "ReplayGainScanner")
+                extractor.release()
+                return@withContext null
             }
 
-            // Calculate gain adjustment needed to reach target loudness level
-            // Formula: gain_db = target_loudness - measured_loudness
-            // where measured_loudness = 20 * log10(rms / reference)
-            // and target_loudness = REFERENCE_LUFS = -14 dB
-            //
-            // Note: We use a very small floor to prevent log10(0) = -Infinity
-            val measuredDb = 20 * log10(rms.toDouble().coerceAtLeast(1e-10))
-            val gainDb = (targetLoudness.toDouble() - measuredDb).toFloat()
+            val peak = analyzer.getSamplePeak().toFloat()
+            val channelPeaks = analyzer.getChannelPeaks()
+            val truePeak = channelPeaks.maxOrNull()?.toFloat()
+
+            val trackLoudness = loudness.toFloat()
+            val trackRange = analyzer.getLoudnessRange()?.toFloat()
 
             Logger.v(
-                "ReplayGain result: file=${file.name} rms=${rms} measuredDb=${measuredDb} gainDb=${gainDb} peak=${peak}",
+                "ReplayGain result: file=${file.name} loudness=${trackLoudness} LUFS gainDb=${gainDb} peak=${peak} truePeak=${truePeak}",
                 "ReplayGainScanner"
             )
 
-            // Clamp gain to reasonable range (-50dB to +50dB) to prevent extreme values
-            // These bounds are based on ReplayGain standard: tracks rarely need more than 18dB adjustment
-            // The wide range (50dB) handles edge cases like very quiet recordings or heavily clipped audio
-            val clampedTrackGain = gainDb.coerceIn(-50f, 50f)
-            if (clampedTrackGain != gainDb) {
-                Logger.w(
-                    "Track gain clamped from ${gainDb}dB to ${clampedTrackGain}dB",
-                    "ReplayGainScanner"
-                )
-            }
+            // Apply clipping protection if enabled
+            val clampedTrackGain = applyClipProtection(
+                gain = gainDb.toFloat(),
+                peak = peak,
+                clipMode = config.clipMode,
+                maxPeakLevel = config.maxPeakLevel.toFloat()
+            )
 
             ReplayGainInfo(
                 trackGain = clampedTrackGain,
                 trackPeak = peak,
-                albumGain = null, // Album gain requires scanning all files first
-                albumPeak = null
+                albumGain = null,
+                albumPeak = null,
+                truePeak = truePeak,
+                trackLoudness = trackLoudness,
+                albumLoudness = null,
+                trackRange = trackRange,
+                albumRange = null,
+                referenceLoudness = targetLoudness
             )
         } catch (e: Exception) {
-            e.printStackTrace()
+            Logger.e("analyzeAudioFile exception: ${e.message}", e, "ReplayGainScanner")
             null
         }
     }
 
     /**
-     * Calculates RMS (Root Mean Square) of audio samples.
+     * Applies clipping protection to the calculated gain.
+     *
+     * Following rsgain's clip_mode implementation:
+     * - NONE: No clipping protection
+     * - POSITIVE: Only apply clipping protection when gain is positive
+     * - ALWAYS: Always apply clipping protection
+     *
+     * @param gain Calculated gain in dB
+     * @param peak Sample peak value
+     * @param clipMode Clipping protection mode
+     * @param maxPeakLevel Maximum allowed peak level in dB (default 0.0)
+     * @return Gain value adjusted for clipping protection
      */
-    private fun calculateRMSFromStats(sumSquares: Double, sampleCount: Long): Float {
-        if (sampleCount <= 0L) return 0f
-        return sqrt(sumSquares / sampleCount).toFloat()
+    private fun applyClipProtection(
+        gain: Float,
+        peak: Float,
+        clipMode: ClipMode,
+        maxPeakLevel: Float = 0f
+    ): Float {
+        if (clipMode == ClipMode.NONE) {
+            return gain.coerceIn(MIN_GAIN_DB, MAX_GAIN_DB)
+        }
+
+        val maxPeakLinear = 10.0.pow(maxPeakLevel / 20.0).toFloat()
+
+        // Check if clipping protection should be applied
+        val shouldApplyProtection = when (clipMode) {
+            ClipMode.ALWAYS -> true
+            ClipMode.POSITIVE -> gain > 0f
+            ClipMode.NONE -> false
+        }
+
+        if (!shouldApplyProtection) {
+            return gain.coerceIn(MIN_GAIN_DB, MAX_GAIN_DB)
+        }
+
+        // Calculate new peak after applying gain
+        val newPeak = peak * 10.0.pow(gain / 20.0).toFloat()
+
+        if (newPeak > maxPeakLinear) {
+            // Calculate adjustment needed to prevent clipping
+            val adjustment = 20f * log10((newPeak / maxPeakLinear).toDouble()).toFloat()
+
+            // For positive mode, don't reduce gain below original
+            val effectiveAdjustment = if (clipMode == ClipMode.POSITIVE && adjustment > gain) {
+                gain
+            } else {
+                adjustment
+            }
+
+            val protectedGain = gain - effectiveAdjustment
+            Logger.w(
+                "Clipping protection applied: gain=$gain -> $protectedGain (peak=$newPeak > $maxPeakLinear)",
+                "ReplayGainScanner"
+            )
+            return protectedGain.coerceIn(MIN_GAIN_DB, MAX_GAIN_DB)
+        }
+
+        return gain.coerceIn(MIN_GAIN_DB, MAX_GAIN_DB)
     }
 
     /**
-     * Calculates the 95th percentile RMS from a list of block RMS values.
-     * This matches the foobar2000 ReplayGain algorithm which uses 95th percentile
-     * instead of simple average for better human perception matching.
+     * Decodes audio file and feeds samples to EbuR128Analyzer.
      *
-     * @param blockRmsValues List of RMS values from each 50ms block
-     * @return 95th percentile RMS value
-     */
-    private fun calculate95thPercentileRms(blockRmsValues: List<Float>): Float {
-        if (blockRmsValues.isEmpty()) return 0f
-        if (blockRmsValues.size == 1) return blockRmsValues.first()
-
-        // Sort the RMS values
-        val sortedRms = blockRmsValues.sorted()
-
-        // Calculate the 95th percentile index
-        val percentileIndex = ((sortedRms.size - 1) * 0.95).toInt()
-
-        val result = sortedRms[percentileIndex]
-        return result
-    }
-
-    private data class SampleStats(
-        val sampleCount: Long,
-        val sumSquares: Double,
-        val peak: Float,
-        val blockRmsValues: List<Float> = emptyList()
-    )
-
-    /**
-     * Decodes audio file and collects statistics for ReplayGain calculation.
-     *
-     * foobar2000 ReplayGain implementation:
-     * - Peak: Calculated from UNFILTERED original audio (for clipping prevention)
-     * - RMS/Loudness: Calculated from FILTERED audio (psychoacoustically compensated)
-     * - Block size: 50ms
-     * - Percentile: 95th percentile
+     * EBU R128 implementation (ITU-R BS.1770-4):
+     * - K-weighting filters (high-shelf + high-pass)
+     * - 400ms blocks with 75% overlap
+     * - Relative gating (-10 LU relative to integrated)
+     * - Absolute gating (-70 LUFS threshold)
      */
     private fun decodeAndAccumulateStats(
         extractor: MediaExtractor,
         format: MediaFormat,
         targetSampleRate: Int,
-        channelCount: Int
-    ): SampleStats {
-        val mime = format.getString(MediaFormat.KEY_MIME) ?: return SampleStats(0L, 0.0, 0f)
+        channelCount: Int,
+        targetLoudness: Double,
+        dualMono: Boolean
+    ): EbuR128Analyzer {
+        val mime = format.getString(MediaFormat.KEY_MIME) ?: return EbuR128Analyzer(
+            channels = channelCount,
+            sampleRate = targetSampleRate,
+            targetLoudness = targetLoudness,
+            dualMono = dualMono
+        )
         val codec = MediaCodec.createDecoderByType(mime)
+
+        val analyzer = EbuR128Analyzer(
+            channels = channelCount,
+            sampleRate = targetSampleRate,
+            targetLoudness = targetLoudness,
+            dualMono = dualMono
+        )
 
         try {
             codec.configure(format, null, null, 0)
@@ -974,18 +970,13 @@ class ReplayGainScanner @Inject constructor(
             var inputDone = false
             var outputDone = false
 
-            var sampleCount = 0L
-            var peak = 0f
-
-            // Calculate samples per block based on target sample rate and block duration
-            val samplesPerBlock = (targetSampleRate * BLOCK_DURATION_MS) / 1000
-
             val bufferInfo = MediaCodec.BufferInfo()
             var lastSeenTimestampUs = Long.MIN_VALUE
             var acceptSample = true
 
-            // Buffer to collect raw samples for filter processing
+            // Buffer to collect samples for batch processing
             val sampleBuffer = mutableListOf<Float>()
+            val bufferSize = targetSampleRate / 4  // 250ms buffer
 
             while (!outputDone) {
                 if (!inputDone) {
@@ -1037,17 +1028,17 @@ class ReplayGainScanner @Inject constructor(
                             if (acceptSample) {
                                 val shortBuffer = outputBuffer.asShortBuffer()
                                 while (shortBuffer.hasRemaining()) {
-                                    // Normalize to -1.0 to 1.0 range
                                     val sample = shortBuffer.get().toInt().toFloat() / 32768.0f
-
-                                    // Calculate PEAK from UNFILTERED audio (foobar2000 behavior)
-                                    // This is used for clipping prevention
-                                    val absSample = kotlin.math.abs(sample)
-                                    if (absSample > peak) peak = absSample
-
-                                    // Store sample for later filtering
                                     sampleBuffer.add(sample)
-                                    sampleCount++
+
+                                    // Process in batches to avoid memory issues
+                                    if (sampleBuffer.size >= bufferSize * channelCount) {
+                                        analyzer.processBlock(
+                                            sampleBuffer.toFloatArray(),
+                                            sampleBuffer.size
+                                        )
+                                        sampleBuffer.clear()
+                                    }
                                 }
                             }
                         }
@@ -1072,63 +1063,17 @@ class ReplayGainScanner @Inject constructor(
                 }
             }
 
-            // Apply psychoacoustic filters and calculate RMS from filtered audio
-            return if (sampleBuffer.isNotEmpty()) {
-                val samplesArray = sampleBuffer.toFloatArray()
-
-                // Process through Yulewalk + Butterworth filters
-                // This matches foobar2000's analysis chain
-                val filteredSamples = ReplayGainFilter.processFilters(samplesArray, channelCount)
-
-                // Calculate RMS from FILTERED samples only (for loudness measurement)
-                val blockRmsValues = mutableListOf<Float>()
-                var blockSumSquares = 0.0
-                var blockSampleCount = 0L
-
-                for (sample in filteredSamples) {
-                    blockSumSquares += sample.toDouble().pow(2.0)
-                    blockSampleCount++
-
-                    if (blockSampleCount >= samplesPerBlock) {
-                        val blockRms = sqrt(blockSumSquares / blockSampleCount).toFloat()
-                        blockRmsValues.add(blockRms)
-                        blockSampleCount = 0L
-                        blockSumSquares = 0.0
-                    }
-                }
-
-                // Process remaining samples in the last block
-                if (blockSampleCount > 0) {
-                    val blockRms = sqrt(blockSumSquares / blockSampleCount).toFloat()
-                    blockRmsValues.add(blockRms)
-                }
-
-                // Calculate total sum of squares for fallback
-                val totalSumSquares = filteredSamples.sumOf { it.toDouble().pow(2.0) }
-
-                // Return filtered RMS values but KEEP original peak (unfiltered)
-                // This matches foobar2000: peak from original, RMS from filtered
-                SampleStats(
-                    sampleCount = filteredSamples.size.toLong(),
-                    sumSquares = totalSumSquares, // For fallback RMS calculation
-                    peak = peak, // Use UNFILTERED peak (foobar2000 behavior)
-                    blockRmsValues = blockRmsValues
-                )
-            } else {
-                SampleStats(sampleCount, 0.0, peak, emptyList())
+            // Process remaining samples
+            if (sampleBuffer.isNotEmpty()) {
+                analyzer.processBlock(sampleBuffer.toFloatArray(), sampleBuffer.size)
             }
+
         } finally {
-            try {
-                codec.stop()
-            } catch (_: Exception) {
-            }
-            try {
-                codec.release()
-            } catch (_: Exception) {
-            }
-            // Note: extractor is released by caller (attemptDecodeWithRetry) in its finally block
-            // to ensure proper cleanup even when exceptions occur during decode
+            try { codec.stop() } catch (_: Exception) {}
+            try { codec.release() } catch (_: Exception) {}
         }
+
+        return analyzer
     }
 
     private fun shouldAcceptSample(timestampUs: Long, targetSampleRate: Int): Boolean {
@@ -1140,19 +1085,26 @@ class ReplayGainScanner @Inject constructor(
     /**
      * Calculates album gain from a list of track gains using energy average.
      *
-     * Energy average formula: album_rms = sqrt(mean(track_rms²))
-     * This prevents loud tracks from dominating the album gain calculation.
-     * Matches foobar2000 ReplayGain album gain calculation.
+     * Following rsgain's approach:
+     * - Convert track gains back to linear loudness values
+     * - Calculate energy mean: sqrt(mean(loudness²))
+     * - Convert back to dB gain
      *
-     * @param trackGains List of track ReplayGainInfo with track RMS values
-     * @return Album gain info with album gain and peak
+     * @param trackGains List of track ReplayGainInfo
+     * @param config ReplayGain configuration
+     * @return Album gain info with album gain, peak, and loudness
      */
-    fun calculateAlbumGain(trackGains: List<ReplayGainInfo>): ReplayGainInfo {
-        Logger.i("calculateAlbumGain: input trackGains count=${trackGains.size} gains=${trackGains.map { it.trackGain }}", "ReplayGainScanner")
+    fun calculateAlbumGain(
+        trackGains: List<ReplayGainInfo>,
+        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
+    ): ReplayGainInfo {
+        Logger.i(
+            "calculateAlbumGain: input trackGains count=${trackGains.size} gains=${trackGains.map { it.trackGain }}",
+            "ReplayGainScanner"
+        )
 
         if (trackGains.isEmpty()) return ReplayGainInfo()
 
-        // Filter out invalid track gains (NaN, Infinity, or extremely anomalous values)
         val validTrackGains = trackGains.filter { trackGain ->
             trackGain.trackGain.isFinite() &&
             trackGain.trackGain > -100f &&
@@ -1166,56 +1118,70 @@ class ReplayGainScanner @Inject constructor(
             return ReplayGainInfo()
         }
 
-        // Convert track gains back to linear RMS values
-        // track_gain = target_loudness - measured_loudness
-        // measured_loudness = target_loudness - track_gain
-        // measured_loudness_db = 20 * log10(rms / reference)
-        // => rms = reference * 10^(measured_loudness_db / 20)
-        // => rms = reference * 10^((target_loudness - track_gain) / 20)
-        val trackRmsValues = validTrackGains.map { trackGain ->
-            val linear = RMS_REFERENCE * 10.0.pow((REFERENCE_LUFS - trackGain.trackGain) / 20.0)
-            // Clamp to valid range to prevent extreme values
-            linear.coerceIn(1e-10, 10.0)
-        }
+        // Use track loudness values if available (EBU R128), otherwise estimate from gain
+        val referenceLoudness = validTrackGains.first().referenceLoudness.toDouble()
 
-        Logger.v(
-            "Album calculation: trackGains=${validTrackGains.map { it.trackGain }} trackRmsValues=$trackRmsValues",
-            "ReplayGainScanner"
-        )
+        val albumLoudness = if (validTrackGains.all { it.trackLoudness != null }) {
+            // Energy average of loudness values (convert to linear, average, convert back)
+            val linearLoudness = validTrackGains.mapNotNull { it.trackLoudness?.toDouble() }
+                .map { 10.0.pow(it / 10.0) }
 
-        // Energy average: sqrt(mean(rms²))
-        // This matches foobar2000's album gain calculation
-        val energyMean = trackRmsValues.map { it * it }.average()
-        val albumRmsLinear = sqrt(energyMean).coerceIn(1e-10, 10.0)
-
-        // Convert back to dB gain: album_gain = target - 20 * log10(album_rms / reference)
-        val albumGainDb = if (albumRmsLinear.isNaN() || albumRmsLinear.isInfinite() || albumRmsLinear <= 0) {
-            Logger.w("calculateAlbumGain: invalid albumRmsLinear=$albumRmsLinear, using 0", "ReplayGainScanner")
-            0f
+            if (linearLoudness.isEmpty()) {
+                referenceLoudness
+            } else {
+                val meanEnergy = linearLoudness.average()
+                10.0 * log10(meanEnergy)
+            }
         } else {
-            val albumGain = REFERENCE_LUFS - (20 * log10(albumRmsLinear / RMS_REFERENCE))
-            albumGain.toFloat()
+            // Fallback: estimate from gain values
+            val trackLoudnessValues = validTrackGains.map { trackGain ->
+                referenceLoudness - trackGain.trackGain
+            }
+            val linearLoudness = trackLoudnessValues.map { 10.0.pow(it / 10.0) }
+            val meanEnergy = linearLoudness.average()
+            10.0 * log10(meanEnergy)
         }
 
-        Logger.v(
-            "Album gain calculated: trackCount=${validTrackGains.size} albumGainDb=$albumGainDb albumRmsLinear=$albumRmsLinear",
-            "ReplayGainScanner"
+        val albumGainDb = (referenceLoudness - albumLoudness).toFloat()
+
+        // Apply clipping protection to album gain
+        val maxPeak = validTrackGains.maxOf { it.trackPeak }
+        val clampedAlbumGain = applyClipProtection(
+            gain = albumGainDb,
+            peak = maxPeak,
+            clipMode = config.clipMode,
+            maxPeakLevel = config.maxPeakLevel.toFloat()
         )
 
-        // Use the highest peak from all tracks
-        val maxPeak = validTrackGains.maxOf { it.trackPeak }
+        // Calculate album range (max of track ranges)
+        val albumRange = validTrackGains.mapNotNull { it.trackRange }.maxOrNull()
+
+        Logger.v(
+            "Album gain calculated: trackCount=${validTrackGains.size} albumGainDb=$clampedAlbumGain albumLoudness=$albumLoudness",
+            "ReplayGainScanner"
+        )
 
         return ReplayGainInfo(
             trackGain = validTrackGains.first().trackGain,
             trackPeak = validTrackGains.first().trackPeak,
-            albumGain = albumGainDb,
-            albumPeak = maxPeak
+            albumGain = clampedAlbumGain,
+            albumPeak = maxPeak,
+            truePeak = validTrackGains.first().truePeak,
+            trackLoudness = validTrackGains.first().trackLoudness,
+            albumLoudness = albumLoudness.toFloat(),
+            trackRange = validTrackGains.first().trackRange,
+            albumRange = albumRange,
+            referenceLoudness = validTrackGains.first().referenceLoudness
         )
     }
 
     /**
      * Saves ReplayGain information to file metadata.
-     * Uses TagLib to write REPLAYGAIN_TRACK_GAIN and related tags.
+     * Uses TagLib to write ReplayGain 2.0 tags:
+     * - REPLAYGAIN_TRACK_GAIN, REPLAYGAIN_TRACK_PEAK
+     * - REPLAYGAIN_ALBUM_GAIN, REPLAYGAIN_ALBUM_PEAK
+     * - REPLAYGAIN_TRACK_RANGE, REPLAYGAIN_ALBUM_RANGE
+     * - REPLAYGAIN_REFERENCE_LOUDNESS
      */
     suspend fun saveReplayGainToFile(
         filePath: String,
@@ -1225,11 +1191,11 @@ class ReplayGainScanner @Inject constructor(
             val file = File(filePath)
             if (!file.exists()) return@withContext false
 
-            // Read existing metadata
             val existingMetadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
 
-            // Create updated metadata with ReplayGain fields
             val customFields = existingMetadata?.customFields?.toMutableMap() ?: mutableMapOf()
+
+            // Core ReplayGain tags
             customFields["REPLAYGAIN_TRACK_GAIN"] = String.format("%.2f dB", replayGainInfo.trackGain)
             customFields["REPLAYGAIN_TRACK_PEAK"] = String.format("%.6f", replayGainInfo.trackPeak)
 
@@ -1240,6 +1206,25 @@ class ReplayGainScanner @Inject constructor(
             replayGainInfo.albumPeak?.let {
                 customFields["REPLAYGAIN_ALBUM_PEAK"] = String.format("%.6f", it)
             }
+
+            // ReplayGain 2.0 tags
+            replayGainInfo.trackLoudness?.let {
+                customFields["REPLAYGAIN_TRACK_LOUDNESS"] = String.format("%.2f LUFS", it)
+            }
+
+            replayGainInfo.albumLoudness?.let {
+                customFields["REPLAYGAIN_ALBUM_LOUDNESS"] = String.format("%.2f LUFS", it)
+            }
+
+            replayGainInfo.trackRange?.let {
+                customFields["REPLAYGAIN_TRACK_RANGE"] = String.format("%.2f LU", it)
+            }
+
+            replayGainInfo.albumRange?.let {
+                customFields["REPLAYGAIN_ALBUM_RANGE"] = String.format("%.2f LU", it)
+            }
+
+            customFields["REPLAYGAIN_REFERENCE_LOUDNESS"] = String.format("%.1f LUFS", replayGainInfo.referenceLoudness)
 
             val updatedMetadata = existingMetadata?.copy(customFields = customFields)
                 ?: AudioMetadata(
@@ -1252,14 +1237,14 @@ class ReplayGainScanner @Inject constructor(
             val result = metadataProcessor.updateMetadata(filePath, updatedMetadata)
             result.isSuccess
         } catch (e: Exception) {
-            e.printStackTrace()
+            Logger.e("saveReplayGainToFile exception: ${e.message}", e, "ReplayGainScanner")
             false
         }
     }
 
     /**
-     * Reads existing ReplayGain information from a fileparam filePath Path.
-     * @ to the audio file
+     * Reads existing ReplayGain information from a file.
+     * @param filePath Path to the audio file
      * @return ReplayGainInfo or null if not found
      */
     suspend fun readReplayGainFromFile(filePath: String): ReplayGainInfo? =
@@ -1275,18 +1260,33 @@ class ReplayGainScanner @Inject constructor(
                 val trackPeakStr = customFields["REPLAYGAIN_TRACK_PEAK"]
                 val albumGainStr = customFields["REPLAYGAIN_ALBUM_GAIN"]
                 val albumPeakStr = customFields["REPLAYGAIN_ALBUM_PEAK"]
+                val trackLoudnessStr = customFields["REPLAYGAIN_TRACK_LOUDNESS"]
+                val albumLoudnessStr = customFields["REPLAYGAIN_ALBUM_LOUDNESS"]
+                val trackRangeStr = customFields["REPLAYGAIN_TRACK_RANGE"]
+                val albumRangeStr = customFields["REPLAYGAIN_ALBUM_RANGE"]
+                val refLoudnessStr = customFields["REPLAYGAIN_REFERENCE_LOUDNESS"]
 
                 val trackGain = parseGainValue(trackGainStr)
                 val trackPeak = parsePeakValue(trackPeakStr)
                 val albumGain = albumGainStr?.let { parseGainValue(it) }
                 val albumPeak = albumPeakStr?.let { parsePeakValue(it) }
+                val trackLoudness = parseLoudnessValue(trackLoudnessStr)
+                val albumLoudness = parseLoudnessValue(albumLoudnessStr)
+                val trackRange = parseLoudnessValue(trackRangeStr)
+                val albumRange = parseLoudnessValue(albumRangeStr)
+                val referenceLoudness = refLoudnessStr?.let { parseLoudnessValue(it) } ?: -18f
 
                 if (trackGain != null || trackPeak != null) {
                     ReplayGainInfo(
                         trackGain = trackGain ?: 0f,
                         trackPeak = trackPeak ?: 0f,
                         albumGain = albumGain,
-                        albumPeak = albumPeak
+                        albumPeak = albumPeak,
+                        trackLoudness = trackLoudness,
+                        albumLoudness = albumLoudness,
+                        trackRange = trackRange,
+                        albumRange = albumRange,
+                        referenceLoudness = referenceLoudness
                     )
                 } else {
                     null
@@ -1315,6 +1315,18 @@ class ReplayGainScanner @Inject constructor(
         if (value.isNullOrBlank()) return null
         return try {
             value.trim().toFloatOrNull()
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /**
+     * Parses a loudness value string (e.g., "-18.50 LUFS") to float.
+     */
+    private fun parseLoudnessValue(value: String?): Float? {
+        if (value.isNullOrBlank()) return null
+        return try {
+            value.replace(" LUFS", "").replace(" LU", "").replace("LUFS", "").trim().toFloatOrNull()
         } catch (e: Exception) {
             null
         }

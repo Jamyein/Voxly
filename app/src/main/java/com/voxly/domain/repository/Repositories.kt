@@ -92,7 +92,8 @@ interface ReplayGainRepository {
     fun scanReplayGain(
         filePaths: List<String>,
         scanQuality: ScanQuality = ScanQuality.NORMAL,
-        targetLoudness: Float = -18f
+        targetLoudness: Float = -18f,
+        config: com.voxly.domain.model.ReplayGainConfig = com.voxly.domain.model.ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress>
 
     /**
@@ -103,12 +104,14 @@ interface ReplayGainRepository {
      * @param filesByAlbum Map of album key to list of file paths in that album
      * @param scanQuality The quality level for scanning
      * @param targetLoudness Target loudness in LUFS (default -18.0)
+     * @param config ReplayGain configuration (clip mode, dual mono, etc.)
      * @return Flow emitting scan progress
      */
     fun scanReplayGainByAlbum(
         filesByAlbum: Map<String, List<String>>,
         scanQuality: ScanQuality = ScanQuality.NORMAL,
-        targetLoudness: Float = -18f
+        targetLoudness: Float = -18f,
+        config: com.voxly.domain.model.ReplayGainConfig = com.voxly.domain.model.ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress>
 
     /**
@@ -119,12 +122,14 @@ interface ReplayGainRepository {
      * @param filePaths Flat list of file paths to scan
      * @param scanQuality The quality level for scanning
      * @param targetLoudness Target loudness in LUFS (default -18.0)
+     * @param config ReplayGain configuration (clip mode, dual mono, etc.)
      * @return Flow emitting scan progress
      */
     fun scanReplayGainWithAlbumGrouping(
         filePaths: List<String>,
         scanQuality: ScanQuality = ScanQuality.NORMAL,
-        targetLoudness: Float = -18f
+        targetLoudness: Float = -18f,
+        config: com.voxly.domain.model.ReplayGainConfig = com.voxly.domain.model.ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress>
 
     /**

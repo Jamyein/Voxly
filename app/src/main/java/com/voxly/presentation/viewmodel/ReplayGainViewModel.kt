@@ -3,6 +3,8 @@ package com.voxly.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.domain.model.ClipMode
+import com.voxly.domain.model.ReplayGainConfig
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
@@ -59,30 +61,44 @@ class ReplayGainViewModel @AssistedInject constructor(
             _error.value = null
 
             try {
-                // Get target loudness from settings
+                // Get target loudness and clip mode from settings
                 val targetLoudness = settingsDataStore.replayGainTargetLoudness.first()
+                val clipModeStr = settingsDataStore.replayGainClipMode.first()
+                val clipMode = ClipMode.fromString(clipModeStr)
+                val scanConfig = ReplayGainConfig(
+                    clipMode = clipMode,
+                    truePeak = false,
+                    dualMono = false,
+                    albumAsAes77 = false,
+                    skipExisting = false,
+                    maxPeakLevel = 0.0
+                )
 
                 val scanMode = settingsDataStore.scanMode.first()
                 val scanFlow = when (scanMode) {
                     ScanMode.TRACK_ONLY.name -> replayGainRepository.scanReplayGain(
                         filePaths,
                         scanQuality,
-                        targetLoudness
+                        targetLoudness,
+                        scanConfig
                     )
                     ScanMode.SINGLE_ALBUM.name -> replayGainRepository.scanReplayGainByAlbum(
                         mapOf("single_album" to filePaths),
                         scanQuality,
-                        targetLoudness
+                        targetLoudness,
+                        scanConfig
                     )
                     ScanMode.ALBUMS.name -> replayGainRepository.scanReplayGainWithAlbumGrouping(
                         filePaths,
                         scanQuality,
-                        targetLoudness
+                        targetLoudness,
+                        scanConfig
                     )
                     else -> replayGainRepository.scanReplayGain(
                         filePaths,
                         scanQuality,
-                        targetLoudness
+                        targetLoudness,
+                        scanConfig
                     )
                 }
 

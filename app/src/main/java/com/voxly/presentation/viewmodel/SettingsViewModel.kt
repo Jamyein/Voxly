@@ -233,6 +233,16 @@ class SettingsViewModel @Inject constructor(
     )
 
     /**
+     * ReplayGain clip mode state (n=none, p=positive, a=always)
+     */
+    val replayGainClipMode: StateFlow<String> = settingsDataStore.replayGainClipMode
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = "p"
+        )
+
+    /**
      * Minimum duration filter enabled state
      */
     val minDurationFilterEnabled: StateFlow<Boolean> = settingsDataStore.minDurationFilterEnabled
@@ -518,6 +528,15 @@ class SettingsViewModel @Inject constructor(
     fun setScanMode(mode: String) {
         viewModelScope.launch {
             settingsDataStore.setScanMode(mode)
+        }
+    }
+
+    /**
+     * Set ReplayGain clip mode preference
+     */
+    fun setReplayGainClipMode(mode: String) {
+        viewModelScope.launch {
+            settingsDataStore.setReplayGainClipMode(mode)
         }
     }
 

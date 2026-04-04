@@ -145,7 +145,12 @@ class BatchReplayGainUseCase @Inject constructor(
         batchEngine.execute(
             items = filePaths,
             operation = { filePath ->
-                replayGainRepository.scanReplayGain(listOf(filePath), scanQuality, targetLoudness)
+                replayGainRepository.scanReplayGain(
+                    listOf(filePath),
+                    scanQuality,
+                    targetLoudness,
+                    com.voxly.domain.model.ReplayGainConfig.DEFAULT
+                )
                 Result.success(Unit)
             },
             itemName = { it }
