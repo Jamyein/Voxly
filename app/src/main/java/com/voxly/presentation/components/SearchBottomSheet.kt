@@ -210,7 +210,7 @@ fun SearchResultItem(
             ) {
                 AlbumArtImage(
                     filePath = audioFile.path,
-                    mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                    albumId = audioFile.mediaStoreAlbumId,
                     contentDescription = stringResource(R.string.cd_album_art),
                     size = 48.dp,
                     modifier = Modifier.fillMaxSize()

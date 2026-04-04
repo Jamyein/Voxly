@@ -172,7 +172,7 @@ fun AlbumDetailScreen(
                             ) {
                                 AlbumArtImage(
                                     filePath = coverPath ?: firstFile?.path,
-                                    mediaStoreAlbumId = firstFile?.mediaStoreAlbumId,
+                                    albumId = firstFile?.mediaStoreAlbumId,
                                     contentDescription = stringResource(R.string.album_cover),
                                     size = 120.dp,
                                     modifier = Modifier.fillMaxSize()
@@ -329,7 +329,7 @@ fun AlbumDetailScreen(
                                         ) {
                                             AlbumArtImage(
                                                 filePath = audioFile.path,
-                                                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                                                albumId = audioFile.mediaStoreAlbumId,
                                                 contentDescription = null,
                                                 size = 32.dp,
                                                 modifier = Modifier.fillMaxSize()

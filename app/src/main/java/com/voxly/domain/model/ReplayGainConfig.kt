@@ -45,7 +45,6 @@ data class ReplayGainConfig(
         )
     }
 }
-}
 
 /**
  * Clipping protection mode.

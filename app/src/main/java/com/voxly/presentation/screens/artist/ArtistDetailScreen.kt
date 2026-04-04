@@ -301,7 +301,7 @@ fun ArtistDetailScreen(
                                 trackCount = albumInfo.files.size,
                                 albumYear = albumInfo.year,
                                 albumArtPath = albumArtPath,
-                                mediaStoreAlbumId = albumId,
+                                albumId = albumId,
                                 onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
                                 modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
                             )
@@ -384,16 +384,19 @@ fun CarouselAlbumArtImage(
 ) {
     val context = LocalContext.current
     var fallbackMediaStoreBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var showFallback by remember { mutableStateOf(false) }
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         when {
-            fallbackMediaStoreBitmap != null -> {
-                Image(
-                    bitmap = fallbackMediaStoreBitmap!!.asImageBitmap(),
-                    contentDescription = contentDescription,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
+            showFallback && fallbackMediaStoreBitmap != null -> {
+                fallbackMediaStoreBitmap?.let { bitmap ->
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = contentDescription,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
             }
 
             !filePath.isNullOrBlank() -> {
@@ -409,6 +412,7 @@ fun CarouselAlbumArtImage(
                                 if (albumId != null && albumId > 0) {
                                     loadMediaStoreAlbumArt(context, albumId)?.let {
                                         fallbackMediaStoreBitmap = it
+                                        showFallback = true
                                     }
                                 }
                             }
@@ -454,7 +458,7 @@ fun AlbumCard(
     trackCount: Int,
     albumYear: Int?,
     albumArtPath: String?,
-    mediaStoreAlbumId: Long? = null,
+    albumId: Long? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -483,7 +487,7 @@ fun AlbumCard(
             ) {
                 CarouselAlbumArtImage(
                     filePath = albumArtPath,
-                    albumId = mediaStoreAlbumId,
+                    albumId = albumId,
                     contentDescription = albumName,
                     modifier = Modifier.fillMaxSize()
                 )

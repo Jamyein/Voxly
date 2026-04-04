@@ -12,7 +12,6 @@ import com.kyant.taglib.Picture
 import com.kyant.taglib.TagLib
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SafPermissionCache
-import com.voxly.data.local.cache.AlbumArtCacheManager
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.parseMediaStoreTrackField
@@ -25,6 +24,8 @@ import java.text.Normalizer
 import javax.inject.Inject
 import com.voxly.core.util.Constants
 import com.voxly.core.util.PathUtils
+import com.voxly.presentation.ui.extractAndCacheCoverBytes
+import com.voxly.presentation.ui.extractAndCacheCoverBytes
 import javax.inject.Singleton
 
 // Common base directories for path normalization
@@ -62,8 +63,7 @@ class TagLibMetadataProcessor @Inject constructor(
     @ApplicationContext private val context: Context,
     private val safPermissionCache: SafPermissionCache,
     private val safWriteAccessService: SafWriteAccessService,
-    private val musicLibraryCache: MusicLibraryCache,
-    private val albumArtCacheManager: AlbumArtCacheManager
+    private val musicLibraryCache: MusicLibraryCache
 ) {
     companion object {
         private const val TAG = "TagLibProcessor"
@@ -95,14 +95,13 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
-     * Cache entry for metadata + audio info (album art stored separately in AlbumArtCacheManager)
+     * Cache entry for metadata + audio info
      */
     data class MetadataCacheEntry(
         val filePath: String,
         val lastModified: Long,
         val metadata: AudioMetadata,
         val audioInfo: AudioInfo?
-        // Note: albumArt is no longer stored here - use AlbumArtCacheManager instead
     ) {
         override fun equals(other: Any?): Boolean {
             if (this === other) return true
@@ -132,7 +131,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 lastModified = lastModified,
                 metadata = metadata,
                 audioInfo = audioInfo
-                // albumArt is not stored in memory cache - use AlbumArtCacheManager
+                // albumArt is not stored in memory cache - read from file when needed
             )
         }
     }
@@ -310,7 +309,7 @@ class TagLibMetadataProcessor @Inject constructor(
             getFromMemoryCache(normalizedPath)?.let { cached ->
                 Timber.tag(TAG).d("Memory cache hit for: $filePath")
                 val albumArt = if (includeAlbumArt) {
-                    albumArtCacheManager.getOriginalArt(normalizedPath)
+                    extractAndCacheCoverBytes(normalizedPath)
                 } else null
                 return@withContext CompleteMetadata(
                     metadata = cached.metadata,
@@ -341,7 +340,7 @@ class TagLibMetadataProcessor @Inject constructor(
                         )
                         return@withContext cachedMetadata
                     } else {
-                        val cachedAlbumArt = albumArtCacheManager.getOriginalArt(normalizedPath)
+                        val cachedAlbumArt = extractAndCacheCoverBytes(normalizedPath)
                         if (cachedAlbumArt != null) {
                             Timber.tag(TAG).d("Album art cache hit for: $filePath")
                             val cachedMetadata = CompleteMetadata(
@@ -383,13 +382,9 @@ class TagLibMetadataProcessor @Inject constructor(
                 val entry = metadata.toCacheEntry(resolvedFile.absolutePath, resolvedFile.lastModified())
                 putInMemoryCache(entry)
                 
-                // OPTIMIZATION: Cache album art in three-tier cache system
+                // OPTIMIZATION: Cache album art bytes for direct access
                 metadata.albumArt?.let { artBytes ->
-                    albumArtCacheManager.cacheAlbumArt(
-                        filePath = resolvedFile.absolutePath,
-                        artBytes = artBytes,
-                        lastModified = resolvedFile.lastModified()
-                    )
+                    extractAndCacheCoverBytes(resolvedFile.absolutePath)
                 }
             }
 

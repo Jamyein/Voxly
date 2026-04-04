@@ -260,6 +260,14 @@ dependencies {
     // Palette for color extraction from album art
     implementation("androidx.palette:palette-ktx:1.0.0")
 
+    // Coil 3 - Image loading library
+    implementation("io.coil-kt.coil3:coil-compose:3.2.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.2.0")
+
+    // Coil 3 - Image loading library
+    implementation("io.coil-kt.coil3:coil-compose:3.2.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.2.0")
+
     // Testing
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")

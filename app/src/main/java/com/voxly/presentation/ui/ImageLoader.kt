@@ -9,8 +9,6 @@ import android.provider.MediaStore
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.voxly.data.remote.NetworkConstants
-import com.voxly.di.AlbumArtCacheEntryPoint
-import dagger.hilt.android.EntryPointAccessors
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -250,7 +248,7 @@ suspend fun loadImageBytesFromUrl(url: String?): ByteArray? {
 
 /**
  * Legacy fallback for local album art loading.
- * Prefer loadAlbumArtThumbnail() which uses AlbumArtCacheManager.
+ * Prefer loadAlbumArtThumbnail() for consistent cache-backed loading.
  */
 @Deprecated(
     message = "Use loadAlbumArtThumbnail() for consistent cache-backed loading",
@@ -292,7 +290,7 @@ fun loadLocalAlbumArt(filePath: String, targetSizePx: Int = 300): Bitmap? {
 }
 
 /**
- * Loads album art thumbnail via AlbumArtCacheManager (preferred path for UI).
+ * Loads album art thumbnail from embedded art or folder cover.
  * Falls back to folder cover art (cover.jpg, folder.jpg, etc.) if no embedded art found.
  */
 suspend fun loadAlbumArtThumbnail(
@@ -304,27 +302,10 @@ suspend fun loadAlbumArtThumbnail(
 
     val safeTargetSize = if (targetSizePx > 0) targetSizePx else 300
 
-    val entryPoint = EntryPointAccessors.fromApplication(
-        context.applicationContext,
-        AlbumArtCacheEntryPoint::class.java
-    )
-    val cacheManager = entryPoint.albumArtCacheManager()
+    // 1. Try embedded album art via MediaMetadataRetriever
+    loadEmbeddedAlbumArtSized(filePath, safeTargetSize)?.let { return it }
 
-    // 1. Check AlbumArtCacheManager (L1 memory, L2 Room, L3 file embedded)
-    cacheManager.getThumbnail(filePath)?.let { return it }
-
-    // 2. Fallback: read from TagLib to seed cache (embedded art only)
-    val metadataProcessor = entryPoint.tagLibMetadataProcessor()
-    val complete = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
-    complete?.albumArt?.let { artBytes ->
-        cacheManager.cacheAlbumArt(filePath, artBytes)
-    }
-
-    // 3. Return embedded art if found
-    cacheManager.getThumbnail(filePath)?.let { return it }
-    complete?.albumArt?.let { return decodeHighQualityBitmapFromBytes(it, safeTargetSize) }
-
-    // 4. Final fallback: folder cover art (cover.jpg, folder.jpg, etc.)
+    // 2. Final fallback: folder cover art (cover.jpg, folder.jpg, etc.)
     return loadFolderCoverArt(filePath, safeTargetSize)
 }
 
@@ -340,25 +321,16 @@ suspend fun loadAlbumArtOriginalBitmap(
 
     val safeTargetSize = if (targetSizePx > 0) targetSizePx else 384
 
-    val entryPoint = EntryPointAccessors.fromApplication(
-        context.applicationContext,
-        AlbumArtCacheEntryPoint::class.java
-    )
-    val cacheManager = entryPoint.albumArtCacheManager()
-
-    val originalBytes = cacheManager.getOriginalArt(filePath)
-        ?: run {
-            val metadataProcessor = entryPoint.tagLibMetadataProcessor()
-            val complete = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
-            complete?.albumArt?.also { cacheManager.cacheAlbumArt(filePath, it) }
+    return withContext(Dispatchers.IO) {
+        extractAndCacheCoverBytes(filePath)?.let {
+            decodeHighQualityBitmapFromBytes(it, safeTargetSize)
         }
-
-    return originalBytes?.let { decodeHighQualityBitmapFromBytes(it, safeTargetSize) }
+    }
 }
 
 /**
  * Legacy fallback for local album art loading.
- * Prefer loadAlbumArtThumbnail() which uses AlbumArtCacheManager.
+ * Prefer loadAlbumArtThumbnail() for consistent cache-backed loading.
  */
 @Deprecated(
     message = "Use loadAlbumArtThumbnail() for consistent cache-backed loading",
@@ -530,8 +502,28 @@ private fun decodeSampledBitmapFromFile(filePath: String, targetSize: Int): Bitm
 /**
  * Decodes a bitmap from bytes without downsampling.
  */
-private fun decodeBitmapFromBytes(bytes: ByteArray): Bitmap? {
+internal fun decodeBitmapFromBytes(bytes: ByteArray): Bitmap? {
     return BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+}
+
+/**
+ * Decodes a sampled bitmap from bytes to reduce memory usage.
+ */
+internal fun decodeBitmapFromBytes(bytes: ByteArray, targetSize: Int): Bitmap? {
+    val options = BitmapFactory.Options().apply {
+        inJustDecodeBounds = true
+    }
+    BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+
+    var sampleSize = 1
+    while (options.outWidth / sampleSize > targetSize || options.outHeight / sampleSize > targetSize) {
+        sampleSize *= 2
+    }
+
+    val decodeOptions = BitmapFactory.Options().apply {
+        inSampleSize = sampleSize
+    }
+    return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
 }
 
 /**
@@ -669,13 +661,6 @@ fun trimToCoreCache(context: Context) {
         val keysToRemove = mediaStoreAlbumCache.keys.drop(CORE_CACHE_SIZE)
         keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
     }
-    runCatching {
-        val entryPoint = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            AlbumArtCacheEntryPoint::class.java
-        )
-        entryPoint.albumArtCacheManager().trimToCoreCache()
-    }
     Timber.d(TAG, "Trimmed to core cache: $CORE_CACHE_SIZE entries retained")
 }
 
@@ -695,14 +680,7 @@ fun trimToEssentialCache(context: Context) {
         val keysToRemove = mediaStoreAlbumCache.keys.drop(ESSENTIAL_CACHE_SIZE)
         keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
     }
-    runCatching {
-        val entryPoint = EntryPointAccessors.fromApplication(
-            context.applicationContext,
-            AlbumArtCacheEntryPoint::class.java
-        )
-        entryPoint.albumArtCacheManager().trimToEssentialCache()
-    }
-    Timber.d(TAG, "Trimmed to essential cache: $ESSENTIAL_CACHE_SIZE entries retained")
+    Timber.d(TAG, "Trimmed to core cache: $CORE_CACHE_SIZE entries retained")
 }
 
 /**
@@ -718,15 +696,6 @@ fun clearAllCaches(context: Context) {
     }
     synchronized(mediaStoreAlbumCache) {
         mediaStoreAlbumCache.clear()
-    }
-    CoroutineScope(Dispatchers.IO).launch {
-        runCatching {
-            val entryPoint = EntryPointAccessors.fromApplication(
-                context.applicationContext,
-                AlbumArtCacheEntryPoint::class.java
-            )
-            entryPoint.albumArtCacheManager().clearAllCache()
-        }
     }
     Timber.d(TAG, "Cleared all album art caches")
 }

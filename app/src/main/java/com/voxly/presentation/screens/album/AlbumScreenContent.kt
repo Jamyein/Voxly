@@ -311,7 +311,7 @@ internal fun AlbumYearGroupedContent(
                             ) {
                                 AlbumArtImage(
                                     filePath = coverFile?.path,
-                                    mediaStoreAlbumId = coverFile?.mediaStoreAlbumId,
+                                    albumId = coverFile?.mediaStoreAlbumId,
                                     contentDescription = null,
                                     size = 40.dp,
                                     modifier = Modifier.fillMaxSize()

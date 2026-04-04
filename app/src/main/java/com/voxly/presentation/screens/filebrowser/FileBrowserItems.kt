@@ -178,7 +178,7 @@ internal fun AlbumGridItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
-            Spacer(modifier = Modifier.height(2.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             // Track count, artist, and year in the same row
             val albumYear = album.files.firstOrNull()?.metadata?.year
             val infoText = buildString {

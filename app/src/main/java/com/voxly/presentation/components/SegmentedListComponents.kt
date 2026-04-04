@@ -829,6 +829,7 @@ fun AudioFileStandardRow(
     isSelected: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
+    onAction: ((com.voxly.presentation.components.AudioFileAction) -> Unit)? = null,
     modifier: Modifier = Modifier,
     sharedElementKey: String? = null
 ) {
@@ -865,7 +866,7 @@ fun AudioFileStandardRow(
         ) {
             AlbumArtImage(
                 filePath = audioFile.path,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                albumId = audioFile.mediaStoreAlbumId,
                 contentDescription = null,
                 size = AlbumArtSizeLarge,
                 modifier = Modifier.fillMaxSize()
@@ -876,8 +877,9 @@ fun AudioFileStandardRow(
     },
     trailingContent = {
         if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(IconPadding))
+        else if (onAction != null) AudioFileActionsMenu(onAction)
     }
-    )
+)
 }
 
 /**
@@ -1033,7 +1035,7 @@ fun AudioFileStandardRowWithMenu(
         ) {
             AlbumArtImage(
                 filePath = audioFile.path,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                albumId = audioFile.mediaStoreAlbumId,
                 contentDescription = null,
                 size = AlbumArtSizeLarge,
                 modifier = Modifier.fillMaxSize()
@@ -1104,7 +1106,7 @@ fun AudioFileStandardRowCompact(
         ) {
             AlbumArtImage(
                 filePath = audioFile.path,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                albumId = audioFile.mediaStoreAlbumId,
                 contentDescription = null,
                 size = AlbumArtSizeSmall,
                 modifier = Modifier

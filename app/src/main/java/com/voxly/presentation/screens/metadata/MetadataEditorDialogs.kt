@@ -23,10 +23,10 @@ import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
-import com.voxly.presentation.components.NetworkAlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.ui.decodeBitmapFromBytes
+import com.voxly.presentation.ui.loadAlbumArtOriginalBitmap
 import com.voxly.presentation.viewmodel.ConvertibleField
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import java.io.ByteArrayOutputStream
@@ -220,12 +220,10 @@ fun AlbumArtPreviewDialog(
         when {
             albumArt != null -> decodeAlbumArtPreview(albumArt, 2048)
             !filePath.isNullOrBlank() -> {
-                // Synchronous load from cache for preview dialog.
-                // Acceptable because the dialog is shown on user action,
-                // and the cover art should already be cached by AlbumArtSection.
-                runCatching {
+                val path = filePath!!
+                runCatching<android.graphics.Bitmap?> {
                     kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                        com.voxly.presentation.ui.loadAlbumArtOriginalBitmap(context, filePath, 2048)
+                        com.voxly.presentation.ui.loadAlbumArtOriginalBitmap(context, path, 2048)
                     }
                 }.getOrNull()
             }
