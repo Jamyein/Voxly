@@ -130,7 +130,16 @@ android {
         abortOnError = false
         checkDependencies = true
     }
-    
+
+    // NDK native ReplayGain scanner (FFmpeg + libebur128)
+    externalNativeBuild {
+        cmake {
+            path = file("src/main/cpp/CMakeLists.txt")
+            version = "3.22.1"
+        }
+    }
+
+    ndkVersion = "26.1.10909125"
 
 }
 

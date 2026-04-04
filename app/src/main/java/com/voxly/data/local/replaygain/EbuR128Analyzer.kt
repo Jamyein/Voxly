@@ -67,6 +67,10 @@ class EbuR128Analyzer(
     // Per-block energies for gating and LRA calculation
     private val blockEnergies = mutableListOf<Double>()
 
+    // Global accumulators for correct mean energy calculation
+    private var totalEnergy = 0.0
+    private var totalFrames = 0L
+
     // Peak tracking
     private var samplePeak = 0.0
     private val channelPeaks: DoubleArray = DoubleArray(channels)
@@ -221,10 +225,13 @@ class EbuR128Analyzer(
                 blockEnergy += weightedEnergy
             }
 
-            // Store block energy for gating
-            if (blockEnergy > 0) {
-                blockEnergies.add(blockEnergy)
+            // Store block energy for gating (normalized per frame)
+            if (blockFrames > 0 && blockEnergy > 0) {
+                blockEnergies.add(blockEnergy / blockFrames)
             }
+
+            totalEnergy += blockEnergy
+            totalFrames += blockFrames
 
             frameIdx += blockFrames
         }
@@ -240,10 +247,13 @@ class EbuR128Analyzer(
         if (blockEnergies.isEmpty()) return null
 
         // First pass: calculate ungated loudness for relative threshold
-        val totalEnergy = blockEnergies.sum()
-        val ungatedLoudness = energyToLoudness(totalEnergy, blockEnergies.size)
-
-        if (ungatedLoudness == null) return null
+        // Use total energy / total frames for correct mean
+        val ungatedLoudness = if (totalFrames > 0 && totalEnergy > 0) {
+            val meanEnergy = totalEnergy / totalFrames
+            -0.691 + 10.0 * log10(meanEnergy)
+        } else {
+            return null
+        }
 
         // Second pass: apply gating
         val relativeThreshold = ungatedLoudness + RELATIVE_THRESHOLD
@@ -268,17 +278,19 @@ class EbuR128Analyzer(
             return ungatedLoudness
         }
 
+        // Gated loudness: mean of gated block energies
         return energyToLoudness(gatedEnergy, gatedBlocks)
     }
 
     /**
      * Calculate ungated (global) loudness without EBU R128 gating.
      * This is used for ReplayGain track gain calculation.
+     * Uses total energy / total frames for correct mean energy calculation.
      */
     fun getGlobalLoudness(): Double? {
-        if (blockEnergies.isEmpty()) return null
-        val totalEnergy = blockEnergies.sum()
-        return energyToLoudness(totalEnergy, blockEnergies.size)
+        if (totalFrames == 0L || totalEnergy <= 0.0) return null
+        val meanEnergy = totalEnergy / totalFrames
+        return -0.691 + 10.0 * log10(meanEnergy)
     }
 
     /**
@@ -322,6 +334,8 @@ class EbuR128Analyzer(
         totalBlockCount = 0
         gatedBlockCount = 0
         blockEnergies.clear()
+        totalEnergy = 0.0
+        totalFrames = 0L
         samplePeak = 0.0
         channelPeaks.fill(0.0)
     }

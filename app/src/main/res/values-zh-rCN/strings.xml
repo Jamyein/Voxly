@@ -271,6 +271,9 @@
     <string name="settings_scan_mode_track_only">单轨增益</string>
     <string name="settings_scan_mode_album_only">单专辑扫描</string>
     <string name="settings_scan_mode_track_and_album">多专辑扫描</string>
+    <string name="settings_scan_engine">扫描引擎</string>
+    <string name="settings_scan_engine_native">原生（推荐）</string>
+    <string name="settings_scan_engine_kotlin">Kotlin（旧版）</string>
     <string name="settings_min_duration_filter">不扫描短音频</string>
     <string name="settings_min_duration_filter_subtitle">不扫描60秒以下的音频文件</string>
 

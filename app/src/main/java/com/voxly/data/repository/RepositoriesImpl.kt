@@ -340,15 +340,23 @@ class ReplayGainRepositoryImpl @Inject constructor(
         filesByAlbum: Map<String, List<String>>,
         scanQuality: ScanQuality,
         targetLoudness: Float,
-        config: com.voxly.domain.model.ReplayGainConfig
-    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness, config)
+        config: com.voxly.domain.model.ReplayGainConfig,
+        useNative: Boolean
+    ): Flow<ScanProgress> {
+        return if (useNative) {
+            replayGainScanner.scanReplayGainByAlbumNative(filesByAlbum, scanQuality, targetLoudness, config)
+        } else {
+            replayGainScanner.scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness, config)
+        }
+    }
 
     override fun scanReplayGainWithAlbumGrouping(
         filePaths: List<String>,
         scanQuality: ScanQuality,
         targetLoudness: Float,
-        config: com.voxly.domain.model.ReplayGainConfig
-    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainWithAlbumGrouping(filePaths, scanQuality, targetLoudness, config)
+        config: com.voxly.domain.model.ReplayGainConfig,
+        useNative: Boolean
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainWithAlbumGrouping(filePaths, scanQuality, targetLoudness, config, useNative)
 
     override suspend fun applyReplayGain(
         filePaths: List<String>,

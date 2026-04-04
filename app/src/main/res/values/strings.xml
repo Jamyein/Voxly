@@ -362,6 +362,9 @@
     <string name="settings_scan_mode_track_only">Track Only</string>
     <string name="settings_scan_mode_album_only">Single Album</string>
     <string name="settings_scan_mode_track_and_album">Albums</string>
+    <string name="settings_scan_engine">Scan Engine</string>
+    <string name="settings_scan_engine_native">Native (Recommended)</string>
+    <string name="settings_scan_engine_kotlin">Kotlin (Legacy)</string>
     <string name="settings_min_duration_filter">Skip Short Audio</string>
     <string name="settings_min_duration_filter_subtitle">Do not scan audio files shorter than 60 seconds</string>
 

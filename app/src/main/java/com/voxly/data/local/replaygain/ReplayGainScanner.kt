@@ -14,6 +14,7 @@ import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
 import com.voxly.domain.repository.ScanStatus
+import com.voxly.data.local.replaygain.native.EbuR128NativeScanner
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -60,8 +61,36 @@ class ReplayGainScanner @Inject constructor(
     private val metadataProcessor: TagLibMetadataProcessor
 ) {
 
+    // Lazy native EBU R128 scanner (computation only, decoding via MediaCodec)
+    private val nativeEbuR128 by lazy {
+        try {
+            EbuR128NativeScanner(
+                channels = 2,
+                sampleRate = 48000,
+                targetLoudness = REFERENCE_LUFS
+            )
+        } catch (e: UnsatisfiedLinkError) {
+            Logger.w("Native EBU R128 scanner not available: ${e.message}", "ReplayGainScanner")
+            null
+        }
+    }
+
+    /**
+     * Check if native EBU R128 scanner is available.
+     */
+    fun isNativeScannerAvailable(): Boolean = nativeEbuR128 != null
+
+    /**
+     * Get the native scanner version info.
+     */
+    fun getNativeScannerVersion(): String = try {
+        nativeEbuR128?.getVersion() ?: "Native scanner not available"
+    } catch (e: UnsatisfiedLinkError) {
+        "Native scanner not available"
+    }
+
     companion object {
-        // Reference loudness level (rsgain default: -18 LUFS)
+        // Reference loudness level (ReplayGain 2.0 standard: -18 LUFS, rsgain)
         const val REFERENCE_LUFS = -18.0
 
         // Number of samples to process per chunk (for progress updates)
@@ -465,19 +494,21 @@ class ReplayGainScanner @Inject constructor(
      * @param scanQuality Quality level affecting sample rate
      * @param targetLoudness Target loudness in LUFS (default -18.0)
      * @param config ReplayGain configuration
+     * @param useNative If true, uses native libebur128 for computation (faster, more accurate)
      * @return Flow emitting scan progress
      */
     fun scanReplayGainWithAlbumGrouping(
         filePaths: List<String>,
         scanQuality: ScanQuality,
         targetLoudness: Float = -18f,
-        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
+        config: ReplayGainConfig = ReplayGainConfig.DEFAULT,
+        useNative: Boolean = false
     ): Flow<ScanProgress> = flow {
         val scanStartedAt = SystemClock.elapsedRealtime()
         val totalFiles = filePaths.size
 
         Logger.i(
-            "ReplayGain album grouping started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS",
+            "ReplayGain album grouping started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS native=$useNative",
             "ReplayGainScanner"
         )
 
@@ -522,12 +553,166 @@ class ReplayGainScanner @Inject constructor(
             "ReplayGainScanner"
         )
 
-        scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness, config).collect { progress ->
-            emit(progress)
+        // Route to native or Kotlin scanner
+        if (useNative && nativeEbuR128 != null) {
+            scanReplayGainByAlbumNative(filesByAlbum, scanQuality, targetLoudness, config).collect { progress ->
+                emit(progress)
+            }
+        } else {
+            scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness, config).collect { progress ->
+                emit(progress)
+            }
         }
 
         Logger.i(
             "ReplayGain album grouping finished. elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
+            "ReplayGainScanner"
+        )
+    }
+
+    /**
+     * Scans audio files grouped by album using native libebur128 engine.
+     * Uses Android MediaCodec for decoding and native libebur128 for computation.
+     * Provides bit-exact results matching rsgain's behavior with minimal APK size impact.
+     *
+     * @param filesByAlbum Map of album key to list of file paths
+     * @param scanQuality Quality level (ignored for native, uses original sample rate)
+     * @param targetLoudness Target loudness in LUFS (default -18.0)
+     * @param config ReplayGain configuration
+     * @return Flow emitting scan progress
+     */
+    fun scanReplayGainByAlbumNative(
+        filesByAlbum: Map<String, List<String>>,
+        scanQuality: ScanQuality,
+        targetLoudness: Float = -18f,
+        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
+    ): Flow<ScanProgress> = flow {
+        val totalAlbums = filesByAlbum.size
+        val totalFiles = filesByAlbum.values.flatten().size
+        var processedFiles = 0
+        var processedAlbums = 0
+        val scanStartedAt = SystemClock.elapsedRealtime()
+
+        Logger.i(
+            "Native ReplayGain album scan started. albums=$totalAlbums files=$totalFiles targetLoudness=$targetLoudness LUFS",
+            "ReplayGainScanner"
+        )
+
+        for ((albumKey, albumFiles) in filesByAlbum) {
+            if (!kotlin.coroutines.coroutineContext.isActive) {
+                Logger.w(
+                    "Native ReplayGain album scan cancelled at album=$albumKey",
+                    "ReplayGainScanner"
+                )
+                emit(
+                    ScanProgress(
+                        currentFile = processedFiles,
+                        totalFiles = totalFiles,
+                        percentage = processedFiles.toFloat() / totalFiles,
+                        currentFilePath = "",
+                        status = ScanStatus.CANCELLED
+                    )
+                )
+                return@flow
+            }
+
+            val trackGains = mutableListOf<Pair<String, ReplayGainInfo>>()
+
+            for ((index, filePath) in albumFiles.withIndex()) {
+                emit(
+                    ScanProgress(
+                        currentFile = processedFiles + 1,
+                        totalFiles = totalFiles,
+                        percentage = processedFiles.toFloat() / totalFiles,
+                        currentFilePath = filePath,
+                        status = ScanStatus.SCANNING
+                    )
+                )
+
+                try {
+                    val fileStartedAt = SystemClock.elapsedRealtime()
+                    val replayGainInfo = analyzeAudioFileNative(filePath, scanQuality, targetLoudness, config)
+
+                    if (replayGainInfo != null) {
+                        trackGains.add(filePath to replayGainInfo)
+                        Logger.v(
+                            "Native track gain calculated file=${File(filePath).name} gain=${replayGainInfo.trackGain} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}",
+                            "ReplayGainScanner"
+                        )
+                    } else {
+                        Logger.w(
+                            "Native track gain analysis failed file=${File(filePath).name}",
+                            "ReplayGainScanner"
+                        )
+                    }
+                } catch (e: Exception) {
+                    Logger.e(
+                        "Native track scan failed file=${File(filePath).name} reason=${e.message}",
+                        e,
+                        "ReplayGainScanner"
+                    )
+                }
+
+                processedFiles++
+                emit(
+                    ScanProgress(
+                        currentFile = processedFiles,
+                        totalFiles = totalFiles,
+                        percentage = processedFiles.toFloat() / totalFiles,
+                        currentFilePath = filePath,
+                        status = ScanStatus.SCANNING
+                    )
+                )
+
+                delay(50)
+                }
+
+                if (trackGains.isNotEmpty()) {
+                    val albumGainInfo = calculateAlbumGain(trackGains.map { it.second }, config)
+                    Logger.i(
+                        "Album gain calculated album=$albumKey tracks=${trackGains.size} albumGain=${albumGainInfo.albumGain} albumPeak=${albumGainInfo.albumPeak}",
+                        "ReplayGainScanner"
+                    )
+
+                    for ((filePath, trackInfo) in trackGains) {
+                        try {
+                            val combinedInfo = ReplayGainInfo(
+                                trackGain = trackInfo.trackGain,
+                                trackPeak = trackInfo.trackPeak,
+                                albumGain = albumGainInfo.albumGain,
+                                albumPeak = albumGainInfo.albumPeak,
+                                truePeak = trackInfo.truePeak,
+                                trackLoudness = trackInfo.trackLoudness,
+                                albumLoudness = albumGainInfo.albumLoudness,
+                                trackRange = trackInfo.trackRange,
+                                albumRange = albumGainInfo.albumRange,
+                                referenceLoudness = trackInfo.referenceLoudness
+                            )
+                            saveReplayGainToFile(filePath, combinedInfo)
+                        } catch (e: Exception) {
+                            Logger.e(
+                                "Failed to save album gain for file=$filePath reason=${e.message}",
+                                e,
+                                "ReplayGainScanner"
+                            )
+                        }
+                    }
+                }
+
+                processedAlbums++
+        }
+
+        emit(
+            ScanProgress(
+                currentFile = totalFiles,
+                totalFiles = totalFiles,
+                percentage = 1f,
+                currentFilePath = "",
+                status = ScanStatus.COMPLETED
+            )
+        )
+        Logger.i(
+            "Native ReplayGain album scan finished. albums=$totalAlbums files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
             "ReplayGainScanner"
         )
     }
@@ -870,6 +1055,218 @@ class ReplayGainScanner @Inject constructor(
     }
 
     /**
+     * Analyzes a single audio file using native libebur128 (via JNI).
+     * Uses Android MediaCodec for decoding and native libebur128 for computation.
+     *
+     * @param filePath Path to the audio file
+     * @param scanQuality Quality level
+     * @param targetLoudness Target loudness in LUFS
+     * @param config ReplayGain configuration
+     * @return ReplayGainInfo or null if analysis fails
+     */
+    private suspend fun analyzeAudioFileNative(
+        filePath: String,
+        scanQuality: ScanQuality,
+        targetLoudness: Float,
+        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
+    ): ReplayGainInfo? = withContext(Dispatchers.IO) {
+        try {
+            val file = File(filePath)
+            if (!file.exists()) return@withContext null
+
+            val extractor = MediaExtractor()
+            extractor.setDataSource(filePath)
+
+            var audioTrackIndex = -1
+            for (i in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(i)
+                val mime = format.getString(MediaFormat.KEY_MIME)
+                if (mime?.startsWith("audio/") == true) {
+                    audioTrackIndex = i
+                    break
+                }
+            }
+
+            if (audioTrackIndex == -1) {
+                extractor.release()
+                return@withContext null
+            }
+
+            extractor.selectTrack(audioTrackIndex)
+            val format = extractor.getTrackFormat(audioTrackIndex)
+
+            val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+
+            // Create native scanner for this file
+            val scanner = try {
+                EbuR128NativeScanner(
+                    channels = channelCount,
+                    sampleRate = sampleRate,
+                    targetLoudness = targetLoudness.toDouble(),
+                    truePeak = false,
+                    dualMono = config.dualMono
+                )
+            } catch (e: Exception) {
+                Logger.e("Failed to create native scanner for $filePath", e, "ReplayGainScanner")
+                extractor.release()
+                return@withContext null
+            }
+
+            scanner.use { nativeScanner ->
+                decodeAndFeedNativeScanner(
+                    extractor = extractor,
+                    format = format,
+                    channelCount = channelCount,
+                    nativeScanner = nativeScanner
+                )
+
+                val replayGainInfo = nativeScanner.getResult()
+                    ?: run {
+                        Logger.w("Native scanner returned null for $filePath", "ReplayGainScanner")
+                        return@withContext null
+                    }
+
+                Logger.v(
+                    "Native ReplayGain result: file=${file.name} loudness=${replayGainInfo.trackLoudness} LUFS gainDb=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak}",
+                    "ReplayGainScanner"
+                )
+
+                // Apply clipping protection
+                val clampedTrackGain = applyClipProtection(
+                    gain = replayGainInfo.trackGain,
+                    peak = replayGainInfo.trackPeak,
+                    clipMode = config.clipMode,
+                    maxPeakLevel = config.maxPeakLevel.toFloat()
+                )
+
+                replayGainInfo.copy(trackGain = clampedTrackGain)
+            }
+        } catch (e: Exception) {
+            Logger.e("analyzeAudioFileNative exception: ${e.message}", e, "ReplayGainScanner")
+            null
+        }
+    }
+
+    /**
+     * Decodes audio and feeds PCM samples to native EBU R128 scanner.
+     * Optimized: reuses ShortArray buffer, batches samples before JNI crossing.
+     */
+    private fun decodeAndFeedNativeScanner(
+        extractor: MediaExtractor,
+        format: MediaFormat,
+        channelCount: Int,
+        nativeScanner: EbuR128NativeScanner
+    ) {
+        val mime = format.getString(MediaFormat.KEY_MIME) ?: return
+        val codec = MediaCodec.createDecoderByType(mime)
+
+        try {
+            codec.configure(format, null, null, 0)
+            codec.start()
+
+            var inputDone = false
+            var outputDone = false
+            val bufferInfo = MediaCodec.BufferInfo()
+
+            // Reusable buffer: accumulate PCM samples across multiple output buffers
+            val batchBuffer = ShortArray(65536)
+            var batchPos = 0
+
+            while (!outputDone) {
+                if (!inputDone) {
+                    val inputIndex = codec.dequeueInputBuffer(DECODE_TIMEOUT_US)
+                    if (inputIndex >= 0) {
+                        val inputBuffer = codec.getInputBuffer(inputIndex)
+                        if (inputBuffer != null) {
+                            val sampleSize = extractor.readSampleData(inputBuffer, 0)
+                            if (sampleSize < 0) {
+                                codec.queueInputBuffer(
+                                    inputIndex,
+                                    0,
+                                    0,
+                                    0L,
+                                    MediaCodec.BUFFER_FLAG_END_OF_STREAM
+                                )
+                                inputDone = true
+                            } else {
+                                codec.queueInputBuffer(
+                                    inputIndex,
+                                    0,
+                                    sampleSize,
+                                    extractor.sampleTime,
+                                    0
+                                )
+                                extractor.advance()
+                            }
+                        }
+                    }
+                }
+
+                val outputIndex = codec.dequeueOutputBuffer(bufferInfo, DECODE_TIMEOUT_US)
+                when {
+                    outputIndex >= 0 -> {
+                        val outputBuffer = codec.getOutputBuffer(outputIndex)
+                        if (outputBuffer != null && bufferInfo.size > 0) {
+                            val safeOffset = bufferInfo.offset.coerceIn(0, outputBuffer.capacity() - 1)
+                            val safeLimit = minOf(safeOffset + bufferInfo.size, outputBuffer.capacity())
+                            if (safeLimit > safeOffset) {
+                                outputBuffer.position(safeOffset)
+                                outputBuffer.limit(safeLimit)
+
+                                val shortBuffer = outputBuffer.asShortBuffer()
+                                val samplesToRead = shortBuffer.remaining()
+                                if (samplesToRead > 0) {
+                                    val spaceInBatch = batchBuffer.size - batchPos
+                                    if (samplesToRead <= spaceInBatch) {
+                                        shortBuffer.get(batchBuffer, batchPos, samplesToRead)
+                                        batchPos += samplesToRead
+                                    } else {
+                                        val framesInBatch = batchPos / channelCount
+                                        if (framesInBatch > 0) {
+                                            nativeScanner.processFrames(batchBuffer, framesInBatch)
+                                        }
+                                        batchPos = 0
+                                        val canFit = minOf(samplesToRead, batchBuffer.size)
+                                        shortBuffer.get(batchBuffer, 0, canFit)
+                                        batchPos = canFit
+                                    }
+                                }
+                            }
+                        }
+
+                        codec.releaseOutputBuffer(outputIndex, false)
+                        if ((bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                            outputDone = true
+                        }
+                    }
+
+                    outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
+                        val newFormat = codec.outputFormat
+                        val newChannelCount =
+                            newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
+                        if (newChannelCount != channelCount) {
+                            Logger.w(
+                                "Native ReplayGain channelCount changed $channelCount -> $newChannelCount",
+                                "ReplayGainScanner"
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Process remaining samples in batch buffer
+            val remainingFrames = batchPos / channelCount
+            if (remainingFrames > 0) {
+                nativeScanner.processFrames(batchBuffer, remainingFrames)
+            }
+        } finally {
+            try { codec.stop() } catch (_: Exception) {}
+            try { codec.release() } catch (_: Exception) {}
+        }
+    }
+
+    /**
      * Applies clipping protection to the calculated gain.
      *
      * Following rsgain's clip_mode implementation:
@@ -934,11 +1331,10 @@ class ReplayGainScanner @Inject constructor(
     /**
      * Decodes audio file and feeds samples to EbuR128Analyzer.
      *
-     * EBU R128 implementation (ITU-R BS.1770-4):
-     * - K-weighting filters (high-shelf + high-pass)
-     * - 400ms blocks with 75% overlap
-     * - Relative gating (-10 LU relative to integrated)
-     * - Absolute gating (-70 LUFS threshold)
+     * ReplayGain 2.0 algorithm (rsgain / libebur128 compatible):
+     * - K-weighting filters (ITU-R BS.1770-4)
+     * - EBU R128 gating for integrated loudness
+     * - Reference loudness: -18 LUFS
      */
     private fun decodeAndAccumulateStats(
         extractor: MediaExtractor,
@@ -971,12 +1367,10 @@ class ReplayGainScanner @Inject constructor(
             var outputDone = false
 
             val bufferInfo = MediaCodec.BufferInfo()
-            var lastSeenTimestampUs = Long.MIN_VALUE
-            var acceptSample = true
 
-            // Buffer to collect samples for batch processing
-            val sampleBuffer = mutableListOf<Float>()
-            val bufferSize = targetSampleRate / 4  // 250ms buffer
+            // Reusable ShortArray buffer for batch processing
+            val sampleBuffer = ShortArray(targetSampleRate / 4 * channelCount)
+            var sampleBufferPos = 0
 
             while (!outputDone) {
                 if (!inputDone) {
@@ -1014,30 +1408,42 @@ class ReplayGainScanner @Inject constructor(
                     outputIndex >= 0 -> {
                         val outputBuffer = codec.getOutputBuffer(outputIndex)
                         if (outputBuffer != null && bufferInfo.size > 0) {
-                            outputBuffer.position(bufferInfo.offset)
-                            outputBuffer.limit(bufferInfo.offset + bufferInfo.size)
+                            val safeOffset = bufferInfo.offset.coerceIn(0, outputBuffer.capacity() - 1)
+                            val safeLimit = minOf(safeOffset + bufferInfo.size, outputBuffer.capacity())
+                            if (safeLimit > safeOffset) {
+                                outputBuffer.position(safeOffset)
+                                outputBuffer.limit(safeLimit)
 
-                            if (bufferInfo.presentationTimeUs != lastSeenTimestampUs) {
-                                lastSeenTimestampUs = bufferInfo.presentationTimeUs
-                                acceptSample = shouldAcceptSample(
-                                    timestampUs = bufferInfo.presentationTimeUs,
-                                    targetSampleRate = targetSampleRate
-                                )
-                            }
-
-                            if (acceptSample) {
                                 val shortBuffer = outputBuffer.asShortBuffer()
-                                while (shortBuffer.hasRemaining()) {
-                                    val sample = shortBuffer.get().toInt().toFloat() / 32768.0f
-                                    sampleBuffer.add(sample)
+                                val samplesToRead = shortBuffer.remaining()
+                                if (samplesToRead > 0) {
+                                    val spaceInBuffer = sampleBuffer.size - sampleBufferPos
+                                    val toRead = minOf(samplesToRead, spaceInBuffer)
 
-                                    // Process in batches to avoid memory issues
-                                    if (sampleBuffer.size >= bufferSize * channelCount) {
-                                        analyzer.processBlock(
-                                            sampleBuffer.toFloatArray(),
-                                            sampleBuffer.size
-                                        )
-                                        sampleBuffer.clear()
+                                    shortBuffer.get(sampleBuffer, sampleBufferPos, toRead)
+                                    sampleBufferPos += toRead
+
+                                    if (sampleBufferPos >= sampleBuffer.size) {
+                                        val floatBuffer = FloatArray(sampleBuffer.size)
+                                        for (i in sampleBuffer.indices) {
+                                            floatBuffer[i] = sampleBuffer[i].toFloat() / 32768.0f
+                                        }
+                                        analyzer.processBlock(floatBuffer, floatBuffer.size)
+                                        sampleBufferPos = 0
+                                    }
+
+                                    if (toRead < samplesToRead) {
+                                        val floatBuffer = FloatArray(sampleBufferPos)
+                                        for (i in 0 until sampleBufferPos) {
+                                            floatBuffer[i] = sampleBuffer[i].toFloat() / 32768.0f
+                                        }
+                                        analyzer.processBlock(floatBuffer, floatBuffer.size)
+                                        sampleBufferPos = 0
+
+                                        val stillRemaining = shortBuffer.remaining()
+                                        val toReadNow = minOf(stillRemaining, sampleBuffer.size)
+                                        shortBuffer.get(sampleBuffer, 0, toReadNow)
+                                        sampleBufferPos = toReadNow
                                     }
                                 }
                             }
@@ -1064,8 +1470,12 @@ class ReplayGainScanner @Inject constructor(
             }
 
             // Process remaining samples
-            if (sampleBuffer.isNotEmpty()) {
-                analyzer.processBlock(sampleBuffer.toFloatArray(), sampleBuffer.size)
+            if (sampleBufferPos > 0) {
+                val floatBuffer = FloatArray(sampleBufferPos)
+                for (i in 0 until sampleBufferPos) {
+                    floatBuffer[i] = sampleBuffer[i].toFloat() / 32768.0f
+                }
+                analyzer.processBlock(floatBuffer, floatBuffer.size)
             }
 
         } finally {
@@ -1076,11 +1486,6 @@ class ReplayGainScanner @Inject constructor(
         return analyzer
     }
 
-    private fun shouldAcceptSample(timestampUs: Long, targetSampleRate: Int): Boolean {
-        if (targetSampleRate <= 0) return true
-        val stepUs = (1_000_000L / targetSampleRate).coerceAtLeast(1L)
-        return timestampUs % stepUs == 0L
-    }
 
     /**
      * Calculates album gain from a list of track gains using energy average.

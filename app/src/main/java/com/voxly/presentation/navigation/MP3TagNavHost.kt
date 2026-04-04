@@ -2,6 +2,7 @@ package com.voxly.presentation.navigation
 
 import android.widget.Toast
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.navigation3.runtime.NavKey
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
@@ -203,12 +204,7 @@ fun MP3TagNavHost() {
                                 selected = isFileSelected,
                                 onClick = {
                                     if (!isFileSelected) {
-                                        val currentIndex = backStack.indexOfFirst {
-                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
-                                        }
-                                        if (currentIndex >= 0) {
-                                            backStack[currentIndex] = FileBrowser
-                                        }
+                                        navigateToMainScreen(backStack, FileBrowser)
                                     }
                                 }
                             )
@@ -226,12 +222,7 @@ fun MP3TagNavHost() {
                                 selected = isAlbumsSelected,
                                 onClick = {
                                     if (!isAlbumsSelected) {
-                                        val currentIndex = backStack.indexOfFirst {
-                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
-                                        }
-                                        if (currentIndex >= 0) {
-                                            backStack[currentIndex] = Albums
-                                        }
+                                        navigateToMainScreen(backStack, Albums)
                                     }
                                 }
                             )
@@ -249,12 +240,7 @@ fun MP3TagNavHost() {
                                 selected = isArtistsSelected,
                                 onClick = {
                                     if (!isArtistsSelected) {
-                                        val currentIndex = backStack.indexOfFirst {
-                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
-                                        }
-                                        if (currentIndex >= 0) {
-                                            backStack[currentIndex] = Artists
-                                        }
+                                        navigateToMainScreen(backStack, Artists)
                                     }
                                 }
                             )
@@ -272,12 +258,7 @@ fun MP3TagNavHost() {
                                 selected = isSettingsSelected,
                                 onClick = {
                                     if (!isSettingsSelected) {
-                                        val currentIndex = backStack.indexOfFirst {
-                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
-                                        }
-                                        if (currentIndex >= 0) {
-                                            backStack[currentIndex] = Settings
-                                        }
+                                        navigateToMainScreen(backStack, Settings)
                                     }
                                 }
                             )
@@ -652,3 +633,21 @@ private fun isMainScreenKey(key: Any?): Boolean = key == FileBrowser ||
         key == Albums ||
         key == Artists ||
         key == Settings
+
+/**
+ * Navigate to a main screen by truncating all sub-screens above the main screen
+ * and replacing the main screen key. This prevents back stack corruption when
+ * switching tabs while on a sub-screen.
+ */
+private fun navigateToMainScreen(backStack: MutableList<Any>, targetMainScreen: NavKey) {
+    val mainScreenIndex = backStack.indexOfFirst {
+        it is FileBrowser || it is Albums || it is Artists || it is Settings
+    }
+    if (mainScreenIndex >= 0) {
+        // Truncate all sub-screens above the main screen
+        while (backStack.size > mainScreenIndex + 1) {
+            backStack.removeAt(backStack.lastIndex)
+        }
+        backStack[mainScreenIndex] = targetMainScreen
+    }
+}

@@ -104,7 +104,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.Eagerly,
             initialValue = ScanMode.TRACK_ONLY
         )
 
