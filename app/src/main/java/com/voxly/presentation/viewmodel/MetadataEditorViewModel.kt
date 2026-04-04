@@ -186,36 +186,20 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     /**
      * Loads the audio file and its metadata.
-     * Fast path: reads metadata without cover art bytes for instant page load.
-     * Cover art is loaded asynchronously via loadCoverArtAsync().
+     * Uses getAudioFile() to get complete audio info (bitrate, sampleRate, channels, duration)
+     * from TagLib + MediaStore. Cover art is loaded asynchronously via loadCoverArtAsync().
      */
     private fun loadAudioFile() {
         viewModelScope.launch {
             _uiState.value = MetadataEditorUiState.Loading
 
-            // Fast path: read metadata without cover art bytes
-            val metadataResult = audioRepository.readMetadata(filePath)
+            val audioFileResult = audioRepository.getAudioFile(filePath)
 
-            metadataResult.fold(
-                onSuccess = { metadata ->
+            audioFileResult.fold(
+                onSuccess = { audioFile ->
+                    val metadata = audioFile.metadata
                     _editedMetadata.value = metadata
                     _originalMetadata = metadata
-
-                    // Build minimal AudioFile from metadata + file info
-                    val file = File(filePath)
-                    val audioFile = AudioFile(
-                        id = "",
-                        path = filePath,
-                        name = file.nameWithoutExtension,
-                        size = file.length(),
-                        duration = 0L,
-                        format = "",
-                        bitrate = 0,
-                        sampleRate = 0,
-                        channels = 0,
-                        metadata = metadata,
-                        replayGainInfo = null
-                    )
 
                     _uiState.value = MetadataEditorUiState.Success(
                         audioFile = audioFile,

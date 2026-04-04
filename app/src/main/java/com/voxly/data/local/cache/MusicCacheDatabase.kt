@@ -101,6 +101,8 @@ class MusicCacheDatabaseProvider @Inject constructor(
             )
                 // Enable WAL mode for better concurrent performance
                 .setJournalMode(RoomDatabase.JournalMode.WRITE_AHEAD_LOGGING)
+                // Destructive migration for cache database - data can be re-scanned
+                .fallbackToDestructiveMigration(dropAllTables = true)
                 // Migration from version 2 to 3: adds year index
                 .addMigrations(object : Migration(2, 3) {
                     override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {

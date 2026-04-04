@@ -1,5 +1,7 @@
 package com.voxly.presentation.components
 
+import android.graphics.Bitmap
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -8,10 +10,12 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -27,6 +31,8 @@ import com.voxly.R
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
+import java.io.File
 
 /**
  * Gramophone-style album art image component using Coil 3.
@@ -34,6 +40,7 @@ import com.voxly.presentation.icons.appIconPainter
  * Loading priority:
  * 1. MediaStore album art URI (fast, system cached)
  * 2. Folder cover files (cover.jpg, folder.jpg, etc.)
+ * 3. Embedded album art from audio file (MediaMetadataRetriever)
  * 
  * Note: This is for list/playback screens only. Metadata editor uses OriginalCoverImage
  * to display raw cover art from audio files.
@@ -64,27 +71,52 @@ fun AlbumArtImage(
         provider.getCoverUri(albumId = albumId, filePath = filePath)
     }
     
+    // Fallback: extract embedded art from audio file
+    val embeddedBitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = filePath,
+        key2 = targetSizePx
+    ) {
+        value = if (coverUri == null && !filePath.isNullOrBlank()) {
+            loadAlbumArtThumbnail(context, filePath!!, targetSizePx)
+        } else null
+    }
+    
     var loadFailed by remember { mutableStateOf(false) }
     
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        if (coverUri != null && !loadFailed) {
-            AsyncImage(
-                model = ImageRequest.Builder(LocalPlatformContext.current)
-                    .data(coverUri)
-                    .size(targetSizePx)
-                    .scale(Scale.FILL)
-                    .crossfade(crossfade)
-                    .build(),
-                contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = contentScale,
-                onError = { loadFailed = true }
-            )
-        } else {
-            placeholder()
+        when {
+            // Primary: MediaStore or folder cover via Coil
+            coverUri != null && !loadFailed -> {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalPlatformContext.current)
+                        .data(coverUri)
+                        .size(targetSizePx)
+                        .scale(Scale.FILL)
+                        .crossfade(crossfade)
+                        .build(),
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = contentScale,
+                    onError = { loadFailed = true }
+                )
+            }
+            // Fallback: embedded art from audio file
+            embeddedBitmap != null -> {
+                Image(
+                    bitmap = embeddedBitmap!!.asImageBitmap(),
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = contentScale
+                )
+            }
+            // Placeholder
+            else -> {
+                placeholder()
+            }
         }
     }
 }

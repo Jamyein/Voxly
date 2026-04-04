@@ -38,6 +38,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -59,6 +60,8 @@ import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 import coil3.compose.AsyncImage
@@ -386,6 +389,16 @@ fun CarouselAlbumArtImage(
     var fallbackMediaStoreBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showFallback by remember { mutableStateOf(false) }
 
+    val embeddedBitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = filePath,
+        key2 = 300
+    ) {
+        value = if (!filePath.isNullOrBlank()) {
+            loadAlbumArtThumbnail(context, filePath!!, 300)
+        } else null
+    }
+
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
         when {
             showFallback && fallbackMediaStoreBitmap != null -> {
@@ -436,11 +449,25 @@ fun CarouselAlbumArtImage(
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
+                } ?: embeddedBitmap?.let { bitmap ->
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = contentDescription,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
                 } ?: placeholder()
             }
 
             else -> {
-                placeholder()
+                embeddedBitmap?.let { bitmap ->
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = contentDescription,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } ?: placeholder()
             }
         }
     }
