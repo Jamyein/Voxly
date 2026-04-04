@@ -77,12 +77,15 @@ class AudioRepositoryImpl @Inject constructor(
                     } else {
                         cachedFile.metadata
                     }
-                    return@withContext Result.success(
-                        cachedFile.copy(
-                            metadata = mergedMeta,
-                            replayGainInfo = cachedFile.replayGainInfo
-                        )
+                    val resultFile = cachedFile.copy(
+                        metadata = mergedMeta,
+                        replayGainInfo = cachedFile.replayGainInfo
                     )
+
+                    // Update cache with complete metadata for future reads
+                    libraryCache.syncFileToCache(resultFile)
+
+                    return@withContext Result.success(resultFile)
                 }
 
                 // Cache miss: run independent I/O operations in parallel
@@ -123,8 +126,12 @@ class AudioRepositoryImpl @Inject constructor(
 
                 val mediaStoreFallbackMetadata = readMediaStoreBasicMetadata(filePath)
                 val mergedMetadata = mergeWithFallback(audioFile.metadata, mediaStoreFallbackMetadata)
+                val resultFile = audioFile.copy(metadata = mergedMetadata ?: AudioMetadata())
 
-                Result.success(audioFile.copy(metadata = mergedMetadata ?: AudioMetadata()))
+                // Persist complete metadata to cache for future reads
+                libraryCache.syncFileToCache(resultFile)
+
+                Result.success(resultFile)
             } catch (e: SecurityException) {
                 Result.failure(Exception("File not accessible due to storage permission/scope: $filePath", e))
             } catch (e: Exception) {

@@ -198,21 +198,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
             audioFileResult.fold(
                 onSuccess = { audioFile ->
                     val metadata = audioFile.metadata
-                    Logger.i(
-                        "getAudioFile metadata: title=${metadata.title}, artist=${metadata.artist}, " +
-                        "album=${metadata.album}, albumArtist=${metadata.albumArtist}, " +
-                        "year=${metadata.year}, genre=${metadata.genre}, " +
-                        "discNumber=${metadata.discNumber}, totalDiscs=${metadata.totalDiscs}, " +
-                        "lyrics=${metadata.lyrics?.take(20)}, composer=${metadata.composer}, " +
-                        "lyricist=${metadata.lyricist}, conductor=${metadata.conductor}",
-                        "MetadataEditorVM"
-                    )
-                    Logger.i(
-                        "getAudioFile audio info: format=${audioFile.format}, bitrate=${audioFile.bitrate}, " +
-                        "sampleRate=${audioFile.sampleRate}, channels=${audioFile.channels}, " +
-                        "duration=${audioFile.duration}",
-                        "MetadataEditorVM"
-                    )
                     _editedMetadata.value = metadata
                     _originalMetadata = metadata
 

@@ -580,13 +580,6 @@ class TagLibMetadataProcessor @Inject constructor(
     ): AudioMetadata {
         val propertyMap = metadata.propertyMap
 
-        Timber.tag(TAG).d("TagLib propertyMap keys: ${propertyMap.keys}")
-        Timber.tag(TAG).d("TagLib albumArtist: ${propertyMap["ALBUMARTIST"]?.firstOrNull()}")
-        Timber.tag(TAG).d("TagLib date: ${propertyMap["DATE"]?.firstOrNull()}, year: ${propertyMap["YEAR"]?.firstOrNull()}")
-        Timber.tag(TAG).d("TagLib genre: ${propertyMap["GENRE"]?.firstOrNull()}")
-        Timber.tag(TAG).d("TagLib discNumber: ${propertyMap["DISCNUMBER"]?.firstOrNull()}")
-        Timber.tag(TAG).d("TagLib lyrics: ${propertyMap["LYRICS"]?.firstOrNull()?.take(30)}")
-
         // Helper function to find property key case-insensitively
         fun findKeyIgnoreCase(map: Map<String, Array<String>>, targetKey: String): String? {
             val lowerTarget = targetKey.lowercase()
