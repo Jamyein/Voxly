@@ -932,74 +932,77 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         }
 
-        if (settings.coverEnableMusicBrainz) {
-            launch {
-                try {
-                    val result = musicBrainzRepository.searchByTrack(title, artist)
-                    result.getOrNull()?.forEach { recording ->
-                        trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.MUSICBRAINZ))
+        // Use supervisorScope so each source fails independently - one failed source doesn't cancel others
+        supervisorScope {
+            if (settings.coverEnableMusicBrainz) {
+                launch {
+                    try {
+                        val result = musicBrainzRepository.searchByTrack(title, artist)
+                        result.getOrNull()?.forEach { recording ->
+                            trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.MUSICBRAINZ))
+                        }
+                        if (result.isFailure) {
+                            trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, result.exceptionOrNull()?.message ?: "Failed"))
+                        }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.message ?: "Failed"))
+                    } finally {
+                        markSourceCompleted(OnlineSource.MUSICBRAINZ)
                     }
-                    if (result.isFailure) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, result.exceptionOrNull()?.message ?: "Failed"))
-                    }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.message ?: "Failed"))
-                } finally {
-                    markSourceCompleted(OnlineSource.MUSICBRAINZ)
                 }
             }
-        }
 
-        if (settings.coverEnableITunes) {
-            launch {
-                try {
-                    val result = iTunesRepository.searchByTrack(title, artist)
-                    result.getOrNull()?.forEach { recording ->
-                        trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.ITUNES))
+            if (settings.coverEnableITunes) {
+                launch {
+                    try {
+                        val result = iTunesRepository.searchByTrack(title, artist)
+                        result.getOrNull()?.forEach { recording ->
+                            trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.ITUNES))
+                        }
+                        if (result.isFailure) {
+                            trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, result.exceptionOrNull()?.message ?: "Failed"))
+                        }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.message ?: "Failed"))
+                    } finally {
+                        markSourceCompleted(OnlineSource.ITUNES)
                     }
-                    if (result.isFailure) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, result.exceptionOrNull()?.message ?: "Failed"))
-                    }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.message ?: "Failed"))
-                } finally {
-                    markSourceCompleted(OnlineSource.ITUNES)
                 }
             }
-        }
 
-        if (settings.coverEnableNetease) {
-            launch {
-                try {
-                    val result = searchNeteaseByTrack(title, artist, settings.requestLimit)
-                    result.getOrNull()?.forEach { recording ->
-                        trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.NETEASE))
+            if (settings.coverEnableNetease) {
+                launch {
+                    try {
+                        val result = searchNeteaseByTrack(title, artist, settings.requestLimit)
+                        result.getOrNull()?.forEach { recording ->
+                            trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.NETEASE))
+                        }
+                        if (result.isFailure) {
+                            trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, result.exceptionOrNull()?.message ?: "Failed"))
+                        }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.message ?: "Failed"))
+                    } finally {
+                        markSourceCompleted(OnlineSource.NETEASE)
                     }
-                    if (result.isFailure) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, result.exceptionOrNull()?.message ?: "Failed"))
-                    }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.message ?: "Failed"))
-                } finally {
-                    markSourceCompleted(OnlineSource.NETEASE)
                 }
             }
-        }
 
-        if (settings.coverEnableQQMusic) {
-            launch {
-                try {
-                    val result = searchQQMusicByTrack(title, artist, settings.requestLimit)
-                    result.getOrNull()?.forEach { recording ->
-                        trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.QQ_MUSIC))
+            if (settings.coverEnableQQMusic) {
+                launch {
+                    try {
+                        val result = searchQQMusicByTrack(title, artist, settings.requestLimit)
+                        result.getOrNull()?.forEach { recording ->
+                            trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.QQ_MUSIC))
+                        }
+                        if (result.isFailure) {
+                            trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, result.exceptionOrNull()?.message ?: "Failed"))
+                        }
+                    } catch (e: Exception) {
+                        trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.message ?: "Failed"))
+                    } finally {
+                        markSourceCompleted(OnlineSource.QQ_MUSIC)
                     }
-                    if (result.isFailure) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, result.exceptionOrNull()?.message ?: "Failed"))
-                    }
-                } catch (e: Exception) {
-                    trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.message ?: "Failed"))
-                } finally {
-                    markSourceCompleted(OnlineSource.QQ_MUSIC)
                 }
             }
         }
