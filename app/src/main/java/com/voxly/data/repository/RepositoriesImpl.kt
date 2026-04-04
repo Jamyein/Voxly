@@ -333,8 +333,9 @@ class ReplayGainRepositoryImpl @Inject constructor(
         filePaths: List<String>,
         scanQuality: ScanQuality,
         targetLoudness: Float,
-        config: com.voxly.domain.model.ReplayGainConfig
-    ): Flow<ScanProgress> = replayGainScanner.scanReplayGain(filePaths, scanQuality, targetLoudness, config)
+        config: com.voxly.domain.model.ReplayGainConfig,
+        useNative: Boolean
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGain(filePaths, scanQuality, targetLoudness, config, useNative)
 
     override fun scanReplayGainByAlbum(
         filesByAlbum: Map<String, List<String>>,

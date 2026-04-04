@@ -140,7 +140,8 @@ class BatchReplayGainUseCase @Inject constructor(
     operator fun invoke(
         filePaths: List<String>,
         scanQuality: ScanQuality = ScanQuality.ACCURATE,
-        targetLoudness: Float = -14f
+        targetLoudness: Float = -14f,
+        useNative: Boolean = false
     ): Flow<com.voxly.domain.repository.ScanProgress> = flow {
         batchEngine.execute(
             items = filePaths,
@@ -149,7 +150,8 @@ class BatchReplayGainUseCase @Inject constructor(
                     listOf(filePath),
                     scanQuality,
                     targetLoudness,
-                    com.voxly.domain.model.ReplayGainConfig.DEFAULT
+                    com.voxly.domain.model.ReplayGainConfig.DEFAULT,
+                    useNative = useNative
                 )
                 Result.success(Unit)
             },

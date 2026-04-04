@@ -83,7 +83,8 @@ class ReplayGainViewModel @AssistedInject constructor(
                         filePaths,
                         scanQuality,
                         targetLoudness,
-                        scanConfig
+                        scanConfig,
+                        useNative = useNative
                     )
                     ScanMode.SINGLE_ALBUM.name -> replayGainRepository.scanReplayGainByAlbum(
                         mapOf("single_album" to filePaths),
@@ -103,7 +104,8 @@ class ReplayGainViewModel @AssistedInject constructor(
                         filePaths,
                         scanQuality,
                         targetLoudness,
-                        scanConfig
+                        scanConfig,
+                        useNative = useNative
                     )
                 }
 

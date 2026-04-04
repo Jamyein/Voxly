@@ -373,7 +373,8 @@ class ReplayGainScanner @Inject constructor(
         filePaths: List<String>,
         scanQuality: ScanQuality,
         targetLoudness: Float = -18f,
-        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
+        config: ReplayGainConfig = ReplayGainConfig.DEFAULT,
+        useNative: Boolean = false
     ): Flow<ScanProgress> = flow {
         val totalFiles = filePaths.size
         var processedFiles = 0
@@ -414,10 +415,14 @@ class ReplayGainScanner @Inject constructor(
             try {
                 val fileStartedAt = SystemClock.elapsedRealtime()
                 Logger.v(
-                    "Analyzing ReplayGain file=${File(filePath).name} path=$filePath",
+                    "Analyzing ReplayGain file=${File(filePath).name} path=$filePath native=$useNative",
                     "ReplayGainScanner"
                 )
-                val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness, config)
+                val replayGainInfo = if (useNative && nativeEbuR128 != null) {
+                    analyzeAudioFileNative(filePath, scanQuality, targetLoudness, config)
+                } else {
+                    analyzeAudioFile(filePath, scanQuality, targetLoudness, config)
+                }
 
                 if (replayGainInfo != null) {
                     val saved = saveReplayGainToFile(filePath, replayGainInfo)

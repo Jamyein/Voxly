@@ -413,24 +413,30 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     maxPeakLevel = 0.0
                 )
 
+                val scanEngine = settingsDataStore.scanEngine.first()
+                val useNative = scanEngine.equals("NATIVE", ignoreCase = true)
+
                 val scanFlow = when (currentScanMode) {
                     ScanMode.TRACK_ONLY -> replayGainRepository.scanReplayGain(
                         filesToScan,
                         scanQuality,
                         targetLoudness,
-                        scanConfig
+                        scanConfig,
+                        useNative = useNative
                     )
                     ScanMode.SINGLE_ALBUM -> replayGainRepository.scanReplayGainByAlbum(
                         mapOf("single_album" to filesToScan),
                         scanQuality,
                         targetLoudness,
-                        scanConfig
+                        scanConfig,
+                        useNative = useNative
                     )
                     ScanMode.ALBUMS -> replayGainRepository.scanReplayGainWithAlbumGrouping(
                         filesToScan,
                         scanQuality,
                         targetLoudness,
-                        scanConfig
+                        scanConfig,
+                        useNative = useNative
                     )
                 }
 
