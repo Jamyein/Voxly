@@ -4,7 +4,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -67,7 +66,6 @@ import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -183,19 +181,6 @@ fun FileBrowserAdaptiveScreen(
     
     // Determine if we're in single-pane mode (small screens)
     val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
-    
-    // Handle back gesture when in detail pane (only in multi-pane mode)
-    PredictiveBackHandler(enabled = !isSinglePane && navigator.currentDestination?.contentKey != null) { progress ->
-        try {
-            progress.collect { /* Handle progress if needed */ }
-            // Navigate back from detail pane
-            coroutineScope.launch {
-                navigator.navigateBack()
-            }
-        } catch (e: CancellationException) {
-            // Gesture cancelled, do nothing
-        }
-    }
 
     // Material3 ListDetailPaneScaffold - handles all screen sizes automatically
     ListDetailPaneScaffold(

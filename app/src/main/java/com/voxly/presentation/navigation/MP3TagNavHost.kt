@@ -180,7 +180,21 @@ fun MP3TagNavHost() {
                         }
                     }
             },
-            contentKey = { it?.javaClass?.name ?: "null" },
+            contentKey = { key ->
+                when (key) {
+                    is MetadataEditor -> "MetadataEditor_${key.filePath}"
+                    is DirectoryContent -> "DirectoryContent_${key.directoryUri}"
+                    is ReplayGainScanner -> "ReplayGainScanner_${key.filePaths.hashCode()}"
+                    is OnlineMetadata -> "OnlineMetadata_${key.filePath}"
+                    is OnlineLyricsSearch -> "OnlineLyricsSearch_${key.filePath}"
+                    is OnlineCoverSearch -> "OnlineCoverSearch_${key.filePath}"
+                    is LyricsSelector -> "LyricsSelector_${key.filePath}"
+                    is LyricsPoster -> "LyricsPoster_${key.filePath}"
+                    is AlbumDetail -> "AlbumDetail_${key.albumName}_${key.albumArtist}"
+                    is ArtistDetail -> "ArtistDetail_${key.artistName}"
+                    else -> key?.javaClass?.name ?: "null"
+                }
+            },
             label = "Unified_Navigation"
         ) { targetKey ->
             CompositionLocalProvider(

@@ -1,7 +1,6 @@
 package com.voxly.presentation.screens.album
 
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
@@ -28,7 +27,6 @@ import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.AlbumViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
@@ -50,15 +48,6 @@ fun AlbumAdaptiveScreen(
     
     val scaffoldValue = navigator.scaffoldValue
     val isSinglePane = scaffoldValue.primary == PaneAdaptedValue.Hidden
-    
-    PredictiveBackHandler(enabled = selectedFileForEditing != null && !isSinglePane) { progress ->
-        try {
-            progress.collect { }
-            selectedFileForEditing = null
-            fileSwitchCounter++
-        } catch (e: CancellationException) {
-        }
-    }
 
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,

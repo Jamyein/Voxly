@@ -1,6 +1,5 @@
 package com.voxly.presentation.screens.artist
 
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -31,7 +30,6 @@ import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
@@ -54,30 +52,6 @@ fun ArtistAdaptiveScreen(
     
     val scaffoldValue = navigator.scaffoldValue
     val isSinglePane = scaffoldValue.primary == PaneAdaptedValue.Hidden
-    
-    val isInSubScreen = selectedFileForEditing != null || selectedAlbumNavKey != null || 
-        navigator.currentDestination?.contentKey is ArtistDetail
-    
-    PredictiveBackHandler(enabled = isInSubScreen && !isSinglePane) { progress ->
-        try {
-            progress.collect { }
-            when {
-                selectedFileForEditing != null -> {
-                    selectedFileForEditing = null
-                    fileSwitchCounter++
-                }
-                selectedAlbumNavKey != null -> {
-                    selectedAlbumNavKey = null
-                }
-                navigator.currentDestination?.contentKey is ArtistDetail -> {
-                    coroutineScope.launch {
-                        navigator.navigateBack()
-                    }
-                }
-            }
-        } catch (e: CancellationException) {
-        }
-    }
 
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
