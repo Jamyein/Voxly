@@ -113,9 +113,9 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
 
             if (seed != null) {
                 // 使用编辑中的实时值，进行清理
-                val sanitizedTitle = sanitizeSearchTerm(seed.title) ?: File(targetPath).nameWithoutExtension
+                val sanitizedTitle = sanitizeSearchTerm(seed.title)
                 val sanitizedArtist = sanitizeSearchTerm(seed.artist)
-                title = sanitizedTitle
+                title = sanitizedTitle.orEmpty()
                 artist = sanitizedArtist
                 _searchTitle.value = title
                 _searchArtist.value = artist
@@ -128,7 +128,7 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                 result.fold(
                     onSuccess = { audioFile ->
                         val metadata = audioFile.metadata
-                        val rawTitle = metadata.title?.takeIf { it.isNotBlank() } ?: File(targetPath).nameWithoutExtension
+                        val rawTitle = metadata.title.orEmpty()
                         val rawArtist = metadata.artist?.takeIf { it.isNotBlank() }
                         title = sanitizeSearchTerm(rawTitle) ?: rawTitle
                         artist = sanitizeSearchTerm(rawArtist) ?: rawArtist

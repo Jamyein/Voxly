@@ -83,7 +83,7 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
 
             if (seed != null) {
                 // 使用编辑中的实时值，进行清理
-                track = sanitizeSearchTerm(seed.title) ?: File(targetPath).nameWithoutExtension
+                track = sanitizeSearchTerm(seed.title).orEmpty()
                 artist = sanitizeSearchTerm(seed.artist)
                 album = sanitizeSearchTerm(seed.album)
             } else {
@@ -92,7 +92,7 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
                 result.fold(
                     onSuccess = { audioFile ->
                         val metadata = audioFile.metadata
-                        val rawTitle = metadata.title?.takeIf { it.isNotBlank() } ?: File(targetPath).nameWithoutExtension
+                        val rawTitle = metadata.title.orEmpty()
                         val rawArtist = metadata.artist?.takeIf { it.isNotBlank() }
                         val rawAlbum = metadata.album?.takeIf { it.isNotBlank() }
                         track = sanitizeSearchTerm(rawTitle) ?: rawTitle
