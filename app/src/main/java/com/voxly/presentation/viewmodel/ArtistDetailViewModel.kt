@@ -5,7 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.repository.ArtistCacheRepository
-import com.voxly.data.repository.ArtistGroup
+import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.navigation.ArtistDetail
 import com.voxly.presentation.ui.extractAndCacheCoverBytes
@@ -110,7 +110,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
      * Cache artist data for navigation.
      */
     fun cacheArtistData(artistName: String, files: List<AudioFile>, coverPath: String? = null) {
-        val artistGroup = ArtistGroup(name = artistName, files = files, coverPath = coverPath)
+        val artistGroup = ArtistGroup(name = artistName, albums = emptyList(), files = files, coverPath = coverPath)
         artistCacheRepository.cacheArtist(artistGroup)
 
         // Also update ViewModel state

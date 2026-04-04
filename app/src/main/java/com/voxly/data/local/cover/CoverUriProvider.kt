@@ -14,11 +14,13 @@ class CoverUriProvider @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
-    
+
     private val albumArtUri = Uri.parse("content://media/external/audio/albumart")
-    
-    private val uriExistsCache = mutableMapOf<Uri, Boolean>()
-    private val folderCoverCache = mutableMapOf<String, Uri?>()
+
+    companion object {
+        private val uriExistsCache = mutableMapOf<Uri, Boolean>()
+        private val folderCoverCache = mutableMapOf<String, Uri?>()
+    }
 
     fun getCoverUri(
         albumId: Long?,
@@ -30,45 +32,43 @@ class CoverUriProvider @Inject constructor(
                 return mediaStoreUri
             }
         }
-        
+
         if (!filePath.isNullOrBlank()) {
             findFolderCoverCached(filePath)?.let { return it }
         }
-        
+
         return null
     }
 
-    private fun uriExistsCached(uri: Uri): Boolean {
-        return uriExistsCache.getOrPut(uri) {
-            try {
-                contentResolver.openInputStream(uri)?.use { true } ?: false
-            } catch (e: Exception) {
-                false
-            }
+    private fun uriExistsCached(uri: Uri): Boolean = synchronized(uriExistsCache) {
+        uriExistsCache.getOrPut(uri) {
+            runCatching { contentResolver.openInputStream(uri)?.use { true } }.getOrNull() ?: false
         }
     }
 
     private fun findFolderCoverCached(filePath: String): Uri? {
-        return folderCoverCache.getOrPut(filePath) {
-            val folder = File(filePath).parentFile ?: return@getOrPut null
-            if (!folder.exists() || !folder.isDirectory) return@getOrPut null
-            
-            val coverNames = listOf(
-                "cover.jpg", "folder.jpg", "cover.png", "folder.png",
-                "album.jpg", "album.png", "cover.webp", "folder.webp"
-            )
-            
-            for (name in coverNames) {
-                val file = File(folder, name)
-                if (file.exists()) {
-                    return@getOrPut Uri.fromFile(file)
+        return synchronized(folderCoverCache) {
+            folderCoverCache.getOrPut(filePath) {
+                val folder = File(filePath).parentFile ?: return@getOrPut null
+                if (!folder.exists() || !folder.isDirectory) return@getOrPut null
+
+                val coverNames = listOf(
+                    "cover.jpg", "folder.jpg", "cover.png", "folder.png",
+                    "album.jpg", "album.png", "cover.webp", "folder.webp"
+                )
+
+                for (name in coverNames) {
+                    val file = File(folder, name)
+                    if (file.exists()) {
+                        return@getOrPut Uri.fromFile(file)
+                    }
                 }
+
+                return@getOrPut null
             }
-            
-            return@getOrPut null
         }
     }
-    
+
     fun getMediaStoreUri(albumId: Long): Uri? {
         if (albumId <= 0) return null
         val uri = ContentUris.withAppendedId(albumArtUri, albumId)

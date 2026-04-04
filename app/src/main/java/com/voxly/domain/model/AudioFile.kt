@@ -1,11 +1,13 @@
 package com.voxly.domain.model
 
 import android.net.Uri
+import androidx.compose.runtime.Immutable
 import java.io.Serializable
 
 /**
  * Domain model representing an audio file with its metadata and replay gain information.
  */
+@Immutable
 data class AudioFile(
     val id: String,
     val path: String,
@@ -242,19 +244,9 @@ data class ReplayGainInfo(
 }
 
 /**
- * Domain model representing a directory entry.
- */
-data class DirectoryEntry(
-    val path: String,
-    val name: String,
-    val isDirectory: Boolean,
-    val audioFiles: List<AudioFile> = emptyList(),
-    val subDirectories: List<DirectoryEntry> = emptyList()
-)
-
-/**
  * Domain model representing a group of audio files by album.
  */
+@Immutable
 data class AlbumGroup(
     val name: String,
     val artist: String?,
@@ -265,6 +257,7 @@ data class AlbumGroup(
 /**
  * Domain model representing a group of audio files by artist.
  */
+@Immutable
 data class ArtistGroup(
     val name: String,
     val albums: List<String>,

@@ -595,11 +595,18 @@
     <string name="artist_separators_summary">Characters used to split artist names, default &amp; \\</string>
 
     <!-- Edit History -->
-    <string name="edit_history">编辑历史</string>
-    <string name="edit_history_title">编辑历史</string>
-    <string name="no_edit_history">暂无编辑记录</string>
-    <string name="modified_fields">修改了: %s</string>
-    <string name="original_value">原始: %s</string>
-    <string name="new_value">新: %s</string>
+    <string name="edit_history">Edit History</string>
+    <string name="edit_history_title">Edit History</string>
+    <string name="no_edit_history">No edit history</string>
+    <string name="modified_fields">Modified: %s</string>
+    <string name="original_value">Original: %s</string>
+    <string name="new_value">New: %s</string>
+
+    <!-- Online Search -->
+    <string name="search_results_count">Found %d results</string>
+    <string name="search_results_count_with_more">Found %d results, searching for more…</string>
+    <string name="source_status_completed">✓</string>
+    <string name="source_status_error">✗</string>
+    <string name="source_status_searching">…</string>
 
 </resources>

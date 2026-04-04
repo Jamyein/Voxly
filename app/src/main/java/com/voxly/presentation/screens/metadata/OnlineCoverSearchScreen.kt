@@ -1,7 +1,6 @@
 package com.voxly.presentation.screens.metadata
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -148,7 +147,6 @@ fun OnlineCoverSearchScreen(
                 .fillMaxSize()
                 .padding(top = innerPadding.calculateTopPadding())
                 .padding(16.dp)
-                .pointerInput(Unit) { }
         ) {
             AnimatedVisibility(
                 visible = isLoading && coverResults.isEmpty(),
@@ -318,17 +316,18 @@ private fun CoverResultItem(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Surface(
-                    shape = MaterialTheme.shapes.small,
-                    color = MaterialTheme.colorScheme.tertiaryContainer
-                ) {
-                    Text(
-                        text = item.source.toDisplayString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
+            // Source tag - unified with tertiary color scheme
+            Surface(
+                shape = MaterialTheme.shapes.small,
+                color = MaterialTheme.colorScheme.tertiaryContainer
+            ) {
+                Text(
+                    text = item.source.toDisplayString(),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
+                )
+            }
                 if (dimensions != null) {
                     Text(
                         text = "${dimensions.first}×${dimensions.second}",
@@ -417,11 +416,10 @@ private fun SearchProgressIndicatorForCover(
 
             Spacer(modifier = Modifier.height(8.dp))
 
-            val statusText = buildString {
-                append("已找到 $resultCount 个结果")
-                if (isSearching) {
-                    append("，正在搜索更多...")
-                }
+            val statusText = if (isSearching) {
+                stringResource(R.string.search_results_count_with_more, resultCount)
+            } else {
+                stringResource(R.string.search_results_count, resultCount)
             }
 
             val hasKnownProgress = completedSources.isNotEmpty() || errorSources.isNotEmpty()
@@ -493,8 +491,14 @@ private fun SourceStatusChipForCover(
         else -> MaterialTheme.colorScheme.outline
     }
 
+    val statusSymbol = when {
+        hasError -> stringResource(R.string.source_status_error)
+        isCompleted -> stringResource(R.string.source_status_completed)
+        else -> stringResource(R.string.source_status_searching)
+    }
+
     Text(
-        text = if (hasError) "$name ✗" else if (isCompleted) "$name ✓" else "$name...",
+        text = "$name $statusSymbol",
         style = MaterialTheme.typography.labelSmall,
         color = color
     )
