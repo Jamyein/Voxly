@@ -6,7 +6,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import com.voxly.presentation.theme.ExpressiveMotion
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -209,7 +209,7 @@ private fun <T> ConnectedIconButtonGroup(
     val animatedWeights = options.map { option ->
         val animatedWeight by animateFloatAsState(
             targetValue = if (option.value == selectedValue) selectedWeight else baseWeight,
-            animationSpec = ExpressiveMotion.DefaultSpring,
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
             label = "settings_connected_button_weight"
         )
         animatedWeight
@@ -258,7 +258,7 @@ private fun <T> ConnectedIconButtonGroup(
                                         text = option.text,
                                         style = MaterialTheme.typography.labelLarge,
                                         modifier = Modifier.animateContentSize(
-                                            animationSpec = ExpressiveMotion.DefaultSpringSize
+                                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
                                         )
                                     )
                                 } else {
@@ -266,7 +266,7 @@ private fun <T> ConnectedIconButtonGroup(
                                         imageVector = option.icon!!,
                                         contentDescription = option.tooltip,
                                         modifier = Modifier.animateContentSize(
-                                            animationSpec = ExpressiveMotion.DefaultSpringSize
+                                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
                                         )
                                     )
                                 }
@@ -361,7 +361,7 @@ fun DraggableSourcePriorityDialog(
                     .heightIn(max = 450.dp)
                     .verticalScroll(rememberScrollState())
                     .animateContentSize(
-                        animationSpec = ExpressiveMotion.DefaultSpringSize
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
                     ),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -377,12 +377,12 @@ fun DraggableSourcePriorityDialog(
                     // Animated hover effects for dragged item
                     val animatedScale by animateFloatAsState(
                         targetValue = if (isDragging) 1.05f else 1f,
-                        animationSpec = ExpressiveMotion.DefaultSpring,
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         label = "scale"
                     )
                     val animatedElevation by animateDpAsState(
                         targetValue = if (isDragging) 8.dp else 0.dp,
-                        animationSpec = ExpressiveMotion.SlowSpringDp,
+                        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
                         label = "elevation"
                     )
 
@@ -1068,7 +1068,7 @@ fun SettingsScreen(
                     trailingContent = {
                         val arrowRotation by animateFloatAsState(
                             targetValue = if (languageExpanded) 180f else 0f,
-            animationSpec = ExpressiveMotion.DefaultSpring,
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                             label = "language_dropdown_arrow"
                         )
                         SortDropdownMenu(
@@ -1176,7 +1176,7 @@ fun SettingsScreen(
                     trailingContent = {
                         val arrowRotation by animateFloatAsState(
                             targetValue = if (loudnessExpanded) 180f else 0f,
-                            animationSpec = ExpressiveMotion.DefaultSpring,
+                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                             label = "loudness_dropdown_arrow"
                         )
                         SortDropdownMenu(

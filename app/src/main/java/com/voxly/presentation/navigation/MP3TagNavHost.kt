@@ -465,7 +465,7 @@ private fun RenderSubScreen(
                 filePath = key.filePath,
                 viewModel = viewModel,
                 coverTag = key.coverTag.takeIf { it.isNotEmpty() },
-                sharedElementKey = null,
+                sharedElementKey = key.coverTag.takeIf { it.isNotEmpty() },
                 onNavigateBack = { backStack.removeLastOrNull() },
                 onNavigateToOnlineMetadata = {
                     backStack.add(OnlineMetadata(key.filePath))

@@ -376,7 +376,7 @@ fun FileBrowserAdaptiveScreen(
                             filePath = currentFile.path,
                             viewModel = metadataViewModel,
                             coverTag = createAlbumArtSharedElementKey(currentFile.path),
-                            sharedElementKey = null,
+                            sharedElementKey = createAlbumArtSharedElementKey(currentFile.path),
                             onNavigateBack = {
                                 // Use coroutine for suspend function
                                 coroutineScope.launch {

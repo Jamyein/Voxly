@@ -71,7 +71,6 @@ import com.voxly.presentation.components.lyricsposter.PosterFontWeight
 import com.voxly.presentation.components.lyricsposter.PosterShape
 import com.voxly.presentation.components.lyricsposter.WatermarkPosition
 import com.voxly.presentation.components.lyricsposter.rememberPosterCapture
-import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.viewmodel.LyricsPosterViewModel
 import androidx.compose.runtime.collectAsState
 
@@ -164,7 +163,7 @@ fun LyricsPosterScreen(
     // Animate background color
     val backgroundColor by animateColorAsState(
         targetValue = targetBackgroundColor,
-        animationSpec = ExpressiveMotion.SlowSpringColor,
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "background_color"
     )
 
@@ -183,7 +182,7 @@ fun LyricsPosterScreen(
     // Animate content color
     val contentColor by animateColorAsState(
         targetValue = targetContentColor,
-        animationSpec = ExpressiveMotion.SlowSpringColor,
+        animationSpec = MaterialTheme.motionScheme.slowEffectsSpec(),
         label = "content_color"
     )
 

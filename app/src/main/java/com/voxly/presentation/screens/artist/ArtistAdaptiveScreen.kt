@@ -118,7 +118,7 @@ fun ArtistAdaptiveScreen(
                                     filePath = filePath,
                                     viewModel = metadataViewModel,
                                     coverTag = createAlbumArtSharedElementKey(filePath),
-                                    sharedElementKey = null,
+                                    sharedElementKey = createAlbumArtSharedElementKey(filePath),
                                     onNavigateBack = {
                                         selectedFileForEditing = null
                                         fileSwitchCounter++
@@ -207,7 +207,7 @@ fun ArtistAdaptiveScreen(
                             filePath = filePath,
                             viewModel = metadataViewModel,
                             coverTag = createAlbumArtSharedElementKey(filePath),
-                            sharedElementKey = null,
+                            sharedElementKey = createAlbumArtSharedElementKey(filePath),
                             onNavigateBack = {
                                 selectedFileForEditing = null
                                 fileSwitchCounter++

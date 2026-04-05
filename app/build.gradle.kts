@@ -189,8 +189,8 @@ dependencies {
     implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha16")
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha16")
     // Material3 Adaptive Layout - for dual-pane and three-pane layouts
-    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.1.0")
-    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.1.0")
+    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.2.0")
+    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.2.0")
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
 
@@ -256,12 +256,8 @@ dependencies {
     implementation("androidx.palette:palette-ktx:1.0.0")
 
     // Coil 3 - Image loading library
-    implementation("io.coil-kt.coil3:coil-compose:3.2.0")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.2.0")
-
-    // Coil 3 - Image loading library
-    implementation("io.coil-kt.coil3:coil-compose:3.2.0")
-    implementation("io.coil-kt.coil3:coil-network-okhttp:3.2.0")
+    implementation("io.coil-kt.coil3:coil-compose:3.4.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")
