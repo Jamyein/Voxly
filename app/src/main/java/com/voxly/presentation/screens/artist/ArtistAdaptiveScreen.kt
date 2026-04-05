@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.artist
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -53,6 +54,25 @@ fun ArtistAdaptiveScreen(
     val scaffoldValue = navigator.scaffoldValue
     val isSinglePane = scaffoldValue.primary == PaneAdaptedValue.Hidden
 
+    // Handle system back gesture/button for internal scaffold navigation
+    // This intercepts back before NavHost's PredictiveBackHandler when detail/extra panes have content
+    BackHandler(enabled = selectedFileForEditing != null || selectedAlbumNavKey != null || navigator.currentDestination?.contentKey is ArtistDetail) {
+        when {
+            selectedAlbumNavKey != null -> {
+                selectedAlbumNavKey = null
+            }
+            selectedFileForEditing != null -> {
+                selectedFileForEditing = null
+                fileSwitchCounter++
+            }
+            navigator.currentDestination?.contentKey is ArtistDetail -> {
+                coroutineScope.launch {
+                    navigator.navigateBack()
+                }
+            }
+        }
+    }
+
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
@@ -82,7 +102,8 @@ fun ArtistAdaptiveScreen(
                 val currentDestination = navigator.currentDestination?.contentKey
                 
                 when {
-                    !isSinglePane && selectedFileForEditing != null -> {
+                    // 2-pane mode: show MetadataEditor when file selected (replaces ArtistDetail/AlbumDetail)
+                    selectedFileForEditing != null -> {
                         selectedFileForEditing?.let { filePath ->
                             key(filePath, fileSwitchCounter) {
                                 val navKey = MetadataEditor(

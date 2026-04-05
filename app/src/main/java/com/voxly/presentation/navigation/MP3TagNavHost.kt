@@ -429,6 +429,9 @@ private fun RenderSubScreen(
                 directoryName = key.directoryName,
                 viewModel = libraryViewModel,
                 onNavigateBack = { backStack.removeLastOrNull() },
+                onNavigateToMetadata = { filePath, coverTag ->
+                    backStack.add(MetadataEditor(filePath, coverTag ?: ""))
+                },
                 onNavigateToReplayGain = { filePaths ->
                     backStack.add(ReplayGainScanner(filePaths))
                 },
@@ -441,9 +444,9 @@ private fun RenderSubScreen(
                 onNavigateToOnlineCoverSearch = {
                     backStack.add(OnlineCoverSearch(key.directoryUri))
                 },
-                onNavigateToLyricsSelector = { _, title, artist, album, _ ->
+                onNavigateToLyricsSelector = { filePath, title, artist, album, _ ->
                     backStack.add(LyricsSelector(
-                        filePath = key.directoryUri,
+                        filePath = filePath,
                         title = title,
                         artist = artist,
                         album = album

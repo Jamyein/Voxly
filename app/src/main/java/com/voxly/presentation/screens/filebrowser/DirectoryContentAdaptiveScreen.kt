@@ -34,12 +34,14 @@ import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
+import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -69,11 +71,9 @@ import kotlinx.coroutines.launch
  * Adaptive DirectoryContent screen using Material3 ListDetailPaneScaffold.
  *
  * This is true adaptive design - Material3 automatically manages:
- * - Small screens: Single pane with full-screen navigation
+ * - Small screens: Single pane with full-screen navigation (delegates to NavHost)
  * - Medium screens: Dual pane with adjustable ratio
  * - Large screens: Dual pane with 40:60 split
- *
- * No conditional logic needed - Material3 handles all screen sizes.
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -81,6 +81,7 @@ fun DirectoryContentAdaptiveScreen(
     directoryUri: String,
     directoryName: String,
     onNavigateBack: () -> Unit,
+    onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
     onNavigateToOnlineMetadata: () -> Unit,
     onNavigateToOnlineLyricsSearch: () -> Unit,
@@ -93,6 +94,12 @@ fun DirectoryContentAdaptiveScreen(
 
     // Material3 Adaptive Navigator - automatically handles all screen sizes
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
+
+    // Track file switch counter for proper ViewModel recreation
+    var fileSwitchCounter by remember { mutableIntStateOf(0) }
+
+    // Determine if we're in single-pane mode (small screens)
+    val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
 
     // Load directory files
     LaunchedEffect(directoryUri) {
@@ -187,7 +194,13 @@ fun DirectoryContentAdaptiveScreen(
                             IconButton(onClick = {
                                 if (isSelectionMode) {
                                     viewModel.clearSelection()
+                                } else if (!isSinglePane && navigator.currentDestination != null) {
+                                    // Multi-pane with detail showing: go back to list
+                                    coroutineScope.launch {
+                                        navigator.navigateBack()
+                                    }
                                 } else {
+                                    // Single-pane or no detail: exit directory
                                     onNavigateBack()
                                 }
                             }) {
@@ -278,8 +291,11 @@ fun DirectoryContentAdaptiveScreen(
                                         onFileClick = { audioFile ->
                                             if (isSelectionMode) {
                                                 viewModel.toggleFileSelection(audioFile.path)
+                                            } else if (isSinglePane) {
+                                                // Small screen: navigate to independent MetadataEditor via NavHost
+                                                onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
                                             } else {
-                                                // Navigate to detail - use coroutine for suspend function
+                                                // Multi-pane: show in detail pane
                                                 coroutineScope.launch {
                                                     navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
                                                 }
@@ -479,8 +495,12 @@ fun DirectoryContentAdaptiveScreen(
             allFiles = files,
             onFileClick = { audioFile ->
                 showSearchSheet = false
-                coroutineScope.launch {
-                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                if (isSinglePane) {
+                    onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                } else {
+                    coroutineScope.launch {
+                        navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                    }
                 }
             }
         )
