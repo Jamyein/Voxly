@@ -106,7 +106,9 @@ class AudioFileScanner @Inject constructor(
         val whitelistEnabled = array[1] as Boolean
         val blacklistEnabled = array[2] as Boolean
         val minDurationEnabled = array[3] as Boolean
+        @Suppress("UNCHECKED_CAST")
         val whitelistUris = array[4] as List<String>
+        @Suppress("UNCHECKED_CAST")
         val blacklistUris = array[5] as List<String>
         val minDurationMs = (array[6] as Int).toLong()
 

@@ -126,7 +126,7 @@ fun M3EScrollbar(
     val thumbWidth by animateDpAsState(
         targetValue = if (isDragging) config.thumbWidthDragging else config.thumbWidth,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
+            dampingRatio = 1.0f, // FastEffects damping (no bounce)
             stiffness = config.thumbStiffness
         ),
         label = "thumb_width"
@@ -135,7 +135,7 @@ fun M3EScrollbar(
     val trackAlpha by animateFloatAsState(
         targetValue = if (isDragging) config.trackAlphaDragging else config.trackAlpha,
         animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
+            dampingRatio = 1.0f, // FastEffects damping (no bounce)
             stiffness = config.visualFeedbackStiffness
         ),
         label = "track_alpha"
@@ -143,18 +143,28 @@ fun M3EScrollbar(
 
     val bubbleScale by animateFloatAsState(
         targetValue = if (isDragging && showBubble) 1f else 0.5f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        animationSpec = spring(
+            dampingRatio = 1.0f, // FastEffects damping (no bounce)
+            stiffness = config.visualFeedbackStiffness
+        ),
         label = "bubble_scale"
     )
 
     val bubbleAlpha by animateFloatAsState(
         targetValue = if (isDragging && showBubble) 1f else 0f,
+        animationSpec = spring(
+            dampingRatio = 1.0f, // FastEffects damping (no bounce)
+            stiffness = config.visualFeedbackStiffness
+        ),
         label = "bubble_alpha"
     )
 
     val scrollbarAlpha by animateFloatAsState(
         targetValue = if (isVisible || isDragging) 1f else 0f,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
+        animationSpec = spring(
+            dampingRatio = 1.0f, // FastEffects damping (no bounce)
+            stiffness = config.visualFeedbackStiffness
+        ),
         label = "scrollbar_alpha"
     )
 

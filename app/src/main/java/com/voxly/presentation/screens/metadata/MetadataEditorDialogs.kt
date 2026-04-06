@@ -220,7 +220,7 @@ fun AlbumArtPreviewDialog(
         when {
             albumArt != null -> decodeAlbumArtPreview(albumArt, 2048)
             !filePath.isNullOrBlank() -> {
-                val path = filePath!!
+                val path = filePath
                 runCatching<android.graphics.Bitmap?> {
                     kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
                         com.voxly.presentation.ui.loadAlbumArtOriginalBitmap(context, path, 2048)

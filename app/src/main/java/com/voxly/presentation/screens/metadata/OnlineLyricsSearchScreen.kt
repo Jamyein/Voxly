@@ -13,11 +13,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Refresh
-import com.voxly.presentation.theme.ExpressiveAnimations
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -45,9 +49,11 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.repository.OnlineLyricsResult
+import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.OnlineLyricsSearchViewModel
 import kotlinx.coroutines.launch
 
@@ -143,13 +149,14 @@ fun OnlineLyricsSearchScreen(
             ),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Search progress - 使用弹性缩放动画
-            if (searchState.isSearching || isLoading) {
-                item {
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = ExpressiveAnimations.FadeEnter
-                    ) {
+             // Search progress - 使用弹性缩放动画
+             if (searchState.isSearching || isLoading) {
+                 item {
+                     AnimatedVisibility(
+                         visible = true,
+                         enter = ExpressiveAnimations.FadeEnter,
+                         exit = ExpressiveAnimations.FadeExit
+                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -162,12 +169,13 @@ fun OnlineLyricsSearchScreen(
                 }
             }
 
-            // Error message - 使用 Surface 容器
-            item {
-                AnimatedVisibility(
-                    visible = errorMessage != null,
-                    enter = ExpressiveAnimations.ListItemEnter
-                ) {
+             // Error message - 使用 Surface 容器
+             item {
+                 AnimatedVisibility(
+                     visible = errorMessage != null,
+                     enter = ExpressiveAnimations.FadeEnter,
+                     exit = ExpressiveAnimations.FadeExit
+                 ) {
                     errorMessage?.let { error ->
                         Surface(
                             modifier = Modifier.fillMaxWidth(),
@@ -186,14 +194,15 @@ fun OnlineLyricsSearchScreen(
                 }
             }
 
-            // Results - 无结果提示
-            if (lyricsResults.isEmpty() && !isLoading && errorMessage == null) {
-                item {
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = ExpressiveAnimations.FadeEnter
-                    ) {
-                        Surface(
+             // Results - 无结果提示
+             if (lyricsResults.isEmpty() && !isLoading && errorMessage == null) {
+                 item {
+                      AnimatedVisibility(
+                          visible = true,
+                          enter = ExpressiveAnimations.ListItemEnter,
+                          exit = ExpressiveAnimations.FadeExit
+                      ) {
+                         Surface(
                             modifier = Modifier.fillMaxWidth(),
                             shape = MaterialTheme.shapes.medium,
                             color = MaterialTheme.colorScheme.surfaceContainerLow
@@ -209,12 +218,13 @@ fun OnlineLyricsSearchScreen(
                 }
             }
 
-            if (lyricsResults.isNotEmpty()) {
-                items(lyricsResults, key = { it.id }) { item ->
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = ExpressiveAnimations.FadeEnter
-                    ) {
+             if (lyricsResults.isNotEmpty()) {
+                 items(lyricsResults, key = { it.id }) { item ->
+                     AnimatedVisibility(
+                         visible = true,
+                         enter = ExpressiveAnimations.ListItemEnter,
+                         exit = ExpressiveAnimations.FadeExit
+                     ) {
                         LyricsResultItem(
                             item = item,
                             isLoading = isFetchingLyrics && fetchingItemId == item.id,

@@ -42,12 +42,16 @@ import androidx.compose.ui.unit.dp
 /**
  * Material Design 3 Expressive Motion System
  *
- * Uses official MotionSchemeKeyTokens from Material 3 for animation specs.
+ * Animation parameters align with Material 3 1.5.0+ MotionScheme specifications.
  * The MotionScheme is applied via MaterialTheme in Theme.kt.
+ *
+ * MotionScheme.expressive() parameters:
+ * - Emphasized: dampingRatio ~0.72, stiffness ~400
+ * - Standard: dampingRatio ~1.0, stiffness ~400
  */
 
 // ============================================================================
-// Official MotionSchemeKeyTokens - using Material 3 built-in values
+// Backward Compatibility: Motion Tokens
 // ============================================================================
 
 @Stable

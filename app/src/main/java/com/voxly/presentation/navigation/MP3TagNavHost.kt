@@ -143,14 +143,14 @@ fun MP3TagNavHost() {
                         ExpressiveAnimations.FadeThroughExit
                     )
 
-                    // Container Transform: Album/Artist list → detail pages
+                    // Container Transform: Album/Artist list 鈫?detail pages
                     targetState is AlbumDetail || targetState is ArtistDetail ||
                         initialState is AlbumDetail || initialState is ArtistDetail -> Pair(
                         if (isPush) ExpressiveAnimations.ContainerTransformEnter else ExpressiveAnimations.ContainerTransformPopEnter,
                         if (isPush) ExpressiveAnimations.ContainerTransformExit else ExpressiveAnimations.ContainerTransformPopExit
                     )
 
-                    // Container Transform: list item → MetadataEditor (existing behavior)
+                    // Container Transform: list item 鈫?MetadataEditor (existing behavior)
                     targetState is MetadataEditor || initialState is MetadataEditor -> Pair(
                         if (isPush) ExpressiveAnimations.ContainerTransformEnter else ExpressiveAnimations.ContainerTransformPopEnter,
                         if (isPush) ExpressiveAnimations.ContainerTransformExit else ExpressiveAnimations.ContainerTransformPopExit
@@ -456,7 +456,7 @@ private fun RenderSubScreen(
         }
 
         is MetadataEditor -> {
-            // 使用filePath作为key，确保切换歌曲时创建新的ViewModel实例
+            // 浣跨敤filePath浣滀负key锛岀‘淇濆垏鎹㈡瓕鏇叉椂鍒涘缓鏂扮殑ViewModel瀹炰緥
             val viewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
                 key = key.filePath,
                 creationCallback = { factory -> factory.create(key) }

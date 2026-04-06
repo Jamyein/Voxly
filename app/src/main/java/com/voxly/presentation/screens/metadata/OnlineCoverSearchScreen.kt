@@ -1,6 +1,12 @@
 package com.voxly.presentation.screens.metadata
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,7 +25,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Refresh
-import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.theme.MaterialShapes
 import androidx.compose.material3.toShape
 import androidx.compose.material3.Card
@@ -56,11 +61,13 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
 import com.voxly.presentation.components.NetworkCoverImage
+import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.CoverSearchProgressState
 import com.voxly.presentation.viewmodel.OnlineCoverSearchViewModel
 
@@ -143,10 +150,11 @@ fun OnlineCoverSearchScreen(
                 .padding(top = innerPadding.calculateTopPadding())
                 .padding(16.dp)
         ) {
-            AnimatedVisibility(
-                visible = isLoading && coverResults.isEmpty(),
-                enter = ExpressiveAnimations.FadeEnter
-            ) {
+                    AnimatedVisibility(
+                        visible = isLoading && coverResults.isEmpty(),
+                        enter = ExpressiveAnimations.FadeEnter,
+                        exit = ExpressiveAnimations.FadeExit
+                ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -155,75 +163,25 @@ fun OnlineCoverSearchScreen(
                 ) {
                     LoadingIndicator()
                 }
-            }
+         }
 
-            AnimatedVisibility(
-                visible = coverResults.isNotEmpty(),
-                enter = ExpressiveAnimations.ListItemEnter
-            ) {
-                SearchProgressIndicatorForCover(
-                    searchState = searchProgress,
-                    modifier = Modifier.padding(bottom = 8.dp)
-                )
-            }
+         AnimatedVisibility(
+             visible = coverResults.isNotEmpty(),
+             enter = ExpressiveAnimations.ListItemEnter,
+             exit = ExpressiveAnimations.FadeExit
+         ) {
+             SearchProgressIndicatorForCover(
+                 searchState = searchProgress,
+                 modifier = Modifier.padding(bottom = 8.dp)
+             )
+         }
 
-            AnimatedVisibility(
-                visible = errorMessage != null,
-                enter = ExpressiveAnimations.ListItemEnter
-            ) {
-                errorMessage?.let { error ->
-                    Surface(
-                        modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.medium,
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        tonalElevation = 1.dp
-                    ) {
-                        Text(
-                            text = error,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(12.dp)
-                        )
-                    }
-                }
-            }
-
-            AnimatedVisibility(
-                visible = coverResults.isEmpty() && !isLoading && errorMessage == null,
-                enter = ExpressiveAnimations.FadeEnter
-            ) {
-                Surface(
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .padding(16.dp)
-                            .fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.ImageNotSupported,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Text(
-                            text = stringResource(R.string.error_no_results),
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-            }
-
-            AnimatedVisibility(
-                visible = coverResults.isNotEmpty(),
-                enter = ExpressiveAnimations.ListItemEnter
-            ) {
-                LazyColumn(
+                      AnimatedVisibility(
+                          visible = coverResults.isNotEmpty(),
+                          enter = ExpressiveAnimations.ListItemEnter,
+                          exit = ExpressiveAnimations.FadeExit
+                 ) {
+             LazyColumn(
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {

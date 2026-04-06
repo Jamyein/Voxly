@@ -365,6 +365,7 @@ suspend fun loadAlbumArtOriginalBitmap(
  * Legacy fallback for local album art loading.
  * Prefer loadAlbumArtThumbnail() for consistent cache-backed loading.
  */
+@Suppress("DEPRECATION")
 @Deprecated(
     message = "Use loadAlbumArtThumbnail() for consistent cache-backed loading",
     replaceWith = ReplaceWith("loadAlbumArtThumbnail(context, filePath, targetSizePx)")

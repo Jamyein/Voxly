@@ -11,7 +11,11 @@ import androidx.compose.ui.unit.dp
  * - 48dp touch area (M3 accessibility minimum)
  * - 12dp drag width for easy visual feedback
  * - 2000ms hide delay for comfortable reading
- * - Spring stiffness tuned for M3E bouncy feel
+ * - Spring stiffness following M3E Fast/L1 schemes
+ *
+ * Stiffness values are based on Material 3 Expressive Motion specifications:
+ * - FastSpatial: stiffness = 1400 (for resizing/dimensions)
+ * - FastEffects: stiffness = 3800 (for color/opacity)
  *
  * @property thumbWidth Width of the scrollbar thumb in default state
  * @property thumbWidthDragging Width of the thumb when being dragged
@@ -26,8 +30,8 @@ import androidx.compose.ui.unit.dp
  * @property trackAlphaDragging Alpha value for the scrollbar track when dragging
  * @property thumbElevation Elevation for thumb shadow
  * @property bubbleElevation Elevation for bubble shadow
- * @property thumbStiffness Spring stiffness for thumb width animation
- * @property visualFeedbackStiffness Spring stiffness for visual feedback
+ * @property thumbStiffness Spring stiffness for thumb width animation (FastSpatial: 1400)
+ * @property visualFeedbackStiffness Spring stiffness for visual feedback (FastEffects: 3800)
  */
 data class ScrollbarConfig(
     val thumbWidth: Dp = 8.dp,
@@ -43,8 +47,8 @@ data class ScrollbarConfig(
     val trackAlphaDragging: Float = 1f,
     val thumbElevation: Dp = 2.dp,
     val bubbleElevation: Dp = 6.dp,
-    val thumbStiffness: Float = Spring.StiffnessMedium,
-    val visualFeedbackStiffness: Float = Spring.StiffnessMedium
+    val thumbStiffness: Float = 1400f, // FastSpatial stiffness from M3E spec
+    val visualFeedbackStiffness: Float = 3800f // FastEffects stiffness from M3E spec
 ) {
     companion object {
         /** Default M3 Expressive configuration */

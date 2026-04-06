@@ -395,7 +395,7 @@ fun CarouselAlbumArtImage(
         key2 = 300
     ) {
         value = if (!filePath.isNullOrBlank()) {
-            loadAlbumArtThumbnail(context, filePath!!, 300)
+            loadAlbumArtThumbnail(context, filePath, 300)
         } else null
     }
 
