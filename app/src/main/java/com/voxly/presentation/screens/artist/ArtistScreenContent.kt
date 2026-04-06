@@ -119,18 +119,24 @@ internal fun ArtistTabContent(
     listState: LazyListState? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
+    
+    // Preload cover art based on visible items
     val artistFilePaths = remember(artistListItems) {
         artistListItems.mapNotNull { it.coverPath }
     }
+    LazyListCoverPreloader(listState = lazyListState, filePaths = artistFilePaths)
+    
+    // Build lookup map for artist groups (depends on artists since we need ArtistGroup objects)
+    val artistMap = remember(artists) {
+        artists.associateBy { it.name }
+    }
+    
     val bubbleFormatter: ((Int) -> String) = remember(artistListItems) {
         { index: Int ->
             artistListItems.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
         }
     }
-    val artistMap = remember(artists) {
-        artists.associateBy { it.name }
-    }
-    LazyListCoverPreloader(listState = lazyListState, filePaths = artistFilePaths)
+
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         if (artistListItems.isEmpty()) {
             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

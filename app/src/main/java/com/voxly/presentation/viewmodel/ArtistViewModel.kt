@@ -24,6 +24,17 @@ class ArtistViewModel @Inject constructor(
 ) : ViewModel() {
 
     val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
+        .distinctUntilChanged { oldList, newList ->
+            // Compare by artist names and sizes to prevent unnecessary emissions
+            if (oldList.size != newList.size) return@distinctUntilChanged false
+            oldList.map { it.name to it.albums.size to it.files.size } ==
+                    newList.map { it.name to it.albums.size to it.files.size }
+        }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        )
 
     val artistListItems: StateFlow<List<ArtistListItemState>> = artists
         .map { artistGroups ->
@@ -36,7 +47,12 @@ class ArtistViewModel @Inject constructor(
                 )
             }
         }
-        .distinctUntilChanged()
+        .distinctUntilChanged { oldList, newList ->
+            // Compare by essential fields to prevent unnecessary emissions
+            if (oldList.size != newList.size) return@distinctUntilChanged false
+            oldList.map { it.name to it.albumCount to it.trackCount } ==
+                    newList.map { it.name to it.albumCount to it.trackCount }
+        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
