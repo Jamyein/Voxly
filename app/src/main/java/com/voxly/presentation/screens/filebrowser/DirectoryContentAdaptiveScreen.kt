@@ -290,9 +290,7 @@ fun DirectoryContentAdaptiveScreen(
                                         AudioFileListWithIndexer(
                                             files = displayedFiles,
                                             listState = listState,
-                                            modifier = Modifier
-                                                .fillMaxSize()
-                                                .nestedScroll(floatingToolbarScrollBehavior.nestedScrollConnection),
+                                            modifier = Modifier.fillMaxSize(),
                                             selectedFiles = selectedFiles,
                                             onFileClick = { audioFile ->
                                                 if (isSelectionMode) {
