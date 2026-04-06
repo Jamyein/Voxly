@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.AlbumSortOption
+import com.voxly.data.local.cache.AlbumInfoEntity
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
@@ -96,6 +97,7 @@ internal fun AlbumScreenContent(
     val albums by viewModel.albums.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val sortOption by viewModel.sortOption.collectAsState(initial = AlbumSortOption.NAME_ASC.name)
+    val albumInfoMap by viewModel.albumInfoMap.collectAsState()
     var scrollToTopTrigger by remember { mutableIntStateOf(0) }
     var isSortExpanded by remember { mutableStateOf(false) }
 
@@ -107,8 +109,8 @@ internal fun AlbumScreenContent(
         }
     }
 
-    val sortedAlbums = remember(albums, currentSortOption) {
-        applyAlbumSort(albums, currentSortOption)
+    val sortedAlbums = remember(albums, currentSortOption, albumInfoMap) {
+        applyAlbumSortWithCache(albums, currentSortOption, albumInfoMap)
     }
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -166,12 +168,13 @@ internal fun AlbumScreenContent(
                 }
             } else {
                 key(scrollToTopTrigger) {
-                    AlbumTabContent(
-                        albums = sortedAlbums,
-                        onAlbumClick = onAlbumClick,
-                        scrollToTopTrigger = scrollToTopTrigger,
-                        sortOption = currentSortOption
-                    )
+                        AlbumTabContent(
+                            albums = sortedAlbums,
+                            onAlbumClick = onAlbumClick,
+                            scrollToTopTrigger = scrollToTopTrigger,
+                            sortOption = currentSortOption,
+                            albumInfoMap = albumInfoMap
+                        )
                 }
             }
         }
@@ -184,7 +187,8 @@ internal fun AlbumTabContent(
     onAlbumClick: (AlbumGroup) -> Unit,
     listState: LazyListState? = null,
     scrollToTopTrigger: Int = 0,
-    sortOption: AlbumSortOption? = null
+    sortOption: AlbumSortOption? = null,
+    albumInfoMap: Map<String, AlbumInfoEntity> = emptyMap()
 ) {
     key(scrollToTopTrigger) {
         val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
@@ -204,7 +208,8 @@ internal fun AlbumTabContent(
                     AlbumYearGroupedContent(
                         albums = albums,
                         onAlbumClick = onAlbumClick,
-                        isDescending = true
+                        isDescending = true,
+                        albumInfoMap = albumInfoMap
                     )
                 } else {
                     val albumFilePaths = remember(albums) {
@@ -224,9 +229,12 @@ internal fun AlbumTabContent(
                             key = { index -> albumStableKey(albums[index]) }
                         ) { index ->
                             val album = albums[index]
+                            val albumKey = AlbumInfoEntity.generateId(album.name, album.artist)
+                            val albumInfo = albumInfoMap[albumKey]
                             AlbumGridItem(
                                 album = album,
-                                onClick = { onAlbumClick(album) }
+                                onClick = { onAlbumClick(album) },
+                                albumInfo = albumInfo
                             )
                         }
                     }
@@ -253,12 +261,15 @@ internal fun AlbumTabContent(
 internal fun AlbumYearGroupedContent(
     albums: List<AlbumGroup>,
     onAlbumClick: (AlbumGroup) -> Unit,
-    isDescending: Boolean = false
+    isDescending: Boolean = false,
+    albumInfoMap: Map<String, AlbumInfoEntity> = emptyMap()
 ) {
     val listState = rememberLazyListState()
-    val albumsByYear = remember(albums, isDescending) {
+    val albumsByYear = remember(albums, isDescending, albumInfoMap) {
         albums.groupBy { album ->
-            albumDisplayYearInt(album) ?: 0
+            val albumKey = AlbumInfoEntity.generateId(album.name, album.artist)
+            val cachedInfo = albumInfoMap[albumKey]
+            getAlbumDisplayYear(album, cachedInfo) ?: 0
         }.toSortedMap(if (isDescending) compareByDescending { it } else compareBy { it })
     }
 

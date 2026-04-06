@@ -49,6 +49,8 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
+import com.voxly.presentation.screens.album.formatBitrate
+import com.voxly.presentation.screens.album.formatSampleRate
 
 /**
  * Album detail screen showing album info and track list.
@@ -212,14 +214,14 @@ fun AlbumDetailScreen(
                                 )
                                 if (albumBitrate > 0) {
                                     Text(
-                                        text = "$albumBitrate kbps",
+                                        text = formatBitrate(albumBitrate),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline
                                     )
                                 }
                                 if (albumSampleRate > 0) {
                                     Text(
-                                        text = "${albumSampleRate / 1000} kHz",
+                                        text = formatSampleRate(albumSampleRate),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline
                                     )

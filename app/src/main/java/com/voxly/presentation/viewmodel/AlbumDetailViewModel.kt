@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.navigation.AlbumDetail
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -17,6 +18,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * ViewModel for AlbumDetailScreen.
@@ -26,7 +28,8 @@ import kotlinx.coroutines.launch
 class AlbumDetailViewModel @AssistedInject constructor(
     @Assisted val navKey: AlbumDetail,
     @ApplicationContext private val context: Context,
-    private val audioFileScanner: AudioFileScanner
+    private val audioFileScanner: AudioFileScanner,
+    private val databaseProvider: MusicCacheDatabaseProvider
 ) : ViewModel() {
 
     private val _albumName = MutableStateFlow("")
@@ -62,8 +65,8 @@ class AlbumDetailViewModel @AssistedInject constructor(
 
     /**
      * Load album data from AudioFileScanner by album name and artist.
-     * Sample rate is loaded from file tags (MediaStore doesn't provide this).
-     * Year is loaded from file tags for accurate results.
+     * Sample rate is loaded from cache (AlbumInfoEntity).
+     * Year is loaded from cache for accurate and fast results.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
         viewModelScope.launch {
@@ -80,22 +83,32 @@ class AlbumDetailViewModel @AssistedInject constructor(
                     _coverPath.value = albumGroup.coverPath
                     _files.value = albumGroup.files
 
-                    val scannedAlbumYear = albumGroup.files
-                        .mapNotNull { file -> file.metadata.year?.takeIf { it.isNotBlank() } }
-                        .maxOrNull()
+                    // Try to load from AlbumInfo cache first
+                    val albumInfo = databaseProvider.getDatabase()
+                        .albumInfoDao()
+                        .getAlbumInfo(albumName, albumArtist)
 
-                    // Get bitrate from first file (MediaStore provides this)
-                    albumGroup.files.firstOrNull()?.let { firstFile ->
-                        _albumBitrate.value = firstFile.bitrate
+                    if (albumInfo != null) {
+                        // Use cached album info
+                        _albumYear.value = albumInfo.year
+                        _albumSampleRate.value = albumInfo.sampleRate
+                        _albumBitrate.value = albumInfo.bitrate
+                        Timber.d("Loaded album info from cache: $albumName")
+                    } else {
+                        // Fallback: calculate from files
+                        Timber.d("No cache found for album: $albumName, calculating from files")
 
-                        // Load audio properties for sample rate (MediaStore doesn't provide this)
-                        val audioProperties = audioFileScanner.loadAudioProperties(firstFile.path)
-                        _albumSampleRate.value = audioProperties?.sampleRate ?: 0
+                        val scannedAlbumYear = albumGroup.files
+                            .mapNotNull { file -> file.metadata.year?.takeIf { it.isNotBlank() } }
+                            .maxOrNull()
 
-                        // Prefer the scanner year used by album sorting; only fall back to TagLib when absent.
-                        _albumYear.value = scannedAlbumYear ?: audioFileScanner
-                            .loadDetailedMetadata(firstFile.path)
-                            ?.year
+                        // Get bitrate and sample rate from files
+                        val maxBitrate = albumGroup.files.maxOfOrNull { it.bitrate } ?: 0
+                        val maxSampleRate = albumGroup.files.maxOfOrNull { it.sampleRate } ?: 0
+
+                        _albumYear.value = scannedAlbumYear
+                        _albumBitrate.value = maxBitrate
+                        _albumSampleRate.value = maxSampleRate
                     }
                 } else {
                     // Album not found - set basic info at least
@@ -103,7 +116,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
                     _albumArtist.value = albumArtist
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "Error loading album: $albumName")
             }
         }
     }

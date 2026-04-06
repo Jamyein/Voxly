@@ -21,9 +21,10 @@ import javax.inject.Singleton
         CachedAudioFileEntity::class,
         AlbumThumbnailEntity::class,
         RecentEditEntity::class,
-        AlbumArtFileCacheEntity::class  // Added for three-tier album art caching
+        AlbumArtFileCacheEntity::class,
+        AlbumInfoEntity::class  // Added for album year and audio info caching
     ],
-    version = 4,  // Bumped from 3 to 4
+    version = 5,  // Bumped from 4 to 5 for AlbumInfoEntity
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -31,7 +32,8 @@ abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun audioFileDao(): CachedAudioFileDao
     abstract fun albumThumbnailDao(): AlbumThumbnailDao
     abstract fun recentEditDao(): RecentEditDao
-    abstract fun albumArtFileCacheDao(): AlbumArtFileCacheDao  // New DAO for file-level art cache
+    abstract fun albumArtFileCacheDao(): AlbumArtFileCacheDao
+    abstract fun albumInfoDao(): AlbumInfoDao  // New DAO for album info caching
 
     companion object {
         const val DATABASE_NAME = "music_cache.db"
@@ -129,6 +131,29 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         db.execSQL("CREATE INDEX IF NOT EXISTS `index_album_art_file_cache_access` ON `album_art_file_cache` (`accessCount`, `lastAccessTime`)")
                     }
                 })
+                // Migration from version 4 to 5: adds album info table for year and audio quality caching
+                .addMigrations(object : Migration(4, 5) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        // Create album_info table
+                        db.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `album_info` (
+                                `id` TEXT PRIMARY KEY NOT NULL,
+                                `albumName` TEXT NOT NULL,
+                                `albumArtist` TEXT,
+                                `year` TEXT,
+                                `yearHash` TEXT NOT NULL,
+                                `sampleRate` INTEGER NOT NULL DEFAULT 0,
+                                `bitrate` INTEGER NOT NULL DEFAULT 0,
+                                `contentHash` TEXT NOT NULL,
+                                `songCount` INTEGER NOT NULL DEFAULT 0,
+                                `lastUpdatedAt` INTEGER NOT NULL
+                            )
+                        """)
+                        // Create indices for faster queries
+                        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_album_info_name_artist` ON `album_info` (`albumName`, `albumArtist`)")
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_album_info_year` ON `album_info` (`year`)")
+                    }
+                })
 
             val newInstance = builder.build()
             prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
@@ -153,6 +178,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
     companion object {
         private const val PREFS_NAME = "music_cache_meta"
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
-        private const val CURRENT_DATA_FORMAT_VERSION = 4
+        private const val CURRENT_DATA_FORMAT_VERSION = 5  // Updated for AlbumInfoEntity
     }
 }

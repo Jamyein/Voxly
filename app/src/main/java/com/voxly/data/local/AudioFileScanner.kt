@@ -8,6 +8,7 @@ import android.provider.MediaStore
 import android.provider.DocumentsContract
 import android.os.Environment
 import com.voxly.core.util.SortUtil
+import com.voxly.data.local.cache.AlbumInfoManager
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
@@ -66,6 +67,7 @@ class AudioFileScanner @Inject constructor(
     private val metadataProcessor: TagLibMetadataProcessor,
     private val libraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
+    private val albumInfoManager: AlbumInfoManager  // Added for album info caching
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -326,6 +328,9 @@ class AudioFileScanner @Inject constructor(
         // Remove deleted files from cache
         val deletedPaths = cachedInDirs.map { it.path }.filter { it !in currentPaths }
         libraryCache.removeFromCache(deletedPaths)
+        if (deletedPaths.isNotEmpty()) {
+            albumInfoManager.cleanupOrphanedAlbums()
+        }
 
         (retainedFiles + updatedFiles)
             .distinctBy { it.path }
@@ -372,7 +377,10 @@ class AudioFileScanner @Inject constructor(
         }
 
         // Cleanup deleted files
-        libraryCache.cleanupDeletedFiles(currentFiles.map { it.first })
+        val deletedCount = libraryCache.cleanupDeletedFiles(currentFiles.map { it.first })
+        if (deletedCount > 0) {
+            albumInfoManager.cleanupOrphanedAlbums()
+        }
 
         (retainedFiles + updatedFiles)
             .distinctBy { it.path }
@@ -767,7 +775,7 @@ class AudioFileScanner @Inject constructor(
     /**
      * Derives albums from audio files.
      */
-    private fun updateAlbumsFromFiles(files: List<AudioFile>) {
+    private suspend fun updateAlbumsFromFiles(files: List<AudioFile>) {
         val albumsMap = files
             .filter { it.metadata.album?.isNotBlank() == true }
             .groupBy { file ->
@@ -778,20 +786,31 @@ class AudioFileScanner @Inject constructor(
                         ?: file.metadata.artist.orEmpty()
                 )
             }
-            .map { (key, albumFiles) ->
-                val coverFile = albumFiles.firstOrNull {
-                    it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
-                } ?: albumFiles.firstOrNull()
-                AlbumGroup(
-                    name = key.album,
-                    artist = key.albumArtist.ifBlank { albumFiles.firstOrNull()?.metadata?.artist },
-                    files = albumFiles.sortedBy { it.metadata.trackNumber },
-                    coverPath = coverFile?.path
-                )
-            }
-            .sortedBy { SortUtil.toSortablePinyin(it.name) }
 
-        _albums.value = albumsMap
+        // Build albums list and cache data in one pass
+        val albumsForCache = mutableMapOf<Pair<String, String?>, List<AudioFile>>()
+
+        val albumsList = albumsMap.map { (key, albumFiles) ->
+            // Add to cache map (albumName, albumArtist) -> List<AudioFile>
+            albumsForCache[key.album to key.albumArtist.takeIf { it.isNotBlank() }] = albumFiles
+
+            val coverFile = albumFiles.firstOrNull {
+                it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+            } ?: albumFiles.firstOrNull()
+            AlbumGroup(
+                name = key.album,
+                artist = key.albumArtist.ifBlank { albumFiles.firstOrNull()?.metadata?.artist },
+                files = albumFiles.sortedBy { it.metadata.trackNumber },
+                coverPath = coverFile?.path
+            )
+        }.sortedBy { SortUtil.toSortablePinyin(it.name) }
+
+        _albums.value = albumsList
+
+        // Update album info cache
+        if (albumsForCache.isNotEmpty()) {
+            albumInfoManager.updateAlbumInfoBatch(albumsForCache)
+        }
     }
 
     /**
@@ -941,7 +960,10 @@ class AudioFileScanner @Inject constructor(
     /**
      * Clear the scan cache.
      */
-    suspend fun clearCache() = libraryCache.clearCache()
+    suspend fun clearCache() {
+        libraryCache.clearCache()
+        albumInfoManager.clearAll()
+    }
 
     /**
      * Remove a file from cache.

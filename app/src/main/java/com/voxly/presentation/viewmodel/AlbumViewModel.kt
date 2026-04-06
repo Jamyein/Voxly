@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.UiStateDataStore
+import com.voxly.data.local.cache.AlbumInfoEntity
+import com.voxly.data.local.cache.AlbumInfoManager
 import com.voxly.domain.model.AlbumGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -22,7 +25,8 @@ import javax.inject.Inject
 @HiltViewModel
 class AlbumViewModel @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
-    private val uiStateDataStore: UiStateDataStore
+    private val uiStateDataStore: UiStateDataStore,
+    private val albumInfoManager: AlbumInfoManager
 ) : ViewModel() {
 
     // Directly use AudioFileScanner's albums - same singleton instance as LibraryViewModel
@@ -31,10 +35,17 @@ class AlbumViewModel @Inject constructor(
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _albumInfoMap = MutableStateFlow<Map<String, AlbumInfoEntity>>(emptyMap())
+    val albumInfoMap: StateFlow<Map<String, AlbumInfoEntity>> = _albumInfoMap.asStateFlow()
+
     // Sort option from persistent storage
     val sortOption = uiStateDataStore.albumSortOption
 
     private var refreshJob: Job? = null
+
+    init {
+        preloadAlbumInfo()
+    }
 
     fun refresh(forceRefresh: Boolean = false) {
         // Cancel previous refresh if still running
@@ -60,6 +71,27 @@ class AlbumViewModel @Inject constructor(
     fun setSortOption(option: String) {
         viewModelScope.launch {
             uiStateDataStore.setAlbumSortOption(option)
+        }
+    }
+
+    private fun preloadAlbumInfo() {
+        viewModelScope.launch {
+            var lastKeySignature: String? = null
+            audioFileScanner.albums.collectLatest { albumGroups ->
+                val albumKeys = albumGroups
+                    .map { it.name to it.artist }
+                    .distinct()
+
+                val newSignature = albumKeys.joinToString("|") { key ->
+                    "${key.first}|${key.second.orEmpty()}"
+                }
+
+                if (newSignature == lastKeySignature) return@collectLatest
+                lastKeySignature = newSignature
+
+                val cachedMap = albumInfoManager.preloadAlbumInfo(albumKeys)
+                _albumInfoMap.value = cachedMap
+            }
         }
     }
 }

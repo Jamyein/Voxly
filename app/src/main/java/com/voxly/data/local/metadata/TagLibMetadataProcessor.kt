@@ -510,6 +510,15 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
+     * Reads metadata via MediaStore only.
+     * This is a fallback for cases where TagLib cannot read the year.
+     */
+    suspend fun readMetadataFromMediaStoreOnly(filePath: String): AudioMetadata? =
+        withContext(Dispatchers.IO) {
+            readMetadataFromMediaStore(filePath, includeAlbumArt = false)
+        }
+
+    /**
      * Attempts to resolve a file path by searching in likely locations.
      * This handles cases where MediaStore paths become stale.
      */
