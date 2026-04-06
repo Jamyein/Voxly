@@ -10,6 +10,7 @@ import androidx.compose.runtime.Immutable
 data class ArtistListItemState(
     val name: String,
     val coverPath: String?,
+    val coverAlbumId: Long? = null,
     val albumCount: Int,
     val trackCount: Int
 )

@@ -39,9 +39,13 @@ class ArtistViewModel @Inject constructor(
     val artistListItems: StateFlow<List<ArtistListItemState>> = artists
         .map { artistGroups ->
             artistGroups.map { artist ->
+                // Select best cover file: prefer MediaStore album ID for faster loading
+                val coverFile = artist.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    ?: artist.files.firstOrNull()
                 ArtistListItemState(
                     name = artist.name,
-                    coverPath = artist.coverPath,
+                    coverPath = coverFile?.path,
+                    coverAlbumId = coverFile?.mediaStoreAlbumId,
                     albumCount = artist.albums.size,
                     trackCount = artist.files.size
                 )
@@ -50,8 +54,8 @@ class ArtistViewModel @Inject constructor(
         .distinctUntilChanged { oldList, newList ->
             // Compare by essential fields to prevent unnecessary emissions
             if (oldList.size != newList.size) return@distinctUntilChanged false
-            oldList.map { it.name to it.albumCount to it.trackCount } ==
-                    newList.map { it.name to it.albumCount to it.trackCount }
+            oldList.map { it.name to it.coverAlbumId to it.albumCount to it.trackCount } ==
+                    newList.map { it.name to it.coverAlbumId to it.albumCount to it.trackCount }
         }
         .stateIn(
             scope = viewModelScope,

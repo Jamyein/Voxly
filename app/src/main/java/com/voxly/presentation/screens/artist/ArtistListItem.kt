@@ -60,6 +60,7 @@ internal fun ArtistListItem(
                 if (!artist.coverPath.isNullOrBlank()) {
                     AlbumArtImage(
                         filePath = artist.coverPath,
+                        albumId = artist.coverAlbumId,
                         contentDescription = null,
                         size = 48.dp,
                         modifier = Modifier.fillMaxSize()
