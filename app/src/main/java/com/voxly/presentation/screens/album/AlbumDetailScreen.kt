@@ -162,7 +162,7 @@ fun AlbumDetailScreen(
                         ) {
                             // Left: Cover image using AlbumArtImage composable with shared element transition
                             val firstFile = files.firstOrNull()
-                            val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
+                            val albumCoverKey = firstFile?.let { createAlbumArtSharedElementKey(it.path) } ?: "album-cover-$albumName-$albumArtist"
                             Box(
                                 modifier = Modifier
                                     .size(120.dp)
