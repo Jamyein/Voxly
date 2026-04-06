@@ -216,7 +216,6 @@ fun MetadataEditorScreen(
 
     Scaffold(
         modifier = Modifier
-            .then(sharedElementModifier)
             .nestedScroll(scrollBehavior.nestedScrollConnection)
             .nestedScroll(floatingToolbarScrollBehavior),
         topBar = {
