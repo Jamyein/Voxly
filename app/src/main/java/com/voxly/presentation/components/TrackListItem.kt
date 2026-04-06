@@ -59,7 +59,7 @@ fun TrackListItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

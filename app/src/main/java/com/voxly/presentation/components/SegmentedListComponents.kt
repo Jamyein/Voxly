@@ -842,7 +842,7 @@ fun AudioFileStandardRow(
             containerColor = MaterialTheme.colorScheme.surface
         ),
     headlineContent = {
-        Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {
         Column {
@@ -1011,7 +1011,7 @@ fun AudioFileStandardRowWithMenu(
         containerColor = MaterialTheme.colorScheme.surface
     ),
     headlineContent = {
-        Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {
         Column {
@@ -1067,7 +1067,7 @@ fun AudioFileStandardRowCompact(
         containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface
     ),
     headlineContent = {
-        Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodySmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodySmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {
         Column {
