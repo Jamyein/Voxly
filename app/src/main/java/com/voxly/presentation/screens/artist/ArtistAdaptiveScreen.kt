@@ -1,6 +1,6 @@
 package com.voxly.presentation.screens.artist
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -31,6 +31,7 @@ import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
@@ -56,20 +57,27 @@ fun ArtistAdaptiveScreen(
 
     // Handle system back gesture/button for internal scaffold navigation
     // This intercepts back before NavHost's PredictiveBackHandler when detail/extra panes have content
-    BackHandler(enabled = selectedFileForEditing != null || selectedAlbumNavKey != null || navigator.currentDestination?.contentKey is ArtistDetail) {
-        when {
-            selectedAlbumNavKey != null -> {
-                selectedAlbumNavKey = null
-            }
-            selectedFileForEditing != null -> {
-                selectedFileForEditing = null
-                fileSwitchCounter++
-            }
-            navigator.currentDestination?.contentKey is ArtistDetail -> {
-                coroutineScope.launch {
-                    navigator.navigateBack()
+    PredictiveBackHandler(
+        enabled = selectedFileForEditing != null || selectedAlbumNavKey != null || navigator.currentDestination?.contentKey is ArtistDetail
+    ) { progress ->
+        try {
+            progress.collect { }
+            when {
+                selectedAlbumNavKey != null -> {
+                    selectedAlbumNavKey = null
+                }
+                selectedFileForEditing != null -> {
+                    selectedFileForEditing = null
+                    fileSwitchCounter++
+                }
+                navigator.currentDestination?.contentKey is ArtistDetail -> {
+                    coroutineScope.launch {
+                        navigator.navigateBack()
+                    }
                 }
             }
+        } catch (e: CancellationException) {
+            // Gesture cancelled - no action
         }
     }
 

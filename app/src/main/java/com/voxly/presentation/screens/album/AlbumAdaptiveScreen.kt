@@ -1,6 +1,6 @@
 package com.voxly.presentation.screens.album
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -28,6 +28,7 @@ import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.AlbumViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
@@ -52,14 +53,19 @@ fun AlbumAdaptiveScreen(
 
     // Handle system back gesture/button for internal scaffold navigation
     // This intercepts back before NavHost's PredictiveBackHandler when detail pane has content
-    BackHandler(enabled = selectedFileForEditing != null || navigator.currentDestination != null) {
-        if (selectedFileForEditing != null) {
-            selectedFileForEditing = null
-            fileSwitchCounter++
-        } else if (navigator.currentDestination != null) {
-            coroutineScope.launch {
-                navigator.navigateBack()
+    PredictiveBackHandler(enabled = selectedFileForEditing != null || navigator.currentDestination != null) { progress ->
+        try {
+            progress.collect { }
+            if (selectedFileForEditing != null) {
+                selectedFileForEditing = null
+                fileSwitchCounter++
+            } else if (navigator.currentDestination != null) {
+                coroutineScope.launch {
+                    navigator.navigateBack()
+                }
             }
+        } catch (e: CancellationException) {
+            // Gesture cancelled - no action
         }
     }
 

@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.filebrowser
 
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -65,6 +66,7 @@ import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -100,6 +102,8 @@ fun DirectoryContentAdaptiveScreen(
 
     // Determine if we're in single-pane mode (small screens)
     val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
+
+    val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
 
     // Load directory files
     LaunchedEffect(directoryUri) {
@@ -145,6 +149,22 @@ fun DirectoryContentAdaptiveScreen(
     val isSelectionMode = selectedFiles.isNotEmpty()
     val canScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
+    }
+
+    PredictiveBackHandler(enabled = isSelectionMode || canCloseDetailPane) { progress ->
+        try {
+            progress.collect { }
+            when {
+                isSelectionMode -> viewModel.clearSelection()
+                canCloseDetailPane -> {
+                    coroutineScope.launch {
+                        navigator.navigateBack()
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            // Gesture cancelled - no action
+        }
     }
 
     // FloatingToolbar scroll behavior for batch operations

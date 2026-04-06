@@ -287,9 +287,6 @@ fun MP3TagNavHost() {
                         )
                     }
                 } else if (targetKey != null) {
-                    // Removed manual graphicsLayer animation
-                    // System-level PredictiveBackHandler now handles visual feedback
-                    // AnimatedContent handles the pop exit animation when back completes
                     Box(modifier = Modifier.fillMaxSize()) {
                         RenderSubScreen(
                             targetKey = targetKey,
