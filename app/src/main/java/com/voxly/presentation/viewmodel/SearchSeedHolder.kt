@@ -22,24 +22,36 @@ class SearchSeedHolder @Inject constructor() : ViewModel() {
 
     /**
      * 更新搜索种子（由 MetadataEditorViewModel 调用）
+     * @param filePath 文件路径，用于标识种子所属文件
      */
-    fun updateSeed(title: String, artist: String?, album: String?) {
-        _editedSearchSeed.value = SearchSeed(title, artist, album)
+    fun updateSeed(filePath: String, title: String, artist: String?, album: String?) {
+        _editedSearchSeed.value = SearchSeed(filePath, title, artist, album)
     }
 
     /**
-     * 读取搜索种子但不清除（多屏幕共享）
+     * 读取指定文件的搜索种子（不清除）
+     * @param filePath 文件路径
+     * @return 如果种子存在且匹配该文件路径则返回种子，否则返回 null
      */
-    fun peekSeed(): SearchSeed? = _editedSearchSeed.value
+    fun peekSeed(filePath: String): SearchSeed? {
+        val seed = _editedSearchSeed.value
+        return if (seed != null && seed.filePath == filePath) seed else null
+    }
 
     /**
-     * 获取并清除搜索种子（由 Online Search ViewModel 调用）
+     * 获取并清除指定文件的搜索种子（由 Online Search ViewModel 调用）
      * 读取后自动清除，避免下次进入时残留旧数据。
+     * @param filePath 文件路径
+     * @return 如果种子存在且匹配该文件路径则返回种子，否则返回 null
      */
-    fun getAndClearSeed(): SearchSeed? {
+    fun getAndClearSeed(filePath: String): SearchSeed? {
         val seed = _editedSearchSeed.value
-        _editedSearchSeed.value = null
-        return seed
+        return if (seed != null && seed.filePath == filePath) {
+            _editedSearchSeed.value = null
+            seed
+        } else {
+            null
+        }
     }
 
     /**

@@ -105,7 +105,7 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
             _coverFetchMessage.value = null
 
             // 优先从 SearchSeedHolder 获取实时编辑值
-            val seed = searchSeedHolder.peekSeed()
+            val seed = searchSeedHolder.peekSeed(targetPath)
             Timber.d(TAG, "search() seed=$seed")
 
             val title: String

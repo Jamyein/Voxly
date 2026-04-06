@@ -209,6 +209,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
                     // 初始化搜索种子，供 Online Search 屏幕使用
                     searchSeedHolder.updateSeed(
+                        filePath = filePath,
                         title = metadata.title.orEmpty(),
                         artist = metadata.artist,
                         album = metadata.album
@@ -343,6 +344,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
         // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
         searchSeedHolder.updateSeed(
+            filePath = filePath,
             title = updatedMetadata.title.orEmpty(),
             artist = updatedMetadata.artist,
             album = updatedMetadata.album

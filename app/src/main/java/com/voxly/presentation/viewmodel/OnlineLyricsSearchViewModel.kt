@@ -75,7 +75,7 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
             _searchState.value = LyricsSearchState()
 
             // 优先从 SearchSeedHolder 获取实时编辑值
-            val seed = searchSeedHolder.peekSeed()
+            val seed = searchSeedHolder.peekSeed(targetPath)
 
             val track: String
             val artist: String?

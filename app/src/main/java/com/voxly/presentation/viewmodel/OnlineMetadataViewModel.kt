@@ -122,7 +122,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     private fun prepareAutoSearch() {
         viewModelScope.launch {
             // 优先从 SearchSeedHolder 获取实时编辑值（未保存的修改）
-            val seed = searchSeedHolder.peekSeed()
+            val seed = searchSeedHolder.peekSeed(filePath)
 
             val rawTitle: String?
             val rawArtist: String?

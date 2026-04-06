@@ -8,6 +8,7 @@ import androidx.compose.runtime.Immutable
  */
 @Immutable
 data class SearchSeed(
+    val filePath: String,
     val title: String,
     val artist: String?,
     val album: String?
