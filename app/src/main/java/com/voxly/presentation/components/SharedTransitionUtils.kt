@@ -60,61 +60,6 @@ object SharedTransitionConfigs {
             stiffness = 300f
         )
     }
-
-    /**
-     * Container Transform Tween: Alternate using tween for tighter transitions.
-     * Uses M3 Expressive duration token medium3 (350ms) with standard easing.
-     *
-     * Use this if spring animation feels too bouncy.
-     */
-    val ContainerTransformTween: BoundsTransform = BoundsTransform { _, _ ->
-        tween(
-            durationMillis = 350, // Medium3
-            easing = CubicBezierEasing(0.2f, 0f, 0f, 1f) // StandardInterpolator
-        )
-    }
-
-    /**
-     * Fade Through: Used for transitions between unrelated pages.
-     * Uses M3 Expressive duration medium2 (300ms) with standard easing.
-     *
-     * Best for: Bottom navigation tab switches
-     */
-    val FadeThrough: BoundsTransform = BoundsTransform { _, _ ->
-        tween(
-            durationMillis = 300, // Medium2
-            easing = CubicBezierEasing(0.2f, 0f, 0f, 1f) // StandardInterpolator
-        )
-    }
-
-    /**
-     * Quick Transform: For smaller UI elements.
-     * Uses M3 Expressive short3 duration (150ms).
-     *
-     * Best for: Buttons, icons, chips
-     */
-    val QuickTransform: BoundsTransform = BoundsTransform { _, _ ->
-        tween(
-            durationMillis = 150, // Short3
-            easing = CubicBezierEasing(0.2f, 0f, 0f, 1f) // StandardInterpolator
-        )
-    }
-
-    /**
-     * Expressive Container Transform: M3 Expressive recommended animation.
-     * Uses keyframes with ArcMode.ArcBelow and standard interpolator.
-     * Duration: motionDurationLong3 (350ms)
-     *
-     * Best for: List item to detail page transitions in Material 3 Expressive
-     */
-    @OptIn(ExperimentalSharedTransitionApi::class)
-    val ExpressiveContainerTransform: BoundsTransform = BoundsTransform { initial, target ->
-        keyframes {
-            durationMillis = 350 // Medium3
-            initial at 0 using ArcMode.ArcBelow using CubicBezierEasing(0.2f, 0f, 0f, 1f)
-            target at durationMillis
-        }
-    }
 }
 
 /**
