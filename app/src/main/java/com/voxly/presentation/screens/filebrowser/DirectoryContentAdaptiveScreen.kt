@@ -165,6 +165,7 @@ fun DirectoryContentAdaptiveScreen(
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
+        modifier = modifier.nestedScroll(floatingToolbarScrollBehavior),
         listPane = {
             AnimatedPane(
                 modifier = Modifier.fillMaxSize()
@@ -391,8 +392,7 @@ fun DirectoryContentAdaptiveScreen(
                     EmptyDetailPane()
                 }
             }
-        },
-        modifier = modifier
+        }
     )
 
     // Batch Operation Dialogs
