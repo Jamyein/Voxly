@@ -2,6 +2,7 @@ package com.voxly.presentation.navigation
 
 import android.widget.Toast
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.navigation3.runtime.NavKey
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
@@ -129,9 +130,9 @@ fun MP3TagNavHost() {
         AnimatedContent(
             targetState = currentKey,
             transitionSpec = {
-                val isPush = targetState?.let { backStack.contains(it) } ?: false &&
+                val isPush = (targetState?.let { backStack.contains(it) } ?: false) &&
                     (initialState?.let { backStack.indexOf(it) } ?: -1) < (targetState?.let { backStack.indexOf(it) } ?: 0)
-                val isPop = initialState?.let { backStack.contains(it) } ?: false &&
+                val isPop = (initialState?.let { backStack.contains(it) } ?: false) &&
                     (targetState?.let { backStack.indexOf(it) } ?: -1) < (initialState?.let { backStack.indexOf(it) } ?: 0)
                 val isMainToMain = isMainScreenKey(initialState) && isMainScreenKey(targetState)
 
@@ -142,14 +143,14 @@ fun MP3TagNavHost() {
                         ExpressiveAnimations.FadeThroughExit
                     )
 
-                    // Container Transform: Album/Artist list → detail pages
+                    // Container Transform: Album/Artist list 鈫?detail pages
                     targetState is AlbumDetail || targetState is ArtistDetail ||
                         initialState is AlbumDetail || initialState is ArtistDetail -> Pair(
                         if (isPush) ExpressiveAnimations.ContainerTransformEnter else ExpressiveAnimations.ContainerTransformPopEnter,
                         if (isPush) ExpressiveAnimations.ContainerTransformExit else ExpressiveAnimations.ContainerTransformPopExit
                     )
 
-                    // Container Transform: list item → MetadataEditor (existing behavior)
+                    // Container Transform: list item 鈫?MetadataEditor (existing behavior)
                     targetState is MetadataEditor || initialState is MetadataEditor -> Pair(
                         if (isPush) ExpressiveAnimations.ContainerTransformEnter else ExpressiveAnimations.ContainerTransformPopEnter,
                         if (isPush) ExpressiveAnimations.ContainerTransformExit else ExpressiveAnimations.ContainerTransformPopExit
@@ -179,7 +180,21 @@ fun MP3TagNavHost() {
                         }
                     }
             },
-            contentKey = { it?.javaClass?.name ?: "null" },
+            contentKey = { key ->
+                when (key) {
+                    is MetadataEditor -> "MetadataEditor_${key.filePath}"
+                    is DirectoryContent -> "DirectoryContent_${key.directoryUri}"
+                    is ReplayGainScanner -> "ReplayGainScanner_${key.filePaths.hashCode()}"
+                    is OnlineMetadata -> "OnlineMetadata_${key.filePath}"
+                    is OnlineLyricsSearch -> "OnlineLyricsSearch_${key.filePath}"
+                    is OnlineCoverSearch -> "OnlineCoverSearch_${key.filePath}"
+                    is LyricsSelector -> "LyricsSelector_${key.filePath}"
+                    is LyricsPoster -> "LyricsPoster_${key.filePath}"
+                    is AlbumDetail -> "AlbumDetail_${key.albumName}_${key.albumArtist}"
+                    is ArtistDetail -> "ArtistDetail_${key.artistName}"
+                    else -> key?.javaClass?.name ?: "null"
+                }
+            },
             label = "Unified_Navigation"
         ) { targetKey ->
             CompositionLocalProvider(
@@ -203,12 +218,7 @@ fun MP3TagNavHost() {
                                 selected = isFileSelected,
                                 onClick = {
                                     if (!isFileSelected) {
-                                        val currentIndex = backStack.indexOfFirst {
-                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
-                                        }
-                                        if (currentIndex >= 0) {
-                                            backStack[currentIndex] = FileBrowser
-                                        }
+                                        navigateToMainScreen(backStack, FileBrowser)
                                     }
                                 }
                             )
@@ -226,12 +236,7 @@ fun MP3TagNavHost() {
                                 selected = isAlbumsSelected,
                                 onClick = {
                                     if (!isAlbumsSelected) {
-                                        val currentIndex = backStack.indexOfFirst {
-                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
-                                        }
-                                        if (currentIndex >= 0) {
-                                            backStack[currentIndex] = Albums
-                                        }
+                                        navigateToMainScreen(backStack, Albums)
                                     }
                                 }
                             )
@@ -249,12 +254,7 @@ fun MP3TagNavHost() {
                                 selected = isArtistsSelected,
                                 onClick = {
                                     if (!isArtistsSelected) {
-                                        val currentIndex = backStack.indexOfFirst {
-                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
-                                        }
-                                        if (currentIndex >= 0) {
-                                            backStack[currentIndex] = Artists
-                                        }
+                                        navigateToMainScreen(backStack, Artists)
                                     }
                                 }
                             )
@@ -272,12 +272,7 @@ fun MP3TagNavHost() {
                                 selected = isSettingsSelected,
                                 onClick = {
                                     if (!isSettingsSelected) {
-                                        val currentIndex = backStack.indexOfFirst {
-                                            it is FileBrowser || it is Albums || it is Artists || it is Settings
-                                        }
-                                        if (currentIndex >= 0) {
-                                            backStack[currentIndex] = Settings
-                                        }
+                                        navigateToMainScreen(backStack, Settings)
                                     }
                                 }
                             )
@@ -373,14 +368,14 @@ private fun RenderMainScreen(
         }
 
         is Settings -> {
+            val logViewerViewModel = hiltViewModel<com.voxly.presentation.screens.log.LogViewerViewModel>()
             SettingsScreen(
                 outerPadding = PaddingValues(),
                 onNavigateToLogViewer = {
                     backStack.add(LogViewer)
                 },
                 onExportLogs = {
-                    val viewModel = com.voxly.presentation.screens.log.LogViewerViewModel()
-                    viewModel.exportLogs(context) { uri ->
+                    logViewerViewModel.exportLogs(context) { uri ->
                         if (uri != null) {
                             val intent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
                                 type = "application/zip"
@@ -434,6 +429,9 @@ private fun RenderSubScreen(
                 directoryName = key.directoryName,
                 viewModel = libraryViewModel,
                 onNavigateBack = { backStack.removeLastOrNull() },
+                onNavigateToMetadata = { filePath, coverTag ->
+                    backStack.add(MetadataEditor(filePath, coverTag ?: ""))
+                },
                 onNavigateToReplayGain = { filePaths ->
                     backStack.add(ReplayGainScanner(filePaths))
                 },
@@ -446,9 +444,9 @@ private fun RenderSubScreen(
                 onNavigateToOnlineCoverSearch = {
                     backStack.add(OnlineCoverSearch(key.directoryUri))
                 },
-                onNavigateToLyricsSelector = { _, title, artist, album, _ ->
+                onNavigateToLyricsSelector = { filePath, title, artist, album, _ ->
                     backStack.add(LyricsSelector(
-                        filePath = key.directoryUri,
+                        filePath = filePath,
                         title = title,
                         artist = artist,
                         album = album
@@ -458,7 +456,7 @@ private fun RenderSubScreen(
         }
 
         is MetadataEditor -> {
-            // 使用filePath作为key，确保切换歌曲时创建新的ViewModel实例
+            // 浣跨敤filePath浣滀负key锛岀‘淇濆垏鎹㈡瓕鏇叉椂鍒涘缓鏂扮殑ViewModel瀹炰緥
             val viewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
                 key = key.filePath,
                 creationCallback = { factory -> factory.create(key) }
@@ -467,7 +465,7 @@ private fun RenderSubScreen(
                 filePath = key.filePath,
                 viewModel = viewModel,
                 coverTag = key.coverTag.takeIf { it.isNotEmpty() },
-                sharedElementKey = null,
+                sharedElementKey = key.coverTag.takeIf { it.isNotEmpty() },
                 onNavigateBack = { backStack.removeLastOrNull() },
                 onNavigateToOnlineMetadata = {
                     backStack.add(OnlineMetadata(key.filePath))
@@ -652,3 +650,21 @@ private fun isMainScreenKey(key: Any?): Boolean = key == FileBrowser ||
         key == Albums ||
         key == Artists ||
         key == Settings
+
+/**
+ * Navigate to a main screen by truncating all sub-screens above the main screen
+ * and replacing the main screen key. This prevents back stack corruption when
+ * switching tabs while on a sub-screen.
+ */
+private fun navigateToMainScreen(backStack: MutableList<Any>, targetMainScreen: NavKey) {
+    val mainScreenIndex = backStack.indexOfFirst {
+        it is FileBrowser || it is Albums || it is Artists || it is Settings
+    }
+    if (mainScreenIndex >= 0) {
+        // Truncate all sub-screens above the main screen
+        while (backStack.size > mainScreenIndex + 1) {
+            backStack.removeAt(backStack.lastIndex)
+        }
+        backStack[mainScreenIndex] = targetMainScreen
+    }
+}

@@ -164,24 +164,24 @@ class TengxRepositoryImpl(
         return try {
             val response = api.getLyrics(songmid = songMid)
 
-            if (response.isSuccessful && response.body() != null) {
-                val lyricsResponse = response.body()!!
+            val body = response.body()
+            if (body != null) {
                 val decodedResult = if (decode) {
                     DecodedLyricsResult(
-                        response = lyricsResponse,
-                        lyrics = decodeBase64(lyricsResponse.lyric?.lyric ?: ""),
-                        translatedLyrics = decodeBase64(lyricsResponse.trans?.lyric ?: "")
+                        response = body,
+                        lyrics = decodeBase64(body.lyric?.lyric ?: ""),
+                        translatedLyrics = decodeBase64(body.trans?.lyric ?: "")
                     )
                 } else {
                     DecodedLyricsResult(
-                        response = lyricsResponse,
-                        lyrics = lyricsResponse.lyric?.lyric ?: "",
-                        translatedLyrics = lyricsResponse.trans?.lyric ?: ""
+                        response = body,
+                        lyrics = body.lyric?.lyric ?: "",
+                        translatedLyrics = body.trans?.lyric ?: ""
                     )
                 }
                 Result.success(decodedResult)
             } else {
-                Result.failure(Exception("QQ Music get lyrics failed: ${response.code()}"))
+                Result.failure(Exception("QQ Music get lyrics returned empty body"))
             }
         } catch (e: Exception) {
             Result.failure(e)
@@ -194,8 +194,13 @@ class TengxRepositoryImpl(
                 songIds = songIds.joinToString(",")
             )
 
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null) {
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception("QQ Music get song detail returned empty body"))
+                }
             } else {
                 Result.failure(Exception("QQ Music get song detail failed: ${response.code()}"))
             }
@@ -208,8 +213,13 @@ class TengxRepositoryImpl(
         return try {
             val response = api.getAlbumDetail(albumId = albumId)
 
-            if (response.isSuccessful && response.body() != null) {
-                Result.success(response.body()!!)
+            if (response.isSuccessful) {
+                val body = response.body()
+                if (body != null) {
+                    Result.success(body)
+                } else {
+                    Result.failure(Exception("QQ Music get album detail returned empty body"))
+                }
             } else {
                 Result.failure(Exception("QQ Music get album detail failed: ${response.code()}"))
             }

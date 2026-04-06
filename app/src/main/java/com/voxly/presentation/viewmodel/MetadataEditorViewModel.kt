@@ -16,6 +16,8 @@ import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.Lyrics
+import com.voxly.domain.model.ClipMode
+import com.voxly.domain.model.ReplayGainConfig
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.domain.model.ScanModeConstants
 import com.voxly.domain.repository.AudioRepository
@@ -102,7 +104,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
+            started = SharingStarted.Eagerly,
             initialValue = ScanMode.TRACK_ONLY
         )
 
@@ -163,6 +165,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private var _lyricsSearchJob: kotlinx.coroutines.Job? = null
     private var _coverSearchJob: kotlinx.coroutines.Job? = null
 
+    // Lyrics timestamp format state
+    private val _isLyricsTimestampFormatted = MutableStateFlow(false)
+    val isLyricsTimestampFormatted: StateFlow<Boolean> = _isLyricsTimestampFormatted.asStateFlow()
+
     // Combined edit state using combine() - reduces multiple StateFlow updates to single UI recomposition
     val editState: StateFlow<EditState> = combine(
         _hasUnsavedChanges,
@@ -186,35 +192,26 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     /**
      * Loads the audio file and its metadata.
-     * Fast path: reads metadata without cover art bytes for instant page load.
-     * Cover art is loaded asynchronously via loadCoverArtAsync().
+     * Uses getAudioFile() to get complete audio info (bitrate, sampleRate, channels, duration)
+     * from TagLib + MediaStore. Cover art is loaded asynchronously via loadCoverArtAsync().
      */
     private fun loadAudioFile() {
         viewModelScope.launch {
             _uiState.value = MetadataEditorUiState.Loading
 
-            // Fast path: read metadata without cover art bytes
-            val metadataResult = audioRepository.readMetadata(filePath)
+            val audioFileResult = audioRepository.getAudioFile(filePath)
 
-            metadataResult.fold(
-                onSuccess = { metadata ->
+            audioFileResult.fold(
+                onSuccess = { audioFile ->
+                    val metadata = audioFile.metadata
                     _editedMetadata.value = metadata
                     _originalMetadata = metadata
 
-                    // Build minimal AudioFile from metadata + file info
-                    val file = File(filePath)
-                    val audioFile = AudioFile(
-                        id = "",
-                        path = filePath,
-                        name = file.nameWithoutExtension,
-                        size = file.length(),
-                        duration = 0L,
-                        format = "",
-                        bitrate = 0,
-                        sampleRate = 0,
-                        channels = 0,
-                        metadata = metadata,
-                        replayGainInfo = null
+                    // 初始化搜索种子，供 Online Search 屏幕使用
+                    searchSeedHolder.updateSeed(
+                        title = metadata.title.orEmpty(),
+                        artist = metadata.artist,
+                        album = metadata.album
                     )
 
                     _uiState.value = MetadataEditorUiState.Success(
@@ -346,9 +343,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
         // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
         searchSeedHolder.updateSeed(
-            title = updatedMetadata.title?.takeIf { it.isNotBlank() } ?: File(filePath).nameWithoutExtension,
-            artist = updatedMetadata.artist?.takeIf { it.isNotBlank() },
-            album = updatedMetadata.album?.takeIf { it.isNotBlank() }
+            title = updatedMetadata.title.orEmpty(),
+            artist = updatedMetadata.artist,
+            album = updatedMetadata.album
         )
 
         val currentState = _uiState.value
@@ -414,24 +411,37 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 
                 Logger.i("ReplayGain scan started. mode=${currentScanMode.name} files=${filesToScan.size}", "MetadataEditor")
 
-                // Get target loudness from settings
+                // Get target loudness and clip mode from settings
                 val targetLoudness = settingsDataStore.replayGainTargetLoudness.first()
+                val clipModeStr = settingsDataStore.replayGainClipMode.first()
+                val clipMode = ClipMode.fromString(clipModeStr)
+                val scanConfig = ReplayGainConfig(
+                    clipMode = clipMode,
+                    truePeak = false,
+                    dualMono = false,
+                    albumAsAes77 = false,
+                    skipExisting = false,
+                    maxPeakLevel = 0.0
+                )
 
                 val scanFlow = when (currentScanMode) {
                     ScanMode.TRACK_ONLY -> replayGainRepository.scanReplayGain(
                         filesToScan,
                         scanQuality,
-                        targetLoudness
+                        targetLoudness,
+                        scanConfig
                     )
                     ScanMode.SINGLE_ALBUM -> replayGainRepository.scanReplayGainByAlbum(
                         mapOf("single_album" to filesToScan),
                         scanQuality,
-                        targetLoudness
+                        targetLoudness,
+                        scanConfig
                     )
                     ScanMode.ALBUMS -> replayGainRepository.scanReplayGainWithAlbumGrouping(
                         filesToScan,
                         scanQuality,
-                        targetLoudness
+                        targetLoudness,
+                        scanConfig
                     )
                 }
 
@@ -785,7 +795,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     fun searchOnlineCoverCandidates() {
         val metadata = _editedMetadata.value ?: return
-        val title = metadata.title?.takeIf { it.isNotBlank() } ?: File(filePath).nameWithoutExtension
+        val title = metadata.title.orEmpty()
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
 
         // Cancel previous search before starting new one (flatMapLatest pattern)
@@ -912,7 +922,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     fun searchOnlineLyrics() {
         val metadata = _editedMetadata.value ?: return
-        val track = metadata.title?.takeIf { it.isNotBlank() } ?: File(filePath).nameWithoutExtension
+        val track = metadata.title.orEmpty()
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
         val album = metadata.album?.takeIf { it.isNotBlank() }
         val flowLyricsRepository = lyricsRepository as? LyricsRepositoryImpl ?: return
@@ -1010,12 +1020,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     /**
-     * Track whether lyrics timestamps are currently in 2-digit format (xx) or 3-digit format (xxx)
-     */
-    var isLyricsTimestampFormatted: Boolean = false
-        private set
-
-    /**
      * Toggles lyrics timestamp format between [mm:ss.xxx] and [mm:ss.xx]
      */
     fun toggleLyricsTimestampFormat() {
@@ -1024,16 +1028,17 @@ class MetadataEditorViewModel @AssistedInject constructor(
         
         viewModelScope.launch {
             val hasThreeDigit = currentLyrics.contains(Regex("""\[\d{2}:\d{2}\.\d{3}\]"""))
+            val currentFormatted = _isLyricsTimestampFormatted.value
             
             val newLyrics: String
-            if (hasThreeDigit && !isLyricsTimestampFormatted) {
+            if (hasThreeDigit && !currentFormatted) {
                 // If currently has 3-digit, convert to 2-digit
-                isLyricsTimestampFormatted = true
+                _isLyricsTimestampFormatted.value = true
                 newLyrics = Lyrics.formatTimestamps(currentLyrics)
             } else {
                 // If currently has 2-digit (manually formatted), we can't easily convert back
                 // So just toggle the flag
-                isLyricsTimestampFormatted = !isLyricsTimestampFormatted
+                _isLyricsTimestampFormatted.value = !currentFormatted
                 newLyrics = currentLyrics
             }
             

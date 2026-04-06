@@ -56,6 +56,8 @@ fun LogViewerScreen(
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
+    val fabVisible = uiState.selectedLogFile == null && uiState.logFiles.isNotEmpty()
+
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
@@ -105,25 +107,27 @@ fun LogViewerScreen(
             )
         },
         floatingActionButton = {
-            if (uiState.selectedLogFile == null && uiState.logFiles.isNotEmpty()) {
-                FloatingActionButton(
-                    onClick = {
-                        viewModel.exportLogs(context) { uri ->
-                            if (uri != null) {
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "application/zip"
-                                    putExtra(Intent.EXTRA_STREAM, uri)
-                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
-                                }
-                                context.startActivity(Intent.createChooser(intent, "Export Logs"))
-                            } else {
-                                Toast.makeText(context, "Failed to export logs", Toast.LENGTH_SHORT).show()
+            FloatingActionButton(
+                modifier = Modifier.animateFloatingActionButton(
+                    visible = fabVisible,
+                    alignment = Alignment.BottomEnd
+                ),
+                onClick = {
+                    viewModel.exportLogs(context) { uri ->
+                        if (uri != null) {
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = "application/zip"
+                                putExtra(Intent.EXTRA_STREAM, uri)
+                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
                             }
+                            context.startActivity(Intent.createChooser(intent, "Export Logs"))
+                        } else {
+                            Toast.makeText(context, "Failed to export logs", Toast.LENGTH_SHORT).show()
                         }
                     }
-                ) {
-                    Icon(Icons.Default.Archive, contentDescription = null)
                 }
+            ) {
+                Icon(Icons.Default.Archive, contentDescription = null)
             }
         }
     ) { innerPadding ->

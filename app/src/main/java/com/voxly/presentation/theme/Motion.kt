@@ -357,19 +357,20 @@ object ExpressiveAnimations {
     )
 
     // Fade Through - for bottom navigation (no spatial relationship)
+    // Pure fade in/out without scaling for clean tab transitions
     val FadeThroughEnter: EnterTransition = fadeIn(
-        animationSpec = PageEffectsSpring
-    ) + scaleIn(
-        initialScale = 0.92f,
-        animationSpec = PartialEnterSpring
-    )
-
+            animationSpec = spring(
+                dampingRatio = ExpressiveMotionTokens.SlowEffects.dampingRatio,
+                stiffness = ExpressiveMotionTokens.SlowEffects.stiffness
+            )
+        )
+    
     val FadeThroughExit: ExitTransition = fadeOut(
-        animationSpec = PageEffectsSpring
-    ) + scaleOut(
-        targetScale = 0.92f,
-        animationSpec = PartialExitSpring
-    )
+            animationSpec = spring(
+                dampingRatio = ExpressiveMotionTokens.SlowEffects.dampingRatio,
+                stiffness = ExpressiveMotionTokens.SlowEffects.stiffness
+            )
+        )
 
     // Fade - for dialogs, bottom sheets, FABs
     val FadeEnter: EnterTransition = fadeIn(
@@ -462,79 +463,6 @@ object ExpressiveAnimations {
             stiffness = ExpressiveMotionTokens.DefaultEffects.stiffness
         )
     )
-
-    // ===== Legacy compatibility (deprecated, use Material Motion Transitions above) =====
-    @Deprecated("Use ContainerTransformEnter", ReplaceWith("ContainerTransformEnter"))
-    val BottomNavEnter = FadeThroughEnter
-
-    @Deprecated("Use ContainerTransformExit", ReplaceWith("ContainerTransformExit"))
-    val BottomNavExit = FadeThroughExit
-
-    @Deprecated("Use ContainerTransformEnter", ReplaceWith("ContainerTransformEnter"))
-    val BottomNavEnterM3E = ContainerTransformEnter
-
-    @Deprecated("Use ContainerTransformExit", ReplaceWith("ContainerTransformExit"))
-    val BottomNavExitM3E = ContainerTransformExit
-
-    @Deprecated("Use SharedAxisXEnter", ReplaceWith("SharedAxisXEnter"))
-    val PageEnter = SharedAxisXEnter
-
-    @Deprecated("Use SharedAxisXEnter", ReplaceWith("SharedAxisXEnter"))
-    val PageEnterExpressive = SharedAxisXEnter
-
-    @Deprecated("Use SharedAxisXExit", ReplaceWith("SharedAxisXExit"))
-    val PageExitExpressive = SharedAxisXExit
-
-    @Deprecated("Use SharedAxisXPopEnter", ReplaceWith("SharedAxisXPopEnter"))
-    val PageEnterFromLeft = SharedAxisXPopEnter
-
-    @Deprecated("Use SharedAxisXPopExit", ReplaceWith("SharedAxisXPopExit"))
-    val PageExitToRight = SharedAxisXPopExit
-
-    @Deprecated("Use FadeThroughEnter", ReplaceWith("FadeThroughEnter"))
-    val BottomNavSlideEnter = FadeThroughEnter
-
-    @Deprecated("Use FadeThroughExit", ReplaceWith("FadeThroughExit"))
-    val BottomNavSlideExit = FadeThroughExit
-
-    @Deprecated("Use SharedAxisXEnter", ReplaceWith("SharedAxisXEnter"))
-    val CrossFadeEnter = SharedAxisXEnter
-
-    @Deprecated("Use SharedAxisXExit", ReplaceWith("SharedAxisXExit"))
-    val CrossFadeExit = SharedAxisXExit
-
-    @Deprecated("Use SharedAxisXEnter", ReplaceWith("SharedAxisXEnter"))
-    val PageEnterWithScale = SharedAxisXEnter
-
-    @Deprecated("Use SharedAxisXExit", ReplaceWith("SharedAxisXExit"))
-    val PageExitWithScale = SharedAxisXExit
-
-    @Deprecated("Use SharedAxisXEnter", ReplaceWith("SharedAxisXEnter"))
-    val SharedAxisEnter = SharedAxisXEnter
-
-    @Deprecated("Use SharedAxisXExit", ReplaceWith("SharedAxisXExit"))
-    val SharedAxisExit = SharedAxisXExit
-
-    @Deprecated("Use SharedAxisXPopEnter", ReplaceWith("SharedAxisXPopEnter"))
-    val SharedAxisPopEnter = SharedAxisXPopEnter
-
-    @Deprecated("Use SharedAxisXPopExit", ReplaceWith("SharedAxisXPopExit"))
-    val SharedAxisPopExit = SharedAxisXPopExit
-
-    @Deprecated("Use ContainerTransformExit", ReplaceWith("ContainerTransformExit"))
-    val PageExit = ContainerTransformExit
-
-    @Deprecated("Use ContainerTransformPopExit", ReplaceWith("ContainerTransformPopExit"))
-    val M3E_PageExit = ContainerTransformPopExit
-
-    @Deprecated("Use ContainerTransformPopExit", ReplaceWith("ContainerTransformPopExit"))
-    val M3E_PopExit = ContainerTransformPopExit
-
-    // ===== Navigation Transition Animations (legacy names) =====
-    val SlideInHorizontallyInitialOffsetForward = SharedAxisXEnter
-    val SlideOutHorizontallyInitialOffsetForward = SharedAxisXExit
-    val SlideInHorizontallyInitialOffsetBackward = SharedAxisXPopEnter
-    val SlideOutHorizontallyInitialOffsetBackward = SharedAxisXPopExit
 
     // ===== State Change Animations =====
     val SelectionChange: AnimationSpec<Float> = FastEnterSpring

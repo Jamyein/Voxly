@@ -44,8 +44,8 @@ class BatchEditMetadataUseCase @Inject constructor(
                 // Read existing metadata
                 val existingMetadataResult = audioRepository.readMetadata(filePath)
 
-                if (existingMetadataResult.isSuccess) {
-                    val existingMetadata = existingMetadataResult.getOrNull()!!
+                val existingMetadata = existingMetadataResult.getOrNull()
+                if (existingMetadata != null) {
 
                     // Merge metadata based on fields to update
                     val updatedMetadata = mergeMetadata(
@@ -81,7 +81,7 @@ class BatchEditMetadataUseCase @Inject constructor(
         }
 
         Logger.i(
-            "Batch metadata edit finished. files=$totalFiles success=${batchEngine.getFailedItems().let { totalFiles - it.size }} failed=${batchEngine.getFailedItems().size} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+            "Batch metadata edit finished. files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
             "BatchEdit"
         )
     }
@@ -137,17 +137,26 @@ class BatchReplayGainUseCase @Inject constructor(
      * @param targetLoudness Target loudness in LUFS (default -14.0, standard ReplayGain)
      * @return Flow emitting scan progress
      */
-    operator fun invoke(
-        filePaths: List<String>,
-        scanQuality: ScanQuality = ScanQuality.ACCURATE,
-        targetLoudness: Float = -14f
-    ): Flow<com.voxly.domain.repository.ScanProgress> = flow {
-        batchEngine.execute(
-            items = filePaths,
-            operation = { filePath ->
-                replayGainRepository.scanReplayGain(listOf(filePath), scanQuality, targetLoudness)
-                Result.success(Unit)
-            },
+     operator fun invoke(
+         filePaths: List<String>,
+         scanQuality: ScanQuality = ScanQuality.ACCURATE,
+         targetLoudness: Float = -14f
+     ): Flow<com.voxly.domain.repository.ScanProgress> = flow {
+         batchEngine.execute(
+             items = filePaths,
+             operation = { filePath ->
+                 try {
+                     replayGainRepository.scanReplayGain(
+                         listOf(filePath),
+                         scanQuality,
+                         targetLoudness,
+                         com.voxly.domain.model.ReplayGainConfig.DEFAULT
+                     ).collect { /* progress emitted via outer flow */ }
+                     Result.success(Unit)
+                 } catch (e: Exception) {
+                     Result.failure(e)
+                 }
+             },
             itemName = { it }
         ).collect { result ->
             emit(
@@ -200,7 +209,7 @@ class BatchAlbumArtUseCase @Inject constructor(
             }
         } finally {
             Logger.i(
-                "Batch album art set finished. files=$totalFiles success=${batchEngine.getFailedItems().let { totalFiles - it.size }} failed=${batchEngine.getFailedItems().size} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+                "Batch album art set finished. files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
                 "BatchAlbumArt"
             )
         }
@@ -228,7 +237,7 @@ class BatchAlbumArtUseCase @Inject constructor(
             }
         } finally {
             Logger.i(
-                "Batch album art remove finished. files=$totalFiles success=${batchEngine.getFailedItems().let { totalFiles - it.size }} failed=${batchEngine.getFailedItems().size} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+                "Batch album art remove finished. files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
                 "BatchAlbumArt"
             )
         }

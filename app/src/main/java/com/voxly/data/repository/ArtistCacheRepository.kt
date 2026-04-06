@@ -1,18 +1,10 @@
 package com.voxly.data.repository
 
+import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import java.util.concurrent.ConcurrentHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
-
-/**
- * Data class representing an artist with their songs.
- */
-data class ArtistGroup(
-    val name: String,
-    val files: List<AudioFile>,
-    val coverPath: String? = null
-)
 
 /**
  * In-memory cache for artist data to avoid repeated database queries when navigating to ArtistDetailScreen.

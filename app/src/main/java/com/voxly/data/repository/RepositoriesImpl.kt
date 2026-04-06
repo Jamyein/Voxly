@@ -5,7 +5,7 @@ import android.provider.MediaStore
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
-import com.voxly.data.local.replaygain.Ebur128ReplayGainScanner
+import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
@@ -68,29 +68,30 @@ class AudioRepositoryImpl @Inject constructor(
 
                 // Try Room cache first — skip TagLib I/O if cache is valid
                 val cachedFile = libraryCache.getCachedFile(filePath)
-                if (cachedFile != null && javaFile.exists() &&
-                    fileLastModified <= cachedFile.path.hashCode().toLong()
-                ) {
-                    // Cache hit: only need album art bytes
-                    val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
+                if (cachedFile != null && javaFile.exists()) {
+                    // Cache hit: always read from file to get complete metadata
+                    val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true, bypassCache = true)
                     val mergedMeta = if (completeMetadata?.metadata != null) {
                         mergeWithFallback(completeMetadata.metadata, cachedFile.metadata)
                             ?: completeMetadata.metadata
                     } else {
                         cachedFile.metadata
                     }
-                    return@withContext Result.success(
-                        cachedFile.copy(
-                            metadata = mergedMeta,
-                            replayGainInfo = cachedFile.replayGainInfo
-                        )
+                    val resultFile = cachedFile.copy(
+                        metadata = mergedMeta,
+                        replayGainInfo = cachedFile.replayGainInfo
                     )
+
+                    // Update cache with complete metadata for future reads
+                    libraryCache.syncFileToCache(resultFile)
+
+                    return@withContext Result.success(resultFile)
                 }
 
                 // Cache miss: run independent I/O operations in parallel
                 val (completeMetadata, mediaStoreInfo) = coroutineScope {
                     val tagLibDeferred = async {
-                        metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true)
+                        metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true, bypassCache = true)
                     }
                     val mediaStoreDeferred = async {
                         queryMediaStoreAudioInfo(filePath)
@@ -125,8 +126,12 @@ class AudioRepositoryImpl @Inject constructor(
 
                 val mediaStoreFallbackMetadata = readMediaStoreBasicMetadata(filePath)
                 val mergedMetadata = mergeWithFallback(audioFile.metadata, mediaStoreFallbackMetadata)
+                val resultFile = audioFile.copy(metadata = mergedMetadata ?: AudioMetadata())
 
-                Result.success(audioFile.copy(metadata = mergedMetadata ?: AudioMetadata()))
+                // Persist complete metadata to cache for future reads
+                libraryCache.syncFileToCache(resultFile)
+
+                Result.success(resultFile)
             } catch (e: SecurityException) {
                 Result.failure(Exception("File not accessible due to storage permission/scope: $filePath", e))
             } catch (e: Exception) {
@@ -321,26 +326,29 @@ class AudioRepositoryImpl @Inject constructor(
 class ReplayGainRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val metadataProcessor: TagLibMetadataProcessor,
-    private val replayGainScanner: Ebur128ReplayGainScanner
+    private val replayGainScanner: ReplayGainScanner
 ) : ReplayGainRepository {
 
     override fun scanReplayGain(
         filePaths: List<String>,
         scanQuality: ScanQuality,
-        targetLoudness: Float
-    ): Flow<ScanProgress> = replayGainScanner.scanReplayGain(filePaths, scanQuality, targetLoudness)
+        targetLoudness: Float,
+        config: com.voxly.domain.model.ReplayGainConfig
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGain(filePaths, scanQuality, targetLoudness, config)
 
     override fun scanReplayGainByAlbum(
         filesByAlbum: Map<String, List<String>>,
         scanQuality: ScanQuality,
-        targetLoudness: Float
-    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness)
+        targetLoudness: Float,
+        config: com.voxly.domain.model.ReplayGainConfig
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness, config)
 
     override fun scanReplayGainWithAlbumGrouping(
         filePaths: List<String>,
         scanQuality: ScanQuality,
-        targetLoudness: Float
-    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainWithAlbumGrouping(filePaths, scanQuality, targetLoudness)
+        targetLoudness: Float,
+        config: com.voxly.domain.model.ReplayGainConfig
+    ): Flow<ScanProgress> = replayGainScanner.scanReplayGainWithAlbumGrouping(filePaths, scanQuality, targetLoudness, config)
 
     override suspend fun applyReplayGain(
         filePaths: List<String>,

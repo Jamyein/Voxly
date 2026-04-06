@@ -39,13 +39,13 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
 
     // Search query info (exposed for UI)
     private val _searchTitle = MutableStateFlow("")
-    val searchTitle: String get() = _searchTitle.value
+    val searchTitle: StateFlow<String> = _searchTitle.asStateFlow()
 
     private val _searchArtist = MutableStateFlow<String?>(null)
-    val searchArtist: String? get() = _searchArtist.value
+    val searchArtist: StateFlow<String?> = _searchArtist.asStateFlow()
 
     private val _searchAlbum = MutableStateFlow<String?>(null)
-    val searchAlbum: String? get() = _searchAlbum.value
+    val searchAlbum: StateFlow<String?> = _searchAlbum.asStateFlow()
 
     private val _lyricsResults = MutableStateFlow<List<OnlineLyricsResult>>(emptyList())
     val lyricsResults: StateFlow<List<OnlineLyricsResult>> = _lyricsResults.asStateFlow()
@@ -75,26 +75,29 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
             _searchState.value = LyricsSearchState()
 
             // 优先从 SearchSeedHolder 获取实时编辑值
-            val seed = searchSeedHolder.getAndClearSeed()
+            val seed = searchSeedHolder.peekSeed()
 
             val track: String
             val artist: String?
             val album: String?
 
             if (seed != null) {
-                // 使用编辑中的实时值
-                track = seed.title
-                artist = seed.artist
-                album = seed.album
+                // 使用编辑中的实时值，进行清理
+                track = sanitizeSearchTerm(seed.title).orEmpty()
+                artist = sanitizeSearchTerm(seed.artist)
+                album = sanitizeSearchTerm(seed.album)
             } else {
                 // 兜底：从文件读取
                 val result = audioRepository.getAudioFile(targetPath)
                 result.fold(
                     onSuccess = { audioFile ->
                         val metadata = audioFile.metadata
-                        track = metadata.title?.takeIf { it.isNotBlank() } ?: File(targetPath).nameWithoutExtension
-                        artist = metadata.artist?.takeIf { it.isNotBlank() }
-                        album = metadata.album?.takeIf { it.isNotBlank() }
+                        val rawTitle = metadata.title.orEmpty()
+                        val rawArtist = metadata.artist?.takeIf { it.isNotBlank() }
+                        val rawAlbum = metadata.album?.takeIf { it.isNotBlank() }
+                        track = sanitizeSearchTerm(rawTitle) ?: rawTitle
+                        artist = sanitizeSearchTerm(rawArtist)
+                        album = sanitizeSearchTerm(rawAlbum)
 
                         _searchTitle.value = track
                         _searchArtist.value = artist
@@ -116,6 +119,18 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
 
             performLyricsSearch(track, artist, album)
         }
+    }
+
+    private fun sanitizeSearchTerm(value: String?): String? {
+        if (value.isNullOrBlank()) return null
+        val cleaned = value
+            .replace('_', ' ')
+            .replace('.', ' ')
+            .replace(Regex("^\\s*\\d{1,3}[\\s._-]+"), "")
+            .replace(Regex("\\([^)]*\\)|\\[[^\\]]*\\]|\\{[^}]*\\}"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return cleaned.takeIf { it.length >= 2 }
     }
 
     private fun performLyricsSearch(track: String, artist: String?, album: String?) {

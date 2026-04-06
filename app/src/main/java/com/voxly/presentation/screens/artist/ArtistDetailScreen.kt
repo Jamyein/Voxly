@@ -13,14 +13,11 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -36,42 +33,43 @@ import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
-import kotlin.math.max
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
-import com.voxly.presentation.theme.ExpressiveMotion
-import com.voxly.presentation.ui.loadAlbumArtOriginalBitmap
+import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
+import coil3.compose.AsyncImage
+import coil3.compose.LocalPlatformContext
+import coil3.request.ImageRequest
+import coil3.request.crossfade
+import com.voxly.data.local.cover.CoverUriProvider
+import java.io.File
 
 /**
  * Album information for carousel display with year.
@@ -81,17 +79,6 @@ private data class AlbumInfo(
     val files: List<com.voxly.domain.model.AudioFile>,
     val year: Int?
 )
-
-private const val CAROUSEL_ART_TARGET_PX = 384
-
-/**
- * Extracts the year from album files (uses the maximum year found).
- */
-private fun extractAlbumYear(files: List<com.voxly.domain.model.AudioFile>): Int? {
-    return files
-        .mapNotNull { file -> extractYear(file.metadata.year) }
-        .maxOrNull()
-}
 
 /**
  * Extracts 4-digit year from a string (e.g., "2023" or "2023-01-01").
@@ -154,11 +141,6 @@ fun ArtistDetailScreen(
             .sortedByDescending { it.year ?: 0 }
     }
 
-    // Create a map for easy lookup (maintains sorted order)
-    val albumsGrouped = remember(albumsSorted) {
-        albumsSorted.associate { it.name to it.files }
-    }
-
     // Use the same AlbumArtImage component as ArtistListItem for consistency
     // This ensures the avatar displays the same way as in the artist list
     val avatarKey = createArtistAvatarSharedElementKey(artistName)
@@ -210,6 +192,8 @@ fun ArtistDetailScreen(
                     ) {
                         // Circle Avatar (150dp) with shared element transition
                         // Using AlbumArtImage like ArtistListItem for consistent display
+                        // If coverPath is null, use first file's path as fallback
+                        val artistCoverPath = coverPath ?: files.firstOrNull()?.path
                         Box(
                             modifier = Modifier
                                 .size(150.dp)
@@ -217,25 +201,15 @@ fun ArtistDetailScreen(
                                 .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            AlbumArtImage(
-                                filePath = coverPath,
-                                contentDescription = stringResource(R.string.artist_cover),
-                                size = 150.dp,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Surface(
-                                    modifier = Modifier.fillMaxSize(),
-                                    color = MaterialTheme.colorScheme.primaryContainer
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Icon(
-                                            imageVector = Icons.Default.Person,
-                                            contentDescription = null,
-                                            modifier = Modifier.size(80.dp),
-                                            tint = MaterialTheme.colorScheme.onPrimaryContainer
-                                        )
-                                    }
-                                }
+                            if (!artistCoverPath.isNullOrBlank()) {
+                                AlbumArtImage(
+                                    filePath = artistCoverPath,
+                                    contentDescription = stringResource(R.string.artist_cover),
+                                    size = 150.dp,
+                                    modifier = Modifier.fillMaxSize()
+                                )
+                            } else {
+                                DefaultAlbumArtPlaceholder(size = 150.dp)
                             }
                         }
 
@@ -320,7 +294,7 @@ fun ArtistDetailScreen(
                             val albumInfo = albumsSorted[page]
                             val albumArtPath = albumCovers[albumInfo.name]
                             // Get mediaStoreAlbumId from the first file in the album that has one
-                            val mediaStoreAlbumId = albumInfo.files.firstOrNull { 
+                            val albumId = albumInfo.files.firstOrNull { 
                                 it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
                             }?.mediaStoreAlbumId
 
@@ -330,7 +304,7 @@ fun ArtistDetailScreen(
                                 trackCount = albumInfo.files.size,
                                 albumYear = albumInfo.year,
                                 albumArtPath = albumArtPath,
-                                mediaStoreAlbumId = mediaStoreAlbumId,
+                                albumId = albumId,
                                 onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
                                 modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
                             )
@@ -401,77 +375,100 @@ fun ArtistDetailScreen(
 }
 
 /**
- * 轮播封面专用图片组件（384px）。
- * 使用produceState在IO线程加载，避免主线程阻塞。
- * key1 = filePath, key2 = mediaStoreAlbumId 确保任一变化时重新加载。
+ * 轮播封面专用图片组件，使用 Coil 3 加载。
  */
 @Composable
 fun CarouselAlbumArtImage(
     filePath: String?,
-    mediaStoreAlbumId: Long? = null,
+    albumId: Long? = null,
     contentDescription: String?,
     modifier: Modifier = Modifier,
     placeholder: @Composable () -> Unit = {}
 ) {
     val context = LocalContext.current
-    val density = LocalDensity.current
-    val targetSizePx = max(CAROUSEL_ART_TARGET_PX, with(density) { 160.dp.toPx().toInt() })
-    var thumbnail by remember(filePath, mediaStoreAlbumId) { mutableStateOf<Bitmap?>(null) }
-    var original by remember(filePath, mediaStoreAlbumId) { mutableStateOf<Bitmap?>(null) }
+    var fallbackMediaStoreBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var showFallback by remember { mutableStateOf(false) }
 
-    LaunchedEffect(filePath, mediaStoreAlbumId) {
-        thumbnail = null
-        original = null
-
-        // 1) Try MediaStore first (fastest, system-level cache)
-        if (mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
-            val mediaStoreBitmap = withContext(Dispatchers.IO) {
-                loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
-            }
-            if (mediaStoreBitmap != null) {
-                thumbnail = mediaStoreBitmap
-                original = mediaStoreBitmap
-                return@LaunchedEffect
-            }
-        }
-
-        if (filePath.isNullOrBlank()) return@LaunchedEffect
-
-        // 2) Load high-quality thumbnail for instant display (if MediaStore failed)
-        if (thumbnail == null) {
-            thumbnail = withContext(Dispatchers.IO) {
-                loadAlbumArtThumbnail(
-                    context = context,
-                    filePath = filePath,
-                    targetSizePx = targetSizePx
-                )
-            }
-        }
-
-        // 3) Load original and replace without layout changes
-        val full = withContext(Dispatchers.IO) {
-            loadAlbumArtOriginalBitmap(
-                context = context,
-                filePath = filePath,
-                targetSizePx = targetSizePx
-            )
-        }
-        if (full != null) {
-            original = full
-        }
+    val embeddedBitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = filePath,
+        key2 = 300
+    ) {
+        value = if (!filePath.isNullOrBlank()) {
+            loadAlbumArtThumbnail(context, filePath, 300)
+        } else null
     }
 
     Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        val loadedBitmap = original ?: thumbnail
-        if (loadedBitmap != null) {
-            Image(
-                bitmap = loadedBitmap.asImageBitmap(),
-                contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            placeholder()
+        when {
+            showFallback && fallbackMediaStoreBitmap != null -> {
+                fallbackMediaStoreBitmap?.let { bitmap ->
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = contentDescription,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                }
+            }
+
+            !filePath.isNullOrBlank() -> {
+                val coverUri = remember(filePath, albumId) {
+                    CoverUriProvider(context).getCoverUri(albumId = albumId, filePath = filePath)
+                }
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalPlatformContext.current)
+                        .data(coverUri ?: File(filePath))
+                        .crossfade(false)
+                        .listener(
+                            onError = { _, _ ->
+                                if (albumId != null && albumId > 0) {
+                                    loadMediaStoreAlbumArt(context, albumId)?.let {
+                                        fallbackMediaStoreBitmap = it
+                                        showFallback = true
+                                    }
+                                }
+                            }
+                        )
+                        .build(),
+                    contentDescription = contentDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+
+            albumId != null && albumId > 0 -> {
+                var msBitmap by remember { mutableStateOf<Bitmap?>(null) }
+                LaunchedEffect(albumId) {
+                    msBitmap = loadMediaStoreAlbumArt(context, albumId)
+                }
+                msBitmap?.let { bitmap ->
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = contentDescription,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } ?: embeddedBitmap?.let { bitmap ->
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = contentDescription,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } ?: placeholder()
+            }
+
+            else -> {
+                embeddedBitmap?.let { bitmap ->
+                    Image(
+                        bitmap = bitmap.asImageBitmap(),
+                        contentDescription = contentDescription,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } ?: placeholder()
+            }
         }
     }
 }
@@ -488,22 +485,15 @@ fun AlbumCard(
     trackCount: Int,
     albumYear: Int?,
     albumArtPath: String?,
-    mediaStoreAlbumId: Long? = null,
+    albumId: Long? = null,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val scale by animateFloatAsState(
-        targetValue = 1f,
-        animationSpec = ExpressiveMotion.DefaultSpring,
-        label = "albumCardScale"
-    )
-
     Card(
         onClick = onClick,
         modifier = modifier
             .width(160.dp)
-            .height(205.dp)
-            .scale(scale),
+            .height(205.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
         )
@@ -524,24 +514,10 @@ fun AlbumCard(
             ) {
                 CarouselAlbumArtImage(
                     filePath = albumArtPath,
-                    mediaStoreAlbumId = mediaStoreAlbumId,
+                    albumId = albumId,
                     contentDescription = albumName,
                     modifier = Modifier.fillMaxSize()
-                ) {
-                    Surface(
-                        modifier = Modifier.fillMaxSize(),
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Album,
-                            contentDescription = null,
-                            modifier = Modifier
-                                .padding(32.dp)
-                                .fillMaxSize(),
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                }
+                )
             }
 
             // Album name, year and track count

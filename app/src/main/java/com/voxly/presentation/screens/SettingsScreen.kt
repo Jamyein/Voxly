@@ -6,7 +6,7 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import com.voxly.presentation.theme.ExpressiveMotion
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -209,7 +209,7 @@ private fun <T> ConnectedIconButtonGroup(
     val animatedWeights = options.map { option ->
         val animatedWeight by animateFloatAsState(
             targetValue = if (option.value == selectedValue) selectedWeight else baseWeight,
-            animationSpec = ExpressiveMotion.DefaultSpring,
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
             label = "settings_connected_button_weight"
         )
         animatedWeight
@@ -258,7 +258,7 @@ private fun <T> ConnectedIconButtonGroup(
                                         text = option.text,
                                         style = MaterialTheme.typography.labelLarge,
                                         modifier = Modifier.animateContentSize(
-                                            animationSpec = ExpressiveMotion.DefaultSpringSize
+                                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
                                         )
                                     )
                                 } else {
@@ -266,7 +266,7 @@ private fun <T> ConnectedIconButtonGroup(
                                         imageVector = option.icon!!,
                                         contentDescription = option.tooltip,
                                         modifier = Modifier.animateContentSize(
-                                            animationSpec = ExpressiveMotion.DefaultSpringSize
+                                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
                                         )
                                     )
                                 }
@@ -361,7 +361,7 @@ fun DraggableSourcePriorityDialog(
                     .heightIn(max = 450.dp)
                     .verticalScroll(rememberScrollState())
                     .animateContentSize(
-                        animationSpec = ExpressiveMotion.DefaultSpringSize
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
                     ),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
@@ -377,12 +377,12 @@ fun DraggableSourcePriorityDialog(
                     // Animated hover effects for dragged item
                     val animatedScale by animateFloatAsState(
                         targetValue = if (isDragging) 1.05f else 1f,
-                        animationSpec = ExpressiveMotion.DefaultSpring,
+                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                         label = "scale"
                     )
                     val animatedElevation by animateDpAsState(
                         targetValue = if (isDragging) 8.dp else 0.dp,
-                        animationSpec = ExpressiveMotion.SlowSpringDp,
+                        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
                         label = "elevation"
                     )
 
@@ -528,9 +528,9 @@ fun DraggableSourcePriorityDialog(
                                         // Enable/Disable toggle
                                         DropdownMenuItem(
                                             text = {
-                                                Text(
-                                                    if (sourceState.enabled) "禁用" else "启用"
-                                                )
+                                    Text(
+                                        if (sourceState.enabled) stringResource(R.string.settings_source_disable) else stringResource(R.string.settings_source_enable)
+                                    )
                                             },
                                             onClick = {
                                                 // Directly trigger ViewModel callback for real-time save
@@ -579,7 +579,7 @@ fun DraggableSourcePriorityDialog(
                             // Drag hint
                             if (!isDragging) {
                                 Text(
-                                    text = "长按拖拽排序",
+                                    text = stringResource(R.string.settings_drag_hint),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
                                     modifier = Modifier
@@ -1068,7 +1068,7 @@ fun SettingsScreen(
                     trailingContent = {
                         val arrowRotation by animateFloatAsState(
                             targetValue = if (languageExpanded) 180f else 0f,
-            animationSpec = ExpressiveMotion.DefaultSpring,
+            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                             label = "language_dropdown_arrow"
                         )
                         SortDropdownMenu(
@@ -1176,7 +1176,7 @@ fun SettingsScreen(
                     trailingContent = {
                         val arrowRotation by animateFloatAsState(
                             targetValue = if (loudnessExpanded) 180f else 0f,
-                            animationSpec = ExpressiveMotion.DefaultSpring,
+                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
                             label = "loudness_dropdown_arrow"
                         )
                         SortDropdownMenu(
@@ -1272,7 +1272,7 @@ fun SettingsScreen(
                                     },
                                     enabled = separatorInput.isNotBlank()
                                 ) {
-                                    Text("Add")
+                                    Text(stringResource(R.string.settings_separator_add))
                                 }
                             }
                         }
@@ -1303,8 +1303,8 @@ fun SettingsScreen(
                 AlertDialog(
                     onDismissRequest = { pendingDeleteSeparator = null },
                     shape = MaterialTheme.shapes.large,
-                    title = { Text("删除分隔符") },
-                    text = { Text("确定删除分隔符 \"${pendingDeleteSeparator}\" 吗？") },
+                    title = { Text(stringResource(R.string.settings_separator_delete_title)) },
+                    text = { Text(stringResource(R.string.settings_separator_delete_message, pendingDeleteSeparator!!)) },
                     confirmButton = {
                         TextButton(
                             onClick = {
@@ -1312,12 +1312,12 @@ fun SettingsScreen(
                                 pendingDeleteSeparator = null
                             }
                         ) {
-                            Text("删除")
+                            Text(stringResource(R.string.settings_separator_delete))
                         }
                     },
                     dismissButton = {
                         TextButton(onClick = { pendingDeleteSeparator = null }) {
-                            Text("取消")
+                            Text(stringResource(R.string.settings_separator_cancel))
                         }
                     }
                 )
@@ -1587,7 +1587,7 @@ private fun SeparatorChip(
             ) {
                 Icon(
                     imageVector = Icons.Default.Close,
-                    contentDescription = "删除",
+                    contentDescription = stringResource(R.string.settings_separator_delete_cd),
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f)
                 )

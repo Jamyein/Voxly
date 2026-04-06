@@ -1,34 +1,37 @@
 # PROJECT KNOWLEDGE BASE
 
-**Generated:** 2026-03-11
-**Commit:** 69bea87
+**Updated:** 2026-04-03
 **Branch:** main
 
 ## OVERVIEW
-Android MP3 Tag Editor with Kotlin, Jetpack Compose, Material Design 3. Clean Architecture + MVVM.
+Android MP3 Tag Editor with Kotlin, Jetpack Compose, Material Design 3 Expressive. Clean Architecture + MVVM.
 
 ## STRUCTURE
 ```
 app/src/main/java/com/voxly/
-├── core/          # Utils: logging, crash handling
+├── core/          # Utils: logging (Timber), crash handling
 ├── data/          # Data layer
-│   ├── local/     # AudioFileScanner, Settings, cache
+│   ├── local/     # AudioFileScanner, Settings, cache (Room), metadata, SAF, replaygain
 │   └── remote/    # APIs: wangy, tengx, musicbrainz, itunes, lrclib
-├── di/            # Hilt modules
-├── domain/        # Models, repository interfaces
-└── presentation/  # UI: screens, viewmodels, theme
+├── di/            # Hilt dependency injection modules
+├── domain/        # Models, repository interfaces, use cases
+├── presentation/  # UI: screens, viewmodels, theme, components, navigation
+├── util/          # Utility functions
+└── MP3TagApplication.kt
 ```
 
 ## WHERE TO LOOK
 | Task | Location |
 |------|----------|
 | Metadata editing | `data/local/metadata/`, `presentation/screens/metadata/` |
-| Online metadata | `data/remote/` (multiple APIs) |
+| Online metadata | `data/remote/` (5 APIs: Wangy, Tengx, MusicBrainz, iTunes, LRCLib) |
 | Audio scanning | `data/local/AudioFileScanner.kt` |
 | ReplayGain | `data/local/replaygain/` |
 | UI screens | `presentation/screens/` |
 | ViewModels | `presentation/viewmodel/` |
 | Lyrics poster | `presentation/components/lyricsposter/` |
+| Navigation | `presentation/navigation/` |
+| Theme/Design | `presentation/theme/` |
 
 ---
 
@@ -36,33 +39,34 @@ app/src/main/java/com/voxly/
 
 ### Build & Run
 ```bash
-./gradlew build           # Debug build
-./gradlew assembleDist    # Distribution build (requires signing)
-./gradlew assembleDebug   # Debug APK only
-./gradlew assembleRelease # Release APK (requires signing)
+./gradlew build                    # Debug build
+./gradlew assembleDebug            # Debug APK only
+./gradlew assembleRelease          # Release APK (requires signing)
+./gradlew assembleDist             # Distribution build (requires signing)
 ```
 
 ### Testing
 ```bash
-./gradlew test                    # Run all unit tests
+./gradlew test                     # Run all unit tests
 ./gradlew test --tests "com.voxly.data.local.metadata.TagLibMetadataProcessorTest"  # Single test class
-./gradlew test --tests "com.voxly.data.local.metadata.TagLibMetadataProcessorTest.isFormatSupported*"  # Single test method
-./gradlew test --tests "*Test"    # Run all test classes matching pattern
-./gradlew connectedAndroidTest    # Run Android instrumentation tests
+./gradlew test --tests "com.voxly.domain.usecase.BatchEngineTest.execute*"  # Single test method
+./gradlew test --tests "*BatchEngineTest"  # Pattern match test class
+./gradlew connectedAndroidTest     # Run Android instrumentation tests
 ```
+
+**Test framework:** JUnit 4 + MockK + Turbine. Tests use `runBlocking` for coroutines.
 
 ### Linting
 ```bash
-./gradlew lint                    # Run lint analysis
-./gradlew lintRelease             # Lint release build
-./gradlew ktlintCheck             # Check Kotlin style (if configured)
+./gradlew lint                     # Run lint analysis
+./gradlew lintRelease              # Lint release build
 ```
 
 ### Development
 ```bash
-./gradlew clean                   # Clean build artifacts
-./gradlew dependencyUpdates       # Check for dependency updates
-./gradlew dependencies           # Show project dependencies
+./gradlew clean                    # Clean build artifacts
+./gradlew dependencyUpdates        # Check for dependency updates
+./gradlew dependencies             # Show project dependencies
 ```
 
 ---
@@ -72,32 +76,15 @@ app/src/main/java/com/voxly/
 ### Kotlin Conventions
 - **Package**: `com.voxly` (NOT com.mp3tag.android)
 - **DI**: Hilt with `@HiltViewModel`
-- **Navigation**: Jetpack Navigation Compose
+- **Navigation**: Navigation3 (`androidx.navigation3`)
 - **State**: ViewModel + StateFlow
 - **Tests**: JUnit 4 + MockK + Turbine
 
 ### Import Order (Official Kotlin Style)
-1. Android imports (`android.*`)
-2. Kotlin standard library (`kotlin.*`)
-3. Third-party libraries (`com.*`, `io.*`, `org.*`)
+1. Android imports (`android.*`, `androidx.*`)
+2. Kotlin standard library (`kotlin.*`, `kotlinx.*`)
+3. Third-party libraries (`com.*`, `io.*`, `org.*`, `dagger.*`, `javax.*`)
 4. Project imports (`com.voxly.*`)
-5. Java imports (`java.*`, `javax.*`)
-
-Example:
-```kotlin
-package com.voxly.presentation.viewmodel
-
-import android.content.Context
-import android.net.Uri
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
-import com.voxly.core.util.Logger
-import com.voxly.data.repository.XxxRepository
-import com.voxly.domain.model.AudioFile
-import dagger.hilt.android.lifecycle.HiltViewModel
-import kotlinx.coroutines.flow.MutableStateFlow
-import javax.inject.Inject
-```
 
 ### Naming Conventions
 - **Classes**: PascalCase (`MetadataEditorViewModel`, `AudioFileScanner`)
@@ -112,18 +99,13 @@ import javax.inject.Inject
 - **Use** nullable types (`T?`) explicitly - avoid `!!` operator
 - **Use** `by lazy` for expensive initialization
 - **Use** `object` for singletons
+- **Use** Kotlin `Result<T>` for operations that can fail
 
 ### Error Handling
-- **Use** Result wrapper for operations that can fail:
-  ```kotlin
-  sealed class Result<out T> {
-      data class Success<T>(val data: T) : Result<T>()
-      data class Error(val exception: Throwable) : Result<Nothing>()
-  }
-  ```
 - **Never** use empty catch blocks (`catch(e) {}`)
 - **Use** Timber for logging (`Timber.tag(TAG).d(...)`)
 - **Never** suppress errors with `@Suppress` unless absolutely necessary
+- **Use** `try-catch` with meaningful error messages
 
 ### Compose Guidelines
 - **Always** use `@Composable` annotation for composable functions
@@ -140,11 +122,25 @@ import javax.inject.Inject
 
 ---
 
+## M3E DESIGN GUIDELINES
+1. **No hardcoded colors** - Always use `MaterialTheme.colorScheme`
+2. **No hardcoded shapes** - Use `MaterialTheme.shapes` tokens (extraSmall, small, medium, large, extraLarge)
+3. **No hardcoded typography** - Use `MaterialTheme.typography.XXX`
+4. **No dividers** - Use `Surface` with background colors and spacing instead
+5. **Spring animations** - Use `spring()` instead of `tween()` for all animations
+6. **4dp spacing grid** - All padding/spacers must be multiples of 4dp
+7. **Edge-to-edge** - All screens must support immersive layout with proper `windowInsetsPadding()`
+
+### WindowInsets Handling
+- **ExpressiveScaffold**: Disable default `contentWindowInsets` with `WindowInsets(0, 0, 0, 0)`
+- **ExpressiveTopAppBar**: Use `windowInsets = WindowInsets.statusBars.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Top)`
+
+---
+
 ## ANTI-PATTERNS (THIS PROJECT)
-- **NEVER** produce unsigned APKs (`build.gradle.kts`)
+- **NEVER** produce unsigned APKs for release/dist builds (enforced in `app/build.gradle.kts`)
 - **NEVER** use MediaStore for sampleRate/channels (always read from file)
 - **NEVER** toggle UI state rapidly (debounce required)
-- **NEVER** use `as any` or `@ts-ignore` to suppress errors
 - **NEVER** use empty catch blocks
 
 ---
@@ -154,6 +150,7 @@ import javax.inject.Inject
 - Custom crypto for Wangy API (`data/remote/wangy/crypto/`)
 - Room database for music library caching
 - MD3-style lyrics poster color extraction with tonal palette generation
+- Navigation3 for modern navigation architecture
 
 ---
 

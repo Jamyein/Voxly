@@ -9,7 +9,7 @@
 #include <stdlib.h>
 
 /* This can be replaced by any BSD-like queue implementation. */
-#include "queue.h"
+#include <sys/queue.h>
 
 #define CHECK_ERROR(condition, errorcode, goto_point)                          \
   if ((condition)) {                                                           \
@@ -1016,7 +1016,7 @@ static int ebur128_energy_shortterm(ebur128_state* st, double* out);
                       sizeof(struct ebur128_dq_entry));                        \
                   if (!block) {                                                \
                     return EBUR128_ERROR_NOMEM;                                \
-                  }                                                              \
+                  }                                                            \
                   st->d->st_block_list_size++;                                 \
                 }                                                              \
                 block->z = st_energy;                                          \

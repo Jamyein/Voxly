@@ -271,6 +271,9 @@
     <string name="settings_scan_mode_track_only">单轨增益</string>
     <string name="settings_scan_mode_album_only">单专辑扫描</string>
     <string name="settings_scan_mode_track_and_album">多专辑扫描</string>
+    <string name="settings_scan_engine">扫描引擎</string>
+    <string name="settings_scan_engine_native">原生（推荐）</string>
+    <string name="settings_scan_engine_kotlin">Kotlin（旧版）</string>
     <string name="settings_min_duration_filter">不扫描短音频</string>
     <string name="settings_min_duration_filter_subtitle">不扫描60秒以下的音频文件</string>
 
@@ -418,6 +421,15 @@
     <string name="settings_min_duration_threshold">最短时长过滤</string>
     <string name="settings_min_duration_threshold_subtitle">跳过短于此时长的文件</string>
     <string name="settings_drag_handle">拖动排序</string>
+    <string name="settings_drag_hint">长按并拖动以重新排序</string>
+    <string name="settings_source_disable">禁用</string>
+    <string name="settings_source_enable">启用</string>
+    <string name="settings_separator_add">添加</string>
+    <string name="settings_separator_delete_title">删除分隔符</string>
+    <string name="settings_separator_delete_message">确定要删除分隔符"%s"吗？</string>
+    <string name="settings_separator_delete">删除</string>
+    <string name="settings_separator_cancel">取消</string>
+    <string name="settings_separator_delete_cd">删除分隔符</string>
     <string name="settings_scan_directory_settings">扫描目录设置</string>
     <string name="settings_scan_directory_settings_subtitle">配置白名单和黑名单</string>
     <string name="settings_whitelist_mode">白名单模式</string>

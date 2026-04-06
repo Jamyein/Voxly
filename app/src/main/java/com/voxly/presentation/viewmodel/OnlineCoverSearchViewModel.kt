@@ -64,10 +64,10 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
 
     // Search query info (exposed for UI)
     private val _searchTitle = MutableStateFlow("")
-    val searchTitle: String get() = _searchTitle.value
+    val searchTitle: StateFlow<String> = _searchTitle.asStateFlow()
 
     private val _searchArtist = MutableStateFlow<String?>(null)
-    val searchArtist: String? get() = _searchArtist.value
+    val searchArtist: StateFlow<String?> = _searchArtist.asStateFlow()
 
     // 搜索进度状态（新）
     private val _searchProgressState = MutableStateFlow(CoverSearchProgressState())
@@ -105,16 +105,18 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
             _coverFetchMessage.value = null
 
             // 优先从 SearchSeedHolder 获取实时编辑值
-            val seed = searchSeedHolder.getAndClearSeed()
+            val seed = searchSeedHolder.peekSeed()
             Timber.d(TAG, "search() seed=$seed")
 
             val title: String
             val artist: String?
 
             if (seed != null) {
-                // 使用编辑中的实时值
-                title = seed.title
-                artist = seed.artist
+                // 使用编辑中的实时值，进行清理
+                val sanitizedTitle = sanitizeSearchTerm(seed.title)
+                val sanitizedArtist = sanitizeSearchTerm(seed.artist)
+                title = sanitizedTitle.orEmpty()
+                artist = sanitizedArtist
                 _searchTitle.value = title
                 _searchArtist.value = artist
                 Timber.d(TAG, "search() using seed - title='$title', artist='$artist'")
@@ -126,8 +128,10 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                 result.fold(
                     onSuccess = { audioFile ->
                         val metadata = audioFile.metadata
-                        title = metadata.title?.takeIf { it.isNotBlank() } ?: File(targetPath).nameWithoutExtension
-                        artist = metadata.artist?.takeIf { it.isNotBlank() }
+                        val rawTitle = metadata.title.orEmpty()
+                        val rawArtist = metadata.artist?.takeIf { it.isNotBlank() }
+                        title = sanitizeSearchTerm(rawTitle) ?: rawTitle
+                        artist = sanitizeSearchTerm(rawArtist) ?: rawArtist
 
                         _searchTitle.value = title
                         _searchArtist.value = artist
@@ -445,6 +449,18 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
 
     fun clearError() {
         _errorMessage.value = null
+    }
+
+    private fun sanitizeSearchTerm(value: String?): String? {
+        if (value.isNullOrBlank()) return null
+        val cleaned = value
+            .replace('_', ' ')
+            .replace('.', ' ')
+            .replace(Regex("^\\s*\\d{1,3}[\\s._-]+"), "")
+            .replace(Regex("\\([^)]*\\)|\\[[^\\]]*\\]|\\{[^}]*\\}"), " ")
+            .replace(Regex("\\s+"), " ")
+            .trim()
+        return cleaned.takeIf { it.length >= 2 }
     }
 
     @AssistedFactory

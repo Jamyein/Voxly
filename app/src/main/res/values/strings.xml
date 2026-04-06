@@ -362,6 +362,9 @@
     <string name="settings_scan_mode_track_only">Track Only</string>
     <string name="settings_scan_mode_album_only">Single Album</string>
     <string name="settings_scan_mode_track_and_album">Albums</string>
+    <string name="settings_scan_engine">Scan Engine</string>
+    <string name="settings_scan_engine_native">Native (Recommended)</string>
+    <string name="settings_scan_engine_kotlin">Kotlin (Legacy)</string>
     <string name="settings_min_duration_filter">Skip Short Audio</string>
     <string name="settings_min_duration_filter_subtitle">Do not scan audio files shorter than 60 seconds</string>
 
@@ -504,6 +507,15 @@
     <string name="settings_min_duration_threshold">Minimum Duration Filter</string>
     <string name="settings_min_duration_threshold_subtitle">Skip files shorter than this</string>
     <string name="settings_drag_handle">Drag to reorder</string>
+    <string name="settings_drag_hint">Long press and drag to reorder</string>
+    <string name="settings_source_disable">Disable</string>
+    <string name="settings_source_enable">Enable</string>
+    <string name="settings_separator_add">Add</string>
+    <string name="settings_separator_delete_title">Delete Separator</string>
+    <string name="settings_separator_delete_message">Are you sure you want to delete the separator "%s"?</string>
+    <string name="settings_separator_delete">Delete</string>
+    <string name="settings_separator_cancel">Cancel</string>
+    <string name="settings_separator_delete_cd">Delete separator</string>
     <string name="settings_scan_directory_settings">Scan Directory Settings</string>
     <string name="settings_scan_directory_settings_subtitle">Configure whitelist and blacklist for scanning</string>
     <string name="settings_whitelist_mode">Whitelist Mode</string>
@@ -595,11 +607,18 @@
     <string name="artist_separators_summary">Characters used to split artist names, default &amp; \\</string>
 
     <!-- Edit History -->
-    <string name="edit_history">编辑历史</string>
-    <string name="edit_history_title">编辑历史</string>
-    <string name="no_edit_history">暂无编辑记录</string>
-    <string name="modified_fields">修改了: %s</string>
-    <string name="original_value">原始: %s</string>
-    <string name="new_value">新: %s</string>
+    <string name="edit_history">Edit History</string>
+    <string name="edit_history_title">Edit History</string>
+    <string name="no_edit_history">No edit history</string>
+    <string name="modified_fields">Modified: %s</string>
+    <string name="original_value">Original: %s</string>
+    <string name="new_value">New: %s</string>
+
+    <!-- Online Search -->
+    <string name="search_results_count">Found %d results</string>
+    <string name="search_results_count_with_more">Found %d results, searching for more…</string>
+    <string name="source_status_completed">✓</string>
+    <string name="source_status_error">✗</string>
+    <string name="source_status_searching">…</string>
 
 </resources>

@@ -65,7 +65,6 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.MaterialShapes
-import com.voxly.presentation.theme.ExpressiveMotion
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import kotlinx.coroutines.launch
@@ -126,7 +125,7 @@ private fun <T> rememberConnectedButtonWeights(
 ): List<Float> = options.map { option ->
     val animatedWeight by animateFloatAsState(
         targetValue = if (option == selectedValue) selectedWeight else unselectedWeight,
-        animationSpec = ExpressiveMotion.DefaultSpring,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
         label = "connected_button_weight"
     )
     animatedWeight
@@ -829,6 +828,7 @@ fun AudioFileStandardRow(
     isSelected: Boolean = false,
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
+    onAction: ((com.voxly.presentation.components.AudioFileAction) -> Unit)? = null,
     modifier: Modifier = Modifier,
     sharedElementKey: String? = null
 ) {
@@ -865,7 +865,7 @@ fun AudioFileStandardRow(
         ) {
             AlbumArtImage(
                 filePath = audioFile.path,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                albumId = audioFile.mediaStoreAlbumId,
                 contentDescription = null,
                 size = AlbumArtSizeLarge,
                 modifier = Modifier.fillMaxSize()
@@ -876,8 +876,9 @@ fun AudioFileStandardRow(
     },
     trailingContent = {
         if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(IconPadding))
+        else if (onAction != null) AudioFileActionsMenu(onAction)
     }
-    )
+)
 }
 
 /**
@@ -1033,7 +1034,7 @@ fun AudioFileStandardRowWithMenu(
         ) {
             AlbumArtImage(
                 filePath = audioFile.path,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                albumId = audioFile.mediaStoreAlbumId,
                 contentDescription = null,
                 size = AlbumArtSizeLarge,
                 modifier = Modifier.fillMaxSize()
@@ -1104,7 +1105,7 @@ fun AudioFileStandardRowCompact(
         ) {
             AlbumArtImage(
                 filePath = audioFile.path,
-                mediaStoreAlbumId = audioFile.mediaStoreAlbumId,
+                albumId = audioFile.mediaStoreAlbumId,
                 contentDescription = null,
                 size = AlbumArtSizeSmall,
                 modifier = Modifier

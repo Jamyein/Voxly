@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -270,48 +271,51 @@ class LyricsRepositoryImpl @Inject constructor(
             }
         }
 
-        if (settings.enableNetease) {
-            launch {
-                try {
-                    val netEaseSearchResult = searchFromNetEase(normalizedTrackName, normalizedArtistName)
-                    applyLimit(netEaseSearchResult.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
-                        trySend(LyricsSourceResult.Result(lyrics, "NetEase"))
-                    }
-                    if (netEaseSearchResult.isFailure) {
-                        trySend(
-                            LyricsSourceResult.Error(
-                                "NetEase",
-                                netEaseSearchResult.exceptionOrNull()?.message ?: "Failed"
+        // Use supervisorScope so each source fails independently - one failed source doesn't cancel others
+        supervisorScope {
+            if (settings.enableNetease) {
+                launch {
+                    try {
+                        val netEaseSearchResult = searchFromNetEase(normalizedTrackName, normalizedArtistName)
+                        applyLimit(netEaseSearchResult.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
+                            trySend(LyricsSourceResult.Result(lyrics, "NetEase"))
+                        }
+                        if (netEaseSearchResult.isFailure) {
+                            trySend(
+                                LyricsSourceResult.Error(
+                                    "NetEase",
+                                    netEaseSearchResult.exceptionOrNull()?.message ?: "Failed"
+                                )
                             )
-                        )
+                        }
+                    } catch (e: Exception) {
+                        trySend(LyricsSourceResult.Error("NetEase", e.message ?: "Failed"))
+                    } finally {
+                        markSourceCompleted("NetEase")
                     }
-                } catch (e: Exception) {
-                    trySend(LyricsSourceResult.Error("NetEase", e.message ?: "Failed"))
-                } finally {
-                    markSourceCompleted("NetEase")
                 }
             }
-        }
 
-        if (settings.enableQQMusic) {
-            launch {
-                try {
-                    val qqMusicSearchResult = searchFromQQMusic(normalizedTrackName, normalizedArtistName)
-                    applyLimit(qqMusicSearchResult.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
-                        trySend(LyricsSourceResult.Result(lyrics, "QQ Music"))
-                    }
-                    if (qqMusicSearchResult.isFailure) {
-                        trySend(
-                            LyricsSourceResult.Error(
-                                "QQ Music",
-                                qqMusicSearchResult.exceptionOrNull()?.message ?: "Failed"
+            if (settings.enableQQMusic) {
+                launch {
+                    try {
+                        val qqMusicSearchResult = searchFromQQMusic(normalizedTrackName, normalizedArtistName)
+                        applyLimit(qqMusicSearchResult.getOrNull().orEmpty(), settings.searchLimit).forEach { lyrics ->
+                            trySend(LyricsSourceResult.Result(lyrics, "QQ Music"))
+                        }
+                        if (qqMusicSearchResult.isFailure) {
+                            trySend(
+                                LyricsSourceResult.Error(
+                                    "QQ Music",
+                                    qqMusicSearchResult.exceptionOrNull()?.message ?: "Failed"
+                                )
                             )
-                        )
+                        }
+                    } catch (e: Exception) {
+                        trySend(LyricsSourceResult.Error("QQ Music", e.message ?: "Failed"))
+                    } finally {
+                        markSourceCompleted("QQ Music")
                     }
-                } catch (e: Exception) {
-                    trySend(LyricsSourceResult.Error("QQ Music", e.message ?: "Failed"))
-                } finally {
-                    markSourceCompleted("QQ Music")
                 }
             }
         }

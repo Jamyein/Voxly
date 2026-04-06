@@ -3,14 +3,11 @@ package com.voxly.presentation.screens.metadata
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.animateFloatAsState
-import com.voxly.presentation.theme.ExpressiveMotion
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
@@ -38,7 +35,6 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -57,7 +53,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 import com.voxly.presentation.components.sharedBoundsIfAvailable
-import com.voxly.presentation.theme.ExpressiveAnimations
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.MetadataField
@@ -135,6 +130,7 @@ fun MetadataEditorScreen(
     }
 
     val coverFetchMessage by viewModel.coverFetchMessage.collectAsState()
+    val isLyricsTimestampFormatted by viewModel.isLyricsTimestampFormatted.collectAsState()
 
     LaunchedEffect(coverFetchMessage) {
         coverFetchMessage?.let {
@@ -174,18 +170,9 @@ fun MetadataEditorScreen(
         }
     }
 
-    // Predictive back handler for Android 14+ back gesture
-    var backProgress by remember { mutableFloatStateOf(0f) }
-    val animatedBackProgress by animateFloatAsState(
-        targetValue = backProgress,
-        animationSpec = ExpressiveMotion.SlowSpring,
-        label = "backProgress"
-    )
-
-    PredictiveBackHandler(enabled = hasUnsavedChanges) { progress ->
-        progress.collect { backEvent ->
-            backProgress = backEvent.progress
-        }
+    // Back navigation handler — checks for unsaved changes before exiting.
+    // Predictive back is handled centrally by NavDisplay in MP3TagNavHost.
+    val handleNavigateBack = {
         if (hasUnsavedChanges) {
             showDiscardDialog = true
         } else {
@@ -229,15 +216,8 @@ fun MetadataEditorScreen(
 
     Scaffold(
         modifier = Modifier
-            .then(sharedElementModifier)
             .nestedScroll(scrollBehavior.nestedScrollConnection)
-            .nestedScroll(floatingToolbarScrollBehavior)
-            .graphicsLayer {
-                val scale = 1f - (animatedBackProgress * 0.05f)
-                scaleX = scale
-                scaleY = scale
-                alpha = 1f - (animatedBackProgress * 0.3f)
-            },
+            .nestedScroll(floatingToolbarScrollBehavior),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_metadata)) },
@@ -247,15 +227,9 @@ fun MetadataEditorScreen(
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                navigationIcon = {
-                    IconButton(onClick = {
-                        if (hasUnsavedChanges) {
-                            showDiscardDialog = true
-                        } else {
-                            onNavigateBack()
-                        }
-                    }) {
-                        Icon(
+                    navigationIcon = {
+                        IconButton(onClick = handleNavigateBack) {
+                            Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.cd_back)
                         )
@@ -500,7 +474,7 @@ fun MetadataEditorScreen(
                 showMoreOptionsSheet = false
                 viewModel.toggleLyricsTimestampFormat()
             },
-            isLyricsTimestampFormatted = viewModel.isLyricsTimestampFormatted,
+            isLyricsTimestampFormatted = isLyricsTimestampFormatted,
             hasLyrics = hasLyrics
         )
     }

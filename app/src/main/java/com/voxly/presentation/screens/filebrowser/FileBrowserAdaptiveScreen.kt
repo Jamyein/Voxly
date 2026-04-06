@@ -4,7 +4,6 @@ import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.widget.Toast
-import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
@@ -56,6 +55,7 @@ import com.voxly.core.util.MediaPermission
 import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.RootTab
+import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
@@ -66,7 +66,6 @@ import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -153,7 +152,7 @@ fun FileBrowserAdaptiveScreen(
     }
 
     // Search and sort
-    var searchQuery by remember { mutableStateOf("") }
+    var showSearchSheet by remember { mutableStateOf(false) }
     var isSortExpanded by remember { mutableStateOf(false) }
     val sortOption by viewModel.fileBrowserSortOption.collectAsState(initial = FileSortOption.NAME_ASC.name)
     val currentSortOption = remember(sortOption) {
@@ -164,21 +163,9 @@ fun FileBrowserAdaptiveScreen(
         }
     }
 
-    // Filter and sort audio files
-    val displayedFiles = remember(allAudios, searchQuery, currentSortOption) {
-        val filtered = if (searchQuery.isBlank()) {
-            allAudios
-        } else {
-            allAudios.filter { audioFile ->
-                val title = audioFile.metadata.title.orEmpty()
-                val artist = audioFile.metadata.artist.orEmpty()
-                val album = audioFile.metadata.album.orEmpty()
-                listOf(audioFile.name, title, artist, album).any { text ->
-                    text.lowercase().contains(searchQuery.lowercase())
-                }
-            }
-        }
-        applyFileSort(filtered, currentSortOption)
+    // Sort audio files (search handled by SearchBottomSheet)
+    val displayedFiles = remember(allAudios, currentSortOption) {
+        applyFileSort(allAudios, currentSortOption)
     }
 
     // List pane state
@@ -194,19 +181,6 @@ fun FileBrowserAdaptiveScreen(
     
     // Determine if we're in single-pane mode (small screens)
     val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
-    
-    // Handle back gesture when in detail pane (only in multi-pane mode)
-    PredictiveBackHandler(enabled = !isSinglePane && navigator.currentDestination?.contentKey != null) { progress ->
-        try {
-            progress.collect { /* Handle progress if needed */ }
-            // Navigate back from detail pane
-            coroutineScope.launch {
-                navigator.navigateBack()
-            }
-        } catch (e: CancellationException) {
-            // Gesture cancelled, do nothing
-        }
-    }
 
     // Material3 ListDetailPaneScaffold - handles all screen sizes automatically
     ListDetailPaneScaffold(
@@ -233,7 +207,7 @@ fun FileBrowserAdaptiveScreen(
                             titleContentColor = MaterialTheme.colorScheme.onSurface
                         ),
                         actions = {
-                            IconButton(onClick = { /* Show search */ }) {
+                            IconButton(onClick = { showSearchSheet = true }) {
                                 Icon(
                                     imageVector = Icons.Default.Search,
                                     contentDescription = "Search"
@@ -385,7 +359,7 @@ fun FileBrowserAdaptiveScreen(
         },
         detailPane = {
             AnimatedPane {
-                val currentFile = navigator.currentDestination?.contentKey as? AudioFile
+                val currentFile = navigator.currentDestination?.contentKey
                 if (currentFile != null) {
                     key(currentFile.path, fileSwitchCounter) {
                         // Create navKey for MetadataEditor
@@ -402,7 +376,7 @@ fun FileBrowserAdaptiveScreen(
                             filePath = currentFile.path,
                             viewModel = metadataViewModel,
                             coverTag = createAlbumArtSharedElementKey(currentFile.path),
-                            sharedElementKey = null,
+                            sharedElementKey = createAlbumArtSharedElementKey(currentFile.path),
                             onNavigateBack = {
                                 // Use coroutine for suspend function
                                 coroutineScope.launch {
@@ -423,6 +397,25 @@ fun FileBrowserAdaptiveScreen(
         },
         modifier = modifier
     )
+
+    if (showSearchSheet) {
+        SearchBottomSheet(
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
+            onDismiss = { showSearchSheet = false },
+            allFiles = allAudios,
+            onFileClick = { audioFile ->
+                showSearchSheet = false
+                if (isSinglePane) {
+                    onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                } else {
+                    coroutineScope.launch {
+                        fileSwitchCounter++
+                        navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                    }
+                }
+            }
+        )
+    }
 }
 
 /**

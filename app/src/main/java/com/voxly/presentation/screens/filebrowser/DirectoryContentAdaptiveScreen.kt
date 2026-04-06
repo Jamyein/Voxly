@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.KeyboardArrowUp
@@ -34,12 +33,14 @@ import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
+import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -50,10 +51,12 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.DirFileSortOption
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
@@ -68,11 +71,9 @@ import kotlinx.coroutines.launch
  * Adaptive DirectoryContent screen using Material3 ListDetailPaneScaffold.
  *
  * This is true adaptive design - Material3 automatically manages:
- * - Small screens: Single pane with full-screen navigation
+ * - Small screens: Single pane with full-screen navigation (delegates to NavHost)
  * - Medium screens: Dual pane with adjustable ratio
  * - Large screens: Dual pane with 40:60 split
- *
- * No conditional logic needed - Material3 handles all screen sizes.
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -80,6 +81,7 @@ fun DirectoryContentAdaptiveScreen(
     directoryUri: String,
     directoryName: String,
     onNavigateBack: () -> Unit,
+    onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToReplayGain: (List<String>) -> Unit,
     onNavigateToOnlineMetadata: () -> Unit,
     onNavigateToOnlineLyricsSearch: () -> Unit,
@@ -92,6 +94,12 @@ fun DirectoryContentAdaptiveScreen(
 
     // Material3 Adaptive Navigator - automatically handles all screen sizes
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
+
+    // Track file switch counter for proper ViewModel recreation
+    var fileSwitchCounter by remember { mutableIntStateOf(0) }
+
+    // Determine if we're in single-pane mode (small screens)
+    val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
 
     // Load directory files
     LaunchedEffect(directoryUri) {
@@ -115,7 +123,7 @@ fun DirectoryContentAdaptiveScreen(
     }
 
     // Search and sort
-    var searchQuery by remember { mutableStateOf("") }
+    var showSearchSheet by remember { mutableStateOf(false) }
     var isSortExpanded by remember { mutableStateOf(false) }
     val sortOption by viewModel.directoryFileSortOption.collectAsState(initial = DirFileSortOption.NAME_ASC.name)
     val currentSortOption = remember(sortOption) {
@@ -126,9 +134,9 @@ fun DirectoryContentAdaptiveScreen(
         }
     }
 
-    // Apply search and sort
-    val displayedFiles = remember(files, searchQuery, currentSortOption) {
-        applySearchAndSort(files, searchQuery, currentSortOption)
+    // Apply sort only (search handled by SearchBottomSheet)
+    val displayedFiles = remember(files, currentSortOption) {
+        applySort(files, currentSortOption)
     }
 
     // List pane state
@@ -143,7 +151,6 @@ fun DirectoryContentAdaptiveScreen(
     val floatingToolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
         exitDirection = FloatingToolbarExitDirection.Bottom
     )
-    val scrollState = rememberScrollState()
 
     // Dialog states for batch operations
     var showBatchOperationsMenu by remember { mutableStateOf(false) }
@@ -159,7 +166,9 @@ fun DirectoryContentAdaptiveScreen(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
         listPane = {
-            AnimatedPane {
+            AnimatedPane(
+                modifier = Modifier.fillMaxSize()
+            ) {
                 Column(
                     modifier = Modifier.fillMaxSize()
                 ) {
@@ -186,7 +195,13 @@ fun DirectoryContentAdaptiveScreen(
                             IconButton(onClick = {
                                 if (isSelectionMode) {
                                     viewModel.clearSelection()
+                                } else if (!isSinglePane && navigator.currentDestination != null) {
+                                    // Multi-pane with detail showing: go back to list
+                                    coroutineScope.launch {
+                                        navigator.navigateBack()
+                                    }
                                 } else {
+                                    // Single-pane or no detail: exit directory
                                     onNavigateBack()
                                 }
                             }) {
@@ -216,7 +231,7 @@ fun DirectoryContentAdaptiveScreen(
                                 }
                             } else {
                                 // Search and Sort buttons
-                                IconButton(onClick = { /* Show search */ }) {
+                                IconButton(onClick = { showSearchSheet = true }) {
                                     Icon(
                                         imageVector = Icons.Default.Search,
                                         contentDescription = "Search"
@@ -242,59 +257,65 @@ fun DirectoryContentAdaptiveScreen(
                     )
 
                     // File list content with PullToRefresh
-                    Surface(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .nestedScroll(floatingToolbarScrollBehavior)
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.BottomCenter
                     ) {
-                        val pullToRefreshState = rememberPullToRefreshState()
-                        PullToRefreshBox(
-                            isRefreshing = isRefreshing,
-                            onRefresh = { viewModel.refresh() },
-                            state = pullToRefreshState,
-                            modifier = Modifier.fillMaxSize(),
-                            indicator = {
-                                LoadingIndicator(
-                                    state = pullToRefreshState,
-                                    isRefreshing = isRefreshing,
-                                    modifier = Modifier.align(Alignment.TopCenter)
-                                )
-                            }
+                        Surface(
+                            modifier = Modifier.fillMaxSize()
                         ) {
-                            Box(modifier = Modifier.fillMaxSize()) {
-                                if (files.isEmpty() && isDirectoryLoading) {
-                                    LoadingContent()
-                                } else if (files.isEmpty()) {
-                                    DirectoryEmptyContent(
-                                        modifier = Modifier.fillMaxSize()
-                                    )
-                                } else {
-                                    AudioFileListWithIndexer(
-                                        files = displayedFiles,
-                                        listState = listState,
-                                        modifier = Modifier.fillMaxSize(),
-                                        selectedFiles = selectedFiles,
-                                        onFileClick = { audioFile ->
-                                            if (isSelectionMode) {
-                                                viewModel.toggleFileSelection(audioFile.path)
-                                            } else {
-                                                // Navigate to detail - use coroutine for suspend function
-                                                coroutineScope.launch {
-                                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
-                                                }
-                                            }
-                                        },
-                                        onFileLongClick = { audioFile ->
-                                            viewModel.toggleFileSelection(audioFile.path)
-                                        },
-                                        onEditFileMetadata = { /* Not used in adaptive mode */ },
-                                        onRenameFile = { /* Not used in adaptive mode */ },
-                                        onDeleteFile = { /* Not used in adaptive mode */ },
-                                        onFetchOnlineMetadata = { /* Not used in adaptive mode */ },
-                                        onFixMetadata = { /* Not used in adaptive mode */ },
-                                        bottomPadding = if (isSelectionMode) 80.dp else 16.dp
+                            val pullToRefreshState = rememberPullToRefreshState()
+                            PullToRefreshBox(
+                                isRefreshing = isRefreshing,
+                                onRefresh = { viewModel.refresh() },
+                                state = pullToRefreshState,
+                                modifier = Modifier.fillMaxSize(),
+                                indicator = {
+                                    LoadingIndicator(
+                                        state = pullToRefreshState,
+                                        isRefreshing = isRefreshing,
+                                        modifier = Modifier.align(Alignment.TopCenter)
                                     )
                                 }
+                            ) {
+                                Box(modifier = Modifier.fillMaxSize()) {
+                                    if (files.isEmpty() && isDirectoryLoading) {
+                                        LoadingContent()
+                                    } else if (files.isEmpty()) {
+                                        DirectoryEmptyContent(
+                                            modifier = Modifier.fillMaxSize()
+                                        )
+                                    } else {
+                                        AudioFileListWithIndexer(
+                                            files = displayedFiles,
+                                            listState = listState,
+                                            modifier = Modifier.fillMaxSize(),
+                                            selectedFiles = selectedFiles,
+                                            onFileClick = { audioFile ->
+                                                if (isSelectionMode) {
+                                                    viewModel.toggleFileSelection(audioFile.path)
+                                                } else if (isSinglePane) {
+                                                    onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                                                } else {
+                                                    coroutineScope.launch {
+                                                        navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                                                    }
+                                                }
+                                            },
+                                            onFileLongClick = { audioFile ->
+                                                viewModel.toggleFileSelection(audioFile.path)
+                                            },
+                                            onEditFileMetadata = { },
+                                            onRenameFile = { },
+                                            onDeleteFile = { },
+                                            onFetchOnlineMetadata = { },
+                                            onFixMetadata = { },
+                                            bottomPadding = if (isSelectionMode) 80.dp else 16.dp
+                                        )
+                                    }
+                                }
+                            }
+                        }
 
                                 // Batch Operations FloatingToolbar (only in selection mode)
                                 if (isSelectionMode) {
@@ -311,27 +332,25 @@ fun DirectoryContentAdaptiveScreen(
                                     )
                                 }
 
-                                // Back to top FAB
-                                if (canScrollToTop && displayedFiles.isNotEmpty() && !isSelectionMode) {
-                                    SmallFloatingActionButton(
-                                        onClick = {
-                                            coroutineScope.launch {
-                                                listState.animateScrollToItem(0)
-                                            }
-                                        },
-                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        shape = MaterialTheme.shapes.extraLarge,
-                                        modifier = Modifier
-                                            .align(Alignment.BottomEnd)
-                                            .padding(16.dp)
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.KeyboardArrowUp,
-                                            contentDescription = "Back to top"
-                                        )
+                        // Back to top FAB
+                        if (canScrollToTop && displayedFiles.isNotEmpty() && !isSelectionMode) {
+                            SmallFloatingActionButton(
+                                onClick = {
+                                    coroutineScope.launch {
+                                        listState.animateScrollToItem(0)
                                     }
-                                }
+                                },
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                                shape = MaterialTheme.shapes.extraLarge,
+                                modifier = Modifier
+                                    .align(Alignment.BottomEnd)
+                                    .padding(16.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowUp,
+                                    contentDescription = "Back to top"
+                                )
                             }
                         }
                     }
@@ -356,7 +375,7 @@ fun DirectoryContentAdaptiveScreen(
                         filePath = currentFile.path,
                         viewModel = metadataViewModel,
                         coverTag = createAlbumArtSharedElementKey(currentFile.path),
-                        sharedElementKey = null,
+                        sharedElementKey = createAlbumArtSharedElementKey(currentFile.path),
                         onNavigateBack = {
                             // Use coroutine for suspend function
                             coroutineScope.launch {
@@ -470,31 +489,24 @@ fun DirectoryContentAdaptiveScreen(
             }
         )
     }
-}
 
-/**
- * Applies search and sort to directory files.
- */
-private fun applySearchAndSort(
-    files: List<AudioFile>,
-    query: String,
-    sortOption: DirFileSortOption
-): List<AudioFile> {
-    val normalizedQuery = query.trim().lowercase()
-    val filtered = if (normalizedQuery.isBlank()) {
-        files
-    } else {
-        files.filter { audioFile ->
-            val title = audioFile.metadata.title.orEmpty()
-            val artist = audioFile.metadata.artist.orEmpty()
-            val album = audioFile.metadata.album.orEmpty()
-            listOf(audioFile.name, title, artist, album).any { text ->
-                text.lowercase().contains(normalizedQuery)
+    if (showSearchSheet) {
+        SearchBottomSheet(
+            sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
+            onDismiss = { showSearchSheet = false },
+            allFiles = files,
+            onFileClick = { audioFile ->
+                showSearchSheet = false
+                if (isSinglePane) {
+                    onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                } else {
+                    coroutineScope.launch {
+                        navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                    }
+                }
             }
-        }
+        )
     }
-
-    return applySort(filtered, sortOption)
 }
 
 /**

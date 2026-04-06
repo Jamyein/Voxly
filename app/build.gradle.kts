@@ -37,8 +37,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 30
         targetSdk = 36
-        versionCode = 38
-        versionName = "1.6.0"
+        versionCode = 40
+        versionName = "1.6.2"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -130,22 +130,17 @@ android {
         abortOnError = false
         checkDependencies = true
     }
-    
+
+    // NDK native ReplayGain scanner (FFmpeg + libebur128)
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
             version = "3.22.1"
         }
     }
-    
-    defaultConfig {
-        externalNativeBuild {
-            cmake {
-                cppFlags += "-O3"
-                cFlags += "-O3"
-            }
-        }
-    }
+
+    ndkVersion = "26.1.10909125"
+
 }
 
 // Fail fast: never produce unsigned dist/release APKs by mistake.
@@ -194,8 +189,8 @@ dependencies {
     implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha16")
     implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha16")
     // Material3 Adaptive Layout - for dual-pane and three-pane layouts
-    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.1.0")
-    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.1.0")
+    implementation("androidx.compose.material3.adaptive:adaptive-layout:1.2.0")
+    implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.2.0")
     implementation("androidx.compose.material:material-icons-core")
     implementation("androidx.compose.material:material-icons-extended")
 
@@ -259,6 +254,10 @@ dependencies {
 
     // Palette for color extraction from album art
     implementation("androidx.palette:palette-ktx:1.0.0")
+
+    // Coil 3 - Image loading library
+    implementation("io.coil-kt.coil3:coil-compose:3.4.0")
+    implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
 
     // Testing
     testImplementation("junit:junit:4.13.2")

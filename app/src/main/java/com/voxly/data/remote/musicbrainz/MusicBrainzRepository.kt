@@ -279,7 +279,8 @@ class MusicBrainzRepository @Inject constructor(
                     )
                 }
 
-                val details = detailsResult.getOrNull()!!
+                val details = detailsResult.getOrNull()
+                    ?: return@withContext Result.failure(Exception("Release details unexpectedly null"))
 
                 // Get cover art
                 val coverArtResult = getCoverArt(releaseId)

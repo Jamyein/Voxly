@@ -1,47 +1,36 @@
-cmake_minimum_required(VERSION 3.10.2)
-project("ebur128-jni")
+cmake_minimum_required(VERSION 3.22.1)
+project("ebur128-scanner")
 
-# Set C++ standard
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_C_STANDARD 11)
+set(CMAKE_C_STANDARD_REQUIRED ON)
 
-# Add libebur128 source files
-add_library(
-    ebur128
-    STATIC
-    libebur128/ebur128.c
-)
+# libebur128 source directory
+set(EBUR128_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/libebur128)
 
-# Include directories for libebur128
-target_include_directories(ebur128 PRIVATE libebur128)
-
-# Create JNI wrapper library
-add_library(
-    ebur128-jni
-    SHARED
-    Ebur128Jni.cpp
-)
-
-# Link libraries
-target_link_libraries(
-    ebur128-jni
-    ebur128
-    log
+# Build shared library
+add_library(ebur128-scanner SHARED
+    ebur128_scanner.cpp
+    ${EBUR128_SRC_DIR}/ebur128.c
 )
 
 # Include directories
-target_include_directories(
-    ebur128-jni
-    PRIVATE
-    libebur128
+target_include_directories(ebur128-scanner PRIVATE
+    ${EBUR128_SRC_DIR}/include
+    ${EBUR128_SRC_DIR}/queue
 )
 
-# Compiler flags for optimization
-set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -ffast-math")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3 -ffast-math")
+# Find system libraries
+find_library(log-lib log)
 
-# Android specific settings if needed
-if(ANDROID)
-    target_compile_definitions(ebur128 PRIVATE __ANDROID__)
-    target_compile_definitions(ebur128-jni PRIVATE __ANDROID__)
-endif()
+# 16 KB page size alignment for Android 15+ compatibility
+target_link_options(ebur128-scanner PRIVATE
+    "-Wl,-z,max-page-size=16384"
+    "-Wl,-z,relro"
+    "-Wl,-z,now"
+)
+
+target_link_libraries(ebur128-scanner
+    ${log-lib}
+)

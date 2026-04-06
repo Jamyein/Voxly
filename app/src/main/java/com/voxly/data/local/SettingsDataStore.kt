@@ -69,6 +69,7 @@ class SettingsDataStore @Inject constructor(
         val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
         val REPLAY_GAIN_TARGET_LOUDNESS = floatPreferencesKey("replay_gain_target_loudness")
         val SCAN_MODE = stringPreferencesKey("scan_mode")
+        val REPLAY_GAIN_CLIP_MODE = stringPreferencesKey("replay_gain_clip_mode")
         val MIN_DURATION_FILTER_ENABLED = booleanPreferencesKey("min_duration_filter_enabled")
         val MIN_DURATION_FILTER_THRESHOLD_MS = intPreferencesKey("min_duration_filter_threshold_ms")
         val SOURCE_CONFIGURATIONS = stringPreferencesKey("source_configurations")
@@ -303,6 +304,14 @@ class SettingsDataStore @Inject constructor(
     val scanMode: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
             preferences[SCAN_MODE] ?: "TRACK_ONLY"
+        }
+
+    /**
+     * ReplayGain clip mode preference flow (n=none, p=positive, a=always)
+     */
+    val replayGainClipMode: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[REPLAY_GAIN_CLIP_MODE] ?: "p"
         }
 
     /**
@@ -790,6 +799,15 @@ class SettingsDataStore @Inject constructor(
     suspend fun setScanMode(mode: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[SCAN_MODE] = mode
+        }
+    }
+
+    /**
+     * Save ReplayGain clip mode preference
+     */
+    suspend fun setReplayGainClipMode(mode: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[REPLAY_GAIN_CLIP_MODE] = mode
         }
     }
 
