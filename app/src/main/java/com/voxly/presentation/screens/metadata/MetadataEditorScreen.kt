@@ -85,6 +85,8 @@ fun MetadataEditorScreen(
     onConsumePendingOnlineMetadata: () -> Unit = {},
     pendingOnlineLyrics: String? = null,
     onConsumePendingOnlineLyrics: () -> Unit = {},
+    pendingOnlineCoverArt: ByteArray? = null,
+    onConsumePendingOnlineCoverArt: () -> Unit = {},
 ) {
     // Shared element transition setup
     // Note: Full Container Transform requires AnimatedVisibilityScope which is not directly 
@@ -150,6 +152,13 @@ fun MetadataEditorScreen(
         val lyricsText = pendingOnlineLyrics ?: return@LaunchedEffect
         viewModel.updateMetadataField(MetadataField.LYRICS, lyricsText)
         onConsumePendingOnlineLyrics()
+    }
+
+    // Handle online cover art result from search screen
+    LaunchedEffect(pendingOnlineCoverArt) {
+        val coverBytes = pendingOnlineCoverArt ?: return@LaunchedEffect
+        viewModel.updateAlbumArt(coverBytes)
+        onConsumePendingOnlineCoverArt()
     }
 
     // Handle save result

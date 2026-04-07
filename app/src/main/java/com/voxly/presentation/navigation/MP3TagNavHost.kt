@@ -294,10 +294,13 @@ fun MP3TagNavHost() {
                             libraryViewModel = libraryViewModel,
                             pendingMetadata = pendingMetadata,
                             onPendingMetadataConsumed = { pendingMetadata = null },
+                            onPendingMetadataSet = { pendingMetadata = it },
                             pendingLyrics = pendingLyrics,
                             onPendingLyricsConsumed = { pendingLyrics = null },
+                            onPendingLyricsSet = { pendingLyrics = it },
                             pendingCoverArt = pendingCoverArt,
                             onPendingCoverArtConsumed = { pendingCoverArt = null },
+                            onPendingCoverArtSet = { pendingCoverArt = it },
                             context = context
                         )
                     }
@@ -413,10 +416,13 @@ private fun RenderSubScreen(
     libraryViewModel: LibraryViewModel,
     pendingMetadata: AudioMetadata?,
     onPendingMetadataConsumed: () -> Unit,
+    onPendingMetadataSet: (AudioMetadata) -> Unit,
     pendingLyrics: String?,
     onPendingLyricsConsumed: () -> Unit,
+    onPendingLyricsSet: (String) -> Unit,
     pendingCoverArt: ByteArray?,
     onPendingCoverArtConsumed: () -> Unit,
+    onPendingCoverArtSet: (ByteArray) -> Unit,
     context: android.content.Context
 ) {
     when (val key = targetKey) {
@@ -484,7 +490,9 @@ private fun RenderSubScreen(
                 pendingOnlineMetadata = pendingMetadata,
                 onConsumePendingOnlineMetadata = onPendingMetadataConsumed,
                 pendingOnlineLyrics = pendingLyrics,
-                onConsumePendingOnlineLyrics = onPendingLyricsConsumed
+                onConsumePendingOnlineLyrics = onPendingLyricsConsumed,
+                pendingOnlineCoverArt = pendingCoverArt,
+                onConsumePendingOnlineCoverArt = onPendingCoverArtConsumed
             )
         }
 
@@ -512,7 +520,7 @@ private fun RenderSubScreen(
                 viewModel = viewModel,
                 onNavigateBack = { backStack.removeLastOrNull() },
                 onApplyMetadata = { metadata ->
-                    onPendingMetadataConsumed()
+                    onPendingMetadataSet(metadata)
                     backStack.removeLastOrNull()
                 }
             )
@@ -526,7 +534,7 @@ private fun RenderSubScreen(
                 filePath = key.filePath,
                 onNavigateBack = { backStack.removeLastOrNull() },
                 onLyricsSelected = { lyricsText ->
-                    onPendingLyricsConsumed()
+                    onPendingLyricsSet(lyricsText)
                     backStack.removeLastOrNull()
                 }
             )
@@ -541,7 +549,7 @@ private fun RenderSubScreen(
                 viewModel = viewModel,
                 onNavigateBack = { backStack.removeLastOrNull() },
                 onCoverSelected = { coverBytes ->
-                    onPendingCoverArtConsumed()
+                    onPendingCoverArtSet(coverBytes)
                     backStack.removeLastOrNull()
                 }
             )
