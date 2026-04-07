@@ -43,6 +43,7 @@ import java.text.Collator
 import java.util.Locale
 import javax.inject.Inject
 import javax.inject.Singleton
+import javax.inject.Named
 
 /**
  * Local data source for scanning and accessing audio files from device storage.
@@ -67,10 +68,10 @@ class AudioFileScanner @Inject constructor(
     private val metadataProcessor: TagLibMetadataProcessor,
     private val libraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
-    private val albumInfoManager: AlbumInfoManager  // Added for album info caching
+    private val albumInfoManager: AlbumInfoManager,  // Added for album info caching
+    @Named("ApplicationScope") private val applicationScope: CoroutineScope
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     private data class AlbumAggregationKey(
         val album: String,
@@ -146,7 +147,7 @@ class AudioFileScanner @Inject constructor(
     init {
         // Auto-update albums and artists when filtered data changes
         // Uses debounce to prevent rapid recomputation during incremental scans
-        scope.launch {
+        applicationScope.launch(Dispatchers.Default) {
             filteredAudioFiles
                 .collectLatest { files ->
                     kotlinx.coroutines.delay(50) // Debounce: wait 50ms to batch rapid updates
@@ -990,6 +991,6 @@ class AudioFileScanner @Inject constructor(
      * Clean up resources.
      */
     fun cleanup() {
-        scope.cancel()
+        // No-op: ApplicationScope is managed at app level
     }
 }

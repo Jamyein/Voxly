@@ -49,6 +49,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.util.LinkedHashMap
 import javax.inject.Inject
 
 /**
@@ -74,6 +75,7 @@ class LibraryViewModel @Inject constructor(
     companion object {
         private const val TAG = "LibraryViewModel"
         private const val STATE_FLOW_TIMEOUT_MS = 5000L
+        private const val MAX_SCROLL_POSITIONS = 30
     }
 
     private val _uiState = MutableStateFlow<FileBrowserUiState>(FileBrowserUiState.Loading)
@@ -171,7 +173,7 @@ class LibraryViewModel @Inject constructor(
 
     private var scanJob: Job? = null
     private var batchJob: Job? = null
-    private val scrollPositions = mutableMapOf<String, ScrollPosition>()
+    private val scrollPositions = LinkedHashMap<String, ScrollPosition>(MAX_SCROLL_POSITIONS, 0.75f, true)
 
     // Scan filter settings - observe changes to trigger auto-refresh
     // Note: Core settings (whitelistEnabled, blacklistEnabled, minDurationFilterEnabled)
@@ -1267,6 +1269,9 @@ class LibraryViewModel @Inject constructor(
 
     fun saveScrollPosition(listKey: String, index: Int, offset: Int) {
         scrollPositions[listKey] = ScrollPosition(index = index, offset = offset)
+        while (scrollPositions.size > MAX_SCROLL_POSITIONS) {
+            scrollPositions.keys.firstOrNull()?.let { scrollPositions.remove(it) } ?: break
+        }
     }
 
     fun getScrollPosition(listKey: String): ScrollPosition {

@@ -7,6 +7,7 @@ import android.provider.DocumentsContract
 import dagger.hilt.android.qualifiers.ApplicationContext
 import timber.log.Timber
 import java.text.Normalizer
+import java.util.LinkedHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,16 +25,18 @@ class SafPermissionCache @Inject constructor(
 ) {
     companion object {
         private const val TAG = "SafPermissionCache"
+        private const val MAX_PATH_CACHE_SIZE = 100
+        private const val MAX_FOLDER_DOC_CACHE_SIZE = 200
     }
 
     // TreeUri -> 物理路径映射
-    private val treeUriToPathMap = mutableMapOf<Uri, String>()
+    private val treeUriToPathMap = LinkedHashMap<Uri, String>(MAX_PATH_CACHE_SIZE, 0.75f, true)
 
     // 物理路径 -> TreeUri 映射
-    private val pathToTreeUriMap = mutableMapOf<String, Uri>()
+    private val pathToTreeUriMap = LinkedHashMap<String, Uri>(MAX_PATH_CACHE_SIZE, 0.75f, true)
 
     // 文件夹 Document ID 缓存: (TreeUri, folderRelativePath) -> DocumentId
-    private val folderDocIdCache = mutableMapOf<Pair<Uri, String>, String>()
+    private val folderDocIdCache = LinkedHashMap<Pair<Uri, String>, String>(MAX_FOLDER_DOC_CACHE_SIZE, 0.75f, true)
 
     // 根目录的 Document ID 缓存: TreeUri -> Root DocumentId
     private val rootDocIdCache = mutableMapOf<Uri, String>()
@@ -60,6 +63,7 @@ class SafPermissionCache @Inject constructor(
             if (path != null) {
                 treeUriToPathMap[perm.uri] = path
                 pathToTreeUriMap[path] = perm.uri
+                trimBidirectionalPathCaches()
 
                 // 预缓存根目录的 Document ID
                 val rootDocId = DocumentsContract.getTreeDocumentId(perm.uri)
@@ -131,6 +135,7 @@ class SafPermissionCache @Inject constructor(
         // 如果是根目录，直接返回
         if (folderRelativePath.isBlank()) {
             folderDocIdCache[cacheKey] = rootDocId
+            trimFolderDocIdCache()
             return rootDocId
         }
 
@@ -138,6 +143,7 @@ class SafPermissionCache @Inject constructor(
         val folderDocId = findFolderDocId(treeUri, rootDocId, folderRelativePath)
         if (folderDocId != null) {
             folderDocIdCache[cacheKey] = folderDocId
+            trimFolderDocIdCache()
         }
 
         return folderDocId
@@ -149,6 +155,7 @@ class SafPermissionCache @Inject constructor(
     fun cacheFileDocId(treeUri: Uri, relativePath: String, docId: String) {
         val cacheKey = treeUri to relativePath
         folderDocIdCache[cacheKey] = docId
+        trimFolderDocIdCache()
     }
 
     /**
@@ -166,6 +173,31 @@ class SafPermissionCache @Inject constructor(
         for ((relativePath, docId) in relativePathsAndDocIds) {
             val cacheKey = treeUri to relativePath
             folderDocIdCache[cacheKey] = docId
+        }
+        trimFolderDocIdCache()
+    }
+
+    private fun trimBidirectionalPathCaches() {
+        while (pathToTreeUriMap.size > MAX_PATH_CACHE_SIZE) {
+            val oldestPath = pathToTreeUriMap.keys.firstOrNull() ?: break
+            val uri = pathToTreeUriMap.remove(oldestPath)
+            if (uri != null) {
+                treeUriToPathMap.remove(uri)
+            }
+        }
+
+        while (treeUriToPathMap.size > MAX_PATH_CACHE_SIZE) {
+            val oldestUri = treeUriToPathMap.keys.firstOrNull() ?: break
+            val path = treeUriToPathMap.remove(oldestUri)
+            if (path != null) {
+                pathToTreeUriMap.remove(path)
+            }
+        }
+    }
+
+    private fun trimFolderDocIdCache() {
+        while (folderDocIdCache.size > MAX_FOLDER_DOC_CACHE_SIZE) {
+            folderDocIdCache.keys.firstOrNull()?.let { folderDocIdCache.remove(it) } ?: break
         }
     }
 
