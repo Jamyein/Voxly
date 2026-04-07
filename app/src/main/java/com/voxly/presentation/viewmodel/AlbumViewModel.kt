@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.util.LinkedHashMap
 import javax.inject.Inject
 
 /**
@@ -38,13 +39,36 @@ class AlbumViewModel @Inject constructor(
     private val _albumInfoMap = MutableStateFlow<Map<String, AlbumInfoEntity>>(emptyMap())
     val albumInfoMap: StateFlow<Map<String, AlbumInfoEntity>> = _albumInfoMap.asStateFlow()
 
-    // Sort option from persistent storage
     val sortOption = uiStateDataStore.albumSortOption
 
     private var refreshJob: Job? = null
 
+    // Scroll positions storage with LRU eviction
+    private val scrollPositions = LinkedHashMap<String, ScrollPosition>(MAX_SCROLL_POSITIONS, 0.75f, true)
+
+    companion object {
+        private const val MAX_SCROLL_POSITIONS = 10
+    }
+
     init {
         preloadAlbumInfo()
+    }
+
+    /**
+     * Save scroll position for a list key
+     */
+    fun saveScrollPosition(listKey: String, index: Int, offset: Int) {
+        scrollPositions[listKey] = ScrollPosition(index = index, offset = offset)
+        while (scrollPositions.size > MAX_SCROLL_POSITIONS) {
+            scrollPositions.keys.firstOrNull()?.let { scrollPositions.remove(it) } ?: break
+        }
+    }
+
+    /**
+     * Get saved scroll position for a list key
+     */
+    fun getScrollPosition(listKey: String): ScrollPosition {
+        return scrollPositions[listKey] ?: ScrollPosition()
     }
 
     fun refresh(forceRefresh: Boolean = false) {

@@ -37,6 +37,7 @@ import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -118,6 +119,11 @@ fun DirectoryContentAdaptiveScreen(
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadingDirectories by viewModel.directoryLoadingState.collectAsState()
 
+    // Get saved scroll position for this directory
+    val savedScrollPosition = remember(directoryUri) {
+        viewModel.getScrollPosition("directory_$directoryUri")
+    }
+
     val isDirectoryLoading = remember(directoryUri, loadingDirectories) {
         directoryUri in loadingDirectories
     }
@@ -143,12 +149,26 @@ fun DirectoryContentAdaptiveScreen(
         applySort(files, currentSortOption)
     }
 
-    // List pane state
-    val listState = rememberLazyListState()
+    // List pane state - restore saved scroll position
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = savedScrollPosition.index,
+        initialFirstVisibleItemScrollOffset = savedScrollPosition.offset
+    )
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val isSelectionMode = selectedFiles.isNotEmpty()
     val canScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
+    }
+
+    // Save scroll position when leaving the screen
+    DisposableEffect(directoryUri) {
+        onDispose {
+            viewModel.saveScrollPosition(
+                "directory_$directoryUri",
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset
+            )
+        }
     }
 
     PredictiveBackHandler(enabled = isSelectionMode || canCloseDetailPane) { progress ->

@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.cache.AlbumInfoEntity
+import com.voxly.data.local.cache.AlbumInfoManager
 import com.voxly.data.repository.ArtistCacheRepository
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -33,7 +35,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
     @Assisted val navKey: ArtistDetail,
     @ApplicationContext private val context: Context,
     private val artistCacheRepository: ArtistCacheRepository,
-    private val audioFileScanner: AudioFileScanner
+    private val audioFileScanner: AudioFileScanner,
+    private val albumInfoManager: AlbumInfoManager
 ) : ViewModel() {
 
     private val _artistName = MutableStateFlow("")
@@ -132,8 +135,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * Load album years from metadata with fallback to TagLib.
-     * This is done asynchronously to avoid blocking UI.
+     * Load album years from Room cache (AlbumInfoEntity).
+     * Uses AlbumInfoManager to query cached year data, avoiding expensive file I/O.
      */
     private fun loadAlbumYears(files: List<AudioFile>) {
         albumYearJob?.cancel()
@@ -141,27 +144,22 @@ class ArtistDetailViewModel @AssistedInject constructor(
             val albumGroups = files.filter { !it.metadata.album.isNullOrBlank() }
                 .groupBy { it.metadata.album!! }
 
-            val yearsMap = mutableMapOf<String, String?>()
-
-            albumGroups.forEach { (albumName, albumFiles) ->
-                // First try to get year from MediaStore metadata
-                val mediaStoreYear = albumFiles
-                    .mapNotNull { file -> file.metadata.year?.takeIf { it.isNotBlank() } }
-                    .maxOrNull()
-
-                yearsMap[albumName] = if (mediaStoreYear != null) {
-                    mediaStoreYear
-                } else {
-                    // Fallback: read from file using TagLib (expensive operation)
-                    albumFiles.firstOrNull()?.let { firstFile ->
-                        try {
-                            audioFileScanner.loadDetailedMetadata(firstFile.path)?.year
-                        } catch (e: Exception) {
-                            null
-                        }
-                    }
-                }
+            // Build list of album keys (albumName, albumArtist) for batch query
+            val albumKeys = albumGroups.map { (albumName, albumFiles) ->
+                val albumArtist = albumFiles.firstOrNull()?.metadata?.albumArtist
+                    ?: albumFiles.firstOrNull()?.metadata?.artist
+                albumName to albumArtist
             }
+
+            // Query years from Room cache via AlbumInfoManager
+            val cachedYears = albumInfoManager.getAlbumYears(albumKeys)
+
+            // Build years map: albumName -> year string
+            val yearsMap = albumGroups.keys.mapIndexed { index, albumName ->
+                val key = albumKeys.getOrNull(index)
+                val albumId = key?.let { AlbumInfoEntity.generateId(it.first, it.second) }
+                albumName to cachedYears[albumId]
+            }.toMap()
 
             _albumYears.value = yearsMap
         }

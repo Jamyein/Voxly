@@ -34,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -64,6 +65,7 @@ import com.voxly.presentation.components.LazyGridCoverPreloader
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
+import com.voxly.presentation.viewmodel.ScrollPosition
 
 /**
  * Extracts the best cover file path for an album.
@@ -111,6 +113,11 @@ internal fun AlbumScreenContent(
 
     val sortedAlbums = remember(albums, currentSortOption, albumInfoMap) {
         applyAlbumSortWithCache(albums, currentSortOption, albumInfoMap)
+    }
+
+    // Get saved scroll position
+    val savedScrollPosition = remember(currentSortOption) {
+        viewModel.getScrollPosition("album_list_${currentSortOption.name}")
     }
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -168,13 +175,17 @@ internal fun AlbumScreenContent(
                 }
             } else {
                 key(scrollToTopTrigger) {
-                        AlbumTabContent(
-                            albums = sortedAlbums,
-                            onAlbumClick = onAlbumClick,
-                            scrollToTopTrigger = scrollToTopTrigger,
-                            sortOption = currentSortOption,
-                            albumInfoMap = albumInfoMap
-                        )
+                    AlbumTabContent(
+                        albums = sortedAlbums,
+                        onAlbumClick = onAlbumClick,
+                        scrollToTopTrigger = scrollToTopTrigger,
+                        sortOption = currentSortOption,
+                        albumInfoMap = albumInfoMap,
+                        savedScrollPosition = savedScrollPosition,
+                        onSaveScrollPosition = { index, offset ->
+                            viewModel.saveScrollPosition("album_list_${currentSortOption.name}", index, offset)
+                        }
+                    )
                 }
             }
         }
@@ -188,11 +199,25 @@ internal fun AlbumTabContent(
     listState: LazyListState? = null,
     scrollToTopTrigger: Int = 0,
     sortOption: AlbumSortOption? = null,
-    albumInfoMap: Map<String, AlbumInfoEntity> = emptyMap()
+    albumInfoMap: Map<String, AlbumInfoEntity> = emptyMap(),
+    savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
+    onSaveScrollPosition: ((Int, Int) -> Unit)? = null
 ) {
     key(scrollToTopTrigger) {
         val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
-        val gridState = rememberLazyGridState()
+        
+        // Restore scroll position for grid
+        val gridState = rememberLazyGridState(
+            initialFirstVisibleItemIndex = savedScrollPosition?.index ?: 0,
+            initialFirstVisibleItemScrollOffset = savedScrollPosition?.offset ?: 0
+        )
+        
+        // Save scroll position when leaving
+        DisposableEffect(sortOption) {
+            onDispose {
+                onSaveScrollPosition?.invoke(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
+            }
+        }
 
         BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             if (albums.isEmpty()) {
@@ -209,7 +234,9 @@ internal fun AlbumTabContent(
                         albums = albums,
                         onAlbumClick = onAlbumClick,
                         isDescending = true,
-                        albumInfoMap = albumInfoMap
+                        albumInfoMap = albumInfoMap,
+                        savedScrollPosition = savedScrollPosition,
+                        onSaveScrollPosition = onSaveScrollPosition
                     )
                 } else {
                     val albumFilePaths = remember(albums) {
@@ -262,9 +289,23 @@ internal fun AlbumYearGroupedContent(
     albums: List<AlbumGroup>,
     onAlbumClick: (AlbumGroup) -> Unit,
     isDescending: Boolean = false,
-    albumInfoMap: Map<String, AlbumInfoEntity> = emptyMap()
+    albumInfoMap: Map<String, AlbumInfoEntity> = emptyMap(),
+    savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
+    onSaveScrollPosition: ((Int, Int) -> Unit)? = null
 ) {
-    val listState = rememberLazyListState()
+    // Restore scroll position
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = savedScrollPosition?.index ?: 0,
+        initialFirstVisibleItemScrollOffset = savedScrollPosition?.offset ?: 0
+    )
+    
+    // Save scroll position when leaving
+    DisposableEffect(albums.size) {
+        onDispose {
+            onSaveScrollPosition?.invoke(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+        }
+    }
+    
     val albumsByYear = remember(albums, isDescending, albumInfoMap) {
         albums.groupBy { album ->
             val albumKey = AlbumInfoEntity.generateId(album.name, album.artist)
