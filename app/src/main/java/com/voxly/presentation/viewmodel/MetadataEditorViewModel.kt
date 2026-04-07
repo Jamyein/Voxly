@@ -191,6 +191,14 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     /**
+     * 当 ViewModel 被销毁时清理该文件的搜索种子。
+     */
+    override fun onCleared() {
+        super.onCleared()
+        searchSeedHolder.removeSeedForFile(filePath)
+    }
+
+    /**
      * Loads the audio file and its metadata.
      * Uses getAudioFile() to get complete audio info (bitrate, sampleRate, channels, duration)
      * from TagLib + MediaStore. Cover art is loaded asynchronously via loadCoverArtAsync().
