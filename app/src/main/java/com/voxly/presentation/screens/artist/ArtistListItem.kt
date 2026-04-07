@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.artist
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -24,19 +25,22 @@ import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.ArtistListItemState
 import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
+import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.MaterialShapes
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.toShape
+import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun ArtistListItem(
     artist: ArtistListItemState,
     onClick: () -> Unit
 ) {
+    val avatarKey = createArtistAvatarSharedElementKey(artist.name)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -54,6 +58,7 @@ internal fun ArtistListItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
+                    .sharedBoundsIfAvailable(key = avatarKey)
                     .clip(MaterialShapes.Sunny.toShape()),
                 contentAlignment = Alignment.Center
             ) {

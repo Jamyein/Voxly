@@ -192,8 +192,10 @@ fun ArtistDetailScreen(
                     ) {
                         // Circle Avatar (150dp) with shared element transition
                         // Using AlbumArtImage like ArtistListItem for consistent display
-                        // If coverPath is null, use first file's path as fallback
-                        val artistCoverPath = coverPath ?: files.firstOrNull()?.path
+                        // If coverPath is null, use the same logic as ArtistViewModel: prefer file with mediaStoreAlbumId
+                        val artistCoverPath = coverPath ?: files.firstOrNull { 
+                            it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
+                        }?.path ?: files.firstOrNull()?.path
                         Box(
                             modifier = Modifier
                                 .size(150.dp)

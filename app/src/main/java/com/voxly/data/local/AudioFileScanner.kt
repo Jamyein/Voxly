@@ -836,7 +836,7 @@ class AudioFileScanner @Inject constructor(
 
         val artistsList = artistsMap.map { (artistName, artistFiles) ->
             val coverFile = artistFiles.firstOrNull {
-                it.metadata.album?.isNotBlank() == true
+                it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
             } ?: artistFiles.firstOrNull()
             ArtistGroup(
                 name = artistName,
