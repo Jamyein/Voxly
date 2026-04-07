@@ -48,7 +48,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineRelease
@@ -66,7 +65,7 @@ import timber.log.Timber
 @Composable
 fun OnlineMetadataScreen(
     filePath: String,
-    viewModel: OnlineMetadataViewModel = hiltViewModel(),
+    viewModel: OnlineMetadataViewModel,
     onNavigateBack: () -> Unit,
     onApplyMetadata: (AudioMetadata) -> Unit
 ) {

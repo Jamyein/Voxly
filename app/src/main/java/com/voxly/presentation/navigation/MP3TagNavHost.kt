@@ -504,10 +504,12 @@ private fun RenderSubScreen(
 
         is OnlineMetadata -> {
             val viewModel = hiltViewModel<OnlineMetadataViewModel, OnlineMetadataViewModel.Factory>(
+                key = key.filePath,
                 creationCallback = { factory -> factory.create(key) }
             )
             OnlineMetadataScreen(
                 filePath = key.filePath,
+                viewModel = viewModel,
                 onNavigateBack = { backStack.removeLastOrNull() },
                 onApplyMetadata = { metadata ->
                     onPendingMetadataConsumed()
