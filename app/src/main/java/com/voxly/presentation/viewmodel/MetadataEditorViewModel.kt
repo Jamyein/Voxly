@@ -684,8 +684,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 _originalMetadata = originalMetadata
                 _hasUnsavedChanges.value = false
                 _modifiedFields.value = emptySet()
-                // 清除搜索种子（放弃修改后不再使用编辑中的值）
-                searchSeedHolder.clearSeed()
+                // 清除当前文件的搜索种子（放弃修改后不再使用编辑中的值）
+                searchSeedHolder.removeSeedForFile(filePath)
                 val currentState = _uiState.value
                 if (currentState is MetadataEditorUiState.Success) {
                     _uiState.value = currentState.copy(editedMetadata = originalMetadata)
