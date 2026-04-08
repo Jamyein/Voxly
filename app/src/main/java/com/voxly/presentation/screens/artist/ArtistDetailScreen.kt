@@ -430,25 +430,29 @@ fun AlbumCard(
                 )
             }
 
-            // Album name, year and track count
+            // Album year and name
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp)
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.Start
                 ) {
+                    // Year above album name
+                    if (albumYear != null) {
+                        Text(
+                            text = albumYear.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    // Album name
                     Text(
                         text = albumName,
                         style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
-                    )
-                    val yearText = albumYear?.let { " • $it" } ?: ""
-                    Text(
-                        text = stringResource(R.string.track_count, trackCount) + yearText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
