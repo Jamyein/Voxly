@@ -79,11 +79,8 @@ fun OnlineMetadataScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val downloadedAlbumArt by viewModel.downloadedAlbumArt.collectAsState()
     val isCoverArtTimeout by viewModel.isCoverArtTimeout.collectAsState()
-
-    // Track if we've already triggered apply for the current selection
-    var hasAppliedForCurrentSelection by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    // Track the selection ID to detect when selection changes
-    var lastAppliedSelectionId by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
+    val hasAppliedForCurrentSelection by viewModel.hasAppliedForCurrentSelection.collectAsState()
+    val lastAppliedSelectionId by viewModel.lastAppliedSelectionId.collectAsState()
 
     // Auto-apply metadata when release or candidate is selected, and cover art is downloaded
     // Wait for cover art to be downloaded before applying (if cover is available)
@@ -95,18 +92,11 @@ fun OnlineMetadataScreen(
         val isTimeout = isCoverArtTimeout
         val currentSelectionId = candidate?.id
 
-        // Reset flag when selection changes
-        if (currentSelectionId != null && currentSelectionId != lastAppliedSelectionId) {
-            hasAppliedForCurrentSelection = false
-        }
-
         // Apply when we have release details OR candidate selected
         // If candidate has cover art URL, wait until it's downloaded OR timeout
         val candidateHasCover = candidate?.coverArtUrl != null
         val isCoverDownloaded = !candidateHasCover || albumArt != null || isTimeout
         if ((release != null || candidate != null) && !hasAppliedForCurrentSelection && isCoverDownloaded) {
-            hasAppliedForCurrentSelection = true
-            lastAppliedSelectionId = currentSelectionId
             viewModel.applyMetadata()?.let { metadata ->
                 Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}, hasCover=${metadata.albumArt != null}")
                 onApplyMetadata(metadata)

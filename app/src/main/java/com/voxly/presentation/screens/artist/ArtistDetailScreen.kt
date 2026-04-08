@@ -45,6 +45,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import com.voxly.R
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
@@ -253,18 +254,34 @@ fun ArtistDetailScreen(
                     item {
                         val carouselState = rememberCarouselState { albumsSorted.size }
 
-                        // 封面数据首次填充时立即预加载（解决首屏空白问题）
-                        LaunchedEffect(albumCovers) {
-                            if (albumCovers.isNotEmpty()) {
-                                viewModel.preloadAdjacentAlbumCovers(0)
-                            }
-                        }
-
-                        // 滚动监听：滚动停止时预加载相邻专辑封面
+                        // 自动轮播 + 预加载：基于当前索引变化的混合策略
+                        // 性能优化：仅使用 snapshotFlow 监听，避免额外的 DisposableEffect
+                        val autoScrollEnabled = albumsSorted.size > 1
+                        
                         LaunchedEffect(carouselState) {
-                            snapshotFlow { carouselState.currentItem }.collect { page ->
-                                viewModel.preloadAdjacentAlbumCovers(page)
-                            }
+                            snapshotFlow { carouselState.currentItem }
+                                .collect { currentIndex ->
+                                    // 预加载相邻封面
+                                    viewModel.preloadAdjacentAlbumCovers(currentIndex)
+                                    
+                                    if (autoScrollEnabled) {
+                                        // 等待 4 秒无交互后再滚动到下一项
+                                        delay(4000)
+                                        
+                                        // 再次检查是否仍然在同一位置（无新交互）
+                                        if (carouselState.currentItem == currentIndex) {
+                                            // 计算下一项（循环）
+                                            val nextIndex = (currentIndex + 1) % albumsSorted.size
+                                            
+                                            // 执行平滑滚动
+                                            try {
+                                                carouselState.animateScrollToItem(nextIndex)
+                                            } catch (_: Exception) {
+                                                // 动画可能被中断（用户交互），静默处理
+                                            }
+                                        }
+                                    }
+                                }
                         }
 
                         HorizontalMultiBrowseCarousel(

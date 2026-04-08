@@ -101,6 +101,14 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     private val _isCoverArtTimeout = MutableStateFlow(false)
     val isCoverArtTimeout: StateFlow<Boolean> = _isCoverArtTimeout.asStateFlow()
 
+    // 用于跟踪是否已经为当前选择触发了应用操作
+    private val _hasAppliedForCurrentSelection = MutableStateFlow(false)
+    val hasAppliedForCurrentSelection: StateFlow<Boolean> = _hasAppliedForCurrentSelection.asStateFlow()
+
+    // 用于跟踪上次应用的选择ID
+    private val _lastAppliedSelectionId = MutableStateFlow<String?>(null)
+    val lastAppliedSelectionId: StateFlow<String?> = _lastAppliedSelectionId.asStateFlow()
+
     init {
         viewModelScope.launch {
             // 监听元数据源优先级设置变化，实时更新
@@ -520,6 +528,10 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     fun selectRelease(release: OnlineRelease) {
         Timber.d("selectRelease called: id=${release.id}, title=${release.title}, source=${release.source}")
 
+        // 重置应用状态跟踪
+        _hasAppliedForCurrentSelection.value = false
+        _lastAppliedSelectionId.value = null
+
         // Cancel previous release selection coroutines before starting new ones
         activeSelectReleaseJob?.cancel()
 
@@ -665,6 +677,20 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     fun applyMetadata(): AudioMetadata? {
         val details = _selectedRelease.value
         val candidate = _selectedReleaseCandidate.value
+        
+        // 检查是否已经应用过当前选择
+        val currentSelectionId = candidate?.id
+        if (currentSelectionId != null && currentSelectionId == _lastAppliedSelectionId.value) {
+            Timber.d("applyMetadata: already applied for selection $currentSelectionId, skipping")
+            return null
+        }
+        
+        // 标记为已应用
+        if (currentSelectionId != null) {
+            _hasAppliedForCurrentSelection.value = true
+            _lastAppliedSelectionId.value = currentSelectionId
+        }
+        
         val asyncLyrics = getSyncedLyricsForSelected()
         val albumArt = _downloadedAlbumArt.value
 
