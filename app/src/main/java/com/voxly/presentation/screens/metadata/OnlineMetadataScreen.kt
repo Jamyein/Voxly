@@ -85,7 +85,7 @@ fun OnlineMetadataScreen(
     // Auto-apply metadata when release or candidate is selected, and cover art is downloaded
     // Wait for cover art to be downloaded before applying (if cover is available)
     // If cover download times out, apply metadata without cover
-    LaunchedEffect(selectedRelease, selectedReleaseCandidate, downloadedAlbumArt, isCoverArtTimeout) {
+    LaunchedEffect(selectedRelease, selectedReleaseCandidate, downloadedAlbumArt, isCoverArtTimeout, hasAppliedForCurrentSelection) {
         val release = selectedRelease
         val candidate = selectedReleaseCandidate
         val albumArt = downloadedAlbumArt
@@ -168,7 +168,6 @@ fun OnlineMetadataScreen(
                     OnlineReleaseList(
                         releases = state.releases,
                         onSelect = { release ->
-                            hasAppliedForCurrentSelection = false
                             viewModel.selectRelease(release)
                             clearSearchResultImageCache()
                         },
@@ -191,7 +190,6 @@ fun OnlineMetadataScreen(
                     OnlineReleaseList(
                         releases = state.releases,
                         onSelect = { release ->
-                            hasAppliedForCurrentSelection = false
                             viewModel.selectRelease(release)
                             clearSearchResultImageCache()
                         },
@@ -202,7 +200,6 @@ fun OnlineMetadataScreen(
                     OnlineReleaseList(
                         releases = searchResults,
                         onSelect = { release ->
-                            hasAppliedForCurrentSelection = false
                             viewModel.selectRelease(release)
                             clearSearchResultImageCache()
                         },
