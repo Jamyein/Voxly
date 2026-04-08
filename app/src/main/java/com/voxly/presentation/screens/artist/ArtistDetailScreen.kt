@@ -61,15 +61,14 @@ import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.ui.loadAlbumArtThumbnail
-import com.voxly.presentation.ui.loadAlbumArtThumbnail
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 import coil3.compose.AsyncImage
 import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import com.voxly.data.local.cover.CoverUriProvider
 import java.io.File
+import com.voxly.data.local.cover.CoverUriProvider
 
 /**
  * Album information for carousel display with year.
