@@ -85,3 +85,12 @@ local.properties
 *.html
 /.worktrees
 /.performance-optimization
+
+# Ignore all markdown files except README
+*.md
+!README.md
+!readme.md
+!README*.md
+!readme*.md
+
+*.md
