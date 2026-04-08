@@ -1,6 +1,7 @@
 package com.voxly.presentation.viewmodel
 
 import android.net.Uri
+import android.os.Environment
 import android.os.SystemClock
 import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
@@ -538,15 +539,21 @@ class MetadataEditorViewModel @AssistedInject constructor(
             
             context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                arrayOf(MediaStore.Audio.Media.DATA),
+                arrayOf(
+                    MediaStore.Audio.Media.DISPLAY_NAME,
+                    MediaStore.Audio.Media.RELATIVE_PATH
+                ),
                 selection,
                 selectionArgs,
                 null
             )?.use { cursor ->
-                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+                val relativeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
                 while (cursor.moveToNext()) {
-                    val path = cursor.getString(dataColumn)
-                    if (path != null && File(path).exists()) {
+                    val displayName = cursor.getString(nameColumn) ?: continue
+                    val relativePath = cursor.getString(relativeColumn)
+                    val path = buildPathFromRelativePath(relativePath, displayName)
+                    if (path.isNotBlank()) {
                         files.add(path)
                     }
                 }
@@ -556,6 +563,16 @@ class MetadataEditorViewModel @AssistedInject constructor(
         }
         
         files
+    }
+
+    private fun buildPathFromRelativePath(relativePath: String?, displayName: String): String {
+        val sanitizedRelative = relativePath?.trimStart('/')?.replace('\\', '/') ?: ""
+        val base = Environment.getExternalStorageDirectory().absolutePath.trimEnd('/')
+        return if (sanitizedRelative.isBlank()) {
+            "$base/$displayName"
+        } else {
+            "$base/$sanitizedRelative$displayName"
+        }
     }
     
 

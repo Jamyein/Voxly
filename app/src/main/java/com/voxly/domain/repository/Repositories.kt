@@ -38,7 +38,12 @@ interface AudioRepository {
      * @param filePath The path to the audio file
      * @return Result containing the audio file or an error
      */
-    suspend fun getAudioFile(filePath: String): Result<AudioFile>
+    suspend fun getAudioFile(filePath: String, includeAlbumArt: Boolean = false): Result<AudioFile>
+
+    /**
+     * Gets a single audio file with detailed metadata (including album art).
+     */
+    suspend fun getAudioFileDetail(filePath: String): Result<AudioFile>
 
     /**
      * Reads metadata from an audio file.

@@ -15,6 +15,13 @@ class BatchEngine<T>(
     private val memoryPressureMonitor: MemoryPressureMonitor,
     private val throttlePercent: Float = 0.05f
 ) {
+    private var lastFailedItems: List<FailedItem> = emptyList()
+
+    fun getFailedItems(): List<FailedItem> = lastFailedItems.toList()
+
+    fun clearFailedItems() {
+        lastFailedItems = emptyList()
+    }
     fun execute(
         items: List<T>,
         operation: suspend (T) -> Result<Unit>,
@@ -112,6 +119,7 @@ class BatchEngine<T>(
                     status = BatchStatus.COMPLETED
                 )
             )
+            lastFailedItems = failedItems.toList()
         } catch (e: CancellationException) {
             throw e
         }

@@ -24,9 +24,10 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
@@ -97,6 +98,7 @@ class AudioFileScanner @Inject constructor(
     // Uses conflate() to drop intermediate values during rapid settings changes
     val filteredAudioFiles: Flow<List<AudioFile>> = combine(
         cachedAudioFilesFlow,
+        libraryCache.cacheVersionFlow,
         settingsDataStore.whitelistEnabled,
         settingsDataStore.blacklistEnabled,
         settingsDataStore.minDurationFilterEnabled,
@@ -106,38 +108,34 @@ class AudioFileScanner @Inject constructor(
     ) { array ->
         @Suppress("UNCHECKED_CAST")
         val files = array[0] as List<AudioFile>
-        val whitelistEnabled = array[1] as Boolean
-        val blacklistEnabled = array[2] as Boolean
-        val minDurationEnabled = array[3] as Boolean
+        val cacheVersion = array[1] as Long
+        val whitelistEnabled = array[2] as Boolean
+        val blacklistEnabled = array[3] as Boolean
+        val minDurationEnabled = array[4] as Boolean
         @Suppress("UNCHECKED_CAST")
-        val whitelistUris = array[4] as List<String>
+        val whitelistUris = array[5] as List<String>
         @Suppress("UNCHECKED_CAST")
-        val blacklistUris = array[5] as List<String>
-        val minDurationMs = (array[6] as Int).toLong()
+        val blacklistUris = array[6] as List<String>
+        val minDurationMs = (array[7] as Int).toLong()
 
-        // Apply filters with pre-collected settings (no suspend calls, no I/O)
-        applyFilters(
-            files,
-            FilterSettings(
-                whitelistEnabled = whitelistEnabled,
-                blacklistEnabled = blacklistEnabled,
-                minDurationEnabled = minDurationEnabled,
-                whitelistUris = whitelistUris,
-                blacklistUris = blacklistUris,
-                minDurationMs = minDurationMs
-            )
+        val settings = FilterSettings(
+            whitelistEnabled = whitelistEnabled,
+            blacklistEnabled = blacklistEnabled,
+            minDurationEnabled = minDurationEnabled,
+            whitelistUris = whitelistUris,
+            blacklistUris = blacklistUris,
+            minDurationMs = minDurationMs
+        )
+
+        val filtered = applyFilters(files, settings)
+        FilteredResult(
+            version = computeFilterVersion(cacheVersion, settings),
+            files = filtered
         )
     }
         .conflate()
-        .distinctUntilChanged { old, new ->
-            // Fast path: if sizes differ, they are definitely different
-            if (old.size != new.size) return@distinctUntilChanged false
-            // Both empty: they are the same
-            if (old.isEmpty()) return@distinctUntilChanged true
-            // Compare first and last items for quick check
-            // For sorted lists (by path), this should be sufficient
-            old.first().path == new.first().path && old.last().path == new.last().path
-        }
+        .distinctUntilChangedBy { it.version }
+        .map { it.files }
         .flowOn(Dispatchers.Default)
         .catch { e ->
             Timber.e(e, "Error observing filtered audio files")
@@ -173,7 +171,6 @@ class AudioFileScanner @Inject constructor(
         private val FAST_PROJECTION = arrayOf(
             MediaStore.Audio.Media._ID,
             MediaStore.Audio.Media.DISPLAY_NAME,
-            MediaStore.Audio.Media.DATA,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
@@ -183,7 +180,9 @@ class AudioFileScanner @Inject constructor(
             MediaStore.Audio.Media.SIZE,
             MediaStore.Audio.Media.MIME_TYPE,
             MediaStore.Audio.Media.BITRATE,
-            MediaStore.Audio.Media.TRACK
+            MediaStore.Audio.Media.TRACK,
+            MediaStore.Audio.Media.RELATIVE_PATH,
+            MediaStore.Audio.Media.DATE_MODIFIED
         )
 
         private val AUDIO_EXTENSIONS = setOf("mp3", "flac", "ogg", "m4a", "mp4", "wma", "wav", "ape", "opus")
@@ -401,25 +400,26 @@ class AudioFileScanner @Inject constructor(
         val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
         val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
 
-        val selection = buildString {
-            append("${MediaStore.Audio.Media.IS_MUSIC} != 0")
-            append(" AND (")
-            append("${MediaStore.Audio.Media.DATA} = ?")
-            append(" OR ${MediaStore.Audio.Media.DATA} LIKE ?")
-            append(" OR ${MediaStore.Audio.Media.DATA} LIKE ?")
-            append(")")
-        }
-        val selectionArgs = arrayOf(
-            normalizedDir,
-            "$normalizedDir/%",
-            "$normalizedDir\\%"
-        )
+        val relativeDir = getRelativePathFromAbsolute(normalizedDir)
+        if (relativeDir != null) {
+            val selection = buildString {
+                append("${MediaStore.Audio.Media.IS_MUSIC} != 0")
+                append(" AND (")
+                append("${MediaStore.Audio.Media.RELATIVE_PATH} = ?")
+                append(" OR ${MediaStore.Audio.Media.RELATIVE_PATH} LIKE ?")
+                append(")")
+            }
+            val selectionArgs = arrayOf(
+                relativeDir,
+                "$relativeDir%"
+            )
 
-        contentResolver.query(
-            AUDIO_URI, FAST_PROJECTION, selection, selectionArgs,
-            "${MediaStore.Audio.Media.TITLE} ASC"
-        )?.use { cursor ->
-            cursorToAudioFiles(cursor, audioFiles, minDurationEnabled, minDurationMs)
+            contentResolver.query(
+                AUDIO_URI, FAST_PROJECTION, selection, selectionArgs,
+                "${MediaStore.Audio.Media.TITLE} ASC"
+            )?.use { cursor ->
+                cursorToAudioFiles(cursor, audioFiles, minDurationEnabled, minDurationMs)
+            }
         }
 
         // Fallback for files not yet indexed
@@ -446,8 +446,10 @@ class AudioFileScanner @Inject constructor(
         val columns = CursorColumns(cursor)
 
         while (cursor.moveToNext()) {
-            val filePath = cursor.getString(columns.data)
-            val extension = filePath.substringAfterLast('.', "")
+            val displayName = cursor.getString(columns.name) ?: continue
+            val relativePath = cursor.getString(columns.relativePath)
+            val filePath = buildPathFromRelativePath(relativePath, displayName)
+            val extension = displayName.substringAfterLast('.', "")
 
             if (AudioFormat.fromExtension(extension) == AudioFormat.OTHER) continue
 
@@ -483,7 +485,7 @@ class AudioFileScanner @Inject constructor(
                 AudioFile(
                     id = cursor.getLong(columns.id).toString(),
                     path = filePath,
-                    name = cursor.getString(columns.name) ?: filePath.substringAfterLast('/'),
+                    name = displayName,
                     size = cursor.getLong(columns.size),
                     duration = duration,
                     format = extension.uppercase(),
@@ -503,7 +505,6 @@ class AudioFileScanner @Inject constructor(
     private class CursorColumns(cursor: Cursor) {
         val id = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media._ID)
         val name = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
-        val data = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
         val title = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
         val artist = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
         val album = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
@@ -513,6 +514,8 @@ class AudioFileScanner @Inject constructor(
         val size = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
         val bitrate = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
         val track = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
+        val relativePath = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
+        val dateModified = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
     }
 
     /**
@@ -542,20 +545,26 @@ class AudioFileScanner @Inject constructor(
 
         contentResolver.query(
             AUDIO_URI,
-            arrayOf(MediaStore.Audio.Media.DATA),
+            arrayOf(
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.RELATIVE_PATH,
+                MediaStore.Audio.Media.DATE_MODIFIED
+            ),
             selection, null, null
         )?.use { cursor ->
-            val dataCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val relativeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
+            val modifiedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
 
             while (cursor.moveToNext()) {
-                val filePath = cursor.getString(dataCol)
-                val extension = filePath.substringAfterLast('.', "")
+                val displayName = cursor.getString(nameCol) ?: continue
+                val relativePath = cursor.getString(relativeCol)
+                val filePath = buildPathFromRelativePath(relativePath, displayName)
+                val extension = displayName.substringAfterLast('.', "")
 
                 if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
-                    val file = File(filePath)
-                    if (file.exists()) {
-                        output.add(filePath to file.lastModified())
-                    }
+                    val lastModified = cursor.getLong(modifiedCol) * 1000
+                    output.add(filePath to lastModified)
                 }
             }
         }
@@ -609,11 +618,24 @@ class AudioFileScanner @Inject constructor(
         var duration = 0L
         var bitrate = 0
 
+        val relativePath = getRelativePathFromAbsolute(file.parentFile?.absolutePath.orEmpty())
+        val selection: String
+        val selectionArgs: Array<String>
+
+        if (relativePath != null) {
+            selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ? AND ${MediaStore.Audio.Media.RELATIVE_PATH} = ?"
+            selectionArgs = arrayOf(file.name, relativePath)
+        } else {
+            selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ?"
+            selectionArgs = arrayOf(file.name)
+        }
+
         contentResolver.query(
             AUDIO_URI,
             arrayOf(MediaStore.Audio.Media.DURATION, MediaStore.Audio.Media.BITRATE),
-            "${MediaStore.Audio.Media.DATA} = ?",
-            arrayOf(filePath), null
+            selection,
+            selectionArgs,
+            null
         )?.use { cursor ->
             if (cursor.moveToFirst()) {
                 duration = cursor.getLong(0)
@@ -706,6 +728,11 @@ class AudioFileScanner @Inject constructor(
         val minDurationMs: Long
     )
 
+    private data class FilteredResult(
+        val version: Long,
+        val files: List<AudioFile>
+    )
+
     /**
      * Applies all filters (whitelist, blacklist, min duration) to audio files.
      * @param files List of audio files to filter
@@ -761,6 +788,17 @@ class AudioFileScanner @Inject constructor(
 
             true
         }
+    }
+
+    private fun computeFilterVersion(cacheVersion: Long, settings: FilterSettings): Long {
+        var result = cacheVersion
+        result = 31 * result + if (settings.whitelistEnabled) 1 else 0
+        result = 31 * result + if (settings.blacklistEnabled) 1 else 0
+        result = 31 * result + if (settings.minDurationEnabled) 1 else 0
+        result = 31 * result + settings.whitelistUris.hashCode().toLong()
+        result = 31 * result + settings.blacklistUris.hashCode().toLong()
+        result = 31 * result + settings.minDurationMs
+        return result
     }
 
     /**
@@ -921,6 +959,24 @@ class AudioFileScanner @Inject constructor(
                 }
             }
         }.getOrElse { uri.path.orEmpty() }
+    }
+
+    private fun buildPathFromRelativePath(relativePath: String?, displayName: String): String {
+        val sanitizedRelative = relativePath?.trimStart('/')?.replace('\\', '/') ?: ""
+        val base = Environment.getExternalStorageDirectory().absolutePath.trimEnd('/')
+        return if (sanitizedRelative.isBlank()) {
+            "$base/$displayName"
+        } else {
+            "$base/$sanitizedRelative$displayName"
+        }
+    }
+
+    private fun getRelativePathFromAbsolute(absolutePath: String): String? {
+        val normalized = absolutePath.replace('\\', '/').trimEnd('/')
+        val primaryRoot = Environment.getExternalStorageDirectory().absolutePath.replace('\\', '/').trimEnd('/')
+        if (!normalized.startsWith(primaryRoot)) return null
+        val relative = normalized.removePrefix(primaryRoot).trimStart('/')
+        return if (relative.isBlank()) "" else "$relative/"
     }
 
     /**

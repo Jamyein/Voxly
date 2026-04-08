@@ -1,6 +1,7 @@
 package com.voxly.data.repository
 
 import android.content.Context
+import android.os.Environment
 import android.provider.MediaStore
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
@@ -59,7 +60,10 @@ class AudioRepositoryImpl @Inject constructor(
     override fun getCachedAudioFiles(): Flow<List<AudioFile>> = audioFileScanner.getCachedAudioFiles()
 
 
-    override suspend fun getAudioFile(filePath: String): Result<AudioFile> =
+    override suspend fun getAudioFile(
+        filePath: String,
+        includeAlbumArt: Boolean
+    ): Result<AudioFile> =
         withContext(Dispatchers.IO) {
             try {
                 val javaFile = java.io.File(filePath)
@@ -67,31 +71,39 @@ class AudioRepositoryImpl @Inject constructor(
                 val fileLastModified = javaFile.lastModified()
 
                 // Try Room cache first — skip TagLib I/O if cache is valid
-                val cachedFile = libraryCache.getCachedFile(filePath)
-                if (cachedFile != null && javaFile.exists()) {
-                    // Cache hit: always read from file to get complete metadata
-                    val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true, bypassCache = true)
+                val cachedEntity = libraryCache.getCachedFileEntity(filePath)
+                val cachedFile = cachedEntity?.toAudioFile()
+                val isFileUnchanged = cachedEntity != null && javaFile.exists() &&
+                    cachedEntity.fileLastModifiedAt == fileLastModified
+
+                if (cachedFile != null && isFileUnchanged && !includeAlbumArt) {
+                    return@withContext Result.success(cachedFile)
+                }
+
+                if (cachedFile != null && isFileUnchanged && includeAlbumArt) {
+                    val completeMetadata = metadataProcessor.readAllMetadata(
+                        filePath,
+                        includeAlbumArt = true,
+                        bypassCache = false
+                    )
                     val mergedMeta = if (completeMetadata?.metadata != null) {
                         mergeWithFallback(completeMetadata.metadata, cachedFile.metadata)
                             ?: completeMetadata.metadata
                     } else {
                         cachedFile.metadata
                     }
-                    val resultFile = cachedFile.copy(
-                        metadata = mergedMeta,
-                        replayGainInfo = cachedFile.replayGainInfo
-                    )
-
-                    // Update cache with complete metadata for future reads
-                    libraryCache.syncFileToCache(resultFile)
-
+                    val resultFile = cachedFile.copy(metadata = mergedMeta)
                     return@withContext Result.success(resultFile)
                 }
 
                 // Cache miss: run independent I/O operations in parallel
                 val (completeMetadata, mediaStoreInfo) = coroutineScope {
                     val tagLibDeferred = async {
-                        metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true, bypassCache = true)
+                        metadataProcessor.readAllMetadata(
+                            filePath,
+                            includeAlbumArt = includeAlbumArt,
+                            bypassCache = true
+                        )
                     }
                     val mediaStoreDeferred = async {
                         queryMediaStoreAudioInfo(filePath)
@@ -139,12 +151,15 @@ class AudioRepositoryImpl @Inject constructor(
             }
         }
 
+    override suspend fun getAudioFileDetail(filePath: String): Result<AudioFile> {
+        return getAudioFile(filePath, includeAlbumArt = true)
+    }
+
     private fun queryMediaStoreAudioInfo(filePath: String): AudioInfo {
         var duration = 0L
         var bitrate = 0
         try {
-            val selection = "${MediaStore.Audio.Media.DATA} = ?"
-            val selectionArgs = arrayOf(filePath)
+            val (selection, selectionArgs) = buildMediaStoreSelection(filePath)
             val cursor = context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 arrayOf(
@@ -193,7 +208,7 @@ class AudioRepositoryImpl @Inject constructor(
 
     private fun readMediaStoreBasicMetadata(filePath: String): AudioMetadata? {
         return runCatching {
-            val selection = "${MediaStore.Audio.Media.DATA} = ?"
+            val (selection, selectionArgs) = buildMediaStoreSelection(filePath)
             val cursor = context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 arrayOf(
@@ -204,7 +219,7 @@ class AudioRepositoryImpl @Inject constructor(
                     MediaStore.Audio.Media.TRACK
                 ),
                 selection,
-                arrayOf(filePath),
+                selectionArgs,
                 null
             )
             // Helper to parse MediaStore TRACK field
@@ -230,6 +245,26 @@ class AudioRepositoryImpl @Inject constructor(
                 )
             }
         }.getOrNull()
+    }
+
+    private fun buildMediaStoreSelection(filePath: String): Pair<String, Array<String>> {
+        val file = File(filePath)
+        val relativePath = getRelativePathFromAbsolute(file.parentFile?.absolutePath.orEmpty())
+        return if (relativePath != null) {
+            "${MediaStore.Audio.Media.DISPLAY_NAME} = ? AND ${MediaStore.Audio.Media.RELATIVE_PATH} = ?" to
+                arrayOf(file.name, relativePath)
+        } else {
+            "${MediaStore.Audio.Media.DISPLAY_NAME} = ?" to arrayOf(file.name)
+        }
+    }
+
+    private fun getRelativePathFromAbsolute(absolutePath: String): String? {
+        val normalized = absolutePath.replace('\\', '/').trimEnd('/')
+        val primaryRoot = Environment.getExternalStorageDirectory().absolutePath
+            .replace('\\', '/').trimEnd('/')
+        if (!normalized.startsWith(primaryRoot)) return null
+        val relative = normalized.removePrefix(primaryRoot).trimStart('/')
+        return if (relative.isBlank()) "" else "$relative/"
     }
 
     private fun mergeWithFallback(

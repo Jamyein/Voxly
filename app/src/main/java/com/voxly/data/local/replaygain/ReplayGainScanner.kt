@@ -19,9 +19,9 @@ import com.voxly.domain.repository.ScanStatus
 import com.voxly.data.local.replaygain.native.EbuR128NativeScanner
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -154,7 +154,6 @@ class ReplayGainScanner @Inject constructor(
                 )
             }
 
-            delay(50)
         }
 
         emit(
@@ -170,7 +169,7 @@ class ReplayGainScanner @Inject constructor(
             "ReplayGain scan finished. files=$totalFiles processed=$processedFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
             "ReplayGainScanner"
         )
-    }
+    }.sample(50)
 
     /**
      * Scans audio files with album grouping.
@@ -326,7 +325,6 @@ class ReplayGainScanner @Inject constructor(
                     )
                 )
 
-                delay(50)
             }
 
             if (trackGains.isNotEmpty()) {
@@ -380,7 +378,7 @@ class ReplayGainScanner @Inject constructor(
             "ReplayGain album scan finished. albums=$totalAlbums files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
             "ReplayGainScanner"
         )
-    }
+    }.sample(50)
 
     /**
      * Analyzes a single audio file using native libebur128 (via JNI).

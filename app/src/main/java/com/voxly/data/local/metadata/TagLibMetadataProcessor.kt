@@ -1491,13 +1491,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 return null
             }
 
-            // Legacy fast path
-            queryBySelection(
-                "${MediaStore.Audio.Media.DATA} = ?",
-                arrayOf(filePath)
-            )?.let { return@runCatching it }
-
-            // Scoped-storage friendly fallback
+            // Scoped-storage friendly lookup
             val file = File(filePath)
             val fileName = file.name
             val relativePath = file.parentFile?.absolutePath

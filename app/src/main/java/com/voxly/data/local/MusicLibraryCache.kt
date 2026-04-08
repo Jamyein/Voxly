@@ -2,7 +2,7 @@ package com.voxly.data.local
 
 import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import android.graphics.ImageDecoder
 import android.net.Uri
 import com.google.gson.Gson
 import com.voxly.data.local.cache.*
@@ -10,7 +10,11 @@ import com.voxly.domain.model.AudioFile
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
@@ -45,6 +49,9 @@ class MusicLibraryCache @Inject constructor(
     private val database: MusicCacheDatabase by lazy { databaseProvider.getDatabase() }
     private val audioFileDao: CachedAudioFileDao by lazy { database.audioFileDao() }
     private val albumThumbnailDao: AlbumThumbnailDao by lazy { database.albumThumbnailDao() }
+
+    private val cacheVersion = MutableStateFlow(0L)
+    val cacheVersionFlow: StateFlow<Long> = cacheVersion.asStateFlow()
     
     // ==================== Audio File Cache Operations ====================
     
@@ -78,6 +85,13 @@ class MusicLibraryCache @Inject constructor(
      */
     suspend fun getCachedFile(filePath: String): AudioFile? = withContext(Dispatchers.IO) {
         audioFileDao.getAudioFileByPath(filePath)?.toAudioFile()
+    }
+
+    /**
+     * Gets raw cached entity for accessing metadata timestamps.
+     */
+    suspend fun getCachedFileEntity(filePath: String): CachedAudioFileEntity? = withContext(Dispatchers.IO) {
+        audioFileDao.getAudioFileByPath(filePath)
     }
     
     /**
@@ -121,6 +135,7 @@ class MusicLibraryCache @Inject constructor(
         
         // Use chunked insert for large libraries
         audioFileDao.insertAllChunked(entities)
+        bumpCacheVersion()
         
         Timber.d(TAG, "Cached ${entities.size} audio files")
     }
@@ -141,6 +156,7 @@ class MusicLibraryCache @Inject constructor(
         )
         
         audioFileDao.insert(entity)
+        bumpCacheVersion()
     }
     
     /**
@@ -148,6 +164,7 @@ class MusicLibraryCache @Inject constructor(
      */
     suspend fun removeFromCache(filePath: String) = withContext(Dispatchers.IO) {
         audioFileDao.deleteByPath(filePath)
+        bumpCacheVersion()
     }
 
     /**
@@ -156,6 +173,7 @@ class MusicLibraryCache @Inject constructor(
     suspend fun removeFromCache(filePaths: List<String>) = withContext(Dispatchers.IO) {
         if (filePaths.isNotEmpty()) {
             audioFileDao.deleteByPaths(filePaths)
+            bumpCacheVersion()
         }
     }
     
@@ -165,6 +183,7 @@ class MusicLibraryCache @Inject constructor(
     suspend fun clearCache() = withContext(Dispatchers.IO) {
         audioFileDao.deleteAll()
         albumThumbnailDao.deleteAll()
+        bumpCacheVersion()
         Timber.d(TAG, "Cache cleared")
     }
     
@@ -202,7 +221,15 @@ class MusicLibraryCache @Inject constructor(
      * Cleans up deleted files from cache.
      */
     suspend fun cleanupDeletedFiles(currentPaths: List<String>): Int = withContext(Dispatchers.IO) {
-        audioFileDao.deleteNotInPaths(currentPaths)
+        val deletedCount = audioFileDao.deleteNotInPaths(currentPaths)
+        if (deletedCount > 0) {
+            bumpCacheVersion()
+        }
+        deletedCount
+    }
+
+    private fun bumpCacheVersion() {
+        cacheVersion.update { current -> current + 1 }
     }
     
     // ==================== Album Thumbnail Cache Operations ====================
@@ -263,25 +290,31 @@ class MusicLibraryCache @Inject constructor(
         sourceUri: String? = null
     ) = withContext(Dispatchers.IO) {
         try {
-            val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return@withContext
-            
-            val scaledBitmap = if (bitmap.width > THUMBNAIL_SIZE || bitmap.height > THUMBNAIL_SIZE) {
-                val ratio = bitmap.width.toFloat() / bitmap.height.toFloat()
-                val (width, height) = if (ratio > 1) {
-                    THUMBNAIL_SIZE to (THUMBNAIL_SIZE / ratio).toInt()
-                } else {
-                    (THUMBNAIL_SIZE * ratio).toInt() to THUMBNAIL_SIZE
-                }
-                Bitmap.createScaledBitmap(bitmap, width, height, true).also {
-                    if (it != bitmap) bitmap.recycle()
-                }
-            } else bitmap
-            
-            cacheAlbumThumbnail(albumId, scaledBitmap, sourceUri)
-            
-            if (scaledBitmap != bitmap) scaledBitmap.recycle()
+            val bitmap = decodeThumbnailBitmap(bytes) ?: return@withContext
+            cacheAlbumThumbnail(albumId, bitmap, sourceUri)
+            bitmap.recycle()
         } catch (e: Exception) {
             Timber.w(TAG, "Failed to cache thumbnail for album $albumId", e)
+        }
+    }
+
+    private fun decodeThumbnailBitmap(bytes: ByteArray): Bitmap? {
+        val source = ImageDecoder.createSource(bytes, 0, bytes.size)
+        return ImageDecoder.decodeBitmap(source) { decoder, info, _ ->
+            val size = info.size
+            val (targetWidth, targetHeight) = calculateTargetSize(size.width, size.height)
+            decoder.setTargetSize(targetWidth, targetHeight)
+        }
+    }
+
+    private fun calculateTargetSize(width: Int, height: Int): Pair<Int, Int> {
+        if (width <= 0 || height <= 0) return THUMBNAIL_SIZE to THUMBNAIL_SIZE
+        if (width <= THUMBNAIL_SIZE && height <= THUMBNAIL_SIZE) return width to height
+        val ratio = width.toFloat() / height.toFloat()
+        return if (ratio > 1f) {
+            THUMBNAIL_SIZE to (THUMBNAIL_SIZE / ratio).toInt().coerceAtLeast(1)
+        } else {
+            (THUMBNAIL_SIZE * ratio).toInt().coerceAtLeast(1) to THUMBNAIL_SIZE
         }
     }
     
