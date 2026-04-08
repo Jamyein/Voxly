@@ -1,7 +1,5 @@
 package com.voxly.presentation.screens.artist
 
-import android.graphics.Bitmap
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,18 +35,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,15 +53,7 @@ import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
-import com.voxly.presentation.ui.loadAlbumArtThumbnail
-import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
-import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
-import coil3.request.crossfade
-import java.io.File
-import com.voxly.data.local.cover.CoverUriProvider
 
 /**
  * Album information for carousel display with year.
@@ -108,6 +93,7 @@ fun ArtistDetailScreen(
     val artistNameState by viewModel.artistName.collectAsState()
     val files by viewModel.files.collectAsState()
     val coverPath by viewModel.coverPath.collectAsState()
+    val coverAlbumId by viewModel.coverAlbumId.collectAsState()
     val albumCovers by viewModel.albumCovers.collectAsState()
     val albumYears by viewModel.albumYears.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -191,10 +177,7 @@ fun ArtistDetailScreen(
                     ) {
                         // Circle Avatar (150dp) with shared element transition
                         // Using AlbumArtImage like ArtistListItem for consistent display
-                        // If coverPath is null, use the same logic as ArtistViewModel: prefer file with mediaStoreAlbumId
-                        val artistCoverPath = coverPath ?: files.firstOrNull { 
-                            it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
-                        }?.path ?: files.firstOrNull()?.path
+                        // Pass both coverPath and coverAlbumId for fallback support
                         Box(
                             modifier = Modifier
                                 .size(150.dp)
@@ -202,9 +185,10 @@ fun ArtistDetailScreen(
                                 .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (!artistCoverPath.isNullOrBlank()) {
+                            if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
                                 AlbumArtImage(
-                                    filePath = artistCoverPath,
+                                    filePath = coverPath,
+                                    albumId = coverAlbumId,
                                     contentDescription = stringResource(R.string.artist_cover),
                                     size = 150.dp,
                                     modifier = Modifier.fillMaxSize()
@@ -376,7 +360,8 @@ fun ArtistDetailScreen(
 }
 
 /**
- * 轮播封面专用图片组件，使用 Coil 3 加载。
+ * 轮播封面专用图片组件。
+ * 简化为 AlbumArtImage 的包装，使用统一的图片加载逻辑和缓存策略。
  */
 @Composable
 fun CarouselAlbumArtImage(
@@ -384,94 +369,18 @@ fun CarouselAlbumArtImage(
     albumId: Long? = null,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    placeholder: @Composable () -> Unit = {}
+    placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = 160.dp) }
 ) {
-    val context = LocalContext.current
-    var fallbackMediaStoreBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var showFallback by remember { mutableStateOf(false) }
-
-    val embeddedBitmap by produceState<Bitmap?>(
-        initialValue = null,
-        key1 = filePath,
-        key2 = 300
-    ) {
-        value = if (!filePath.isNullOrBlank()) {
-            loadAlbumArtThumbnail(context, filePath, 300)
-        } else null
-    }
-
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        when {
-            showFallback && fallbackMediaStoreBitmap != null -> {
-                fallbackMediaStoreBitmap?.let { bitmap ->
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = contentDescription,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
-
-            !filePath.isNullOrBlank() -> {
-                val coverUri = remember(filePath, albumId) {
-                    CoverUriProvider(context).getCoverUri(albumId = albumId, filePath = filePath)
-                }
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalPlatformContext.current)
-                        .data(coverUri ?: File(filePath))
-                        .crossfade(false)
-                        .listener(
-                            onError = { _, _ ->
-                                if (albumId != null && albumId > 0) {
-                                    loadMediaStoreAlbumArt(context, albumId)?.let {
-                                        fallbackMediaStoreBitmap = it
-                                        showFallback = true
-                                    }
-                                }
-                            }
-                        )
-                        .build(),
-                    contentDescription = contentDescription,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-
-            albumId != null && albumId > 0 -> {
-                var msBitmap by remember { mutableStateOf<Bitmap?>(null) }
-                LaunchedEffect(albumId) {
-                    msBitmap = loadMediaStoreAlbumArt(context, albumId)
-                }
-                msBitmap?.let { bitmap ->
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = contentDescription,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } ?: embeddedBitmap?.let { bitmap ->
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = contentDescription,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } ?: placeholder()
-            }
-
-            else -> {
-                embeddedBitmap?.let { bitmap ->
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = contentDescription,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } ?: placeholder()
-            }
-        }
-    }
+    AlbumArtImage(
+        filePath = filePath,
+        albumId = albumId,
+        contentDescription = contentDescription,
+        modifier = modifier,
+        size = 160.dp,
+        contentScale = ContentScale.Crop,
+        crossfade = false,
+        placeholder = placeholder
+    )
 }
 
 /**

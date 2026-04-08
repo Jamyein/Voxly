@@ -54,6 +54,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private val _coverPath = MutableStateFlow<String?>(null)
     val coverPath: StateFlow<String?> = _coverPath.asStateFlow()
 
+    private val _coverAlbumId = MutableStateFlow<Long?>(null)
+    val coverAlbumId: StateFlow<Long?> = _coverAlbumId.asStateFlow()
+
     private val _albumCovers = MutableStateFlow<Map<String, String?>>(emptyMap())
     val albumCovers: StateFlow<Map<String, String?>> = _albumCovers.asStateFlow()
 
@@ -86,6 +89,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     _artistName.value = cachedArtist.name
                     _files.value = cachedArtist.files
                     _coverPath.value = cachedArtist.coverPath
+                    _coverAlbumId.value = cachedArtist.files.firstOrNull { 
+                        it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
+                    }?.mediaStoreAlbumId
                     calculateStats(cachedArtist.files)
                     precomputeAlbumCovers(cachedArtist.files)
                     loadAlbumYears(cachedArtist.files)
@@ -120,6 +126,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
         _artistName.value = artistName
         _files.value = files
         _coverPath.value = coverPath
+        _coverAlbumId.value = files.firstOrNull { 
+            it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
+        }?.mediaStoreAlbumId
         calculateStats(files)
         precomputeAlbumCovers(files)
         loadAlbumYears(files)
