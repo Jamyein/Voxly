@@ -274,6 +274,7 @@ internal fun AlbumTabContent(
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .padding(end = 4.dp),
+                    showBubble = true,
                     bubbleFormatter = { index ->
                         albums.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
                     }
@@ -425,11 +426,7 @@ internal fun AlbumYearGroupedContent(
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 4.dp),
-            bubbleFormatter = { index ->
-                yearGroups.getOrNull(index)?.let { group ->
-                    if (group.year == 0) "N/A" else group.year.toString()
-                } ?: "#"
-            }
+            showBubble = false
         )
     }
 }

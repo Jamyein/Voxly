@@ -92,7 +92,16 @@ fun M3EScrollbar(
     if (contentSize <= 0 || viewportSize <= 0) return
 
     val scrollRange = (contentSize - viewportSize).coerceAtLeast(1)
-    val scrollProgress = (scrollOffset.toFloat() / scrollRange).coerceIn(0f, 1f)
+    
+    // Fraction for scroll position - use derivedStateOf to ensure reactivity
+    val scrollFraction by remember(contentSize, viewportSize, scrollOffset) {
+        derivedStateOf {
+            if (scrollRange > 0) (scrollOffset.toFloat() / scrollRange).coerceIn(0f, 1f) else 0f
+        }
+    }
+    
+    // Real-time scroll progress based on actual scroll fraction
+    val scrollProgress = scrollFraction
 
     // Smart auto-hide
     LaunchedEffect(state.isScrollInProgress, isDragging) {
@@ -167,13 +176,6 @@ fun M3EScrollbar(
         ),
         label = "scrollbar_alpha"
     )
-
-    // Fraction for scroll position (used by both thumb position and index calculation)
-    val scrollFraction by remember(contentSize, viewportSize, scrollOffset) {
-        derivedStateOf {
-            if (scrollRange > 0) (scrollOffset.toFloat() / scrollRange).coerceIn(0f, 1f) else 0f
-        }
-    }
 
     // Current index for bubble text
     val currentIndex: Int by remember(state, isDragging, dragY, maxThumbOffset) {

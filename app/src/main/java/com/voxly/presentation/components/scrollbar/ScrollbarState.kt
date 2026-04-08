@@ -198,13 +198,27 @@ class LazyGridScrollbarState(
         val layoutInfo = gridState.layoutInfo
         if (layoutInfo.totalItemsCount == 0) return 0
         
-        // Grid size is (rows * avgRowHeight)
-        val spanCount = if (layoutInfo.visibleItemsInfo.isNotEmpty()) {
-            layoutInfo.visibleItemsInfo.groupBy { it.row }.values.first().size
-        } else 1
-        val rowCount = (layoutInfo.totalItemsCount + spanCount - 1) / spanCount
+        val visibleItems = layoutInfo.visibleItemsInfo
+        if (visibleItems.isEmpty()) {
+            // Fallback: estimate based on first item size if available
+            return layoutInfo.totalItemsCount * 200 // rough estimate
+        }
         
-        return calculateAvgItemHeight() * rowCount
+        // Calculate rows more accurately
+        val firstItem = visibleItems.first()
+        val lastItem = visibleItems.last()
+        val visibleRows = (lastItem.row - firstItem.row + 1).coerceAtLeast(1)
+        val avgRowHeight = if (visibleRows > 1) {
+            (lastItem.offset.y + lastItem.size.height - firstItem.offset.y) / (visibleRows - 1)
+        } else {
+            visibleItems.maxOf { it.size.height }
+        }
+        
+        // Calculate total rows
+        val spanCount = visibleItems.groupBy { it.row }.values.firstOrNull()?.size ?: 1
+        val totalRows = (layoutInfo.totalItemsCount + spanCount - 1) / spanCount
+        
+        return avgRowHeight * totalRows
     }
 
     private fun calculateViewportSize(): Int {
