@@ -179,9 +179,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
     // 使用 Kotlin 2.3.10 配合 Compose alpha 版本
-    implementation("androidx.compose.animation:animation:1.11.0-beta02")
-    implementation("androidx.compose.animation:animation-core:1.11.0-beta02")
-    implementation("androidx.compose.animation:animation-graphics:1.11.0-beta02")
+    implementation("androidx.compose.animation:animation:1.11.0-rc01")
+    implementation("androidx.compose.animation:animation-core:1.11.0-rc01")
+    implementation("androidx.compose.animation:animation-graphics:1.11.0-rc01")
     // Material3 Alpha 版本 - 覆盖 BOM 中的稳定版以使用最新特性
     implementation("androidx.compose.material3:material3:1.5.0-alpha16")
     // Material Design 3 Expressive - RoundedPolygon 形状支持
@@ -195,7 +195,7 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     // Google Fonts - Variable Font支持 (使用Compose BOM中的版本)
-    implementation("androidx.compose.ui:ui-text-google-fonts:1.11.0-beta02")
+    implementation("androidx.compose.ui:ui-text-google-fonts:1.11.0-rc01")
     implementation("androidx.appcompat:appcompat:1.7.1")
 
     // Navigation 3 - 使用新的导航架构解决退出页面点击穿透问题
@@ -239,7 +239,7 @@ dependencies {
     implementation("com.google.code.gson:gson:2.13.2")
 
     // Kotlinx Serialization for type-safe serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     // Retrofit Kotlinx Serialization Converter
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
