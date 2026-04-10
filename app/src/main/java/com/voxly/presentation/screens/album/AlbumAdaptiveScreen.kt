@@ -10,6 +10,7 @@ import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,15 +52,26 @@ fun AlbumAdaptiveScreen(
     val scaffoldValue = navigator.scaffoldValue
     val isSinglePane = scaffoldValue.primary == PaneAdaptedValue.Hidden
 
+    val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
+
+    // Guard against scaffold restoring a detail destination that would hide the list pane
+    // when NavDisplay has already taken over detail navigation (e.g. after returning from
+    // AlbumDetail). This ensures the album grid is always visible on single-pane layouts.
+    LaunchedEffect(Unit) {
+        if (navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden && navigator.currentDestination != null) {
+            navigator.navigateBack()
+        }
+    }
+
     // Handle system back gesture/button for internal scaffold navigation
     // This intercepts back before NavHost's PredictiveBackHandler when detail pane has content
-    PredictiveBackHandler(enabled = selectedFileForEditing != null || navigator.currentDestination != null) { progress ->
+    PredictiveBackHandler(enabled = selectedFileForEditing != null || canCloseDetailPane) { progress ->
         try {
             progress.collect { }
             if (selectedFileForEditing != null) {
                 selectedFileForEditing = null
                 fileSwitchCounter++
-            } else if (navigator.currentDestination != null) {
+            } else if (canCloseDetailPane) {
                 coroutineScope.launch {
                     navigator.navigateBack()
                 }
