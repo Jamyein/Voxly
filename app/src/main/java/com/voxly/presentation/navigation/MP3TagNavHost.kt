@@ -647,15 +647,11 @@ private fun ArtistDetailEntry(key: ArtistDetail, backStack: SnapshotStateList<Na
     )
 }
 
-@Suppress("UNCHECKED_CAST")
-private val Scene<*>.navKey: NavKey
-    get() = entries.last().contentKey as NavKey
-
-private fun <T : Any> AnimatedContentTransitionScope<Scene<T>>.computeTransition(
+private fun AnimatedContentTransitionScope<Scene<NavKey>>.computeTransition(
     isPush: Boolean
 ): androidx.compose.animation.ContentTransform {
-    val from = initialState.navKey
-    val to = targetState.navKey
+    val from = initialState.key
+    val to = targetState.key
     val isMainToMain = isMainScreenKey(from) && isMainScreenKey(to)
 
     return if (isMainToMain) {
