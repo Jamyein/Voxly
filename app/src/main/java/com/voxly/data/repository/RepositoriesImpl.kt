@@ -77,14 +77,26 @@ class AudioRepositoryImpl @Inject constructor(
                     cachedEntity.fileLastModifiedAt == fileLastModified
 
                 if (cachedFile != null && isFileUnchanged && !includeAlbumArt) {
-                    return@withContext Result.success(cachedFile)
+                    val completeMetadata = metadataProcessor.readAllMetadata(
+                        filePath,
+                        includeAlbumArt = false,
+                        bypassCache = true
+                    )
+                    val mergedMeta = if (completeMetadata?.metadata != null) {
+                        mergeWithFallback(completeMetadata.metadata, cachedFile.metadata)
+                            ?: completeMetadata.metadata
+                    } else {
+                        cachedFile.metadata
+                    }
+                    val resultFile = cachedFile.copy(metadata = mergedMeta)
+                    return@withContext Result.success(resultFile)
                 }
 
                 if (cachedFile != null && isFileUnchanged && includeAlbumArt) {
                     val completeMetadata = metadataProcessor.readAllMetadata(
                         filePath,
                         includeAlbumArt = true,
-                        bypassCache = false
+                        bypassCache = true
                     )
                     val mergedMeta = if (completeMetadata?.metadata != null) {
                         mergeWithFallback(completeMetadata.metadata, cachedFile.metadata)
@@ -278,8 +290,21 @@ class AudioRepositoryImpl @Inject constructor(
             title = primary.title.takeIf { !it.isNullOrBlank() } ?: fallback.title,
             artist = primary.artist.takeIf { !it.isNullOrBlank() } ?: fallback.artist,
             album = primary.album.takeIf { !it.isNullOrBlank() } ?: fallback.album,
+            albumArtist = primary.albumArtist.takeIf { !it.isNullOrBlank() } ?: fallback.albumArtist,
             year = primary.year.takeIf { !it.isNullOrBlank() } ?: fallback.year,
-            trackNumber = primary.trackNumber ?: fallback.trackNumber
+            genre = primary.genre.takeIf { !it.isNullOrBlank() } ?: fallback.genre,
+            trackNumber = primary.trackNumber ?: fallback.trackNumber,
+            totalTracks = primary.totalTracks ?: fallback.totalTracks,
+            discNumber = primary.discNumber ?: fallback.discNumber,
+            totalDiscs = primary.totalDiscs ?: fallback.totalDiscs,
+            composer = primary.composer.takeIf { !it.isNullOrBlank() } ?: fallback.composer,
+            lyricist = primary.lyricist.takeIf { !it.isNullOrBlank() } ?: fallback.lyricist,
+            conductor = primary.conductor.takeIf { !it.isNullOrBlank() } ?: fallback.conductor,
+            originalArtist = primary.originalArtist.takeIf { !it.isNullOrBlank() } ?: fallback.originalArtist,
+            comment = primary.comment.takeIf { !it.isNullOrBlank() } ?: fallback.comment,
+            lyrics = primary.lyrics.takeIf { !it.isNullOrBlank() } ?: fallback.lyrics,
+            albumArt = primary.albumArt ?: fallback.albumArt,
+            customFields = primary.customFields.takeIf { it.isNotEmpty() } ?: fallback.customFields
         )
     }
 
