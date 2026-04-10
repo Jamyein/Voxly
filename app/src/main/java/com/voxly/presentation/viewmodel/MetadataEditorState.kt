@@ -33,7 +33,8 @@ enum class MetadataField {
     LYRICIST,
     CONDUCTOR,
     COMMENT,
-    LYRICS
+    LYRICS,
+    ALBUM_ART
 }
 
 /**

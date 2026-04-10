@@ -86,7 +86,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
     private val unifiedScanManager: UnifiedScanManager,
-    private val searchSeedHolder: SearchSeedHolder
+    private val searchSeedHolder: SearchSeedHolder,
+    private val pendingMetadataHolder: PendingMetadataHolder
 ) : ViewModel() {
 
     private val TAG = "MetadataEditorVM"
@@ -239,6 +240,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             _pendingReplayGainInfo.value = replayGainInfo
                         }
                     }
+                    
+                    // 检查并应用待处理的在线元数据
+                    tryApplyPendingOnlineMetadata()
                 },
                 onFailure = { error ->
                     _uiState.value = MetadataEditorUiState.Error(
@@ -298,6 +302,11 @@ class MetadataEditorViewModel @AssistedInject constructor(
             MetadataField.CONDUCTOR -> currentMetadata.copy(conductor = nonBlankValue)
             MetadataField.COMMENT -> currentMetadata.copy(comment = nonBlankValue)
             MetadataField.LYRICS -> currentMetadata.copy(lyrics = value)
+            MetadataField.ALBUM_ART -> {
+                // ALBUM_ART is handled by updateAlbumArt() which takes ByteArray, not String
+                Logger.w("updateMetadataField called for ALBUM_ART with String value, ignoring. Use updateAlbumArt() instead.", "MetadataEditor")
+                currentMetadata
+            }
         }
 
         setEditedMetadata(updatedMetadata, modifiedField = field)
@@ -345,6 +354,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     private fun setEditedMetadata(updatedMetadata: AudioMetadata, modifiedField: MetadataField? = null) {
+        Logger.d("setEditedMetadata: updating editedMetadata, new title=${updatedMetadata.title}", "MetadataEditor")
         _editedMetadata.value = updatedMetadata
         _hasUnsavedChanges.value = true
         if (modifiedField != null) {
@@ -361,6 +371,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
         val currentState = _uiState.value
         if (currentState is MetadataEditorUiState.Success) {
+            Logger.d("setEditedMetadata: updating uiState with new metadata", "MetadataEditor")
             _uiState.value = currentState.copy(editedMetadata = updatedMetadata)
         }
     }
@@ -1029,21 +1040,89 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     fun applyOnlineMetadata(metadata: AudioMetadata) {
-        val currentMetadata = _editedMetadata.value ?: return
+        applyOnlineMetadataInternal(metadata)
+    }
+
+    /**
+     * 检查并从 PendingMetadataHolder 中消费待处理的在线元数据。
+     * 应在屏幕进入时调用（如 MetadataEditorScreen 的 LaunchedEffect(Unit) 中）。
+     */
+    fun tryApplyPendingOnlineMetadata() {
+        val pending = pendingMetadataHolder.consume(filePath) ?: return
+        Logger.d("tryApplyPendingOnlineMetadata: applying pending metadata for $filePath", "MetadataEditor")
+        applyOnlineMetadataInternal(pending)
+    }
+
+    private fun applyOnlineMetadataInternal(metadata: AudioMetadata) {
+        val currentMetadata = _editedMetadata.value ?: run {
+            Logger.w("applyOnlineMetadata: _editedMetadata is null, cannot apply", "MetadataEditor")
+            return
+        }
+        Logger.d("applyOnlineMetadata: current title=${currentMetadata.title}, new title=${metadata.title}", "MetadataEditor")
+
+        // Track which fields are being modified
+        val modifiedFields = mutableSetOf<MetadataField>()
+
+        // 在线源在字段缺失时可能用 "Unknown" 等占位文本填充，回填时应视为无效值
+        fun String?.isValidValue(): Boolean {
+            if (this.isNullOrBlank()) return false
+            val lower = this.trim().lowercase()
+            return lower !in setOf(
+                "unknown", "unknown artist", "unknown album", "unknown track",
+                "0", "null", "n/a", "tbd", "-"
+            )
+        }
+
+        // 过滤掉只有时间戳壳的空歌词（如 [00:00.000]\n[00:01.000]）
+        fun String?.isMeaningfulLyrics(): Boolean {
+            if (this.isNullOrBlank()) return false
+            val cleaned = this.replace(Regex("""\[\d{2}:\d{2}\.\d{2,3}\]"""), "")
+                .replace(Regex("""\[\d{2}:\d{2}\]"""), "")
+                .replace(Regex("""\[ti:.*?\]|\[ar:.*?\]|\[al:.*?\]"""), "")
+                .trim()
+            return cleaned.isNotBlank()
+        }
+
         val updatedMetadata = currentMetadata.copy(
-            title = metadata.title ?: currentMetadata.title,
-            artist = metadata.artist ?: currentMetadata.artist,
-            album = metadata.album ?: currentMetadata.album,
-            albumArtist = metadata.albumArtist ?: currentMetadata.albumArtist,
-            year = metadata.year ?: currentMetadata.year,
-            genre = metadata.genre ?: currentMetadata.genre,
-            trackNumber = metadata.trackNumber ?: currentMetadata.trackNumber,
-            totalTracks = metadata.totalTracks ?: currentMetadata.totalTracks,
-            lyrics = metadata.lyrics ?: currentMetadata.lyrics,
+            title = metadata.title.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.title) modifiedFields.add(MetadataField.TITLE) } ?: currentMetadata.title,
+            artist = metadata.artist.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.artist) modifiedFields.add(MetadataField.ARTIST) } ?: currentMetadata.artist,
+            album = metadata.album.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.album) modifiedFields.add(MetadataField.ALBUM) } ?: currentMetadata.album,
+            albumArtist = metadata.albumArtist.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.albumArtist) modifiedFields.add(MetadataField.ALBUM_ARTIST) } ?: currentMetadata.albumArtist,
+            year = metadata.year?.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.year) modifiedFields.add(MetadataField.YEAR) } ?: currentMetadata.year,
+            genre = metadata.genre.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.genre) modifiedFields.add(MetadataField.GENRE) } ?: currentMetadata.genre,
+            trackNumber = metadata.trackNumber?.takeIf { it > 0 } ?: currentMetadata.trackNumber,
+            totalTracks = metadata.totalTracks?.takeIf { it > 0 } ?: currentMetadata.totalTracks,
+            discNumber = metadata.discNumber?.takeIf { it > 0 } ?: currentMetadata.discNumber,
+            totalDiscs = metadata.totalDiscs?.takeIf { it > 0 } ?: currentMetadata.totalDiscs,
+            comment = metadata.comment.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.comment) modifiedFields.add(MetadataField.COMMENT) } ?: currentMetadata.comment,
+            lyrics = metadata.lyrics.takeIf { it.isValidValue() && it.isMeaningfulLyrics() }?.also { if (it != currentMetadata.lyrics) modifiedFields.add(MetadataField.LYRICS) } ?: currentMetadata.lyrics,
             albumArt = metadata.albumArt ?: currentMetadata.albumArt
+        ).also {
+            if (metadata.albumArt != null && metadata.albumArt != currentMetadata.albumArt) {
+                modifiedFields.add(MetadataField.ALBUM_ART)
+            }
+        }
+        
+        Logger.d("applyOnlineMetadata: setting edited metadata, title=${updatedMetadata.title}, modifiedFields=$modifiedFields", "MetadataEditor")
+        
+        _editedMetadata.value = updatedMetadata
+        _hasUnsavedChanges.value = true
+        _modifiedFields.value = _modifiedFields.value + modifiedFields
+
+        // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
+        searchSeedHolder.updateSeed(
+            filePath = filePath,
+            title = updatedMetadata.title.orEmpty(),
+            artist = updatedMetadata.artist,
+            album = updatedMetadata.album
         )
 
-        setEditedMetadata(updatedMetadata)
+        // 更新 uiState
+        val currentUiState = _uiState.value
+        if (currentUiState is MetadataEditorUiState.Success) {
+            Logger.d("applyOnlineMetadata: updating uiState with new metadata", "MetadataEditor")
+            _uiState.value = currentUiState.copy(editedMetadata = updatedMetadata)
+        }
     }
 
     /**

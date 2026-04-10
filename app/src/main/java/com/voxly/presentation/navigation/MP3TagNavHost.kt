@@ -63,6 +63,7 @@ import com.voxly.presentation.viewmodel.OnlineMetadataViewModel
 import com.voxly.presentation.viewmodel.ReplayGainViewModel
 import com.voxly.presentation.theme.ExpressiveAnimations
 import kotlinx.coroutines.CancellationException
+import timber.log.Timber
 
 /**
  * Main navigation host for the MP3 Tag Editor app using Navigation3.
@@ -92,8 +93,7 @@ fun MP3TagNavHost() {
         mutableStateListOf<Any>(FileBrowser)
     }
 
-    // Pending data for cross-screen communication
-    var pendingMetadata by remember { mutableStateOf<AudioMetadata?>(null) }
+    // Pending data for cross-screen communication (lyrics / cover art only)
     var pendingLyrics by remember { mutableStateOf<String?>(null) }
     var pendingCoverArt by remember { mutableStateOf<ByteArray?>(null) }
 
@@ -292,9 +292,6 @@ fun MP3TagNavHost() {
                             targetKey = targetKey,
                             backStack = backStack,
                             libraryViewModel = libraryViewModel,
-                            pendingMetadata = pendingMetadata,
-                            onPendingMetadataConsumed = { pendingMetadata = null },
-                            onPendingMetadataSet = { pendingMetadata = it },
                             pendingLyrics = pendingLyrics,
                             onPendingLyricsConsumed = { pendingLyrics = null },
                             onPendingLyricsSet = { pendingLyrics = it },
@@ -414,9 +411,6 @@ private fun RenderSubScreen(
     targetKey: Any?,
     backStack: MutableList<Any>,
     libraryViewModel: LibraryViewModel,
-    pendingMetadata: AudioMetadata?,
-    onPendingMetadataConsumed: () -> Unit,
-    onPendingMetadataSet: (AudioMetadata) -> Unit,
     pendingLyrics: String?,
     onPendingLyricsConsumed: () -> Unit,
     onPendingLyricsSet: (String) -> Unit,
@@ -487,8 +481,6 @@ private fun RenderSubScreen(
                         album = album
                     ))
                 },
-                pendingOnlineMetadata = pendingMetadata,
-                onConsumePendingOnlineMetadata = onPendingMetadataConsumed,
                 pendingOnlineLyrics = pendingLyrics,
                 onConsumePendingOnlineLyrics = onPendingLyricsConsumed,
                 pendingOnlineCoverArt = pendingCoverArt,
@@ -520,8 +512,9 @@ private fun RenderSubScreen(
                 viewModel = viewModel,
                 onNavigateBack = { backStack.removeLastOrNull() },
                 onApplyMetadata = { metadata ->
-                    onPendingMetadataSet(metadata)
+                    Timber.d("MP3TagNavHost: onApplyMetadata called, title=${metadata.title}")
                     backStack.removeLastOrNull()
+                    Timber.d("MP3TagNavHost: backStack popped, size=${backStack.size}")
                 }
             )
         }

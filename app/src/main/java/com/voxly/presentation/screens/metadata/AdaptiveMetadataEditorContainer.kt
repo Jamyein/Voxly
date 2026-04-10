@@ -18,8 +18,6 @@ fun AdaptiveMetadataEditorContainer(
     viewModel: MetadataEditorViewModel,
     coverTag: String? = null,
     sharedElementKey: String? = null,
-    pendingOnlineMetadata: AudioMetadata? = null,
-    onConsumePendingOnlineMetadata: () -> Unit = {},
     pendingOnlineLyrics: String? = null,
     onConsumePendingOnlineLyrics: () -> Unit = {},
     onNavigateBack: () -> Unit,
@@ -38,8 +36,6 @@ fun AdaptiveMetadataEditorContainer(
         onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
         onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
         onNavigateToLyricsSelector = onNavigateToLyricsSelector,
-        pendingOnlineMetadata = pendingOnlineMetadata,
-        onConsumePendingOnlineMetadata = onConsumePendingOnlineMetadata,
         pendingOnlineLyrics = pendingOnlineLyrics,
         onConsumePendingOnlineLyrics = onConsumePendingOnlineLyrics
     )

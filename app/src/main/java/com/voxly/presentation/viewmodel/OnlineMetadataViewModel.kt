@@ -54,7 +54,8 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val lyricsRepository: LyricsRepository,
     private val settingsDataStore: SettingsDataStore,
-    private val searchSeedHolder: SearchSeedHolder
+    private val searchSeedHolder: SearchSeedHolder,
+    private val pendingMetadataHolder: PendingMetadataHolder
 ) : ViewModel() {
 
     private val filePath: String = navKey.filePath
@@ -101,13 +102,8 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     private val _isCoverArtTimeout = MutableStateFlow(false)
     val isCoverArtTimeout: StateFlow<Boolean> = _isCoverArtTimeout.asStateFlow()
 
-    // 用于跟踪是否已经为当前选择触发了应用操作
+    // 标记是否已为当前选择应用过元数据（防止 LaunchedEffect 多次触发）
     private val _hasAppliedForCurrentSelection = MutableStateFlow(false)
-    val hasAppliedForCurrentSelection: StateFlow<Boolean> = _hasAppliedForCurrentSelection.asStateFlow()
-
-    // 用于跟踪上次应用的选择ID
-    private val _lastAppliedSelectionId = MutableStateFlow<String?>(null)
-    val lastAppliedSelectionId: StateFlow<String?> = _lastAppliedSelectionId.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -528,9 +524,8 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     fun selectRelease(release: OnlineRelease) {
         Timber.d("selectRelease called: id=${release.id}, title=${release.title}, source=${release.source}")
 
-        // 重置应用状态跟踪
+        // 重置应用状态，允许新的选择触发自动回填
         _hasAppliedForCurrentSelection.value = false
-        _lastAppliedSelectionId.value = null
 
         // Cancel previous release selection coroutines before starting new ones
         activeSelectReleaseJob?.cancel()
@@ -675,27 +670,18 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     }
 
     fun applyMetadata(): AudioMetadata? {
-        val details = _selectedRelease.value
-        val candidate = _selectedReleaseCandidate.value
-        
-        // 检查是否已经应用过当前选择
-        val currentSelectionId = candidate?.id
-        if (currentSelectionId != null && currentSelectionId == _lastAppliedSelectionId.value) {
-            Timber.d("applyMetadata: already applied for selection $currentSelectionId, skipping")
+        if (_hasAppliedForCurrentSelection.value) {
+            Timber.d("applyMetadata: already applied for current selection, skipping")
             return null
         }
-        
-        // 标记为已应用
-        if (currentSelectionId != null) {
-            _hasAppliedForCurrentSelection.value = true
-            _lastAppliedSelectionId.value = currentSelectionId
-        }
+
+        val details = _selectedRelease.value
+        val candidate = _selectedReleaseCandidate.value
         
         val asyncLyrics = getSyncedLyricsForSelected()
         val albumArt = _downloadedAlbumArt.value
 
-        // 详情存在时使用详情，详情不存在时使用候选，二选一不混合
-        return if (details != null) {
+        val result = if (details != null) {
             AudioMetadata(
                 title = details.tracks.find { it.number == 1 }?.title ?: details.title,
                 artist = details.artist,
@@ -703,7 +689,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                 albumArtist = details.artist,
                 year = details.year?.toString(),
                 genre = details.genre,
-                trackNumber = details.tracks.firstOrNull()?.number ?: 1,
+                trackNumber = details.tracks.firstOrNull()?.number,
                 totalTracks = details.trackCount,
                 discNumber = details.tracks.firstOrNull()?.discNumber ?: details.discNumber,
                 totalDiscs = details.discCount,
@@ -726,7 +712,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                 albumArtist = candidate.artist,
                 year = candidate.year?.toString(),
                 genre = candidate.genre,
-                trackNumber = candidate.trackNumber ?: 1,
+                trackNumber = candidate.trackNumber,
                 totalTracks = candidate.trackCount,
                 discNumber = candidate.discNumber,
                 totalDiscs = candidate.discCount,
@@ -738,6 +724,14 @@ class OnlineMetadataViewModel @AssistedInject constructor(
         } else {
             null
         }
+
+        if (result != null) {
+            _hasAppliedForCurrentSelection.value = true
+            pendingMetadataHolder.put(filePath, result)
+            Timber.d("applyMetadata: marked current selection as applied and stored pending metadata")
+        }
+
+        return result
     }
 
     fun clearSelection() {

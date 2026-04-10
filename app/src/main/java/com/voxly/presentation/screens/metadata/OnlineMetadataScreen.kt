@@ -79,24 +79,23 @@ fun OnlineMetadataScreen(
     val errorMessage by viewModel.errorMessage.collectAsState()
     val downloadedAlbumArt by viewModel.downloadedAlbumArt.collectAsState()
     val isCoverArtTimeout by viewModel.isCoverArtTimeout.collectAsState()
-    val hasAppliedForCurrentSelection by viewModel.hasAppliedForCurrentSelection.collectAsState()
-    val lastAppliedSelectionId by viewModel.lastAppliedSelectionId.collectAsState()
 
     // Auto-apply metadata when release or candidate is selected, and cover art is downloaded
     // Wait for cover art to be downloaded before applying (if cover is available)
     // If cover download times out, apply metadata without cover
-    LaunchedEffect(selectedRelease, selectedReleaseCandidate, downloadedAlbumArt, isCoverArtTimeout, hasAppliedForCurrentSelection) {
+    // Note: This LaunchedEffect runs once per selection because selectedReleaseCandidate 
+    // changes only when user clicks a different item
+    LaunchedEffect(selectedRelease, selectedReleaseCandidate, downloadedAlbumArt, isCoverArtTimeout) {
         val release = selectedRelease
         val candidate = selectedReleaseCandidate
         val albumArt = downloadedAlbumArt
         val isTimeout = isCoverArtTimeout
-        val currentSelectionId = candidate?.id
 
         // Apply when we have release details OR candidate selected
         // If candidate has cover art URL, wait until it's downloaded OR timeout
         val candidateHasCover = candidate?.coverArtUrl != null
         val isCoverDownloaded = !candidateHasCover || albumArt != null || isTimeout
-        if ((release != null || candidate != null) && !hasAppliedForCurrentSelection && isCoverDownloaded) {
+        if ((release != null || candidate != null) && isCoverDownloaded) {
             viewModel.applyMetadata()?.let { metadata ->
                 Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}, hasCover=${metadata.albumArt != null}")
                 onApplyMetadata(metadata)
