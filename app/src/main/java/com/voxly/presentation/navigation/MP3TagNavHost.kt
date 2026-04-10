@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import com.voxly.R
 import com.voxly.core.util.LogManager
@@ -103,13 +104,13 @@ fun MP3TagNavHost() {
                 onBack = { backStack.removeLastOrNull() },
                 sharedTransitionScope = sharedTransitionScope,
                 transitionSpec = {
-                    computeTransition(initialState as Any, targetState as Any, isPush = true)
+                    computeTransition(isPush = true)
                 },
                 popTransitionSpec = {
-                    computeTransition(initialState as Any, targetState as Any, isPush = false)
+                    computeTransition(isPush = false)
                 },
                 predictivePopTransitionSpec = {
-                    computeTransition(initialState as Any, targetState as Any, isPush = false)
+                    computeTransition(isPush = false)
                 },
                 entryProvider = entryProvider<NavKey> {
                     entry<FileBrowser> {
@@ -614,14 +615,18 @@ private fun ArtistDetailEntry(key: ArtistDetail, backStack: SnapshotStateList<Na
     )
 }
 
-private fun AnimatedContentTransitionScope<*>.computeTransition(
-    initialState: Any,
-    targetState: Any,
+@Suppress("UNCHECKED_CAST")
+private val Scene<*>.navKey: NavKey
+    get() = entries.last().contentKey as NavKey
+
+private fun <T : Any> AnimatedContentTransitionScope<Scene<T>>.computeTransition(
     isPush: Boolean
 ): androidx.compose.animation.ContentTransform {
-    val isMainToMain = isMainScreenKey(initialState) && isMainScreenKey(targetState)
-    val isContainerTransform = initialState is AlbumDetail || initialState is ArtistDetail || initialState is MetadataEditor ||
-        targetState is AlbumDetail || targetState is ArtistDetail || targetState is MetadataEditor
+    val from = initialState.navKey
+    val to = targetState.navKey
+    val isMainToMain = isMainScreenKey(from) && isMainScreenKey(to)
+    val isContainerTransform = from is AlbumDetail || from is ArtistDetail || from is MetadataEditor ||
+        to is AlbumDetail || to is ArtistDetail || to is MetadataEditor
 
     return when {
         isMainToMain -> ExpressiveAnimations.FadeThroughEnter togetherWith ExpressiveAnimations.FadeThroughExit
@@ -632,7 +637,7 @@ private fun AnimatedContentTransitionScope<*>.computeTransition(
             ExpressiveAnimations.ContainerTransformPopEnter togetherWith ExpressiveAnimations.ContainerTransformPopExit
         }
 
-        targetState is LogViewer || targetState is ScanDirectorySettings -> if (isPush) {
+        to is LogViewer || to is ScanDirectorySettings -> if (isPush) {
             ExpressiveAnimations.SharedAxisXEnter togetherWith ExpressiveAnimations.SharedAxisXExit
         } else {
             ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
