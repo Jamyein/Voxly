@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
+import androidx.navigation3.runtime.metadata
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.ui.NavDisplay
 import com.voxly.R
@@ -76,6 +77,30 @@ import timber.log.Timber
  * 4. Per-entry transitions mapped to NavDisplay transitionSpec / metadata
  * 5. Predictive back handled natively by NavDisplay via onBack
  */
+private val containerTransformMetadata = metadata {
+    put(NavDisplay.TransitionKey) {
+        ExpressiveAnimations.ContainerTransformEnter togetherWith ExpressiveAnimations.ContainerTransformExit
+    }
+    put(NavDisplay.PopTransitionKey) {
+        ExpressiveAnimations.ContainerTransformPopEnter togetherWith ExpressiveAnimations.ContainerTransformPopExit
+    }
+    put(NavDisplay.PredictivePopTransitionKey) {
+        ExpressiveAnimations.ContainerTransformPopEnter togetherWith ExpressiveAnimations.ContainerTransformPopExit
+    }
+}
+
+private val sharedAxisXMetadata = metadata {
+    put(NavDisplay.TransitionKey) {
+        ExpressiveAnimations.SharedAxisXEnter togetherWith ExpressiveAnimations.SharedAxisXExit
+    }
+    put(NavDisplay.PopTransitionKey) {
+        ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
+    }
+    put(NavDisplay.PredictivePopTransitionKey) {
+        ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
+    }
+}
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalMaterial3ExpressiveApi::class,
@@ -205,7 +230,8 @@ fun MP3TagNavHost() {
                     }
 
                     entry<MetadataEditor>(
-                        clazzContentKey = { key -> "MetadataEditor_${key.filePath}" }
+                        clazzContentKey = { key -> "MetadataEditor_${key.filePath}" },
+                        metadata = containerTransformMetadata
                     ) { key ->
                         SharedTransitionWrapper(sharedTransitionScope) {
                             MetadataEditorEntry(
@@ -268,7 +294,8 @@ fun MP3TagNavHost() {
                     }
 
                     entry<AlbumDetail>(
-                        clazzContentKey = { key -> "AlbumDetail_${key.albumName}_${key.albumArtist}" }
+                        clazzContentKey = { key -> "AlbumDetail_${key.albumName}_${key.albumArtist}" },
+                        metadata = containerTransformMetadata
                     ) { key ->
                         SharedTransitionWrapper(sharedTransitionScope) {
                             AlbumDetailEntry(key, backStack)
@@ -276,14 +303,17 @@ fun MP3TagNavHost() {
                     }
 
                     entry<ArtistDetail>(
-                        clazzContentKey = { key -> "ArtistDetail_${key.artistName}" }
+                        clazzContentKey = { key -> "ArtistDetail_${key.artistName}" },
+                        metadata = containerTransformMetadata
                     ) { key ->
                         SharedTransitionWrapper(sharedTransitionScope) {
                             ArtistDetailEntry(key, backStack)
                         }
                     }
 
-                    entry<ScanDirectorySettings> {
+                    entry<ScanDirectorySettings>(
+                        metadata = sharedAxisXMetadata
+                    ) {
                         SharedTransitionWrapper(sharedTransitionScope) {
                             com.voxly.presentation.screens.ScanDirectorySettingsScreen(
                                 onNavigateBack = { backStack.removeLastOrNull() }
@@ -291,7 +321,9 @@ fun MP3TagNavHost() {
                         }
                     }
 
-                    entry<LogViewer> {
+                    entry<LogViewer>(
+                        metadata = sharedAxisXMetadata
+                    ) {
                         SharedTransitionWrapper(sharedTransitionScope) {
                             LogViewerScreen(
                                 onBack = { backStack.removeLastOrNull() }
@@ -625,29 +657,13 @@ private fun <T : Any> AnimatedContentTransitionScope<Scene<T>>.computeTransition
     val from = initialState.navKey
     val to = targetState.navKey
     val isMainToMain = isMainScreenKey(from) && isMainScreenKey(to)
-    val isContainerTransform = from is AlbumDetail || from is ArtistDetail || from is MetadataEditor ||
-        to is AlbumDetail || to is ArtistDetail || to is MetadataEditor
 
-    return when {
-        isMainToMain -> ExpressiveAnimations.FadeThroughEnter togetherWith ExpressiveAnimations.FadeThroughExit
-
-        isContainerTransform -> if (isPush) {
-            ExpressiveAnimations.ContainerTransformEnter togetherWith ExpressiveAnimations.ContainerTransformExit
-        } else {
-            ExpressiveAnimations.ContainerTransformPopEnter togetherWith ExpressiveAnimations.ContainerTransformPopExit
-        }
-
-        to is LogViewer || to is ScanDirectorySettings -> if (isPush) {
-            ExpressiveAnimations.SharedAxisXEnter togetherWith ExpressiveAnimations.SharedAxisXExit
-        } else {
-            ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
-        }
-
-        else -> if (isPush) {
-            ExpressiveAnimations.SharedAxisXEnter togetherWith ExpressiveAnimations.SharedAxisXExit
-        } else {
-            ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
-        }
+    return if (isMainToMain) {
+        ExpressiveAnimations.FadeThroughEnter togetherWith ExpressiveAnimations.FadeThroughExit
+    } else {
+        val enter = if (isPush) ExpressiveAnimations.SharedAxisXEnter else ExpressiveAnimations.SharedAxisXPopEnter
+        val exit = if (isPush) ExpressiveAnimations.SharedAxisXExit else ExpressiveAnimations.SharedAxisXPopExit
+        enter togetherWith exit
     }.apply {
         targetContentZIndex = when {
             isMainToMain -> 0f
