@@ -124,6 +124,16 @@ class LazyListScrollbarState(
         listState.scrollToItem(targetIndex)
     }
 
+    suspend fun scrollToProgressAnimated(progress: Float) {
+        val totalItems = layoutInfo.totalItemsCount
+        if (totalItems <= 0) return
+
+        val targetIndex = (progress * (totalItems - 1)).toInt()
+            .coerceIn(0, totalItems - 1)
+
+        listState.animateScrollToItem(targetIndex)
+    }
+
     suspend fun scrollToOffset(targetOffset: Int) {
         val currentOffset = scrollOffset
         val delta = (targetOffset - currentOffset).toFloat()
@@ -251,6 +261,16 @@ class LazyGridScrollbarState(
             .coerceIn(0, totalItems - 1)
 
         gridState.scrollToItem(targetIndex)
+    }
+
+    suspend fun scrollToProgressAnimated(progress: Float) {
+        val totalItems = layoutInfo.totalItemsCount
+        if (totalItems <= 0) return
+
+        val targetIndex = (progress * (totalItems - 1)).toInt()
+            .coerceIn(0, totalItems - 1)
+
+        gridState.animateScrollToItem(targetIndex)
     }
 
     suspend fun scrollToOffset(targetOffset: Int) {

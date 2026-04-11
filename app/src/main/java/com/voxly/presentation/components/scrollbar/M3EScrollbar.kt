@@ -244,10 +244,10 @@ fun M3EScrollbar(
                             val tapProgress = (offset.y / size.height).coerceIn(0f, 1f)
                             when (val s = state) {
                                 is LazyListScrollbarState -> {
-                                    coroutineScope.launch { s.scrollToProgress(tapProgress) }
+                                    coroutineScope.launch { s.scrollToProgressAnimated(tapProgress) }
                                 }
                                 is LazyGridScrollbarState -> {
-                                    coroutineScope.launch { s.scrollToProgress(tapProgress) }
+                                    coroutineScope.launch { s.scrollToProgressAnimated(tapProgress) }
                                 }
                             }
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
