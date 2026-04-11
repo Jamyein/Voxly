@@ -94,8 +94,8 @@ fun M3EScrollbar(
 
     if (contentSize <= 0 || state.viewportSize <= 0) return
 
-    // Inline viewportSize to reduce function call overhead
-    val scrollRange = (contentSize - state.viewportSize).coerceAtLeast(1)
+    // scrollRange must be positive to avoid division by zero and thumb jump
+    val scrollRange = (contentSize - state.viewportSize).coerceAtLeast(0)
     
     // Scroll fraction - derivedStateOf handles dependency tracking internally
     // No need for remember keys as derivedStateOf manages its own memoization
@@ -254,7 +254,7 @@ fun M3EScrollbar(
                         }
                     }
                 }
-                .pointerInput(contentSize) {
+                .pointerInput(Unit) {
                     // Use rememberUpdatedState values to avoid lambda re-creation
                     val scrollRange by scrollRangeState
                     val coroutineScope by coroutineScopeState
@@ -323,14 +323,13 @@ fun M3EScrollbar(
 
         // Thumb (pill shape for M3E)
         val thumbHeight = with(density) { thumbHeightPx.toDp() }
-        val thumbOffset = with(density) { thumbOffsetPx.toDp() }
 
         Box(
             modifier = Modifier
                 .width(thumbWidth)
                 .height(thumbHeight)
                 .align(Alignment.TopEnd)
-                .offset(y = thumbOffset)
+                .offset { IntOffset(0, thumbOffsetPx.roundToInt()) }
                 .shadow(
                     elevation = if (isDragging) config.thumbElevation * 1.5f else config.thumbElevation,
                     shape = CircleShape,
