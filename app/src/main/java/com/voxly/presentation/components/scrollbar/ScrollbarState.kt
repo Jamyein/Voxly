@@ -114,24 +114,12 @@ class LazyListScrollbarState(
         (progress * (totalItems - 1)).toInt().coerceIn(0, totalItems - 1)
     }
 
-    suspend fun scrollToProgress(progress: Float) {
-        val totalItems = layoutInfo.totalItemsCount
-        if (totalItems <= 0) return
-
-        val targetIndex = (progress * (totalItems - 1)).toInt()
-            .coerceIn(0, totalItems - 1)
-
-        listState.scrollToItem(targetIndex)
+    suspend fun scrollToItem(index: Int) {
+        listState.scrollToItem(index.coerceIn(0, (layoutInfo.totalItemsCount - 1).coerceAtLeast(0)))
     }
 
-    suspend fun scrollToProgressAnimated(progress: Float) {
-        val totalItems = layoutInfo.totalItemsCount
-        if (totalItems <= 0) return
-
-        val targetIndex = (progress * (totalItems - 1)).toInt()
-            .coerceIn(0, totalItems - 1)
-
-        listState.animateScrollToItem(targetIndex)
+    suspend fun animateScrollToItem(index: Int) {
+        listState.animateScrollToItem(index.coerceIn(0, (layoutInfo.totalItemsCount - 1).coerceAtLeast(0)))
     }
 
     suspend fun scrollToOffset(targetOffset: Int) {
@@ -253,24 +241,12 @@ class LazyGridScrollbarState(
         } else 1
     }
 
-    suspend fun scrollToProgress(progress: Float) {
-        val totalItems = layoutInfo.totalItemsCount
-        if (totalItems <= 0) return
-
-        val targetIndex = (progress * (totalItems - 1)).toInt()
-            .coerceIn(0, totalItems - 1)
-
-        gridState.scrollToItem(targetIndex)
+    suspend fun scrollToItem(index: Int) {
+        gridState.scrollToItem(index.coerceIn(0, (layoutInfo.totalItemsCount - 1).coerceAtLeast(0)))
     }
 
-    suspend fun scrollToProgressAnimated(progress: Float) {
-        val totalItems = layoutInfo.totalItemsCount
-        if (totalItems <= 0) return
-
-        val targetIndex = (progress * (totalItems - 1)).toInt()
-            .coerceIn(0, totalItems - 1)
-
-        gridState.animateScrollToItem(targetIndex)
+    suspend fun animateScrollToItem(index: Int) {
+        gridState.animateScrollToItem(index.coerceIn(0, (layoutInfo.totalItemsCount - 1).coerceAtLeast(0)))
     }
 
     suspend fun scrollToOffset(targetOffset: Int) {

@@ -242,12 +242,14 @@ fun M3EScrollbar(
                     detectTapGestures { offset ->
                         if (!isDragging) {
                             val tapProgress = (offset.y / size.height).coerceIn(0f, 1f)
+                            val totalItems = state.totalItemsCount
+                            val targetIndex = (tapProgress * (totalItems - 1)).toInt().coerceIn(0, (totalItems - 1).coerceAtLeast(0))
                             when (val s = state) {
                                 is LazyListScrollbarState -> {
-                                    coroutineScope.launch { s.scrollToProgressAnimated(tapProgress) }
+                                    coroutineScope.launch { s.animateScrollToItem(targetIndex) }
                                 }
                                 is LazyGridScrollbarState -> {
-                                    coroutineScope.launch { s.scrollToProgressAnimated(tapProgress) }
+                                    coroutineScope.launch { s.animateScrollToItem(targetIndex) }
                                 }
                             }
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
