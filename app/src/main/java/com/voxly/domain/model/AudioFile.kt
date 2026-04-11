@@ -69,6 +69,7 @@ data class AudioFile(
 /**
  * Domain model representing audio metadata (ID3 tags, etc.).
  */
+@Immutable
 data class AudioMetadata(
     val title: String? = null,
     val artist: String? = null,
@@ -173,6 +174,7 @@ data class AudioMetadata(
  * Domain model representing ReplayGain information.
  * Supports both ReplayGain 1.0 (gain/peak) and 2.0 (loudness/range/reference).
  */
+@Immutable
 data class ReplayGainInfo(
     val trackGain: Float = 0f,
     val trackPeak: Float = 0f,

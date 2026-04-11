@@ -52,6 +52,9 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
@@ -71,7 +74,8 @@ import com.voxly.presentation.viewmodel.ReplayGainScanError
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalMaterial3ExpressiveApi::class,
-    ExperimentalSharedTransitionApi::class
+    ExperimentalSharedTransitionApi::class,
+    kotlinx.coroutines.FlowPreview::class
 )
 @Composable
 fun MetadataEditorScreen(
@@ -135,6 +139,70 @@ fun MetadataEditorScreen(
 
     val coverFetchMessage by viewModel.coverFetchMessage.collectAsState()
     val isLyricsTimestampFormatted by viewModel.isLyricsTimestampFormatted.collectAsState()
+
+    // Debounced text handlers to reduce metadata processing on rapid keystrokes
+    val titleTextFlow = remember { MutableStateFlow<String?>(null) }
+    val artistTextFlow = remember { MutableStateFlow<String?>(null) }
+    val albumTextFlow = remember { MutableStateFlow<String?>(null) }
+    val albumArtistTextFlow = remember { MutableStateFlow<String?>(null) }
+    val yearTextFlow = remember { MutableStateFlow<String?>(null) }
+    val genreTextFlow = remember { MutableStateFlow<String?>(null) }
+    val composerTextFlow = remember { MutableStateFlow<String?>(null) }
+    val lyricistTextFlow = remember { MutableStateFlow<String?>(null) }
+    val commentTextFlow = remember { MutableStateFlow<String?>(null) }
+    val lyricsTextFlow = remember { MutableStateFlow<String?>(null) }
+
+    // Debounced collectors for text fields
+    LaunchedEffect(Unit) {
+        titleTextFlow
+            .debounce(300L)
+            .collectLatest { value -> value?.let { viewModel.updateMetadataField(MetadataField.TITLE, it) } }
+    }
+    LaunchedEffect(Unit) {
+        artistTextFlow
+            .debounce(300L)
+            .collectLatest { value -> value?.let { viewModel.updateMetadataField(MetadataField.ARTIST, it) } }
+    }
+    LaunchedEffect(Unit) {
+        albumTextFlow
+            .debounce(300L)
+            .collectLatest { value -> value?.let { viewModel.updateMetadataField(MetadataField.ALBUM, it) } }
+    }
+    LaunchedEffect(Unit) {
+        albumArtistTextFlow
+            .debounce(300L)
+            .collectLatest { value -> value?.let { viewModel.updateMetadataField(MetadataField.ALBUM_ARTIST, it) } }
+    }
+    LaunchedEffect(Unit) {
+        yearTextFlow
+            .debounce(300L)
+            .collectLatest { value -> value?.let { viewModel.updateMetadataField(MetadataField.YEAR, it) } }
+    }
+    LaunchedEffect(Unit) {
+        genreTextFlow
+            .debounce(300L)
+            .collectLatest { value -> value?.let { viewModel.updateMetadataField(MetadataField.GENRE, it) } }
+    }
+    LaunchedEffect(Unit) {
+        composerTextFlow
+            .debounce(300L)
+            .collectLatest { value -> value?.let { viewModel.updateMetadataField(MetadataField.COMPOSER, it) } }
+    }
+    LaunchedEffect(Unit) {
+        lyricistTextFlow
+            .debounce(300L)
+            .collectLatest { value -> value?.let { viewModel.updateMetadataField(MetadataField.LYRICIST, it) } }
+    }
+    LaunchedEffect(Unit) {
+        commentTextFlow
+            .debounce(300L)
+            .collectLatest { value -> value?.let { viewModel.updateMetadataField(MetadataField.COMMENT, it) } }
+    }
+    LaunchedEffect(Unit) {
+        lyricsTextFlow
+            .debounce(300L)
+            .collectLatest { value -> value?.let { viewModel.updateMetadataField(MetadataField.LYRICS, it) } }
+    }
 
     LaunchedEffect(coverFetchMessage) {
         coverFetchMessage?.let {
@@ -310,6 +378,21 @@ fun MetadataEditorScreen(
                         currentReplayGainInfo = state.audioFile.replayGainInfo
                     }
 
+                    // Sync text flows with metadata when file changes (reset debounce buffers)
+                    LaunchedEffect(filePath) {
+                        val metadata = state.editedMetadata
+                        titleTextFlow.value = metadata.title
+                        artistTextFlow.value = metadata.artist
+                        albumTextFlow.value = metadata.album
+                        albumArtistTextFlow.value = metadata.albumArtist
+                        yearTextFlow.value = metadata.year
+                        genreTextFlow.value = metadata.genre
+                        composerTextFlow.value = metadata.composer
+                        lyricistTextFlow.value = metadata.lyricist
+                        commentTextFlow.value = metadata.comment
+                        lyricsTextFlow.value = metadata.lyrics
+                    }
+
                     // Box with FloatingToolbar at bottom
                     Box(modifier = Modifier.fillMaxSize()) {
                         // Create scroll state for FloatingToolbarScrollBehavior
@@ -340,16 +423,16 @@ fun MetadataEditorScreen(
                             scrollState = scrollState,
                             nestedScrollModifier = Modifier,
                             modifiedFields = modifiedFields,
-                            onTitleChange = { viewModel.updateMetadataField(MetadataField.TITLE, it) },
-                            onArtistChange = { viewModel.updateMetadataField(MetadataField.ARTIST, it) },
-                            onAlbumChange = { viewModel.updateMetadataField(MetadataField.ALBUM, it) },
-                            onAlbumArtistChange = { viewModel.updateMetadataField(MetadataField.ALBUM_ARTIST, it) },
-                            onYearChange = { viewModel.updateMetadataField(MetadataField.YEAR, it) },
-                            onGenreChange = { viewModel.updateMetadataField(MetadataField.GENRE, it) },
-                            onComposerChange = { viewModel.updateMetadataField(MetadataField.COMPOSER, it) },
-                            onLyricistChange = { viewModel.updateMetadataField(MetadataField.LYRICIST, it) },
-                            onCommentChange = { viewModel.updateMetadataField(MetadataField.COMMENT, it) },
-                            onLyricsChange = { viewModel.updateMetadataField(MetadataField.LYRICS, it) },
+                            onTitleChange = { titleTextFlow.value = it },
+                            onArtistChange = { artistTextFlow.value = it },
+                            onAlbumChange = { albumTextFlow.value = it },
+                            onAlbumArtistChange = { albumArtistTextFlow.value = it },
+                            onYearChange = { yearTextFlow.value = it },
+                            onGenreChange = { genreTextFlow.value = it },
+                            onComposerChange = { composerTextFlow.value = it },
+                            onLyricistChange = { lyricistTextFlow.value = it },
+                            onCommentChange = { commentTextFlow.value = it },
+                            onLyricsChange = { lyricsTextFlow.value = it },
                             onTrackNumberChange = { track, total ->
                                 viewModel.updateTrackNumber(track.toIntOrNull(), total.toIntOrNull())
                             },

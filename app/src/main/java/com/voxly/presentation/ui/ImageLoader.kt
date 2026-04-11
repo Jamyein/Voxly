@@ -27,7 +27,7 @@ import timber.log.Timber
 
 // Semaphore for limiting concurrent album art preloading
 // Prevents thread pool exhaustion when preloading large lists
-private val preloadSemaphore = Semaphore(4)
+private val preloadSemaphore = Semaphore(8)
 
 @Volatile
 private var imageLoaderScope: CoroutineScope? = null

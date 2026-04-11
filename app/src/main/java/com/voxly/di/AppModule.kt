@@ -46,6 +46,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.Cache
+import okhttp3.CertificatePinner
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -56,6 +57,8 @@ import kotlinx.serialization.json.Json
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
+import com.voxly.BuildConfig
+import timber.log.Timber
 
 /**
  * Hilt module providing application-level dependencies.
@@ -72,7 +75,7 @@ object AppModule {
     @Singleton
     @Named("ApplicationScope")
     fun provideApplicationCoroutineScope(): CoroutineScope {
-        return CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        return CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
 
     @Provides
@@ -81,8 +84,14 @@ object AppModule {
         @ApplicationContext context: Context,
         proxyInterceptor: ProxyInterceptor
     ): OkHttpClient {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+        val loggingInterceptor = HttpLoggingInterceptor { message ->
+            val redactedMessage = message
+                .replace(Regex("""Authorization:\s*\S+"""), "Authorization: [REDACTED]")
+                .replace(Regex("""Cookie:\s*\S+"""), "Cookie: [REDACTED]")
+            Timber.tag("OkHttp").d(redactedMessage)
+        }.apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC
+                    else HttpLoggingInterceptor.Level.NONE
         }
 
         // User-Agent interceptor for all requests
@@ -113,8 +122,12 @@ object AppModule {
         val cacheDir = File(context.cacheDir, "http_cache")
         val cache = Cache(cacheDir, 50 * 1024 * 1024)
 
+        // Certificate pinner for enhanced security
+        val certificatePinner = CertificatePinnerConfig.createCertificatePinner()
+
         return OkHttpClient.Builder()
             .cache(cache)
+            .certificatePinner(certificatePinner)
             .addInterceptor(proxyInterceptor)
             .addInterceptor(userAgentInterceptor)
             .addInterceptor(cacheInterceptor)

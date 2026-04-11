@@ -1117,7 +1117,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
             lyrics = metadata.lyrics.takeIf { it.isValidValue() && it.isMeaningfulLyrics() }?.also { if (it != currentMetadata.lyrics) modifiedFields.add(MetadataField.LYRICS) } ?: currentMetadata.lyrics,
             albumArt = metadata.albumArt ?: currentMetadata.albumArt
         ).also {
-            if (metadata.albumArt != null && metadata.albumArt != currentMetadata.albumArt) {
+            if (metadata.albumArt != null && !metadata.albumArt.contentEquals(currentMetadata.albumArt)) {
                 modifiedFields.add(MetadataField.ALBUM_ART)
             }
         }

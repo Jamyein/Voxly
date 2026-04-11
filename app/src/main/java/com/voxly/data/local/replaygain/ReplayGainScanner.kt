@@ -55,6 +55,7 @@ class ReplayGainScanner @Inject constructor(
     /**
      * Scans audio files and calculates ReplayGain values.
      */
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
     fun scanReplayGain(
         filePaths: List<String>,
         scanQuality: ScanQuality,
@@ -175,6 +176,7 @@ class ReplayGainScanner @Inject constructor(
      * Scans audio files with album grouping.
      * Reads metadata from each file to group by album, then calculates both track and album gain.
      */
+    @OptIn(kotlinx.coroutines.FlowPreview::class)
     fun scanReplayGainWithAlbumGrouping(
         filePaths: List<String>,
         scanQuality: ScanQuality,

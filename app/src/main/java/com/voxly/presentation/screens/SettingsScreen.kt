@@ -231,7 +231,9 @@ fun DraggableSourcePriorityDialog(
     val density = LocalDensity.current
     val itemHeight = 80.dp
     val itemHeightPx = with(density) { itemHeight.toPx() }
-    var localAppleCountry by remember { mutableStateOf(currentAppleCountry) }
+    // Use key-based remember so localAppleCountry updates when currentAppleCountry changes
+    // (e.g., when user changes country in another dialog instance)
+    var localAppleCountry by remember(currentAppleCountry) { mutableStateOf(currentAppleCountry) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
