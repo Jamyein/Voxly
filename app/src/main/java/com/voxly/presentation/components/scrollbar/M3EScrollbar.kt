@@ -306,7 +306,7 @@ fun M3EScrollbar(
                             lastDragOffset = 0f
                             lastHapticIndex = -1
                             val velocity = velocityTracker.calculateVelocity().y
-                            if (abs(velocity) > 500f) {
+                            if (abs(velocity) > configState.value.velocityThreshold) {
                                 coroutineScope.launch {
                                     state.scrollByVelocity(velocity)
                                 }
