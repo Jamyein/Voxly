@@ -2,7 +2,6 @@ package com.voxly.presentation.components.scrollbar
 
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.grid.LazyGridLayoutInfo
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -227,18 +226,6 @@ class LazyGridScrollbarState(
         } else 0f
 
         (progress * (totalItems - 1)).toInt().coerceIn(0, totalItems - 1)
-    }
-
-    private fun inferSpanCount(layoutInfo: LazyGridLayoutInfo): Int {
-        val visibleItems = layoutInfo.visibleItemsInfo
-        if (visibleItems.isEmpty()) return 1
-
-        val itemsByRow = visibleItems.groupBy { it.row }
-        val rowCounts = itemsByRow.values.map { it.size }
-
-        return if (rowCounts.isNotEmpty()) {
-            rowCounts.maxOrNull() ?: 1
-        } else 1
     }
 
     suspend fun scrollToItem(index: Int) {
