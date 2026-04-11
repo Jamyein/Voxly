@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
+import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.AudioMetadata
 import com.voxly.presentation.navigation.AlbumDetail
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -20,16 +22,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
-/**
- * ViewModel for AlbumDetailScreen.
- * Loads album data directly from AudioFileScanner's albums StateFlow.
- */
 @HiltViewModel(assistedFactory = AlbumDetailViewModel.Factory::class)
 class AlbumDetailViewModel @AssistedInject constructor(
     @Assisted val navKey: AlbumDetail,
     @ApplicationContext private val context: Context,
     private val audioFileScanner: AudioFileScanner,
-    private val databaseProvider: MusicCacheDatabaseProvider
+    private val databaseProvider: MusicCacheDatabaseProvider,
+    private val metadataProcessor: TagLibMetadataProcessor
 ) : ViewModel() {
 
     private val _albumName = MutableStateFlow("")
@@ -67,11 +66,11 @@ class AlbumDetailViewModel @AssistedInject constructor(
      * Load album data from AudioFileScanner by album name and artist.
      * Sample rate is loaded from cache (AlbumInfoEntity).
      * Year is loaded from cache for accurate and fast results.
+     * For files with missing discNumber, uses TagLib to read from file tags.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
         viewModelScope.launch {
             try {
-                // Get albums from AudioFileScanner and find the matching one
                 val albums = audioFileScanner.albums.first()
                 val albumGroup = albums.find { album ->
                     album.name == albumName && album.artist == albumArtist
@@ -81,28 +80,38 @@ class AlbumDetailViewModel @AssistedInject constructor(
                     _albumName.value = albumGroup.name
                     _albumArtist.value = albumGroup.artist
                     _coverPath.value = albumGroup.coverPath
-                    _files.value = albumGroup.files
 
-                    // Try to load from AlbumInfo cache first
+                    val filesWithDiscNumber = albumGroup.files.map { file ->
+                        if (file.metadata.discNumber == null) {
+                            val tagMetadata = metadataProcessor.readMetadata(file.path)
+                            if (tagMetadata?.discNumber != null) {
+                                file.copy(metadata = file.metadata.copy(discNumber = tagMetadata.discNumber))
+                            } else {
+                                file
+                            }
+                        } else {
+                            file
+                        }
+                    }
+
+                    _files.value = filesWithDiscNumber
+
                     val albumInfo = databaseProvider.getDatabase()
                         .albumInfoDao()
                         .getAlbumInfo(albumName, albumArtist)
 
                     if (albumInfo != null) {
-                        // Use cached album info
                         _albumYear.value = albumInfo.year
                         _albumSampleRate.value = albumInfo.sampleRate
                         _albumBitrate.value = albumInfo.bitrate
                         Timber.d("Loaded album info from cache: $albumName")
                     } else {
-                        // Fallback: calculate from files
                         Timber.d("No cache found for album: $albumName, calculating from files")
 
                         val scannedAlbumYear = albumGroup.files
                             .mapNotNull { file -> file.metadata.year?.takeIf { it.isNotBlank() } }
                             .maxOrNull()
 
-                        // Get bitrate and sample rate from files
                         val maxBitrate = albumGroup.files.maxOfOrNull { it.bitrate } ?: 0
                         val maxSampleRate = albumGroup.files.maxOfOrNull { it.sampleRate } ?: 0
 
@@ -111,7 +120,6 @@ class AlbumDetailViewModel @AssistedInject constructor(
                         _albumSampleRate.value = maxSampleRate
                     }
                 } else {
-                    // Album not found - set basic info at least
                     _albumName.value = albumName
                     _albumArtist.value = albumArtist
                 }

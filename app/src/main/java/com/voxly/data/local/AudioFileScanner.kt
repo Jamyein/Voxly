@@ -164,7 +164,6 @@ class AudioFileScanner @Inject constructor(
             strength = Collator.PRIMARY
         }
 
-        // Helper function to parse MediaStore TRACK field correctly
         fun parseTrackField(value: Int): Pair<Int?, Int?> = parseMediaStoreTrackField(value)
 
         // Fast projection - only MediaStore columns, no file parsing needed

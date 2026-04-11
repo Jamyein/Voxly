@@ -5,6 +5,7 @@ import android.os.Environment
 import android.provider.MediaStore
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
+import com.voxly.data.local.metadata.RecoverableMediaStoreException
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.domain.model.AudioFile
@@ -234,8 +235,6 @@ class AudioRepositoryImpl @Inject constructor(
                 selectionArgs,
                 null
             )
-            // Helper to parse MediaStore TRACK field
-            // Uses shared implementation from domain model
             fun parseTrackField(value: Int): Pair<Int?, Int?> = parseMediaStoreTrackField(value)
             cursor?.use {
                 if (!it.moveToFirst()) {
@@ -319,6 +318,8 @@ class AudioRepositoryImpl @Inject constructor(
                         )
                     }
                 )
+            } catch (e: RecoverableMediaStoreException) {
+                throw e
             } catch (e: Exception) {
                 Result.failure(e)
             }

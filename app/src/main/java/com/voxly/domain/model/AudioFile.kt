@@ -299,35 +299,18 @@ enum class AudioFormat(val extensions: List<String>, val displayName: String) {
  * Constants for MediaStore track parsing.
  */
 private object MediaStoreConstants {
-    // Track number offset used by some sources incorrectly
     const val TRACK_OFFSET = 1000
-    // Maximum track number after normalization
     const val MAX_NORMALIZED_TRACK = 999
-    // Track number range that indicates corruption
     const val MIN_CORRUPTED_TRACK = 1000
     const val MAX_CORRUPTED_TRACK = 10000
 }
 
-/**
- * Parses the MediaStore TRACK field which encodes both track number and total tracks.
- *
- * MediaStore stores: trackNumber | (totalTracks << 16)
- * - Bits 0-15: track number
- * - Bits 16-31: total tracks
- *
- * Also handles corrupted track values like 1001 which should be 1.
- *
- * @param value The raw track value from MediaStore
- * @return Pair of (trackNumber, totalTracks) or (null, null) if invalid
- */
 fun parseMediaStoreTrackField(value: Int): Pair<Int?, Int?> {
     if (value <= 0) return Pair(null, null)
 
     var trackNumber = value and 0xFFFF
     val totalTracks = (value shr 16) and 0xFFFF
 
-    // Normalize corrupted track numbers (some sources add 1000 offset incorrectly)
-    // e.g., 1001 should be 1, 1012 should be 12
     if (trackNumber in MediaStoreConstants.MIN_CORRUPTED_TRACK until MediaStoreConstants.MAX_CORRUPTED_TRACK) {
         val normalized = trackNumber - MediaStoreConstants.TRACK_OFFSET
         if (normalized in 1..MediaStoreConstants.MAX_NORMALIZED_TRACK) {
