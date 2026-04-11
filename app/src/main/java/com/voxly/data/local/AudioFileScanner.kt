@@ -18,6 +18,7 @@ import com.voxly.domain.model.parseMediaStoreTrackField
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -144,12 +145,17 @@ class AudioFileScanner @Inject constructor(
 
     init {
         // Auto-update albums and artists when filtered data changes
-        // Uses debounce to prevent rapid recomputation during incremental scans
+        // Uses conflate to drop intermediate values and coroutineContext.isActive to respect cancellation
         applicationScope.launch(Dispatchers.Default) {
             filteredAudioFiles
+                .conflate()
                 .collectLatest { files ->
-                    kotlinx.coroutines.delay(50) // Debounce: wait 50ms to batch rapid updates
-                    updateAlbumsAndArtistsFromFiles(files)
+                    if (coroutineContext.isActive) {
+                        kotlinx.coroutines.delay(50) // Debounce: wait 50ms to batch rapid updates
+                    }
+                    if (coroutineContext.isActive) {
+                        updateAlbumsAndArtistsFromFiles(files)
+                    }
                 }
         }
     }

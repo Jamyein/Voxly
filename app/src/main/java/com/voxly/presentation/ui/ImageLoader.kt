@@ -32,7 +32,16 @@ private val preloadSemaphore = Semaphore(8)
 @Volatile
 private var imageLoaderScope: CoroutineScope? = null
 
-private val fallbackScope by lazy { CoroutineScope(SupervisorJob() + Dispatchers.IO) }
+private val fallbackScope by lazy {
+    CoroutineScope(SupervisorJob().apply {
+        // Ensure fallback scope can be tracked for proper cleanup
+        invokeOnCompletion { cause ->
+            if (cause != null) {
+                Timber.w(TAG, "Fallback scope cancelled: $cause")
+            }
+        }
+    } + Dispatchers.IO)
+}
 
 fun initImageLoaderScope(scope: CoroutineScope) {
     imageLoaderScope = scope

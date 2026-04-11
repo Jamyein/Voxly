@@ -393,6 +393,9 @@ class ReplayGainScanner @Inject constructor(
         config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): ReplayGainInfo? = withContext(Dispatchers.IO) {
         try {
+            // Lower thread priority for CPU-intensive audio processing to reduce overheating
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+            
             val file = File(filePath)
             if (!file.exists()) return@withContext null
 

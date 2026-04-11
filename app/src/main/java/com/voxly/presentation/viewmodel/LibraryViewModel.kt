@@ -118,7 +118,7 @@ class LibraryViewModel @Inject constructor(
         .map { uris -> uris.isNotEmpty() }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.Eagerly,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
             initialValue = false
         )
 
@@ -129,7 +129,7 @@ class LibraryViewModel @Inject constructor(
     val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
 
     val artistSeparatorEnabled: StateFlow<Boolean> = settingsDataStore.artistSeparatorEnabled
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
 
     /**
      * Artist separators as Set<String> for splitArtist()
@@ -179,11 +179,11 @@ class LibraryViewModel @Inject constructor(
     // Note: Core settings (whitelistEnabled, blacklistEnabled, minDurationFilterEnabled)
     // are watched by MusicLibraryRefreshManager at app level
     private val minDurationFilterThresholdMs = settingsDataStore.minDurationFilterThresholdMs
-        .stateIn(viewModelScope, SharingStarted.Eagerly, 60000)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), 60000)
     private val selectedDirectoryUris = settingsDataStore.selectedDirectoryUris
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), emptyList())
     private val blacklistDirectoryUris = settingsDataStore.blacklistDirectoryUris
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), emptyList())
 
     // Track previous settings to detect changes
     private var lastMinDurationFilterThresholdMs = 60000

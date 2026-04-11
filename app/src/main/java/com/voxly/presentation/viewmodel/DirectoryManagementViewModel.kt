@@ -28,10 +28,10 @@ class DirectoryManagementViewModel @Inject constructor(
     val blacklistDirectories: StateFlow<List<SelectedDirectory>> = _blacklistDirectories.asStateFlow()
 
     val whitelistEnabled: StateFlow<Boolean> = settingsDataStore.whitelistEnabled
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     val blacklistEnabled: StateFlow<Boolean> = settingsDataStore.blacklistEnabled
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
     init {
         loadDirectories()

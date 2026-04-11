@@ -152,11 +152,11 @@ class UnifiedScanManagerImpl @Inject constructor(
         isWatchingSettings = true
 
         val minDurationFilterEnabled = settingsDataStore.minDurationFilterEnabled
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.WhileSubscribed(30000), false)
         val whitelistEnabled = settingsDataStore.whitelistEnabled
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.WhileSubscribed(30000), false)
         val blacklistEnabled = settingsDataStore.blacklistEnabled
-            .stateIn(scope, SharingStarted.Eagerly, false)
+            .stateIn(scope, SharingStarted.WhileSubscribed(30000), false)
 
         scope.launch {
             combine(
