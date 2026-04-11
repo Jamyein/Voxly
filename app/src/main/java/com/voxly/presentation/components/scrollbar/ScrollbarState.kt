@@ -123,6 +123,14 @@ class LazyListScrollbarState(
         listState.scrollToItem(targetIndex)
     }
 
+    suspend fun scrollToOffset(targetOffset: Int) {
+        val currentOffset = calculateScrollOffset()
+        val delta = (targetOffset - currentOffset).toFloat()
+        listState.scroll {
+            scrollBy(delta)
+        }
+    }
+
     override suspend fun scrollByVelocity(velocity: Float) {
         listState.scroll {
             scrollBy(velocity / 5f)
@@ -246,6 +254,14 @@ class LazyGridScrollbarState(
             .coerceIn(0, totalItems - 1)
 
         gridState.scrollToItem(targetIndex)
+    }
+
+    suspend fun scrollToOffset(targetOffset: Int) {
+        val currentOffset = calculateScrollOffset()
+        val delta = (targetOffset - currentOffset).toFloat()
+        gridState.scroll {
+            scrollBy(delta)
+        }
     }
 
     override suspend fun scrollByVelocity(velocity: Float) {

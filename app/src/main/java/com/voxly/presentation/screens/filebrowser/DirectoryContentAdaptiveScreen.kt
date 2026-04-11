@@ -156,6 +156,13 @@ fun DirectoryContentAdaptiveScreen(
     )
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val isSelectionMode = selectedFiles.isNotEmpty()
+
+    LaunchedEffect(isSinglePane, isSelectionMode) {
+        if (isSinglePane && isSelectionMode) {
+            viewModel.clearSelection()
+        }
+    }
+
     val canScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
