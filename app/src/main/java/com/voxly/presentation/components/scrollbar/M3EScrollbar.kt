@@ -292,10 +292,10 @@ fun M3EScrollbar(
                             if (delta != 0f) {
                                 when (val s = state) {
                                     is LazyListScrollbarState -> {
-                                        coroutineScope.launch { s.scrollToOffset(targetOffset) }
+                                        coroutineScope.launch { s.scrollByDelta(delta) }
                                     }
                                     is LazyGridScrollbarState -> {
-                                        coroutineScope.launch { s.scrollToOffset(targetOffset) }
+                                        coroutineScope.launch { s.scrollByDelta(delta) }
                                     }
                                 }
                                 lastDragOffset = targetOffset.toFloat()

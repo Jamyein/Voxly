@@ -117,6 +117,12 @@ class LazyListScrollbarState(
         }
     }
 
+    suspend fun scrollByDelta(delta: Float) {
+        listState.scroll {
+            scrollBy(delta)
+        }
+    }
+
     override suspend fun scrollByVelocity(velocity: Float) {
         listState.scroll {
             scrollBy(velocity / 5f)
@@ -228,6 +234,12 @@ class LazyGridScrollbarState(
     suspend fun scrollToOffset(targetOffset: Int) {
         val currentOffset = scrollOffset
         val delta = (targetOffset - currentOffset).toFloat()
+        gridState.scroll {
+            scrollBy(delta)
+        }
+    }
+
+    suspend fun scrollByDelta(delta: Float) {
         gridState.scroll {
             scrollBy(delta)
         }
