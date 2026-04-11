@@ -1,5 +1,6 @@
 package com.voxly.presentation.viewmodel
 
+import android.content.IntentSender
 import androidx.compose.runtime.Immutable
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
@@ -45,12 +46,14 @@ sealed class SaveResult {
     data class Error(
         val message: String,
         val requiresReauthorization: Boolean = false,
-        val errorCode: SaveErrorCode = SaveErrorCode.SAVE_FAILED
+        val errorCode: SaveErrorCode = SaveErrorCode.SAVE_FAILED,
+        val mediaStoreIntentSender: IntentSender? = null
     ) : SaveResult()
 }
 
 enum class SaveErrorCode {
     PERMISSION_REQUIRED,
+    MEDIASTORE_PERMISSION_REQUIRED,
     PERMISSION_REAUTHORIZE_FAILED,
     SAVE_FAILED
 }

@@ -27,6 +27,7 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -86,20 +87,28 @@ fun M3EScrollbar(
     var lastHapticIndex by remember { mutableIntStateOf(-1) }
     var lastDragOffset by remember { mutableFloatStateOf(0f) }
 
-    val contentSize by remember { derivedStateOf { state.contentSize } }
-    val viewportSize by remember { derivedStateOf { state.viewportSize } }
-    val scrollOffset by remember { derivedStateOf { state.scrollOffset } }
+    // Direct access to state properties - no redundant derivedStateOf wrapping
+    // Note: These are already derivedStateOf in ScrollbarState implementations
+    val contentSize = state.contentSize
+    val scrollOffset = state.scrollOffset
 
-    if (contentSize <= 0 || viewportSize <= 0) return
+    if (contentSize <= 0 || state.viewportSize <= 0) return
 
-    val scrollRange = (contentSize - viewportSize).coerceAtLeast(1)
+    // Inline viewportSize to reduce function call overhead
+    val scrollRange = (contentSize - state.viewportSize).coerceAtLeast(1)
     
-    // Fraction for scroll position - use derivedStateOf to ensure reactivity
-    val scrollFraction by remember(contentSize, viewportSize, scrollOffset) {
-        derivedStateOf {
-            if (scrollRange > 0) (scrollOffset.toFloat() / scrollRange).coerceIn(0f, 1f) else 0f
-        }
+    // Scroll fraction - derivedStateOf handles dependency tracking internally
+    // No need for remember keys as derivedStateOf manages its own memoization
+    val scrollFraction by derivedStateOf {
+        if (scrollRange > 0) (scrollOffset.toFloat() / scrollRange).coerceIn(0f, 1f) else 0f
     }
+
+    // rememberUpdatedState for pointerInput optimization - avoids lambda re-creation
+    val scrollRangeState = rememberUpdatedState(scrollRange)
+    val coroutineScopeState = rememberUpdatedState(coroutineScope)
+    val hapticState = rememberUpdatedState(haptic)
+    val stateState = rememberUpdatedState(state)
+    val configState = rememberUpdatedState(config)
     
     // Real-time scroll progress based on actual scroll fraction
     val scrollProgress = scrollFraction
@@ -114,18 +123,18 @@ fun M3EScrollbar(
         }
     }
 
-    // Thumb dimensions
+    // Thumb dimensions (viewportSize inlined directly)
     val thumbHeightPx = if (contentSize > 0) {
-        (viewportSize.toFloat() / contentSize * viewportSize)
+        (state.viewportSize.toFloat() / contentSize * state.viewportSize)
             .coerceIn(
                 with(density) { config.minThumbHeight.toPx() },
-                viewportSize * 0.5f
+                state.viewportSize * 0.5f
             )
     } else {
         with(density) { config.thumbHeight.toPx() }
     }
 
-    val maxThumbOffset = (viewportSize - thumbHeightPx).coerceAtLeast(0f)
+    val maxThumbOffset = (state.viewportSize - thumbHeightPx).coerceAtLeast(0f)
     val thumbOffsetPx = if (isDragging) {
         dragY.coerceIn(0f, maxThumbOffset)
     } else {
@@ -136,7 +145,7 @@ fun M3EScrollbar(
     val thumbWidth by animateDpAsState(
         targetValue = if (isDragging) config.thumbWidthDragging else config.thumbWidth,
         animationSpec = spring(
-            dampingRatio = 1.0f, // FastEffects damping (no bounce)
+            dampingRatio = 1.0f,
             stiffness = config.thumbStiffness
         ),
         label = "thumb_width"
@@ -145,7 +154,7 @@ fun M3EScrollbar(
     val trackAlpha by animateFloatAsState(
         targetValue = if (isDragging) config.trackAlphaDragging else config.trackAlpha,
         animationSpec = spring(
-            dampingRatio = 1.0f, // FastEffects damping (no bounce)
+            dampingRatio = 1.0f,
             stiffness = config.visualFeedbackStiffness
         ),
         label = "track_alpha"
@@ -154,7 +163,7 @@ fun M3EScrollbar(
     val bubbleScale by animateFloatAsState(
         targetValue = if (isDragging && showBubble) 1f else 0.5f,
         animationSpec = spring(
-            dampingRatio = 1.0f, // FastEffects damping (no bounce)
+            dampingRatio = 1.0f,
             stiffness = config.visualFeedbackStiffness
         ),
         label = "bubble_scale"
@@ -163,7 +172,7 @@ fun M3EScrollbar(
     val bubbleAlpha by animateFloatAsState(
         targetValue = if (isDragging && showBubble) 1f else 0f,
         animationSpec = spring(
-            dampingRatio = 1.0f, // FastEffects damping (no bounce)
+            dampingRatio = 1.0f,
             stiffness = config.visualFeedbackStiffness
         ),
         label = "bubble_alpha"
@@ -172,32 +181,27 @@ fun M3EScrollbar(
     val scrollbarAlpha by animateFloatAsState(
         targetValue = if (isVisible || isDragging) 1f else 0f,
         animationSpec = spring(
-            dampingRatio = 1.0f, // FastEffects damping (no bounce)
+            dampingRatio = 1.0f,
             stiffness = config.visualFeedbackStiffness
         ),
         label = "scrollbar_alpha"
     )
 
-    // Current index for bubble text
-    val currentIndex: Int by remember(state, isDragging, dragY, maxThumbOffset) {
-        derivedStateOf {
-            if (isDragging && maxThumbOffset > 0) {
-                val fraction = (dragY / maxThumbOffset).coerceIn(0f, 1f)
-                (fraction * (state.totalItemsCount - 1)).toInt().coerceIn(0, (state.totalItemsCount - 1).coerceAtLeast(0))
-            } else {
-                when (state) {
-                    is LazyListScrollbarState -> state.getCurrentItemIndex()
-                    is LazyGridScrollbarState -> state.getCurrentItemIndex()
-                    else -> 0
-                }
-            }
+    // Current item index - during drag, calculate directly from dragY to avoid
+    // recomputing derived state on every pointer move
+    val currentItemIndex: Int = if (isDragging && maxThumbOffset > 0) {
+        val fraction = (dragY / maxThumbOffset).coerceIn(0f, 1f)
+        (fraction * (state.totalItemsCount - 1)).toInt().coerceIn(0, (state.totalItemsCount - 1).coerceAtLeast(0))
+    } else {
+        when (state) {
+            is LazyListScrollbarState -> state.currentItemIndex
+            is LazyGridScrollbarState -> state.currentItemIndex
+            else -> 0
         }
     }
 
-    val bubbleText by remember(currentIndex, bubbleFormatter) {
-        derivedStateOf {
-            bubbleFormatter?.invoke(currentIndex) ?: currentIndex.toString()
-        }
+    val bubbleText: String = remember(currentItemIndex, bubbleFormatter) {
+        bubbleFormatter?.invoke(currentItemIndex) ?: currentItemIndex.toString()
     }
 
     // M3E colors
@@ -230,6 +234,11 @@ fun M3EScrollbar(
                 .fillMaxHeight()
                 .width(config.touchAreaWidth)
                 .pointerInput(Unit) {
+                    // Use rememberUpdatedState values to avoid lambda re-creation
+                    val coroutineScope by coroutineScopeState
+                    val haptic by hapticState
+                    val state by stateState
+
                     detectTapGestures { offset ->
                         if (!isDragging) {
                             val tapProgress = (offset.y / size.height).coerceIn(0f, 1f)
@@ -245,7 +254,13 @@ fun M3EScrollbar(
                         }
                     }
                 }
-                .pointerInput(viewportSize, contentSize) {
+                .pointerInput(contentSize) {
+                    // Use rememberUpdatedState values to avoid lambda re-creation
+                    val scrollRange by scrollRangeState
+                    val coroutineScope by coroutineScopeState
+                    val haptic by hapticState
+                    val state by stateState
+
                     detectDragGestures(
                         onDragStart = { offset ->
                             isDragging = true

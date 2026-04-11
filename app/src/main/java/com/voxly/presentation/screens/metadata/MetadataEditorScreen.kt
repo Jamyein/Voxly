@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -162,6 +163,17 @@ fun MetadataEditorScreen(
         onConsumePendingOnlineCoverArt()
     }
 
+    var pendingMediaStoreIntentSender by remember { mutableStateOf<android.content.IntentSender?>(null) }
+    
+    val mediaStorePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        pendingMediaStoreIntentSender = null
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            viewModel.retrySaveAfterMediaStorePermission()
+        }
+    }
+
     // Handle save result
     LaunchedEffect(saveResult) {
         if (saveResult is com.voxly.presentation.viewmodel.SaveResult.Success) {
@@ -173,6 +185,17 @@ fun MetadataEditorScreen(
         } else if (saveResult is com.voxly.presentation.viewmodel.SaveResult.Error) {
             exitAfterSave = false
             val error = saveResult as com.voxly.presentation.viewmodel.SaveResult.Error
+            // Handle MediaStore permission required - launch system dialog
+            if (error.errorCode == com.voxly.presentation.viewmodel.SaveErrorCode.MEDIASTORE_PERMISSION_REQUIRED) {
+                error.mediaStoreIntentSender?.let { intentSender ->
+                    pendingMediaStoreIntentSender = intentSender
+                    mediaStorePermissionLauncher.launch(
+                        androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
+                    )
+                }
+                // Don't clear yet - wait for permission result
+                return@LaunchedEffect
+            }
             if (error.requiresReauthorization) {
                 showReauthorizeDialog = true
             }

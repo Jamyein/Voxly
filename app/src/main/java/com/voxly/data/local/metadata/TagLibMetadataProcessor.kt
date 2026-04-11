@@ -1,7 +1,9 @@
 package com.voxly.data.local.metadata
 
+import android.app.RecoverableSecurityException
 import android.content.Context
 import android.content.ContentUris
+import android.content.IntentSender
 import android.net.Uri
 import android.os.Environment
 import android.os.ParcelFileDescriptor
@@ -800,7 +802,6 @@ class TagLibMetadataProcessor @Inject constructor(
      */
     suspend fun updateMetadata(filePath: String, metadata: AudioMetadata): Result<Unit> =
         withContext(Dispatchers.IO) {
-            // First try SAF approach for external storage
             if (isExternalStorage(filePath)) {
                 val safResult = tryUpdateMetadataViaSaf(filePath, metadata)
                 if (safResult.isSuccess) {
@@ -809,12 +810,23 @@ class TagLibMetadataProcessor @Inject constructor(
                 }
                 Timber.w(
                     TAG,
-                    "SAF write failed, trying direct access: $filePath, reason=${safResult.exceptionOrNull()?.message}",
+                    "SAF write failed, trying MediaStore: $filePath, reason=${safResult.exceptionOrNull()?.message}",
                     safResult.exceptionOrNull()
+                )
+                val mediaStoreResult = updateMetadataViaMediaStoreUri(filePath, metadata)
+                if (mediaStoreResult.isSuccess) {
+                    Timber.d(TAG, "MediaStore write successful: $filePath")
+                    return@withContext mediaStoreResult
+                }
+                val errorMsg = "Cannot write to file: $filePath. " +
+                    "Please add a working directory containing this file, " +
+                    "or re-select the file through the file browser to grant write access."
+                Timber.tag(TAG).e( errorMsg)
+                return@withContext Result.failure(
+                    IllegalStateException(errorMsg)
                 )
             }
 
-            // Direct file access for internal storage
             try {
                 val result = updateMetadataDirect(filePath, metadata)
                 if (result.isSuccess) {
@@ -902,19 +914,22 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     private fun updateMetadataViaMediaStoreUri(filePath: String, metadata: AudioMetadata): Result<Unit> {
-        return runCatching {
-            val mediaUri = queryMediaStoreUriByPath(filePath)
-                ?: return Result.failure(IllegalStateException("No MediaStore URI for: $filePath"))
-            val pfd = context.contentResolver.openFileDescriptor(mediaUri, "rw")
+        val mediaUri = queryMediaStoreUriByPath(filePath)
+            ?: return Result.failure(IllegalStateException("No MediaStore URI for: $filePath"))
+        
+        var pfd: ParcelFileDescriptor? = null
+        var fdForTagLib: Int = -1
+        
+        try {
+            pfd = context.contentResolver.openFileDescriptor(mediaUri, "rw")
                 ?: return Result.failure(IllegalStateException("Cannot open MediaStore file descriptor"))
-            val fdForTagLib = pfd.dup().detachFd()
+            fdForTagLib = pfd.dup().detachFd()
 
             val properties = buildPropertiesMap(metadata)
-
-            val success = try {
-                TagLib.savePropertyMap(fdForTagLib, properties)
-            } finally {
-                pfd.close()
+            val success = TagLib.savePropertyMap(fdForTagLib, properties)
+            
+            if (!success) {
+                return Result.failure(IllegalStateException("TagLib.savePropertyMap() returned false"))
             }
             
             // Save album art if provided
@@ -926,9 +941,8 @@ class TagLibMetadataProcessor @Inject constructor(
                     pictureType = "Front Cover",
                     mimeType = mimeType
                 )
-                // Need to reopen file descriptor for picture saving since we closed it in finally
                 val pfd2 = context.contentResolver.openFileDescriptor(mediaUri, "rw")
-                    ?: return@runCatching Result.failure(IllegalStateException("Cannot reopen file descriptor for picture save"))
+                    ?: return Result.failure(IllegalStateException("Cannot reopen file descriptor for picture save"))
                 val fdForTagLib2 = pfd2.dup().detachFd()
                 try {
                     val pictureSaved = TagLib.savePictures(fdForTagLib2, arrayOf(picture))
@@ -936,17 +950,42 @@ class TagLibMetadataProcessor @Inject constructor(
                         Timber.tag(TAG).w( "Failed to save album art for: $filePath")
                     }
                 } finally {
-                    pfd2.close()
+                    try { pfd2.close() } catch (_: Exception) { }
                 }
             }
             
-            if (!success) {
-                return Result.failure(IllegalStateException("TagLib.savePropertyMap() returned false"))
-            }
             Result.success(Unit)
-        }.getOrElse { e ->
-            Result.failure(e)
+        } catch (e: RecoverableSecurityException) {
+            val intentSender = try {
+                val method = e.userAction.javaClass.getMethod("getIntentSender")
+                method.invoke(e.userAction) as? IntentSender
+            } catch (_: Exception) {
+                null
+            }
+            if (intentSender != null) {
+                throw RecoverableMediaStoreException(
+                    "MediaStore write permission denied for: $filePath. Please grant write access through the system permission dialog to edit this file.",
+                    intentSender,
+                    e
+                )
+            }
+            return Result.failure(
+                IllegalStateException(
+                    "MediaStore write permission denied for: $filePath. Please grant write access through the system permission dialog to edit this file.",
+                    e
+                )
+            )
+        } catch (e: Exception) {
+            val errorMessage = if (e.message?.contains("EACCES") == true || e.message?.contains("Permission denied") == true) {
+                "Write permission denied for: $filePath. ${e.message ?: ""}"
+            } else {
+                e.message ?: "Failed to update metadata via MediaStore for: $filePath"
+            }
+            Result.failure(IllegalStateException(errorMessage, e))
+        } finally {
+            try { pfd?.close() } catch (_: Exception) { }
         }
+        return Result.failure(IllegalStateException("Unexpected exit in updateMetadataViaMediaStoreUri"))
     }
 
     /**

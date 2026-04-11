@@ -10,6 +10,7 @@ import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.data.local.saf.SafWriteAccessService
+import com.voxly.data.local.metadata.RecoverableMediaStoreException
 import com.voxly.data.remote.downloadImageBytes
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.data.repository.LyricsRepositoryImpl
@@ -603,7 +604,18 @@ class MetadataEditorViewModel @AssistedInject constructor(
             _uiState.value = MetadataEditorUiState.Saving
 
             // First save the metadata
-            val metadataResult = audioRepository.updateMetadata(filePath, metadataToSave)
+            val metadataResult = try {
+                audioRepository.updateMetadata(filePath, metadataToSave)
+            } catch (e: RecoverableMediaStoreException) {
+                _saveResult.value = SaveResult.Error(
+                    message = e.message ?: "MediaStore permission required to edit this file",
+                    requiresReauthorization = true,
+                    errorCode = SaveErrorCode.MEDIASTORE_PERMISSION_REQUIRED,
+                    mediaStoreIntentSender = e.intentSender
+                )
+                _uiState.value = MetadataEditorUiState.Error(e.message ?: "MediaStore permission required")
+                return@launch
+            }
             
             metadataResult.fold(
                 onSuccess = {
@@ -828,6 +840,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     _uiState.value = MetadataEditorUiState.Error(message)
                 }
             )
+        }
+    }
+
+    fun retrySaveAfterMediaStorePermission() {
+        viewModelScope.launch {
+            Logger.i("MediaStore permission granted, retrying save for file=$filePath", TAG)
+            saveMetadata()
         }
     }
 
