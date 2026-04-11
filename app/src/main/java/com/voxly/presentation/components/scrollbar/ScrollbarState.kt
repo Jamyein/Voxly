@@ -172,10 +172,10 @@ class LazyGridScrollbarState(
             return@derivedStateOf 0
         }
 
-        val firstVisible = visibleItems.first()
-        val firstItemRow = gridState.firstVisibleItemIndex / maxOf(1, gridMetrics.spanCount)
+        val topItem = visibleItems.minByOrNull { it.offset.y } ?: visibleItems.first()
+        val topItemRow = topItem.row
 
-        (firstItemRow * gridMetrics.rowHeight) + firstVisible.offset.y
+(topItemRow * gridMetrics.rowHeight) + topItem.offset.y
     }
 
     override val viewportSize: Int by derivedStateOf {
