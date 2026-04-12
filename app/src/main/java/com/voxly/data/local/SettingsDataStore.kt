@@ -897,9 +897,10 @@ class SettingsDataStore @Inject constructor(
      */
     private val encryptedProxyPrefs: SharedPreferences by lazy {
         val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
             .build()
-        
-        EncryptedSharedPreferences(
+
+        EncryptedSharedPreferences.create(
             context,
             "proxy_settings_encrypted",
             masterKey,

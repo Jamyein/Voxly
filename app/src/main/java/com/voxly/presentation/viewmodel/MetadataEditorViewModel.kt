@@ -190,6 +190,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     init {
         loadAudioFile()
+        viewModelScope.launch {
+            pendingMetadataHolder.pending.collect { pendingMap ->
+                if (pendingMap.containsKey(filePath)) {
+                    tryApplyPendingOnlineMetadata()
+                }
+            }
+        }
     }
 
     /**

@@ -236,7 +236,8 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     // Security - EncryptedSharedPreferences for proxy credentials
-    implementation("androidx.security:security-crypto:1.1.0")
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("com.google.crypto.tink:tink-android:1.12.0")
 
     // Gson for JSON serialization (Retrofit)
     implementation("com.google.code.gson:gson:2.13.2")
