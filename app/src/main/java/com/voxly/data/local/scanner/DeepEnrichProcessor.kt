@@ -19,7 +19,7 @@ import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 import javax.inject.Named
-import kotlin.math.min
+
 
 /**
  * Deep enrichment processor - second pass of two-pass scanning.
@@ -96,14 +96,11 @@ class DeepEnrichProcessor @Inject constructor(
 
         val coverKey = generateCoverKey(albumArtist, albumName)
 
-        val bitmap = android.graphics.BitmapFactory.decodeByteArray(albumArt, 0, albumArt.size)
+        val bitmap = decodeSampledBitmap(albumArt, COVER_SIZE)
             ?: return@withContext null
 
-        val scaled = scaleBitmap(bitmap, COVER_SIZE)
+        val webp = encodeWebP(bitmap)
         bitmap.recycle()
-
-        val webp = encodeWebP(scaled)
-        scaled.recycle()
 
         if (webp != null) {
             coverDiskCache.put(coverKey, webp)
@@ -112,21 +109,28 @@ class DeepEnrichProcessor @Inject constructor(
         coverKey
     }
 
+    private fun decodeSampledBitmap(bytes: ByteArray, targetSize: Int): Bitmap? {
+        val options = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+
+        var sampleSize = 1
+        while (options.outWidth / sampleSize > targetSize * 2 || options.outHeight / sampleSize > targetSize * 2) {
+            sampleSize *= 2
+        }
+
+        val decodeOptions = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+        }
+        return BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
+    }
+
     private fun generateCoverKey(albumArtist: String, albumName: String): String {
         val input = "$albumArtist|$albumName"
         val digest = MessageDigest.getInstance("MD5")
         val bytes = digest.digest(input.toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
-    }
-
-    private fun scaleBitmap(bitmap: Bitmap, maxSize: Int): Bitmap {
-        val ratio = min(
-            maxSize.toFloat() / bitmap.width,
-            maxSize.toFloat() / bitmap.height
-        )
-        val newWidth = (bitmap.width * ratio).toInt()
-        val newHeight = (bitmap.height * ratio).toInt()
-        return Bitmap.createScaledBitmap(bitmap, newWidth, newHeight, true)
     }
 
     private fun encodeWebP(bitmap: Bitmap): ByteArray? {
