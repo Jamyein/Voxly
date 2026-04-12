@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChangedBy
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
@@ -124,13 +125,16 @@ class AudioFileScanner @Inject constructor(
         )
 
         val filtered = filterEngine.applyFilters(files, settings)
-        FilteredResult(
+        val result = FilteredResult(
             version = filterEngine.computeFilterVersion(cacheVersion, settings),
             files = filtered
         )
+        Timber.d("$TAG: combine.emit: version=${result.version}, files=${result.files.size}, cacheVersion=$cacheVersion")
+        result
     }
         .conflate()
         .distinctUntilChangedBy { it.version }
+        .onEach { result: FilteredResult -> Timber.d("$TAG: filteredAudioFiles.emit: version=${result.version}, files=${result.files.size}") }
         .map { it.files }
         .flowOn(Dispatchers.Default)
         .catch { e ->

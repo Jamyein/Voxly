@@ -52,7 +52,8 @@ class MediaStoreDataSource @Inject constructor(
             MediaStore.Audio.Media.BITRATE,
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.RELATIVE_PATH,
-            MediaStore.Audio.Media.DATE_MODIFIED
+            MediaStore.Audio.Media.DATE_MODIFIED,
+            MediaStore.Audio.Media.ALBUM_ARTIST
         )
     }
 
@@ -309,7 +310,7 @@ class MediaStoreDataSource @Inject constructor(
                 trackNumber = trackNum,
                 totalTracks = totalTracks,
                 albumArt = null,
-                albumArtist = null,
+                albumArtist = cursor.getString(columns.albumArtist)?.takeIf { it.isNotBlank() },
                 genre = null,
                 discNumber = null,
                 totalDiscs = null,
@@ -357,6 +358,7 @@ class MediaStoreDataSource @Inject constructor(
         val track = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
         val relativePath = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
         val dateModified = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+        val albumArtist = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ARTIST)
     }
 
     /**
