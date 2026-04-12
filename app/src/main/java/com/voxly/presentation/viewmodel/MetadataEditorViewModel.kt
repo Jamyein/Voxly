@@ -189,6 +189,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
     )
 
     init {
+        // Initialize modified fields to empty - will be populated only by actual edits
+        _modifiedFields.value = emptySet()
+        _hasUnsavedChanges.value = false
+        
         loadAudioFile()
         viewModelScope.launch {
             pendingMetadataHolder.pending.collect { pendingMap ->
