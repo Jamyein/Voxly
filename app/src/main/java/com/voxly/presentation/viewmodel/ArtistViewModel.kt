@@ -81,4 +81,8 @@ class ArtistViewModel @Inject constructor(
             }
         }
     }
+
+    init {
+        refresh(forceRefresh = false)
+    }
 }

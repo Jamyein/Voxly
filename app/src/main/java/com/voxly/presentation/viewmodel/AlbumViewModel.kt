@@ -52,6 +52,7 @@ class AlbumViewModel @Inject constructor(
 
     init {
         preloadAlbumInfo()
+        refresh(forceRefresh = false)
     }
 
     /**
