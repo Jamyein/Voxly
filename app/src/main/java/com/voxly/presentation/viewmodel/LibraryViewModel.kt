@@ -115,7 +115,7 @@ class LibraryViewModel @Inject constructor(
     
     // Keep original allAudios for backward compatibility
     @Suppress("DEPRECATION")
-    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredAudioFiles
+    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredFiles
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),

@@ -87,82 +87,13 @@ class AudioFileScanner @Inject constructor(
     // Delegate albums/artists to aggregator
     val albums: StateFlow<List<AlbumGroup>> = albumArtistAggregator.albums
     val artists: StateFlow<List<ArtistGroup>> = albumArtistAggregator.artists
+    val filteredFiles: StateFlow<List<AudioFile>> = albumArtistAggregator.filteredFiles
 
     // Raw cached audio files from database
     val cachedAudioFilesFlow: Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
         .catch { e ->
             Timber.e(e, "Error observing cached audio files")
         }
-
-    // Filtered audio files - applies all filters and reacts to settings changes
-    @Suppress("UNCHECKED_CAST")
-    val filteredAudioFiles: Flow<List<AudioFile>> = combine(
-        cachedAudioFilesFlow,
-        libraryCache.cacheVersionFlow,
-        settingsDataStore.whitelistEnabled,
-        settingsDataStore.blacklistEnabled,
-        settingsDataStore.minDurationFilterEnabled,
-        settingsDataStore.selectedDirectoryUris,
-        settingsDataStore.blacklistDirectoryUris,
-        settingsDataStore.minDurationFilterThresholdMs
-    ) { arrays ->
-        val files = arrays[0] as List<AudioFile>
-        val cacheVersion = arrays[1] as Long
-        val whitelistEnabled = arrays[2] as Boolean
-        val blacklistEnabled = arrays[3] as Boolean
-        val minDurationEnabled = arrays[4] as Boolean
-        val whitelistUris = arrays[5] as List<String>
-        val blacklistUris = arrays[6] as List<String>
-        val minDurationMs = (arrays[7] as Int).toLong()
-
-        val settings = FilterEngine.FilterSettings(
-            whitelistEnabled = whitelistEnabled,
-            blacklistEnabled = blacklistEnabled,
-            minDurationEnabled = minDurationEnabled,
-            whitelistUris = whitelistUris,
-            blacklistUris = blacklistUris,
-            minDurationMs = minDurationMs
-        )
-
-        val filtered = filterEngine.applyFilters(files, settings)
-        val result = FilteredResult(
-            version = filterEngine.computeFilterVersion(cacheVersion, settings),
-            files = filtered
-        )
-        Timber.d("$TAG: combine.emit: version=${result.version}, files=${result.files.size}, cacheVersion=$cacheVersion")
-        result
-    }
-        .conflate()
-        .distinctUntilChangedBy { it.version }
-        .onEach { result: FilteredResult -> Timber.d("$TAG: filteredAudioFiles.emit: version=${result.version}, files=${result.files.size}") }
-        .map { it.files }
-        .flowOn(Dispatchers.Default)
-        .catch { e ->
-            Timber.e(e, "Error observing filtered audio files")
-            emit(emptyList())
-        }
-
-    init {
-        // Auto-update albums and artists when filtered data changes
-        applicationScope.launch(Dispatchers.Default) {
-            filteredAudioFiles
-                .conflate()
-                .collectLatest { files ->
-                    if (coroutineContext.isActive) {
-                        kotlinx.coroutines.delay(50) // Debounce: wait 50ms to batch rapid updates
-                    }
-                    if (coroutineContext.isActive) {
-                        Timber.d("$TAG: updateAlbumsAndArtistsFromFiles with ${files.size} files")
-                        albumArtistAggregator.updateAlbumsAndArtistsFromFiles(files, filterEngine)
-                    }
-                }
-        }
-    }
-
-    private data class FilteredResult(
-        val version: Long,
-        val files: List<AudioFile>
-    )
 
     /**
      * Get cached audio files (from Room database).

@@ -24,7 +24,7 @@ import javax.inject.Singleton
         AlbumArtFileCacheEntity::class,
         AlbumInfoEntity::class  // Added for album year and audio info caching
     ],
-    version = 5,  // Bumped from 4 to 5 for AlbumInfoEntity
+    version = 6,  // Bumped from 5 to 6 for artistId, mimeType, dateAdded columns
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -154,6 +154,15 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         db.execSQL("CREATE INDEX IF NOT EXISTS `index_album_info_year` ON `album_info` (`year`)")
                     }
                 })
+                // Migration from version 5 to 6: adds artistId, mimeType, dateAdded columns to cached_audio_files
+                .addMigrations(object : Migration(5, 6) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `mimeType` TEXT")
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `artistId` INTEGER")
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `dateAdded` INTEGER NOT NULL DEFAULT 0")
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_artistId` ON `cached_audio_files` (`artistId`)")
+                    }
+                })
 
             val newInstance = builder.build()
             prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
@@ -178,6 +187,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
     companion object {
         private const val PREFS_NAME = "music_cache_meta"
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
-        private const val CURRENT_DATA_FORMAT_VERSION = 5  // Updated for AlbumInfoEntity
+        private const val CURRENT_DATA_FORMAT_VERSION = 6  // Updated for artistId, mimeType, dateAdded
     }
 }

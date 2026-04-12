@@ -15,12 +15,15 @@ data class AudioFile(
     val size: Long,
     val duration: Long,
     val format: String,
+    val mimeType: String? = null,
     val bitrate: Int,
     val sampleRate: Int,
     val channels: Int,
     val metadata: AudioMetadata,
     val replayGainInfo: ReplayGainInfo? = null,
-    val mediaStoreAlbumId: Long? = null
+    val mediaStoreAlbumId: Long? = null,
+    val mediaStoreArtistId: Long? = null,
+    val dateAdded: Long = 0
 ) {
     companion object {
         private val ALBUM_ART_URI = Uri.parse("content://media/external/audio/albumart")

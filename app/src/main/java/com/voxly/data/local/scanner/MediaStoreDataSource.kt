@@ -43,6 +43,7 @@ class MediaStoreDataSource @Inject constructor(
             MediaStore.Audio.Media.DISPLAY_NAME,
             MediaStore.Audio.Media.TITLE,
             MediaStore.Audio.Media.ARTIST,
+            MediaStore.Audio.Media.ARTIST_ID,
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.ALBUM_ID,
             MediaStore.Audio.Media.YEAR,
@@ -53,7 +54,9 @@ class MediaStoreDataSource @Inject constructor(
             MediaStore.Audio.Media.TRACK,
             MediaStore.Audio.Media.RELATIVE_PATH,
             MediaStore.Audio.Media.DATE_MODIFIED,
-            MediaStore.Audio.Media.ALBUM_ARTIST
+            MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.ALBUM_ARTIST,
+            MediaStore.Audio.Media.COMPOSER
         )
     }
 
@@ -299,9 +302,11 @@ class MediaStoreDataSource @Inject constructor(
             if (duration != 0L && minDurationEnabled && duration < minDurationMs) continue
 
             val albumId = cursor.getLong(columns.albumId).takeIf { it > 0L }
+            val artistId = cursor.getLong(columns.artistId).takeIf { it > 0L }
             val (trackNum, totalTracks) = parseMediaStoreTrackField(cursor.getInt(columns.track))
 
             val yearInt = cursor.getInt(columns.year)
+            val composerStr = cursor.getString(columns.composer)?.takeIf { it.isNotBlank() }
             val metadata = com.voxly.domain.model.AudioMetadata(
                 title = cursor.getString(columns.title)?.takeIf { it.isNotBlank() },
                 artist = cursor.getString(columns.artist)?.takeIf { it.isNotBlank() },
@@ -314,7 +319,7 @@ class MediaStoreDataSource @Inject constructor(
                 genre = null,
                 discNumber = null,
                 totalDiscs = null,
-                composer = null,
+                composer = composerStr,
                 lyricist = null,
                 conductor = null,
                 originalArtist = null,
@@ -331,10 +336,13 @@ class MediaStoreDataSource @Inject constructor(
                     size = cursor.getLong(columns.size),
                     duration = duration,
                     format = extension.uppercase(),
+                    mimeType = cursor.getString(columns.mimeType),
                     bitrate = cursor.getInt(columns.bitrate) / 1000,
                     sampleRate = 0,
                     channels = 0,
                     mediaStoreAlbumId = albumId,
+                    mediaStoreArtistId = artistId,
+                    dateAdded = cursor.getLong(columns.dateAdded),
                     metadata = metadata
                 )
             )
@@ -349,16 +357,20 @@ class MediaStoreDataSource @Inject constructor(
         val name = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
         val title = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE)
         val artist = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST)
+        val artistId = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST_ID)
         val album = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
         val albumId = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
         val year = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR)
         val duration = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
         val size = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.SIZE)
+        val mimeType = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.MIME_TYPE)
         val bitrate = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
         val track = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK)
         val relativePath = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
         val dateModified = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+        val dateAdded = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
         val albumArtist = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ARTIST)
+        val composer = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.COMPOSER)
     }
 
     /**
@@ -462,4 +474,43 @@ class MediaStoreDataSource @Inject constructor(
      * Get audio extensions set.
      */
     fun getAudioExtensions(): Set<String> = AUDIO_EXTENSIONS
+
+    /**
+     * Query artist names for a list of artist IDs.
+     * Returns a map of artistId to artist name.
+     */
+    fun queryArtistNames(artistIds: List<Long>): Map<Long, String> {
+        if (artistIds.isEmpty()) return emptyMap()
+
+        val result = mutableMapOf<Long, String>()
+        val artistUri = MediaStore.Audio.Artists.EXTERNAL_CONTENT_URI
+
+        val projection = arrayOf(
+            MediaStore.Audio.Artists._ID,
+            MediaStore.Audio.Artists.ARTIST
+        )
+
+        val selection = "${MediaStore.Audio.Artists._ID} IN (${artistIds.joinToString(",")})"
+
+        contentResolver.query(
+            artistUri,
+            projection,
+            selection,
+            null,
+            null
+        )?.use { cursor ->
+            val idCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists._ID)
+            val artistCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Artists.ARTIST)
+
+            while (cursor.moveToNext()) {
+                val id = cursor.getLong(idCol)
+                val name = cursor.getString(artistCol)
+                if (name != null) {
+                    result[id] = name
+                }
+            }
+        }
+
+        return result
+    }
 }
