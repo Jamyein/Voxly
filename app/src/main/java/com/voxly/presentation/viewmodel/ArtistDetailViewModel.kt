@@ -69,6 +69,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private var preloadJob: Job? = null
     private var refreshJob: Job? = null
     private var albumYearJob: Job? = null
+    private var hasLoadedArtistData = false
     private val preloadMutex = kotlinx.coroutines.sync.Mutex()
 
     init {
@@ -82,6 +83,11 @@ class ArtistDetailViewModel @AssistedInject constructor(
     fun loadArtist(artistName: String) {
         viewModelScope.launch {
             try {
+                // Skip if already loaded for this artist
+                if (hasLoadedArtistData && _artistName.value == artistName && _files.value.isNotEmpty()) {
+                    return@launch
+                }
+
                 // First try to get from cache
                 val cachedArtist = artistCacheRepository.getArtist(artistName)
 
@@ -93,8 +99,11 @@ class ArtistDetailViewModel @AssistedInject constructor(
                         it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
                     }?.mediaStoreAlbumId
                     calculateStats(cachedArtist.files)
-                    precomputeAlbumCovers(cachedArtist.files)
-                    loadAlbumYears(cachedArtist.files)
+                    if (!hasLoadedArtistData) {
+                        precomputeAlbumCovers(cachedArtist.files)
+                        loadAlbumYears(cachedArtist.files)
+                    }
+                    hasLoadedArtistData = true
                 } else {
                     // Cache miss: look up from AudioFileScanner (source of truth)
                     val scannerArtist = audioFileScanner.artists.first()
@@ -159,24 +168,16 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     return@launch
                 }
 
-                // Query all album summaries and filter by album names
-                val allSummaries = databaseProvider.getDatabase()
-                    .albumSummaryDao()
-                    .getAllAlbumSummaries()
+                val summaries = withContext(Dispatchers.IO) {
+                    databaseProvider.getDatabase()
+                        .albumSummaryDao()
+                        .getAlbumSummariesByNames(albumNames)
+                }
 
-                val summariesByAlbumName = allSummaries
-                    .filter { it.albumTitle in albumNames }
-                    .associate { it.albumTitle to it.year }
-
-                _albumYears.value = summariesByAlbumName
+                _albumYears.value = summaries.associate { it.albumTitle to it.year }
             } catch (e: Exception) {
                 Timber.e(e, "Error loading album years from view")
-                // Fallback to calculating from files
-                val albumGroups = files.filter { !it.metadata.album.isNullOrBlank() }
-                    .groupBy { it.metadata.album!! }
-                _albumYears.value = albumGroups.mapValues { (_, albumFiles) ->
-                    albumFiles.mapNotNull { it.metadata.year }.maxOrNull()
-                }
+                _albumYears.value = emptyMap()
             }
         }
     }

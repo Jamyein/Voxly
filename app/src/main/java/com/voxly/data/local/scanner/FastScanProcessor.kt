@@ -45,6 +45,7 @@ class FastScanProcessor @Inject constructor(
 
                 val extension = file.extension.lowercase()
                 val (duration, bitrate) = mediaStoreDataSource.queryFileDurationAndBitrate(path)
+                val year = mediaStoreDataSource.queryYearFromMediaStore(path)
 
                 AudioFile(
                     id = path.hashCode().toString(),
@@ -56,7 +57,7 @@ class FastScanProcessor @Inject constructor(
                     bitrate = bitrate,
                     sampleRate = 0,
                     channels = 0,
-                    metadata = AudioMetadata()
+                    metadata = AudioMetadata(year = year)
                 )
             } catch (e: Exception) {
                 Timber.w(TAG, "Fast scan failed: $path", e)

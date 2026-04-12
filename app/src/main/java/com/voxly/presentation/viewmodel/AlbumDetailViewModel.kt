@@ -56,6 +56,8 @@ class AlbumDetailViewModel @AssistedInject constructor(
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private var refreshJob: Job? = null
+    private var hasLoadedAlbum = false
+    private val tagLibReadCache = mutableMapOf<String, AudioMetadata>()
 
     init {
         // Load album data from AudioFileScanner albums on init
@@ -69,6 +71,10 @@ class AlbumDetailViewModel @AssistedInject constructor(
      * For files with missing discNumber, uses TagLib to read from file tags.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
+        if (hasLoadedAlbum && _albumName.value == albumName && _albumArtist.value == albumArtist && _files.value.isNotEmpty()) {
+            return
+        }
+
         viewModelScope.launch {
             try {
                 val albums = audioFileScanner.albums.first()
@@ -83,9 +89,11 @@ class AlbumDetailViewModel @AssistedInject constructor(
 
                     val filesWithDiscNumber = albumGroup.files.map { file ->
                         if (file.metadata.discNumber == null) {
-                            val tagMetadata = metadataProcessor.readMetadata(file.path)
-                            if (tagMetadata?.discNumber != null) {
-                                file.copy(metadata = file.metadata.copy(discNumber = tagMetadata.discNumber))
+                            val cached = tagLibReadCache.getOrPut(file.path) {
+                                metadataProcessor.readMetadata(file.path) ?: file.metadata
+                            }
+                            if (cached.discNumber != null) {
+                                file.copy(metadata = file.metadata.copy(discNumber = cached.discNumber))
                             } else {
                                 file
                             }
@@ -104,6 +112,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
                     _albumYear.value = albumSummary?.year
                     _albumSampleRate.value = albumSummary?.maxSampleRate ?: 0
                     _albumBitrate.value = albumSummary?.maxBitrate ?: 0
+                    hasLoadedAlbum = true
                 } else {
                     _albumName.value = albumName
                     _albumArtist.value = albumArtist

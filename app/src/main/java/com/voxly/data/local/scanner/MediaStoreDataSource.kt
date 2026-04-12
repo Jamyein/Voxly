@@ -280,6 +280,38 @@ class MediaStoreDataSource @Inject constructor(
     }
 
     /**
+     * Query MediaStore for a single file's year.
+     */
+    suspend fun queryYearFromMediaStore(filePath: String): String? = withContext(Dispatchers.IO) {
+        val file = File(filePath)
+        val relativePath = getRelativePathFromAbsolute(file.parentFile?.absolutePath.orEmpty())
+        val selection: String
+        val selectionArgs: Array<String>
+
+        if (relativePath != null) {
+            selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ? AND ${MediaStore.Audio.Media.RELATIVE_PATH} = ?"
+            selectionArgs = arrayOf(file.name, relativePath)
+        } else {
+            selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ?"
+            selectionArgs = arrayOf(file.name)
+        }
+
+        contentResolver.query(
+            AUDIO_URI,
+            arrayOf(MediaStore.Audio.Media.YEAR),
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val year = cursor.getInt(0)
+                return@withContext if (year > 0) year.toString() else null
+            }
+        }
+        null
+    }
+
+    /**
      * Convert MediaStore cursor to AudioFile list.
      */
     private fun cursorToAudioFiles(

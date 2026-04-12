@@ -33,6 +33,20 @@ interface AlbumSummaryDao {
         GROUP BY albumArtist, album
     """)
     suspend fun getAllAlbumSummaries(): List<AlbumSummary>
+
+    @Query("""
+        SELECT 
+            album AS albumTitle,
+            albumArtist AS albumArtist,
+            COUNT(*) AS songCount,
+            MAX(year) AS year,
+            MAX(sampleRate) AS maxSampleRate,
+            MAX(bitrate) AS maxBitrate
+        FROM cached_audio_files
+        WHERE album IN (:albumTitles) AND album IS NOT NULL AND album != ''
+        GROUP BY albumArtist, album
+    """)
+    suspend fun getAlbumSummariesByNames(albumTitles: List<String>): List<AlbumSummary>
 }
 
 data class AlbumSummary(
