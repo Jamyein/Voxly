@@ -9,6 +9,7 @@ import com.voxly.data.local.cache.AlbumInfoEntity
 import com.voxly.data.local.cache.AlbumInfoManager
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AlbumGroup
+import com.voxly.domain.repository.WhitelistRepository
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import kotlinx.coroutines.Dispatchers
@@ -38,7 +39,7 @@ class AlbumArtistAggregator @Inject constructor(
     private val albumInfoManager: AlbumInfoManager,
     private val mediaStoreDataSource: MediaStoreDataSource,
     private val filterEngine: FilterEngine,
-    private val safWriteAccessService: SafWriteAccessService,
+    private val whitelistRepository: WhitelistRepository,
     @Named("ApplicationScope") private val applicationScope: CoroutineScope
 ) {
     // Albums derived from cached audio files - auto-updated when cache changes
@@ -82,15 +83,8 @@ class AlbumArtistAggregator @Inject constructor(
         val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
         val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
 
-        val whitelistUris = settingsDataStore.selectedDirectoryUris.first()
-        val blacklistUris = settingsDataStore.blacklistDirectoryUris.first()
-
-        val whitelistPaths = whitelistUris.mapNotNull { uri ->
-            safWriteAccessService.mapTreeUriToPath(android.net.Uri.parse(uri))
-        }
-        val blacklistPaths = blacklistUris.mapNotNull { uri ->
-            safWriteAccessService.mapTreeUriToPath(android.net.Uri.parse(uri))
-        }
+        val whitelistPaths = whitelistRepository.getValidWhitelistPaths().first()
+        val blacklistPaths = whitelistRepository.getValidBlacklistPaths().first()
 
         val filtered = filterEngine.applyFilters(
             files,

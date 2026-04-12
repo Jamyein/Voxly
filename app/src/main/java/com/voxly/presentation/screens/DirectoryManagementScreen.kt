@@ -45,7 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.viewmodel.DirectoryManagementViewModel
-import com.voxly.presentation.viewmodel.SelectedDirectory
+import com.voxly.domain.model.WhitelistDirectory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -170,7 +170,7 @@ fun DirectoryManagementScreen(
 
 @Composable
 private fun DirectoryManageItem(
-    directory: SelectedDirectory,
+    directory: WhitelistDirectory,
     onRemove: () -> Unit
 ) {
     Card(
