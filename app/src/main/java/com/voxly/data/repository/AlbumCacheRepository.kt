@@ -17,7 +17,7 @@ class AlbumCacheRepository @Inject constructor() {
      * Cache an album group using a key composed of album name and artist.
      */
     fun cacheAlbum(album: AlbumGroup) {
-        val key = createKey(album.name, album.artist)
+        val key = createKey(album.name, album.albumArtist)
         albumCache[key] = album
     }
 

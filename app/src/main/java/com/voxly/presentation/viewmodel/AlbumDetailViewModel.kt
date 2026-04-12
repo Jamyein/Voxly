@@ -73,12 +73,12 @@ class AlbumDetailViewModel @AssistedInject constructor(
             try {
                 val albums = audioFileScanner.albums.first()
                 val albumGroup = albums.find { album ->
-                    album.name == albumName && album.artist == albumArtist
+                    album.name == albumName && album.albumArtist == albumArtist
                 }
 
                 if (albumGroup != null) {
                     _albumName.value = albumGroup.name
-                    _albumArtist.value = albumGroup.artist
+                    _albumArtist.value = albumGroup.albumArtist
                     _coverPath.value = albumGroup.coverPath
 
                     val filesWithDiscNumber = albumGroup.files.map { file ->

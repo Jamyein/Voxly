@@ -256,7 +256,7 @@ internal fun AlbumTabContent(
                             key = { index -> albumStableKey(albums[index]) }
                         ) { index ->
                             val album = albums[index]
-                            val albumKey = AlbumInfoEntity.generateId(album.name, album.artist)
+                            val albumKey = AlbumInfoEntity.generateId(album.name, album.albumArtist)
                             val albumInfo = albumInfoMap[albumKey]
                             AlbumGridItem(
                                 album = album,
@@ -309,7 +309,7 @@ internal fun AlbumYearGroupedContent(
     
     val albumsByYear = remember(albums, isDescending, albumInfoMap) {
         albums.groupBy { album ->
-            val albumKey = AlbumInfoEntity.generateId(album.name, album.artist)
+            val albumKey = AlbumInfoEntity.generateId(album.name, album.albumArtist)
             val cachedInfo = albumInfoMap[albumKey]
             getAlbumDisplayYear(album, cachedInfo) ?: 0
         }.toSortedMap(if (isDescending) compareByDescending { it } else compareBy { it })
@@ -353,7 +353,7 @@ internal fun AlbumYearGroupedContent(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                         ),
                         leadingContent = {
-                            val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.artist)
+                            val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
                             val coverFile = album.coverFile()
                             Box(
                                 modifier = Modifier
@@ -395,7 +395,7 @@ internal fun AlbumYearGroupedContent(
                                     overflow = TextOverflow.Ellipsis
                                 )
                                 Text(
-                                    text = album.artist ?: "",
+                                    text = album.albumArtist ?: "",
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,

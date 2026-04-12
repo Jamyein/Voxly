@@ -251,7 +251,7 @@ data class ReplayGainInfo(
 @Immutable
 data class AlbumGroup(
     val name: String,
-    val artist: String?,
+    val albumArtist: String?,
     val files: List<AudioFile>,
     val coverPath: String? = null
 )

@@ -103,7 +103,7 @@ class AlbumViewModel @Inject constructor(
             var lastKeySignature: String? = null
             audioFileScanner.albums.collectLatest { albumGroups ->
                 val albumKeys = albumGroups
-                    .map { it.name to it.artist }
+                    .map { it.name to it.albumArtist }
                     .distinct()
 
                 val newSignature = albumKeys.joinToString("|") { key ->

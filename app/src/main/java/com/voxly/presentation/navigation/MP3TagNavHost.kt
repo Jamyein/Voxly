@@ -165,7 +165,7 @@ fun MP3TagNavHost() {
                                     backStack.add(MetadataEditor(filePath, coverTag ?: ""))
                                 },
                                 onNavigateToAlbumDetail = { albumGroup ->
-                                    backStack.add(AlbumDetail(albumGroup.name, albumGroup.artist ?: ""))
+                                    backStack.add(AlbumDetail(albumGroup.name, albumGroup.albumArtist ?: ""))
                                 }
                             )
                         }

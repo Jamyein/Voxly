@@ -60,7 +60,7 @@ fun getAlbumDisplayYearString(album: AlbumGroup, cachedInfo: AlbumInfoEntity?): 
  */
 fun albumStableKey(album: AlbumGroup): String {
     val representativePath = album.files.firstOrNull()?.path.orEmpty()
-    return "${album.name}|${album.artist.orEmpty()}|$representativePath"
+    return "${album.name}|${album.albumArtist.orEmpty()}|$representativePath"
 }
 
 /**
@@ -116,7 +116,7 @@ fun applyAlbumSortWithCache(
         AlbumSortOption.TRACK_COUNT_DESC -> albums.sortedByDescending { it.files.size }
         AlbumSortOption.YEAR_DESC -> albums.sortedByDescending { album ->
             // Try cache first
-            val albumKey = AlbumInfoEntity.generateId(album.name, album.artist)
+            val albumKey = AlbumInfoEntity.generateId(album.name, album.albumArtist)
             val cachedYear = cachedInfoMap[albumKey]?.year?.let { extractYear(it) }
             // Fallback to file metadata
             cachedYear ?: album.files.mapNotNull { audioFile ->

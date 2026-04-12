@@ -126,15 +126,15 @@ fun AlbumAdaptiveScreen(
                     if (currentAlbum != null) {
                         val navKey = AlbumDetail(
                             albumName = currentAlbum.name,
-                            albumArtist = currentAlbum.artist ?: ""
+                            albumArtist = currentAlbum.albumArtist ?: ""
                         )
                         val detailViewModel = hiltViewModel<AlbumDetailViewModel, AlbumDetailViewModel.Factory>(
-                            key = currentAlbum.name + (currentAlbum.artist ?: ""),
+                            key = currentAlbum.name + (currentAlbum.albumArtist ?: ""),
                             creationCallback = { factory -> factory.create(navKey) }
                         )
                         AlbumDetailScreen(
                             albumName = currentAlbum.name,
-                            albumArtist = currentAlbum.artist,
+                            albumArtist = currentAlbum.albumArtist,
                             onNavigateBack = {
                                 coroutineScope.launch {
                                     navigator.navigateBack()
