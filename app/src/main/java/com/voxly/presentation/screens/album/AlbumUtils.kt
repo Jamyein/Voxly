@@ -3,7 +3,6 @@ package com.voxly.presentation.screens.album
 import com.voxly.R
 import com.voxly.core.util.SortUtil
 import com.voxly.data.local.AlbumSortOption
-import com.voxly.data.local.cache.AlbumInfoEntity
 import com.voxly.domain.model.AlbumGroup
 
 /**
@@ -16,8 +15,6 @@ data class YearGroup(
 
 /**
  * Extracts a 4-digit year from the album metadata.
- * This is the legacy method that calculates from file metadata.
- * For better performance, use [getAlbumDisplayYear] with cached AlbumInfoEntity.
  */
 fun albumDisplayYearInt(album: AlbumGroup): Int? {
     return album.files
@@ -26,31 +23,17 @@ fun albumDisplayYearInt(album: AlbumGroup): Int? {
 }
 
 /**
- * Gets the display year for an album, preferring cached AlbumInfo data.
- * Falls back to calculating from file metadata if cache is unavailable.
- *
- * @param album The album group
- * @param cachedInfo Optional cached album info (from AlbumInfoManager)
- * @return The year as an integer, or null if not available
+ * Gets the display year for an album from file metadata.
  */
-fun getAlbumDisplayYear(album: AlbumGroup, cachedInfo: AlbumInfoEntity?): Int? {
-    // Prefer cached year
-    cachedInfo?.year?.let { year ->
-        return extractYear(year)
-    }
-    // Fallback to calculating from files
+fun getAlbumDisplayYear(album: AlbumGroup): Int? {
     return albumDisplayYearInt(album)
 }
 
 /**
  * Gets the display year string for an album.
- *
- * @param album The album group
- * @param cachedInfo Optional cached album info
- * @return The year as a string, or null if not available
  */
-fun getAlbumDisplayYearString(album: AlbumGroup, cachedInfo: AlbumInfoEntity?): String? {
-    return cachedInfo?.year ?: album.files
+fun getAlbumDisplayYearString(album: AlbumGroup): String? {
+    return album.files
         .mapNotNull { it.metadata.year }
         .maxOrNull()
 }
@@ -87,39 +70,6 @@ fun applyAlbumSort(
         AlbumSortOption.TRACK_COUNT_DESC -> albums.sortedByDescending { it.files.size }
         AlbumSortOption.YEAR_DESC -> albums.sortedByDescending { album ->
             album.files.mapNotNull { audioFile ->
-                audioFile.metadata.year
-                    ?.let { Regex("""\d{4}""").find(it)?.value }
-                    ?.toIntOrNull()
-            }.maxOrNull() ?: Int.MIN_VALUE
-        }
-    }
-}
-
-/**
- * Applies sorting to album groups with cached info support.
- * This suspend version can use cached album info for better performance.
- *
- * @param albums List of album groups
- * @param sortOption Sort option
- * @param cachedInfoMap Map of album keys to cached info
- * @return Sorted list of albums
- */
-fun applyAlbumSortWithCache(
-    albums: List<AlbumGroup>,
-    sortOption: AlbumSortOption,
-    cachedInfoMap: Map<String, AlbumInfoEntity> = emptyMap()
-): List<AlbumGroup> {
-    return when (sortOption) {
-        AlbumSortOption.NAME_ASC -> albums.sortedWith(
-            compareBy { SortUtil.toSortablePinyin(it.name) }
-        )
-        AlbumSortOption.TRACK_COUNT_DESC -> albums.sortedByDescending { it.files.size }
-        AlbumSortOption.YEAR_DESC -> albums.sortedByDescending { album ->
-            // Try cache first
-            val albumKey = AlbumInfoEntity.generateId(album.name, album.albumArtist)
-            val cachedYear = cachedInfoMap[albumKey]?.year?.let { extractYear(it) }
-            // Fallback to file metadata
-            cachedYear ?: album.files.mapNotNull { audioFile ->
                 audioFile.metadata.year
                     ?.let { Regex("""\d{4}""").find(it)?.value }
                     ?.toIntOrNull()

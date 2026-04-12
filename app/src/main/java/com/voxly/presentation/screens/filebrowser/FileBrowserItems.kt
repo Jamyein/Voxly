@@ -35,7 +35,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
-import com.voxly.data.local.cache.AlbumInfoEntity
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.screens.album.getAlbumDisplayYearString
 import com.voxly.domain.model.ArtistGroup
@@ -135,8 +134,7 @@ internal fun AlbumListItem(
 @Composable
 internal fun AlbumGridItem(
     album: AlbumGroup,
-    onClick: () -> Unit,
-    albumInfo: AlbumInfoEntity? = null
+    onClick: () -> Unit
 ) {
     val coverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
     Column(
@@ -183,7 +181,7 @@ internal fun AlbumGridItem(
             )
             Spacer(modifier = Modifier.height(4.dp))
             // Track count, artist, and year in the same row
-            val albumYear = getAlbumDisplayYearString(album, albumInfo)
+            val albumYear = getAlbumDisplayYearString(album)
             val infoText = buildString {
                 append(stringResource(R.string.track_count, album.files.size))
                 album.albumArtist?.let {

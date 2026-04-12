@@ -5,8 +5,6 @@ import com.voxly.data.local.AlbumSortOption
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.UiStateDataStore
-import com.voxly.data.local.cache.AlbumInfoEntity
-import com.voxly.data.local.cache.AlbumInfoManager
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.repository.WhitelistRepository
@@ -36,7 +34,6 @@ class AlbumArtistAggregator @Inject constructor(
     private val libraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
     private val uiStateDataStore: UiStateDataStore,
-    private val albumInfoManager: AlbumInfoManager,
     private val mediaStoreDataSource: MediaStoreDataSource,
     private val filterEngine: FilterEngine,
     private val whitelistRepository: WhitelistRepository,
@@ -53,10 +50,6 @@ class AlbumArtistAggregator @Inject constructor(
     // Filtered audio files - exposed for LibraryViewModel and other consumers
     private val _filteredFiles = MutableStateFlow<List<AudioFile>>(emptyList())
     val filteredFiles: StateFlow<List<AudioFile>> = _filteredFiles.asStateFlow()
-
-    // Album info map - updated internally when albums change
-    private val _albumInfoMap = MutableStateFlow<Map<String, AlbumInfoEntity>>(emptyMap())
-    val albumInfoMap: StateFlow<Map<String, AlbumInfoEntity>> = _albumInfoMap.asStateFlow()
 
     // Albums sorted by different sort options
     private val _albumsBySort = MutableStateFlow<Map<AlbumSortOption, List<AlbumGroup>>>(emptyMap())
@@ -129,9 +122,6 @@ class AlbumArtistAggregator @Inject constructor(
             }
         }
 
-        // Build albums list and cache data in one pass
-        val albumsForCache = mutableMapOf<Pair<String, String?>, List<AudioFile>>()
-
         val albumsList = primaryGroups.map { (key, albumFiles) ->
             val albumName: String
             val albumArtist: String?
@@ -149,9 +139,6 @@ class AlbumArtistAggregator @Inject constructor(
                 albumArtist = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
             }
 
-            // Add to cache map (albumName, albumArtist) -> List<AudioFile>
-            albumsForCache[albumName to albumArtist?.takeIf { it.isNotBlank() }] = albumFiles
-
             val coverFile = albumFiles.firstOrNull {
                 it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
             } ?: albumFiles.firstOrNull()
@@ -166,18 +153,11 @@ class AlbumArtistAggregator @Inject constructor(
         _albums.value = albumsList
         timber.log.Timber.d("AlbumArtistAggregator: Updated albums count = ${albumsList.size}")
 
-        // Update album info cache
-        if (albumsForCache.isNotEmpty()) {
-            val entities = albumInfoManager.updateAlbumInfoBatch(albumsForCache)
-            _albumInfoMap.value = entities.associateBy { it.id }
-        }
-
-        // Compute all sort versions and cache
         computeAndCacheSortOrders(albumsList)
     }
 
-    private suspend fun computeAndCacheSortOrders(albumsList: List<AlbumGroup>) {
-        val albumIdsBySort = mapOf(
+    private fun computeAndCacheSortOrders(albumsList: List<AlbumGroup>) {
+        val sortedAlbumsByOption = mapOf(
             AlbumSortOption.NAME_ASC to albumsList.sortedBy { SortUtil.toSortablePinyin(it.name) },
             AlbumSortOption.TRACK_COUNT_DESC to albumsList.sortedByDescending { it.files.size },
             AlbumSortOption.YEAR_DESC to albumsList.sortedByDescending { album ->
@@ -188,17 +168,6 @@ class AlbumArtistAggregator @Inject constructor(
                 }.maxOrNull() ?: Int.MIN_VALUE
             }
         )
-
-        val sortedAlbumsByOption = mutableMapOf<AlbumSortOption, List<AlbumGroup>>()
-        val globalContentHash = albumsList.joinToString("|") {
-            AlbumInfoEntity.generateId(it.name, it.albumArtist)
-        }.hashCode().toString()
-
-        albumIdsBySort.forEach { (sortOption, sortedAlbums) ->
-            val albumIds = sortedAlbums.map { AlbumInfoEntity.generateId(it.name, it.albumArtist) }
-            albumInfoManager.saveSortOrder(sortOption.name, albumIds, globalContentHash)
-            sortedAlbumsByOption[sortOption] = sortedAlbums
-        }
 
         _albumsBySort.value = sortedAlbumsByOption
     }

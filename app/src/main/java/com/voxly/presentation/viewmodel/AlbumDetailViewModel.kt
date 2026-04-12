@@ -64,8 +64,8 @@ class AlbumDetailViewModel @AssistedInject constructor(
 
     /**
      * Load album data from AudioFileScanner by album name and artist.
-     * Sample rate is loaded from cache (AlbumInfoEntity).
-     * Year is loaded from cache for accurate and fast results.
+     * Year and sample rate are loaded from album_summary_view for fast aggregation.
+     * Bitrate is calculated from file metadata.
      * For files with missing discNumber, uses TagLib to read from file tags.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
@@ -96,29 +96,14 @@ class AlbumDetailViewModel @AssistedInject constructor(
 
                     _files.value = filesWithDiscNumber
 
-                    val albumInfo = databaseProvider.getDatabase()
-                        .albumInfoDao()
-                        .getAlbumInfo(albumName, albumArtist)
+                    // Query year and sampleRate from album_summary_view
+                    val albumSummary = databaseProvider.getDatabase()
+                        .albumSummaryDao()
+                        .getAlbumSummary(albumName, albumArtist)
 
-                    if (albumInfo != null) {
-                        _albumYear.value = albumInfo.year
-                        _albumSampleRate.value = albumInfo.sampleRate
-                        _albumBitrate.value = albumInfo.bitrate
-                        Timber.d("Loaded album info from cache: $albumName")
-                    } else {
-                        Timber.d("No cache found for album: $albumName, calculating from files")
-
-                        val scannedAlbumYear = albumGroup.files
-                            .mapNotNull { file -> file.metadata.year?.takeIf { it.isNotBlank() } }
-                            .maxOrNull()
-
-                        val maxBitrate = albumGroup.files.maxOfOrNull { it.bitrate } ?: 0
-                        val maxSampleRate = albumGroup.files.maxOfOrNull { it.sampleRate } ?: 0
-
-                        _albumYear.value = scannedAlbumYear
-                        _albumBitrate.value = maxBitrate
-                        _albumSampleRate.value = maxSampleRate
-                    }
+                    _albumYear.value = albumSummary?.year
+                    _albumSampleRate.value = albumSummary?.maxSampleRate ?: 0
+                    _albumBitrate.value = albumSummary?.maxBitrate ?: 0
                 } else {
                     _albumName.value = albumName
                     _albumArtist.value = albumArtist

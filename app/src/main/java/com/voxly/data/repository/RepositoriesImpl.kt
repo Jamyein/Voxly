@@ -7,6 +7,7 @@ import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.metadata.RecoverableMediaStoreException
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
+import com.voxly.data.local.metadata.TagWriteManager
 import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
@@ -37,6 +38,7 @@ class AudioRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val audioFileScanner: AudioFileScanner,
     private val metadataProcessor: TagLibMetadataProcessor,
+    private val tagWriteManager: TagWriteManager,
     private val libraryCache: MusicLibraryCache
 ) : AudioRepository {
     companion object {
@@ -310,7 +312,8 @@ class AudioRepositoryImpl @Inject constructor(
     override suspend fun updateMetadata(filePath: String, metadata: AudioMetadata): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
-                metadataProcessor.updateMetadata(filePath, metadata).fold(
+                // Use TagWriteManager for Android 16 safe write with whitelist support
+                tagWriteManager.writeMetadata(filePath, metadata).fold(
                     onSuccess = {
                         // Re-read the updated file and sync to cache
                         // This ensures Room has the latest metadata immediately

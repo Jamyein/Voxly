@@ -49,6 +49,12 @@ interface AlbumThumbnailDao {
     @Query("SELECT albumId FROM album_thumbnails")
     suspend fun getCachedAlbumIds(): List<Long>
     
+    /**
+     * Gets all cover keys for cleanup purposes.
+     */
+    @Query("SELECT coverKey FROM album_thumbnails")
+    suspend fun getAllCoverKeys(): List<String>
+    
     // ==================== Inserts/Updates ====================
     
     /**

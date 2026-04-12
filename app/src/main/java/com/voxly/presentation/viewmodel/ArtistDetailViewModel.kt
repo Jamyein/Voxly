@@ -4,8 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
-import com.voxly.data.local.cache.AlbumInfoEntity
-import com.voxly.data.local.cache.AlbumInfoManager
+import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.repository.ArtistCacheRepository
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -25,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * ViewModel for ArtistDetailScreen.
@@ -36,7 +36,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
     @ApplicationContext private val context: Context,
     private val artistCacheRepository: ArtistCacheRepository,
     private val audioFileScanner: AudioFileScanner,
-    private val albumInfoManager: AlbumInfoManager
+    private val databaseProvider: MusicCacheDatabaseProvider
 ) : ViewModel() {
 
     private val _artistName = MutableStateFlow("")
@@ -144,33 +144,40 @@ class ArtistDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * Load album years from Room cache (AlbumInfoEntity).
-     * Uses AlbumInfoManager to query cached year data, avoiding expensive file I/O.
+     * Load album years from album_summary_view.
      */
     private fun loadAlbumYears(files: List<AudioFile>) {
         albumYearJob?.cancel()
         albumYearJob = viewModelScope.launch {
-            val albumGroups = files.filter { !it.metadata.album.isNullOrBlank() }
-                .groupBy { it.metadata.album!! }
+            try {
+                val albumNames = files.mapNotNull { it.metadata.album }
+                    .filter { it.isNotBlank() }
+                    .distinct()
 
-            // Build list of album keys (albumName, albumArtist) for batch query
-            val albumKeys = albumGroups.map { (albumName, albumFiles) ->
-                val albumArtist = albumFiles.firstOrNull()?.metadata?.albumArtist
-                    ?: albumFiles.firstOrNull()?.metadata?.artist
-                albumName to albumArtist
+                if (albumNames.isEmpty()) {
+                    _albumYears.value = emptyMap()
+                    return@launch
+                }
+
+                // Query all album summaries and filter by album names
+                val allSummaries = databaseProvider.getDatabase()
+                    .albumSummaryDao()
+                    .getAllAlbumSummaries()
+
+                val summariesByAlbumName = allSummaries
+                    .filter { it.albumTitle in albumNames }
+                    .associate { it.albumTitle to it.year }
+
+                _albumYears.value = summariesByAlbumName
+            } catch (e: Exception) {
+                Timber.e(e, "Error loading album years from view")
+                // Fallback to calculating from files
+                val albumGroups = files.filter { !it.metadata.album.isNullOrBlank() }
+                    .groupBy { it.metadata.album!! }
+                _albumYears.value = albumGroups.mapValues { (_, albumFiles) ->
+                    albumFiles.mapNotNull { it.metadata.year }.maxOrNull()
+                }
             }
-
-            // Query years from Room cache via AlbumInfoManager
-            val cachedYears = albumInfoManager.getAlbumYears(albumKeys)
-
-            // Build years map: albumName -> year string
-            val yearsMap = albumGroups.keys.mapIndexed { index, albumName ->
-                val key = albumKeys.getOrNull(index)
-                val albumId = key?.let { AlbumInfoEntity.generateId(it.first, it.second) }
-                albumName to cachedYears[albumId]
-            }.toMap()
-
-            _albumYears.value = yearsMap
         }
     }
 

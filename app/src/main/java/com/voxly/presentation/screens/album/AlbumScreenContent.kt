@@ -53,7 +53,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.AlbumSortOption
-import com.voxly.data.local.cache.AlbumInfoEntity
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
@@ -99,7 +98,6 @@ internal fun AlbumScreenContent(
     val albums by viewModel.sortedAlbums.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val sortOption by viewModel.sortOption.collectAsState(initial = AlbumSortOption.NAME_ASC.name)
-    val albumInfoMap by viewModel.albumInfoMap.collectAsState()
     var scrollToTopTrigger by remember { mutableIntStateOf(0) }
     var isSortExpanded by remember { mutableStateOf(false) }
 
@@ -176,7 +174,6 @@ internal fun AlbumScreenContent(
                         onAlbumClick = onAlbumClick,
                         scrollToTopTrigger = scrollToTopTrigger,
                         sortOption = currentSortOption,
-                        albumInfoMap = albumInfoMap,
                         savedScrollPosition = savedScrollPosition,
                         onSaveScrollPosition = { index, offset ->
                             viewModel.saveScrollPosition("album_list_${currentSortOption.name}", index, offset)
@@ -195,7 +192,6 @@ internal fun AlbumTabContent(
     listState: LazyListState? = null,
     scrollToTopTrigger: Int = 0,
     sortOption: AlbumSortOption? = null,
-    albumInfoMap: Map<String, AlbumInfoEntity> = emptyMap(),
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
     onSaveScrollPosition: ((Int, Int) -> Unit)? = null
 ) {
@@ -230,7 +226,6 @@ internal fun AlbumTabContent(
                         albums = albums,
                         onAlbumClick = onAlbumClick,
                         isDescending = true,
-                        albumInfoMap = albumInfoMap,
                         savedScrollPosition = savedScrollPosition,
                         onSaveScrollPosition = onSaveScrollPosition
                     )
@@ -252,12 +247,9 @@ internal fun AlbumTabContent(
                             key = { index -> albumStableKey(albums[index]) }
                         ) { index ->
                             val album = albums[index]
-                            val albumKey = AlbumInfoEntity.generateId(album.name, album.albumArtist)
-                            val albumInfo = albumInfoMap[albumKey]
                             AlbumGridItem(
                                 album = album,
-                                onClick = { onAlbumClick(album) },
-                                albumInfo = albumInfo
+                                onClick = { onAlbumClick(album) }
                             )
                         }
                     }
@@ -286,7 +278,6 @@ internal fun AlbumYearGroupedContent(
     albums: List<AlbumGroup>,
     onAlbumClick: (AlbumGroup) -> Unit,
     isDescending: Boolean = false,
-    albumInfoMap: Map<String, AlbumInfoEntity> = emptyMap(),
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
     onSaveScrollPosition: ((Int, Int) -> Unit)? = null
 ) {
@@ -303,11 +294,9 @@ internal fun AlbumYearGroupedContent(
         }
     }
     
-    val albumsByYear = remember(albums, isDescending, albumInfoMap) {
+    val albumsByYear = remember(albums, isDescending) {
         albums.groupBy { album ->
-            val albumKey = AlbumInfoEntity.generateId(album.name, album.albumArtist)
-            val cachedInfo = albumInfoMap[albumKey]
-            getAlbumDisplayYear(album, cachedInfo) ?: 0
+            getAlbumDisplayYear(album) ?: 0
         }.toSortedMap(if (isDescending) compareByDescending { it } else compareBy { it })
     }
 

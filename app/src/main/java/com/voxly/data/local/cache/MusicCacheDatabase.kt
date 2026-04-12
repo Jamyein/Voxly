@@ -20,22 +20,19 @@ import javax.inject.Singleton
     entities = [
         CachedAudioFileEntity::class,
         AlbumThumbnailEntity::class,
+        ArtistLinkEntity::class,
         RecentEditEntity::class,
-        AlbumArtFileCacheEntity::class,
-        AlbumInfoEntity::class,
-        AlbumSortOrderEntity::class  // Added for album sort order caching
     ],
-    version = 7,  // Bumped from 6 to 7 for AlbumSortOrderEntity
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
 abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun audioFileDao(): CachedAudioFileDao
     abstract fun albumThumbnailDao(): AlbumThumbnailDao
+    abstract fun artistLinkDao(): ArtistLinkDao
+    abstract fun albumSummaryDao(): AlbumSummaryDao
     abstract fun recentEditDao(): RecentEditDao
-    abstract fun albumArtFileCacheDao(): AlbumArtFileCacheDao
-    abstract fun albumInfoDao(): AlbumInfoDao
-    abstract fun albumSortOrderDao(): AlbumSortOrderDao
 
     companion object {
         const val DATABASE_NAME = "music_cache.db"
@@ -114,27 +111,8 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_year` ON `cached_audio_files` (`year`)")
                     }
                 })
-                // Migration from version 3 to 4: adds album art file cache table
-                .addMigrations(object : Migration(3, 4) {
-                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                        // Create album art file cache table
-                        db.execSQL("""
-                            CREATE TABLE IF NOT EXISTS `album_art_file_cache` (
-                                `filePath` TEXT PRIMARY KEY NOT NULL,
-                                `originalArtBytes` BLOB,
-                                `thumbnailBytes` BLOB,
-                                `lastModified` INTEGER NOT NULL,
-                                `cacheTime` INTEGER NOT NULL DEFAULT 0,
-                                `accessCount` INTEGER NOT NULL DEFAULT 0,
-                                `lastAccessTime` INTEGER NOT NULL DEFAULT 0
-                            )
-                        """)
-                        // Create indices for LRU queries
-                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_album_art_file_cache_access` ON `album_art_file_cache` (`accessCount`, `lastAccessTime`)")
-                    }
-                })
-                // Migration from version 4 to 5: adds album info table for year and audio quality caching
-                .addMigrations(object : Migration(4, 5) {
+                // Migration from version 3 to 5: skip v4 (album_art_file_cache table was removed)
+                .addMigrations(object : Migration(3, 5) {
                     override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
                         // Create album_info table
                         db.execSQL("""
@@ -151,7 +129,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
                                 `lastUpdatedAt` INTEGER NOT NULL
                             )
                         """)
-                        // Create indices for faster queries
                         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_album_info_name_artist` ON `album_info` (`albumName`, `albumArtist`)")
                         db.execSQL("CREATE INDEX IF NOT EXISTS `index_album_info_year` ON `album_info` (`year`)")
                     }
@@ -175,6 +152,38 @@ class MusicCacheDatabaseProvider @Inject constructor(
                                 `contentHash` TEXT NOT NULL,
                                 `lastUpdatedAt` INTEGER NOT NULL
                             )
+                        """)
+                    }
+                })
+                // Migration from version 7 to 8: adds artist_links table and album_summary_view
+                .addMigrations(object : Migration(7, 8) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        // Create artist_links table
+                        db.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `artist_links` (
+                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                `trackId` TEXT NOT NULL,
+                                `artistName` TEXT NOT NULL
+                            )
+                        """)
+                        // Create indices for artist_links
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_artist_links_artistName` ON `artist_links` (`artistName`)")
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_artist_links_trackId` ON `artist_links` (`trackId`)")
+                        
+                        // Create album_summary_view
+                        db.execSQL("""
+                            CREATE VIEW IF NOT EXISTS `album_summary_view` AS
+                            SELECT 
+                                SUBSTR(MD5(album_artist || album), 1, 16) AS albumKey,
+                                album AS albumTitle,
+                                album_artist AS albumArtist,
+                                COUNT(*) AS songCount,
+                                MAX(year) AS year,
+                                MAX(sample_rate) AS maxSampleRate,
+                                MAX(id) AS coverId
+                            FROM cached_audio_files
+                            WHERE album IS NOT NULL AND album != ''
+                            GROUP BY album_artist, album
                         """)
                     }
                 })
@@ -202,6 +211,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
     companion object {
         private const val PREFS_NAME = "music_cache_meta"
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
-        private const val CURRENT_DATA_FORMAT_VERSION = 7  // Updated for AlbumSortOrderEntity
+        private const val CURRENT_DATA_FORMAT_VERSION = 8  // Updated for ArtistLinkEntity
     }
 }

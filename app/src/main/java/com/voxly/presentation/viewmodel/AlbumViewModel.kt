@@ -5,7 +5,6 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.data.local.UiStateDataStore
-import com.voxly.data.local.cache.AlbumInfoEntity
 import com.voxly.domain.model.AlbumGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
@@ -36,7 +35,6 @@ class AlbumViewModel @Inject constructor(
 
     // Albums sorted by different options - pre-computed by aggregator
     private val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = audioFileScanner.albumsBySort
-    val albumInfoMap: StateFlow<Map<String, AlbumInfoEntity>> = audioFileScanner.albumInfoMap
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()

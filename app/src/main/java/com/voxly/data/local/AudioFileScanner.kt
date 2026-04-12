@@ -2,12 +2,12 @@ package com.voxly.data.local
 
 import android.content.Context
 import com.voxly.core.util.SortUtil
-import com.voxly.data.local.cache.AlbumInfoEntity
-import com.voxly.data.local.cache.AlbumInfoManager
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.scanner.AlbumArtistAggregator
 import com.voxly.data.local.scanner.FilterEngine
 import com.voxly.data.local.scanner.MediaStoreDataSource
+import com.voxly.data.local.scanner.FastScanProcessor
+import com.voxly.data.local.scanner.DeepEnrichProcessor
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -66,12 +66,14 @@ class AudioFileScanner @Inject constructor(
     private val metadataProcessor: TagLibMetadataProcessor,
     private val libraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
-    private val albumInfoManager: AlbumInfoManager,
     @Named("ApplicationScope") private val applicationScope: CoroutineScope,
     // New injected components for separation of concerns
     private val mediaStoreDataSource: MediaStoreDataSource,
     private val filterEngine: FilterEngine,
-    private val albumArtistAggregator: AlbumArtistAggregator
+    private val albumArtistAggregator: AlbumArtistAggregator,
+    // Two-pass scanning processors
+    private val fastScanProcessor: FastScanProcessor,
+    private val deepEnrichProcessor: DeepEnrichProcessor
 ) {
     companion object {
         private const val TAG = "AudioFileScanner"
@@ -90,7 +92,6 @@ class AudioFileScanner @Inject constructor(
     val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = albumArtistAggregator.albumsBySort
     val artists: StateFlow<List<ArtistGroup>> = albumArtistAggregator.artists
     val filteredFiles: StateFlow<List<AudioFile>> = albumArtistAggregator.filteredFiles
-    val albumInfoMap: StateFlow<Map<String, AlbumInfoEntity>> = albumArtistAggregator.albumInfoMap
 
     // Raw cached audio files from database
     val cachedAudioFilesFlow: Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
@@ -150,6 +151,9 @@ class AudioFileScanner @Inject constructor(
 
         // Update cache with scan results
         libraryCache.updateCache(files)
+
+        // Two-pass: Background enrichment for cover art pre-caching
+        enrichCoversInBackground(files)
 
         return files
     }
@@ -238,9 +242,6 @@ class AudioFileScanner @Inject constructor(
         // Remove deleted files from cache
         val deletedPaths = cachedInDirs.map { it.path }.filter { it !in currentPaths }
         libraryCache.removeFromCache(deletedPaths)
-        if (deletedPaths.isNotEmpty()) {
-            albumInfoManager.cleanupOrphanedAlbums()
-        }
 
         (retainedFiles + updatedFiles)
             .distinctBy { it.path }
@@ -286,10 +287,7 @@ class AudioFileScanner @Inject constructor(
         }
 
         // Cleanup deleted files
-        val deletedCount = libraryCache.cleanupDeletedFiles(currentFiles.map { it.first })
-        if (deletedCount > 0) {
-            albumInfoManager.cleanupOrphanedAlbums()
-        }
+        libraryCache.cleanupDeletedFiles(currentFiles.map { it.first })
 
         (retainedFiles + updatedFiles)
             .distinctBy { it.path }
@@ -435,7 +433,6 @@ class AudioFileScanner @Inject constructor(
      */
     suspend fun clearCache() {
         libraryCache.clearCache()
-        albumInfoManager.clearAll()
     }
 
     /**
@@ -456,6 +453,24 @@ class AudioFileScanner @Inject constructor(
             File(filePath).let { it.exists() && it.canRead() }
         } catch (e: SecurityException) {
             false
+        }
+    }
+
+    /**
+     * Background enrichment for cover art pre-caching.
+     * Uses DeepEnrichProcessor to extract and cache cover art.
+     */
+    private fun enrichCoversInBackground(files: List<AudioFile>) {
+        if (files.isEmpty()) return
+        
+        applicationScope.launch {
+            try {
+                Timber.d(TAG, "Starting background cover enrichment for ${files.size} files")
+                deepEnrichProcessor.enrichBatch(files)
+                Timber.d(TAG, "Background cover enrichment completed")
+            } catch (e: Exception) {
+                Timber.w(TAG, "Background cover enrichment failed", e)
+            }
         }
     }
 
