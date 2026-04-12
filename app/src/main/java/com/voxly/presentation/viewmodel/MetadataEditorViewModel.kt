@@ -34,17 +34,21 @@ import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.viewmodel.SearchSeedHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import android.icu.text.Transliterator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.WhileSubscribed
@@ -171,6 +175,21 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val _isLyricsTimestampFormatted = MutableStateFlow(false)
     val isLyricsTimestampFormatted: StateFlow<Boolean> = _isLyricsTimestampFormatted.asStateFlow()
 
+    // Debounced text input StateFlows - moved from Composable to ViewModel to avoid recomposition issues
+    private val _titleTextFlow = MutableStateFlow<String?>(null)
+    private val _artistTextFlow = MutableStateFlow<String?>(null)
+    private val _albumTextFlow = MutableStateFlow<String?>(null)
+    private val _albumArtistTextFlow = MutableStateFlow<String?>(null)
+    private val _yearTextFlow = MutableStateFlow<String?>(null)
+    private val _genreTextFlow = MutableStateFlow<String?>(null)
+    private val _composerTextFlow = MutableStateFlow<String?>(null)
+    private val _lyricistTextFlow = MutableStateFlow<String?>(null)
+    private val _commentTextFlow = MutableStateFlow<String?>(null)
+    private val _lyricsTextFlow = MutableStateFlow<String?>(null)
+
+    // Debounce jobs for cancellation on ViewModel clear
+    private val debounceJobs = mutableListOf<Job>()
+
     // Combined edit state using combine() - reduces multiple StateFlow updates to single UI recomposition
     val editState: StateFlow<EditState> = combine(
         _hasUnsavedChanges,
@@ -201,6 +220,33 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 }
             }
         }
+
+        // Setup debounced text field updates - moved from Composable to avoid recomposition issues
+        setupDebouncedTextField(MetadataField.TITLE, _titleTextFlow)
+        setupDebouncedTextField(MetadataField.ARTIST, _artistTextFlow)
+        setupDebouncedTextField(MetadataField.ALBUM, _albumTextFlow)
+        setupDebouncedTextField(MetadataField.ALBUM_ARTIST, _albumArtistTextFlow)
+        setupDebouncedTextField(MetadataField.YEAR, _yearTextFlow)
+        setupDebouncedTextField(MetadataField.GENRE, _genreTextFlow)
+        setupDebouncedTextField(MetadataField.COMPOSER, _composerTextFlow)
+        setupDebouncedTextField(MetadataField.LYRICIST, _lyricistTextFlow)
+        setupDebouncedTextField(MetadataField.COMMENT, _commentTextFlow)
+        setupDebouncedTextField(MetadataField.LYRICS, _lyricsTextFlow)
+    }
+
+    /**
+     * Sets up debounced collection for a text field.
+     * The flow is debounced 300ms to reduce metadata processing on rapid keystrokes.
+     */
+    private fun setupDebouncedTextField(field: MetadataField, flow: MutableStateFlow<String?>) {
+        val job = viewModelScope.launch {
+            flow
+                .debounce(300L)
+                .collect { value ->
+                    value?.let { updateMetadataField(field, it) }
+                }
+        }
+        debounceJobs.add(job)
     }
 
     /**
@@ -209,6 +255,29 @@ class MetadataEditorViewModel @AssistedInject constructor(
     override fun onCleared() {
         super.onCleared()
         searchSeedHolder.removeSeedForFile(filePath)
+        debounceJobs.forEach { it.cancel() }
+        debounceJobs.clear()
+    }
+
+    /**
+     * Updates the debounced text field for the given metadata field.
+     * This is called from the Composable to update the ViewModel's debouncing flows.
+     */
+    fun updateDebouncedTextField(field: MetadataField, value: String?) {
+        when (field) {
+            MetadataField.TITLE -> _titleTextFlow.value = value
+            MetadataField.ARTIST -> _artistTextFlow.value = value
+            MetadataField.ALBUM -> _albumTextFlow.value = value
+            MetadataField.ALBUM_ARTIST -> _albumArtistTextFlow.value = value
+            MetadataField.YEAR -> _yearTextFlow.value = value
+            MetadataField.GENRE -> _genreTextFlow.value = value
+            MetadataField.COMPOSER -> _composerTextFlow.value = value
+            MetadataField.LYRICIST -> _lyricistTextFlow.value = value
+            MetadataField.COMMENT -> _commentTextFlow.value = value
+            MetadataField.LYRICS -> _lyricsTextFlow.value = value
+            MetadataField.CONDUCTOR -> updateMetadataField(field, value ?: "")
+            MetadataField.ALBUM_ART -> { /* handled by updateAlbumArt */ }
+        }
     }
 
     /**
@@ -813,14 +882,17 @@ class MetadataEditorViewModel @AssistedInject constructor(
         setEditedMetadata(updatedMetadata)
     }
 
+    private companion object {
+        val TRAD_TO_SIMP_TRANSLITERATOR: Transliterator = Transliterator.getInstance("Traditional-Simplified")
+        val SIMP_TO_TRAD_TRANSLITERATOR: Transliterator = Transliterator.getInstance("Simplified-Traditional")
+    }
+
     private fun toSimplifiedChinese(text: String): String {
-        val transliterator = android.icu.text.Transliterator.getInstance("Traditional-Simplified")
-        return transliterator.transliterate(text)
+        return TRAD_TO_SIMP_TRANSLITERATOR.transliterate(text)
     }
 
     private fun toTraditionalChinese(text: String): String {
-        val transliterator = android.icu.text.Transliterator.getInstance("Simplified-Traditional")
-        return transliterator.transliterate(text)
+        return SIMP_TO_TRAD_TRANSLITERATOR.transliterate(text)
     }
 
     /**

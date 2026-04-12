@@ -7,6 +7,7 @@ import com.voxly.domain.model.WhitelistDirectory
 import com.voxly.domain.repository.WhitelistRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -15,22 +16,19 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
-import javax.inject.Named
 import javax.inject.Singleton
 
 @Singleton
 class WhitelistRepositoryImpl @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
-    private val safAccessService: SafWriteAccessService,
-    @Named("ApplicationScope") private val applicationScope: CoroutineScope
+    private val safAccessService: SafWriteAccessService
 ) : WhitelistRepository {
 
+    private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _whitelistDirectories = MutableStateFlow<List<WhitelistDirectory>>(emptyList())
     private val _blacklistDirectories = MutableStateFlow<List<WhitelistDirectory>>(emptyList())
 
     init {
-        // Synchronous initial load to avoid blocking first access
-        // This uses runBlocking only in init block - acceptable for startup
         runBlocking(Dispatchers.IO) {
             try {
                 val uris = settingsDataStore.selectedDirectoryUris.first()
@@ -40,7 +38,6 @@ class WhitelistRepositoryImpl @Inject constructor(
                     else null
                 }
             } catch (e: Exception) {
-                // Ignore, keep empty
             }
         }
         runBlocking(Dispatchers.IO) {
@@ -52,12 +49,10 @@ class WhitelistRepositoryImpl @Inject constructor(
                     else null
                 }
             } catch (e: Exception) {
-                // Ignore, keep empty
             }
         }
 
-        // Then listen for changes in background
-        applicationScope.launch {
+        repositoryScope.launch {
             settingsDataStore.selectedDirectoryUris.collect { uris ->
                 _whitelistDirectories.value = uris.mapNotNull { uriString ->
                     val path = safAccessService.mapTreeUriToPath(Uri.parse(uriString))
@@ -66,7 +61,7 @@ class WhitelistRepositoryImpl @Inject constructor(
                 }
             }
         }
-        applicationScope.launch {
+        repositoryScope.launch {
             settingsDataStore.blacklistDirectoryUris.collect { uris ->
                 _blacklistDirectories.value = uris.mapNotNull { uriString ->
                     val path = safAccessService.mapTreeUriToPath(Uri.parse(uriString))

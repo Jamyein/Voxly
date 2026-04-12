@@ -83,8 +83,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideOkHttpClient(
-        @ApplicationContext context: Context,
-        proxyInterceptor: ProxyInterceptor
+        @ApplicationContext context: Context
     ): OkHttpClient {
         val loggingInterceptor = HttpLoggingInterceptor { message ->
             val redactedMessage = message
@@ -130,7 +129,6 @@ object AppModule {
         return OkHttpClient.Builder()
             .cache(cache)
             .certificatePinner(certificatePinner)
-            .addInterceptor(proxyInterceptor)
             .addInterceptor(userAgentInterceptor)
             .addInterceptor(cacheInterceptor)
             .addInterceptor(loggingInterceptor)

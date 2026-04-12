@@ -64,7 +64,7 @@ class MusicLibraryCache @Inject constructor(
      * Gets all cached audio files as a one-shot query.
      */
     suspend fun getCachedAudioFilesOnce(): List<AudioFile> = withContext(Dispatchers.IO) {
-        audioFileDao.getAllAudioFilesOnce().map { it.toAudioFile() }
+        audioFileDao.getAllAudioFiles().first().map { it.toAudioFile() }
     }
     
     /**

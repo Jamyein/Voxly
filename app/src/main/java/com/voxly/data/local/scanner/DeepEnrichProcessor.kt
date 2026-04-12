@@ -128,7 +128,7 @@ class DeepEnrichProcessor @Inject constructor(
 
     private fun generateCoverKey(albumArtist: String, albumName: String): String {
         val input = "$albumArtist|$albumName"
-        val digest = MessageDigest.getInstance("MD5")
+        val digest = MessageDigest.getInstance("SHA-256")
         val bytes = digest.digest(input.toByteArray())
         return bytes.joinToString("") { "%02x".format(it) }
     }

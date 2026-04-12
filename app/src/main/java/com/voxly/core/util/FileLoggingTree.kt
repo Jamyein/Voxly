@@ -120,18 +120,16 @@ class FileLoggingTree : Timber.Tree() {
     }
 
     private fun getOrCreateLogFile(): File? {
-        // If we already have a current log file, use it
-        if (currentLogFile != null && currentLogFile!!.exists()) {
-            // Check if file size exceeds limit
+        val logFile = currentLogFile
+        if (logFile != null && logFile.exists()) {
             if (currentFileSize >= MAX_FILE_SIZE) {
-                // Create new file with timestamp when size limit reached
                 currentLogFile = createNewLogFile()
                 currentFileSize = 0
+                return currentLogFile
             }
-            return currentLogFile
+            return logFile
         }
 
-        // Create a new log file for this app session
         currentLogFile = createNewLogFile()
         currentFileSize = 0
         return currentLogFile

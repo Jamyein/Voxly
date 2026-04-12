@@ -140,8 +140,9 @@ fun AlbumArtImage(
                 )
             }
             embeddedBitmap != null -> {
+                val bitmap = embeddedBitmap
                 Image(
-                    bitmap = embeddedBitmap!!.asImageBitmap(),
+                    bitmap = bitmap?.asImageBitmap()!!,
                     contentDescription = contentDescription,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = contentScale

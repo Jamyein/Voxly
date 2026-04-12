@@ -19,11 +19,12 @@ import javax.inject.Singleton
 @Database(
     entities = [
         CachedAudioFileEntity::class,
+        CachedAudioFileFts::class,
         AlbumThumbnailEntity::class,
         ArtistLinkEntity::class,
         RecentEditEntity::class,
     ],
-    version = 9,
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -187,6 +188,21 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         """)
                     }
                 })
+                // Migration from version 9 to 10: adds FTS4 table for full-text search
+                .addMigrations(object : Migration(9, 10) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        // Create FTS4 virtual table for full-text search on title, artist, album
+                        db.execSQL("""
+                            CREATE VIRTUAL TABLE IF NOT EXISTS `cached_audio_files_fts` 
+                            USING fts4(content='cached_audio_files', title, artist, album)
+                        """)
+                        // Populate FTS table with existing data
+                        db.execSQL("""
+                            INSERT INTO cached_audio_files_fts(rowid, title, artist, album)
+                            SELECT rowid, title, artist, album FROM cached_audio_files
+                        """)
+                    }
+                })
 
             val newInstance = builder.build()
             prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
@@ -211,6 +227,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
     companion object {
         private const val PREFS_NAME = "music_cache_meta"
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
-        private const val CURRENT_DATA_FORMAT_VERSION = 8  // Updated for ArtistLinkEntity
+        private const val CURRENT_DATA_FORMAT_VERSION = 10  // FTS4 full-text search
     }
 }

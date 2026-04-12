@@ -97,20 +97,21 @@ fun AlbumAdaptiveScreen(
         detailPane = {
             AnimatedPane {
                 if (selectedFileForEditing != null) {
-                    key(selectedFileForEditing!!, fileSwitchCounter) {
+                    val selectedFile = selectedFileForEditing!!
+                    key(selectedFile, fileSwitchCounter) {
                         val navKey = MetadataEditor(
-                            filePath = selectedFileForEditing!!,
-                            coverTag = createAlbumArtSharedElementKey(selectedFileForEditing!!)
+                            filePath = selectedFile,
+                            coverTag = createAlbumArtSharedElementKey(selectedFile)
                         )
                         val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
-                            key = "${selectedFileForEditing!!}_$fileSwitchCounter",
+                            key = "${selectedFile}_$fileSwitchCounter",
                             creationCallback = { factory -> factory.create(navKey) }
                         )
                         AdaptiveMetadataEditorContainer(
-                            filePath = selectedFileForEditing!!,
+                            filePath = selectedFile,
                             viewModel = metadataViewModel,
-                            coverTag = createAlbumArtSharedElementKey(selectedFileForEditing!!),
-                            sharedElementKey = createAlbumArtSharedElementKey(selectedFileForEditing!!),
+                            coverTag = createAlbumArtSharedElementKey(selectedFile),
+                            sharedElementKey = createAlbumArtSharedElementKey(selectedFile),
                             onNavigateBack = {
                                 selectedFileForEditing = null
                                 fileSwitchCounter++

@@ -175,9 +175,9 @@ private fun <T> ConnectedIconButtonGroup(
                                             animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
                                         )
                                     )
-                                } else {
+                                } else if (option.icon != null) {
                                     Icon(
-                                        imageVector = option.icon!!,
+                                        imageVector = option.icon,
                                         contentDescription = option.tooltip,
                                         modifier = Modifier.animateContentSize(
                                             animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()

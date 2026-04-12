@@ -9,6 +9,8 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 class BatchEngine<T>(
     private val maxConcurrency: Int = 4,
@@ -16,11 +18,14 @@ class BatchEngine<T>(
     private val throttlePercent: Float = 0.05f
 ) {
     private var lastFailedItems: List<FailedItem> = emptyList()
+    private val mutex = Mutex()
 
     fun getFailedItems(): List<FailedItem> = lastFailedItems.toList()
 
-    fun clearFailedItems() {
-        lastFailedItems = emptyList()
+    suspend fun clearFailedItems() {
+        mutex.withLock {
+            lastFailedItems = emptyList()
+        }
     }
     fun execute(
         items: List<T>,
@@ -119,7 +124,9 @@ class BatchEngine<T>(
                     status = BatchStatus.COMPLETED
                 )
             )
-            lastFailedItems = failedItems.toList()
+            mutex.withLock {
+                lastFailedItems = failedItems.toList()
+            }
         } catch (e: CancellationException) {
             throw e
         }
