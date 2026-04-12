@@ -2,10 +2,9 @@ package com.voxly.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.voxly.data.repository.LyricsRepositoryImpl
-import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
+import com.voxly.domain.repository.LyricsSourceResult
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.presentation.navigation.OnlineLyricsSearch
 import com.voxly.presentation.viewmodel.SearchSeedHolder
@@ -75,7 +74,7 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
             _searchState.value = LyricsSearchState()
 
             // 优先从 SearchSeedHolder 获取实时编辑值
-            val seed = searchSeedHolder.peekSeed()
+            val seed = searchSeedHolder.peekSeed(targetPath)
 
             val track: String
             val artist: String?
@@ -134,16 +133,10 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
     }
 
     private fun performLyricsSearch(track: String, artist: String?, album: String?) {
-        val flowLyricsRepository = lyricsRepository as? LyricsRepositoryImpl ?: run {
-            _errorMessage.value = "Lyrics repository not available"
-            _isLoading.value = false
-            return
-        }
-
         viewModelScope.launch {
             try {
                 _searchState.value = LyricsSearchState(isSearching = true)
-                flowLyricsRepository.searchOnlineLyricsFlow(track, artist, album).collect { result ->
+                lyricsRepository.searchOnlineLyricsFlow(track, artist, album).collect { result ->
                     when (result) {
                         is LyricsSourceResult.Result -> {
                             val newResults = _searchState.value.results + result.lyrics

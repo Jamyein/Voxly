@@ -32,6 +32,7 @@ import androidx.compose.ui.unit.dp
  * @property bubbleElevation Elevation for bubble shadow
  * @property thumbStiffness Spring stiffness for thumb width animation (FastSpatial: 1400)
  * @property visualFeedbackStiffness Spring stiffness for visual feedback (FastEffects: 3800)
+ * @property velocityThreshold Minimum velocity to trigger inertia scroll on drag end
  */
 data class ScrollbarConfig(
     val thumbWidth: Dp = 8.dp,
@@ -47,8 +48,9 @@ data class ScrollbarConfig(
     val trackAlphaDragging: Float = 1f,
     val thumbElevation: Dp = 2.dp,
     val bubbleElevation: Dp = 6.dp,
-    val thumbStiffness: Float = 1400f, // FastSpatial stiffness from M3E spec
-    val visualFeedbackStiffness: Float = 3800f // FastEffects stiffness from M3E spec
+    val thumbStiffness: Float = 1400f,
+    val visualFeedbackStiffness: Float = 3800f,
+    val velocityThreshold: Float = 500f
 ) {
     companion object {
         /** Default M3 Expressive configuration */

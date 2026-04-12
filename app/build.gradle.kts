@@ -37,8 +37,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 30
         targetSdk = 36
-        versionCode = 40
-        versionName = "1.6.2"
+        versionCode = 41
+        versionName = "1.6.3"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -179,9 +179,9 @@ dependencies {
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
     // 使用 Kotlin 2.3.10 配合 Compose alpha 版本
-    implementation("androidx.compose.animation:animation:1.11.0-beta02")
-    implementation("androidx.compose.animation:animation-core:1.11.0-beta02")
-    implementation("androidx.compose.animation:animation-graphics:1.11.0-beta02")
+    implementation("androidx.compose.animation:animation:1.11.0-rc01")
+    implementation("androidx.compose.animation:animation-core:1.11.0-rc01")
+    implementation("androidx.compose.animation:animation-graphics:1.11.0-rc01")
     // Material3 Alpha 版本 - 覆盖 BOM 中的稳定版以使用最新特性
     implementation("androidx.compose.material3:material3:1.5.0-alpha16")
     // Material Design 3 Expressive - RoundedPolygon 形状支持
@@ -195,12 +195,12 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     // Google Fonts - Variable Font支持 (使用Compose BOM中的版本)
-    implementation("androidx.compose.ui:ui-text-google-fonts:1.11.0-beta02")
+    implementation("androidx.compose.ui:ui-text-google-fonts:1.11.0-rc01")
     implementation("androidx.appcompat:appcompat:1.7.1")
 
     // Navigation 3 - 使用新的导航架构解决退出页面点击穿透问题
-    implementation("androidx.navigation3:navigation3-runtime:1.0.1")
-    implementation("androidx.navigation3:navigation3-ui:1.0.1")
+    implementation("androidx.navigation3:navigation3-runtime:1.1.0")
+    implementation("androidx.navigation3:navigation3-ui:1.1.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-navigation3:2.10.0")
     // Navigation3 Scene Strategies (BottomSheet, ListDetail)
     // Using 1.3.0-alpha09 (latest available version with Navigation 3 + Adaptive integration)
@@ -235,11 +235,15 @@ dependencies {
     // DataStore Preferences
     implementation("androidx.datastore:datastore-preferences:1.2.1")
 
+    // Security - EncryptedSharedPreferences for proxy credentials
+    implementation("androidx.security:security-crypto:1.1.0-alpha06")
+    implementation("com.google.crypto.tink:tink-android:1.12.0")
+
     // Gson for JSON serialization (Retrofit)
     implementation("com.google.code.gson:gson:2.13.2")
 
     // Kotlinx Serialization for type-safe serialization
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.10.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")
 
     // Retrofit Kotlinx Serialization Converter
     implementation("com.jakewharton.retrofit:retrofit2-kotlinx-serialization-converter:1.0.0")
@@ -248,6 +252,10 @@ dependencies {
     implementation("androidx.room:room-runtime:2.8.4")
     implementation("androidx.room:room-ktx:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")
+
+    // Paging 3 for efficient large library handling
+    implementation("androidx.paging:paging-runtime-ktx:3.4.2")
+    implementation("androidx.paging:paging-compose:3.4.2")
 
     // Timber for logging
     implementation("com.jakewharton.timber:timber:5.0.1")

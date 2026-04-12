@@ -12,6 +12,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -31,13 +32,14 @@ fun TrackListItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val rememberedOnClick = remember(audioFile) { { onClick() } }
     Card(
         modifier = modifier.fillMaxWidth(),
         shape = RoundedCornerShape(0.dp),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        onClick = onClick
+        onClick = rememberedOnClick
     ) {
         Row(
             modifier = Modifier
@@ -59,7 +61,7 @@ fun TrackListItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )

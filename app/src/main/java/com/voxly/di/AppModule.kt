@@ -24,9 +24,11 @@ import com.voxly.data.repository.AudioRepositoryImpl
 import com.voxly.data.repository.LyricsRepositoryImpl
 import com.voxly.data.repository.ReplayGainRepositoryImpl
 import com.voxly.data.repository.RoomRecentEditsRepository
+import com.voxly.data.repository.WhitelistRepositoryImpl
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
+import com.voxly.domain.repository.WhitelistRepository
 import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.usecase.BatchAlbumArtUseCase
@@ -46,6 +48,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import okhttp3.Cache
+import okhttp3.CertificatePinner
 import okhttp3.OkHttpClient
 import okhttp3.logging.HttpLoggingInterceptor
 import okhttp3.MediaType.Companion.toMediaType
@@ -56,6 +59,8 @@ import kotlinx.serialization.json.Json
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
+import com.voxly.BuildConfig
+import timber.log.Timber
 
 /**
  * Hilt module providing application-level dependencies.
@@ -72,17 +77,22 @@ object AppModule {
     @Singleton
     @Named("ApplicationScope")
     fun provideApplicationCoroutineScope(): CoroutineScope {
-        return CoroutineScope(SupervisorJob() + Dispatchers.Main)
+        return CoroutineScope(SupervisorJob() + Dispatchers.Default)
     }
 
     @Provides
     @Singleton
     fun provideOkHttpClient(
-        @ApplicationContext context: Context,
-        proxyInterceptor: ProxyInterceptor
+        @ApplicationContext context: Context
     ): OkHttpClient {
-        val loggingInterceptor = HttpLoggingInterceptor().apply {
-            level = HttpLoggingInterceptor.Level.BASIC
+        val loggingInterceptor = HttpLoggingInterceptor { message ->
+            val redactedMessage = message
+                .replace(Regex("""Authorization:\s*\S+"""), "Authorization: [REDACTED]")
+                .replace(Regex("""Cookie:\s*\S+"""), "Cookie: [REDACTED]")
+            Timber.tag("OkHttp").d(redactedMessage)
+        }.apply {
+            level = if (BuildConfig.DEBUG) HttpLoggingInterceptor.Level.BASIC
+                    else HttpLoggingInterceptor.Level.NONE
         }
 
         // User-Agent interceptor for all requests
@@ -113,9 +123,12 @@ object AppModule {
         val cacheDir = File(context.cacheDir, "http_cache")
         val cache = Cache(cacheDir, 50 * 1024 * 1024)
 
+        // Certificate pinner for enhanced security
+        val certificatePinner = CertificatePinnerConfig.createCertificatePinner()
+
         return OkHttpClient.Builder()
             .cache(cache)
-            .addInterceptor(proxyInterceptor)
+            .certificatePinner(certificatePinner)
             .addInterceptor(userAgentInterceptor)
             .addInterceptor(cacheInterceptor)
             .addInterceptor(loggingInterceptor)
@@ -358,4 +371,10 @@ abstract class RepositoryModule {
     abstract fun bindRecentEditsRepository(
         recentEditsRepository: RoomRecentEditsRepository
     ): RecentEditsRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindWhitelistRepository(
+        whitelistRepositoryImpl: WhitelistRepositoryImpl
+    ): WhitelistRepository
 }

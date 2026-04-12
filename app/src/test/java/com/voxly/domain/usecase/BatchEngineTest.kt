@@ -64,24 +64,31 @@ class BatchEngineTest {
     fun `retry processes only failed items`() = runBlocking {
         val engine = BatchEngine<String>(memoryPressureMonitor = mockMemoryMonitor)
 
-        // First run with some failures
+        // First run with some failures - collect fully to ensure completion
+        var collectedResults = mutableListOf<BatchResult>()
         engine.execute(
             items = listOf("file1.mp3", "file2.mp3"),
             operation = { item ->
                 if (item == "file2.mp3") Result.failure(Exception("Error")) else Result.success(Unit)
             },
             itemName = { it }
-        ).first { it.status != BatchStatus.PROCESSING }
+        ).collect { result ->
+            collectedResults.add(result)
+        }
 
-        // Capture failed items
+        // Now check failed items AFTER full collection
         val failedItems = engine.getFailedItems()
+        
+        // Debug assertions
+        assertTrue("Should have 1 failed item, got: ${failedItems.size}", failedItems.size == 1)
+        assertEquals("file2.mp3", failedItems.first().filePath)
 
         // Retry
         val retryResults = mutableListOf<BatchResult>()
         engine.retry(failedItems) { Result.success(Unit) }.collect { retryResults.add(it) }
 
         val final = retryResults.last()
-        assertEquals(1, final.totalFiles) // Only file2.mp3
+        assertEquals(1, final.totalFiles)
         assertEquals(BatchStatus.COMPLETED, final.status)
     }
 
@@ -89,16 +96,17 @@ class BatchEngineTest {
     fun `retry restores original failures if retry fails`() = runBlocking {
         val engine = BatchEngine<String>(memoryPressureMonitor = mockMemoryMonitor)
 
-        // First run with failure
+        // First run - collect fully
         engine.execute(
             items = listOf("file1.mp3", "file2.mp3"),
             operation = { item ->
                 if (item == "file2.mp3") Result.failure(Exception("Original Error")) else Result.success(Unit)
             },
             itemName = { it }
-        ).first { it.status != BatchStatus.PROCESSING }
+        ).collect { }
 
         val originalFailed = engine.getFailedItems()
+        assertTrue("Should have failed items", originalFailed.isNotEmpty())
 
         // Retry with failure
         val retryResults = mutableListOf<BatchResult>()

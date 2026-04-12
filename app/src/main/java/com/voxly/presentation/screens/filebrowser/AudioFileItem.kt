@@ -19,7 +19,7 @@ import com.voxly.presentation.components.AudioFileStandardRow
 import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
-import com.voxly.presentation.components.scrollbar.getFirstLetter
+import com.voxly.core.util.getFirstLetter
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.LazyListCoverPreloader
 

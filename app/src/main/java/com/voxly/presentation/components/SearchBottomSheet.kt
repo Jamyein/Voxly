@@ -229,7 +229,7 @@ fun SearchResultItem(
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                    style = MaterialTheme.typography.bodyLarge,
+                    style = MaterialTheme.typography.bodyLarge.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
                     color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis

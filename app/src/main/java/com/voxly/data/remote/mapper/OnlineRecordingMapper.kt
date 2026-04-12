@@ -1,4 +1,4 @@
-package com.voxly.data.mapper
+package com.voxly.data.remote.mapper
 
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource

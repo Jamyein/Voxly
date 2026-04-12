@@ -16,9 +16,34 @@ import com.voxly.domain.model.DataSourceConfig
 import com.voxly.domain.model.DataSourceType
 import com.voxly.domain.model.ScanModeConstants
 import com.voxly.domain.model.SourceConfigurations
+import com.voxly.presentation.screens.settings.SettingsUiState
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
 
 /** Timeout for StateFlow sharing in milliseconds */
 private const val STATE_FLOW_TIMEOUT_MS = 5000L
+
+/**
+ * UI state for the drag-to-reorder source priority dialog.
+ */
+data class DragDialogState(
+    val sourceType: DataSourceType,
+    val sources: List<DragDialogSourceItem>,
+    val draggedIndex: Int? = null,
+    val dragOffset: Float = 0f,
+    val originalDragIndex: Int? = null
+)
+
+/**
+ * Individual source item within the drag dialog.
+ */
+data class DragDialogSourceItem(
+    val sourceId: String,
+    val enabled: Boolean,
+    val order: Int,
+    val extraOptions: Map<String, String> = emptyMap()
+)
 
 /**
  * ViewModel for the settings screen.
@@ -28,6 +53,12 @@ private const val STATE_FLOW_TIMEOUT_MS = 5000L
 class SettingsViewModel @Inject constructor(
     private val settingsDataStore: SettingsDataStore
 ) : ViewModel() {
+
+    /**
+     * Drag dialog state - manages UI state for the draggable source priority dialog
+     */
+    private val _dragDialogState = MutableStateFlow<DragDialogState?>(null)
+    val dragDialogState: StateFlow<DragDialogState?> = _dragDialogState.asStateFlow()
 
     /**
      * Dark theme state
@@ -558,6 +589,113 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
+    // ==================== Drag Dialog State Management ====================
+
+    /**
+     * Initialize drag dialog state from source configurations
+     */
+    fun initDragDialogState(type: DataSourceType) {
+        val config = sourceConfigurations.value.getConfig(type)
+        val sortedSources = config.sources.sortedBy { it.order }
+        _dragDialogState.value = DragDialogState(
+            sourceType = type,
+            sources = sortedSources.map {
+                DragDialogSourceItem(
+                    sourceId = it.sourceId,
+                    enabled = it.enabled,
+                    order = it.order,
+                    extraOptions = it.extraOptions
+                )
+            }
+        )
+    }
+
+    /**
+     * Clear drag dialog state
+     */
+    fun clearDragDialogState() {
+        _dragDialogState.value = null
+    }
+
+    /**
+     * Start dragging an item
+     */
+    fun startDragging(index: Int) {
+        _dragDialogState.value = _dragDialogState.value?.copy(
+            originalDragIndex = index,
+            draggedIndex = index,
+            dragOffset = 0f
+        )
+    }
+
+    /**
+     * Update drag offset and swap items if needed
+     */
+    fun updateDragOffset(offset: Float, itemHeightPx: Float) {
+        val currentState = _dragDialogState.value ?: return
+        val draggedIdx = currentState.draggedIndex ?: return
+
+        val newDragOffset = currentState.dragOffset + offset
+        val offsetInItems = newDragOffset / itemHeightPx
+        val newTargetIndex = (draggedIdx + offsetInItems.toInt())
+            .coerceIn(0, currentState.sources.lastIndex)
+
+        if (newTargetIndex != draggedIdx && newTargetIndex in currentState.sources.indices) {
+            // Swap items in the list
+            val newList = currentState.sources.toMutableList()
+            val item = newList.removeAt(draggedIdx)
+            newList.add(newTargetIndex, item)
+
+            _dragDialogState.value = currentState.copy(
+                sources = newList,
+                draggedIndex = newTargetIndex,
+                dragOffset = 0f
+            )
+        } else {
+            _dragDialogState.value = currentState.copy(dragOffset = newDragOffset)
+        }
+    }
+
+    /**
+     * End dragging and persist the reordered list
+     */
+    fun endDragging() {
+        val currentState = _dragDialogState.value ?: return
+        val originalIdx = currentState.originalDragIndex
+        val currentIdx = currentState.draggedIndex
+
+        // Persist if order changed
+        if (originalIdx != null && originalIdx != currentIdx) {
+            val reorderedIds = currentState.sources.map { it.sourceId }
+            reorderSources(currentState.sourceType, reorderedIds)
+        }
+
+        _dragDialogState.value = currentState.copy(
+            draggedIndex = null,
+            dragOffset = 0f,
+            originalDragIndex = null
+        )
+    }
+
+    /**
+     * Cancel dragging and revert to original order
+     */
+    fun cancelDragging() {
+        val currentState = _dragDialogState.value ?: return
+        val originalIdx = currentState.originalDragIndex
+
+        if (originalIdx != null) {
+            // Re-fetch original order from persistent storage
+            initDragDialogState(currentState.sourceType)
+        } else {
+            _dragDialogState.value = currentState.copy(
+                draggedIndex = null,
+                dragOffset = 0f,
+                originalDragIndex = null
+            )
+        }
+    }
+
     // ==================== Proxy Settings ====================
 
     /**
@@ -711,4 +849,50 @@ class SettingsViewModel @Inject constructor(
             settingsDataStore.setLyricsTimestampFormatEnabled(enabled)
         }
     }
+
+    /**
+     * Combined UI state for the settings screen.
+     * Replaces 32 individual collectAsState() calls with a single state holder.
+     */
+    val uiState: StateFlow<SettingsUiState> = combine(
+        dynamicColors,
+        languageTag,
+        themeMode,
+        appleCountryCode,
+        onlineSearchLimit,
+        onlineSearchLimitMusicBrainz,
+        onlineSearchLimitITunes,
+        onlineSearchLimitNetease,
+        onlineSearchLimitQQMusic,
+        sourceConfigurations,
+        loggingEnabled,
+        fileLoggingEnabled,
+        consoleLoggingEnabled,
+        crashReportingEnabled,
+        replayGainTargetLoudness,
+        scanMode,
+        minDurationFilterEnabled,
+        lyricsTimestampFormatEnabled
+    ) { values ->
+        SettingsUiState(
+            dynamicColors = values[0] as Boolean,
+            savedLanguageTag = values[1] as String?,
+            themeMode = values[2] as String,
+            appleCountryCode = values[3] as String,
+            onlineSearchLimit = values[4] as Int,
+            onlineSearchLimitMusicBrainz = values[5] as Int,
+            onlineSearchLimitITunes = values[6] as Int,
+            onlineSearchLimitNetease = values[7] as Int,
+            onlineSearchLimitQQMusic = values[8] as Int,
+            sourceConfigurations = values[9] as SourceConfigurations,
+            loggingEnabled = values[10] as Boolean,
+            fileLoggingEnabled = values[11] as Boolean,
+            consoleLoggingEnabled = values[12] as Boolean,
+            crashReportingEnabled = values[13] as Boolean,
+            replayGainTargetLoudness = values[14] as Float,
+            scanMode = values[15] as String,
+            minDurationFilterEnabled = values[16] as Boolean,
+            lyricsTimestampFormatEnabled = values[17] as Boolean
+        )
+    }.stateIn(viewModelScope, SharingStarted.Lazily, SettingsUiState())
 }

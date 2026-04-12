@@ -1,10 +1,13 @@
 package com.voxly.data.repository
 
 import android.content.Context
+import android.os.Environment
 import android.provider.MediaStore
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
+import com.voxly.data.local.metadata.RecoverableMediaStoreException
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
+import com.voxly.data.local.metadata.TagWriteManager
 import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
@@ -35,6 +38,7 @@ class AudioRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context,
     private val audioFileScanner: AudioFileScanner,
     private val metadataProcessor: TagLibMetadataProcessor,
+    private val tagWriteManager: TagWriteManager,
     private val libraryCache: MusicLibraryCache
 ) : AudioRepository {
     companion object {
@@ -59,7 +63,10 @@ class AudioRepositoryImpl @Inject constructor(
     override fun getCachedAudioFiles(): Flow<List<AudioFile>> = audioFileScanner.getCachedAudioFiles()
 
 
-    override suspend fun getAudioFile(filePath: String): Result<AudioFile> =
+    override suspend fun getAudioFile(
+        filePath: String,
+        includeAlbumArt: Boolean
+    ): Result<AudioFile> =
         withContext(Dispatchers.IO) {
             try {
                 val javaFile = java.io.File(filePath)
@@ -67,31 +74,51 @@ class AudioRepositoryImpl @Inject constructor(
                 val fileLastModified = javaFile.lastModified()
 
                 // Try Room cache first — skip TagLib I/O if cache is valid
-                val cachedFile = libraryCache.getCachedFile(filePath)
-                if (cachedFile != null && javaFile.exists()) {
-                    // Cache hit: always read from file to get complete metadata
-                    val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true, bypassCache = true)
+                val cachedEntity = libraryCache.getCachedFileEntity(filePath)
+                val cachedFile = cachedEntity?.toAudioFile()
+                val isFileUnchanged = cachedEntity != null && javaFile.exists() &&
+                    cachedEntity.fileLastModifiedAt == fileLastModified
+
+                if (cachedFile != null && isFileUnchanged && !includeAlbumArt) {
+                    val completeMetadata = metadataProcessor.readAllMetadata(
+                        filePath,
+                        includeAlbumArt = false,
+                        bypassCache = true
+                    )
                     val mergedMeta = if (completeMetadata?.metadata != null) {
                         mergeWithFallback(completeMetadata.metadata, cachedFile.metadata)
                             ?: completeMetadata.metadata
                     } else {
                         cachedFile.metadata
                     }
-                    val resultFile = cachedFile.copy(
-                        metadata = mergedMeta,
-                        replayGainInfo = cachedFile.replayGainInfo
+                    val resultFile = cachedFile.copy(metadata = mergedMeta)
+                    return@withContext Result.success(resultFile)
+                }
+
+                if (cachedFile != null && isFileUnchanged && includeAlbumArt) {
+                    val completeMetadata = metadataProcessor.readAllMetadata(
+                        filePath,
+                        includeAlbumArt = true,
+                        bypassCache = true
                     )
-
-                    // Update cache with complete metadata for future reads
-                    libraryCache.syncFileToCache(resultFile)
-
+                    val mergedMeta = if (completeMetadata?.metadata != null) {
+                        mergeWithFallback(completeMetadata.metadata, cachedFile.metadata)
+                            ?: completeMetadata.metadata
+                    } else {
+                        cachedFile.metadata
+                    }
+                    val resultFile = cachedFile.copy(metadata = mergedMeta)
                     return@withContext Result.success(resultFile)
                 }
 
                 // Cache miss: run independent I/O operations in parallel
                 val (completeMetadata, mediaStoreInfo) = coroutineScope {
                     val tagLibDeferred = async {
-                        metadataProcessor.readAllMetadata(filePath, includeAlbumArt = true, bypassCache = true)
+                        metadataProcessor.readAllMetadata(
+                            filePath,
+                            includeAlbumArt = includeAlbumArt,
+                            bypassCache = true
+                        )
                     }
                     val mediaStoreDeferred = async {
                         queryMediaStoreAudioInfo(filePath)
@@ -139,12 +166,15 @@ class AudioRepositoryImpl @Inject constructor(
             }
         }
 
+    override suspend fun getAudioFileDetail(filePath: String): Result<AudioFile> {
+        return getAudioFile(filePath, includeAlbumArt = true)
+    }
+
     private fun queryMediaStoreAudioInfo(filePath: String): AudioInfo {
         var duration = 0L
         var bitrate = 0
         try {
-            val selection = "${MediaStore.Audio.Media.DATA} = ?"
-            val selectionArgs = arrayOf(filePath)
+            val (selection, selectionArgs) = buildMediaStoreSelection(filePath)
             val cursor = context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 arrayOf(
@@ -193,7 +223,7 @@ class AudioRepositoryImpl @Inject constructor(
 
     private fun readMediaStoreBasicMetadata(filePath: String): AudioMetadata? {
         return runCatching {
-            val selection = "${MediaStore.Audio.Media.DATA} = ?"
+            val (selection, selectionArgs) = buildMediaStoreSelection(filePath)
             val cursor = context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 arrayOf(
@@ -204,11 +234,9 @@ class AudioRepositoryImpl @Inject constructor(
                     MediaStore.Audio.Media.TRACK
                 ),
                 selection,
-                arrayOf(filePath),
+                selectionArgs,
                 null
             )
-            // Helper to parse MediaStore TRACK field
-            // Uses shared implementation from domain model
             fun parseTrackField(value: Int): Pair<Int?, Int?> = parseMediaStoreTrackField(value)
             cursor?.use {
                 if (!it.moveToFirst()) {
@@ -232,6 +260,26 @@ class AudioRepositoryImpl @Inject constructor(
         }.getOrNull()
     }
 
+    private fun buildMediaStoreSelection(filePath: String): Pair<String, Array<String>> {
+        val file = File(filePath)
+        val relativePath = getRelativePathFromAbsolute(file.parentFile?.absolutePath.orEmpty())
+        return if (relativePath != null) {
+            "${MediaStore.Audio.Media.DISPLAY_NAME} = ? AND ${MediaStore.Audio.Media.RELATIVE_PATH} = ?" to
+                arrayOf(file.name, relativePath)
+        } else {
+            "${MediaStore.Audio.Media.DISPLAY_NAME} = ?" to arrayOf(file.name)
+        }
+    }
+
+    private fun getRelativePathFromAbsolute(absolutePath: String): String? {
+        val normalized = absolutePath.replace('\\', '/').trimEnd('/')
+        val primaryRoot = Environment.getExternalStorageDirectory().absolutePath
+            .replace('\\', '/').trimEnd('/')
+        if (!normalized.startsWith(primaryRoot)) return null
+        val relative = normalized.removePrefix(primaryRoot).trimStart('/')
+        return if (relative.isBlank()) "" else "$relative/"
+    }
+
     private fun mergeWithFallback(
         primary: AudioMetadata?,
         fallback: AudioMetadata?
@@ -243,22 +291,46 @@ class AudioRepositoryImpl @Inject constructor(
             title = primary.title.takeIf { !it.isNullOrBlank() } ?: fallback.title,
             artist = primary.artist.takeIf { !it.isNullOrBlank() } ?: fallback.artist,
             album = primary.album.takeIf { !it.isNullOrBlank() } ?: fallback.album,
+            albumArtist = primary.albumArtist.takeIf { !it.isNullOrBlank() } ?: fallback.albumArtist,
             year = primary.year.takeIf { !it.isNullOrBlank() } ?: fallback.year,
-            trackNumber = primary.trackNumber ?: fallback.trackNumber
+            genre = primary.genre.takeIf { !it.isNullOrBlank() } ?: fallback.genre,
+            trackNumber = primary.trackNumber ?: fallback.trackNumber,
+            totalTracks = primary.totalTracks ?: fallback.totalTracks,
+            discNumber = primary.discNumber ?: fallback.discNumber,
+            totalDiscs = primary.totalDiscs ?: fallback.totalDiscs,
+            composer = primary.composer.takeIf { !it.isNullOrBlank() } ?: fallback.composer,
+            lyricist = primary.lyricist.takeIf { !it.isNullOrBlank() } ?: fallback.lyricist,
+            conductor = primary.conductor.takeIf { !it.isNullOrBlank() } ?: fallback.conductor,
+            originalArtist = primary.originalArtist.takeIf { !it.isNullOrBlank() } ?: fallback.originalArtist,
+            comment = primary.comment.takeIf { !it.isNullOrBlank() } ?: fallback.comment,
+            lyrics = primary.lyrics.takeIf { !it.isNullOrBlank() } ?: fallback.lyrics,
+            albumArt = primary.albumArt ?: fallback.albumArt,
+            customFields = primary.customFields.takeIf { it.isNotEmpty() } ?: fallback.customFields
         )
     }
 
     override suspend fun updateMetadata(filePath: String, metadata: AudioMetadata): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
-                metadataProcessor.updateMetadata(filePath, metadata).fold(
-                    onSuccess = { Result.success(Unit) },
+                // Use TagWriteManager for Android 16 safe write with whitelist support
+                tagWriteManager.writeMetadata(filePath, metadata).fold(
+                    onSuccess = {
+                        // Re-read the updated file and sync to cache
+                        // This ensures Room has the latest metadata immediately
+                        val updatedFile = getAudioFile(filePath, includeAlbumArt = false).getOrNull()
+                        if (updatedFile != null) {
+                            libraryCache.syncFileToCache(updatedFile)
+                        }
+                        Result.success(Unit)
+                    },
                     onFailure = { cause ->
                         Result.failure(
                             Exception("Failed to update metadata for: $filePath. ${cause.message}", cause)
                         )
                     }
                 )
+            } catch (e: RecoverableMediaStoreException) {
+                throw e
             } catch (e: Exception) {
                 Result.failure(e)
             }
@@ -280,7 +352,14 @@ class AudioRepositoryImpl @Inject constructor(
                 if (currentMetadata != null) {
                     val updatedMetadata = currentMetadata.copy(albumArt = albumArtBytes)
                     metadataProcessor.updateMetadata(filePath, updatedMetadata).fold(
-                        onSuccess = { Result.success(Unit) },
+                        onSuccess = {
+                            // Re-read the updated file and sync to cache
+                            val updatedFile = getAudioFile(filePath, includeAlbumArt = true).getOrNull()
+                            if (updatedFile != null) {
+                                libraryCache.syncFileToCache(updatedFile)
+                            }
+                            Result.success(Unit)
+                        },
                         onFailure = { cause ->
                             Result.failure(
                                 Exception("Failed to set album art for: $filePath. ${cause.message}", cause)
@@ -302,7 +381,14 @@ class AudioRepositoryImpl @Inject constructor(
                 if (currentMetadata != null) {
                     val updatedMetadata = currentMetadata.copy(albumArt = null)
                     metadataProcessor.updateMetadata(filePath, updatedMetadata).fold(
-                        onSuccess = { Result.success(Unit) },
+                        onSuccess = {
+                            // Re-read the updated file and sync to cache
+                            val updatedFile = getAudioFile(filePath, includeAlbumArt = true).getOrNull()
+                            if (updatedFile != null) {
+                                libraryCache.syncFileToCache(updatedFile)
+                            }
+                            Result.success(Unit)
+                        },
                         onFailure = { cause ->
                             Result.failure(
                                 Exception("Failed to remove album art from: $filePath. ${cause.message}", cause)

@@ -17,7 +17,6 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
-import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -46,12 +45,12 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
-import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
+import com.voxly.presentation.screens.album.formatBitrate
+import com.voxly.presentation.screens.album.formatSampleRate
 
 /**
  * Album detail screen showing album info and track list.
@@ -161,8 +160,9 @@ fun AlbumDetailScreen(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             // Left: Cover image using AlbumArtImage composable with shared element transition
+                            // Use album-level shared element key to match AlbumScreen list
                             val firstFile = files.firstOrNull()
-                            val albumCoverKey = firstFile?.let { createAlbumArtSharedElementKey(it.path) } ?: "album-cover-$albumName-$albumArtist"
+                            val albumCoverKey = createAlbumCoverSharedElementKey(albumNameState, albumArtistState)
                             Box(
                                 modifier = Modifier
                                     .size(120.dp)
@@ -214,14 +214,14 @@ fun AlbumDetailScreen(
                                 )
                                 if (albumBitrate > 0) {
                                     Text(
-                                        text = "$albumBitrate kbps",
+                                        text = formatBitrate(albumBitrate),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline
                                     )
                                 }
                                 if (albumSampleRate > 0) {
                                     Text(
-                                        text = "${albumSampleRate / 1000} kHz",
+                                        text = formatSampleRate(albumSampleRate),
                                         style = MaterialTheme.typography.bodySmall,
                                         color = MaterialTheme.colorScheme.outline
                                     )
@@ -309,7 +309,7 @@ fun AlbumDetailScreen(
                     ) {
                         discFiles.forEachIndexed { index, audioFile ->
                             SegmentedListItem(
-                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
+                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumCoverSharedElementKey(albumNameState, albumArtistState)) },
                                 shapes = ListItemDefaults.segmentedShapes(
                                     index = index,
                                     count = discFiles.size
@@ -318,43 +318,19 @@ fun AlbumDetailScreen(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                                 ),
                                 leadingContent = {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        val albumArtKey = createAlbumArtSharedElementKey(audioFile.path)
-                                        Box(
-                                            modifier = Modifier
-                                                .size(32.dp)
-                                                .sharedBoundsIfAvailable(key = albumArtKey)
-                                                .clip(MaterialTheme.shapes.small),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            AlbumArtImage(
-                                                filePath = audioFile.path,
-                                                albumId = audioFile.mediaStoreAlbumId,
-                                                contentDescription = null,
-                                                size = 32.dp,
-                                                modifier = Modifier.fillMaxSize()
-                                            ) {
-                                                Icon(
-                                                    imageVector = Icons.Default.MusicNote,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                    modifier = Modifier.size(16.dp)
-                                                )
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Text(
-                                            text = audioFile.metadata.trackNumber?.toString() ?: "-",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
+                                    // 只显示 track number，封面使用专辑详情页的封面
+                                    Text(
+                                        text = audioFile.metadata.trackNumber?.toString() ?: "-",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(start = 8.dp)
+                                    )
                                 },
                                 supportingContent = {
                                     Column {
                                         Text(
                                             text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                                            style = MaterialTheme.typography.bodyMedium,
+                                            style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
                                             maxLines = 1
                                         )
                                         Text(

@@ -1,6 +1,6 @@
 package com.voxly.presentation.screens.album
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -10,6 +10,7 @@ import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -28,6 +29,7 @@ import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.AlbumViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
@@ -50,16 +52,23 @@ fun AlbumAdaptiveScreen(
     val scaffoldValue = navigator.scaffoldValue
     val isSinglePane = scaffoldValue.primary == PaneAdaptedValue.Hidden
 
-    // Handle system back gesture/button for internal scaffold navigation
-    // This intercepts back before NavHost's PredictiveBackHandler when detail pane has content
-    BackHandler(enabled = selectedFileForEditing != null || navigator.currentDestination != null) {
-        if (selectedFileForEditing != null) {
-            selectedFileForEditing = null
-            fileSwitchCounter++
-        } else if (navigator.currentDestination != null) {
-            coroutineScope.launch {
-                navigator.navigateBack()
+    val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
+
+    LaunchedEffect(isSinglePane, onNavigateToAlbumDetail) {
+        if (isSinglePane && onNavigateToAlbumDetail != null) {
+            navigator.navigateTo(ListDetailPaneScaffoldRole.List, null)
+        }
+    }
+
+    PredictiveBackHandler(enabled = canCloseDetailPane) { progress ->
+        try {
+            progress.collect { }
+            if (canCloseDetailPane) {
+                coroutineScope.launch {
+                    navigator.navigateBack()
+                }
             }
+        } catch (e: CancellationException) {
         }
     }
 
@@ -87,24 +96,22 @@ fun AlbumAdaptiveScreen(
         },
         detailPane = {
             AnimatedPane {
-                val currentAlbum = navigator.currentDestination?.contentKey
-                
-                // 2-pane mode: show MetadataEditor when file selected (replaces AlbumDetail)
                 if (selectedFileForEditing != null) {
-                    key(selectedFileForEditing!!, fileSwitchCounter) {
+                    val selectedFile = selectedFileForEditing!!
+                    key(selectedFile, fileSwitchCounter) {
                         val navKey = MetadataEditor(
-                            filePath = selectedFileForEditing!!,
-                            coverTag = createAlbumArtSharedElementKey(selectedFileForEditing!!)
+                            filePath = selectedFile,
+                            coverTag = createAlbumArtSharedElementKey(selectedFile)
                         )
                         val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
-                            key = "${selectedFileForEditing!!}_$fileSwitchCounter",
+                            key = "${selectedFile}_$fileSwitchCounter",
                             creationCallback = { factory -> factory.create(navKey) }
                         )
                         AdaptiveMetadataEditorContainer(
-                            filePath = selectedFileForEditing!!,
+                            filePath = selectedFile,
                             viewModel = metadataViewModel,
-                            coverTag = createAlbumArtSharedElementKey(selectedFileForEditing!!),
-                            sharedElementKey = createAlbumArtSharedElementKey(selectedFileForEditing!!),
+                            coverTag = createAlbumArtSharedElementKey(selectedFile),
+                            sharedElementKey = createAlbumArtSharedElementKey(selectedFile),
                             onNavigateBack = {
                                 selectedFileForEditing = null
                                 fileSwitchCounter++
@@ -115,71 +122,40 @@ fun AlbumAdaptiveScreen(
                             onNavigateToLyricsSelector = { _, _, _, _, _ -> }
                         )
                     }
-                } else if (currentAlbum != null) {
-                    val navKey = AlbumDetail(
-                        albumName = currentAlbum.name,
-                        albumArtist = currentAlbum.artist ?: ""
-                    )
-                    val detailViewModel = hiltViewModel<AlbumDetailViewModel, AlbumDetailViewModel.Factory>(
-                        key = currentAlbum.name + (currentAlbum.artist ?: ""),
-                        creationCallback = { factory -> factory.create(navKey) }
-                    )
-                    AlbumDetailScreen(
-                        albumName = currentAlbum.name,
-                        albumArtist = currentAlbum.artist,
-                        onNavigateBack = {
-                            coroutineScope.launch {
-                                navigator.navigateBack()
-                            }
-                        },
-                        onNavigateToMetadata = { filePath, coverTag ->
-                            if (isSinglePane && onNavigateToMetadata != null) {
-                                onNavigateToMetadata(filePath, coverTag)
-                            } else {
-                                fileSwitchCounter++
-                                selectedFileForEditing = filePath
-                            }
-                        },
-                        viewModel = detailViewModel
-                    )
                 } else {
-                    EmptyDetailPane(
-                        message = "Select an album to view details"
-                    )
-                }
-            }
-        },
-        extraPane = {
-            AnimatedPane {
-                selectedFileForEditing?.let { filePath ->
-                    key(filePath, fileSwitchCounter) {
-                        val navKey = MetadataEditor(
-                            filePath = filePath,
-                            coverTag = createAlbumArtSharedElementKey(filePath)
+                    val currentAlbum = navigator.currentDestination?.contentKey
+                    if (currentAlbum != null) {
+                        val navKey = AlbumDetail(
+                            albumName = currentAlbum.name,
+                            albumArtist = currentAlbum.albumArtist ?: ""
                         )
-                        val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
-                            key = "${filePath}_extra_$fileSwitchCounter",
+                        val detailViewModel = hiltViewModel<AlbumDetailViewModel, AlbumDetailViewModel.Factory>(
+                            key = currentAlbum.name + (currentAlbum.albumArtist ?: ""),
                             creationCallback = { factory -> factory.create(navKey) }
                         )
-                        AdaptiveMetadataEditorContainer(
-                            filePath = filePath,
-                            viewModel = metadataViewModel,
-                            coverTag = createAlbumArtSharedElementKey(filePath),
-                            sharedElementKey = createAlbumArtSharedElementKey(filePath),
+                        AlbumDetailScreen(
+                            albumName = currentAlbum.name,
+                            albumArtist = currentAlbum.albumArtist,
                             onNavigateBack = {
-                                selectedFileForEditing = null
-                                fileSwitchCounter++
+                                coroutineScope.launch {
+                                    navigator.navigateBack()
+                                }
                             },
-                            onNavigateToOnlineMetadata = { },
-                            onNavigateToOnlineLyricsSearch = { },
-                            onNavigateToOnlineCoverSearch = { },
-                            onNavigateToLyricsSelector = { _, _, _, _, _ -> }
+                            onNavigateToMetadata = { filePath, coverTag ->
+                                if (isSinglePane && onNavigateToMetadata != null) {
+                                    onNavigateToMetadata(filePath, coverTag)
+                                } else {
+                                    fileSwitchCounter++
+                                    selectedFileForEditing = filePath
+                                }
+                            },
+                            viewModel = detailViewModel
+                        )
+                    } else {
+                        EmptyDetailPane(
+                            message = "Select an album to view details"
                         )
                     }
-                } ?: run {
-                    EmptyDetailPane(
-                        message = "Select a track to edit metadata"
-                    )
                 }
             }
         },

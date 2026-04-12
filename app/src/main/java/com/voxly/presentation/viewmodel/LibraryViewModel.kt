@@ -10,6 +10,7 @@ import com.voxly.data.local.DirFileSortOption
 import com.voxly.data.local.FileSortOption
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.UiStateDataStore
+import com.voxly.data.local.cache.CachedAudioFileEntity
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.repository.AlbumCacheRepository
 import com.voxly.data.repository.ArtistCacheRepository
@@ -28,6 +29,9 @@ import com.voxly.domain.usecase.ScanState
 import com.voxly.domain.usecase.ScanTarget
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.core.util.SortUtil
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.map
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -36,6 +40,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -49,6 +54,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
+import java.util.LinkedHashMap
 import javax.inject.Inject
 
 /**
@@ -61,6 +67,7 @@ class LibraryViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val audioRepository: AudioRepository,
     private val audioFileScanner: com.voxly.data.local.AudioFileScanner,
+    private val musicLibraryCache: com.voxly.data.local.MusicLibraryCache,
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val settingsDataStore: SettingsDataStore,
     private val uiStateDataStore: UiStateDataStore,
@@ -74,6 +81,7 @@ class LibraryViewModel @Inject constructor(
     companion object {
         private const val TAG = "LibraryViewModel"
         private const val STATE_FLOW_TIMEOUT_MS = 5000L
+        private const val MAX_SCROLL_POSITIONS = 30
     }
 
     private val _uiState = MutableStateFlow<FileBrowserUiState>(FileBrowserUiState.Loading)
@@ -98,10 +106,16 @@ class LibraryViewModel @Inject constructor(
     private val _openedDirectoryUri = MutableStateFlow<String?>(null)
     val openedDirectoryUri: StateFlow<String?> = _openedDirectoryUri.asStateFlow()
 
-    // Audio data - sourced from AudioFileScanner (single source of truth)
-    // File browser uses this for "All" mode - applies whitelist/blacklist filtering
-    // Note: filteredAudioFiles already handles background thread and distinctUntilChanged
-    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredAudioFiles
+    // Paging support for large libraries - replaces allAudios for efficient memory usage
+    val pagedAudios: Flow<PagingData<AudioFile>> = musicLibraryCache.getPagedAudioFiles()
+        .map { pagingData ->
+            pagingData.map { entity -> entity.toAudioFile() }
+        }
+        .cachedIn(viewModelScope)
+    
+    // Keep original allAudios for backward compatibility
+    @Suppress("DEPRECATION")
+    val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredFiles
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
@@ -116,7 +130,7 @@ class LibraryViewModel @Inject constructor(
         .map { uris -> uris.isNotEmpty() }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.Eagerly,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
             initialValue = false
         )
 
@@ -127,7 +141,7 @@ class LibraryViewModel @Inject constructor(
     val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
 
     val artistSeparatorEnabled: StateFlow<Boolean> = settingsDataStore.artistSeparatorEnabled
-        .stateIn(viewModelScope, SharingStarted.Eagerly, true)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
 
     /**
      * Artist separators as Set<String> for splitArtist()
@@ -171,17 +185,17 @@ class LibraryViewModel @Inject constructor(
 
     private var scanJob: Job? = null
     private var batchJob: Job? = null
-    private val scrollPositions = mutableMapOf<String, ScrollPosition>()
+    private val scrollPositions = LinkedHashMap<String, ScrollPosition>(MAX_SCROLL_POSITIONS, 0.75f, true)
 
     // Scan filter settings - observe changes to trigger auto-refresh
     // Note: Core settings (whitelistEnabled, blacklistEnabled, minDurationFilterEnabled)
     // are watched by MusicLibraryRefreshManager at app level
     private val minDurationFilterThresholdMs = settingsDataStore.minDurationFilterThresholdMs
-        .stateIn(viewModelScope, SharingStarted.Eagerly, 60000)
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), 60000)
     private val selectedDirectoryUris = settingsDataStore.selectedDirectoryUris
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), emptyList())
     private val blacklistDirectoryUris = settingsDataStore.blacklistDirectoryUris
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), emptyList())
 
     // Track previous settings to detect changes
     private var lastMinDurationFilterThresholdMs = 60000
@@ -1267,6 +1281,9 @@ class LibraryViewModel @Inject constructor(
 
     fun saveScrollPosition(listKey: String, index: Int, offset: Int) {
         scrollPositions[listKey] = ScrollPosition(index = index, offset = offset)
+        while (scrollPositions.size > MAX_SCROLL_POSITIONS) {
+            scrollPositions.keys.firstOrNull()?.let { scrollPositions.remove(it) } ?: break
+        }
     }
 
     fun getScrollPosition(listKey: String): ScrollPosition {

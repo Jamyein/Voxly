@@ -13,7 +13,7 @@ import kotlin.text.RegexOption
  */
 @Dao
 interface CachedAudioFileDao {
-    
+
     // ==================== Queries ====================
     
     /**
@@ -24,16 +24,10 @@ interface CachedAudioFileDao {
     fun getAllAudioFiles(): Flow<List<CachedAudioFileEntity>>
     
     /**
-     * Gets all cached audio files as a one-shot query.
-     * Use this when Flow is not needed.
-     */
-    @Query("SELECT * FROM cached_audio_files ORDER BY COALESCE(title, name) ASC")
-    suspend fun getAllAudioFilesOnce(): List<CachedAudioFileEntity>
-    
-    /**
      * Gets audio files by directory path prefix.
+     * Uses GLOB instead of LIKE to avoid % and _ being interpreted as wildcards.
      */
-    @Query("SELECT * FROM cached_audio_files WHERE path LIKE :directoryPath || '%' ORDER BY path ASC")
+    @Query("SELECT * FROM cached_audio_files WHERE path GLOB :directoryPath || '*' ORDER BY path ASC")
     fun getAudioFilesByDirectory(directoryPath: String): Flow<List<CachedAudioFileEntity>>
     
     /**
@@ -60,15 +54,50 @@ interface CachedAudioFileDao {
     @Query("SELECT * FROM cached_audio_files WHERE artist = :artist ORDER BY COALESCE(album, ''), trackNumber ASC, COALESCE(title, name) ASC")
     suspend fun getAudioFilesByArtistOnce(artist: String): List<CachedAudioFileEntity>
     
+    // ==================== Paging Support ====================
+    
     /**
-     * Searches audio files by title, artist, or album.
+     * Gets paged audio files for large libraries.
+     * @param offset Starting position (0-based)
+     * @param limit Number of items per page
+     */
+    @Query("SELECT * FROM cached_audio_files ORDER BY COALESCE(title, name) ASC LIMIT :limit OFFSET :offset")
+    suspend fun getAudioFilesPaged(offset: Int, limit: Int): List<CachedAudioFileEntity>
+    
+    /**
+     * Gets total count for paging.
+     */
+    @Query("SELECT COUNT(*) FROM cached_audio_files")
+    suspend fun getTotalCount(): Int
+    
+    /**
+     * Gets paged audio files with filtering by directory whitelist.
+     * Uses GLOB instead of LIKE to avoid % and _ being interpreted as wildcards.
      */
     @Query("""
         SELECT * FROM cached_audio_files 
-        WHERE title LIKE '%' || :query || '%' 
-           OR artist LIKE '%' || :query || '%'
-           OR album LIKE '%' || :query || '%'
-        ORDER BY COALESCE(title, name) ASC
+        WHERE path GLOB :directoryPath || '*'
+        ORDER BY COALESCE(title, name) ASC 
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getAudioFilesPagedByDirectory(directoryPath: String, offset: Int, limit: Int): List<CachedAudioFileEntity>
+    
+    /**
+     * Gets total count with directory filtering.
+     * Uses GLOB instead of LIKE to avoid % and _ being interpreted as wildcards.
+     */
+    @Query("SELECT COUNT(*) FROM cached_audio_files WHERE path GLOB :directoryPath || '*'")
+    suspend fun getTotalCountByDirectory(directoryPath: String): Int
+    
+    /**
+     * Searches audio files by title, artist, or album using FTS4 full-text search.
+     * Uses MATCH for efficient indexed queries instead of slow LIKE '%query%'.
+     */
+    @Query("""
+        SELECT cached_audio_files.* FROM cached_audio_files 
+        JOIN cached_audio_files_fts ON cached_audio_files.id = cached_audio_files_fts.rowid
+        WHERE cached_audio_files_fts MATCH :query || '*'
+        ORDER BY COALESCE(cached_audio_files.title, cached_audio_files.name) ASC
     """)
     fun searchAudioFiles(query: String): Flow<List<CachedAudioFileEntity>>
     

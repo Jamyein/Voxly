@@ -1,6 +1,6 @@
 package com.voxly.presentation.screens.artist
 
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -10,6 +10,7 @@ import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -31,6 +32,7 @@ import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
@@ -54,22 +56,30 @@ fun ArtistAdaptiveScreen(
     val scaffoldValue = navigator.scaffoldValue
     val isSinglePane = scaffoldValue.primary == PaneAdaptedValue.Hidden
 
-    // Handle system back gesture/button for internal scaffold navigation
-    // This intercepts back before NavHost's PredictiveBackHandler when detail/extra panes have content
-    BackHandler(enabled = selectedFileForEditing != null || selectedAlbumNavKey != null || navigator.currentDestination?.contentKey is ArtistDetail) {
-        when {
-            selectedAlbumNavKey != null -> {
-                selectedAlbumNavKey = null
+    val canCloseDetailPane = !isSinglePane && navigator.currentDestination?.contentKey is ArtistDetail
+
+    LaunchedEffect(isSinglePane, onNavigateToArtistDetail) {
+        if (isSinglePane && onNavigateToArtistDetail != null) {
+            coroutineScope.launch {
+                navigator.navigateTo(ListDetailPaneScaffoldRole.List, null)
             }
-            selectedFileForEditing != null -> {
-                selectedFileForEditing = null
-                fileSwitchCounter++
-            }
-            navigator.currentDestination?.contentKey is ArtistDetail -> {
-                coroutineScope.launch {
-                    navigator.navigateBack()
+        }
+    }
+
+    PredictiveBackHandler(enabled = canCloseDetailPane || selectedAlbumNavKey != null) { progress ->
+        try {
+            progress.collect { }
+            when {
+                selectedAlbumNavKey != null -> {
+                    selectedAlbumNavKey = null
+                }
+                canCloseDetailPane -> {
+                    coroutineScope.launch {
+                        navigator.navigateBack()
+                    }
                 }
             }
+        } catch (e: CancellationException) {
         }
     }
 
@@ -188,40 +198,6 @@ fun ArtistAdaptiveScreen(
                             message = "Select an artist to view details"
                         )
                     }
-                }
-            }
-        },
-        extraPane = {
-            AnimatedPane {
-                selectedFileForEditing?.let { filePath ->
-                    key(filePath, fileSwitchCounter) {
-                        val navKey = MetadataEditor(
-                            filePath = filePath,
-                            coverTag = createAlbumArtSharedElementKey(filePath)
-                        )
-                        val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
-                            key = "${filePath}_extra_$fileSwitchCounter",
-                            creationCallback = { factory -> factory.create(navKey) }
-                        )
-                        AdaptiveMetadataEditorContainer(
-                            filePath = filePath,
-                            viewModel = metadataViewModel,
-                            coverTag = createAlbumArtSharedElementKey(filePath),
-                            sharedElementKey = createAlbumArtSharedElementKey(filePath),
-                            onNavigateBack = {
-                                selectedFileForEditing = null
-                                fileSwitchCounter++
-                            },
-                            onNavigateToOnlineMetadata = { },
-                            onNavigateToOnlineLyricsSearch = { },
-                            onNavigateToOnlineCoverSearch = { },
-                            onNavigateToLyricsSelector = { _, _, _, _, _ -> }
-                        )
-                    }
-                } ?: run {
-                    EmptyDetailPane(
-                        message = "Select a track to edit metadata"
-                    )
                 }
             }
         },

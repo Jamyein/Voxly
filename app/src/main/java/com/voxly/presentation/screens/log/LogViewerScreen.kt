@@ -5,6 +5,7 @@ import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -36,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
+import kotlinx.coroutines.CancellationException
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -57,6 +59,15 @@ fun LogViewerScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     val fabVisible = uiState.selectedLogFile == null && uiState.logFiles.isNotEmpty()
+
+    PredictiveBackHandler(enabled = uiState.selectedLogFile != null) { progress ->
+        try {
+            progress.collect { }
+            viewModel.clearSelectedLog()
+        } catch (e: CancellationException) {
+            // Gesture cancelled - no action
+        }
+    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),

@@ -10,42 +10,65 @@ import javax.inject.Inject
 /**
  * Activity 级别作用域的搜索种子持有者。
  *
- * 由 MetadataEditorViewModel 在字段编辑时写入（updateSeed），
- * 由 Online Search ViewModel 在启动搜索时读取（getAndClearSeed）。
- * 使用 getAndClearSeed 会在读取后清除种子，避免污染下次搜索。
+ * 为每个文件路径维护独立的搜索种子，避免不同文件间的种子混淆。
+ * 当文件不再需要时（ViewModel被清除），应调用 removeSeedForFile 清理对应的种子。
  */
 @ActivityRetainedScoped
 class SearchSeedHolder @Inject constructor() : ViewModel() {
 
-    private val _editedSearchSeed = MutableStateFlow<SearchSeed?>(null)
-    val editedSearchSeed: StateFlow<SearchSeed?> = _editedSearchSeed.asStateFlow()
-
+    private val _seedsByFile = MutableStateFlow<Map<String, SearchSeed>>(emptyMap())
+    
     /**
-     * 更新搜索种子（由 MetadataEditorViewModel 调用）
+     * 更新指定文件的搜索种子。
+     * @param filePath 文件路径
+     * @param title 标题
+     * @param artist 艺术家
+     * @param album 专辑
      */
-    fun updateSeed(title: String, artist: String?, album: String?) {
-        _editedSearchSeed.value = SearchSeed(title, artist, album)
+    fun updateSeed(filePath: String, title: String, artist: String?, album: String?) {
+        _seedsByFile.value = _seedsByFile.value.toMutableMap().apply {
+            put(filePath, SearchSeed(filePath, title, artist, album))
+        }
     }
 
     /**
-     * 读取搜索种子但不清除（多屏幕共享）
+     * 获取指定文件的搜索种子（不清除）。
+     * @param filePath 文件路径
+     * @return 该文件的搜索种子，如果不存在则返回 null
      */
-    fun peekSeed(): SearchSeed? = _editedSearchSeed.value
+    fun peekSeed(filePath: String): SearchSeed? {
+        return _seedsByFile.value[filePath]
+    }
 
     /**
-     * 获取并清除搜索种子（由 Online Search ViewModel 调用）
-     * 读取后自动清除，避免下次进入时残留旧数据。
+     * 获取并清除指定文件的搜索种子。
+     * @param filePath 文件路径
+     * @return 该文件的搜索种子，如果不存在则返回 null
      */
-    fun getAndClearSeed(): SearchSeed? {
-        val seed = _editedSearchSeed.value
-        _editedSearchSeed.value = null
+    fun getAndClearSeed(filePath: String): SearchSeed? {
+        val seed = _seedsByFile.value[filePath]
+        if (seed != null) {
+            _seedsByFile.value = _seedsByFile.value.toMutableMap().apply {
+                remove(filePath)
+            }
+        }
         return seed
     }
 
     /**
-     * 清除搜索种子（由 MetadataEditorViewModel 在保存/放弃时调用）
+     * 移除指定文件的种子（当 ViewModel 被清除时调用）。
+     * @param filePath 文件路径
      */
-    fun clearSeed() {
-        _editedSearchSeed.value = null
+    fun removeSeedForFile(filePath: String) {
+        _seedsByFile.value = _seedsByFile.value.toMutableMap().apply {
+            remove(filePath)
+        }
+    }
+
+    /**
+     * 清除所有种子。
+     */
+    fun clearAllSeeds() {
+        _seedsByFile.value = emptyMap()
     }
 }

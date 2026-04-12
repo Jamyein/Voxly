@@ -18,12 +18,8 @@ fun LazyListCoverPreloader(
     listState: LazyListState,
     filePaths: List<String>
 ) {
-    val firstVisibleIndex by remember(listState) {
-        derivedStateOf { listState.firstVisibleItemIndex }
-    }
-    val visibleItemCount by remember(listState) {
-        derivedStateOf { listState.layoutInfo.visibleItemsInfo.size }
-    }
+    val firstVisibleIndex by derivedStateOf { listState.firstVisibleItemIndex }
+    val visibleItemCount by derivedStateOf { listState.layoutInfo.visibleItemsInfo.size }
     CoverPreloader(
         firstVisibleIndex = firstVisibleIndex,
         visibleItemCount = visibleItemCount,
@@ -36,12 +32,8 @@ fun LazyGridCoverPreloader(
     gridState: LazyGridState,
     filePaths: List<String>
 ) {
-    val firstVisibleIndex by remember(gridState) {
-        derivedStateOf { gridState.firstVisibleItemIndex }
-    }
-    val visibleItemCount by remember(gridState) {
-        derivedStateOf { gridState.layoutInfo.visibleItemsInfo.size }
-    }
+    val firstVisibleIndex by derivedStateOf { gridState.firstVisibleItemIndex }
+    val visibleItemCount by derivedStateOf { gridState.layoutInfo.visibleItemsInfo.size }
     CoverPreloader(
         firstVisibleIndex = firstVisibleIndex,
         visibleItemCount = visibleItemCount,

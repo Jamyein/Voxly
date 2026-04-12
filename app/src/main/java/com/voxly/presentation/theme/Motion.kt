@@ -10,9 +10,9 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -503,7 +503,11 @@ fun rememberPulseScale(
         initialValue = initialScale,
         targetValue = pulsedScale,
         animationSpec = infiniteRepeatable(
-            animation = tween(durationMillis = durationMillis, easing = FastOutSlowInEasing),
+            animation = keyframes {
+                this.durationMillis = durationMillis
+                initialScale at 0
+                pulsedScale at durationMillis with FastOutSlowInEasing
+            },
             repeatMode = RepeatMode.Reverse
         ),
         label = "pulseScale"
@@ -518,7 +522,11 @@ fun rememberShimmerOffset(width: Float, durationMillis: Int = 1200): Offset {
             initialValue = -width,
             targetValue = width * 2,
             animationSpec = infiniteRepeatable(
-                animation = tween(durationMillis = durationMillis, easing = LinearEasing),
+                animation = keyframes {
+                    this.durationMillis = durationMillis
+                    (-width) at 0 with LinearEasing
+                    (width * 2) at durationMillis with LinearEasing
+                },
                 repeatMode = RepeatMode.Restart
             ),
             label = "shimmerX"

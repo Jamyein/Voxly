@@ -24,7 +24,6 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,7 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.presentation.viewmodel.DirectoryManagementViewModel
-import com.voxly.presentation.viewmodel.SelectedDirectory
+import com.voxly.domain.model.WhitelistDirectory
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -171,7 +170,7 @@ fun DirectoryManagementScreen(
 
 @Composable
 private fun DirectoryManageItem(
-    directory: SelectedDirectory,
+    directory: WhitelistDirectory,
     onRemove: () -> Unit
 ) {
     Card(

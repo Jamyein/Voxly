@@ -6,17 +6,18 @@ import androidx.room.PrimaryKey
 
 /**
  * Room Entity for cached album art thumbnails.
- * Stores compressed thumbnail bytes for instant display.
+ * Stores cover key pointing to disk cache for instant display.
  * 
- * Design decision: Store actual thumbnail bytes (compressed JPEG) for instant display.
+ * Design decision: Store cover key (MD5 of AlbumArtist + Album) instead of bytes.
  * - Album count is much smaller than track count (e.g., 100 albums vs 10,000 tracks)
- * - Thumbnails are small (typically 10-50KB each at 256x256)
- * - Instant display without needing to decode from files or network
+ * - Disk cache (WebP 512x512) provides fast access without DB bloat
+ * - L1: Coil memory cache, L2: Disk cache, L3: MediaStore/Folder fallback
  */
 @Entity(
     tableName = "album_thumbnails",
     indices = [
-        Index(value = ["albumId"], unique = true)
+        Index(value = ["albumId"], unique = true),
+        Index(value = ["coverKey"])
     ]
 )
 data class AlbumThumbnailEntity(
@@ -24,18 +25,18 @@ data class AlbumThumbnailEntity(
     val albumId: Long,
     
     /**
-     * Compressed JPEG bytes of the thumbnail.
-     * Typically 256x256 pixels, 80% quality JPEG (~10-50KB per album).
+     * Cache key: MD5(AlbumArtist + AlbumName)
+     * Used to lookup thumbnail file in disk cache.
      */
-    val thumbnailBytes: ByteArray,
+    val coverKey: String,
     
     /**
-     * Width of the thumbnail in pixels.
+     * Width of the original thumbnail in pixels.
      */
     val width: Int,
     
     /**
-     * Height of the thumbnail in pixels.
+     * Height of the original thumbnail in pixels.
      */
     val height: Int,
     
@@ -57,7 +58,7 @@ data class AlbumThumbnailEntity(
         other as AlbumThumbnailEntity
 
         if (albumId != other.albumId) return false
-        if (!thumbnailBytes.contentEquals(other.thumbnailBytes)) return false
+        if (coverKey != other.coverKey) return false
         if (width != other.width) return false
         if (height != other.height) return false
         if (sourceUri != other.sourceUri) return false
@@ -67,7 +68,7 @@ data class AlbumThumbnailEntity(
 
     override fun hashCode(): Int {
         var result = albumId.hashCode()
-        result = 31 * result + thumbnailBytes.contentHashCode()
+        result = 31 * result + coverKey.hashCode()
         result = 31 * result + width
         result = 31 * result + height
         result = 31 * result + (sourceUri?.hashCode() ?: 0)

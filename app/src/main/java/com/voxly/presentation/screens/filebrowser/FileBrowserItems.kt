@@ -36,6 +36,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AlbumGroup
+import com.voxly.presentation.screens.album.getAlbumDisplayYearString
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
@@ -68,7 +69,7 @@ internal fun AlbumListItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
-    val coverKey = createAlbumCoverSharedElementKey(album.name, album.artist)
+    val coverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -113,7 +114,7 @@ internal fun AlbumListItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = album.artist ?: "",
+                    text = album.albumArtist ?: "",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -135,7 +136,7 @@ internal fun AlbumGridItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
-    val coverKey = createAlbumCoverSharedElementKey(album.name, album.artist)
+    val coverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -180,10 +181,10 @@ internal fun AlbumGridItem(
             )
             Spacer(modifier = Modifier.height(4.dp))
             // Track count, artist, and year in the same row
-            val albumYear = album.files.firstOrNull()?.metadata?.year
+            val albumYear = getAlbumDisplayYearString(album)
             val infoText = buildString {
                 append(stringResource(R.string.track_count, album.files.size))
-                album.artist?.let {
+                album.albumArtist?.let {
                     append(" ")
                     append(it)
                 }

@@ -1,6 +1,7 @@
 package com.voxly.presentation.viewmodel
 
 import android.net.Uri
+import android.os.Environment
 import android.os.SystemClock
 import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
@@ -9,10 +10,9 @@ import com.voxly.core.util.Logger
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.data.local.saf.SafWriteAccessService
+import com.voxly.data.local.metadata.RecoverableMediaStoreException
 import com.voxly.data.remote.downloadImageBytes
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
-import com.voxly.data.repository.LyricsRepositoryImpl
-import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.Lyrics
@@ -22,6 +22,7 @@ import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.domain.model.ScanModeConstants
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
+import com.voxly.domain.repository.LyricsSourceResult
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
@@ -33,17 +34,21 @@ import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.viewmodel.SearchSeedHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import android.icu.text.Transliterator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.launchIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.WhileSubscribed
@@ -85,7 +90,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
     private val unifiedScanManager: UnifiedScanManager,
-    private val searchSeedHolder: SearchSeedHolder
+    private val searchSeedHolder: SearchSeedHolder,
+    private val pendingMetadataHolder: PendingMetadataHolder
 ) : ViewModel() {
 
     private val TAG = "MetadataEditorVM"
@@ -104,7 +110,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.Eagerly,
+            started = SharingStarted.WhileSubscribed(5000),
             initialValue = ScanMode.TRACK_ONLY
         )
 
@@ -169,6 +175,21 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val _isLyricsTimestampFormatted = MutableStateFlow(false)
     val isLyricsTimestampFormatted: StateFlow<Boolean> = _isLyricsTimestampFormatted.asStateFlow()
 
+    // Debounced text input StateFlows - moved from Composable to ViewModel to avoid recomposition issues
+    private val _titleTextFlow = MutableStateFlow<String?>(null)
+    private val _artistTextFlow = MutableStateFlow<String?>(null)
+    private val _albumTextFlow = MutableStateFlow<String?>(null)
+    private val _albumArtistTextFlow = MutableStateFlow<String?>(null)
+    private val _yearTextFlow = MutableStateFlow<String?>(null)
+    private val _genreTextFlow = MutableStateFlow<String?>(null)
+    private val _composerTextFlow = MutableStateFlow<String?>(null)
+    private val _lyricistTextFlow = MutableStateFlow<String?>(null)
+    private val _commentTextFlow = MutableStateFlow<String?>(null)
+    private val _lyricsTextFlow = MutableStateFlow<String?>(null)
+
+    // Debounce jobs for cancellation on ViewModel clear
+    private val debounceJobs = mutableListOf<Job>()
+
     // Combined edit state using combine() - reduces multiple StateFlow updates to single UI recomposition
     val editState: StateFlow<EditState> = combine(
         _hasUnsavedChanges,
@@ -187,7 +208,76 @@ class MetadataEditorViewModel @AssistedInject constructor(
     )
 
     init {
+        // Initialize modified fields to empty - will be populated only by actual edits
+        _modifiedFields.value = emptySet()
+        _hasUnsavedChanges.value = false
+        
         loadAudioFile()
+        viewModelScope.launch {
+            pendingMetadataHolder.pending.collect { pendingMap ->
+                if (pendingMap.containsKey(filePath) && _editedMetadata.value != null) {
+                    tryApplyPendingOnlineMetadata()
+                }
+            }
+        }
+
+        // Setup debounced text field updates - moved from Composable to avoid recomposition issues
+        setupDebouncedTextField(MetadataField.TITLE, _titleTextFlow)
+        setupDebouncedTextField(MetadataField.ARTIST, _artistTextFlow)
+        setupDebouncedTextField(MetadataField.ALBUM, _albumTextFlow)
+        setupDebouncedTextField(MetadataField.ALBUM_ARTIST, _albumArtistTextFlow)
+        setupDebouncedTextField(MetadataField.YEAR, _yearTextFlow)
+        setupDebouncedTextField(MetadataField.GENRE, _genreTextFlow)
+        setupDebouncedTextField(MetadataField.COMPOSER, _composerTextFlow)
+        setupDebouncedTextField(MetadataField.LYRICIST, _lyricistTextFlow)
+        setupDebouncedTextField(MetadataField.COMMENT, _commentTextFlow)
+        setupDebouncedTextField(MetadataField.LYRICS, _lyricsTextFlow)
+    }
+
+    /**
+     * Sets up debounced collection for a text field.
+     * The flow is debounced 300ms to reduce metadata processing on rapid keystrokes.
+     */
+    private fun setupDebouncedTextField(field: MetadataField, flow: MutableStateFlow<String?>) {
+        val job = viewModelScope.launch {
+            flow
+                .debounce(300L)
+                .collect { value ->
+                    value?.let { updateMetadataField(field, it) }
+                }
+        }
+        debounceJobs.add(job)
+    }
+
+    /**
+     * 当 ViewModel 被销毁时清理该文件的搜索种子。
+     */
+    override fun onCleared() {
+        super.onCleared()
+        searchSeedHolder.removeSeedForFile(filePath)
+        debounceJobs.forEach { it.cancel() }
+        debounceJobs.clear()
+    }
+
+    /**
+     * Updates the debounced text field for the given metadata field.
+     * This is called from the Composable to update the ViewModel's debouncing flows.
+     */
+    fun updateDebouncedTextField(field: MetadataField, value: String?) {
+        when (field) {
+            MetadataField.TITLE -> _titleTextFlow.value = value
+            MetadataField.ARTIST -> _artistTextFlow.value = value
+            MetadataField.ALBUM -> _albumTextFlow.value = value
+            MetadataField.ALBUM_ARTIST -> _albumArtistTextFlow.value = value
+            MetadataField.YEAR -> _yearTextFlow.value = value
+            MetadataField.GENRE -> _genreTextFlow.value = value
+            MetadataField.COMPOSER -> _composerTextFlow.value = value
+            MetadataField.LYRICIST -> _lyricistTextFlow.value = value
+            MetadataField.COMMENT -> _commentTextFlow.value = value
+            MetadataField.LYRICS -> _lyricsTextFlow.value = value
+            MetadataField.CONDUCTOR -> updateMetadataField(field, value ?: "")
+            MetadataField.ALBUM_ART -> { /* handled by updateAlbumArt */ }
+        }
     }
 
     /**
@@ -209,6 +299,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
                     // 初始化搜索种子，供 Online Search 屏幕使用
                     searchSeedHolder.updateSeed(
+                        filePath = filePath,
                         title = metadata.title.orEmpty(),
                         artist = metadata.artist,
                         album = metadata.album
@@ -229,6 +320,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             _pendingReplayGainInfo.value = replayGainInfo
                         }
                     }
+                    
+                    // 检查并应用待处理的在线元数据
+                    tryApplyPendingOnlineMetadata()
                 },
                 onFailure = { error ->
                     _uiState.value = MetadataEditorUiState.Error(
@@ -288,6 +382,11 @@ class MetadataEditorViewModel @AssistedInject constructor(
             MetadataField.CONDUCTOR -> currentMetadata.copy(conductor = nonBlankValue)
             MetadataField.COMMENT -> currentMetadata.copy(comment = nonBlankValue)
             MetadataField.LYRICS -> currentMetadata.copy(lyrics = value)
+            MetadataField.ALBUM_ART -> {
+                // ALBUM_ART is handled by updateAlbumArt() which takes ByteArray, not String
+                Logger.w("updateMetadataField called for ALBUM_ART with String value, ignoring. Use updateAlbumArt() instead.", "MetadataEditor")
+                currentMetadata
+            }
         }
 
         setEditedMetadata(updatedMetadata, modifiedField = field)
@@ -335,6 +434,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     private fun setEditedMetadata(updatedMetadata: AudioMetadata, modifiedField: MetadataField? = null) {
+        Logger.d("setEditedMetadata: updating editedMetadata, new title=${updatedMetadata.title}", "MetadataEditor")
         _editedMetadata.value = updatedMetadata
         _hasUnsavedChanges.value = true
         if (modifiedField != null) {
@@ -343,6 +443,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
         // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
         searchSeedHolder.updateSeed(
+            filePath = filePath,
             title = updatedMetadata.title.orEmpty(),
             artist = updatedMetadata.artist,
             album = updatedMetadata.album
@@ -350,6 +451,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
         val currentState = _uiState.value
         if (currentState is MetadataEditorUiState.Success) {
+            Logger.d("setEditedMetadata: updating uiState with new metadata", "MetadataEditor")
             _uiState.value = currentState.copy(editedMetadata = updatedMetadata)
         }
     }
@@ -528,15 +630,21 @@ class MetadataEditorViewModel @AssistedInject constructor(
             
             context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                arrayOf(MediaStore.Audio.Media.DATA),
+                arrayOf(
+                    MediaStore.Audio.Media.DISPLAY_NAME,
+                    MediaStore.Audio.Media.RELATIVE_PATH
+                ),
                 selection,
                 selectionArgs,
                 null
             )?.use { cursor ->
-                val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
+                val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+                val relativeColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
                 while (cursor.moveToNext()) {
-                    val path = cursor.getString(dataColumn)
-                    if (path != null && File(path).exists()) {
+                    val displayName = cursor.getString(nameColumn) ?: continue
+                    val relativePath = cursor.getString(relativeColumn)
+                    val path = buildPathFromRelativePath(relativePath, displayName)
+                    if (path.isNotBlank()) {
                         files.add(path)
                     }
                 }
@@ -546,6 +654,16 @@ class MetadataEditorViewModel @AssistedInject constructor(
         }
         
         files
+    }
+
+    private fun buildPathFromRelativePath(relativePath: String?, displayName: String): String {
+        val sanitizedRelative = relativePath?.trimStart('/')?.replace('\\', '/') ?: ""
+        val base = Environment.getExternalStorageDirectory().absolutePath.trimEnd('/')
+        return if (sanitizedRelative.isBlank()) {
+            "$base/$displayName"
+        } else {
+            "$base/$sanitizedRelative$displayName"
+        }
     }
     
 
@@ -565,7 +683,18 @@ class MetadataEditorViewModel @AssistedInject constructor(
             _uiState.value = MetadataEditorUiState.Saving
 
             // First save the metadata
-            val metadataResult = audioRepository.updateMetadata(filePath, metadataToSave)
+            val metadataResult = try {
+                audioRepository.updateMetadata(filePath, metadataToSave)
+            } catch (e: RecoverableMediaStoreException) {
+                _saveResult.value = SaveResult.Error(
+                    message = e.message ?: "MediaStore permission required to edit this file",
+                    requiresReauthorization = true,
+                    errorCode = SaveErrorCode.MEDIASTORE_PERMISSION_REQUIRED,
+                    mediaStoreIntentSender = e.intentSender
+                )
+                _uiState.value = MetadataEditorUiState.Error(e.message ?: "MediaStore permission required")
+                return@launch
+            }
             
             metadataResult.fold(
                 onSuccess = {
@@ -674,8 +803,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 _originalMetadata = originalMetadata
                 _hasUnsavedChanges.value = false
                 _modifiedFields.value = emptySet()
-                // 清除搜索种子（放弃修改后不再使用编辑中的值）
-                searchSeedHolder.clearSeed()
+                // 清除当前文件的搜索种子（放弃修改后不再使用编辑中的值）
+                searchSeedHolder.removeSeedForFile(filePath)
                 val currentState = _uiState.value
                 if (currentState is MetadataEditorUiState.Success) {
                     _uiState.value = currentState.copy(editedMetadata = originalMetadata)
@@ -753,14 +882,17 @@ class MetadataEditorViewModel @AssistedInject constructor(
         setEditedMetadata(updatedMetadata)
     }
 
+    private companion object {
+        val TRAD_TO_SIMP_TRANSLITERATOR: Transliterator = Transliterator.getInstance("Traditional-Simplified")
+        val SIMP_TO_TRAD_TRANSLITERATOR: Transliterator = Transliterator.getInstance("Simplified-Traditional")
+    }
+
     private fun toSimplifiedChinese(text: String): String {
-        val transliterator = android.icu.text.Transliterator.getInstance("Traditional-Simplified")
-        return transliterator.transliterate(text)
+        return TRAD_TO_SIMP_TRANSLITERATOR.transliterate(text)
     }
 
     private fun toTraditionalChinese(text: String): String {
-        val transliterator = android.icu.text.Transliterator.getInstance("Simplified-Traditional")
-        return transliterator.transliterate(text)
+        return SIMP_TO_TRAD_TRANSLITERATOR.transliterate(text)
     }
 
     /**
@@ -790,6 +922,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     _uiState.value = MetadataEditorUiState.Error(message)
                 }
             )
+        }
+    }
+
+    fun retrySaveAfterMediaStorePermission() {
+        viewModelScope.launch {
+            Logger.i("MediaStore permission granted, retrying save for file=$filePath", TAG)
+            saveMetadata()
         }
     }
 
@@ -925,7 +1064,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
         val track = metadata.title.orEmpty()
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
         val album = metadata.album?.takeIf { it.isNotBlank() }
-        val flowLyricsRepository = lyricsRepository as? LyricsRepositoryImpl ?: return
 
         // Cancel previous search before starting new one (flatMapLatest pattern)
         _lyricsSearchJob?.cancel()
@@ -937,7 +1075,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
             _onlineLyricsResults.value = emptyList()
             try {
-                flowLyricsRepository.searchOnlineLyricsFlow(track, artist, album).collect { result ->
+                lyricsRepository.searchOnlineLyricsFlow(track, artist, album).collect { result ->
                     when (result) {
                         is LyricsSourceResult.Result -> {
                             val newResults = _lyricsSearchState.value.results + result.lyrics
@@ -1002,21 +1140,92 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     fun applyOnlineMetadata(metadata: AudioMetadata) {
-        val currentMetadata = _editedMetadata.value ?: return
+        applyOnlineMetadataInternal(metadata)
+    }
+
+    /**
+     * 检查并从 PendingMetadataHolder 中消费待处理的在线元数据。
+     * 应在屏幕进入时调用（如 MetadataEditorScreen 的 LaunchedEffect(Unit) 中）。
+     */
+    fun tryApplyPendingOnlineMetadata() {
+        val pending = pendingMetadataHolder.consume(filePath) ?: return
+        Logger.d("tryApplyPendingOnlineMetadata: applying pending metadata for $filePath", "MetadataEditor")
+        applyOnlineMetadataInternal(pending)
+    }
+
+    private fun applyOnlineMetadataInternal(metadata: AudioMetadata) {
+        val currentMetadata = _editedMetadata.value ?: run {
+            Logger.w("applyOnlineMetadata: _editedMetadata is null, re-putting pending for later", "MetadataEditor")
+            pendingMetadataHolder.put(filePath, metadata)
+            return
+        }
+        Logger.d("applyOnlineMetadata: current title=${currentMetadata.title}, new title=${metadata.title}", "MetadataEditor")
+
+        // Track which fields are being modified
+        val modifiedFields = mutableSetOf<MetadataField>()
+
+        // 在线源在字段缺失时可能用 "Unknown" 等占位文本填充，回填时应视为无效值
+        fun String?.isValidValue(): Boolean {
+            if (this.isNullOrBlank()) return false
+            val lower = this.trim().lowercase()
+            return lower !in setOf(
+                "unknown", "unknown artist", "unknown album", "unknown track",
+                "0", "null", "n/a", "tbd", "-"
+            )
+        }
+
+        // 过滤掉只有时间戳壳的空歌词（如 [00:00.000]\n[00:01.000]）
+        fun String?.isMeaningfulLyrics(): Boolean {
+            if (this.isNullOrBlank()) return false
+            val cleaned = this.replace(Regex("""\[\d{2}:\d{2}\.\d{2,3}\]"""), "")
+                .replace(Regex("""\[\d{2}:\d{2}\]"""), "")
+                .replace(Regex("""\[ti:.*?\]|\[ar:.*?\]|\[al:.*?\]"""), "")
+                .trim()
+            return cleaned.isNotBlank()
+        }
+
         val updatedMetadata = currentMetadata.copy(
-            title = metadata.title ?: currentMetadata.title,
-            artist = metadata.artist ?: currentMetadata.artist,
-            album = metadata.album ?: currentMetadata.album,
-            albumArtist = metadata.albumArtist ?: currentMetadata.albumArtist,
-            year = metadata.year ?: currentMetadata.year,
-            genre = metadata.genre ?: currentMetadata.genre,
-            trackNumber = metadata.trackNumber ?: currentMetadata.trackNumber,
-            totalTracks = metadata.totalTracks ?: currentMetadata.totalTracks,
-            lyrics = metadata.lyrics ?: currentMetadata.lyrics,
+            title = metadata.title.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.title) modifiedFields.add(MetadataField.TITLE) } ?: currentMetadata.title,
+            artist = metadata.artist.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.artist) modifiedFields.add(MetadataField.ARTIST) } ?: currentMetadata.artist,
+            album = metadata.album.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.album) modifiedFields.add(MetadataField.ALBUM) } ?: currentMetadata.album,
+            albumArtist = metadata.albumArtist.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.albumArtist) modifiedFields.add(MetadataField.ALBUM_ARTIST) } ?: currentMetadata.albumArtist,
+            year = metadata.year?.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.year) modifiedFields.add(MetadataField.YEAR) } ?: currentMetadata.year,
+            genre = metadata.genre.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.genre) modifiedFields.add(MetadataField.GENRE) } ?: currentMetadata.genre,
+            trackNumber = metadata.trackNumber?.takeIf { it > 0 } ?: currentMetadata.trackNumber,
+            totalTracks = metadata.totalTracks?.takeIf { it > 0 } ?: currentMetadata.totalTracks,
+            discNumber = metadata.discNumber?.takeIf { it > 0 } ?: currentMetadata.discNumber,
+            totalDiscs = metadata.totalDiscs?.takeIf { it > 0 } ?: currentMetadata.totalDiscs,
+            comment = metadata.comment.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.comment) modifiedFields.add(MetadataField.COMMENT) } ?: currentMetadata.comment,
+            lyrics = metadata.lyrics.takeIf { it.isValidValue() && it.isMeaningfulLyrics() }?.also { if (it != currentMetadata.lyrics) modifiedFields.add(MetadataField.LYRICS) } ?: currentMetadata.lyrics,
             albumArt = metadata.albumArt ?: currentMetadata.albumArt
+        ).also {
+            if (metadata.albumArt != null && !metadata.albumArt.contentEquals(currentMetadata.albumArt)) {
+                modifiedFields.add(MetadataField.ALBUM_ART)
+            }
+        }
+        
+        Logger.d("applyOnlineMetadata: setting edited metadata, title=${updatedMetadata.title}, modifiedFields=$modifiedFields", "MetadataEditor")
+        
+        _editedMetadata.value = updatedMetadata
+        _hasUnsavedChanges.value = true
+        if (modifiedFields.isNotEmpty()) {
+            _modifiedFields.value = _modifiedFields.value + modifiedFields
+        }
+
+        // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
+        searchSeedHolder.updateSeed(
+            filePath = filePath,
+            title = updatedMetadata.title.orEmpty(),
+            artist = updatedMetadata.artist,
+            album = updatedMetadata.album
         )
 
-        setEditedMetadata(updatedMetadata)
+        // 更新 uiState
+        val currentUiState = _uiState.value
+        if (currentUiState is MetadataEditorUiState.Success) {
+            Logger.d("applyOnlineMetadata: updating uiState with new metadata", "MetadataEditor")
+            _uiState.value = currentUiState.copy(editedMetadata = updatedMetadata)
+        }
     }
 
     /**

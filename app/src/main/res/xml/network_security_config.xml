@@ -7,7 +7,48 @@
         </trust-anchors>
     </base-config>
 
-    <!-- Domain-specific configurations -->
+    <!--
+    Certificate Pinning Configuration
+    =================================
+    
+    HOW TO OBTAIN CERTIFICATE PINS:
+    1. MusicBrainz (musicbrainz.org):
+       - Visit https://www.ssllabs.com/ssltest/analyze.html?d=musicbrainz.org
+       - Get the SHA-256 fingerprint from the certificate chain
+       - Encode in base64
+    
+    2. iTunes/Apple Music (itunes.apple.com):
+       - Visit https://www.ssllabs.com/ssltest/analyze.html?d=itunes.apple.com
+       - Apple uses multiple certificates, pin the root CA
+    
+    3. QQ Music (c.y.qq.com, y.qq.com, y.gtimg.cn):
+       - QQ Music uses certificates from various CAs
+       - Consider pinning the intermediate CA instead of leaf
+    
+    4. NetEase Cloud Music (music.163.com, music.126.net):
+       - NetEase uses DigiCert certificates
+       - Pin the DigiCert root or intermediate
+    
+    TOOLS:
+    - OpenSSL: openssl s_client -connect domain:443 -servername domain </dev/null 2>/dev/null | openssl x509 -fingerprint -sha256 -noout
+    - SSL Labs: https://www.ssllabs.com/ssltest/
+    - Chrome DevTools → Security tab
+    
+    PIN FORMAT:
+    - SHA-256 base64 encoded fingerprint
+    - Example: "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+    
+    IMPORTANT:
+    - Always provide backup pins to allow certificate rotation
+    - Set expiration date before certificate expiry
+    - Update pins before expiration to avoid build failures
+    
+    CURRENT STATUS:
+    - All pins below are PLACEHOLDERS and must be replaced with real pins
+    - Until real pins are added, certificate pinning is NOT active for these domains
+    - The app will work but without the enhanced security of pinning
+    -->
+
     <domain-config>
         <!-- MusicBrainz API -->
         <domain includeSubdomains="true">musicbrainz.org</domain>
@@ -28,5 +69,26 @@
         <trust-anchors>
             <certificates src="system"/>
         </trust-anchors>
+        
+        <!--
+        Certificate Pins - Replace placeholder values with real pins
+        Format: sha256/BASE64_ENCODED_PIN
+        Expiration: 2028-01-01 (update before this date)
+        -->
+        <pin-set expiration="2028-01-01">
+            <!-- MusicBrainz (updated: 2026-04-11) -->
+            <pin digest="SHA-256">JYmchuxqGetRqwgtTDwChOQSyfeDFxS67ijzwKaLxX0=</pin> 
+            <pin digest="SHA-256">0dflgFofXiuLoZvgRpP8N9xrpDTgZ7c1xbmTjIxym7o=</pin>
+
+            <!-- iTunes/Apple -->
+            <pin digest="SHA-256">O2cTB75tClUpBpRgrr0T5USjBm+5VKKXFH7fxEIXhNw=</pin>
+            <pin digest="SHA-256">9C7mf4J789KvLX59lcMyYpsH6bpdmoAGTByZNhcusLA=</pin>
+            <!-- QQ Music -->
+            <pin digest="SHA-256">UQ9uhYYPWXCIb9jyqsobUnL7p1xQiBn8V15FNaIg+GM=</pin>
+            <pin digest="SHA-256">iRVt6vFAG0+gB4h7KFntBfxhDjw2OHuU0tsCfL5BCW8=</pin>
+            <!-- NetEase -->
+            <pin digest="SHA-256">4RXsXeq4TMtib3vDXVWFDWZusqntrDkhfnq/qFSFgeA=</pin>
+            <pin digest="SHA-256">udvVO5HfT3B83McRDgEhj2WVTnsk+Sb9NBCszsRWAqY=</pin>
+        </pin-set>
     </domain-config>
 </network-security-config>

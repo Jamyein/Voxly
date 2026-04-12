@@ -1,5 +1,6 @@
 package com.voxly.presentation.screens.filebrowser
 
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -36,6 +37,7 @@ import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
@@ -65,6 +67,7 @@ import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
 import com.voxly.presentation.viewmodel.LibraryViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 /**
@@ -101,6 +104,8 @@ fun DirectoryContentAdaptiveScreen(
     // Determine if we're in single-pane mode (small screens)
     val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
 
+    val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
+
     // Load directory files
     LaunchedEffect(directoryUri) {
         if (directoryUri.isNotEmpty()) {
@@ -113,6 +118,11 @@ fun DirectoryContentAdaptiveScreen(
     val selectedFiles by viewModel.selectedFiles.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val loadingDirectories by viewModel.directoryLoadingState.collectAsState()
+
+    // Get saved scroll position for this directory
+    val savedScrollPosition = remember(directoryUri) {
+        viewModel.getScrollPosition("directory_$directoryUri")
+    }
 
     val isDirectoryLoading = remember(directoryUri, loadingDirectories) {
         directoryUri in loadingDirectories
@@ -139,12 +149,49 @@ fun DirectoryContentAdaptiveScreen(
         applySort(files, currentSortOption)
     }
 
-    // List pane state
-    val listState = rememberLazyListState()
+    // List pane state - restore saved scroll position
+    val listState = rememberLazyListState(
+        initialFirstVisibleItemIndex = savedScrollPosition.index,
+        initialFirstVisibleItemScrollOffset = savedScrollPosition.offset
+    )
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val isSelectionMode = selectedFiles.isNotEmpty()
+
+    LaunchedEffect(isSinglePane, isSelectionMode) {
+        if (isSinglePane && isSelectionMode) {
+            viewModel.clearSelection()
+        }
+    }
+
     val canScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
+    }
+
+    // Save scroll position when leaving the screen
+    DisposableEffect(directoryUri) {
+        onDispose {
+            viewModel.saveScrollPosition(
+                "directory_$directoryUri",
+                listState.firstVisibleItemIndex,
+                listState.firstVisibleItemScrollOffset
+            )
+        }
+    }
+
+    PredictiveBackHandler(enabled = isSelectionMode || canCloseDetailPane) { progress ->
+        try {
+            progress.collect { }
+            when {
+                isSelectionMode -> viewModel.clearSelection()
+                canCloseDetailPane -> {
+                    coroutineScope.launch {
+                        navigator.navigateBack()
+                    }
+                }
+            }
+        } catch (e: CancellationException) {
+            // Gesture cancelled - no action
+        }
     }
 
     // FloatingToolbar scroll behavior for batch operations
@@ -165,6 +212,7 @@ fun DirectoryContentAdaptiveScreen(
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
+        modifier = modifier.nestedScroll(floatingToolbarScrollBehavior),
         listPane = {
             AnimatedPane(
                 modifier = Modifier.fillMaxSize()
@@ -391,8 +439,7 @@ fun DirectoryContentAdaptiveScreen(
                     EmptyDetailPane()
                 }
             }
-        },
-        modifier = modifier
+        }
     )
 
     // Batch Operation Dialogs

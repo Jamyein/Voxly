@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
@@ -33,6 +34,7 @@ import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarExitDirection
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -51,6 +53,7 @@ import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
@@ -68,7 +71,8 @@ import com.voxly.presentation.viewmodel.ReplayGainScanError
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalMaterial3ExpressiveApi::class,
-    ExperimentalSharedTransitionApi::class
+    ExperimentalSharedTransitionApi::class,
+    kotlinx.coroutines.FlowPreview::class
 )
 @Composable
 fun MetadataEditorScreen(
@@ -81,10 +85,10 @@ fun MetadataEditorScreen(
     onNavigateToLyricsSelector: (lyricsText: String, title: String, artist: String, album: String, albumArtBytes: ByteArray?) -> Unit,
     coverTag: String? = null,
     sharedElementKey: String? = null,
-    pendingOnlineMetadata: AudioMetadata? = null,
-    onConsumePendingOnlineMetadata: () -> Unit = {},
     pendingOnlineLyrics: String? = null,
     onConsumePendingOnlineLyrics: () -> Unit = {},
+    pendingOnlineCoverArt: ByteArray? = null,
+    onConsumePendingOnlineCoverArt: () -> Unit = {},
 ) {
     // Shared element transition setup
     // Note: Full Container Transform requires AnimatedVisibilityScope which is not directly 
@@ -98,6 +102,7 @@ fun MetadataEditorScreen(
     }
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsState()
+    val editedMetadata by viewModel.editedMetadata.collectAsState()
     val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsState()
     val saveResult by viewModel.saveResult.collectAsState()
     val modifiedFields by viewModel.modifiedFields.collectAsState()
@@ -132,6 +137,8 @@ fun MetadataEditorScreen(
     val coverFetchMessage by viewModel.coverFetchMessage.collectAsState()
     val isLyricsTimestampFormatted by viewModel.isLyricsTimestampFormatted.collectAsState()
 
+    // Debouncing is now handled in the ViewModel - just call updateDebouncedTextField
+
     LaunchedEffect(coverFetchMessage) {
         coverFetchMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
@@ -139,10 +146,10 @@ fun MetadataEditorScreen(
         }
     }
 
-    LaunchedEffect(pendingOnlineMetadata) {
-        val metadata = pendingOnlineMetadata ?: return@LaunchedEffect
-        viewModel.applyOnlineMetadata(metadata)
-        onConsumePendingOnlineMetadata()
+    // 屏幕进入时检查并应用待处理的在线元数据（来自 OnlineMetadataScreen）
+    LaunchedEffect(Unit) {
+        Timber.d("MetadataEditorScreen: checking pending online metadata for filePath=$filePath")
+        viewModel.tryApplyPendingOnlineMetadata()
     }
 
     // Handle online lyrics result from search screen
@@ -150,6 +157,24 @@ fun MetadataEditorScreen(
         val lyricsText = pendingOnlineLyrics ?: return@LaunchedEffect
         viewModel.updateMetadataField(MetadataField.LYRICS, lyricsText)
         onConsumePendingOnlineLyrics()
+    }
+
+    // Handle online cover art result from search screen
+    LaunchedEffect(pendingOnlineCoverArt) {
+        val coverBytes = pendingOnlineCoverArt ?: return@LaunchedEffect
+        viewModel.updateAlbumArt(coverBytes)
+        onConsumePendingOnlineCoverArt()
+    }
+
+    var pendingMediaStoreIntentSender by remember { mutableStateOf<android.content.IntentSender?>(null) }
+    
+    val mediaStorePermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartIntentSenderForResult()
+    ) { result ->
+        pendingMediaStoreIntentSender = null
+        if (result.resultCode == android.app.Activity.RESULT_OK) {
+            viewModel.retrySaveAfterMediaStorePermission()
+        }
     }
 
     // Handle save result
@@ -163,6 +188,17 @@ fun MetadataEditorScreen(
         } else if (saveResult is com.voxly.presentation.viewmodel.SaveResult.Error) {
             exitAfterSave = false
             val error = saveResult as com.voxly.presentation.viewmodel.SaveResult.Error
+            // Handle MediaStore permission required - launch system dialog
+            if (error.errorCode == com.voxly.presentation.viewmodel.SaveErrorCode.MEDIASTORE_PERMISSION_REQUIRED) {
+                error.mediaStoreIntentSender?.let { intentSender ->
+                    pendingMediaStoreIntentSender = intentSender
+                    mediaStorePermissionLauncher.launch(
+                        androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
+                    )
+                }
+                // Don't clear yet - wait for permission result
+                return@LaunchedEffect
+            }
             if (error.requiresReauthorization) {
                 showReauthorizeDialog = true
             }
@@ -277,6 +313,21 @@ fun MetadataEditorScreen(
                         currentReplayGainInfo = state.audioFile.replayGainInfo
                     }
 
+                    // Sync text flows with metadata when file changes (reset debounce buffers)
+                    LaunchedEffect(filePath) {
+                        val metadata = state.editedMetadata
+                        viewModel.updateDebouncedTextField(MetadataField.TITLE, metadata.title)
+                        viewModel.updateDebouncedTextField(MetadataField.ARTIST, metadata.artist)
+                        viewModel.updateDebouncedTextField(MetadataField.ALBUM, metadata.album)
+                        viewModel.updateDebouncedTextField(MetadataField.ALBUM_ARTIST, metadata.albumArtist)
+                        viewModel.updateDebouncedTextField(MetadataField.YEAR, metadata.year)
+                        viewModel.updateDebouncedTextField(MetadataField.GENRE, metadata.genre)
+                        viewModel.updateDebouncedTextField(MetadataField.COMPOSER, metadata.composer)
+                        viewModel.updateDebouncedTextField(MetadataField.LYRICIST, metadata.lyricist)
+                        viewModel.updateDebouncedTextField(MetadataField.COMMENT, metadata.comment)
+                        viewModel.updateDebouncedTextField(MetadataField.LYRICS, metadata.lyrics)
+                    }
+
                     // Box with FloatingToolbar at bottom
                     Box(modifier = Modifier.fillMaxSize()) {
                         // Create scroll state for FloatingToolbarScrollBehavior
@@ -285,9 +336,9 @@ fun MetadataEditorScreen(
                         val mediaStoreFallbackBitmap by produceState<Bitmap?>(
                             initialValue = null,
                             key1 = state.audioFile.mediaStoreAlbumId,
-                            key2 = state.editedMetadata.albumArt
+                            key2 = editedMetadata?.albumArt
                         ) {
-                            value = if (state.editedMetadata.albumArt == null &&
+                            value = if (editedMetadata?.albumArt == null &&
                                 state.audioFile.mediaStoreAlbumId != null &&
                                 state.audioFile.mediaStoreAlbumId > 0
                             ) {
@@ -300,23 +351,23 @@ fun MetadataEditorScreen(
                         }
 
                         MetadataFormContent(
-                            metadata = state.editedMetadata,
+                            metadata = editedMetadata ?: state.editedMetadata,
                             audioFile = state.audioFile,
                             albumArtFallback = mediaStoreFallbackBitmap,
                             bottomPadding = innerPadding.calculateBottomPadding() + 80.dp, // Extra space for toolbar
                             scrollState = scrollState,
                             nestedScrollModifier = Modifier,
                             modifiedFields = modifiedFields,
-                            onTitleChange = { viewModel.updateMetadataField(MetadataField.TITLE, it) },
-                            onArtistChange = { viewModel.updateMetadataField(MetadataField.ARTIST, it) },
-                            onAlbumChange = { viewModel.updateMetadataField(MetadataField.ALBUM, it) },
-                            onAlbumArtistChange = { viewModel.updateMetadataField(MetadataField.ALBUM_ARTIST, it) },
-                            onYearChange = { viewModel.updateMetadataField(MetadataField.YEAR, it) },
-                            onGenreChange = { viewModel.updateMetadataField(MetadataField.GENRE, it) },
-                            onComposerChange = { viewModel.updateMetadataField(MetadataField.COMPOSER, it) },
-                            onLyricistChange = { viewModel.updateMetadataField(MetadataField.LYRICIST, it) },
-                            onCommentChange = { viewModel.updateMetadataField(MetadataField.COMMENT, it) },
-                            onLyricsChange = { viewModel.updateMetadataField(MetadataField.LYRICS, it) },
+                            onTitleChange = { viewModel.updateDebouncedTextField(MetadataField.TITLE, it) },
+                            onArtistChange = { viewModel.updateDebouncedTextField(MetadataField.ARTIST, it) },
+                            onAlbumChange = { viewModel.updateDebouncedTextField(MetadataField.ALBUM, it) },
+                            onAlbumArtistChange = { viewModel.updateDebouncedTextField(MetadataField.ALBUM_ARTIST, it) },
+                            onYearChange = { viewModel.updateDebouncedTextField(MetadataField.YEAR, it) },
+                            onGenreChange = { viewModel.updateDebouncedTextField(MetadataField.GENRE, it) },
+                            onComposerChange = { viewModel.updateDebouncedTextField(MetadataField.COMPOSER, it) },
+                            onLyricistChange = { viewModel.updateDebouncedTextField(MetadataField.LYRICIST, it) },
+                            onCommentChange = { viewModel.updateDebouncedTextField(MetadataField.COMMENT, it) },
+                            onLyricsChange = { viewModel.updateDebouncedTextField(MetadataField.LYRICS, it) },
                             onTrackNumberChange = { track, total ->
                                 viewModel.updateTrackNumber(track.toIntOrNull(), total.toIntOrNull())
                             },
@@ -327,7 +378,7 @@ fun MetadataEditorScreen(
                             coverTag = coverTag,
                             onZoomAlbumArt = { showAlbumArtPreview = true },
                             onRotateAlbumArt = {
-                                state.editedMetadata.albumArt?.let { bytes ->
+                                editedMetadata?.albumArt?.let { bytes ->
                                     rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
                                 }
                             },
@@ -361,16 +412,16 @@ fun MetadataEditorScreen(
                             ) {
                                 // Using IconButton per official M3E FloatingToolbar API
                                 // Lyrics Selection (only show if there are lyrics)
-                                val hasLyrics = state.editedMetadata.lyrics?.isNotBlank() == true
+                                val hasLyrics = editedMetadata?.lyrics?.isNotBlank() == true
                                 if (hasLyrics) {
                                     IconButton(
                                         onClick = {
                                             onNavigateToLyricsSelector(
-                                                state.editedMetadata.lyrics,
-                                                state.editedMetadata.getDisplayTitle(state.audioFile.name),
-                                                state.editedMetadata.artist ?: "",
-                                                state.editedMetadata.album ?: "",
-                                                state.editedMetadata.albumArt
+                                                editedMetadata?.lyrics ?: "",
+                                                editedMetadata?.getDisplayTitle(state.audioFile.name) ?: state.audioFile.name,
+                                                editedMetadata?.artist ?: "",
+                                                editedMetadata?.album ?: "",
+                                                editedMetadata?.albumArt
                                             )
                                         }
                                     ) {
@@ -452,7 +503,7 @@ fun MetadataEditorScreen(
 
     // More Options Sheet
     if (showMoreOptionsSheet) {
-        val hasLyrics = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.lyrics?.isNotBlank() == true
+        val hasLyrics = editedMetadata?.lyrics?.isNotBlank() == true
         MoreOptionsSheet(
             sheetState = moreOptionsSheetState,
             onDismiss = { showMoreOptionsSheet = false },
@@ -510,7 +561,7 @@ fun MetadataEditorScreen(
     }
 
     if (showAlbumArtOptions) {
-        val hasAlbumArt = (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt != null
+        val hasAlbumArt = editedMetadata?.albumArt != null
         AlbumArtOptionsSheet(
             hasAlbumArt = hasAlbumArt,
             onDismiss = { showAlbumArtOptions = false },
@@ -532,7 +583,7 @@ fun MetadataEditorScreen(
             },
             onRotateArt = {
                 showAlbumArtOptions = false
-                (uiState as? MetadataEditorUiState.Success)?.editedMetadata?.albumArt?.let { bytes ->
+                editedMetadata?.albumArt?.let { bytes ->
                     rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
                 }
             },
@@ -544,9 +595,8 @@ fun MetadataEditorScreen(
     }
 
     if (showAlbumArtPreview) {
-        val successState = uiState as? MetadataEditorUiState.Success
-        val previewBytes = successState?.editedMetadata?.albumArt
-        val audioFilePath = successState?.audioFile?.path
+        val previewBytes = editedMetadata?.albumArt
+        val audioFilePath = (uiState as? MetadataEditorUiState.Success)?.audioFile?.path
         AlbumArtPreviewDialog(
             albumArt = previewBytes,
             filePath = audioFilePath,

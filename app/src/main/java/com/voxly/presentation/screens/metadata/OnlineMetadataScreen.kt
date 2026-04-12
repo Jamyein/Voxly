@@ -48,7 +48,6 @@ import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineRelease
@@ -66,7 +65,7 @@ import timber.log.Timber
 @Composable
 fun OnlineMetadataScreen(
     filePath: String,
-    viewModel: OnlineMetadataViewModel = hiltViewModel(),
+    viewModel: OnlineMetadataViewModel,
     onNavigateBack: () -> Unit,
     onApplyMetadata: (AudioMetadata) -> Unit
 ) {
@@ -81,33 +80,22 @@ fun OnlineMetadataScreen(
     val downloadedAlbumArt by viewModel.downloadedAlbumArt.collectAsState()
     val isCoverArtTimeout by viewModel.isCoverArtTimeout.collectAsState()
 
-    // Track if we've already triggered apply for the current selection
-    var hasAppliedForCurrentSelection by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
-    // Track the selection ID to detect when selection changes
-    var lastAppliedSelectionId by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf<String?>(null) }
-
     // Auto-apply metadata when release or candidate is selected, and cover art is downloaded
     // Wait for cover art to be downloaded before applying (if cover is available)
     // If cover download times out, apply metadata without cover
+    // Note: This LaunchedEffect runs once per selection because selectedReleaseCandidate 
+    // changes only when user clicks a different item
     LaunchedEffect(selectedRelease, selectedReleaseCandidate, downloadedAlbumArt, isCoverArtTimeout) {
         val release = selectedRelease
         val candidate = selectedReleaseCandidate
         val albumArt = downloadedAlbumArt
         val isTimeout = isCoverArtTimeout
-        val currentSelectionId = candidate?.id
-
-        // Reset flag when selection changes
-        if (currentSelectionId != null && currentSelectionId != lastAppliedSelectionId) {
-            hasAppliedForCurrentSelection = false
-        }
 
         // Apply when we have release details OR candidate selected
         // If candidate has cover art URL, wait until it's downloaded OR timeout
         val candidateHasCover = candidate?.coverArtUrl != null
         val isCoverDownloaded = !candidateHasCover || albumArt != null || isTimeout
-        if ((release != null || candidate != null) && !hasAppliedForCurrentSelection && isCoverDownloaded) {
-            hasAppliedForCurrentSelection = true
-            lastAppliedSelectionId = currentSelectionId
+        if ((release != null || candidate != null) && isCoverDownloaded) {
             viewModel.applyMetadata()?.let { metadata ->
                 Timber.d("OnlineMetadataScreen: auto applying metadata for ${metadata.title}, hasCover=${metadata.albumArt != null}")
                 onApplyMetadata(metadata)
@@ -179,7 +167,6 @@ fun OnlineMetadataScreen(
                     OnlineReleaseList(
                         releases = state.releases,
                         onSelect = { release ->
-                            hasAppliedForCurrentSelection = false
                             viewModel.selectRelease(release)
                             clearSearchResultImageCache()
                         },
@@ -202,7 +189,6 @@ fun OnlineMetadataScreen(
                     OnlineReleaseList(
                         releases = state.releases,
                         onSelect = { release ->
-                            hasAppliedForCurrentSelection = false
                             viewModel.selectRelease(release)
                             clearSearchResultImageCache()
                         },
@@ -213,7 +199,6 @@ fun OnlineMetadataScreen(
                     OnlineReleaseList(
                         releases = searchResults,
                         onSelect = { release ->
-                            hasAppliedForCurrentSelection = false
                             viewModel.selectRelease(release)
                             clearSearchResultImageCache()
                         },
@@ -254,7 +239,7 @@ private fun OnlineReleaseList(
             modifier = modifier.fillMaxWidth(),
             contentPadding = PaddingValues(bottom = 16.dp)
         ) {
-            items(releases) { release ->
+            items(releases, key = { it.id }) { release ->
                 Card(
                     modifier = Modifier
                         .fillMaxWidth()

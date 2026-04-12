@@ -6,6 +6,7 @@ import android.content.Context
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
 import java.io.File
+import java.util.LinkedHashMap
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -18,8 +19,20 @@ class CoverUriProvider @Inject constructor(
     private val albumArtUri = Uri.parse("content://media/external/audio/albumart")
 
     companion object {
-        private val uriExistsCache = mutableMapOf<Uri, Boolean>()
-        private val folderCoverCache = mutableMapOf<String, Uri?>()
+        private const val MAX_URI_EXISTS_CACHE = 200
+        private const val MAX_FOLDER_COVER_CACHE = 200
+
+        private val uriExistsCache = LinkedHashMap<Uri, Boolean>(MAX_URI_EXISTS_CACHE, 0.75f, true)
+        private val folderCoverCache = LinkedHashMap<String, Uri?>(MAX_FOLDER_COVER_CACHE, 0.75f, true)
+
+        fun clearCaches() {
+            synchronized(uriExistsCache) {
+                uriExistsCache.clear()
+            }
+            synchronized(folderCoverCache) {
+                folderCoverCache.clear()
+            }
+        }
     }
 
     fun getCoverUri(
@@ -41,14 +54,16 @@ class CoverUriProvider @Inject constructor(
     }
 
     private fun uriExistsCached(uri: Uri): Boolean = synchronized(uriExistsCache) {
-        uriExistsCache.getOrPut(uri) {
+        val exists = uriExistsCache.getOrPut(uri) {
             runCatching { contentResolver.openInputStream(uri)?.use { true } }.getOrNull() ?: false
         }
+        trimUriExistsCache()
+        exists
     }
 
     private fun findFolderCoverCached(filePath: String): Uri? {
         return synchronized(folderCoverCache) {
-            folderCoverCache.getOrPut(filePath) {
+            val cover = folderCoverCache.getOrPut(filePath) {
                 val folder = File(filePath).parentFile ?: return@getOrPut null
                 if (!folder.exists() || !folder.isDirectory) return@getOrPut null
 
@@ -66,6 +81,20 @@ class CoverUriProvider @Inject constructor(
 
                 return@getOrPut null
             }
+            trimFolderCoverCache()
+            cover
+        }
+    }
+
+    private fun trimUriExistsCache() {
+        while (uriExistsCache.size > MAX_URI_EXISTS_CACHE) {
+            uriExistsCache.keys.firstOrNull()?.let { uriExistsCache.remove(it) } ?: break
+        }
+    }
+
+    private fun trimFolderCoverCache() {
+        while (folderCoverCache.size > MAX_FOLDER_COVER_CACHE) {
+            folderCoverCache.keys.firstOrNull()?.let { folderCoverCache.remove(it) } ?: break
         }
     }
 

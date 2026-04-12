@@ -19,19 +19,21 @@ import javax.inject.Singleton
 @Database(
     entities = [
         CachedAudioFileEntity::class,
+        CachedAudioFileFts::class,
         AlbumThumbnailEntity::class,
+        ArtistLinkEntity::class,
         RecentEditEntity::class,
-        AlbumArtFileCacheEntity::class  // Added for three-tier album art caching
     ],
-    version = 4,  // Bumped from 3 to 4
+    version = 10,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
 abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun audioFileDao(): CachedAudioFileDao
     abstract fun albumThumbnailDao(): AlbumThumbnailDao
+    abstract fun artistLinkDao(): ArtistLinkDao
+    abstract fun albumSummaryDao(): AlbumSummaryDao
     abstract fun recentEditDao(): RecentEditDao
-    abstract fun albumArtFileCacheDao(): AlbumArtFileCacheDao  // New DAO for file-level art cache
 
     companion object {
         const val DATABASE_NAME = "music_cache.db"
@@ -110,23 +112,95 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_year` ON `cached_audio_files` (`year`)")
                     }
                 })
-                // Migration from version 3 to 4: adds album art file cache table
-                .addMigrations(object : Migration(3, 4) {
+                // Migration from version 3 to 5: skip v4 (album_art_file_cache table was removed)
+                .addMigrations(object : Migration(3, 5) {
                     override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
-                        // Create album art file cache table
+                        // Create album_info table
                         db.execSQL("""
-                            CREATE TABLE IF NOT EXISTS `album_art_file_cache` (
-                                `filePath` TEXT PRIMARY KEY NOT NULL,
-                                `originalArtBytes` BLOB,
-                                `thumbnailBytes` BLOB,
-                                `lastModified` INTEGER NOT NULL,
-                                `cacheTime` INTEGER NOT NULL DEFAULT 0,
-                                `accessCount` INTEGER NOT NULL DEFAULT 0,
-                                `lastAccessTime` INTEGER NOT NULL DEFAULT 0
+                            CREATE TABLE IF NOT EXISTS `album_info` (
+                                `id` TEXT PRIMARY KEY NOT NULL,
+                                `albumName` TEXT NOT NULL,
+                                `albumArtist` TEXT,
+                                `year` TEXT,
+                                `yearHash` TEXT NOT NULL,
+                                `sampleRate` INTEGER NOT NULL DEFAULT 0,
+                                `bitrate` INTEGER NOT NULL DEFAULT 0,
+                                `contentHash` TEXT NOT NULL,
+                                `songCount` INTEGER NOT NULL DEFAULT 0,
+                                `lastUpdatedAt` INTEGER NOT NULL
                             )
                         """)
-                        // Create indices for LRU queries
-                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_album_art_file_cache_access` ON `album_art_file_cache` (`accessCount`, `lastAccessTime`)")
+                        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_album_info_name_artist` ON `album_info` (`albumName`, `albumArtist`)")
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_album_info_year` ON `album_info` (`year`)")
+                    }
+                })
+                // Migration from version 5 to 6: adds artistId, mimeType, dateAdded columns to cached_audio_files
+                .addMigrations(object : Migration(5, 6) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `mimeType` TEXT")
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `artistId` INTEGER")
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `dateAdded` INTEGER NOT NULL DEFAULT 0")
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_artistId` ON `cached_audio_files` (`artistId`)")
+                    }
+                })
+                // Migration from version 6 to 7: adds album_sort_order table for cached sort orders
+                .addMigrations(object : Migration(6, 7) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `album_sort_order` (
+                                `sortOption` TEXT PRIMARY KEY NOT NULL,
+                                `albumIds` TEXT NOT NULL,
+                                `contentHash` TEXT NOT NULL,
+                                `lastUpdatedAt` INTEGER NOT NULL
+                            )
+                        """)
+                    }
+                })
+                // Migration from version 7 to 8: adds artist_links table and album_summary_view
+                .addMigrations(object : Migration(7, 8) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        // Create artist_links table
+                        db.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `artist_links` (
+                                `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                                `trackId` TEXT NOT NULL,
+                                `artistName` TEXT NOT NULL
+                            )
+                        """)
+                        // Create indices for artist_links
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_artist_links_artistName` ON `artist_links` (`artistName`)")
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_artist_links_trackId` ON `artist_links` (`trackId`)")
+                        
+                        // Create album_summary_view
+                        db.execSQL("""
+                            CREATE VIEW IF NOT EXISTS `album_summary_view` AS
+                            SELECT 
+                                SUBSTR(MD5(album_artist || album), 1, 16) AS albumKey,
+                                album AS albumTitle,
+                                album_artist AS albumArtist,
+                                COUNT(*) AS songCount,
+                                MAX(year) AS year,
+                                MAX(sample_rate) AS maxSampleRate,
+                                MAX(id) AS coverId
+                            FROM cached_audio_files
+                            WHERE album IS NOT NULL AND album != ''
+                            GROUP BY album_artist, album
+                        """)
+                    }
+                })
+                // Migration from version 9 to 10: adds FTS4 table for full-text search
+                .addMigrations(object : Migration(9, 10) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        // Create FTS4 virtual table for full-text search on title, artist, album
+                        db.execSQL("""
+                            CREATE VIRTUAL TABLE IF NOT EXISTS `cached_audio_files_fts` 
+                            USING fts4(content='cached_audio_files', title, artist, album)
+                        """)
+                        // Populate FTS table with existing data
+                        db.execSQL("""
+                            INSERT INTO cached_audio_files_fts(rowid, title, artist, album)
+                            SELECT rowid, title, artist, album FROM cached_audio_files
+                        """)
                     }
                 })
 
@@ -153,6 +227,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
     companion object {
         private const val PREFS_NAME = "music_cache_meta"
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
-        private const val CURRENT_DATA_FORMAT_VERSION = 4
+        private const val CURRENT_DATA_FORMAT_VERSION = 10  // FTS4 full-text search
     }
 }

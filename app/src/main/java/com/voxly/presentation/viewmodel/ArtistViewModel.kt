@@ -32,7 +32,7 @@ class ArtistViewModel @Inject constructor(
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.Eagerly,
+            started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
@@ -59,7 +59,7 @@ class ArtistViewModel @Inject constructor(
         }
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.Eagerly,
+            started = SharingStarted.WhileSubscribed(5000),
             initialValue = emptyList()
         )
 
@@ -80,5 +80,9 @@ class ArtistViewModel @Inject constructor(
                 _isRefreshing.value = false
             }
         }
+    }
+
+    init {
+        refresh(forceRefresh = false)
     }
 }

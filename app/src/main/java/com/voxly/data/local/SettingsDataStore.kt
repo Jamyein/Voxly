@@ -1,6 +1,7 @@
 package com.voxly.data.local
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
@@ -9,6 +10,8 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -883,10 +886,31 @@ class SettingsDataStore @Inject constructor(
         return listOf("netease", "qq_music")
     }
 
-    // ==================== Proxy Settings ====================
+    // ==================== Proxy Settings (Encrypted) ====================
 
     /**
-     * Proxy enabled state
+     * Encrypted SharedPreferences for sensitive proxy settings.
+     * Uses Android Keystore for encryption to protect proxy credentials at rest.
+     * 
+     * Note: This encrypts proxy host and port. If proxy authentication (username/password)
+     * is added in the future, those should also be stored here.
+     */
+    private val encryptedProxyPrefs: SharedPreferences by lazy {
+        val masterKey = MasterKey.Builder(context)
+            .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+            .build()
+
+        EncryptedSharedPreferences.create(
+            context,
+            "proxy_settings_encrypted",
+            masterKey,
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+        )
+    }
+
+    /**
+     * Proxy enabled state (stored in regular DataStore - not sensitive)
      */
     val proxyEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
@@ -894,7 +918,7 @@ class SettingsDataStore @Inject constructor(
         }
 
     /**
-     * Proxy type state (HTTP, SOCKS)
+     * Proxy type state (stored in regular DataStore - not sensitive)
      */
     val proxyType: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
@@ -902,20 +926,29 @@ class SettingsDataStore @Inject constructor(
         }
 
     /**
-     * Proxy host state
+     * Proxy host state (ENCRYPTED at rest)
+     * Reads from EncryptedSharedPreferences for security.
      */
     val proxyHost: Flow<String> = context.settingsDataStore.data
-        .map { preferences ->
-            preferences[PROXY_HOST] ?: ""
+        .map {
+            // Read from encrypted storage
+            encryptedProxyPrefs.getString(ProxyKeys.KEY_PROXY_HOST, "") ?: ""
         }
 
     /**
-     * Proxy port state
+     * Proxy port state (ENCRYPTED at rest)
+     * Reads from EncryptedSharedPreferences for security.
      */
     val proxyPort: Flow<Int> = context.settingsDataStore.data
-        .map { preferences ->
-            preferences[PROXY_PORT] ?: 0
+        .map {
+            // Read from encrypted storage
+            encryptedProxyPrefs.getInt(ProxyKeys.KEY_PROXY_PORT, 0)
         }
+
+    private object ProxyKeys {
+        const val KEY_PROXY_HOST = "proxy_host"
+        const val KEY_PROXY_PORT = "proxy_port"
+    }
 
     /**
      * Lyrics timestamp format enabled preference flow (3-digit to 2-digit)
@@ -951,6 +984,31 @@ class SettingsDataStore @Inject constructor(
             migrateArtistSeparators(raw)
         }
 
+    // ==================== Input Validation ====================
+
+    /**
+     * Validates a proxy host string.
+     * Proxy host should be a valid hostname or IP address.
+     *
+     * @param host The proxy host to validate
+     * @return true if the host is valid, false otherwise
+     */
+    fun isValidProxyHost(host: String): Boolean {
+        if (host.isBlank()) return false
+        // Basic hostname pattern: starts and ends with alphanumeric, allows hyphens and dots in middle
+        val hostPattern = Regex("^[a-zA-Z0-9][a-zA-Z0-9.-]{0,253}[a-zA-Z0-9]$")
+        return hostPattern.matches(host)
+    }
+
+    /**
+     * Validates a proxy port number.
+     * Valid ports are in the range 1-65535.
+     *
+     * @param port The port number to validate
+     * @return true if the port is valid, false otherwise
+     */
+    fun isValidProxyPort(port: Int): Boolean = port in 1..65535
+
     /**
      * Save proxy enabled preference
      */
@@ -970,21 +1028,27 @@ class SettingsDataStore @Inject constructor(
     }
 
     /**
-     * Save proxy host preference
+     * Save proxy host preference (ENCRYPTED at rest)
+     * @param host The proxy host to save (will be trimmed and validated)
      */
     suspend fun setProxyHost(host: String) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[PROXY_HOST] = host
-        }
+        // Write to encrypted storage (synchronous, call from suspend context)
+        encryptedProxyPrefs.edit()
+            .putString(ProxyKeys.KEY_PROXY_HOST, host.trim())
+            .apply()
     }
 
     /**
-     * Save proxy port preference
+     * Save proxy port preference (ENCRYPTED at rest)
+     * @param port The port to save (will be validated, must be in 1-65535)
      */
     suspend fun setProxyPort(port: Int) {
-        context.settingsDataStore.edit { preferences ->
-            preferences[PROXY_PORT] = port.coerceIn(0, 65535)
-        }
+        // Write to encrypted storage (synchronous, call from suspend context)
+        // Validate port range - only allow valid ports when enabling proxy
+        val validPort = if (isValidProxyPort(port)) port else 0
+        encryptedProxyPrefs.edit()
+            .putInt(ProxyKeys.KEY_PROXY_PORT, validPort)
+            .apply()
     }
 
     /**

@@ -10,6 +10,7 @@ import com.voxly.domain.model.Lyrics
 import com.voxly.domain.model.SyncedLyricLine
 import com.voxly.domain.repository.LyricsException
 import com.voxly.domain.repository.LyricsRepository
+import com.voxly.domain.repository.LyricsSourceResult
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.domain.util.OnlineSearchSorter
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -47,17 +48,6 @@ class LyricsRepositoryImpl @Inject constructor(
 ) : LyricsRepository {
 
     private val multipleSlashesRegex = Regex("//+")
-
-    sealed class LyricsSourceResult {
-        data class Result(
-            val lyrics: OnlineLyricsResult,
-            val source: String
-        ) : LyricsSourceResult()
-
-        data class SourceCompleted(val source: String) : LyricsSourceResult()
-
-        data class Error(val source: String, val message: String) : LyricsSourceResult()
-    }
 
     // LRU cache for lyrics content (50 entries, session-level)
     private val lyricsCache = object : LinkedHashMap<String, Lyrics>(50, 0.75f, true) {
@@ -229,7 +219,7 @@ class LyricsRepositoryImpl @Inject constructor(
         }
     }
 
-    fun searchOnlineLyricsFlow(
+    override fun searchOnlineLyricsFlow(
         trackName: String,
         artistName: String?,
         albumName: String?

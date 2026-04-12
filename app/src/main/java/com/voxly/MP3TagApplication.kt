@@ -5,8 +5,10 @@ import com.voxly.core.util.CrashHandler
 import com.voxly.core.util.FileLoggingTree
 import com.voxly.core.util.LogManager
 import com.voxly.core.util.Logger
+import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.presentation.ui.clearAllCaches
+import com.voxly.presentation.ui.initImageLoaderScope
 import com.voxly.presentation.ui.trimToCoreCache
 import com.voxly.presentation.ui.trimToEssentialCache
 import dagger.hilt.android.HiltAndroidApp
@@ -16,6 +18,8 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import javax.inject.Inject
+import javax.inject.Named
 
 /**
  * Application class for MP3 Tag Editor.
@@ -25,12 +29,16 @@ import timber.log.Timber
 class MP3TagApplication : Application() {
 
     private lateinit var fileLoggingTree: FileLoggingTree
-    private val appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    @Inject
+    @Named("ApplicationScope")
+    lateinit var applicationScope: CoroutineScope
 
     override fun onCreate() {
         super.onCreate()
 
         initLogging()
+        initImageLoaderScope(applicationScope)
     }
 
     @Suppress("DEPRECATION")
@@ -41,16 +49,19 @@ class MP3TagApplication : Application() {
             TRIM_MEMORY_RUNNING_CRITICAL -> {
                 Timber.d(TAG, "Low memory, trimming to core cache")
                 trimToCoreCache(this)
+                CoverUriProvider.clearCaches()
             }
             TRIM_MEMORY_UI_HIDDEN -> {
                 // User switched to another app, release non-essential caches
                 Timber.d(TAG, "UI hidden, trimming to essential")
                 trimToEssentialCache(this)
+                CoverUriProvider.clearCaches()
             }
             TRIM_MEMORY_COMPLETE,
             TRIM_MEMORY_MODERATE -> {
                 Timber.d(TAG, "Memory pressure, clearing caches")
                 clearAllCaches(this)
+                CoverUriProvider.clearCaches()
             }
         }
     }
@@ -87,7 +98,7 @@ class MP3TagApplication : Application() {
     }
 
     private fun applyLoggingSettings() {
-        appScope.launch {
+        applicationScope.launch(Dispatchers.IO) {
             try {
                 val settings = SettingsDataStore(this@MP3TagApplication)
                 LogManager.isLoggingEnabled = settings.loggingEnabled.first()

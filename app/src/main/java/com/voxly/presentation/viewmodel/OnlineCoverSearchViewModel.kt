@@ -30,7 +30,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import com.voxly.data.repository.OnlineSourceResult
+import com.voxly.domain.repository.OnlineSourceResult
 import timber.log.Timber
 import java.io.File
 
@@ -105,7 +105,7 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
             _coverFetchMessage.value = null
 
             // 优先从 SearchSeedHolder 获取实时编辑值
-            val seed = searchSeedHolder.peekSeed()
+            val seed = searchSeedHolder.peekSeed(targetPath)
             Timber.d(TAG, "search() seed=$seed")
 
             val title: String

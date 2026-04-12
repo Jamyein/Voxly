@@ -12,10 +12,12 @@ import com.voxly.data.remote.NetworkConstants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.lang.ref.SoftReference
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Base64
@@ -25,23 +27,42 @@ import timber.log.Timber
 
 // Semaphore for limiting concurrent album art preloading
 // Prevents thread pool exhaustion when preloading large lists
-private val preloadSemaphore = Semaphore(4)
+private val preloadSemaphore = Semaphore(8)
 
-// Session-scoped LRU cache for search result album covers (ImageBitmap)
-private val searchResultCache = mutableMapOf<String, ImageBitmap>()
+@Volatile
+private var imageLoaderScope: CoroutineScope? = null
+
+private val fallbackScope by lazy {
+    CoroutineScope(SupervisorJob().apply {
+        // Ensure fallback scope can be tracked for proper cleanup
+        invokeOnCompletion { cause ->
+            if (cause != null) {
+                Timber.w(TAG, "Fallback scope cancelled: $cause")
+            }
+        }
+    } + Dispatchers.IO)
+}
+
+fun initImageLoaderScope(scope: CoroutineScope) {
+    imageLoaderScope = scope
+}
+
+private fun getImageLoaderScope(): CoroutineScope = imageLoaderScope ?: fallbackScope
+
+// Session-scoped LRU cache for search result album covers (ImageBitmap) - limited to 15 entries
+private val searchResultCache = LinkedHashMap<String, ImageBitmap>(15, 0.75f, true)
 private val cacheLock = ReentrantLock()
+private const val MAX_SEARCH_CACHE_SIZE = 15
 
-// Session-scoped LRU cache for cover art bytes (ByteArray)
-private val coverArtByteCache = LinkedHashMap<String, ByteArray>(16, 0.75f, true)
-private val byteCacheLock = ReentrantLock()
-private const val MAX_BYTE_CACHE_SIZE = 30
+// REMOVED: coverArtByteCache - eliminated duplicate storage (ByteArray + Bitmap)
+// Cover art bytes are now decoded directly without caching intermediate bytes
 
-// LRU cache for local album art (Bitmap)
-private val localAlbumArtCache = LinkedHashMap<String, Bitmap>(200, 0.75f, true)
+// LRU cache for local album art (Bitmap) with soft references for automatic GC under memory pressure
+private val localAlbumArtCache = LinkedHashMap<String, SoftReference<Bitmap>>(50, 0.75f, true)
 private val localCacheLock = ReentrantLock()
-private const val MAX_LOCAL_CACHE_SIZE = 200
+private const val MAX_LOCAL_CACHE_SIZE = 50
 
-// Carousel专用封面缓存（15 entries, 384px）
+// Carousel dedicated cover cache (15 entries, 384px)
 private val carouselCoverCache = LinkedHashMap<String, Bitmap>(15, 0.75f, true)
 private val carouselCacheLock = ReentrantLock()
 private const val MAX_CAROUSEL_CACHE_SIZE = 15
@@ -52,8 +73,8 @@ private val mediaStoreAlbumCache = LinkedHashMap<String, Bitmap>(50, 0.75f, true
 private const val MAX_MEDIASTORE_CACHE_SIZE = 50
 
 // Cache tier thresholds
-private const val CORE_CACHE_SIZE = 50   // Core cache: detail page covers
-private const val ESSENTIAL_CACHE_SIZE = 20  // Minimal cache: currently visible items
+private const val CORE_CACHE_SIZE = 25   // Core cache: detail page covers (reduced from 50)
+private const val ESSENTIAL_CACHE_SIZE = 10  // Minimal cache: currently visible items (reduced from 20)
 
 private const val TAG = "ImageLoader"
 
@@ -101,15 +122,15 @@ fun calculateTargetPixels(sizeDp: Int, density: Float): Int {
 
 /**
  * Loads an image from URL and returns as ImageBitmap.
- * Uses session-scoped cache for search results - cleared after selection.
- * Also checks prefetch cache (coverArtByteCache) for pre-downloaded images.
+ * Uses session-scoped LRU cache (max 15 entries) for search results.
+ * Cache is automatically trimmed when exceeding size limit.
  */
 suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
     if (url.isNullOrBlank()) return null
 
     val highResUrl = toHighResCoverUrl(url) ?: url
 
-    // Check session cache first
+    // Check session cache first with LRU eviction
     cacheLock.lock()
     val cached = searchResultCache[highResUrl]
     cacheLock.unlock()
@@ -117,27 +138,24 @@ suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
         return cached
     }
 
-    // Check prefetch cache (coverArtByteCache) - this is populated by prefetchCoverArtBytes
-    byteCacheLock.lock()
-    val prefetchedBytes = coverArtByteCache[highResUrl]
-    byteCacheLock.unlock()
-    if (prefetchedBytes != null) {
-        val bitmap = decodeBitmapFromBytes(prefetchedBytes)?.asImageBitmap() ?: return null
-        // Store in session cache for faster subsequent access
-        cacheLock.lock()
-        searchResultCache[highResUrl] = bitmap
-        cacheLock.unlock()
-        return bitmap
-    }
-
     // Load from network
     val bytes = loadImageBytesFromUrl(highResUrl) ?: return null
     val bitmap = decodeBitmapFromBytes(bytes)?.asImageBitmap() ?: return null
 
-    // Store in session cache
+    // Store in session cache with LRU eviction
     cacheLock.lock()
-    searchResultCache[highResUrl] = bitmap
-    cacheLock.unlock()
+    try {
+        // Remove oldest entries if at capacity
+        while (searchResultCache.size >= MAX_SEARCH_CACHE_SIZE) {
+            val oldestKey = searchResultCache.keys.firstOrNull()
+            if (oldestKey != null) {
+                searchResultCache.remove(oldestKey)
+            }
+        }
+        searchResultCache[highResUrl] = bitmap
+    } finally {
+        cacheLock.unlock()
+    }
 
     return bitmap
 }
@@ -148,52 +166,60 @@ suspend fun loadImageBitmapFromUrl(url: String?): ImageBitmap? {
  */
 fun clearSearchResultImageCache() {
     cacheLock.lock()
-    searchResultCache.clear()
-    cacheLock.unlock()
-
-    // Also clear the byte array cache
-    clearCoverArtByteCache()
+    try {
+        searchResultCache.clear()
+    } finally {
+        cacheLock.unlock()
+    }
 }
 
 /**
  * Clears the cover art byte array cache.
+ * DEPRECATED: Byte cache has been removed to eliminate duplicate storage.
+ * This function is kept for API compatibility but does nothing.
  */
+@Deprecated("Byte cache has been removed", ReplaceWith("clearSearchResultImageCache()"))
 fun clearCoverArtByteCache() {
-    byteCacheLock.lock()
-    coverArtByteCache.clear()
-    byteCacheLock.unlock()
+    // No-op: Byte caching has been eliminated to prevent duplicate memory usage
 }
 
 /**
- * Prefetches cover art bytes in the background (fire-and-forget).
+ * Prefetches cover art in the background (fire-and-forget).
+ * Downloads image and stores in bitmap cache for faster display.
  * Called when search results are returned to pre-download cover art.
+ * Note: Now stores decoded Bitmap instead of ByteArray to eliminate duplicate storage.
  */
 fun prefetchCoverArtBytes(url: String?) {
     if (url.isNullOrBlank()) return
 
     val highResUrl = toHighResCoverUrl(url) ?: url
 
-    // Check if already in cache
-    byteCacheLock.lock()
-    val alreadyCached = coverArtByteCache.containsKey(highResUrl)
-    byteCacheLock.unlock()
+    // Check if already in bitmap cache
+    cacheLock.lock()
+    val alreadyCached = searchResultCache.containsKey(highResUrl)
+    cacheLock.unlock()
     if (alreadyCached) return
 
-    // Fire-and-forget: download in background
-    CoroutineScope(Dispatchers.IO).launch {
+    // Fire-and-forget: download and decode in background
+    getImageLoaderScope().launch(Dispatchers.IO) {
         try {
             val bytes = loadImageBytesFromUrl(highResUrl)
             if (bytes != null) {
-                // Store in cache with LRU eviction
-                byteCacheLock.lock()
-                try {
-                    while (coverArtByteCache.size >= MAX_BYTE_CACHE_SIZE) {
-                        val oldestKey = coverArtByteCache.keys.first()
-                        coverArtByteCache.remove(oldestKey)
+                val bitmap = decodeBitmapFromBytes(bytes)?.asImageBitmap()
+                if (bitmap != null) {
+                    cacheLock.lock()
+                    try {
+                        // Remove oldest entries if at capacity
+                        while (searchResultCache.size >= MAX_SEARCH_CACHE_SIZE) {
+                            val oldestKey = searchResultCache.keys.firstOrNull()
+                            if (oldestKey != null) {
+                                searchResultCache.remove(oldestKey)
+                            }
+                        }
+                        searchResultCache[highResUrl] = bitmap
+                    } finally {
+                        cacheLock.unlock()
                     }
-                    coverArtByteCache[highResUrl] = bytes
-                } finally {
-                    byteCacheLock.unlock()
                 }
             }
         } catch (e: Exception) {
@@ -203,38 +229,14 @@ fun prefetchCoverArtBytes(url: String?) {
 }
 
 /**
- * Gets cover art bytes, preferring cache over network.
- * Returns cached bytes if available, otherwise downloads and caches.
+ * Gets cover art bytes from network.
+ * Note: Byte caching has been removed. Always downloads fresh.
+ * Use loadImageBitmapFromUrl() for cached bitmap access.
  */
 suspend fun getCoverArtBytes(url: String?): ByteArray? {
     if (url.isNullOrBlank()) return null
-
     val highResUrl = toHighResCoverUrl(url) ?: url
-
-    // Try cache first
-    byteCacheLock.lock()
-    val cached = coverArtByteCache[highResUrl]
-    byteCacheLock.unlock()
-    if (cached != null) {
-        return cached
-    }
-
-    // Download from network
-    val bytes = loadImageBytesFromUrl(highResUrl) ?: return null
-
-    // Store in cache with LRU eviction
-    byteCacheLock.lock()
-    try {
-        while (coverArtByteCache.size >= MAX_BYTE_CACHE_SIZE) {
-            val oldestKey = coverArtByteCache.keys.first()
-            coverArtByteCache.remove(oldestKey)
-        }
-        coverArtByteCache[highResUrl] = bytes
-    } finally {
-        byteCacheLock.unlock()
-    }
-
-    return bytes
+    return loadImageBytesFromUrl(highResUrl)
 }
 
 /**
@@ -290,10 +292,11 @@ suspend fun loadImageBytesFromUrl(url: String?): ByteArray? {
 fun loadLocalAlbumArt(filePath: String, targetSizePx: Int = 300): Bitmap? {
     if (filePath.isBlank()) return null
 
-    // Check cache with size-aware key
+    // Check cache with size-aware key - unwrap SoftReference
     localCacheLock.lock()
-    val cached = localAlbumArtCache[getLocalArtCacheKey(filePath, targetSizePx)]
+    val cachedRef = localAlbumArtCache[getLocalArtCacheKey(filePath, targetSizePx)]
     localCacheLock.unlock()
+    val cached = cachedRef?.get()
     if (cached != null && !cached.isRecycled) {
         return cached
     }
@@ -301,19 +304,17 @@ fun loadLocalAlbumArt(filePath: String, targetSizePx: Int = 300): Bitmap? {
     // Load from file
     val bitmap = loadEmbeddedAlbumArtSized(filePath, targetSizePx)
 
-    // Cache the result with size-aware key
+    // Cache the result with size-aware key - wrap in SoftReference
     if (bitmap != null) {
         localCacheLock.lock()
         try {
-            // Remove oldest entries if at capacity - don't recycle immediately,
-            // just remove from map. Let GC handle the actual memory release.
-            // This prevents crashes when old bitmaps are still referenced by Compose.
+            // Remove oldest entries if at capacity
             while (localAlbumArtCache.size >= MAX_LOCAL_CACHE_SIZE) {
                 localAlbumArtCache.keys.firstOrNull()?.let { key ->
                     localAlbumArtCache.remove(key)
                 }
             }
-            localAlbumArtCache[getLocalArtCacheKey(filePath, targetSizePx)] = bitmap
+            localAlbumArtCache[getLocalArtCacheKey(filePath, targetSizePx)] = SoftReference(bitmap)
         } finally {
             localCacheLock.unlock()
         }
@@ -382,9 +383,9 @@ private fun loadEmbeddedAlbumArt(filePath: String): Bitmap? {
 }
 
 /**
- * 提取封面字节并写入Bytes Cache。
- * 单次MediaMetadataRetriever调用，同时完成existence check和bytes提取。
- * 对同一filePath重复调用是安全的（幂等）。
+ * Extracts cover art bytes from file without caching.
+ * Single MediaMetadataRetriever call for existence check and bytes extraction.
+ * Note: Byte caching has been removed to eliminate duplicate storage.
  */
 @PublishedApi
 internal fun extractAndCacheCoverBytes(filePath: String): ByteArray? {
@@ -392,21 +393,9 @@ internal fun extractAndCacheCoverBytes(filePath: String): ByteArray? {
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(filePath)
-            val artBytes = retriever.embeddedPicture  // 一次性获取
-            if (artBytes != null) {
-                byteCacheLock.lock()
-                try {
-                    while (coverArtByteCache.size >= MAX_BYTE_CACHE_SIZE) {
-                        coverArtByteCache.keys.firstOrNull()?.let { coverArtByteCache.remove(it) }
-                    }
-                    coverArtByteCache[filePath] = artBytes
-                } finally {
-                    byteCacheLock.unlock()
-                }
-            }
-            artBytes
+            retriever.embeddedPicture  // Direct return, no byte caching
         } finally {
-            retriever.release()  // 在finally中确保释放
+            retriever.release()  // Ensure release in finally
         }
     } catch (e: Exception) {
         null
@@ -567,7 +556,7 @@ internal fun decodeBitmapFromBytes(bytes: ByteArray, targetSize: Int): Bitmap? {
  */
 fun preloadLocalAlbumArts(context: Context, filePaths: List<String>) {
     if (filePaths.isEmpty()) return
-    CoroutineScope(Dispatchers.IO).launch {
+    getImageLoaderScope().launch(Dispatchers.IO) {
         filePaths.forEach { path ->
             launch {
                 preloadSemaphore.withPermit {
@@ -714,7 +703,7 @@ fun trimToEssentialCache(context: Context) {
         val keysToRemove = mediaStoreAlbumCache.keys.drop(ESSENTIAL_CACHE_SIZE)
         keysToRemove.forEach { mediaStoreAlbumCache.remove(it) }
     }
-    Timber.d(TAG, "Trimmed to core cache: $CORE_CACHE_SIZE entries retained")
+    Timber.d(TAG, "Trimmed to essential cache: $ESSENTIAL_CACHE_SIZE entries retained")
 }
 
 /**
@@ -740,7 +729,7 @@ fun clearAllCaches(context: Context) {
 fun updateAlbumArtCache(filePath: String, bitmap: Bitmap, sizePx: Int = 300) {
     localCacheLock.lock()
     try {
-        localAlbumArtCache[getLocalArtCacheKey(filePath, sizePx)] = bitmap
+        localAlbumArtCache[getLocalArtCacheKey(filePath, sizePx)] = SoftReference(bitmap)
     } finally {
         localCacheLock.unlock()
     }
@@ -765,10 +754,14 @@ fun removeAlbumArtFromCache(filePath: String) {
  */
 fun findCachedAlbumArt(filePath: String?, albumId: Long?, sizePx: Int): Bitmap? {
     if (!filePath.isNullOrBlank()) {
-        localAlbumArtCache[getLocalArtCacheKey(filePath, sizePx)]?.let { return it }
+        localAlbumArtCache[getLocalArtCacheKey(filePath, sizePx)]?.get()?.let { 
+            if (!it.isRecycled) return it 
+        }
     }
     if (albumId != null && albumId > 0) {
-        mediaStoreAlbumCache[getMediaStoreCacheKey(albumId, sizePx)]?.let { return it }
+        mediaStoreAlbumCache[getMediaStoreCacheKey(albumId, sizePx)]?.let { 
+            if (!it.isRecycled) return it 
+        }
     }
     return null
 }
@@ -781,16 +774,10 @@ private fun getLocalArtCacheKey(filePath: String, sizePx: Int): String {
 }
 
 /**
- * 获取本地文件封面原始字节，优先从Bytes Cache读取，否则从文件提取。
- * 线程安全：提取过程在锁内执行。
- * 注意：与getCoverArtBytes(url)不同，后者用于网络图片。
+ * Gets local file cover bytes directly from file without caching.
+ * Note: Byte caching has been removed to eliminate duplicate storage.
  */
 suspend fun getLocalCoverBytes(filePath: String): ByteArray? {
-    byteCacheLock.lock()
-    val cached = coverArtByteCache[filePath]
-    byteCacheLock.unlock()
-    if (cached != null) return cached
-
     return withContext(Dispatchers.IO) {
         extractAndCacheCoverBytes(filePath)
     }
@@ -812,16 +799,10 @@ suspend fun loadCarouselCoverArt(filePath: String): Bitmap? {
     carouselCacheLock.unlock()
     if (cached != null && !cached.isRecycled) return cached
 
-    byteCacheLock.lock()
-    val bytes = coverArtByteCache[filePath]
-    byteCacheLock.unlock()
-
+    // Extract bytes directly without caching
     val bitmap = withContext(Dispatchers.IO) {
-        if (bytes != null) {
+        extractAndCacheCoverBytes(filePath)?.let { bytes ->
             decodeSampledBitmapFromBytes(bytes, CAROUSEL_TARGET_SIZE)
-        } else {
-            val extractedBytes = extractAndCacheCoverBytes(filePath)
-            extractedBytes?.let { decodeSampledBitmapFromBytes(it, CAROUSEL_TARGET_SIZE) }
         }
     } ?: return null
 

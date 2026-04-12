@@ -24,6 +24,11 @@ target_include_directories(ebur128-scanner PRIVATE
 # Find system libraries
 find_library(log-lib log)
 
+# Suppress #warning for ebur128.c on aarch64 (manual FTZ is correct for ARM)
+target_compile_options(ebur128-scanner PRIVATE
+    $<$<COMPILE_LANGUAGE:C>:-w>
+)
+
 # 16 KB page size alignment for Android 15+ compatibility
 target_link_options(ebur128-scanner PRIVATE
     "-Wl,-z,max-page-size=16384"

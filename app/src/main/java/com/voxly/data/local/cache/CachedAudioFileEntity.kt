@@ -1,6 +1,7 @@
 package com.voxly.data.local.cache
 
 import androidx.room.Entity
+import androidx.room.Fts4
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.voxly.domain.model.AudioFile
@@ -16,6 +17,7 @@ import com.voxly.domain.model.ReplayGainInfo
     indices = [
         Index(value = ["path"], unique = true),
         Index(value = ["albumId"]),
+        Index(value = ["artistId"]),
         Index(value = ["artist"]),
         Index(value = ["album"]),
         Index(value = ["year"])
@@ -29,10 +31,13 @@ data class CachedAudioFileEntity(
     val size: Long,
     val duration: Long,
     val format: String,
+    val mimeType: String?,
     val bitrate: Int,
     val sampleRate: Int,
     val channels: Int,
     val albumId: Long?,
+    val artistId: Long?,
+    val dateAdded: Long,
     
     // Basic metadata (from MediaStore - fast)
     val title: String?,
@@ -76,10 +81,13 @@ data class CachedAudioFileEntity(
             size = size,
             duration = duration,
             format = format,
+            mimeType = mimeType,
             bitrate = bitrate,
             sampleRate = sampleRate,
             channels = channels,
             mediaStoreAlbumId = albumId,
+            mediaStoreArtistId = artistId,
+            dateAdded = dateAdded,
             metadata = AudioMetadata(
                 title = title,
                 artist = artist,
@@ -127,10 +135,13 @@ data class CachedAudioFileEntity(
                 size = audioFile.size,
                 duration = audioFile.duration,
                 format = audioFile.format,
+                mimeType = audioFile.mimeType,
                 bitrate = audioFile.bitrate,
                 sampleRate = audioFile.sampleRate,
                 channels = audioFile.channels,
                 albumId = audioFile.mediaStoreAlbumId,
+                artistId = audioFile.mediaStoreArtistId,
+                dateAdded = audioFile.dateAdded,
                 title = audioFile.metadata.title,
                 artist = audioFile.metadata.artist,
                 album = audioFile.metadata.album,
@@ -158,3 +169,15 @@ data class CachedAudioFileEntity(
         }
     }
 }
+
+/**
+ * FTS4 entity for full-text search on cached audio files.
+ * Provides fast prefix and infix search using MATCH instead of LIKE.
+ */
+@Entity(tableName = "cached_audio_files_fts")
+@Fts4(contentEntity = CachedAudioFileEntity::class)
+data class CachedAudioFileFts(
+    val title: String?,
+    val artist: String?,
+    val album: String?
+)

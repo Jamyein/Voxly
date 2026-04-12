@@ -4,7 +4,10 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.cache.MusicCacheDatabaseProvider
+import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.AudioMetadata
 import com.voxly.presentation.navigation.AlbumDetail
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -17,16 +20,15 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
-/**
- * ViewModel for AlbumDetailScreen.
- * Loads album data directly from AudioFileScanner's albums StateFlow.
- */
 @HiltViewModel(assistedFactory = AlbumDetailViewModel.Factory::class)
 class AlbumDetailViewModel @AssistedInject constructor(
     @Assisted val navKey: AlbumDetail,
     @ApplicationContext private val context: Context,
-    private val audioFileScanner: AudioFileScanner
+    private val audioFileScanner: AudioFileScanner,
+    private val databaseProvider: MusicCacheDatabaseProvider,
+    private val metadataProcessor: TagLibMetadataProcessor
 ) : ViewModel() {
 
     private val _albumName = MutableStateFlow("")
@@ -54,6 +56,8 @@ class AlbumDetailViewModel @AssistedInject constructor(
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private var refreshJob: Job? = null
+    private var hasLoadedAlbum = false
+    private val tagLibReadCache = mutableMapOf<String, AudioMetadata>()
 
     init {
         // Load album data from AudioFileScanner albums on init
@@ -62,48 +66,59 @@ class AlbumDetailViewModel @AssistedInject constructor(
 
     /**
      * Load album data from AudioFileScanner by album name and artist.
-     * Sample rate is loaded from file tags (MediaStore doesn't provide this).
-     * Year is loaded from file tags for accurate results.
+     * Year and sample rate are loaded from album_summary_view for fast aggregation.
+     * Bitrate is calculated from file metadata.
+     * For files with missing discNumber, uses TagLib to read from file tags.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
+        if (hasLoadedAlbum && _albumName.value == albumName && _albumArtist.value == albumArtist && _files.value.isNotEmpty()) {
+            return
+        }
+
         viewModelScope.launch {
             try {
-                // Get albums from AudioFileScanner and find the matching one
                 val albums = audioFileScanner.albums.first()
                 val albumGroup = albums.find { album ->
-                    album.name == albumName && album.artist == albumArtist
+                    album.name == albumName && album.albumArtist == albumArtist
                 }
 
                 if (albumGroup != null) {
                     _albumName.value = albumGroup.name
-                    _albumArtist.value = albumGroup.artist
+                    _albumArtist.value = albumGroup.albumArtist
                     _coverPath.value = albumGroup.coverPath
-                    _files.value = albumGroup.files
 
-                    val scannedAlbumYear = albumGroup.files
-                        .mapNotNull { file -> file.metadata.year?.takeIf { it.isNotBlank() } }
-                        .maxOrNull()
-
-                    // Get bitrate from first file (MediaStore provides this)
-                    albumGroup.files.firstOrNull()?.let { firstFile ->
-                        _albumBitrate.value = firstFile.bitrate
-
-                        // Load audio properties for sample rate (MediaStore doesn't provide this)
-                        val audioProperties = audioFileScanner.loadAudioProperties(firstFile.path)
-                        _albumSampleRate.value = audioProperties?.sampleRate ?: 0
-
-                        // Prefer the scanner year used by album sorting; only fall back to TagLib when absent.
-                        _albumYear.value = scannedAlbumYear ?: audioFileScanner
-                            .loadDetailedMetadata(firstFile.path)
-                            ?.year
+                    val filesWithDiscNumber = albumGroup.files.map { file ->
+                        if (file.metadata.discNumber == null) {
+                            val cached = tagLibReadCache.getOrPut(file.path) {
+                                metadataProcessor.readMetadata(file.path) ?: file.metadata
+                            }
+                            if (cached.discNumber != null) {
+                                file.copy(metadata = file.metadata.copy(discNumber = cached.discNumber))
+                            } else {
+                                file
+                            }
+                        } else {
+                            file
+                        }
                     }
+
+                    _files.value = filesWithDiscNumber
+
+                    // Query year and sampleRate from album_summary_view
+                    val albumSummary = databaseProvider.getDatabase()
+                        .albumSummaryDao()
+                        .getAlbumSummary(albumName, albumArtist)
+
+                    _albumYear.value = albumSummary?.year
+                    _albumSampleRate.value = albumSummary?.maxSampleRate ?: 0
+                    _albumBitrate.value = albumSummary?.maxBitrate ?: 0
+                    hasLoadedAlbum = true
                 } else {
-                    // Album not found - set basic info at least
                     _albumName.value = albumName
                     _albumArtist.value = albumArtist
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "Error loading album: $albumName")
             }
         }
     }

@@ -1,61 +1,52 @@
 package com.voxly.presentation.screens
 
 import android.app.Activity
+import androidx.annotation.StringRes
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.wrapContentSize
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.clickable
-import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.zIndex
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AllInclusive
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.BrightnessAuto
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.ExpandLess
@@ -69,132 +60,55 @@ import androidx.compose.material.icons.filled.LooksOne
 import androidx.compose.material.icons.filled.LooksTwo
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MusicNote
-import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
-import androidx.annotation.StringRes
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import kotlin.math.roundToInt
 import com.voxly.BuildConfig
 import com.voxly.R
 import com.voxly.core.util.LogManager
+import com.voxly.domain.model.DataSourceConfig
+import com.voxly.domain.model.DataSourceType
+import com.voxly.domain.model.SourceConfigurations
+import com.voxly.domain.model.SourceTypeConfig
 import com.voxly.presentation.components.ConnectedButtonGroupRow
 import com.voxly.presentation.components.ConnectedButtonGroupRowCompact
 import com.voxly.presentation.components.ConnectedIconOnlyButtonGroupRow
-import com.voxly.presentation.components.SegmentedOption
 import com.voxly.presentation.components.SegmentedClickableRow
 import com.voxly.presentation.components.SegmentedInfoRow
+import com.voxly.presentation.components.SegmentedOption
 import com.voxly.presentation.components.SegmentedSwitchRow
 import com.voxly.presentation.components.SettingsSection
 import com.voxly.presentation.components.SortDropdownMenu
 import com.voxly.presentation.components.SortMenuItem
 import com.voxly.presentation.viewmodel.SettingsViewModel
-import com.voxly.domain.model.DataSourceConfig
-import com.voxly.domain.model.DataSourceType
-import com.voxly.domain.model.SourceConfigurations
-import com.voxly.domain.model.SourceTypeConfig
-import kotlin.math.roundToInt
+import com.voxly.presentation.screens.settings.*
+import com.voxly.presentation.viewmodel.DragDialogState
+import com.voxly.presentation.viewmodel.DragDialogSourceItem
 
-// ==================== Data Classes ====================
-
-data class LanguageOption(
-    @StringRes val labelResId: Int,
-    val languageTag: String?
-)
-
-data class LoudnessOption(
-    val value: Float,
-    @StringRes val labelResId: Int
-)
-
-data class AppleCountryOption(
-    val value: String,
-    @StringRes val labelResId: Int
-)
-
-// ============ Layout Constants ============
+// Layout constants
 private val HorizontalPadding = 16.dp
 private val SectionSpacing = 16.dp
-
-// ============ Data Classes ============
-data class SearchLimitOption(
-    val value: Int,
-    @StringRes val labelResId: Int? = null
-)
-
-data class ScanModeOption(
-    val value: String,
-    @StringRes val labelResId: Int
-)
-
-data class ConnectedIconOption<T>(
-    val value: T,
-    val icon: ImageVector? = null,
-    val tooltip: String,
-    val text: String? = null
-)
-
-private fun connectedGroupWidth(optionCount: Int): Dp {
-    val perButtonBase = 40.dp
-    val spacing = 2.dp
-    val count = optionCount.coerceAtLeast(1)
-    val width = perButtonBase * count + spacing * (count - 1)
-    return width.coerceIn(124.dp, 220.dp)
-}
-
-// ==================== Helper Functions ====================
-
-fun resolveCurrentLanguageTag(): String? {
-    val locales = AppCompatDelegate.getApplicationLocales()
-    if (locales.isEmpty) {
-        return null
-    }
-    val firstTag = locales.toLanguageTags()
-        .split(",")
-        .firstOrNull()
-        ?.trim()
-        ?.ifBlank { null }
-        ?: return null
-    return when {
-        firstTag.startsWith("zh", ignoreCase = true) -> "zh-CN"
-        firstTag.startsWith("en", ignoreCase = true) -> "en"
-        else -> firstTag
-    }
-}
-
-fun normalizeLanguageTag(tag: String?): String? = tag?.lowercase()
-
-
-
-fun sourceToDisplayName(source: String): String = when (source) {
-    "itunes" -> "iTunes"
-    "musicbrainz" -> "MusicBrainz"
-    "netease" -> "NetEase"
-    "qq_music" -> "QQ Music"
-    else -> source
-}
-
-/**
- * Check if a source has extra options (like country code for iTunes)
- */
-fun sourceHasExtraOptions(sourceId: String): Boolean = sourceId == "itunes"
-
-/**
- * Get extra option display label for a source
- */
-fun getExtraOptionLabel(sourceId: String): String = when (sourceId) {
-    "itunes" -> "Country Code"
-    else -> ""
-}
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -208,7 +122,7 @@ private fun <T> ConnectedIconButtonGroup(
     val selectedWeight = 1.24f
     val animatedWeights = options.map { option ->
         val animatedWeight by animateFloatAsState(
-            targetValue = if (option.value == selectedValue) selectedWeight else baseWeight,
+            targetValue = if (option.optionValue == selectedValue) selectedWeight else baseWeight,
             animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
             label = "settings_connected_button_weight"
         )
@@ -222,7 +136,7 @@ private fun <T> ConnectedIconButtonGroup(
         horizontalArrangement = Arrangement.spacedBy(ButtonGroupDefaults.ConnectedSpaceBetween)
     ) {
         options.forEachIndexed { index, option ->
-            val isSelected = option.value == selectedValue
+            val isSelected = option.optionValue == selectedValue
             val itemModifier = Modifier
                 .weight(animatedWeights[index])
                 .defaultMinSize(minWidth = 56.dp, minHeight = 40.dp)
@@ -243,7 +157,7 @@ private fun <T> ConnectedIconButtonGroup(
                             ToggleButton(
                                 checked = isSelected,
                                 onCheckedChange = { checked ->
-                                    if (checked) onSelected(option.value)
+                                    if (checked) onSelected(option.optionValue)
                                 },
                                 modifier = itemModifier,
                                 shapes = when (index) {
@@ -261,9 +175,9 @@ private fun <T> ConnectedIconButtonGroup(
                                             animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
                                         )
                                     )
-                                } else {
+                                } else if (option.icon != null) {
                                     Icon(
-                                        imageVector = option.icon!!,
+                                        imageVector = option.icon,
                                         contentDescription = option.tooltip,
                                         modifier = Modifier.animateContentSize(
                                             animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec()
@@ -281,7 +195,7 @@ private fun <T> ConnectedIconButtonGroup(
                             { Icon(imageVector = icon, contentDescription = option.tooltip) }
                         },
                         onClick = {
-                            onSelected(option.value)
+                            onSelected(option.optionValue)
                             state.dismiss()
                         }
                     )
@@ -292,63 +206,34 @@ private fun <T> ConnectedIconButtonGroup(
 }
 
 /**
- * Data class for source item state in the draggable dialog
- */
-data class SourceItemState(
-    val sourceId: String,
-    val enabled: Boolean,
-    val extraOptions: Map<String, String>,
-    val expanded: Boolean = false
-)
-
-/**
  * Draggable source priority dialog with inline switches and extra options.
  * Each source item shows: sequence number, drag handle, source name, switch, and more options menu.
  * Supports drag-and-drop reordering.
+ * 
+ * Note: State management is now delegated to the ViewModel for better separation of concerns.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DraggableSourcePriorityDialog(
     title: String,
-    sourceTypeConfig: SourceTypeConfig,
+    dialogState: DragDialogState,
     appleCountryOptions: List<AppleCountryOption>,
     currentAppleCountry: AppleCountryOption,
     onDismiss: () -> Unit,
     onSourceEnabledChange: (String, Boolean) -> Unit,
     onSourceReorder: (List<String>) -> Unit,
-    onAppleCountryChange: (String) -> Unit
+    onAppleCountryChange: (String) -> Unit,
+    onDragStart: (Int) -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
+    onDrag: (Offset, Float) -> Unit
 ) {
-    // Track current sources - updated immediately on drag end for instant feedback
-    // This ensures the next drag operation sees the updated order
-    var currentSources by remember(sourceTypeConfig) {
-        mutableStateOf(sourceTypeConfig.sources.sortedBy { it.order })
-    }
-
-    // Track current iTunes country locally for instant UI update
-    var localAppleCountry by remember { mutableStateOf(currentAppleCountry) }
-
-    // Local drag visual state - only used for visual feedback during drag
-    // This is set when drag starts and cleared when drag ends
-    var localDragList by remember { mutableStateOf<List<SourceItemState>?>(null) }
-
-    // Track original drag start position
-    var originalDragIndex by remember { mutableStateOf<Int?>(null) }
-
-    // Drag state
-    var draggedIndex by remember { mutableStateOf<Int?>(null) }
-    var dragOffset by remember { mutableStateOf(0f) }
-    val itemHeight = 80.dp // Approximate item height
-    val density = androidx.compose.ui.platform.LocalDensity.current
-
-    // Use local drag list if available, otherwise use the current sources
-    // Note: The position in the list (index) represents the order, not a separate field
-    val displayList = localDragList ?: currentSources.map { source ->
-        SourceItemState(
-            sourceId = source.sourceId,
-            enabled = source.enabled,
-            extraOptions = source.extraOptions
-        )
-    }
+    val density = LocalDensity.current
+    val itemHeight = 80.dp
+    val itemHeightPx = with(density) { itemHeight.toPx() }
+    // Use key-based remember so localAppleCountry updates when currentAppleCountry changes
+    // (e.g., when user changes country in another dialog instance)
+    var localAppleCountry by remember(currentAppleCountry) { mutableStateOf(currentAppleCountry) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -371,225 +256,28 @@ fun DraggableSourcePriorityDialog(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                displayList.forEachIndexed { index, sourceState ->
-                    val isDragging = draggedIndex == index
-
-                    // Animated hover effects for dragged item
-                    val animatedScale by animateFloatAsState(
-                        targetValue = if (isDragging) 1.05f else 1f,
-                        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                        label = "scale"
-                    )
-                    val animatedElevation by animateDpAsState(
-                        targetValue = if (isDragging) 8.dp else 0.dp,
-                        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
-                        label = "elevation"
-                    )
-
-                    Card(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .scale(animatedScale)
-                            .then(
-                                if (isDragging) {
-                                    Modifier
-                                        .zIndex(1f)
-                                        .offset { IntOffset(0, dragOffset.roundToInt()) }
-                                } else {
-                                    Modifier
-                                }
-                            )
-                            .pointerInput(Unit) {
-                                detectDragGesturesAfterLongPress(
-                                    onDragStart = {
-                                        originalDragIndex = index
-                                        draggedIndex = index
-                                        dragOffset = 0f
-                                        // Initialize local drag list for visual feedback
-                                        localDragList = displayList.toList()
-                                    },
-                                    onDragEnd = {
-                                        // Use draggedIndex (current position in list) to check if position changed
-                                        // draggedIndex is updated during drag to reflect the actual position in localDragList
-                                        val reorderedIds = localDragList?.map { it.sourceId } ?: displayList.map { it.sourceId }
-                                        if (originalDragIndex != null && originalDragIndex != draggedIndex) {
-                                            // Update current sources immediately for next drag operation
-                                            currentSources = currentSources.map { source ->
-                                                val newOrder = reorderedIds.indexOf(source.sourceId)
-                                                source.copy(order = newOrder)
-                                            }.sortedBy { it.order }
-                                            // Save the reordered list to persistent storage
-                                            onSourceReorder(reorderedIds)
-                                        }
-                                        // Clear local drag list
-                                        localDragList = null
-                                        originalDragIndex = null
-                                        draggedIndex = null
-                                        dragOffset = 0f
-                                    },
-                                    onDragCancel = {
-                                        // Clear local drag list
-                                        localDragList = null
-                                        originalDragIndex = null
-                                        draggedIndex = null
-                                        dragOffset = 0f
-                                    },
-                                    onDrag = { change, dragAmount ->
-                                        change.consume()
-                                        dragOffset += dragAmount.y
-                                        // Calculate target position
-                                        val offsetInItems = dragOffset / with(density) { itemHeight.toPx() }
-                                        val newTargetIndex = (draggedIndex!! + offsetInItems.roundToInt())
-                                            .coerceIn(0, localDragList!!.lastIndex)
-                                        if (newTargetIndex != index && newTargetIndex in localDragList!!.indices) {
-                                            // Swap items in the list for visual feedback
-                                            val newList = localDragList!!.toMutableList()
-                                            val item = newList.removeAt(draggedIndex!!)
-                                            newList.add(newTargetIndex, item)
-                                            localDragList = newList
-                                            draggedIndex = newTargetIndex
-                                            dragOffset = 0f
-                                        }
-                                    }
-                                )
-                            },
-                        shape = MaterialTheme.shapes.extraLarge,
-                        colors = CardDefaults.cardColors(
-                            containerColor = if (isDragging)
-                                MaterialTheme.colorScheme.primaryContainer
-                            else
-                                MaterialTheme.colorScheme.primaryContainer
-                        ),
-                        elevation = CardDefaults.cardElevation(
-                            defaultElevation = animatedElevation,
-                            pressedElevation = animatedElevation,
-                            draggedElevation = animatedElevation
-                        )
-                    ) {
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            // Main row: sequence, drag handle, name, switch, reorder buttons, more menu
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(8.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                // Sequence number
-                                Text(
-                                    text = "${index + 1}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.width(24.dp)
-                                )
-
-                                // Drag handle icon (visual indicator for draggable)
-                                Icon(
-                                    imageVector = Icons.Default.DragHandle,
-                                    contentDescription = stringResource(R.string.settings_drag_handle),
-                                    tint = if (isDragging) 
-                                        MaterialTheme.colorScheme.primary 
-                                    else 
-                                        MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(horizontal = 4.dp)
-                                )
-
-                                // Source name
-                                Text(
-                                    text = sourceToDisplayName(sourceState.sourceId),
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .padding(horizontal = 8.dp)
-                                )
-
-                                // Switch
-                                Switch(
-                                    checked = sourceState.enabled,
-                                    onCheckedChange = { enabled ->
-                                        // Directly trigger ViewModel callback for real-time save
-                                        onSourceEnabledChange(sourceState.sourceId, enabled)
-                                    }
-                                )
-
-                                // More options menu button
-                                var showMenu by remember { mutableStateOf(false) }
-                                Box {
-                                    IconButton(onClick = { showMenu = true }) {
-                                        Icon(
-                                            imageVector = Icons.Default.MoreVert,
-                                            contentDescription = "More options"
-                                        )
-                                    }
-                                    DropdownMenu(
-                                        expanded = showMenu,
-                                        onDismissRequest = { showMenu = false }
-                                    ) {
-                                        // Enable/Disable toggle
-                                        DropdownMenuItem(
-                                            text = {
-                                    Text(
-                                        if (sourceState.enabled) stringResource(R.string.settings_source_disable) else stringResource(R.string.settings_source_enable)
-                                    )
-                                            },
-                                            onClick = {
-                                                // Directly trigger ViewModel callback for real-time save
-                                                onSourceEnabledChange(sourceState.sourceId, !sourceState.enabled)
-                                                showMenu = false
-                                            },
-                                            leadingIcon = {
-                                                Icon(
-                                                    imageVector = if (sourceState.enabled)
-                                                        Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-                                                    contentDescription = null
-                                                )
-                                            }
-                                        )
-
-                                        Spacer(modifier = Modifier.height(4.dp))
-
-                                        // Extra options (iTunes country code)
-                                        if (sourceHasExtraOptions(sourceState.sourceId)) {
-                                            Text(
-                                                text = stringResource(R.string.settings_apple_country),
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-                                            )
-                                            appleCountryOptions.forEach { option ->
-                                                DropdownMenuItem(
-                                                    text = { Text(stringResource(option.labelResId)) },
-                                                    onClick = {
-                                                        localAppleCountry = option
-                                                        onAppleCountryChange(option.value)
-                                                        showMenu = false
-                                                    },
-                                                    trailingIcon = {
-                                                        if (option.value == localAppleCountry.value) {
-                                                            Text("✓", color = MaterialTheme.colorScheme.primary)
-                                                        }
-                                                    }
-                                                )
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // Drag hint
-                            if (!isDragging) {
-                                Text(
-                                    text = stringResource(R.string.settings_drag_hint),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 8.dp)
-                                        .padding(bottom = 8.dp)
-                                )
-                            }
+                dialogState.sources.forEachIndexed { index, sourceItem ->
+                    SourceItemCard(
+                        index = index,
+                        sourceItem = sourceItem,
+                        isDragging = dialogState.draggedIndex == index,
+                        dragOffset = if (dialogState.draggedIndex == index) dialogState.dragOffset else 0f,
+                        appleCountryOptions = appleCountryOptions,
+                        currentAppleCountry = localAppleCountry,
+                        onDragStart = { onDragStart(index) },
+                        onDragEnd = onDragEnd,
+                        onDragCancel = onDragCancel,
+                        onDrag = { dragAmount -> 
+                            onDrag(Offset(0f, dragAmount), itemHeightPx) 
+                        },
+                        onSourceEnabledChange = onSourceEnabledChange,
+                        onAppleCountryChange = { countryCode ->
+                            localAppleCountry = appleCountryOptions.firstOrNull {
+                                it.countryValue == countryCode
+                            } ?: localAppleCountry
+                            onAppleCountryChange(countryCode)
                         }
-                    }
+                    )
                 }
             }
         },
@@ -599,6 +287,198 @@ fun DraggableSourcePriorityDialog(
             }
         }
     )
+}
+
+/**
+ * Individual source item card within the draggable priority dialog.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SourceItemCard(
+    index: Int,
+    sourceItem: DragDialogSourceItem,
+    isDragging: Boolean,
+    dragOffset: Float,
+    appleCountryOptions: List<AppleCountryOption>,
+    currentAppleCountry: AppleCountryOption,
+    onDragStart: () -> Unit,
+    onDragEnd: () -> Unit,
+    onDragCancel: () -> Unit,
+    onDrag: (Float) -> Unit,
+    onSourceEnabledChange: (String, Boolean) -> Unit,
+    onAppleCountryChange: (String) -> Unit
+) {
+    // Animated hover effects for dragged item
+    val animatedScale by animateFloatAsState(
+        targetValue = if (isDragging) 1.05f else 1f,
+        animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+        label = "scale"
+    )
+    val animatedElevation by animateDpAsState(
+        targetValue = if (isDragging) 8.dp else 0.dp,
+        animationSpec = MaterialTheme.motionScheme.slowSpatialSpec(),
+        label = "elevation"
+    )
+
+    var showMenu by remember { mutableStateOf(false) }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .scale(animatedScale)
+            .then(
+                if (isDragging) {
+                    Modifier
+                        .zIndex(1f)
+                        .offset { IntOffset(0, dragOffset.roundToInt()) }
+                } else {
+                    Modifier
+                }
+            )
+            .pointerInput(Unit) {
+                detectDragGesturesAfterLongPress(
+                    onDragStart = { onDragStart() },
+                    onDragEnd = onDragEnd,
+                    onDragCancel = onDragCancel,
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDrag(dragAmount.y)
+                    }
+                )
+            },
+        shape = MaterialTheme.shapes.extraLarge,
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.primaryContainer
+        ),
+        elevation = CardDefaults.cardElevation(
+            defaultElevation = animatedElevation,
+            pressedElevation = animatedElevation,
+            draggedElevation = animatedElevation
+        )
+    ) {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            // Main row: sequence, drag handle, name, switch, more menu
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Sequence number
+                Text(
+                    text = "${index + 1}",
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.width(24.dp)
+                )
+
+                // Drag handle icon (visual indicator for draggable)
+                Icon(
+                    imageVector = Icons.Default.DragHandle,
+                    contentDescription = stringResource(R.string.settings_drag_handle),
+                    tint = if (isDragging)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 4.dp)
+                )
+
+                // Source name
+                Text(
+                    text = sourceToDisplayName(sourceItem.sourceId),
+                    style = MaterialTheme.typography.bodyLarge,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = 8.dp)
+                )
+
+                // Switch
+                Switch(
+                    checked = sourceItem.enabled,
+                    onCheckedChange = { enabled ->
+                        onSourceEnabledChange(sourceItem.sourceId, enabled)
+                    }
+                )
+
+                // More options menu button
+                Box {
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(
+                            imageVector = Icons.Default.MoreVert,
+                            contentDescription = "More options"
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        // Enable/Disable toggle
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    if (sourceItem.enabled)
+                                        stringResource(R.string.settings_source_disable)
+                                    else
+                                        stringResource(R.string.settings_source_enable)
+                                )
+                            },
+                            onClick = {
+                                onSourceEnabledChange(sourceItem.sourceId, !sourceItem.enabled)
+                                showMenu = false
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (sourceItem.enabled)
+                                        Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+                                    contentDescription = null
+                                )
+                            }
+                        )
+
+                        Spacer(modifier = Modifier.height(4.dp))
+
+                        // Extra options (iTunes country code)
+                        if (sourceHasExtraOptions(sourceItem.sourceId)) {
+                            Text(
+                                text = stringResource(R.string.settings_apple_country),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+                            )
+                            appleCountryOptions.forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(option.labelResId)) },
+                                    onClick = {
+                                        onAppleCountryChange(option.countryValue)
+                                        showMenu = false
+                                    },
+                                    trailingIcon = {
+                                        if (option.countryValue == currentAppleCountry.countryValue) {
+                                            Text("✓", color = MaterialTheme.colorScheme.primary)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Drag hint
+            if (!isDragging) {
+                Text(
+                    text = stringResource(R.string.settings_drag_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 8.dp)
+                        .padding(bottom = 8.dp)
+                )
+            }
+        }
+    }
 }
 
 // ==================== Composable Helpers ====================
@@ -614,8 +494,8 @@ fun PerSourceSearchLimitRow(
     onLimitChange: (Int) -> Unit
 ) {
     var expanded by remember { mutableStateOf(false) }
-    val currentOption = searchLimitOptions.firstOrNull { it.value == currentLimit }
-        ?: searchLimitOptions.firstOrNull { it.value == 0 }
+    val currentOption = searchLimitOptions.firstOrNull { it.limitValue == currentLimit }
+        ?: searchLimitOptions.firstOrNull { it.limitValue == 0 }
         ?: searchLimitOptions[0]
     val displayLabel = if (currentLimit <= 0) {
         stringResource(R.string.settings_online_search_limit_per_source_subtitle)
@@ -659,7 +539,7 @@ fun PerSourceSearchLimitRow(
                             DropdownMenuItem(
                                 text = { Text(option.displayLabel()) },
                                 onClick = {
-                                    onLimitChange(option.value)
+                                    onLimitChange(option.limitValue)
                                     expanded = false
                                 }
                             )
@@ -839,9 +719,9 @@ private fun SearchLimitDropdown(
     ConnectedIconButtonGroup(
         options = searchLimitOptions.map { option ->
             ConnectedIconOption(
-                value = option.value,
-                icon = if (option.value == 0) Icons.Default.AllInclusive else null,
-                text = if (option.value != 0) option.value.toString() else null,
+                optionValue = option.limitValue,
+                icon = if (option.limitValue == 0) Icons.Default.AllInclusive else null,
+                text = if (option.limitValue != 0) option.limitValue.toString() else null,
                 tooltip = option.displayLabel()
             )
         },
@@ -879,11 +759,6 @@ private fun SearchLimitRow(
     }
 }
 
-@Composable
-fun SearchLimitOption.displayLabel(): String {
-    return labelResId?.let { stringResource(it) } ?: value.toString()
-}
-
 // ==================== Main Settings Screen ====================
 
 /**
@@ -904,38 +779,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     
-    val dynamicColors by viewModel.dynamicColors.collectAsState()
-    val savedLanguageTag by viewModel.languageTag.collectAsState()
-    val themeMode by viewModel.themeMode.collectAsState()
-    val appleCountryCode by viewModel.appleCountryCode.collectAsState()
-    val onlineSearchLimit by viewModel.onlineSearchLimit.collectAsState()
-    val onlineSearchLimitMusicBrainz by viewModel.onlineSearchLimitMusicBrainz.collectAsState()
-    val onlineSearchLimitITunes by viewModel.onlineSearchLimitITunes.collectAsState()
-    val onlineSearchLimitNetease by viewModel.onlineSearchLimitNetease.collectAsState()
-    val onlineSearchLimitQQMusic by viewModel.onlineSearchLimitQQMusic.collectAsState()
-    val metadataSourceEnabledMusicBrainz by viewModel.metadataSourceEnabledMusicBrainz.collectAsState()
-    val metadataSourceEnabledITunes by viewModel.metadataSourceEnabledITunes.collectAsState()
-    val metadataSourceEnabledNetease by viewModel.metadataSourceEnabledNetease.collectAsState()
-    val metadataSourceEnabledQQMusic by viewModel.metadataSourceEnabledQQMusic.collectAsState()
-    val lyricsSourceEnabledMusicBrainz by viewModel.lyricsSourceEnabledMusicBrainz.collectAsState()
-    val lyricsSourceEnabledNetease by viewModel.lyricsSourceEnabledNetease.collectAsState()
-    val lyricsSourceEnabledQQMusic by viewModel.lyricsSourceEnabledQQMusic.collectAsState()
-    val coverSourceEnabledMusicBrainz by viewModel.coverSourceEnabledMusicBrainz.collectAsState()
-    val coverSourceEnabledITunes by viewModel.coverSourceEnabledITunes.collectAsState()
-    val coverSourceEnabledNetease by viewModel.coverSourceEnabledNetease.collectAsState()
-    val coverSourceEnabledQQMusic by viewModel.coverSourceEnabledQQMusic.collectAsState()
-    val sourceConfigurations by viewModel.sourceConfigurations.collectAsState()
-    val metadataSourcePriority by viewModel.metadataSourcePriority.collectAsState()
-    val lyricsSourcePriority by viewModel.lyricsSourcePriority.collectAsState()
-    val coverSourcePriority by viewModel.coverSourcePriority.collectAsState()
-    val loggingEnabled by viewModel.loggingEnabled.collectAsState()
-    val fileLoggingEnabled by viewModel.fileLoggingEnabled.collectAsState()
-    val consoleLoggingEnabled by viewModel.consoleLoggingEnabled.collectAsState()
-    val crashReportingEnabled by viewModel.crashReportingEnabled.collectAsState()
-    val replayGainTargetLoudness by viewModel.replayGainTargetLoudness.collectAsState()
-    val scanMode by viewModel.scanMode.collectAsState()
-    val minDurationFilterEnabled by viewModel.minDurationFilterEnabled.collectAsState()
-    val lyricsTimestampFormatEnabled by viewModel.lyricsTimestampFormatEnabled.collectAsState()
+    val uiState by viewModel.uiState.collectAsState()
 
     var languageExpanded by remember { mutableStateOf(false) }
     val languageOptions = remember {
@@ -947,7 +791,7 @@ fun SettingsScreen(
     }
     
     // 使用 savedLanguageTag 或解析当前系统语言
-    val effectiveLanguageTag = savedLanguageTag ?: resolveCurrentLanguageTag()
+    val effectiveLanguageTag = uiState.savedLanguageTag ?: resolveCurrentLanguageTag()
     val currentLanguageOption = languageOptions.firstOrNull {
         normalizeLanguageTag(it.languageTag) == normalizeLanguageTag(effectiveLanguageTag)
     } ?: languageOptions.first()
@@ -965,7 +809,7 @@ fun SettingsScreen(
             AppleCountryOption("au", R.string.settings_apple_country_au)
         )
     }
-    val currentAppleCountry = appleCountryOptions.firstOrNull { it.value == appleCountryCode.lowercase() }
+    val currentAppleCountry = appleCountryOptions.firstOrNull { it.countryValue == uiState.appleCountryCode.lowercase() }
         ?: appleCountryOptions.first()
 
     var showMetadataSourceDialog by remember { mutableStateOf(false) }
@@ -995,7 +839,7 @@ fun SettingsScreen(
             SearchLimitOption(50)
         )
     }
-    val currentSearchLimit = searchLimitOptions.firstOrNull { it.value == onlineSearchLimit }
+    val currentSearchLimit = searchLimitOptions.firstOrNull { it.limitValue == uiState.onlineSearchLimit }
         ?: searchLimitOptions[1]
 
     // Convert SearchLimitOption to SegmentedOption for ConnectedButtonGroup
@@ -1003,8 +847,8 @@ fun SettingsScreen(
     val searchLimitSegmentedOptions = remember(searchLimitOptions) {
         searchLimitOptions.map { option ->
             SegmentedOption(
-                value = option.value,
-                label = if (option.value == 0) "∞" else option.value.toString()
+                value = option.limitValue,
+                label = if (option.limitValue == 0) "∞" else option.limitValue.toString()
             )
         }
     }
@@ -1047,7 +891,7 @@ fun SettingsScreen(
                         SegmentedOption("light", Icons.Default.LightMode, stringResource(R.string.settings_theme_light)),
                         SegmentedOption("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
                     ),
-                    selectedValue = themeMode,
+                    selectedValue = uiState.themeMode,
                     onSelected = viewModel::setThemeMode,
                     index = 0,
                     count = 3
@@ -1056,7 +900,7 @@ fun SettingsScreen(
                 SegmentedSwitchRow(
                     title = stringResource(R.string.settings_dynamic_color),
                     subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
-                    checked = dynamicColors,
+                    checked = uiState.dynamicColors,
                     onCheckedChange = { viewModel.setDynamicColors(it) },
                     index = 1,
                     count = 3
@@ -1142,7 +986,7 @@ fun SettingsScreen(
                 SegmentedSwitchRow(
                     title = stringResource(R.string.settings_min_duration_filter),
                     subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
-                    checked = minDurationFilterEnabled,
+                    checked = uiState.minDurationFilterEnabled,
                     onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) },
                     index = 3,
                     count = 6
@@ -1150,10 +994,10 @@ fun SettingsScreen(
 
                 ConnectedIconOnlyButtonGroupRow(
                     title = stringResource(R.string.settings_scan_mode),
-                    options = scanModeOptions.map { option ->
-                        SegmentedOption(
-                            value = option.value,
-                            icon = when (option.value) {
+                options = scanModeOptions.map { option ->
+                    SegmentedOption(
+                        value = option.modeValue,
+                        icon = when (option.modeValue) {
                                 "TRACK_ONLY" -> Icons.Default.MusicNote
                                 "SINGLE_ALBUM" -> Icons.Default.Album
                                 else -> Icons.Default.LibraryMusic
@@ -1161,13 +1005,13 @@ fun SettingsScreen(
                             label = stringResource(option.labelResId)
                         )
                     },
-                    selectedValue = scanMode,
+                    selectedValue = uiState.scanMode,
                     onSelected = viewModel::setScanMode,
                     index = 4,
                     count = 6
                 )
 
-                val currentLoudnessOption = loudnessOptions.firstOrNull { it.value == replayGainTargetLoudness }
+                val currentLoudnessOption = loudnessOptions.firstOrNull { it.loudnessValue == uiState.replayGainTargetLoudness }
                     ?: loudnessOptions.first()
 
                 SegmentedClickableRow(
@@ -1206,7 +1050,7 @@ fun SettingsScreen(
                                     labelResId = option.labelResId,
                                     currentSortOption = currentLoudnessOption,
                                     onSortOptionChange = { selected ->
-                                        viewModel.setReplayGainTargetLoudness(selected.value)
+                                        viewModel.setReplayGainTargetLoudness(selected.loudnessValue)
                                         loudnessExpanded = false
                                     },
                                     onDismiss = { loudnessExpanded = false }
@@ -1355,7 +1199,7 @@ fun SettingsScreen(
                 SegmentedSwitchRow(
                     title = stringResource(R.string.settings_lyrics_timestamp_format),
                     subtitle = stringResource(R.string.settings_lyrics_timestamp_format_subtitle),
-                    checked = lyricsTimestampFormatEnabled,
+                    checked = uiState.lyricsTimestampFormatEnabled,
                     onCheckedChange = { viewModel.setLyricsTimestampFormatEnabled(it) },
                     index = 3,
                     count = 5
@@ -1364,7 +1208,7 @@ fun SettingsScreen(
                 ConnectedButtonGroupRow(
                     title = stringResource(R.string.settings_online_search_limit),
                     options = searchLimitSegmentedOptions,
-                    selectedValue = onlineSearchLimit,
+                    selectedValue = uiState.onlineSearchLimit,
                     onSelected = { viewModel.setOnlineSearchLimit(it) },
                     index = 4,
                     count = 5
@@ -1379,7 +1223,7 @@ fun SettingsScreen(
                 SegmentedSwitchRow(
                     title = stringResource(R.string.settings_logging_enabled),
                     subtitle = stringResource(R.string.settings_logging_enabled_subtitle),
-                    checked = loggingEnabled,
+                    checked = uiState.loggingEnabled,
                     onCheckedChange = {
                         LogManager.isLoggingEnabled = it
                         viewModel.setLoggingEnabled(it)
@@ -1391,7 +1235,7 @@ fun SettingsScreen(
                 SegmentedSwitchRow(
                     title = stringResource(R.string.settings_logging_file),
                     subtitle = stringResource(R.string.settings_logging_file_subtitle),
-                    checked = fileLoggingEnabled,
+                    checked = uiState.fileLoggingEnabled,
                     onCheckedChange = {
                         LogManager.isFileLoggingEnabled = it
                         viewModel.setFileLoggingEnabled(it)
@@ -1403,7 +1247,7 @@ fun SettingsScreen(
                 SegmentedSwitchRow(
                     title = stringResource(R.string.settings_logging_console),
                     subtitle = stringResource(R.string.settings_logging_console_subtitle),
-                    checked = consoleLoggingEnabled,
+                    checked = uiState.consoleLoggingEnabled,
                     onCheckedChange = {
                         LogManager.isConsoleLoggingEnabled = it
                         viewModel.setConsoleLoggingEnabled(it)
@@ -1415,7 +1259,7 @@ fun SettingsScreen(
                 SegmentedSwitchRow(
                     title = stringResource(R.string.settings_logging_crash),
                     subtitle = stringResource(R.string.settings_logging_crash_subtitle),
-                    checked = crashReportingEnabled,
+                    checked = uiState.crashReportingEnabled,
                     onCheckedChange = {
                         LogManager.isCrashReportingEnabled = it
                         viewModel.setCrashReportingEnabled(it)
@@ -1476,84 +1320,133 @@ fun SettingsScreen(
         }
     }
 
+    // Drag dialog state
+    val dragDialogState by viewModel.dragDialogState.collectAsState()
+    var activeDialogType by remember { mutableStateOf<DataSourceType?>(null) }
+
     if (showMetadataSourceDialog) {
-        val metadataConfig = sourceConfigurations.metadata
-        DraggableSourcePriorityDialog(
-            title = stringResource(R.string.settings_source_group_metadata),
-            sourceTypeConfig = metadataConfig,
-            appleCountryOptions = appleCountryOptions,
-            currentAppleCountry = currentAppleCountry,
-            onDismiss = { showMetadataSourceDialog = false },
-            onSourceEnabledChange = { sourceId, enabled ->
-                viewModel.setSourceEnabled(DataSourceType.METADATA, sourceId, enabled)
-            },
-            onSourceReorder = { orderedIds ->
-                viewModel.reorderSources(DataSourceType.METADATA, orderedIds)
-            },
-            onAppleCountryChange = { countryCode ->
-                viewModel.setSourceExtraOption(DataSourceType.METADATA, "itunes", "country", countryCode)
-                viewModel.setAppleCountryCode(countryCode)
+        LaunchedEffect(Unit) {
+            if (activeDialogType != DataSourceType.METADATA) {
+                viewModel.initDragDialogState(DataSourceType.METADATA)
+                activeDialogType = DataSourceType.METADATA
             }
-        )
+        }
+        dragDialogState?.let { state ->
+            DraggableSourcePriorityDialog(
+                title = stringResource(R.string.settings_source_group_metadata),
+                dialogState = state,
+                appleCountryOptions = appleCountryOptions,
+                currentAppleCountry = currentAppleCountry,
+                onDismiss = {
+                    viewModel.clearDragDialogState()
+                    activeDialogType = null
+                    showMetadataSourceDialog = false
+                },
+                onSourceEnabledChange = { sourceId, enabled ->
+                    viewModel.setSourceEnabled(DataSourceType.METADATA, sourceId, enabled)
+                },
+                onSourceReorder = { orderedIds ->
+                    viewModel.reorderSources(DataSourceType.METADATA, orderedIds)
+                },
+                onAppleCountryChange = { countryCode ->
+                    viewModel.setSourceExtraOption(DataSourceType.METADATA, "itunes", "country", countryCode)
+                    viewModel.setAppleCountryCode(countryCode)
+                },
+                onDragStart = { index -> viewModel.startDragging(index) },
+                onDragEnd = { viewModel.endDragging() },
+                onDragCancel = { viewModel.cancelDragging() },
+                onDrag = { offset, itemHeightPx -> viewModel.updateDragOffset(offset.y, itemHeightPx) }
+            )
+        }
     }
 
     if (showLyricsSourceDialog) {
-        val lyricsConfig = sourceConfigurations.lyrics
-        DraggableSourcePriorityDialog(
-            title = stringResource(R.string.settings_source_group_lyrics),
-            sourceTypeConfig = lyricsConfig,
-            appleCountryOptions = appleCountryOptions,
-            currentAppleCountry = currentAppleCountry,
-            onDismiss = { showLyricsSourceDialog = false },
-            onSourceEnabledChange = { sourceId, enabled ->
-                viewModel.setSourceEnabled(DataSourceType.LYRICS, sourceId, enabled)
-            },
-            onSourceReorder = { orderedIds ->
-                viewModel.reorderSources(DataSourceType.LYRICS, orderedIds)
-            },
-            onAppleCountryChange = { countryCode ->
-                viewModel.setSourceExtraOption(DataSourceType.LYRICS, "itunes", "country", countryCode)
-                viewModel.setAppleCountryCode(countryCode)
+        LaunchedEffect(Unit) {
+            if (activeDialogType != DataSourceType.LYRICS) {
+                viewModel.initDragDialogState(DataSourceType.LYRICS)
+                activeDialogType = DataSourceType.LYRICS
             }
-        )
+        }
+        dragDialogState?.let { state ->
+            DraggableSourcePriorityDialog(
+                title = stringResource(R.string.settings_source_group_lyrics),
+                dialogState = state,
+                appleCountryOptions = appleCountryOptions,
+                currentAppleCountry = currentAppleCountry,
+                onDismiss = {
+                    viewModel.clearDragDialogState()
+                    activeDialogType = null
+                    showLyricsSourceDialog = false
+                },
+                onSourceEnabledChange = { sourceId, enabled ->
+                    viewModel.setSourceEnabled(DataSourceType.LYRICS, sourceId, enabled)
+                },
+                onSourceReorder = { orderedIds ->
+                    viewModel.reorderSources(DataSourceType.LYRICS, orderedIds)
+                },
+                onAppleCountryChange = { countryCode ->
+                    viewModel.setSourceExtraOption(DataSourceType.LYRICS, "itunes", "country", countryCode)
+                    viewModel.setAppleCountryCode(countryCode)
+                },
+                onDragStart = { index -> viewModel.startDragging(index) },
+                onDragEnd = { viewModel.endDragging() },
+                onDragCancel = { viewModel.cancelDragging() },
+                onDrag = { offset, itemHeightPx -> viewModel.updateDragOffset(offset.y, itemHeightPx) }
+            )
+        }
     }
 
     if (showCoverSourceDialog) {
-        val coverConfig = sourceConfigurations.cover
-        DraggableSourcePriorityDialog(
-            title = stringResource(R.string.settings_source_group_cover),
-            sourceTypeConfig = coverConfig,
-            appleCountryOptions = appleCountryOptions,
-            currentAppleCountry = currentAppleCountry,
-            onDismiss = { showCoverSourceDialog = false },
-            onSourceEnabledChange = { sourceId, enabled ->
-                viewModel.setSourceEnabled(DataSourceType.COVER, sourceId, enabled)
-            },
-            onSourceReorder = { orderedIds ->
-                viewModel.reorderSources(DataSourceType.COVER, orderedIds)
-            },
-            onAppleCountryChange = { countryCode ->
-                viewModel.setSourceExtraOption(DataSourceType.COVER, "itunes", "country", countryCode)
-                viewModel.setAppleCountryCode(countryCode)
+        LaunchedEffect(Unit) {
+            if (activeDialogType != DataSourceType.COVER) {
+                viewModel.initDragDialogState(DataSourceType.COVER)
+                activeDialogType = DataSourceType.COVER
             }
-        )
-
-        if (showSearchLimitsDialog) {
-            SearchLimitDialog(
-                globalLimit = onlineSearchLimit,
-                musicBrainzLimit = onlineSearchLimitMusicBrainz,
-                itunesLimit = onlineSearchLimitITunes,
-                neteaseLimit = onlineSearchLimitNetease,
-                qqMusicLimit = onlineSearchLimitQQMusic,
-                searchLimitOptions = searchLimitOptions,
-                onDismiss = { showSearchLimitsDialog = false },
-                onGlobalLimitChange = { viewModel.setOnlineSearchLimit(it) },
-                onMusicBrainzLimitChange = { viewModel.setOnlineSearchLimitMusicBrainz(it) },
-                onItunesLimitChange = { viewModel.setOnlineSearchLimitITunes(it) },
-                onNeteaseLimitChange = { viewModel.setOnlineSearchLimitNetease(it) },
-                onQQMusicLimitChange = { viewModel.setOnlineSearchLimitQQMusic(it) }
+        }
+        dragDialogState?.let { state ->
+            DraggableSourcePriorityDialog(
+                title = stringResource(R.string.settings_source_group_cover),
+                dialogState = state,
+                appleCountryOptions = appleCountryOptions,
+                currentAppleCountry = currentAppleCountry,
+                onDismiss = {
+                    viewModel.clearDragDialogState()
+                    activeDialogType = null
+                    showCoverSourceDialog = false
+                },
+                onSourceEnabledChange = { sourceId, enabled ->
+                    viewModel.setSourceEnabled(DataSourceType.COVER, sourceId, enabled)
+                },
+                onSourceReorder = { orderedIds ->
+                    viewModel.reorderSources(DataSourceType.COVER, orderedIds)
+                },
+                onAppleCountryChange = { countryCode ->
+                    viewModel.setSourceExtraOption(DataSourceType.COVER, "itunes", "country", countryCode)
+                    viewModel.setAppleCountryCode(countryCode)
+                },
+                onDragStart = { index -> viewModel.startDragging(index) },
+                onDragEnd = { viewModel.endDragging() },
+                onDragCancel = { viewModel.cancelDragging() },
+                onDrag = { offset, itemHeightPx -> viewModel.updateDragOffset(offset.y, itemHeightPx) }
             )
         }
+    }
+
+    if (showSearchLimitsDialog) {
+        SearchLimitDialog(
+            globalLimit = uiState.onlineSearchLimit,
+            musicBrainzLimit = uiState.onlineSearchLimitMusicBrainz,
+            itunesLimit = uiState.onlineSearchLimitITunes,
+            neteaseLimit = uiState.onlineSearchLimitNetease,
+            qqMusicLimit = uiState.onlineSearchLimitQQMusic,
+            searchLimitOptions = searchLimitOptions,
+            onDismiss = { showSearchLimitsDialog = false },
+            onGlobalLimitChange = { viewModel.setOnlineSearchLimit(it) },
+            onMusicBrainzLimitChange = { viewModel.setOnlineSearchLimitMusicBrainz(it) },
+            onItunesLimitChange = { viewModel.setOnlineSearchLimitITunes(it) },
+            onNeteaseLimitChange = { viewModel.setOnlineSearchLimitNetease(it) },
+            onQQMusicLimitChange = { viewModel.setOnlineSearchLimitQQMusic(it) }
+        )
     }
 }
 

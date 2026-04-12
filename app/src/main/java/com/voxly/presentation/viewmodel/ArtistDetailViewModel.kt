@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.repository.ArtistCacheRepository
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -23,6 +24,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * ViewModel for ArtistDetailScreen.
@@ -33,7 +35,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
     @Assisted val navKey: ArtistDetail,
     @ApplicationContext private val context: Context,
     private val artistCacheRepository: ArtistCacheRepository,
-    private val audioFileScanner: AudioFileScanner
+    private val audioFileScanner: AudioFileScanner,
+    private val databaseProvider: MusicCacheDatabaseProvider
 ) : ViewModel() {
 
     private val _artistName = MutableStateFlow("")
@@ -51,6 +54,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private val _coverPath = MutableStateFlow<String?>(null)
     val coverPath: StateFlow<String?> = _coverPath.asStateFlow()
 
+    private val _coverAlbumId = MutableStateFlow<Long?>(null)
+    val coverAlbumId: StateFlow<Long?> = _coverAlbumId.asStateFlow()
+
     private val _albumCovers = MutableStateFlow<Map<String, String?>>(emptyMap())
     val albumCovers: StateFlow<Map<String, String?>> = _albumCovers.asStateFlow()
 
@@ -63,6 +69,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private var preloadJob: Job? = null
     private var refreshJob: Job? = null
     private var albumYearJob: Job? = null
+    private var hasLoadedArtistData = false
     private val preloadMutex = kotlinx.coroutines.sync.Mutex()
 
     init {
@@ -76,6 +83,11 @@ class ArtistDetailViewModel @AssistedInject constructor(
     fun loadArtist(artistName: String) {
         viewModelScope.launch {
             try {
+                // Skip if already loaded for this artist
+                if (hasLoadedArtistData && _artistName.value == artistName && _files.value.isNotEmpty()) {
+                    return@launch
+                }
+
                 // First try to get from cache
                 val cachedArtist = artistCacheRepository.getArtist(artistName)
 
@@ -83,9 +95,15 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     _artistName.value = cachedArtist.name
                     _files.value = cachedArtist.files
                     _coverPath.value = cachedArtist.coverPath
+                    _coverAlbumId.value = cachedArtist.files.firstOrNull { 
+                        it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
+                    }?.mediaStoreAlbumId
                     calculateStats(cachedArtist.files)
-                    precomputeAlbumCovers(cachedArtist.files)
-                    loadAlbumYears(cachedArtist.files)
+                    if (!hasLoadedArtistData) {
+                        precomputeAlbumCovers(cachedArtist.files)
+                        loadAlbumYears(cachedArtist.files)
+                    }
+                    hasLoadedArtistData = true
                 } else {
                     // Cache miss: look up from AudioFileScanner (source of truth)
                     val scannerArtist = audioFileScanner.artists.first()
@@ -117,6 +135,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
         _artistName.value = artistName
         _files.value = files
         _coverPath.value = coverPath
+        _coverAlbumId.value = files.firstOrNull { 
+            it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
+        }?.mediaStoreAlbumId
         calculateStats(files)
         precomputeAlbumCovers(files)
         loadAlbumYears(files)
@@ -132,38 +153,32 @@ class ArtistDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * Load album years from metadata with fallback to TagLib.
-     * This is done asynchronously to avoid blocking UI.
+     * Load album years from album_summary_view.
      */
     private fun loadAlbumYears(files: List<AudioFile>) {
         albumYearJob?.cancel()
         albumYearJob = viewModelScope.launch {
-            val albumGroups = files.filter { !it.metadata.album.isNullOrBlank() }
-                .groupBy { it.metadata.album!! }
+            try {
+                val albumNames = files.mapNotNull { it.metadata.album }
+                    .filter { it.isNotBlank() }
+                    .distinct()
 
-            val yearsMap = mutableMapOf<String, String?>()
-
-            albumGroups.forEach { (albumName, albumFiles) ->
-                // First try to get year from MediaStore metadata
-                val mediaStoreYear = albumFiles
-                    .mapNotNull { file -> file.metadata.year?.takeIf { it.isNotBlank() } }
-                    .maxOrNull()
-
-                yearsMap[albumName] = if (mediaStoreYear != null) {
-                    mediaStoreYear
-                } else {
-                    // Fallback: read from file using TagLib (expensive operation)
-                    albumFiles.firstOrNull()?.let { firstFile ->
-                        try {
-                            audioFileScanner.loadDetailedMetadata(firstFile.path)?.year
-                        } catch (e: Exception) {
-                            null
-                        }
-                    }
+                if (albumNames.isEmpty()) {
+                    _albumYears.value = emptyMap()
+                    return@launch
                 }
-            }
 
-            _albumYears.value = yearsMap
+                val summaries = withContext(Dispatchers.IO) {
+                    databaseProvider.getDatabase()
+                        .albumSummaryDao()
+                        .getAlbumSummariesByNames(albumNames)
+                }
+
+                _albumYears.value = summaries.associate { it.albumTitle to it.year }
+            } catch (e: Exception) {
+                Timber.e(e, "Error loading album years from view")
+                _albumYears.value = emptyMap()
+            }
         }
     }
 

@@ -23,11 +23,27 @@ fun albumDisplayYearInt(album: AlbumGroup): Int? {
 }
 
 /**
+ * Gets the display year for an album from file metadata.
+ */
+fun getAlbumDisplayYear(album: AlbumGroup): Int? {
+    return albumDisplayYearInt(album)
+}
+
+/**
+ * Gets the display year string for an album.
+ */
+fun getAlbumDisplayYearString(album: AlbumGroup): String? {
+    return album.files
+        .mapNotNull { it.metadata.year }
+        .maxOrNull()
+}
+
+/**
  * Creates a stable key for an album group.
  */
 fun albumStableKey(album: AlbumGroup): String {
     val representativePath = album.files.firstOrNull()?.path.orEmpty()
-    return "${album.name}|${album.artist.orEmpty()}|$representativePath"
+    return "${album.name}|${album.albumArtist.orEmpty()}|$representativePath"
 }
 
 /**
@@ -41,6 +57,7 @@ fun extractYear(rawYear: String?): Int? {
 
 /**
  * Applies sorting to album groups.
+ * For YEAR_DESC sort, uses file metadata calculation (cache integration would require suspend).
  */
 fun applyAlbumSort(
     albums: List<AlbumGroup>,
@@ -58,6 +75,38 @@ fun applyAlbumSort(
                     ?.toIntOrNull()
             }.maxOrNull() ?: Int.MIN_VALUE
         }
+    }
+}
+
+/**
+ * Formats sample rate for display.
+ * Examples: 44100 -> "44.1 kHz", 96000 -> "96 kHz"
+ */
+fun formatSampleRate(sampleRateHz: Int): String {
+    return when {
+        sampleRateHz >= 1000000 -> "${sampleRateHz / 1000000} MHz"
+        sampleRateHz >= 1000 -> {
+            val khz = sampleRateHz / 1000.0
+            if (khz == khz.toInt().toDouble()) {
+                "${khz.toInt()} kHz"
+            } else {
+                "%.1f kHz".format(khz)
+            }
+        }
+        sampleRateHz > 0 -> "$sampleRateHz Hz"
+        else -> ""
+    }
+}
+
+/**
+ * Formats bitrate for display.
+ * Examples: 320 -> "320 kbps", 1411 -> "1,411 kbps"
+ */
+fun formatBitrate(bitrateKbps: Int): String {
+    return when {
+        bitrateKbps >= 1000 -> "%,d kbps".format(bitrateKbps)
+        bitrateKbps > 0 -> "$bitrateKbps kbps"
+        else -> ""
     }
 }
 

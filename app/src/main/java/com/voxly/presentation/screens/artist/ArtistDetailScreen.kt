@@ -1,7 +1,5 @@
 package com.voxly.presentation.screens.artist
 
-import android.graphics.Bitmap
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,21 +35,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 import com.voxly.R
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
@@ -60,16 +54,7 @@ import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
-import com.voxly.presentation.ui.loadAlbumArtThumbnail
-import com.voxly.presentation.ui.loadAlbumArtThumbnail
-import com.voxly.presentation.ui.loadMediaStoreAlbumArt
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
-import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
-import coil3.request.ImageRequest
-import coil3.request.crossfade
-import com.voxly.data.local.cover.CoverUriProvider
-import java.io.File
 
 /**
  * Album information for carousel display with year.
@@ -109,6 +94,7 @@ fun ArtistDetailScreen(
     val artistNameState by viewModel.artistName.collectAsState()
     val files by viewModel.files.collectAsState()
     val coverPath by viewModel.coverPath.collectAsState()
+    val coverAlbumId by viewModel.coverAlbumId.collectAsState()
     val albumCovers by viewModel.albumCovers.collectAsState()
     val albumYears by viewModel.albumYears.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
@@ -192,8 +178,7 @@ fun ArtistDetailScreen(
                     ) {
                         // Circle Avatar (150dp) with shared element transition
                         // Using AlbumArtImage like ArtistListItem for consistent display
-                        // If coverPath is null, use first file's path as fallback
-                        val artistCoverPath = coverPath ?: files.firstOrNull()?.path
+                        // Pass both coverPath and coverAlbumId for fallback support
                         Box(
                             modifier = Modifier
                                 .size(150.dp)
@@ -201,9 +186,10 @@ fun ArtistDetailScreen(
                                 .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            if (!artistCoverPath.isNullOrBlank()) {
+                            if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
                                 AlbumArtImage(
-                                    filePath = artistCoverPath,
+                                    filePath = coverPath,
+                                    albumId = coverAlbumId,
                                     contentDescription = stringResource(R.string.artist_cover),
                                     size = 150.dp,
                                     modifier = Modifier.fillMaxSize()
@@ -268,18 +254,34 @@ fun ArtistDetailScreen(
                     item {
                         val carouselState = rememberCarouselState { albumsSorted.size }
 
-                        // 封面数据首次填充时立即预加载（解决首屏空白问题）
-                        LaunchedEffect(albumCovers) {
-                            if (albumCovers.isNotEmpty()) {
-                                viewModel.preloadAdjacentAlbumCovers(0)
-                            }
-                        }
-
-                        // 滚动监听：滚动停止时预加载相邻专辑封面
+                        // 自动轮播 + 预加载：基于当前索引变化的混合策略
+                        // 性能优化：仅使用 snapshotFlow 监听，避免额外的 DisposableEffect
+                        val autoScrollEnabled = albumsSorted.size > 1
+                        
                         LaunchedEffect(carouselState) {
-                            snapshotFlow { carouselState.currentItem }.collect { page ->
-                                viewModel.preloadAdjacentAlbumCovers(page)
-                            }
+                            snapshotFlow { carouselState.currentItem }
+                                .collect { currentIndex ->
+                                    // 预加载相邻封面
+                                    viewModel.preloadAdjacentAlbumCovers(currentIndex)
+                                    
+                                    if (autoScrollEnabled) {
+                                        // 等待 4 秒无交互后再滚动到下一项
+                                        delay(4000)
+                                        
+                                        // 再次检查是否仍然在同一位置（无新交互）
+                                        if (carouselState.currentItem == currentIndex) {
+                                            // 计算下一项（循环）
+                                            val nextIndex = (currentIndex + 1) % albumsSorted.size
+                                            
+                                            // 执行平滑滚动
+                                            try {
+                                                carouselState.animateScrollToItem(nextIndex)
+                                            } catch (_: Exception) {
+                                                // 动画可能被中断（用户交互），静默处理
+                                            }
+                                        }
+                                    }
+                                }
                         }
 
                         HorizontalMultiBrowseCarousel(
@@ -375,7 +377,8 @@ fun ArtistDetailScreen(
 }
 
 /**
- * 轮播封面专用图片组件，使用 Coil 3 加载。
+ * 轮播封面专用图片组件。
+ * 简化为 AlbumArtImage 的包装，使用统一的图片加载逻辑和缓存策略。
  */
 @Composable
 fun CarouselAlbumArtImage(
@@ -383,94 +386,18 @@ fun CarouselAlbumArtImage(
     albumId: Long? = null,
     contentDescription: String?,
     modifier: Modifier = Modifier,
-    placeholder: @Composable () -> Unit = {}
+    placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = 160.dp) }
 ) {
-    val context = LocalContext.current
-    var fallbackMediaStoreBitmap by remember { mutableStateOf<Bitmap?>(null) }
-    var showFallback by remember { mutableStateOf(false) }
-
-    val embeddedBitmap by produceState<Bitmap?>(
-        initialValue = null,
-        key1 = filePath,
-        key2 = 300
-    ) {
-        value = if (!filePath.isNullOrBlank()) {
-            loadAlbumArtThumbnail(context, filePath, 300)
-        } else null
-    }
-
-    Box(modifier = modifier, contentAlignment = Alignment.Center) {
-        when {
-            showFallback && fallbackMediaStoreBitmap != null -> {
-                fallbackMediaStoreBitmap?.let { bitmap ->
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = contentDescription,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                }
-            }
-
-            !filePath.isNullOrBlank() -> {
-                val coverUri = remember(filePath, albumId) {
-                    CoverUriProvider(context).getCoverUri(albumId = albumId, filePath = filePath)
-                }
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalPlatformContext.current)
-                        .data(coverUri ?: File(filePath))
-                        .crossfade(false)
-                        .listener(
-                            onError = { _, _ ->
-                                if (albumId != null && albumId > 0) {
-                                    loadMediaStoreAlbumArt(context, albumId)?.let {
-                                        fallbackMediaStoreBitmap = it
-                                        showFallback = true
-                                    }
-                                }
-                            }
-                        )
-                        .build(),
-                    contentDescription = contentDescription,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop,
-                )
-            }
-
-            albumId != null && albumId > 0 -> {
-                var msBitmap by remember { mutableStateOf<Bitmap?>(null) }
-                LaunchedEffect(albumId) {
-                    msBitmap = loadMediaStoreAlbumArt(context, albumId)
-                }
-                msBitmap?.let { bitmap ->
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = contentDescription,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } ?: embeddedBitmap?.let { bitmap ->
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = contentDescription,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } ?: placeholder()
-            }
-
-            else -> {
-                embeddedBitmap?.let { bitmap ->
-                    Image(
-                        bitmap = bitmap.asImageBitmap(),
-                        contentDescription = contentDescription,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
-                    )
-                } ?: placeholder()
-            }
-        }
-    }
+    AlbumArtImage(
+        filePath = filePath,
+        albumId = albumId,
+        contentDescription = contentDescription,
+        modifier = modifier,
+        size = 160.dp,
+        contentScale = ContentScale.Crop,
+        crossfade = false,
+        placeholder = placeholder
+    )
 }
 
 /**
@@ -520,25 +447,29 @@ fun AlbumCard(
                 )
             }
 
-            // Album name, year and track count
+            // Album year and name
             Surface(
                 modifier = Modifier.fillMaxWidth(),
                 color = MaterialTheme.colorScheme.surfaceVariant
             ) {
                 Column(
-                    modifier = Modifier.padding(12.dp)
+                    modifier = Modifier.padding(12.dp),
+                    horizontalAlignment = Alignment.Start
                 ) {
+                    // Year above album name
+                    if (albumYear != null) {
+                        Text(
+                            text = albumYear.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    // Album name
                     Text(
                         text = albumName,
                         style = MaterialTheme.typography.labelMedium,
-                        maxLines = 1,
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis
-                    )
-                    val yearText = albumYear?.let { " • $it" } ?: ""
-                    Text(
-                        text = stringResource(R.string.track_count, trackCount) + yearText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
