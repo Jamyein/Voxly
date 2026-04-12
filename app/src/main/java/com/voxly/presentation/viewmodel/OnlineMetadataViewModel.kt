@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
-import com.voxly.data.repository.OnlineSourceResult
+import com.voxly.domain.repository.OnlineSourceResult
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.Lyrics
 import com.voxly.domain.repository.AudioRepository

@@ -1,4 +1,4 @@
-package com.voxly.data.helper
+package com.voxly.data.remote
 
 /**
  * 统一搜索查询构建器

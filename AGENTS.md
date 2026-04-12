@@ -12,7 +12,7 @@
 
 ## Commands (verified)
 - Build: `./gradlew build`
-- Debug APK: `./gradlew assembleDebug`
+- Debug APK: `./gradlew compileGithubDebugKotlin`
 - Unit tests: `./gradlew test` or `./gradlew test --tests "com.voxly.domain.usecase.BatchEngineTest.execute*"`
 - Instrumentation: `./gradlew connectedAndroidTest`
 - Lint: `./gradlew lint`

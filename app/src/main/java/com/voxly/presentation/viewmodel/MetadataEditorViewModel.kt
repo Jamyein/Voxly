@@ -13,8 +13,6 @@ import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.local.metadata.RecoverableMediaStoreException
 import com.voxly.data.remote.downloadImageBytes
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
-import com.voxly.data.repository.LyricsRepositoryImpl
-import com.voxly.data.repository.LyricsRepositoryImpl.LyricsSourceResult
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.Lyrics
@@ -24,6 +22,7 @@ import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.domain.model.ScanModeConstants
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
+import com.voxly.domain.repository.LyricsSourceResult
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
@@ -982,7 +981,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
         val track = metadata.title.orEmpty()
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
         val album = metadata.album?.takeIf { it.isNotBlank() }
-        val flowLyricsRepository = lyricsRepository as? LyricsRepositoryImpl ?: return
 
         // Cancel previous search before starting new one (flatMapLatest pattern)
         _lyricsSearchJob?.cancel()
@@ -994,7 +992,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
             _onlineLyricsResults.value = emptyList()
             try {
-                flowLyricsRepository.searchOnlineLyricsFlow(track, artist, album).collect { result ->
+                lyricsRepository.searchOnlineLyricsFlow(track, artist, album).collect { result ->
                     when (result) {
                         is LyricsSourceResult.Result -> {
                             val newResults = _lyricsSearchState.value.results + result.lyrics

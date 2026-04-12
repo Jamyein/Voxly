@@ -76,6 +76,19 @@ interface LyricsRepository {
      * Clears all cached lyrics.
      */
     suspend fun clearCache()
+
+    /**
+     * Searches for lyrics online with flow-based streaming results.
+     * @param trackName Track title
+     * @param artistName Artist name
+     * @param albumName Album name (optional)
+     * @return Flow emitting search results, completion, and errors per source
+     */
+    fun searchOnlineLyricsFlow(
+        trackName: String,
+        artistName: String?,
+        albumName: String?
+    ): Flow<LyricsSourceResult>
 }
 
 /**

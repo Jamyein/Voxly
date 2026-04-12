@@ -5,40 +5,30 @@ import android.icu.text.Transliterator
 import android.os.SystemClock
 
 import com.voxly.core.util.Logger
-import com.voxly.data.helper.SearchQueryBuilder
 import com.voxly.data.local.SettingsDataStore
-import com.voxly.data.mapper.OnlineRecordingMapper
-import com.voxly.data.mapper.OnlineRecordingMapper.AlbumData
-import com.voxly.data.mapper.OnlineRecordingMapper.AlbumInfo
-import com.voxly.data.mapper.OnlineRecordingMapper.ArtistData
-import com.voxly.data.mapper.OnlineRecordingMapper.SingerData
-import com.voxly.data.remote.NetworkConstants
-import com.voxly.data.remote.downloadImageBytes
-import com.voxly.data.remote.itunes.ITunesRepository
+import com.voxly.data.remote.musicbrainz.MusicBrainzMetadataRepository
 import com.voxly.data.remote.musicbrainz.MusicBrainzRepository
+import com.voxly.data.remote.itunes.ITunesRepository
+import com.voxly.data.remote.itunes.ItunesMetadataRepository
+import com.voxly.data.remote.netease.NetEaseMetadataRepository
+import com.voxly.data.remote.qqmusic.QQMusicMetadataRepository
 import com.voxly.data.remote.tengx.TengxRepository
-import com.voxly.data.remote.tengx.model.TengxAlbumDetail
-import com.voxly.data.remote.tengx.model.TengxAlbumDetailData
-import com.voxly.data.remote.tengx.model.TengxAlbumDetailInfo
-import com.voxly.data.remote.tengx.model.TengxSong
-import com.voxly.data.remote.tengx.model.TengxSinger
 import com.voxly.data.remote.wangy.WangyRepository
 import com.voxly.domain.repository.OnlineMetadataRepository
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineReleaseDetails
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
-import kotlinx.coroutines.Deferred
+import com.voxly.domain.repository.OnlineSourceResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
@@ -51,38 +41,27 @@ import javax.net.ssl.SSLException
 private const val TAG = "AggregatedMetadata"
 
 /**
- * Streaming search result with payload and source marker.
- */
-public sealed class OnlineSourceResult {
-    public data class ReleaseResult(
-        val release: OnlineRelease,
-        val source: OnlineSource
-    ) : OnlineSourceResult()
-
-    public data class RecordingResult(
-        val recording: OnlineRecording,
-        val source: OnlineSource
-    ) : OnlineSourceResult()
-
-    public data class SourceCompleted(val source: OnlineSource) : OnlineSourceResult()
-
-    public data class Error(val source: OnlineSource, val message: String) : OnlineSourceResult()
-}
-
-/**
  * Aggregated repository that combines multiple online metadata sources.
  * Supports MusicBrainz, iTunes/Apple Music, NetEase Cloud Music, and QQ Music.
  * 
  * This repository queries all available sources and merges the results,
  * giving users the best metadata from multiple providers.
+ * 
+ * Uses underlying repositories for blocking calls and *MetadataRepository for Flow-based streaming.
  */
 @Singleton
 class AggregatedOnlineMetadataRepository @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
+    // Underlying repositories for blocking calls
     private val musicBrainzRepository: MusicBrainzRepository,
     private val iTunesRepository: ITunesRepository,
     private val wangyRepository: WangyRepository,
-    private val tengxRepository: TengxRepository
+    private val tengxRepository: TengxRepository,
+    // Metadata repositories for Flow-based streaming
+    private val musicBrainzMetadataRepository: MusicBrainzMetadataRepository,
+    private val itunesMetadataRepository: ItunesMetadataRepository,
+    private val netEaseMetadataRepository: NetEaseMetadataRepository,
+    private val qqMusicMetadataRepository: QQMusicMetadataRepository
 ) : OnlineMetadataRepository {
 
     // Semaphore to limit concurrent detail/lyrics fetching (max 5 concurrent)
@@ -151,7 +130,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
             DataSource.NETEASE -> {
                 if (settings.enableNetease) {
-                    searchNeteaseByArtistAlbum(artist, album, settings.requestLimit)
+                    netEaseMetadataRepository.searchNeteaseByArtistAlbum(artist, album, settings.requestLimit)
                         .map {
                             finalizeReleaseResults(
                                 releases = it,
@@ -166,7 +145,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
             DataSource.QQ_MUSIC -> {
                 if (settings.enableQQMusic) {
-                    searchQQMusicByArtistAlbum(artist, album, settings.requestLimit)
+                    qqMusicMetadataRepository.searchQQMusicByArtistAlbum(artist, album, settings.requestLimit)
                         .map {
                             finalizeReleaseResults(
                                 releases = it,
@@ -205,132 +184,39 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             return@callbackFlow
         }
 
-        // Use supervisorScope so each source fails independently - one failed source doesn't cancel others
         supervisorScope {
             if (useITunes) {
                 launch {
-                    try {
-                        val result = iTunesRepository.searchByArtistAlbum(artist, album)
-                        result
-                            .map {
-                                finalizeReleaseResults(
-                                    releases = it,
-                                    artist = artist,
-                                    album = album,
-                                    settings = settings
-                                )
-                            }
-                            .onSuccess { releases ->
-                                releases.forEach { release ->
-                                    trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.ITUNES))
-                                }
-                            }
-                            .onFailure { error ->
-                                trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, error.message ?: "Failed"))
-                            }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.message ?: "Failed"))
-                    } finally {
-                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.ITUNES))
-                    }
+                    itunesMetadataRepository.searchByArtistAlbumFlow(artist, album, settings.getSourceLimit("iTunes"))
+                        .collect { result -> trySend(result) }
                 }
             }
 
             if (useQQMusic) {
                 launch {
-                    try {
-                        val result = searchQQMusicByArtistAlbum(artist, album, settings.requestLimit)
-                        result
-                            .map {
-                                finalizeReleaseResults(
-                                    releases = it,
-                                    artist = artist,
-                                    album = album,
-                                    settings = settings
-                                )
-                            }
-                            .onSuccess { releases ->
-                                releases.forEach { release ->
-                                    trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.QQ_MUSIC))
-                                }
-                            }
-                            .onFailure { error ->
-                                trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, error.message ?: "Failed"))
-                            }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.message ?: "Failed"))
-                    } finally {
-                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.QQ_MUSIC))
-                    }
+                    qqMusicMetadataRepository.searchByArtistAlbumFlow(artist, album, settings.getSourceLimit("QQ Music"))
+                        .collect { result -> trySend(result) }
                 }
             }
 
             if (useNetease) {
                 launch {
-                    try {
-                        val result = searchNeteaseByArtistAlbum(artist, album, settings.requestLimit)
-                        result
-                            .map {
-                                finalizeReleaseResults(
-                                    releases = it,
-                                    artist = artist,
-                                    album = album,
-                                    settings = settings
-                                )
-                            }
-                            .onSuccess { releases ->
-                                releases.forEach { release ->
-                                    trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.NETEASE))
-                                }
-                            }
-                            .onFailure { error ->
-                                trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, error.message ?: "Failed"))
-                            }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.message ?: "Failed"))
-                    } finally {
-                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.NETEASE))
-                    }
+                    netEaseMetadataRepository.searchByArtistAlbumFlow(artist, album, settings.getSourceLimit("NetEase"))
+                        .collect { result -> trySend(result) }
                 }
             }
 
             if (useMusicBrainz) {
                 launch {
-                    try {
-                        val result = musicBrainzRepository.searchByArtistAlbum(artist, album)
-                        result
-                            .map {
-                                finalizeReleaseResults(
-                                    releases = it,
-                                    artist = artist,
-                                    album = album,
-                                    settings = settings
-                                )
-                            }
-                            .onSuccess { releases ->
-                                releases.forEach { release ->
-                                    trySend(OnlineSourceResult.ReleaseResult(release, OnlineSource.MUSICBRAINZ))
-                                }
-                            }
-                            .onFailure { error ->
-                                trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, error.message ?: "Failed"))
-                            }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.message ?: "Failed"))
-                    } finally {
-                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.MUSICBRAINZ))
-                    }
+                    musicBrainzMetadataRepository.searchByArtistAlbumFlow(artist, album, settings.getSourceLimit("MusicBrainz"))
+                        .collect { result -> trySend(result) }
                 }
             }
         }
 
-        // supervisorScope completes when all child coroutines finish
         channel.close()
 
-        awaitClose {
-            // No explicit cleanup needed - supervisorScope children are cancelled automatically
-            // when the parent callbackFlow scope is cancelled
-        }
+        awaitClose { }
     }
 
     /**
@@ -348,10 +234,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             async { iTunesRepository.searchByArtistAlbum(artist, album) }
         } else null
         val neteaseDeferred = if (settings.enableNetease) {
-            async { searchNeteaseByArtistAlbum(artist, album, settings.requestLimit) }
+            async { netEaseMetadataRepository.searchNeteaseByArtistAlbum(artist, album, settings.requestLimit) }
         } else null
         val qqMusicDeferred = if (settings.enableQQMusic) {
-            async { searchQQMusicByArtistAlbum(artist, album, settings.requestLimit) }
+            async { qqMusicMetadataRepository.searchQQMusicByArtistAlbum(artist, album, settings.requestLimit) }
         } else null
 
         val musicBrainzResult = musicBrainzDeferred?.await()?.map { applyLimit(it, settings.searchLimit) }
@@ -362,12 +248,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         // Merge results
         val mergedResults = mutableListOf<OnlineRelease>()
         
-        // Add MusicBrainz results first
         if (musicBrainzResult?.isSuccess == true) {
             mergedResults.addAll(musicBrainzResult.getOrNull() ?: emptyList())
         }
 
-        // Add iTunes results
         if (iTunesResult?.isSuccess == true) {
             val iTunesReleases = iTunesResult.getOrNull() ?: emptyList()
             iTunesReleases.forEach { release ->
@@ -380,7 +264,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         }
 
-        // Add NetEase results (for Chinese music)
         if (neteaseResult?.isSuccess == true) {
             val neteaseReleases = neteaseResult.getOrNull() ?: emptyList()
             neteaseReleases.forEach { release ->
@@ -393,7 +276,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         }
 
-        // Add QQ Music results (for Chinese music)
         if (qqMusicResult?.isSuccess == true) {
             val qqReleases = qqMusicResult.getOrNull() ?: emptyList()
             qqReleases.forEach { release ->
@@ -406,8 +288,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         }
 
-        // Sort by user-defined priority (list order: first = highest priority)
-        // Use sourcePriorityIndex function to properly map "QQ Music" -> "qq_music"
         val sortedResults = mergedResults.sortedWith(compareBy<OnlineRelease> { release ->
             sourcePriorityIndex(release.source, settings.metadataPriority)
         })
@@ -419,140 +299,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             settings = settings
         )
         Result.success(finalizedResults)
-    }
-
-    /**
-     * Searches NetEase Cloud Music by artist and album.
-     * Uses Simple API (WangyRepository).
-     */
-    private suspend fun searchNeteaseByArtistAlbum(
-        artist: String,
-        album: String,
-        limit: Int
-    ): Result<List<OnlineRelease>> {
-        val startedAt = SystemClock.elapsedRealtime()
-        return try {
-            val searchResult = wangyRepository.searchSongs(
-                keywords = "$artist $album",
-                page = 1,
-                limit = limit
-            )
-
-            searchResult.fold(
-                onSuccess = { response ->
-                    val songs = response.result?.songs ?: emptyList()
-                    if (songs.isEmpty()) {
-                        // API returned success but no data - log warning
-                        Timber.w(TAG, "NetEase search returned empty results for '$artist $album'")
-                        Result.success(emptyList())
-                    } else {
-                        // Group by album - try to get cover from search result first
-                        val albums = songs
-                            .filter { it.album?.name != null }
-                            .groupBy { it.album?.name ?: "" }
-                            .mapNotNull { (albumName, albumSongs) ->
-                                if (albumName.isBlank()) return@mapNotNull null
-                                val firstSong = albumSongs.first()
-                                val songId = firstSong.id.toString()
-                                val albumId = firstSong.album?.id
-                                // Use song detail API which returns album.picUrl directly
-                                val coverUrl = if (albumId != null && albumId > 0) {
-                                    getNeteaseAlbumCoverUrl(albumId, firstSong.id)
-                                } else null
-                                OnlineRelease(
-                                    id = songId,
-                                    title = albumName,
-                                    artist = firstSong.artists.joinToString(", ") { it.name },
-                                    year = null,
-                                    format = "Digital",
-                                    trackCount = albumSongs.size,
-                                    coverArtUrl = coverUrl,
-                                    source = OnlineSource.NETEASE,
-                                    albumTitle = albumName
-                                )
-                            }
-                        Result.success(albums)
-                    }
-                },
-                onFailure = { error ->
-                    // Log the actual error instead of returning empty success
-                    Timber.e(TAG, "NetEase search failed: ${error.message}", error)
-                    Result.failure(error)
-                }
-            )
-        } catch (e: Exception) {
-            Timber.e(TAG, "NetEase search exception: ${e.message}", e)
-            Result.failure(e)
-        }.also { result ->
-            Logger.i(
-                "Online query source=NetEase type=artist_album elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
-                TAG
-            )
-        }
-    }
-
-    /**
-     * Searches QQ Music by artist and album.
-     */
-    private suspend fun searchQQMusicByArtistAlbum(
-        artist: String,
-        album: String,
-        limit: Int
-    ): Result<List<OnlineRelease>> {
-        val startedAt = SystemClock.elapsedRealtime()
-        return try {
-            val searchResult = tengxRepository.searchSongs(
-                keywords = "$artist $album",
-                pageNum = 1,
-                pageSize = limit
-            )
-
-            searchResult.fold(
-                onSuccess = { response ->
-                    val songs = response.data?.song?.list ?: emptyList()
-                    
-                    if (songs.isEmpty()) {
-                        Timber.w(TAG, "QQ Music search returned empty results for '$artist $album'")
-                        Result.success(emptyList())
-                    } else {
-                        // Group by album
-                        val albums = songs.groupBy { it.album?.id }.mapNotNull { (albumId, albumSongs) ->
-                            albumId?.let { id ->
-                                val firstSong = albumSongs.first()
-                                OnlineRelease(
-                                    id = id.toString(),
-                                    title = firstSong.album?.name ?: "Unknown Album",
-                                    artist = firstSong.singer.joinToString(", ") { singer -> singer.name },
-                                    year = null,
-                                    format = "Digital",
-                                    trackCount = albumSongs.size,
-                                    coverArtUrl = buildQQCoverUrl(
-                                        albumMid = firstSong.album?.mid,
-                                        rawCoverUrl = firstSong.album?.pic,
-                                        fallbackId = id.toString()
-                                    ),
-                                    source = OnlineSource.QQ_MUSIC,
-                                    albumTitle = firstSong.album?.name
-                                )
-                            }
-                        }
-                        Result.success(albums)
-                    }
-                },
-                onFailure = { error ->
-                    Timber.e(TAG, "QQ Music search failed: ${error.message}", error)
-                    Result.failure(error)
-                }
-            )
-        } catch (e: Exception) {
-            Timber.e(TAG, "QQ Music search exception: ${e.message}", e)
-            Result.failure(e)
-        }.also { result ->
-            Logger.i(
-                "Online query source=QQ_Music type=artist_album elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
-                TAG
-            )
-        }
     }
 
     override suspend fun searchByTrack(
@@ -604,7 +350,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
             DataSource.NETEASE -> {
                 if (settings.enableNetease) {
-                    searchNeteaseByTrack(title, artist, settings.requestLimit)
+                    netEaseMetadataRepository.searchByTrackBlocking(title, artist, settings.requestLimit)
                         .map {
                             finalizeRecordingResults(
                                 recordings = it,
@@ -620,7 +366,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
             DataSource.QQ_MUSIC -> {
                 if (settings.enableQQMusic) {
-                    searchQQMusicByTrack(title, artist, settings.requestLimit)
+                    qqMusicMetadataRepository.searchByTrackBlocking(title, artist, settings.requestLimit)
                         .map {
                             finalizeRecordingResults(
                                 recordings = it,
@@ -643,10 +389,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                         async { iTunesRepository.searchByTrack(title, artist) }
                     } else null
                     val neteaseDeferred = if (settings.enableNetease) {
-                        async { searchNeteaseByTrack(title, artist, settings.requestLimit) }
+                        async { netEaseMetadataRepository.searchByTrackBlocking(title, artist, settings.requestLimit) }
                     } else null
                     val qqMusicDeferred = if (settings.enableQQMusic) {
-                        async { searchQQMusicByTrack(title, artist, settings.requestLimit) }
+                        async { qqMusicMetadataRepository.searchByTrackBlocking(title, artist, settings.requestLimit) }
                     } else null
 
                     val results = mutableListOf<OnlineRecording>()
@@ -692,143 +438,41 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             return@callbackFlow
         }
 
-        // Use supervisorScope so each source fails independently - one failed source doesn't cancel others
         supervisorScope {
             if (useITunes) {
                 launch {
-                    try {
-                        val result = iTunesRepository.searchByTrack(title, artist)
-                        Timber.d("iTunes raw results count: ${result.getOrNull()?.size ?: 0}")
-                        result
-                            .map {
-                                finalizeRecordingResults(
-                                    recordings = it,
-                                    title = title,
-                                    artist = artist,
-                                    priority = settings.metadataPriority,
-                                    limit = settings.getSourceLimit("iTunes")
-                                )
-                            }
-                            .onSuccess { recordings ->
-                                recordings.forEach { recording ->
-                                    trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.ITUNES))
-                                }
-                            }
-                            .onFailure { error ->
-                                trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, error.toUserFriendlyError()))
-                            }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.toUserFriendlyError()))
-                    } finally {
-                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.ITUNES))
-                    }
+                    itunesMetadataRepository.searchByTrackFlow(title, artist, settings.getSourceLimit("iTunes"))
+                        .collect { result -> trySend(result) }
                 }
             }
 
             if (useQQMusic) {
                 launch {
-                    try {
-                        val result = searchQQMusicByTrack(title, artist, settings.requestLimit)
-                        result
-                            .map {
-                                finalizeRecordingResults(
-                                    recordings = it,
-                                    title = title,
-                                    artist = artist,
-                                    priority = settings.metadataPriority,
-                                    limit = settings.getSourceLimit("QQ Music")
-                                )
-                            }
-                            .onSuccess { recordings ->
-                                recordings.forEach { recording ->
-                                    trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.QQ_MUSIC))
-                                }
-                            }
-                            .onFailure { error ->
-                                trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, error.toUserFriendlyError()))
-                            }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.toUserFriendlyError()))
-                    } finally {
-                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.QQ_MUSIC))
-                    }
+                    qqMusicMetadataRepository.searchByTrackFlow(title, artist, settings.getSourceLimit("QQ Music"))
+                        .collect { result -> trySend(result) }
                 }
             }
 
             if (useNetease) {
                 launch {
-                    try {
-                        val result = searchNeteaseByTrack(title, artist, settings.requestLimit)
-                        result
-                            .map {
-                                finalizeRecordingResults(
-                                    recordings = it,
-                                    title = title,
-                                    artist = artist,
-                                    priority = settings.metadataPriority,
-                                    limit = settings.getSourceLimit("NetEase")
-                                )
-                            }
-                            .onSuccess { recordings ->
-                                recordings.forEach { recording ->
-                                    trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.NETEASE))
-                                }
-                            }
-                            .onFailure { error ->
-                                trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, error.toUserFriendlyError()))
-                            }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.toUserFriendlyError()))
-                    } finally {
-                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.NETEASE))
-                    }
+                    netEaseMetadataRepository.searchByTrackFlow(title, artist, settings.getSourceLimit("NetEase"))
+                        .collect { result -> trySend(result) }
                 }
             }
 
             if (useMusicBrainz) {
                 launch {
-                    try {
-                        val result = musicBrainzRepository.searchByTrack(title, artist)
-                        result
-                            .map {
-                                finalizeRecordingResults(
-                                    recordings = it,
-                                    title = title,
-                                    artist = artist,
-                                    priority = settings.metadataPriority,
-                                    limit = settings.getSourceLimit("MusicBrainz")
-                                )
-                            }
-                            .onSuccess { recordings ->
-                                recordings.forEach { recording ->
-                                    trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.MUSICBRAINZ))
-                                }
-                            }
-                            .onFailure { error ->
-                                trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, error.toUserFriendlyError()))
-                            }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.toUserFriendlyError()))
-                    } finally {
-                        trySend(OnlineSourceResult.SourceCompleted(OnlineSource.MUSICBRAINZ))
-                    }
+                    musicBrainzMetadataRepository.searchByTrackFlow(title, artist, settings.getSourceLimit("MusicBrainz"))
+                        .collect { result -> trySend(result) }
                 }
             }
         }
 
-        // supervisorScope completes when all child coroutines finish
         channel.close()
 
-        awaitClose {
-            // No explicit cleanup needed - supervisorScope children are cancelled automatically
-            // when the parent callbackFlow scope is cancelled
-        }
+        awaitClose { }
     }
 
-    /**
-     * Searches track candidates for cover fetching flow.
-     * Uses cover source toggles and cover source priority.
-     */
     suspend fun searchByTrackForCover(
         title: String,
         artist: String?
@@ -842,7 +486,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         Timber.d(TAG, "searchByTrackForCover: starting search for title='$title', artist='$artist'")
         val results = mutableListOf<OnlineRecording>()
 
-        val musicBrainzDeferred: Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableMusicBrainz) {
+        val musicBrainzDeferred: kotlinx.coroutines.Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableMusicBrainz) {
             async { 
                 try {
                     musicBrainzRepository.searchByTrack(title, artist)
@@ -852,7 +496,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 }
             }
         } else null
-        val iTunesDeferred: Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableITunes) {
+        val iTunesDeferred: kotlinx.coroutines.Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableITunes) {
             async { 
                 try {
                     iTunesRepository.searchByTrack(title, artist)
@@ -862,20 +506,20 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 }
             }
         } else null
-        val neteaseDeferred: Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableNetease) {
+        val neteaseDeferred: kotlinx.coroutines.Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableNetease) {
             async { 
                 try {
-                    searchNeteaseByTrack(title, artist, settings.requestLimit)
+                    netEaseMetadataRepository.searchByTrackBlocking(title, artist, settings.requestLimit)
                 } catch (e: Exception) {
                     Timber.w(TAG, "NetEase search failed: ${e.message}")
                     Result.success(emptyList())
                 }
             }
         } else null
-        val qqDeferred: Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableQQMusic) {
+        val qqDeferred: kotlinx.coroutines.Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableQQMusic) {
             async { 
                 try {
-                    searchQQMusicByTrack(title, artist, settings.requestLimit)
+                    qqMusicMetadataRepository.searchByTrackBlocking(title, artist, settings.requestLimit)
                 } catch (e: Exception) {
                     Timber.w(TAG, "QQ Music search failed: ${e.message}")
                     Result.success(emptyList())
@@ -902,10 +546,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         Result.success(sorted)
     }
 
-    /**
-     * Streaming version of searchByTrackForCover.
-     * Emits results as they arrive from each source, enabling real-time UI updates.
-     */
     fun searchByTrackForCoverFlow(
         title: String,
         artist: String?
@@ -932,326 +572,41 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             }
         }
 
-        // Use supervisorScope so each source fails independently - one failed source doesn't cancel others
         supervisorScope {
             if (settings.coverEnableMusicBrainz) {
                 launch {
-                    try {
-                        val result = musicBrainzRepository.searchByTrack(title, artist)
-                        result.getOrNull()?.forEach { recording ->
-                            trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.MUSICBRAINZ))
-                        }
-                        if (result.isFailure) {
-                            trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, result.exceptionOrNull()?.message ?: "Failed"))
-                        }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.MUSICBRAINZ, e.message ?: "Failed"))
-                    } finally {
-                        markSourceCompleted(OnlineSource.MUSICBRAINZ)
-                    }
+                    musicBrainzMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
+                        .collect { result -> trySend(result) }
+                    markSourceCompleted(OnlineSource.MUSICBRAINZ)
                 }
             }
 
             if (settings.coverEnableITunes) {
                 launch {
-                    try {
-                        val result = iTunesRepository.searchByTrack(title, artist)
-                        result.getOrNull()?.forEach { recording ->
-                            trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.ITUNES))
-                        }
-                        if (result.isFailure) {
-                            trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, result.exceptionOrNull()?.message ?: "Failed"))
-                        }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.ITUNES, e.message ?: "Failed"))
-                    } finally {
-                        markSourceCompleted(OnlineSource.ITUNES)
-                    }
+                    itunesMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
+                        .collect { result -> trySend(result) }
+                    markSourceCompleted(OnlineSource.ITUNES)
                 }
             }
 
             if (settings.coverEnableNetease) {
                 launch {
-                    try {
-                        val result = searchNeteaseByTrack(title, artist, settings.requestLimit)
-                        result.getOrNull()?.forEach { recording ->
-                            trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.NETEASE))
-                        }
-                        if (result.isFailure) {
-                            trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, result.exceptionOrNull()?.message ?: "Failed"))
-                        }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.NETEASE, e.message ?: "Failed"))
-                    } finally {
-                        markSourceCompleted(OnlineSource.NETEASE)
-                    }
+                    netEaseMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
+                        .collect { result -> trySend(result) }
+                    markSourceCompleted(OnlineSource.NETEASE)
                 }
             }
 
             if (settings.coverEnableQQMusic) {
                 launch {
-                    try {
-                        val result = searchQQMusicByTrack(title, artist, settings.requestLimit)
-                        result.getOrNull()?.forEach { recording ->
-                            trySend(OnlineSourceResult.RecordingResult(recording, OnlineSource.QQ_MUSIC))
-                        }
-                        if (result.isFailure) {
-                            trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, result.exceptionOrNull()?.message ?: "Failed"))
-                        }
-                    } catch (e: Exception) {
-                        trySend(OnlineSourceResult.Error(OnlineSource.QQ_MUSIC, e.message ?: "Failed"))
-                    } finally {
-                        markSourceCompleted(OnlineSource.QQ_MUSIC)
-                    }
+                    qqMusicMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
+                        .collect { result -> trySend(result) }
+                    markSourceCompleted(OnlineSource.QQ_MUSIC)
                 }
             }
         }
 
-        // Note: No explicit cleanup needed - launches are children of callbackFlow scope
-        // and will be cancelled automatically when channel closes or collection ends.
         awaitClose { }
-    }
-
-    /**
-     * Searches NetEase by track title.
-     * Uses search API to get song list, then detail API to get complete info including cover.
-     * Flow: searchSongs -> getSongDetail (parallel for each song) -> return results
-     */
-    private suspend fun searchNeteaseByTrack(
-        title: String,
-        artist: String?,
-        limit: Int
-    ): Result<List<OnlineRecording>> {
-        val startedAt = SystemClock.elapsedRealtime()
-        return try {
-            // 统一查询格式：title artist (title在前，空格分隔)
-            val keywords = SearchQueryBuilder.build(title, artist)
-            val searchResult = wangyRepository.searchSongs(
-                keywords = keywords,
-                page = 1,
-                limit = limit
-            )
-
-            searchResult.fold(
-                onSuccess = { response ->
-                    val searchSongs = response.result?.songs ?: emptyList()
-                    Timber.d(TAG, "NetEase search returned ${searchSongs.size} songs")
-                    if (searchSongs.isEmpty()) {
-                        Timber.w(TAG, "NetEase track search returned empty results for '$title' artist='$artist'")
-                        Result.success(emptyList())
-                    } else {
-                        // 并行获取每首歌的详情（包含封面URL）和歌词
-                        // 使用 semaphore 限制并发，防止资源耗尽
-                        val detailJobs = searchSongs.map { song ->
-                            coroutineScope {
-                                async {
-                                    detailSemaphore.withPermit {
-                                        // 并行获取详情和歌词
-                                        val detailDeferred = async { wangyRepository.getSongDetail(song.id) }
-                                        val lyricsDeferred = async { wangyRepository.getLyrics(song.id) }
-                                        
-                                        val detail = detailDeferred.await().getOrNull()
-                                        val lyrics = lyricsDeferred.await().getOrNull()
-                                        
-                                        Triple(song, detail, lyrics)
-                                    }
-                                }
-                            }
-                        }
-
-                        val recordings = detailJobs.mapNotNull { job ->
-                            val (searchSong, detail, lyricsResponse) = job.await()
-                            // 优先使用详情API的数据（包含封面），fallback到搜索结果
-                            val detailSong = detail?.songs?.firstOrNull()
-                            val detailAlbum = detailSong?.album ?: detailSong?.al
-
-                            val artistName = detailSong?.artists?.firstOrNull()?.name
-                                ?: detailSong?.ar?.firstOrNull()?.name
-                                ?: searchSong.artists.firstOrNull()?.name
-                                ?: ""
-                            val albumName = detailAlbum?.name
-                                ?: searchSong.album?.name
-                                ?: ""
-                            val albumId = detailAlbum?.id
-                                ?: searchSong.album?.id
-
-                            // 详情API返回的封面URL优先，fallback到搜索结果的专辑picUrl
-                            val coverUrl = detailAlbum?.picUrl?.takeIf { it.isNotBlank() }
-                                ?.let { normalizeCoverUrl(it) }
-                                ?: searchSong.album?.picUrl?.takeIf { it.isNotBlank() }
-                                    ?.let { normalizeCoverUrl(it) }
-
-                            // 获取歌词文本
-                            val lyricsText = lyricsResponse?.lrc?.lyric?.takeIf { it.isNotBlank() }
-
-                            // 解析碟号
-                            val discNumber = searchSong.disc.toIntOrNull()
-                            // 解析曲目号
-                            val trackNumber = searchSong.trackNumber.takeIf { it > 0 }
-                            // 别名/注释
-                            val alias = searchSong.alias.takeIf { it.isNotEmpty() }?.joinToString("; ")
-
-                            OnlineRecording(
-                                id = searchSong.id.toString(),
-                                title = searchSong.name,
-                                artist = artistName,
-                                album = albumName,
-                                duration = (searchSong.duration / 1000).toInt(),
-                                releaseId = albumId?.toString() ?: searchSong.id.toString(),
-                                source = OnlineSource.NETEASE,
-                                coverArtUrl = coverUrl,
-                                discNumber = discNumber,
-                                trackNumber = trackNumber,
-                                comment = alias,
-                                lyrics = lyricsText
-                            )
-                        }
-                        Timber.d(TAG, "NetEase recordings: ${recordings.take(3).map { "${it.title}(${it.coverArtUrl?.take(30)}...)" }}")
-                        Result.success(recordings)
-                    }
-                },
-                onFailure = { error ->
-                    Timber.e(TAG, "NetEase track search failed: ${error.message}", error)
-                    Result.failure(error)
-                }
-            )
-        } catch (e: Exception) {
-            Timber.e(TAG, "NetEase track search exception: ${e.message}", e)
-            Result.failure(e)
-        }.also { result ->
-            Logger.i(
-                "Online query source=NetEase type=track elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
-                TAG
-            )
-        }
-    }
-
-    /**
-     * Gets NetEase album cover URL using song detail API.
-     * Uses /api/song/detail which returns album.picUrl directly.
-     */
-    private suspend fun getNeteaseAlbumCoverUrl(albumId: Long, songId: Long? = null): String? {
-        return try {
-            // Prefer using songId if available, otherwise use albumId
-            val searchId = songId ?: albumId
-            val songDetail = wangyRepository.getSongDetail(searchId)
-            songDetail.getOrNull()?.songs?.firstOrNull()?.album?.picUrl?.let { normalizeCoverUrl(it) }
-        } catch (e: Exception) {
-            Timber.w(TAG, "Failed to get NetEase album cover for id=$albumId: ${e.message}")
-            null
-        }
-    }
-
-    /**
-     * Searches QQ Music by track title.
-     */
-    private suspend fun searchQQMusicByTrack(
-        title: String,
-        artist: String?,
-        limit: Int
-    ): Result<List<OnlineRecording>> {
-        val startedAt = SystemClock.elapsedRealtime()
-        return try {
-            // 统一查询格式：title artist (title在前，空格分隔)
-            val keywords = SearchQueryBuilder.build(title, artist)
-            
-            val searchResult = tengxRepository.searchSongs(
-                keywords = keywords,
-                pageNum = 1,
-                pageSize = limit
-            )
-
-            searchResult.fold(
-                onSuccess = { response ->
-                    val songs = response.data?.song?.list ?: emptyList()
-                    
-                    if (songs.isEmpty()) {
-                        Timber.w(TAG, "QQ Music track search returned empty results for '$title' artist='$artist'")
-                        Result.success(emptyList())
-                    } else {
-                        // 并行获取每首歌的详情和歌词
-                        // 使用 semaphore 限制并发，防止资源耗尽
-                        val detailJobs = songs.map { song ->
-                            coroutineScope {
-                                async {
-                                    detailSemaphore.withPermit {
-                                        // 并行获取详情和歌词
-                                        val detailDeferred = async {
-                                            if (song.id > 0) {
-                                                tengxRepository.getSongDetail(listOf(song.id))
-                                            } else {
-                                                Result.failure(Exception("Invalid song id"))
-                                            }
-                                        }
-                                        val lyricsDeferred = async {
-                                            if (song.mid.isNotBlank()) {
-                                                tengxRepository.getLyrics(song.mid)
-                                            } else {
-                                                Result.failure(Exception("Invalid song mid"))
-                                            }
-                                        }
-
-                                        val detail = detailDeferred.await().getOrNull()
-                                        val lyricsResult = lyricsDeferred.await().getOrNull()
-
-                                        Triple(song, detail, lyricsResult)
-                                    }
-                                }
-                            }
-                        }
-
-                        val recordings = detailJobs.mapNotNull { job ->
-                            val (searchSong, detailResponse, lyricsResult) = job.await()
-                            
-                            // 从详情响应中获取更多信息（可选）
-                            val detailSong = detailResponse?.data?.track?.firstOrNull()
-                            
-                            // 构建专辑信息 - 优先使用搜索结果中的专辑信息
-                            val albumInfo = searchSong.album?.let { album ->
-                                AlbumInfo(
-                                    id = album.id,
-                                    mid = album.mid,
-                                    name = album.name,
-                                    pic = album.pic
-                                )
-                            } ?: detailSong?.album?.let { album ->
-                                AlbumInfo(
-                                    id = album.id,
-                                    mid = album.mid,
-                                    name = album.name,
-                                    pic = album.pic
-                                )
-                            }
-                            
-                            // 获取歌词文本
-                            val lyricsText = lyricsResult?.lyrics?.takeIf { it.isNotBlank() }
-                            
-                            OnlineRecordingMapper.fromQQMusic(
-                                id = searchSong.id.toInt(),
-                                name = searchSong.name,
-                                singers = searchSong.singer.map { SingerData(it.name) },
-                                interval = searchSong.interval,
-                                album = albumInfo,
-                                lyrics = lyricsText
-                            )
-                        }
-                        Result.success(recordings)
-                    }
-                },
-                onFailure = { error ->
-                    Timber.e(TAG, "QQ Music track search failed: ${error.message}", error)
-                    Result.failure(error)
-                }
-            )
-        } catch (e: Exception) {
-            Timber.e(TAG, "QQ Music track search exception: ${e.message}", e)
-            Result.failure(e)
-        }.also { result ->
-            Logger.i(
-                "Online query source=QQ_Music type=track elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
-                TAG
-            )
-        }
     }
 
     override suspend fun getReleaseDetails(releaseId: String): Result<OnlineReleaseDetails> {
@@ -1270,12 +625,12 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 Result.failure(Exception("Apple Music source is disabled"))
             }
             DataSource.NETEASE -> if (settings.enableNetease) {
-                getNeteaseAlbumDetails(releaseId)
+                netEaseMetadataRepository.getAlbumDetails(releaseId)
             } else {
                 Result.failure(Exception("NetEase source is disabled"))
             }
             DataSource.QQ_MUSIC -> if (settings.enableQQMusic) {
-                getQQMusicAlbumDetails(releaseId)
+                qqMusicMetadataRepository.getAlbumDetails(releaseId)
             } else {
                 Result.failure(Exception("QQ Music source is disabled"))
             }
@@ -1304,177 +659,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         }
     }
 
-    /**
-     * Gets NetEase album details.
-     * Uses Simple API (WangyRepository).
-     */
-    private suspend fun getNeteaseAlbumDetails(albumId: String): Result<OnlineReleaseDetails> {
-        return try {
-            val result = wangyRepository.getAlbumDetail(albumId.toLong())
-            if (result.isSuccess) {
-                val album = result.getOrNull()
-                // Convert to OnlineReleaseDetails
-                // This is a simplified conversion
-                Result.success(OnlineReleaseDetails(
-                    id = albumId,
-                    title = album?.album?.name ?: "Unknown",
-                    // Fix: Use artists list first, fallback to artist, then Unknown
-                    artist = album?.album?.artists?.firstOrNull()?.name
-                        ?: album?.album?.artist?.name
-                        ?: "Unknown",
-                    // Parse year from publishTime timestamp
-                    year = album?.album?.publishTime?.let { timestamp ->
-                        if (timestamp > 0) {
-                            try {
-                                java.text.SimpleDateFormat("yyyy", java.util.Locale.getDefault())
-                                    .format(java.util.Date(timestamp))
-                                    .toIntOrNull()
-                            } catch (e: Exception) {
-                                null
-                            }
-                        } else null
-                    },
-                    // Use tags as genre (comma-separated)
-                    genre = album?.album?.tags?.takeIf { it.isNotBlank() },
-                    trackCount = album?.songs?.size ?: 0,
-                    // Convert songs to tracks list
-                    tracks = album?.songs?.map { song ->
-                        com.voxly.domain.repository.OnlineTrack(
-                            number = song.position ?: song.trackNo,
-                            title = song.name,
-                            artist = song.ar.firstOrNull()?.name ?: "",
-                            duration = if (song.dt > 0) (song.dt / 1000).toInt() else null
-                        )
-                    } ?: emptyList(),
-                    coverArtUrl = album?.album?.picUrl
-                        ?.let(::normalizeCoverUrl)
-                ))
-            } else {
-                Result.failure(Exception("Failed to get NetEase album details"))
-            }
-        } catch (e: Exception) {
-            Timber.e(TAG, "NetEase album details failed: ${e.message}", e)
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Gets QQ Music album details.
-     * Note: QQ Music albums can have either numeric IDs or alphanumeric "mid" identifiers.
-     * Only numeric IDs are supported via API. For mid identifiers, we try to get song info as fallback.
-     */
-    private suspend fun getQQMusicAlbumDetails(albumId: String): Result<OnlineReleaseDetails> {
-        return try {
-            // QQ Music uses both numeric IDs and alphanumeric "mid" identifiers
-            val numericAlbumId = albumId.toLongOrNull()
-            
-            val result = if (numericAlbumId != null && numericAlbumId > 0) {
-                // Use numeric album ID API
-                tengxRepository.getAlbumDetail(numericAlbumId)
-            } else {
-                // For mid-based album IDs (or invalid numeric IDs), try song search fallback
-                // This handles cases where the "albumId" is actually a song's mid
-                Timber.d(TAG, "QQ Music album ID '$albumId' is mid format or invalid, trying song search fallback")
-                searchQQMusicSongByMid(albumId)
-            }
-            
-            if (result.isSuccess) {
-                val album = result.getOrNull()
-                Result.success(OnlineReleaseDetails(
-                    id = albumId,
-                    title = album?.data?.album?.name ?: "Unknown",
-                    artist = album?.data?.album?.singer?.name ?: "Unknown",
-                    year = null,
-                    genre = null,
-                    trackCount = album?.data?.list?.size ?: 0,
-                    tracks = emptyList(),
-                    coverArtUrl = if (albumId.isNotEmpty()) {
-                        buildQQCoverUrl(
-                            albumMid = album?.data?.album?.mid,
-                            rawCoverUrl = album?.data?.album?.pic,
-                            fallbackId = albumId
-                        )
-                    } else null
-                ))
-            } else {
-                Result.failure(Exception("Failed to get QQ Music album details"))
-            }
-        } catch (e: Exception) {
-            Timber.e(TAG, "QQ Music album details failed: ${e.message}", e)
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Searches for QQ Music song by song mid as fallback.
-     * Uses song search API to find song info when album info is unavailable.
-     */
-    private suspend fun searchQQMusicSongByMid(songMid: String): Result<TengxAlbumDetail> {
-        return try {
-            // Search for the song using the mid as keyword
-            // We'll search for songs and use the first match to get album info
-            val searchResult = tengxRepository.searchSongs(
-                keywords = songMid,
-                pageNum = 1,
-                pageSize = 1,
-                type = 0 // type 0 = song search
-            )
-            
-            searchResult.fold(
-                onSuccess = { response ->
-                    val song = response.data?.song?.list?.firstOrNull()
-                    if (song != null) {
-                        // Try to get album details if we have album info
-                        val albumId = song.album?.id
-                        if (albumId != null && albumId > 0) {
-                            tengxRepository.getAlbumDetail(albumId)
-                        } else if (!song.album?.mid.isNullOrBlank()) {
-                            // Album has mid but no numeric ID - need different approach
-                            // For now, construct a basic album detail response
-                            Result.success(createBasicAlbumDetail(song))
-                        } else {
-                            Result.failure(Exception("No album info available for song: ${song.name}"))
-                        }
-                    } else {
-                        Result.failure(Exception("Song not found by mid: $songMid"))
-                    }
-                },
-                onFailure = { error ->
-                    Result.failure(error)
-                }
-            )
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    /**
-     * Creates a basic album detail from song info when album API is unavailable.
-     */
-    private fun createBasicAlbumDetail(song: TengxSong): TengxAlbumDetail {
-        return TengxAlbumDetail(
-            code = 0,
-            data = TengxAlbumDetailData(
-                album = TengxAlbumDetailInfo(
-                    id = song.album?.id ?: 0,
-                    mid = song.album?.mid ?: "",
-                    name = song.album?.name ?: "Unknown Album",
-                    singer = TengxSinger(
-                        id = song.singer.firstOrNull()?.id ?: 0,
-                        name = song.singer.firstOrNull()?.name ?: "Unknown Artist",
-                        title = "",
-                        type = 0,
-                        gender = 0,
-                        pic = ""
-                    ),
-                    pic = song.album?.pic ?: "",
-                    publicTime = ""
-                ),
-                list = emptyList()
-            )
-        )
-    }
-
     override suspend fun getCoverArt(releaseId: String): Result<ByteArray?> {
         Logger.d("getCoverArt: releaseId=$releaseId, preferredSource=$preferredSource", TAG)
         val settings = getOnlineSourceSettings()
@@ -1492,12 +676,12 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 Result.failure(Exception("Apple Music source is disabled"))
             }
             DataSource.NETEASE -> if (settings.coverEnableNetease) {
-                getNeteaseCoverArt(releaseId)
+                netEaseMetadataRepository.getCoverArtBytes(releaseId)
             } else {
                 Result.failure(Exception("NetEase source is disabled"))
             }
             DataSource.QQ_MUSIC -> if (settings.coverEnableQQMusic) {
-                getQQMusicCoverArt(releaseId)
+                qqMusicMetadataRepository.getCoverArtBytes(releaseId)
             } else {
                 Result.failure(Exception("QQ Music source is disabled"))
             }
@@ -1516,71 +700,16 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                             if (result.isSuccess && result.getOrNull() != null) return result
                         }
                         "netease" -> if (settings.coverEnableNetease) {
-                            val result = getNeteaseCoverArt(releaseId)
+                            val result = netEaseMetadataRepository.getCoverArtBytes(releaseId)
                             if (result.isSuccess && result.getOrNull() != null) return result
                         }
                         "qq_music" -> if (settings.coverEnableQQMusic) {
-                            val result = getQQMusicCoverArt(releaseId)
+                            val result = qqMusicMetadataRepository.getCoverArtBytes(releaseId)
                             if (result.isSuccess && result.getOrNull() != null) return result
                         }
                     }
                 }
                 Result.success(null)
-            }
-        }
-    }
-
-    /**
-     * Gets NetEase album cover art.
-     * Uses Simple API (WangyRepository).
-     */
-    private suspend fun getNeteaseCoverArt(albumId: String): Result<ByteArray?> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val result = wangyRepository.getAlbumDetail(albumId.toLong())
-                if (result.isSuccess) {
-                    val album = result.getOrNull()
-                    val coverUrl = normalizeCoverUrl(album?.album?.picUrl)
-                    if (coverUrl != null) {
-                        val bytes = downloadImageBytes(
-                            url = coverUrl,
-                            userAgent = NetworkConstants.USER_AGENT_ANDROID,
-                            referer = "https://music.163.com"
-                        )
-                        Result.success(bytes)
-                    } else {
-                        Result.success(null)
-                    }
-                } else {
-                    Result.success(null)
-                }
-            } catch (e: Exception) {
-                Timber.e(TAG, "NetEase cover art failed: ${e.message}", e)
-                Result.failure(e)
-            }
-        }
-    }
-
-    /**
-     * Gets QQ Music album cover art.
-     */
-    private suspend fun getQQMusicCoverArt(albumId: String): Result<ByteArray?> {
-        return withContext(Dispatchers.IO) {
-            try {
-                val coverUrl = buildQQCoverUrl(
-                    albumMid = albumId.takeUnless { it.all(Char::isDigit) } ?: "",
-                    rawCoverUrl = null,
-                    fallbackId = albumId.takeIf { it.all(Char::isDigit) }
-                ) ?: return@withContext Result.success(null)
-                val bytes = downloadImageBytes(
-                    url = coverUrl,
-                    userAgent = NetworkConstants.USER_AGENT_ANDROID,
-                    referer = "https://y.qq.com"
-                )
-                Result.success(bytes)
-            } catch (e: Exception) {
-                Timber.e(TAG, "QQ Music cover art failed: ${e.message}", e)
-                Result.failure(e)
             }
         }
     }
@@ -1616,7 +745,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String,
         album: String
     ): Result<List<OnlineRelease>> {
-        return searchNeteaseByArtistAlbum(artist, album, getOnlineSourceSettings().requestLimit)
+        return netEaseMetadataRepository.searchNeteaseByArtistAlbum(artist, album, getOnlineSourceSettings().requestLimit)
     }
 
     /**
@@ -1626,7 +755,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String,
         album: String
     ): Result<List<OnlineRelease>> {
-        return searchQQMusicByArtistAlbum(artist, album, getOnlineSourceSettings().requestLimit)
+        return qqMusicMetadataRepository.searchQQMusicByArtistAlbum(artist, album, getOnlineSourceSettings().requestLimit)
     }
 
     /**
@@ -1636,13 +765,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val title1 = release1.title.lowercase().trim()
         val title2 = release2.title.lowercase().trim()
         
-        // Exact match
         if (title1 == title2) return true
         
-        // One contains the other
         if (title1.contains(title2) || title2.contains(title1)) return true
         
-        // Similar artist names
         val artist1 = release1.artist.lowercase().trim()
         val artist2 = release2.artist.lowercase().trim()
         
@@ -1655,7 +781,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         album: String,
         settings: OnlineSourceSettings
     ): List<OnlineRelease> {
-        // Skip fuzzy filtering - API already returns relevant results
         val sorted = releases.sortedWith(
             compareBy<OnlineRelease> { release ->
                 sourcePriorityIndex(release.source, settings.metadataPriority)
@@ -1677,24 +802,20 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             return emptyList()
         }
 
-        // 步骤1: 首先提取所有有封面URL的结果（封面搜索的核心）
         val withCovers = recordings.filter { !it.coverArtUrl.isNullOrBlank() }
         Timber.d("finalizeRecordingResults: ${withCovers.size} recordings have coverArtUrl")
 
-        // 如果没有封面，返回空（封面搜索必须有封面）
         if (withCovers.isEmpty()) {
             Timber.d("finalizeRecordingResults: no covers found, returning empty")
             return emptyList()
         }
 
-        // 步骤2: 应用宽松的标题匹配
         val filtered = withCovers.filter { recording ->
             val titleMatch = matchesTitleFlexible(title, recording.title)
             Timber.d("Cover match check: queryTitle='$title', resultTitle='${recording.title}', match=$titleMatch")
             titleMatch
         }
 
-        // 步骤3: 如果严格过滤后没有结果，返回所有有封面的结果（备选方案）
         val resultsToReturn = if (filtered.isEmpty() && withCovers.isNotEmpty()) {
             Timber.d("finalizeRecordingResults: strict filter returned empty, using fallback (all covers)")
             withCovers
@@ -1704,13 +825,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
         Timber.d("finalizeRecordingResults: returning ${resultsToReturn.size} recordings")
 
-        // 步骤4: 按优先级排序（有封面的优先，然后按用户设置的源优先级）
         val sorted = resultsToReturn.sortedWith(
             compareBy<OnlineRecording> { recording ->
-                // 优先返回有封面的
                 if (recording.coverArtUrl.isNullOrBlank()) 1 else 0
             }.thenBy { recording ->
-                // 然后按用户设置的源优先级
                 sourcePriorityIndex(recording.source, priority)
             }
         )
@@ -1718,48 +836,33 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         return applyLimit(sorted, limit)
     }
 
-    /**
-     * 宽松的标题匹配（用于封面搜索）
-     * 支持：
-     * 1. 包含匹配（query包含在result中，或反之）
-     * 2. 移除括号后的匹配
-     * 3. 空格差异匹配
-     * 4. 简繁体兼容
-     * 5. 对于太短的歌名（<=3字符），使用更宽松的匹配
-     */
     private fun matchesTitleFlexible(queryTitle: String, resultTitle: String): Boolean {
         if (queryTitle.isBlank() || resultTitle.isBlank()) return false
 
         val normalizedQuery = queryTitle.trim()
         val normalizedResult = resultTitle.trim()
 
-        // 完全匹配（不区分大小写）
         if (normalizedResult.equals(normalizedQuery, ignoreCase = true)) {
             return true
         }
 
-        // 对于短歌名（1-3个字符），使用非常宽松的匹配：只要包含即可
         if (normalizedQuery.length <= 3) {
             return normalizedResult.contains(normalizedQuery, ignoreCase = true) ||
                    normalizedQuery.contains(normalizedResult, ignoreCase = true)
         }
 
-        // 移除括号及其内容后的匹配
         val queryNoBrackets = normalizedQuery.removeBracketContent()
         val resultNoBrackets = normalizedResult.removeBracketContent()
 
-        // 括号移除后完全匹配
         if (resultNoBrackets.equals(queryNoBrackets, ignoreCase = true)) {
             return true
         }
 
-        // 包含匹配（不区分大小写）- 双向检查
         if (resultNoBrackets.contains(queryNoBrackets, ignoreCase = true) ||
             queryNoBrackets.contains(resultNoBrackets, ignoreCase = true)) {
             return true
         }
 
-        // 移除空格后匹配
         val queryNoSpaces = queryNoBrackets.replace(" ", "")
         val resultNoSpaces = resultNoBrackets.replace(" ", "")
         if (resultNoSpaces.contains(queryNoSpaces, ignoreCase = true) ||
@@ -1767,7 +870,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             return true
         }
 
-        // 简繁体中文兼容
         val querySimplified = queryNoBrackets.toSimplifiedChinese()
         val resultSimplified = resultNoBrackets.toSimplifiedChinese()
         if (resultSimplified.contains(querySimplified) ||
@@ -1775,31 +877,21 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             return true
         }
 
-        // 简繁体 + 移除空格
         val querySimplifiedNoSpaces = querySimplified.replace(" ", "")
         val resultSimplifiedNoSpaces = resultSimplified.replace(" ", "")
         return resultSimplifiedNoSpaces.contains(querySimplifiedNoSpaces) ||
                querySimplifiedNoSpaces.contains(resultSimplifiedNoSpaces)
     }
 
-    /**
-     * 歌曲名匹配：移除括号后检查是否包含，支持空格差异和简繁体兼容
-     * 例如：查询 "你好（live）" 可以匹配 "你好"、"你好 (Live)"、"你好 live"
-     * 例如：查询 "你好" 可以匹配 "你好（live）"、"你好"、"Hello 你好"
-     * 例如：查询 "MySong" 可以匹配 "My Song"、"My Song (Live)"
-     */
     private fun matchesTitle(queryTitle: String, resultTitle: String): Boolean {
-        // 移除括号及其内容进行比较
         val normalizedQuery = queryTitle.removeBracketContent()
         val normalizedResult = resultTitle.removeBracketContent()
 
-        // 检查是否包含（不区分大小写）
         if (normalizedResult.contains(normalizedQuery, ignoreCase = true) ||
             normalizedQuery.contains(normalizedResult, ignoreCase = true)) {
             return true
         }
 
-        // 新增：移除空格后匹配（处理 "MySong" ↔ "My Song" 的差异）
         val queryNoSpaces = normalizedQuery.replace(" ", "")
         val resultNoSpaces = normalizedResult.replace(" ", "")
         if (queryNoSpaces.contains(resultNoSpaces, ignoreCase = true) ||
@@ -1807,40 +899,28 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             return true
         }
 
-        // 简繁体中文兼容
         val simplifiedQuery = normalizedQuery.toSimplifiedChinese()
         val simplifiedResult = normalizedResult.toSimplifiedChinese()
 
-        // 简繁体匹配
         if (simplifiedResult.contains(simplifiedQuery) || simplifiedQuery.contains(simplifiedResult)) {
             return true
         }
 
-        // 简繁体 + 移除空格匹配
         val simplifiedQueryNoSpaces = simplifiedQuery.replace(" ", "")
         val simplifiedResultNoSpaces = simplifiedResult.replace(" ", "")
         return simplifiedResultNoSpaces.contains(simplifiedQueryNoSpaces) ||
                simplifiedQueryNoSpaces.contains(simplifiedResultNoSpaces)
     }
 
-    /**
-     * 移除字符串中的括号及其内容
-     * 例如："你好（live）" -> "你好"
-     * 例如："Hello (Remastered)" -> "Hello"
-     */
     private fun String.removeBracketContent(): String {
         return this
-            .replace(Regex("\\([^)]*\\)"), "")  // 移除 ()
-            .replace(Regex("\\[[^]]*\\]"), "")  // 移除 []
-            .replace(Regex("\\{[^}]*\\}"), "") // 移除 {}
-            .replace(Regex("（[^）]*）"), "")      // 移除中文括号（）
+            .replace(Regex("\\([^)]*\\)"), "")
+            .replace(Regex("\\[[^]]*\\]"), "")
+            .replace(Regex("\\{[^}]*\\}"), "")
+            .replace(Regex("（[^）]*）"), "")
             .trim()
     }
 
-
-    /**
-     * 歌手名匹配：宽松匹配（包含匹配，不区分大小写，简繁体兼容）
-     */
     private fun matchesArtist(queryArtist: String, resultArtist: String): Boolean {
         val normalizedQuery = queryArtist.lowercase().trim()
         val normalizedResult = resultArtist.lowercase().trim()
@@ -1860,12 +940,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             val transliterator = Transliterator.getInstance("Traditional-Simplified")
             transliterator.transliterate(this)
         } catch (e: Exception) {
-            // Fallback: return original if ICU4J fails
             Timber.w(TAG, "ICU4J conversion failed: ${e.message}")
             this
         }
     }
-
 
     private suspend fun getOnlineSourceSettings(): OnlineSourceSettings {
         return OnlineSourceSettings(
@@ -1915,10 +993,6 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         val requestLimit: Int
             get() = if (searchLimit <= 0) 200 else searchLimit
 
-        /**
-         * Get the effective search limit for a specific source.
-         * Per-source limit takes precedence if set (> 0), otherwise falls back to global limit.
-         */
         fun getSourceLimit(source: String): Int {
             val perSourceLimit = when (source) {
                 "MusicBrainz" -> searchLimitMusicBrainz
@@ -1947,70 +1021,5 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         }
         val index = priority.indexOf(key)
         return if (index >= 0) index else Int.MAX_VALUE
-    }
-
-    private fun normalizeCoverUrl(url: String?): String? {
-        val trimmed = url?.trim().takeUnless { it.isNullOrEmpty() } ?: return null
-        return if (trimmed.startsWith("http://", ignoreCase = true)) {
-            "https://${trimmed.removePrefix("http://")}"
-        } else {
-            trimmed
-        }
-    }
-
-    private fun buildQQCoverUrl(
-        albumMid: String?,
-        rawCoverUrl: String?,
-        fallbackId: String?
-    ): String? {
-        // Handle null or blank values
-        val raw = rawCoverUrl?.takeIf { it.isNotBlank() }
-        val normalizedRaw = normalizeCoverUrl(raw)
-        if (!normalizedRaw.isNullOrBlank()) return normalizedRaw
-
-        val mid = albumMid?.trim().orEmpty()
-        if (mid.isNotBlank()) {
-            return "https://y.gtimg.cn/music/photo_new/T002R500x500M000${mid}.jpg"
-        }
-
-        val id = fallbackId?.trim().orEmpty()
-        if (id.isNotBlank()) {
-            return "https://y.gtimg.cn/music/photo_new/T002R500x500M000${id}.jpg"
-        }
-        return null
-    }
-
-    /**
-     * Converts technical SSL/network errors to user-friendly messages.
-     */
-    private fun Throwable.toUserFriendlyError(): String {
-        val message = this.message ?: "Unknown error"
-        
-        // SSL certificate chain validation failed
-        if (this is SSLException || 
-            message.contains("chain validation failed", ignoreCase = true) ||
-            message.contains("SSL", ignoreCase = true) &&
-            (message.contains("validation", ignoreCase = true) || 
-             message.contains("certificate", ignoreCase = true))
-        ) {
-            return "网络连接失败：SSL 证书验证错误。请检查设备日期/时间设置，或联系网络管理员。"
-        }
-        
-        // Unknown host / DNS error
-        if (this is UnknownHostException || message.contains("Unable to resolve host", ignoreCase = true)) {
-            return "网络连接失败：无法解析服务器地址。请检查网络连接。"
-        }
-        
-        // Connection timeout
-        if (message.contains("timeout", ignoreCase = true)) {
-            return "网络连接超时：请检查网络连接后重试。"
-        }
-        
-        // Connection refused
-        if (message.contains("Connection refused", ignoreCase = true)) {
-            return "网络连接被拒绝：请稍后重试。"
-        }
-        
-        return message
     }
 }

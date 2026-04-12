@@ -1,7 +1,7 @@
 package com.voxly.data.remote.itunes
 
-import com.voxly.data.helper.SearchQueryBuilder
-import com.voxly.data.mapper.OnlineRecordingMapper
+import com.voxly.data.remote.SearchQueryBuilder
+import com.voxly.data.remote.mapper.OnlineRecordingMapper
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.remote.downloadImageBytes
 import com.voxly.domain.repository.*

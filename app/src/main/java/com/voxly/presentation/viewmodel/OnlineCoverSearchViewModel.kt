@@ -30,7 +30,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
-import com.voxly.data.repository.OnlineSourceResult
+import com.voxly.domain.repository.OnlineSourceResult
 import timber.log.Timber
 import java.io.File
 
