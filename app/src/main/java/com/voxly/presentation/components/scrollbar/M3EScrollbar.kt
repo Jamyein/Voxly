@@ -85,7 +85,6 @@ fun M3EScrollbar(
     var containerHeight by remember { mutableFloatStateOf(0f) }
     var isVisible by remember { mutableStateOf(false) }
     var lastHapticIndex by remember { mutableIntStateOf(-1) }
-    var lastDragOffset by remember { mutableFloatStateOf(0f) }
 
     // Direct access to state properties - no redundant derivedStateOf wrapping
     // Note: These are already derivedStateOf in ScrollbarState implementations
@@ -267,7 +266,6 @@ fun M3EScrollbar(
                         onDragStart = { offset ->
                             isDragging = true
                             dragY = (scrollFraction * maxThumbOffset).coerceIn(0f, maxThumbOffset)
-                            lastDragOffset = scrollFraction * scrollRange
                             velocityTracker.resetTracking()
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         },
@@ -290,22 +288,17 @@ fun M3EScrollbar(
                             }
 
                             val targetOffset = (fraction * scrollRange).toInt()
-                            val delta = targetOffset - lastDragOffset
-                            if (delta != 0f) {
-                                when (val s = state) {
-                                    is LazyListScrollbarState -> {
-                                        coroutineScope.launch { s.scrollByDelta(delta) }
-                                    }
-                                    is LazyGridScrollbarState -> {
-                                        coroutineScope.launch { s.scrollByDelta(delta) }
-                                    }
+                            when (val s = state) {
+                                is LazyListScrollbarState -> {
+                                    coroutineScope.launch { s.scrollToOffset(targetOffset) }
                                 }
-                                lastDragOffset = targetOffset.toFloat()
+                                is LazyGridScrollbarState -> {
+                                    coroutineScope.launch { s.scrollToOffset(targetOffset) }
+                                }
                             }
                         },
                         onDragEnd = {
                             isDragging = false
-                            lastDragOffset = 0f
                             lastHapticIndex = -1
                             val velocity = velocityTracker.calculateVelocity().y
                             if (abs(velocity) > configState.value.velocityThreshold) {
@@ -316,7 +309,6 @@ fun M3EScrollbar(
                         },
                         onDragCancel = {
                             isDragging = false
-                            lastDragOffset = 0f
                             lastHapticIndex = -1
                         }
                     )

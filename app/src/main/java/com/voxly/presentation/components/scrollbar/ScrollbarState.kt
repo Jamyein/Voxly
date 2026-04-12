@@ -5,6 +5,8 @@ import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import kotlin.math.max
 
 /**
@@ -49,42 +51,52 @@ class LazyListScrollbarState(
 
     private val layoutInfo get() = listState.layoutInfo
 
-    override val contentSize: Int by derivedStateOf {
+    private var _contentSize by mutableIntStateOf(0)
+    private var _avgItemSize by mutableIntStateOf(100)
+    private var isInitialized = false
+
+    override val contentSize: Int
+        get() {
+            if (!isInitialized && layoutInfo.totalItemsCount > 0) {
+                _avgItemSize = computeAvgItemSize()
+                _contentSize = computeContentSize()
+                isInitialized = true
+            }
+            return _contentSize
+        }
+
+    private fun computeContentSize(): Int {
         val info = layoutInfo
-        if (info.totalItemsCount == 0) return@derivedStateOf 0
-        // Use viewportStartOffset as the actual scroll offset when at rest at index 0
-        // This is more accurate than avgItemSize * totalItems
+        if (info.totalItemsCount == 0) return 0
         val totalItemsMinus1 = (info.totalItemsCount - 1).coerceAtLeast(0)
-        if (totalItemsMinus1 == 0) return@derivedStateOf info.viewportEndOffset
-        // Estimate: total scrollable space = lastVisibleItem offset + size - firstVisible offset + remaining items
+        if (totalItemsMinus1 == 0) return info.viewportEndOffset
         val lastItem = info.visibleItemsInfo.lastOrNull()
         val firstItem = info.visibleItemsInfo.firstOrNull()
         if (lastItem != null && firstItem != null) {
             val visibleRange = lastItem.offset + lastItem.size - firstItem.offset
             val visibleCount = info.visibleItemsInfo.size
             if (visibleCount > 0) {
-                val avgItemSize = visibleRange / visibleCount
+                val avgSize = visibleRange / visibleCount
                 val remainingItems = info.totalItemsCount - info.visibleItemsInfo.size
-                (lastItem.offset + lastItem.size) + (remainingItems * avgItemSize)
+                return (lastItem.offset + lastItem.size) + (remainingItems * avgSize)
             } else {
-                avgItemSize * info.totalItemsCount
+                return _avgItemSize * info.totalItemsCount
             }
         } else {
-            avgItemSize * info.totalItemsCount
+            return _avgItemSize * info.totalItemsCount
         }
     }
 
-    private val avgItemSize: Int by derivedStateOf {
+    private fun computeAvgItemSize(): Int {
         val info = layoutInfo
         val visibleItems = info.visibleItemsInfo
-        if (visibleItems.isEmpty()) return@derivedStateOf 100
-        (visibleItems.last().offset + visibleItems.last().size - visibleItems.first().offset) / visibleItems.size
+        if (visibleItems.isEmpty()) return 100
+        return (visibleItems.last().offset + visibleItems.last().size - visibleItems.first().offset) / visibleItems.size
     }
 
     override val scrollOffset: Int by derivedStateOf {
         val info = layoutInfo
         if (info.totalItemsCount == 0) return@derivedStateOf 0
-        // Use viewportStartOffset directly - it's the actual scroll position
         info.viewportStartOffset
     }
 
@@ -102,15 +114,7 @@ class LazyListScrollbarState(
     }
 
     override val currentItemIndex: Int by derivedStateOf {
-        val totalItems = layoutInfo.totalItemsCount
-        if (totalItems <= 0) return@derivedStateOf 0
-
-        val scrollRange = max(1, contentSize - viewportSize)
-        val progress = if (scrollRange > 0) {
-            scrollOffset.toFloat() / scrollRange
-        } else 0f
-
-        (progress * (totalItems - 1)).toInt().coerceIn(0, totalItems - 1)
+        listState.firstVisibleItemIndex
     }
 
     suspend fun scrollToItem(index: Int) {
@@ -155,25 +159,32 @@ class LazyGridScrollbarState(
 
     private val layoutInfo get() = gridState.layoutInfo
 
-    private val gridMetrics: GridMetrics by derivedStateOf {
+    private var _contentSize by mutableIntStateOf(0)
+    private var isInitialized = false
+
+    override val contentSize: Int
+        get() {
+            if (!isInitialized && layoutInfo.totalItemsCount > 0) {
+                _contentSize = computeContentSize()
+                isInitialized = true
+            }
+            return _contentSize
+        }
+
+    private fun computeContentSize(): Int {
         val info = layoutInfo
         val visibleItems = info.visibleItemsInfo
-        if (visibleItems.isEmpty()) {
-            return@derivedStateOf GridMetrics(rowHeight = 200, spanCount = 1, contentSize = 0)
-        }
+        if (visibleItems.isEmpty()) return 0
 
         val itemsByRow = visibleItems.groupBy { it.row }
         val sortedRows = itemsByRow.keys.sorted()
         val spanCount = itemsByRow.values.maxOfOrNull { it.size } ?: 1
 
-        // Calculate row height from all visible rows
         val rowHeights = sortedRows.mapNotNull { row ->
             val itemsInRow = itemsByRow[row]
             if (itemsInRow != null && itemsInRow.size >= spanCount) {
-                // All items in this row have the same y offset and height
                 itemsInRow.firstOrNull()?.let { it.size.height }
             } else if (itemsInRow != null && itemsInRow.size == 1) {
-                // Single item in row - need to estimate row height
                 itemsInRow.firstOrNull()?.size?.height
             } else null
         }
@@ -187,19 +198,12 @@ class LazyGridScrollbarState(
         }
 
         val totalRows = (info.totalItemsCount + spanCount - 1) / spanCount
-        val estimatedContentSize = totalRows * rowHeight
-
-        GridMetrics(rowHeight = rowHeight, spanCount = spanCount, contentSize = estimatedContentSize)
-    }
-
-    override val contentSize: Int by derivedStateOf {
-        gridMetrics.contentSize
+        return totalRows * rowHeight
     }
 
     override val scrollOffset: Int by derivedStateOf {
         val info = layoutInfo
         if (info.totalItemsCount == 0) return@derivedStateOf 0
-        // Use viewportStartOffset for actual scroll position - it's maintained by LazyList
         info.viewportStartOffset
     }
 
@@ -217,15 +221,7 @@ class LazyGridScrollbarState(
     }
 
     override val currentItemIndex: Int by derivedStateOf {
-        val totalItems = layoutInfo.totalItemsCount
-        if (totalItems <= 0) return@derivedStateOf 0
-
-        val scrollRange = max(1, contentSize - viewportSize)
-        val progress = if (scrollRange > 0) {
-            scrollOffset.toFloat() / scrollRange
-        } else 0f
-
-        (progress * (totalItems - 1)).toInt().coerceIn(0, totalItems - 1)
+        gridState.firstVisibleItemIndex
     }
 
     suspend fun scrollToItem(index: Int) {
@@ -255,6 +251,4 @@ class LazyGridScrollbarState(
             scrollBy(velocity / 5f)
         }
     }
-
-    private data class GridMetrics(val rowHeight: Int, val spanCount: Int, val contentSize: Int)
 }
