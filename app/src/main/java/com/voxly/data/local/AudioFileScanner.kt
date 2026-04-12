@@ -2,6 +2,7 @@ package com.voxly.data.local
 
 import android.content.Context
 import com.voxly.core.util.SortUtil
+import com.voxly.data.local.cache.AlbumInfoEntity
 import com.voxly.data.local.cache.AlbumInfoManager
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.scanner.AlbumArtistAggregator
@@ -84,10 +85,12 @@ class AudioFileScanner @Inject constructor(
             com.voxly.domain.model.parseMediaStoreTrackField(value)
     }
 
-    // Delegate albums/artists to aggregator
+    // Delegate albums/artists/filteredFiles to aggregator
     val albums: StateFlow<List<AlbumGroup>> = albumArtistAggregator.albums
+    val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = albumArtistAggregator.albumsBySort
     val artists: StateFlow<List<ArtistGroup>> = albumArtistAggregator.artists
     val filteredFiles: StateFlow<List<AudioFile>> = albumArtistAggregator.filteredFiles
+    val albumInfoMap: StateFlow<Map<String, AlbumInfoEntity>> = albumArtistAggregator.albumInfoMap
 
     // Raw cached audio files from database
     val cachedAudioFilesFlow: Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()

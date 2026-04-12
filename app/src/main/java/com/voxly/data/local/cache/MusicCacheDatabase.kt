@@ -22,9 +22,10 @@ import javax.inject.Singleton
         AlbumThumbnailEntity::class,
         RecentEditEntity::class,
         AlbumArtFileCacheEntity::class,
-        AlbumInfoEntity::class  // Added for album year and audio info caching
+        AlbumInfoEntity::class,
+        AlbumSortOrderEntity::class  // Added for album sort order caching
     ],
-    version = 6,  // Bumped from 5 to 6 for artistId, mimeType, dateAdded columns
+    version = 7,  // Bumped from 6 to 7 for AlbumSortOrderEntity
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -33,7 +34,8 @@ abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun albumThumbnailDao(): AlbumThumbnailDao
     abstract fun recentEditDao(): RecentEditDao
     abstract fun albumArtFileCacheDao(): AlbumArtFileCacheDao
-    abstract fun albumInfoDao(): AlbumInfoDao  // New DAO for album info caching
+    abstract fun albumInfoDao(): AlbumInfoDao
+    abstract fun albumSortOrderDao(): AlbumSortOrderDao
 
     companion object {
         const val DATABASE_NAME = "music_cache.db"
@@ -163,6 +165,19 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_artistId` ON `cached_audio_files` (`artistId`)")
                     }
                 })
+                // Migration from version 6 to 7: adds album_sort_order table for cached sort orders
+                .addMigrations(object : Migration(6, 7) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `album_sort_order` (
+                                `sortOption` TEXT PRIMARY KEY NOT NULL,
+                                `albumIds` TEXT NOT NULL,
+                                `contentHash` TEXT NOT NULL,
+                                `lastUpdatedAt` INTEGER NOT NULL
+                            )
+                        """)
+                    }
+                })
 
             val newInstance = builder.build()
             prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
@@ -187,6 +202,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
     companion object {
         private const val PREFS_NAME = "music_cache_meta"
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
-        private const val CURRENT_DATA_FORMAT_VERSION = 6  // Updated for artistId, mimeType, dateAdded
+        private const val CURRENT_DATA_FORMAT_VERSION = 7  // Updated for AlbumSortOrderEntity
     }
 }

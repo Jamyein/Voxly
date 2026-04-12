@@ -328,4 +328,35 @@ class AlbumInfoManager @Inject constructor(
         val year: String?,
         val years: List<String>
     )
+
+    private val albumSortOrderDao: AlbumSortOrderDao
+        get() = databaseProvider.getDatabase().albumSortOrderDao()
+
+    /**
+     * Get cached sort order for a sort option.
+     * Returns null if not cached.
+     */
+    suspend fun getSortOrder(sortOption: String): AlbumSortOrderEntity? {
+        return albumSortOrderDao.getSortOrder(sortOption)
+    }
+
+    /**
+     * Save sort order to cache.
+     */
+    suspend fun saveSortOrder(sortOption: String, albumIds: List<String>, contentHash: String) {
+        val entity = AlbumSortOrderEntity(
+            sortOption = sortOption,
+            albumIds = albumIds.joinToString(","),
+            contentHash = contentHash,
+            lastUpdatedAt = System.currentTimeMillis()
+        )
+        albumSortOrderDao.insertOrUpdate(entity)
+    }
+
+    /**
+     * Parse album IDs from cached sort order string.
+     */
+    fun parseAlbumIds(albumIdsString: String): List<String> {
+        return if (albumIdsString.isBlank()) emptyList() else albumIdsString.split(",")
+    }
 }

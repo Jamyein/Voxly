@@ -3,16 +3,18 @@ package com.voxly.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.AlbumSortOption
 import com.voxly.data.local.UiStateDataStore
 import com.voxly.data.local.cache.AlbumInfoEntity
-import com.voxly.data.local.cache.AlbumInfoManager
 import com.voxly.domain.model.AlbumGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.LinkedHashMap
@@ -22,24 +24,41 @@ import javax.inject.Inject
  * Thin ViewModel layer for AlbumScreen.
  * Uses AudioFileScanner directly for data (same singleton instance as LibraryViewModel).
  * The repeatOnLifecycle bug was fixed by removing it - screens passively collect data.
+ * 
+ * Sorting: Albums are pre-sorted by AlbumArtistAggregator and cached in Room.
+ * AlbumViewModel selects the correct pre-sorted list based on current sort option.
  */
 @HiltViewModel
 class AlbumViewModel @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
-    private val uiStateDataStore: UiStateDataStore,
-    private val albumInfoManager: AlbumInfoManager
+    private val uiStateDataStore: UiStateDataStore
 ) : ViewModel() {
 
-    // Directly use AudioFileScanner's albums - same singleton instance as LibraryViewModel
-    val albums: StateFlow<List<AlbumGroup>> = audioFileScanner.albums
+    // Albums sorted by different options - pre-computed by aggregator
+    private val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = audioFileScanner.albumsBySort
+    val albumInfoMap: StateFlow<Map<String, AlbumInfoEntity>> = audioFileScanner.albumInfoMap
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
-    private val _albumInfoMap = MutableStateFlow<Map<String, AlbumInfoEntity>>(emptyMap())
-    val albumInfoMap: StateFlow<Map<String, AlbumInfoEntity>> = _albumInfoMap.asStateFlow()
-
     val sortOption = uiStateDataStore.albumSortOption
+
+    // Pre-sorted albums based on current sort option
+    val sortedAlbums: StateFlow<List<AlbumGroup>> = combine(
+        albumsBySort,
+        sortOption
+    ) { sortMap, currentOption ->
+        try {
+            val option = AlbumSortOption.valueOf(currentOption)
+            sortMap[option] ?: sortMap[AlbumSortOption.NAME_ASC] ?: emptyList()
+        } catch (e: IllegalArgumentException) {
+            sortMap[AlbumSortOption.NAME_ASC] ?: emptyList()
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = kotlinx.coroutines.flow.SharingStarted.WhileSubscribed(5000),
+        initialValue = emptyList()
+    )
 
     private var refreshJob: Job? = null
 
@@ -51,7 +70,6 @@ class AlbumViewModel @Inject constructor(
     }
 
     init {
-        preloadAlbumInfo()
         refresh(forceRefresh = false)
     }
 
@@ -96,27 +114,6 @@ class AlbumViewModel @Inject constructor(
     fun setSortOption(option: String) {
         viewModelScope.launch {
             uiStateDataStore.setAlbumSortOption(option)
-        }
-    }
-
-    private fun preloadAlbumInfo() {
-        viewModelScope.launch {
-            var lastKeySignature: String? = null
-            audioFileScanner.albums.collectLatest { albumGroups ->
-                val albumKeys = albumGroups
-                    .map { it.name to it.albumArtist }
-                    .distinct()
-
-                val newSignature = albumKeys.joinToString("|") { key ->
-                    "${key.first}|${key.second.orEmpty()}"
-                }
-
-                if (newSignature == lastKeySignature) return@collectLatest
-                lastKeySignature = newSignature
-
-                val cachedMap = albumInfoManager.preloadAlbumInfo(albumKeys)
-                _albumInfoMap.value = cachedMap
-            }
         }
     }
 }

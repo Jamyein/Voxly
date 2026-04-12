@@ -96,7 +96,7 @@ internal fun AlbumScreenContent(
     onAlbumClick: (AlbumGroup) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val albums by viewModel.albums.collectAsState()
+    val albums by viewModel.sortedAlbums.collectAsState()
     val isRefreshing by viewModel.isRefreshing.collectAsState()
     val sortOption by viewModel.sortOption.collectAsState(initial = AlbumSortOption.NAME_ASC.name)
     val albumInfoMap by viewModel.albumInfoMap.collectAsState()
@@ -109,10 +109,6 @@ internal fun AlbumScreenContent(
         } catch (e: IllegalArgumentException) {
             AlbumSortOption.NAME_ASC
         }
-    }
-
-    val sortedAlbums = remember(albums, currentSortOption, albumInfoMap) {
-        applyAlbumSortWithCache(albums, currentSortOption, albumInfoMap)
     }
 
     // Get saved scroll position
@@ -176,7 +172,7 @@ internal fun AlbumScreenContent(
             } else {
                 key(scrollToTopTrigger) {
                     AlbumTabContent(
-                        albums = sortedAlbums,
+                        albums = albums,
                         onAlbumClick = onAlbumClick,
                         scrollToTopTrigger = scrollToTopTrigger,
                         sortOption = currentSortOption,
