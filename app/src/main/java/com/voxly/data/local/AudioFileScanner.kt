@@ -148,6 +148,7 @@ class AudioFileScanner @Inject constructor(
                         kotlinx.coroutines.delay(50) // Debounce: wait 50ms to batch rapid updates
                     }
                     if (coroutineContext.isActive) {
+                        Timber.d("$TAG: updateAlbumsAndArtistsFromFiles with ${files.size} files")
                         albumArtistAggregator.updateAlbumsAndArtistsFromFiles(files, filterEngine)
                     }
                 }

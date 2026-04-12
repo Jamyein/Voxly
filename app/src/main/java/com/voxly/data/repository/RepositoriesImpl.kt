@@ -311,7 +311,15 @@ class AudioRepositoryImpl @Inject constructor(
         withContext(Dispatchers.IO) {
             try {
                 metadataProcessor.updateMetadata(filePath, metadata).fold(
-                    onSuccess = { Result.success(Unit) },
+                    onSuccess = {
+                        // Re-read the updated file and sync to cache
+                        // This ensures Room has the latest metadata immediately
+                        val updatedFile = getAudioFile(filePath, includeAlbumArt = false).getOrNull()
+                        if (updatedFile != null) {
+                            libraryCache.syncFileToCache(updatedFile)
+                        }
+                        Result.success(Unit)
+                    },
                     onFailure = { cause ->
                         Result.failure(
                             Exception("Failed to update metadata for: $filePath. ${cause.message}", cause)
@@ -341,7 +349,14 @@ class AudioRepositoryImpl @Inject constructor(
                 if (currentMetadata != null) {
                     val updatedMetadata = currentMetadata.copy(albumArt = albumArtBytes)
                     metadataProcessor.updateMetadata(filePath, updatedMetadata).fold(
-                        onSuccess = { Result.success(Unit) },
+                        onSuccess = {
+                            // Re-read the updated file and sync to cache
+                            val updatedFile = getAudioFile(filePath, includeAlbumArt = true).getOrNull()
+                            if (updatedFile != null) {
+                                libraryCache.syncFileToCache(updatedFile)
+                            }
+                            Result.success(Unit)
+                        },
                         onFailure = { cause ->
                             Result.failure(
                                 Exception("Failed to set album art for: $filePath. ${cause.message}", cause)
@@ -363,7 +378,14 @@ class AudioRepositoryImpl @Inject constructor(
                 if (currentMetadata != null) {
                     val updatedMetadata = currentMetadata.copy(albumArt = null)
                     metadataProcessor.updateMetadata(filePath, updatedMetadata).fold(
-                        onSuccess = { Result.success(Unit) },
+                        onSuccess = {
+                            // Re-read the updated file and sync to cache
+                            val updatedFile = getAudioFile(filePath, includeAlbumArt = true).getOrNull()
+                            if (updatedFile != null) {
+                                libraryCache.syncFileToCache(updatedFile)
+                            }
+                            Result.success(Unit)
+                        },
                         onFailure = { cause ->
                             Result.failure(
                                 Exception("Failed to remove album art from: $filePath. ${cause.message}", cause)

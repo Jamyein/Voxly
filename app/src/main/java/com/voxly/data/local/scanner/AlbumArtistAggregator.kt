@@ -102,6 +102,7 @@ class AlbumArtistAggregator @Inject constructor(
         }.sortedBy { SortUtil.toSortablePinyin(it.name) }
 
         _albums.value = albumsList
+        timber.log.Timber.d("AlbumArtistAggregator: Updated albums count = ${albumsList.size}")
 
         // Update album info cache
         if (albumsForCache.isNotEmpty()) {
