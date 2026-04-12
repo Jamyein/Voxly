@@ -1,4 +1,4 @@
-package com.voxly.presentation.components.scrollbar
+package com.voxly.core.util
 
 /**
  * Get the first letter for indexing purposes.
