@@ -192,7 +192,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
         loadAudioFile()
         viewModelScope.launch {
             pendingMetadataHolder.pending.collect { pendingMap ->
-                if (pendingMap.containsKey(filePath)) {
+                if (pendingMap.containsKey(filePath) && _editedMetadata.value != null) {
                     tryApplyPendingOnlineMetadata()
                 }
             }
@@ -1079,7 +1079,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     private fun applyOnlineMetadataInternal(metadata: AudioMetadata) {
         val currentMetadata = _editedMetadata.value ?: run {
-            Logger.w("applyOnlineMetadata: _editedMetadata is null, cannot apply", "MetadataEditor")
+            Logger.w("applyOnlineMetadata: _editedMetadata is null, re-putting pending for later", "MetadataEditor")
+            pendingMetadataHolder.put(filePath, metadata)
             return
         }
         Logger.d("applyOnlineMetadata: current title=${currentMetadata.title}, new title=${metadata.title}", "MetadataEditor")
@@ -1131,7 +1132,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
         
         _editedMetadata.value = updatedMetadata
         _hasUnsavedChanges.value = true
-        _modifiedFields.value = _modifiedFields.value + modifiedFields
+        if (modifiedFields.isNotEmpty()) {
+            _modifiedFields.value = _modifiedFields.value + modifiedFields
+        }
 
         // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
         searchSeedHolder.updateSeed(
