@@ -1,9 +1,13 @@
 package com.voxly.data.local.scanner
 
 import com.voxly.core.util.SortUtil
+import com.voxly.data.local.AlbumSortOption
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.UiStateDataStore
+import com.voxly.data.local.cache.AlbumInfoEntity
 import com.voxly.data.local.cache.AlbumInfoManager
+import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -30,16 +34,13 @@ import javax.inject.Singleton
 class AlbumArtistAggregator @Inject constructor(
     private val libraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
+    private val uiStateDataStore: UiStateDataStore,
     private val albumInfoManager: AlbumInfoManager,
     private val mediaStoreDataSource: MediaStoreDataSource,
     private val filterEngine: FilterEngine,
+    private val safWriteAccessService: SafWriteAccessService,
     @Named("ApplicationScope") private val applicationScope: CoroutineScope
 ) {
-    private data class AlbumAggregationKey(
-        val album: String,
-        val albumArtist: String
-    )
-
     // Albums derived from cached audio files - auto-updated when cache changes
     private val _albums = MutableStateFlow<List<AlbumGroup>>(emptyList())
     val albums: StateFlow<List<AlbumGroup>> = _albums.asStateFlow()
@@ -51,6 +52,14 @@ class AlbumArtistAggregator @Inject constructor(
     // Filtered audio files - exposed for LibraryViewModel and other consumers
     private val _filteredFiles = MutableStateFlow<List<AudioFile>>(emptyList())
     val filteredFiles: StateFlow<List<AudioFile>> = _filteredFiles.asStateFlow()
+
+    // Album info map - updated internally when albums change
+    private val _albumInfoMap = MutableStateFlow<Map<String, AlbumInfoEntity>>(emptyMap())
+    val albumInfoMap: StateFlow<Map<String, AlbumInfoEntity>> = _albumInfoMap.asStateFlow()
+
+    // Albums sorted by different sort options
+    private val _albumsBySort = MutableStateFlow<Map<AlbumSortOption, List<AlbumGroup>>>(emptyMap())
+    val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = _albumsBySort.asStateFlow()
 
     init {
         applicationScope.launch(Dispatchers.Default) {
@@ -68,13 +77,20 @@ class AlbumArtistAggregator @Inject constructor(
      * Applies whitelist/blacklist filtering before aggregation.
      */
     private suspend fun updateAlbumsAndArtistsFromFilesInternal(files: List<AudioFile>) {
-        // Load current filter settings
         val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
         val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
         val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
+        val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
+
         val whitelistUris = settingsDataStore.selectedDirectoryUris.first()
         val blacklistUris = settingsDataStore.blacklistDirectoryUris.first()
-        val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
+
+        val whitelistPaths = whitelistUris.mapNotNull { uri ->
+            safWriteAccessService.mapTreeUriToPath(android.net.Uri.parse(uri))
+        }
+        val blacklistPaths = blacklistUris.mapNotNull { uri ->
+            safWriteAccessService.mapTreeUriToPath(android.net.Uri.parse(uri))
+        }
 
         val filtered = filterEngine.applyFilters(
             files,
@@ -82,8 +98,8 @@ class AlbumArtistAggregator @Inject constructor(
                 whitelistEnabled = whitelistEnabled,
                 blacklistEnabled = blacklistEnabled,
                 minDurationEnabled = minDurationEnabled,
-                whitelistUris = whitelistUris,
-                blacklistUris = blacklistUris,
+                whitelistUris = whitelistPaths,
+                blacklistUris = blacklistPaths,
                 minDurationMs = minDurationMs
             )
         )
@@ -94,32 +110,60 @@ class AlbumArtistAggregator @Inject constructor(
 
     /**
      * Derives albums from audio files.
+     * Groups by albumId if available, otherwise falls back to (albumName, albumArtist) string.
      */
     private suspend fun updateAlbumsFromFiles(files: List<AudioFile>) {
-        val albumsMap = files
-            .filter { it.metadata.album?.isNotBlank() == true }
-            .groupBy { file ->
-                AlbumAggregationKey(
-                    album = file.metadata.album!!,
-                    albumArtist = file.metadata.albumArtist
-                        ?.takeIf { it.isNotBlank() }
-                        ?: file.metadata.artist.orEmpty()
-                )
+        // First level: group by albumId or (albumName, albumArtist) string
+        val primaryGroups = mutableMapOf<String?, MutableList<AudioFile>>()
+        val albumIdSet = mutableSetOf<Long>()
+
+        files.forEach { file ->
+            val effectiveAlbumId = file.mediaStoreAlbumId?.takeIf { it > 0 }
+            val effectiveAlbumName = file.metadata.album?.takeIf { it.isNotBlank() }
+            val effectiveAlbumArtist = file.metadata.albumArtist?.takeIf { it.isNotBlank() }
+                ?: file.metadata.artist?.takeIf { it.isNotBlank() }
+
+            when {
+                effectiveAlbumId != null && effectiveAlbumName != null -> {
+                    primaryGroups.getOrPut("id:$effectiveAlbumId") { mutableListOf() }.add(file)
+                    albumIdSet.add(effectiveAlbumId)
+                }
+                effectiveAlbumName != null -> {
+                    val key = "str:$effectiveAlbumName|${effectiveAlbumArtist.orEmpty()}"
+                    primaryGroups.getOrPut(key) { mutableListOf() }.add(file)
+                }
             }
+        }
 
         // Build albums list and cache data in one pass
         val albumsForCache = mutableMapOf<Pair<String, String?>, List<AudioFile>>()
 
-        val albumsList = albumsMap.map { (key, albumFiles) ->
+        val albumsList = primaryGroups.map { (key, albumFiles) ->
+            val albumName: String
+            val albumArtist: String?
+
+            if (key?.startsWith("id:") == true) {
+                // albumId group - use metadata values
+                albumName = albumFiles.firstOrNull()?.metadata?.album
+                    ?: key.removePrefix("id:")
+                albumArtist = albumFiles.firstOrNull()?.metadata?.albumArtist
+                    ?: albumFiles.firstOrNull()?.metadata?.artist
+            } else {
+                // String fallback group
+                val parts = key?.removePrefix("str:")?.split("|") ?: listOf()
+                albumName = parts.firstOrNull() ?: ""
+                albumArtist = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+            }
+
             // Add to cache map (albumName, albumArtist) -> List<AudioFile>
-            albumsForCache[key.album to key.albumArtist.takeIf { it.isNotBlank() }] = albumFiles
+            albumsForCache[albumName to albumArtist?.takeIf { it.isNotBlank() }] = albumFiles
 
             val coverFile = albumFiles.firstOrNull {
                 it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
             } ?: albumFiles.firstOrNull()
             AlbumGroup(
-                name = key.album,
-                albumArtist = key.albumArtist.takeIf { it.isNotBlank() },
+                name = albumName,
+                albumArtist = albumArtist?.takeIf { it.isNotBlank() },
                 files = albumFiles.sortedBy { it.metadata.trackNumber },
                 coverPath = coverFile?.path
             )
@@ -130,8 +174,39 @@ class AlbumArtistAggregator @Inject constructor(
 
         // Update album info cache
         if (albumsForCache.isNotEmpty()) {
-            albumInfoManager.updateAlbumInfoBatch(albumsForCache)
+            val entities = albumInfoManager.updateAlbumInfoBatch(albumsForCache)
+            _albumInfoMap.value = entities.associateBy { it.id }
         }
+
+        // Compute all sort versions and cache
+        computeAndCacheSortOrders(albumsList)
+    }
+
+    private suspend fun computeAndCacheSortOrders(albumsList: List<AlbumGroup>) {
+        val albumIdsBySort = mapOf(
+            AlbumSortOption.NAME_ASC to albumsList.sortedBy { SortUtil.toSortablePinyin(it.name) },
+            AlbumSortOption.TRACK_COUNT_DESC to albumsList.sortedByDescending { it.files.size },
+            AlbumSortOption.YEAR_DESC to albumsList.sortedByDescending { album ->
+                album.files.mapNotNull { audioFile ->
+                    audioFile.metadata.year
+                        ?.let { Regex("""\d{4}""").find(it)?.value }
+                        ?.toIntOrNull()
+                }.maxOrNull() ?: Int.MIN_VALUE
+            }
+        )
+
+        val sortedAlbumsByOption = mutableMapOf<AlbumSortOption, List<AlbumGroup>>()
+        val globalContentHash = albumsList.joinToString("|") {
+            AlbumInfoEntity.generateId(it.name, it.albumArtist)
+        }.hashCode().toString()
+
+        albumIdsBySort.forEach { (sortOption, sortedAlbums) ->
+            val albumIds = sortedAlbums.map { AlbumInfoEntity.generateId(it.name, it.albumArtist) }
+            albumInfoManager.saveSortOrder(sortOption.name, albumIds, globalContentHash)
+            sortedAlbumsByOption[sortOption] = sortedAlbums
+        }
+
+        _albumsBySort.value = sortedAlbumsByOption
     }
 
     /**
