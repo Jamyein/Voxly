@@ -83,8 +83,8 @@ class AlbumArtistAggregator @Inject constructor(
         val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
         val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
 
-        val whitelistPaths = whitelistRepository.getValidWhitelistPaths().first()
-        val blacklistPaths = whitelistRepository.getValidBlacklistPaths().first()
+        val whitelistPaths = whitelistRepository.getValidWhitelistPathsOnce()
+        val blacklistPaths = whitelistRepository.getValidBlacklistPathsOnce()
 
         val filtered = filterEngine.applyFilters(
             files,

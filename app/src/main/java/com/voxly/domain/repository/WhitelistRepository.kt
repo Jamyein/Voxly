@@ -11,6 +11,12 @@ interface WhitelistRepository {
     fun getValidWhitelistPaths(): Flow<List<String>>
     
     fun getValidBlacklistPaths(): Flow<List<String>>
+
+    @Suppress("unused")
+    fun getValidWhitelistPathsOnce(): List<String>
+
+    @Suppress("unused")
+    fun getValidBlacklistPathsOnce(): List<String>
     
     suspend fun addWhitelistDirectory(uri: String, path: String)
     

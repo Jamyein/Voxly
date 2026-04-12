@@ -6,12 +6,14 @@ import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.WhitelistDirectory
 import com.voxly.domain.repository.WhitelistRepository
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -27,13 +29,40 @@ class WhitelistRepositoryImpl @Inject constructor(
     private val _blacklistDirectories = MutableStateFlow<List<WhitelistDirectory>>(emptyList())
 
     init {
+        // Synchronous initial load to avoid blocking first access
+        // This uses runBlocking only in init block - acceptable for startup
+        runBlocking(Dispatchers.IO) {
+            try {
+                val uris = settingsDataStore.selectedDirectoryUris.first()
+                _whitelistDirectories.value = uris.mapNotNull { uriString ->
+                    val path = safAccessService.mapTreeUriToPath(Uri.parse(uriString))
+                    if (path != null) WhitelistDirectory(uri = uriString, path = path)
+                    else null
+                }
+            } catch (e: Exception) {
+                // Ignore, keep empty
+            }
+        }
+        runBlocking(Dispatchers.IO) {
+            try {
+                val uris = settingsDataStore.blacklistDirectoryUris.first()
+                _blacklistDirectories.value = uris.mapNotNull { uriString ->
+                    val path = safAccessService.mapTreeUriToPath(Uri.parse(uriString))
+                    if (path != null) WhitelistDirectory(uri = uriString, path = path)
+                    else null
+                }
+            } catch (e: Exception) {
+                // Ignore, keep empty
+            }
+        }
+
+        // Then listen for changes in background
         applicationScope.launch {
             settingsDataStore.selectedDirectoryUris.collect { uris ->
                 _whitelistDirectories.value = uris.mapNotNull { uriString ->
                     val path = safAccessService.mapTreeUriToPath(Uri.parse(uriString))
-                    if (path != null) {
-                        WhitelistDirectory(uri = uriString, path = path)
-                    } else null
+                    if (path != null) WhitelistDirectory(uri = uriString, path = path)
+                    else null
                 }
             }
         }
@@ -41,9 +70,8 @@ class WhitelistRepositoryImpl @Inject constructor(
             settingsDataStore.blacklistDirectoryUris.collect { uris ->
                 _blacklistDirectories.value = uris.mapNotNull { uriString ->
                     val path = safAccessService.mapTreeUriToPath(Uri.parse(uriString))
-                    if (path != null) {
-                        WhitelistDirectory(uri = uriString, path = path)
-                    } else null
+                    if (path != null) WhitelistDirectory(uri = uriString, path = path)
+                    else null
                 }
             }
         }
@@ -60,6 +88,13 @@ class WhitelistRepositoryImpl @Inject constructor(
 
     override fun getValidBlacklistPaths(): Flow<List<String>> =
         _blacklistDirectories.map { dirs -> dirs.filter { it.isValid }.map { it.path } }
+
+    // Synchronous method for use in AlbumArtistAggregator - no suspension
+    override fun getValidWhitelistPathsOnce(): List<String> =
+        _whitelistDirectories.value.filter { it.isValid }.map { it.path }
+
+    override fun getValidBlacklistPathsOnce(): List<String> =
+        _blacklistDirectories.value.filter { it.isValid }.map { it.path }
 
     override suspend fun addWhitelistDirectory(uri: String, path: String) {
         val current = _whitelistDirectories.value.toMutableList()
