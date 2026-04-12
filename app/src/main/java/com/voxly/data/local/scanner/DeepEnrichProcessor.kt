@@ -11,6 +11,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -68,19 +69,22 @@ class DeepEnrichProcessor @Inject constructor(
     }
 
     /**
-     * Enriches multiple files in parallel.
+     * Enriches multiple files in parallel with controlled concurrency.
+     * Uses chunked processing to avoid exhausting memory with large libraries.
      */
     suspend fun enrichBatch(
         files: List<AudioFile>,
         maxConcurrency: Int = 4
     ): List<AudioFile> = coroutineScope {
-        files.map { file ->
-            async(Dispatchers.IO) {
-                val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
-                val albumName = file.metadata.album
-                enrich(file, albumArtist, albumName)
-            }
-        }.map { it.await() }
+        files.chunked(maxConcurrency).flatMap { batch ->
+            batch.map { file ->
+                async(Dispatchers.IO) {
+                    val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
+                    val albumName = file.metadata.album
+                    enrich(file, albumArtist, albumName)
+                }
+            }.awaitAll()
+        }
     }
 
     /**
