@@ -253,6 +253,10 @@ dependencies {
     implementation("androidx.room:room-ktx:2.8.4")
     ksp("androidx.room:room-compiler:2.8.4")
 
+    // Paging 3 for efficient large library handling
+    implementation("androidx.paging:paging-runtime-ktx:3.4.2")
+    implementation("androidx.paging:paging-compose:3.4.2")
+
     // Timber for logging
     implementation("com.jakewharton.timber:timber:5.0.1")
 

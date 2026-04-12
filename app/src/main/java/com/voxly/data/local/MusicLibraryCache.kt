@@ -21,6 +21,10 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
+import androidx.paging.Pager
+import androidx.paging.PagingConfig
+import androidx.paging.PagingData
+import androidx.paging.PagingSource
 
 /**
  * Room-based music library cache for optimized scanning and instant app startup.
@@ -330,5 +334,28 @@ class MusicLibraryCache @Inject constructor(
      */
     fun getAlbumArtUri(albumId: Long): Uri {
         return Uri.withAppendedPath(ALBUM_ART_URI, albumId.toString())
+    }
+    
+    // ==================== Paging Support ====================
+    
+    /**
+     * Creates a Pager for paged audio files.
+     * @param pageSize Number of items per page
+     * @param directoryPath Optional directory filter
+     */
+    fun getPagedAudioFiles(
+        pageSize: Int = 50,
+        directoryPath: String? = null
+    ): Flow<PagingData<CachedAudioFileEntity>> {
+        return Pager(
+            config = PagingConfig(
+                pageSize = pageSize,
+                enablePlaceholders = false,
+                initialLoadSize = pageSize * 2
+            ),
+            pagingSourceFactory = {
+                AudioFilePagingSource(audioFileDao, directoryPath)
+            }
+        ).flow
     }
 }

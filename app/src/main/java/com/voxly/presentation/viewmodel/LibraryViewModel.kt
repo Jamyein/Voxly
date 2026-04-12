@@ -10,6 +10,7 @@ import com.voxly.data.local.DirFileSortOption
 import com.voxly.data.local.FileSortOption
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.UiStateDataStore
+import com.voxly.data.local.cache.CachedAudioFileEntity
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.repository.AlbumCacheRepository
 import com.voxly.data.repository.ArtistCacheRepository
@@ -28,6 +29,9 @@ import com.voxly.domain.usecase.ScanState
 import com.voxly.domain.usecase.ScanTarget
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.core.util.SortUtil
+import androidx.paging.PagingData
+import androidx.paging.cachedIn
+import androidx.paging.map
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -36,6 +40,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -62,6 +67,7 @@ class LibraryViewModel @Inject constructor(
     @ApplicationContext private val context: Context,
     private val audioRepository: AudioRepository,
     private val audioFileScanner: com.voxly.data.local.AudioFileScanner,
+    private val musicLibraryCache: com.voxly.data.local.MusicLibraryCache,
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val settingsDataStore: SettingsDataStore,
     private val uiStateDataStore: UiStateDataStore,
@@ -100,9 +106,15 @@ class LibraryViewModel @Inject constructor(
     private val _openedDirectoryUri = MutableStateFlow<String?>(null)
     val openedDirectoryUri: StateFlow<String?> = _openedDirectoryUri.asStateFlow()
 
-    // Audio data - sourced from AudioFileScanner (single source of truth)
-    // File browser uses this for "All" mode - applies whitelist/blacklist filtering
-    // Note: filteredAudioFiles already handles background thread and distinctUntilChanged
+    // Paging support for large libraries - replaces allAudios for efficient memory usage
+    val pagedAudios: Flow<PagingData<AudioFile>> = musicLibraryCache.getPagedAudioFiles()
+        .map { pagingData ->
+            pagingData.map { entity -> entity.toAudioFile() }
+        }
+        .cachedIn(viewModelScope)
+    
+    // Keep original allAudios for backward compatibility
+    @Suppress("DEPRECATION")
     val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.filteredAudioFiles
         .stateIn(
             scope = viewModelScope,

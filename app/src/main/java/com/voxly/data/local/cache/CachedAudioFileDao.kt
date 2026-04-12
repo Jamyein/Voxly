@@ -60,6 +60,39 @@ interface CachedAudioFileDao {
     @Query("SELECT * FROM cached_audio_files WHERE artist = :artist ORDER BY COALESCE(album, ''), trackNumber ASC, COALESCE(title, name) ASC")
     suspend fun getAudioFilesByArtistOnce(artist: String): List<CachedAudioFileEntity>
     
+    // ==================== Paging Support ====================
+    
+    /**
+     * Gets paged audio files for large libraries.
+     * @param offset Starting position (0-based)
+     * @param limit Number of items per page
+     */
+    @Query("SELECT * FROM cached_audio_files ORDER BY COALESCE(title, name) ASC LIMIT :limit OFFSET :offset")
+    suspend fun getAudioFilesPaged(offset: Int, limit: Int): List<CachedAudioFileEntity>
+    
+    /**
+     * Gets total count for paging.
+     */
+    @Query("SELECT COUNT(*) FROM cached_audio_files")
+    suspend fun getTotalCount(): Int
+    
+    /**
+     * Gets paged audio files with filtering by directory whitelist.
+     */
+    @Query("""
+        SELECT * FROM cached_audio_files 
+        WHERE path LIKE :directoryPath || '%'
+        ORDER BY COALESCE(title, name) ASC 
+        LIMIT :limit OFFSET :offset
+    """)
+    suspend fun getAudioFilesPagedByDirectory(directoryPath: String, offset: Int, limit: Int): List<CachedAudioFileEntity>
+    
+    /**
+     * Gets total count with directory filtering.
+     */
+    @Query("SELECT COUNT(*) FROM cached_audio_files WHERE path LIKE :directoryPath || '%'")
+    suspend fun getTotalCountByDirectory(directoryPath: String): Int
+    
     /**
      * Searches audio files by title, artist, or album.
      */
