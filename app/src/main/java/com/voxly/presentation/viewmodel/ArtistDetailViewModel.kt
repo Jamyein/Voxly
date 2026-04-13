@@ -69,7 +69,6 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private var preloadJob: Job? = null
     private var refreshJob: Job? = null
     private var albumYearJob: Job? = null
-    private var hasLoadedArtistData = false
     private val preloadMutex = kotlinx.coroutines.sync.Mutex()
 
     init {
@@ -83,8 +82,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
     fun loadArtist(artistName: String) {
         viewModelScope.launch {
             try {
-                // Skip if already loaded for this artist
-                if (hasLoadedArtistData && _artistName.value == artistName && _files.value.isNotEmpty()) {
+                // Skip if state already has this artist's data (works across ViewModel recreations)
+                if (_artistName.value == artistName && _files.value.isNotEmpty()) {
                     return@launch
                 }
 
@@ -95,15 +94,12 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     _artistName.value = cachedArtist.name
                     _files.value = cachedArtist.files
                     _coverPath.value = cachedArtist.coverPath
-                    _coverAlbumId.value = cachedArtist.files.firstOrNull { 
-                        it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
+                    _coverAlbumId.value = cachedArtist.files.firstOrNull {
+                        it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
                     }?.mediaStoreAlbumId
                     calculateStats(cachedArtist.files)
-                    if (!hasLoadedArtistData) {
-                        precomputeAlbumCovers(cachedArtist.files)
-                        loadAlbumYears(cachedArtist.files)
-                    }
-                    hasLoadedArtistData = true
+                    loadAlbumYears(cachedArtist.files)
+                    // precomputeAlbumCovers is deferred - called by carousel preloadAdjacentAlbumCovers
                 } else {
                     // Cache miss: look up from AudioFileScanner (source of truth)
                     val scannerArtist = audioFileScanner.artists.first()
@@ -112,6 +108,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     if (scannerArtist != null) {
                         // Populate cache and ViewModel state
                         cacheArtistData(scannerArtist.name, scannerArtist.files, scannerArtist.coverPath)
+                        loadAlbumYears(scannerArtist.files)
                     } else {
                         _artistName.value = artistName
                         _files.value = emptyList()
@@ -183,9 +180,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * 预计算专辑封面路径。
-     * 修复：每封面仅调用一次MediaMetadataRetriever。
-     * 使用extractAndCacheCoverBytes直接获取bytes，null表示无封面。
+     * Precompute album cover paths for the carousel.
+     * Deferred until carousel needs covers - not called on every loadArtist.
+     * Uses extractAndCacheCoverBytes which has LRU byte caching.
      */
     private fun precomputeAlbumCovers(files: List<AudioFile>) {
         viewModelScope.launch {
@@ -194,10 +191,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
                 albumGroups.mapNotNull { (albumName, albumFiles) ->
                     if (albumName.isEmpty()) return@mapNotNull null
 
-                    // 找第一张有封面的文件（单次调用）
                     val fileWithArt = albumFiles.firstOrNull { file ->
                         try {
-                            // extractAndCacheCoverBytes会写入Bytes Cache
                             extractAndCacheCoverBytes(file.path) != null
                         } catch (e: Exception) {
                             false
@@ -209,8 +204,6 @@ class ArtistDetailViewModel @AssistedInject constructor(
             }
             _albumCovers.value = covers
 
-            // 封面计算完成后立即预加载第 0 页封面到 carouselCoverCache
-            // 不依赖 UI recomposition，确保首次渲染时缓存已准备好
             preloadAdjacentAlbumCovers(0)
         }
     }
