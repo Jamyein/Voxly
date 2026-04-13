@@ -675,7 +675,20 @@ private fun MetadataFormContent(
     LaunchedEffect(Unit) {
         focusManager.clearFocus()
     }
-    
+
+    var titleText       by remember(metadata.title)       { mutableStateOf(metadata.title ?: "") }
+    var artistText      by remember(metadata.artist)      { mutableStateOf(metadata.artist ?: "") }
+    var albumText       by remember(metadata.album)       { mutableStateOf(metadata.album ?: "") }
+    var albumArtistText by remember(metadata.albumArtist) { mutableStateOf(metadata.albumArtist ?: "") }
+    var yearText        by remember(metadata.year)        { mutableStateOf(metadata.year ?: "") }
+    var genreText       by remember(metadata.genre)       { mutableStateOf(metadata.genre ?: "") }
+    var composerText    by remember(metadata.composer)    { mutableStateOf(metadata.composer ?: "") }
+    var lyricistText     by remember(metadata.lyricist)    { mutableStateOf(metadata.lyricist ?: "") }
+    var commentText     by remember(metadata.comment)     { mutableStateOf(metadata.comment ?: "") }
+    var lyricsText      by remember(metadata.lyrics)      { mutableStateOf(metadata.lyrics ?: "") }
+    var trackNumberText by remember(metadata.trackNumber) { mutableStateOf(metadata.trackNumber?.toString() ?: "") }
+    var discNumberText  by remember(metadata.discNumber)   { mutableStateOf(metadata.discNumber?.toString() ?: "") }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -701,8 +714,11 @@ private fun MetadataFormContent(
         SectionTitle(stringResource(R.string.basic_information))
 
         OutlinedTextField(
-            value = metadata.title ?: "",
-            onValueChange = onTitleChange,
+            value = titleText,
+            onValueChange = {
+                titleText = it
+                onTitleChange(it)
+            },
             label = { Text(fieldLabel(MetadataField.TITLE, R.string.metadata_title, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -713,8 +729,11 @@ private fun MetadataFormContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
-            value = metadata.artist ?: "",
-            onValueChange = onArtistChange,
+            value = artistText,
+            onValueChange = {
+                artistText = it
+                onArtistChange(it)
+            },
             label = { Text(fieldLabel(MetadataField.ARTIST, R.string.metadata_artist, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -724,8 +743,11 @@ private fun MetadataFormContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
-            value = metadata.album ?: "",
-            onValueChange = onAlbumChange,
+            value = albumText,
+            onValueChange = {
+                albumText = it
+                onAlbumChange(it)
+            },
             label = { Text(fieldLabel(MetadataField.ALBUM, R.string.metadata_album, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -735,8 +757,11 @@ private fun MetadataFormContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
-            value = metadata.albumArtist ?: "",
-            onValueChange = onAlbumArtistChange,
+            value = albumArtistText,
+            onValueChange = {
+                albumArtistText = it
+                onAlbumArtistChange(it)
+            },
             label = { Text(fieldLabel(MetadataField.ALBUM_ARTIST, R.string.metadata_album_artist, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -750,8 +775,11 @@ private fun MetadataFormContent(
 
         Row(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
-                value = metadata.trackNumber?.toString() ?: "",
-                onValueChange = { onTrackNumberChange(it, metadata.totalTracks?.toString() ?: "") },
+                value = trackNumberText,
+                onValueChange = {
+                    trackNumberText = it
+                    onTrackNumberChange(it, metadata.totalTracks?.toString() ?: "")
+                },
                 label = { Text(stringResource(R.string.label_track)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
@@ -762,8 +790,11 @@ private fun MetadataFormContent(
             Spacer(modifier = Modifier.width(8.dp))
 
             OutlinedTextField(
-                value = metadata.discNumber?.toString() ?: "",
-                onValueChange = { onDiscNumberChange(it, metadata.totalDiscs?.toString() ?: "") },
+                value = discNumberText,
+                onValueChange = {
+                    discNumberText = it
+                    onDiscNumberChange(it, metadata.totalDiscs?.toString() ?: "")
+                },
                 label = { Text(stringResource(R.string.label_disc)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
@@ -779,8 +810,11 @@ private fun MetadataFormContent(
 
         Row(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
-                value = metadata.year ?: "",
-                onValueChange = onYearChange,
+                value = yearText,
+                onValueChange = {
+                    yearText = it
+                    onYearChange(it)
+                },
                 label = { Text(fieldLabel(MetadataField.YEAR, R.string.metadata_year, modifiedFields)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
@@ -791,8 +825,11 @@ private fun MetadataFormContent(
             Spacer(modifier = Modifier.width(8.dp))
 
             OutlinedTextField(
-                value = metadata.genre ?: "",
-                onValueChange = onGenreChange,
+                value = genreText,
+                onValueChange = {
+                    genreText = it
+                    onGenreChange(it)
+                },
                 label = { Text(fieldLabel(MetadataField.GENRE, R.string.metadata_genre, modifiedFields)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
@@ -803,8 +840,11 @@ private fun MetadataFormContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
-            value = metadata.composer ?: "",
-            onValueChange = onComposerChange,
+            value = composerText,
+            onValueChange = {
+                composerText = it
+                onComposerChange(it)
+            },
             label = { Text(fieldLabel(MetadataField.COMPOSER, R.string.metadata_composer, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -814,8 +854,11 @@ private fun MetadataFormContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
-            value = metadata.lyricist ?: "",
-            onValueChange = onLyricistChange,
+            value = lyricistText,
+            onValueChange = {
+                lyricistText = it
+                onLyricistChange(it)
+            },
             label = { Text(fieldLabel(MetadataField.LYRICIST, R.string.metadata_lyricist, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             singleLine = true,
@@ -825,8 +868,11 @@ private fun MetadataFormContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         OutlinedTextField(
-            value = metadata.comment ?: "",
-            onValueChange = onCommentChange,
+            value = commentText,
+            onValueChange = {
+                commentText = it
+                onCommentChange(it)
+            },
             label = { Text(fieldLabel(MetadataField.COMMENT, R.string.metadata_comment, modifiedFields)) },
             modifier = Modifier.fillMaxWidth(),
             minLines = 3,
@@ -839,8 +885,11 @@ private fun MetadataFormContent(
         SectionTitle(stringResource(R.string.lyrics_section_title))
 
         OutlinedTextField(
-            value = metadata.lyrics ?: "",
-            onValueChange = onLyricsChange,
+            value = lyricsText,
+            onValueChange = {
+                lyricsText = it
+                onLyricsChange(it)
+            },
             modifier = Modifier
                 .fillMaxWidth()
                 .heightIn(min = 140.dp),

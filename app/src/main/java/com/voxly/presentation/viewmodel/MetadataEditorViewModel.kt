@@ -359,7 +359,29 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     /**
+     * Gets the original field value from the saved metadata for comparison.
+     */
+    private fun getOriginalFieldValue(field: MetadataField): String? {
+        val original = _originalMetadata ?: return null
+        return when (field) {
+            MetadataField.TITLE -> original.title
+            MetadataField.ARTIST -> original.artist
+            MetadataField.ALBUM -> original.album
+            MetadataField.ALBUM_ARTIST -> original.albumArtist
+            MetadataField.YEAR -> original.year
+            MetadataField.GENRE -> original.genre
+            MetadataField.COMPOSER -> original.composer
+            MetadataField.LYRICIST -> original.lyricist
+            MetadataField.CONDUCTOR -> original.conductor
+            MetadataField.COMMENT -> original.comment
+            MetadataField.LYRICS -> original.lyrics
+            MetadataField.ALBUM_ART -> null
+        }
+    }
+
+    /**
      * Updates a specific metadata field.
+     * Only marks field as modified if the new value actually differs from original.
      * @param field The metadata field to update
      * @param value The new value
      */
@@ -369,6 +391,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
             "Metadata field update file=$filePath field=$field valueLength=${value.length}",
             "MetadataEditor"
         )
+        val originalValue = getOriginalFieldValue(field) ?: ""
+        val isActuallyModified = value != originalValue
         val nonBlankValue = value.takeIf { it.isNotBlank() }
         val updatedMetadata = when (field) {
             MetadataField.TITLE -> currentMetadata.copy(title = nonBlankValue)
@@ -389,7 +413,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
             }
         }
 
-        setEditedMetadata(updatedMetadata, modifiedField = field)
+        setEditedMetadata(updatedMetadata, if (isActuallyModified) field else null)
     }
 
     /**
