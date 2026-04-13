@@ -149,11 +149,17 @@ class AudioFileScanner @Inject constructor(
             }
         }
 
-        // Update cache with scan results
-        libraryCache.updateCache(files)
+        // Update cache with scan results only if we actually scanned new data
+        // Skip updateCache when serving from cache to avoid triggering Flow emissions
+        val servedFromCache = !incremental && !forceRefresh && hasCachedData()
+        if (!servedFromCache) {
+            libraryCache.updateCache(files)
+        }
 
         // Two-pass: Background enrichment for cover art pre-caching
-        enrichCoversInBackground(files)
+        if (!servedFromCache) {
+            enrichCoversInBackground(files)
+        }
 
         return files
     }
