@@ -35,6 +35,7 @@ import androidx.compose.material3.FloatingToolbarExitDirection
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -101,11 +102,11 @@ fun MetadataEditorScreen(
         Modifier
     }
     val context = LocalContext.current
-    val uiState by viewModel.uiState.collectAsState()
-    val editedMetadata by viewModel.editedMetadata.collectAsState()
-    val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsState()
-    val saveResult by viewModel.saveResult.collectAsState()
-    val modifiedFields by viewModel.modifiedFields.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val editedMetadata by viewModel.editedMetadata.collectAsStateWithLifecycle()
+    val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsStateWithLifecycle()
+    val saveResult by viewModel.saveResult.collectAsStateWithLifecycle(initialValue = "")
+    val modifiedFields by viewModel.modifiedFields.collectAsStateWithLifecycle()
 
     // Dialog visibility states
     var showDiscardDialog by remember { mutableStateOf(false) }
@@ -119,30 +120,29 @@ fun MetadataEditorScreen(
     var exitAfterSave by remember { mutableStateOf(false) }
 
     // ReplayGain state from ViewModel
-    val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsState()
-    val pendingReplayGainInfo by viewModel.pendingReplayGainInfo.collectAsState()
+    val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsStateWithLifecycle()
+    val pendingReplayGainInfo by viewModel.pendingReplayGainInfo.collectAsStateWithLifecycle()
     // 使用filePath作为key，确保切换歌曲时重置状态
     var currentReplayGainInfo by remember(filePath) { mutableStateOf<ReplayGainInfo?>(null) }
-    val replayGainScanError by viewModel.replayGainScanError.collectAsState()
+    val replayGainScanError by viewModel.replayGainScanError.collectAsStateWithLifecycle(initialValue = null)
 
     // EditHistory state - filter to current file only
     var showEditHistorySheet by remember { mutableStateOf(false) }
     val editHistorySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val editHistoryViewModel: EditHistoryViewModel = hiltViewModel()
-    val allRecentEdits by editHistoryViewModel.recentEdits.collectAsState()
+    val allRecentEdits by editHistoryViewModel.recentEdits.collectAsStateWithLifecycle()
     val currentFileEdits = remember(allRecentEdits, filePath) {
         allRecentEdits.filter { it.filePath == filePath }
     }
 
-    val coverFetchMessage by viewModel.coverFetchMessage.collectAsState()
-    val isLyricsTimestampFormatted by viewModel.isLyricsTimestampFormatted.collectAsState()
+    val coverFetchMessage by viewModel.coverFetchMessage.collectAsStateWithLifecycle(initialValue = null)
+    val isLyricsTimestampFormatted by viewModel.isLyricsTimestampFormatted.collectAsStateWithLifecycle()
 
     // Debouncing is now handled in the ViewModel - just call updateDebouncedTextField
 
     LaunchedEffect(coverFetchMessage) {
         coverFetchMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-            viewModel.clearCoverFetchMessage()
         }
     }
 
@@ -179,30 +179,15 @@ fun MetadataEditorScreen(
 
     // Handle save result
     LaunchedEffect(saveResult) {
-        if (saveResult is com.voxly.presentation.viewmodel.SaveResult.Success) {
-            if (exitAfterSave) {
-                exitAfterSave = false
-                onNavigateBack()
-            }
-            viewModel.clearSaveResult()
-        } else if (saveResult is com.voxly.presentation.viewmodel.SaveResult.Error) {
-            exitAfterSave = false
-            val error = saveResult as com.voxly.presentation.viewmodel.SaveResult.Error
-            // Handle MediaStore permission required - launch system dialog
-            if (error.errorCode == com.voxly.presentation.viewmodel.SaveErrorCode.MEDIASTORE_PERMISSION_REQUIRED) {
-                error.mediaStoreIntentSender?.let { intentSender ->
-                    pendingMediaStoreIntentSender = intentSender
-                    mediaStorePermissionLauncher.launch(
-                        androidx.activity.result.IntentSenderRequest.Builder(intentSender).build()
-                    )
+        if (saveResult.isNotBlank()) {
+            if (saveResult == "Save successful") {
+                if (exitAfterSave) {
+                    exitAfterSave = false
+                    onNavigateBack()
                 }
-                // Don't clear yet - wait for permission result
-                return@LaunchedEffect
             }
-            if (error.requiresReauthorization) {
-                showReauthorizeDialog = true
-            }
-            viewModel.clearSaveResult()
+            // Reset exit flag for any result
+            exitAfterSave = false
         }
     }
 
@@ -664,7 +649,7 @@ private fun MetadataFormContent(
     onClearReplayGain: () -> Unit = {},
     isScanningReplayGain: Boolean = false,
     replayGainInfo: ReplayGainInfo? = null,
-    replayGainScanError: ReplayGainScanError? = null,
+    replayGainScanError: String? = null,
     bottomPadding: Dp = 0.dp,
     scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     nestedScrollModifier: Modifier = Modifier

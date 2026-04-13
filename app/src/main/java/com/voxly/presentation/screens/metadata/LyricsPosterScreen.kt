@@ -71,7 +71,7 @@ import com.voxly.presentation.components.lyricsposter.PosterShape
 import com.voxly.presentation.components.lyricsposter.WatermarkPosition
 import com.voxly.presentation.components.lyricsposter.rememberPosterCapture
 import com.voxly.presentation.viewmodel.LyricsPosterViewModel
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * 歌词海报生成器 Screen
@@ -103,7 +103,7 @@ fun LyricsPosterScreen(
     // GraphicsLayer 海报捕获器 - 用于预览和导出
     val posterCapture = rememberPosterCapture()
 
-    val albumArtBytes by viewModel.albumArtBytes.collectAsState()
+    val albumArtBytes by viewModel.albumArtBytes.collectAsStateWithLifecycle()
 
     // Decode album art
     val albumArtBitmap = remember(albumArtBytes) {

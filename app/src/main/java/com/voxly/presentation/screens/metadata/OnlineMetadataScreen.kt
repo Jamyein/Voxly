@@ -34,7 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -69,16 +69,16 @@ fun OnlineMetadataScreen(
     onNavigateBack: () -> Unit,
     onApplyMetadata: (AudioMetadata) -> Unit
 ) {
-    val uiState by viewModel.uiState.collectAsState()
-    val searchResults by viewModel.searchResults.collectAsState()
-    val searchState by viewModel.searchState.collectAsState()
-    val selectedRelease by viewModel.selectedRelease.collectAsState()
-    val selectedReleaseCandidate by viewModel.selectedReleaseCandidate.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
-    val query by viewModel.searchQuery.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
-    val downloadedAlbumArt by viewModel.downloadedAlbumArt.collectAsState()
-    val isCoverArtTimeout by viewModel.isCoverArtTimeout.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val searchResults by viewModel.searchResults.collectAsStateWithLifecycle()
+    val searchState by viewModel.searchState.collectAsStateWithLifecycle()
+    val selectedRelease by viewModel.selectedRelease.collectAsStateWithLifecycle()
+    val selectedReleaseCandidate by viewModel.selectedReleaseCandidate.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val query by viewModel.searchQuery.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle(initialValue = null)
+    val downloadedAlbumArt by viewModel.downloadedAlbumArt.collectAsStateWithLifecycle()
+    val isCoverArtTimeout by viewModel.isCoverArtTimeout.collectAsStateWithLifecycle()
 
     // Auto-apply metadata when release or candidate is selected, and cover art is downloaded
     // Wait for cover art to be downloaded before applying (if cover is available)

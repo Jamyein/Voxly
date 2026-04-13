@@ -14,6 +14,7 @@ import dagger.assisted.AssistedInject
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -41,18 +42,18 @@ class LyricsPosterViewModel @AssistedInject constructor(
 
     private fun loadAudioFile() {
         viewModelScope.launch {
-            _isLoading.value = true
+            _isLoading.update { true }
 
             // Load album art
             val albumArtResult = audioRepository.extractAlbumArt(filePath)
             albumArtResult.fold(
                 onSuccess = { bytes ->
-                    _albumArtBytes.value = bytes
+                    _albumArtBytes.update { bytes }
                 },
                 onFailure = { /* Ignore album art errors */ }
             )
 
-            _isLoading.value = false
+            _isLoading.update { false }
         }
     }
 

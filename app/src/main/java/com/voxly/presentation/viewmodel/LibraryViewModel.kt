@@ -41,15 +41,19 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.last
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -136,9 +140,19 @@ class LibraryViewModel @Inject constructor(
 
     // Albums - sourced from AudioFileScanner
     val albums: StateFlow<List<AlbumGroup>> = audioFileScanner.albums
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = emptyList()
+        )
 
     // Artists - sourced from AudioFileScanner
     val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = emptyList()
+        )
 
     val artistSeparatorEnabled: StateFlow<Boolean> = settingsDataStore.artistSeparatorEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
@@ -172,8 +186,8 @@ class LibraryViewModel @Inject constructor(
     private val _batchProgress = MutableStateFlow<BatchProgress?>(null)
     val batchProgress: StateFlow<BatchProgress?> = _batchProgress.asStateFlow()
 
-    private val _batchError = MutableStateFlow<String?>(null)
-    val batchError: StateFlow<String?> = _batchError.asStateFlow()
+    private val _batchError = MutableSharedFlow<String>()
+    val batchError: SharedFlow<String> = _batchError.asSharedFlow()
 
     // Replace _batchProgress and _batchError with unified result
     private val _batchResult = MutableStateFlow<BatchResult?>(null)
@@ -241,7 +255,7 @@ class LibraryViewModel @Inject constructor(
             val shouldShowRefresh = forceRefresh || isIncremental
             try {
                 if (shouldShowRefresh) {
-                    _isRefreshing.value = true
+                    _isRefreshing.update { true }
                 }
 
                 syncSelectedDirectoriesFromStorage()
@@ -265,17 +279,17 @@ class LibraryViewModel @Inject constructor(
                 }
 
                 // UI state for directory mode (empty when in All mode)
-                _directoryFiles.value = emptyMap()
-                _uiState.value = FileBrowserUiState.Success(
+                _directoryFiles.update { emptyMap() }
+                _uiState.update { FileBrowserUiState.Success(
                     files = emptyList(), // All mode uses allAudios StateFlow directly
                     selectedCount = _selectedFiles.value.size
-                )
+                ) }
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to load audio files")
-                _uiState.value = FileBrowserUiState.Error(e.message ?: "Unknown error")
+                _uiState.update { FileBrowserUiState.Error(e.message ?: "Unknown error") }
             } finally {
                 if (shouldShowRefresh) {
-                    _isRefreshing.value = false
+                    _isRefreshing.update { false }
                 }
             }
         }
@@ -301,10 +315,10 @@ class LibraryViewModel @Inject constructor(
         Timber.d(TAG, "Scanning ${directories.size} directories (incremental=$isIncremental, force=$forceRefresh)")
 
         val dirUris = directories.map { it.uri }.toSet()
-        _directoryLoadingState.value = _directoryLoadingState.value + dirUris
+        _directoryLoadingState.update { it + dirUris }
 
         if (forceRefresh || _uiState.value !is FileBrowserUiState.Success) {
-            _uiState.value = FileBrowserUiState.Loading
+            _uiState.update { FileBrowserUiState.Loading }
         }
 
         runCatching {
@@ -328,32 +342,32 @@ class LibraryViewModel @Inject constructor(
                 filesByDir
             }
         }.onSuccess { filesByDirectory ->
-            _directoryFiles.value = filesByDirectory
-            _currentDirectory.value = directories.firstOrNull()?.path
+            _directoryFiles.update { filesByDirectory }
+            _currentDirectory.update { directories.firstOrNull()?.path }
 
             if (_openedDirectoryUri.value != null && _openedDirectoryUri.value !in filesByDirectory.keys) {
-                _openedDirectoryUri.value = null
+                _openedDirectoryUri.update { null }
                 clearSelection()
             }
 
             val mergedFiles = filesByDirectory.values.flatten().distinctBy { it.path }
-            _uiState.value = if (mergedFiles.isEmpty()) {
+            _uiState.update { if (mergedFiles.isEmpty()) {
                 FileBrowserUiState.Empty
             } else {
                 FileBrowserUiState.Success(
                     files = mergedFiles,
                     selectedCount = _selectedFiles.value.size
                 )
-            }
+            } }
             // Note: AudioFileScanner automatically updates albums/artists from cache
         }.onFailure { error ->
             if (error is CancellationException) {
                 return@onFailure
             }
             Timber.tag(TAG).e("Directory scan failed for ${directories.joinToString { it.path }}", error)
-            _uiState.value = FileBrowserUiState.Error(error.message ?: "Unknown error")
+            _uiState.update { FileBrowserUiState.Error(error.message ?: "Unknown error") }
         }.also {
-            _directoryLoadingState.value = _directoryLoadingState.value - dirUris
+            _directoryLoadingState.update { it - dirUris }
         }
     }
 
@@ -407,12 +421,12 @@ class LibraryViewModel @Inject constructor(
             if (path.isBlank()) null else SelectedDirectory(uri = uriString, path = path)
         }
         if (restored.map { it.uri } != _selectedDirectories.value.map { it.uri }) {
-            _selectedDirectories.value = restored
-            _directoryFiles.value = _directoryFiles.value.filterKeys { key ->
+            _selectedDirectories.update { restored }
+            _directoryFiles.update { it.filterKeys { key ->
                 restored.any { it.uri == key }
-            }
+            } }
             if (_openedDirectoryUri.value != null && restored.none { it.uri == _openedDirectoryUri.value }) {
-                _openedDirectoryUri.value = null
+                _openedDirectoryUri.update { null }
                 clearSelection()
             }
         }
@@ -432,7 +446,7 @@ class LibraryViewModel @Inject constructor(
     fun addDirectory(directoryUri: Uri) {
         val filePath = getPathFromUri(directoryUri)
         if (filePath.isBlank()) {
-            _uiState.value = FileBrowserUiState.Error("Invalid directory URI")
+            _uiState.update { FileBrowserUiState.Error("Invalid directory URI") }
             return
         }
 
@@ -447,7 +461,7 @@ class LibraryViewModel @Inject constructor(
             return
         }
 
-        _selectedDirectories.value = updatedDirectories
+        _selectedDirectories.update { updatedDirectories }
         persistSelectedDirectories(updatedDirectories)
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
@@ -465,10 +479,10 @@ class LibraryViewModel @Inject constructor(
      */
     fun removeDirectory(directoryUri: String) {
         val updatedDirectories = _selectedDirectories.value.filterNot { it.uri == directoryUri }
-        _selectedDirectories.value = updatedDirectories
-        _directoryFiles.value = _directoryFiles.value - directoryUri
+        _selectedDirectories.update { updatedDirectories }
+        _directoryFiles.update { it - directoryUri }
         if (_openedDirectoryUri.value == directoryUri) {
-            _openedDirectoryUri.value = null
+            _openedDirectoryUri.update { null }
             clearSelection()
         }
         persistSelectedDirectories(updatedDirectories)
@@ -479,21 +493,21 @@ class LibraryViewModel @Inject constructor(
      * Clears selected directories and falls back to global scan.
      */
     fun clearDirectories() {
-        _selectedDirectories.value = emptyList()
-        _directoryFiles.value = emptyMap()
-        _openedDirectoryUri.value = null
+        _selectedDirectories.update { emptyList() }
+        _directoryFiles.update { emptyMap() }
+        _openedDirectoryUri.update { null }
         clearSelection()
         persistSelectedDirectories(emptyList())
         loadAudioFiles()
     }
 
     fun openDirectory(directoryUri: String) {
-        _openedDirectoryUri.value = directoryUri
+        _openedDirectoryUri.update { directoryUri }
         clearSelection()
     }
 
     fun closeOpenedDirectory() {
-        _openedDirectoryUri.value = null
+        _openedDirectoryUri.update { null }
         clearSelection()
     }
 
@@ -502,18 +516,22 @@ class LibraryViewModel @Inject constructor(
      * @param filePath Path of the file to toggle
      */
     fun toggleFileSelection(filePath: String) {
-        _selectedFiles.value = if (filePath in _selectedFiles.value) {
-            _selectedFiles.value - filePath
-        } else {
-            _selectedFiles.value + filePath
+        _selectedFiles.update {
+            if (filePath in it) {
+                it - filePath
+            } else {
+                it + filePath
+            }
         }
 
         // Update UI state with new selection count
         val currentState = _uiState.value
         if (currentState is FileBrowserUiState.Success) {
-            _uiState.value = currentState.copy(
-                selectedCount = _selectedFiles.value.size
-            )
+            _uiState.update {
+                currentState.copy(
+                    selectedCount = _selectedFiles.value.size
+                )
+            }
         }
     }
 
@@ -523,20 +541,22 @@ class LibraryViewModel @Inject constructor(
     fun selectAll() {
         val currentState = _uiState.value
         if (currentState is FileBrowserUiState.Success) {
-            _selectedFiles.value = currentState.files.map { it.path }.toSet()
-            _uiState.value = currentState.copy(
-                selectedCount = _selectedFiles.value.size
-            )
+            _selectedFiles.update { currentState.files.map { it.path }.toSet() }
+            _uiState.update {
+                currentState.copy(
+                    selectedCount = _selectedFiles.value.size
+                )
+            }
         }
     }
 
     fun selectFilePaths(filePaths: List<String>) {
-        _selectedFiles.value = filePaths.toSet()
+        _selectedFiles.update { filePaths.toSet() }
         val currentState = _uiState.value
         if (currentState is FileBrowserUiState.Success) {
-            _uiState.value = currentState.copy(
+            _uiState.update { currentState.copy(
                 selectedCount = _selectedFiles.value.size
-            )
+            ) }
         }
     }
 
@@ -544,10 +564,10 @@ class LibraryViewModel @Inject constructor(
      * Clears all file selections.
      */
     fun clearSelection() {
-        _selectedFiles.value = emptySet()
+        _selectedFiles.update { emptySet() }
         val currentState = _uiState.value
         if (currentState is FileBrowserUiState.Success) {
-            _uiState.value = currentState.copy(selectedCount = 0)
+            _uiState.update { currentState.copy(selectedCount = 0) }
         }
     }
 
@@ -625,7 +645,7 @@ class LibraryViewModel @Inject constructor(
 
             onComplete(result.first, result.second)
             if (result.first) {
-                _selectedFiles.value = _selectedFiles.value - filePath
+                _selectedFiles.update { it - filePath }
                 loadAudioFiles(forceRefresh = true)
             }
         }
@@ -654,7 +674,7 @@ class LibraryViewModel @Inject constructor(
 
             onComplete(result.first, result.second)
             if (result.first) {
-                _selectedFiles.value = _selectedFiles.value - filePath
+                _selectedFiles.update { it - filePath }
                 loadAudioFiles(forceRefresh = true)
             }
         }
@@ -701,8 +721,7 @@ class LibraryViewModel @Inject constructor(
     ) {
         batchJob?.cancel()
         batchJob = viewModelScope.launch {
-            _isBatchProcessing.value = true
-            _batchError.value = null
+            _isBatchProcessing.update { true }
 
             batchEngine.execute(
                 items = filePaths,
@@ -782,10 +801,10 @@ class LibraryViewModel @Inject constructor(
                 },
                 itemName = { it }
             ).collect { result ->
-                _batchResult.value = result
+                _batchResult.update { result }
             }
 
-            _isBatchProcessing.value = false
+            _isBatchProcessing.update { false }
             loadAudioFiles(forceRefresh = false)
         }
     }
@@ -796,8 +815,7 @@ class LibraryViewModel @Inject constructor(
     fun batchRenameFiles(filePaths: List<String>, pattern: String, startNumber: Int) {
         batchJob?.cancel()
         batchJob = viewModelScope.launch {
-            _isBatchProcessing.value = true
-            _batchError.value = null
+            _isBatchProcessing.update { true }
 
             batchEngine.execute(
                 items = filePaths,
@@ -836,10 +854,10 @@ class LibraryViewModel @Inject constructor(
                 },
                 itemName = { it }
             ).collect { result ->
-                _batchResult.value = result
+                _batchResult.update { result }
             }
 
-            _isBatchProcessing.value = false
+            _isBatchProcessing.update { false }
             loadAudioFiles(forceRefresh = false)
         }
     }
@@ -853,8 +871,7 @@ class LibraryViewModel @Inject constructor(
     ) {
         batchJob?.cancel()
         batchJob = viewModelScope.launch {
-            _isBatchProcessing.value = true
-            _batchError.value = null
+            _isBatchProcessing.update { true }
 
             batchEngine.execute(
                 items = filePaths,
@@ -922,10 +939,10 @@ class LibraryViewModel @Inject constructor(
                 },
                 itemName = { it }
             ).collect { result ->
-                _batchResult.value = result
+                _batchResult.update { result }
             }
 
-            _isBatchProcessing.value = false
+            _isBatchProcessing.update { false }
             loadAudioFiles(forceRefresh = false)
         }
     }
@@ -935,25 +952,23 @@ class LibraryViewModel @Inject constructor(
      */
     fun cancelBatchOperation() {
         batchJob?.cancel()
-        _isBatchProcessing.value = false
-        _batchResult.value = _batchResult.value?.copy(status = BatchStatus.CANCELLED)
+        _isBatchProcessing.update { false }
+        _batchResult.update { it?.copy(status = BatchStatus.CANCELLED) }
     }
 
     /**
      * Reset batch operation state.
      */
     fun resetBatchOperation() {
-        _isBatchProcessing.value = false
-        _batchProgress.value = null
-        _batchError.value = null
-        _batchResult.value = null
+        _isBatchProcessing.update { false }
+        _batchProgress.update { null }
+        _batchResult.update { null }
     }
 
     /**
      * Clear batch error.
      */
     fun clearBatchError() {
-        _batchError.value = null
     }
 
     /**
@@ -968,8 +983,7 @@ class LibraryViewModel @Inject constructor(
         // This is a simplified version - actual retry logic depends on the operation type
         batchJob?.cancel()
         batchJob = viewModelScope.launch {
-            _isBatchProcessing.value = true
-            _batchError.value = null
+            _isBatchProcessing.update { true }
 
             batchEngine.execute(
                 items = failed.map { it.filePath },
@@ -1008,10 +1022,10 @@ class LibraryViewModel @Inject constructor(
                 },
                 itemName = { it }
             ).collect { result ->
-                _batchResult.value = result
+                _batchResult.update { result }
             }
 
-            _isBatchProcessing.value = false
+            _isBatchProcessing.update { false }
             loadAudioFiles(forceRefresh = false)
         }
     }
@@ -1022,8 +1036,7 @@ class LibraryViewModel @Inject constructor(
     fun batchSetUnifiedField(filePaths: List<String>, field: String, value: String) {
         batchJob?.cancel()
         batchJob = viewModelScope.launch {
-            _isBatchProcessing.value = true
-            _batchError.value = null
+            _isBatchProcessing.update { true }
 
             batchEngine.execute(
                 items = filePaths,
@@ -1054,10 +1067,10 @@ class LibraryViewModel @Inject constructor(
                 },
                 itemName = { it }
             ).collect { result ->
-                _batchResult.value = result
+                _batchResult.update { result }
             }
 
-            _isBatchProcessing.value = false
+            _isBatchProcessing.update { false }
             loadAudioFiles(forceRefresh = false)
         }
     }
@@ -1074,8 +1087,7 @@ class LibraryViewModel @Inject constructor(
     ) {
         batchJob?.cancel()
         batchJob = viewModelScope.launch {
-            _isBatchProcessing.value = true
-            _batchError.value = null
+            _isBatchProcessing.update { true }
 
             batchEngine.execute(
                 items = filePaths,
@@ -1129,10 +1141,10 @@ class LibraryViewModel @Inject constructor(
                 },
                 itemName = { it }
             ).collect { result ->
-                _batchResult.value = result
+                _batchResult.update { result }
             }
 
-            _isBatchProcessing.value = false
+            _isBatchProcessing.update { false }
             loadAudioFiles(forceRefresh = false)
         }
     }
@@ -1148,8 +1160,7 @@ class LibraryViewModel @Inject constructor(
     ) {
         batchJob?.cancel()
         batchJob = viewModelScope.launch {
-            _isBatchProcessing.value = true
-            _batchError.value = null
+            _isBatchProcessing.update { true }
 
             batchEngine.execute(
                 items = filePaths,
@@ -1178,10 +1189,10 @@ class LibraryViewModel @Inject constructor(
                 },
                 itemName = { it }
             ).collect { result ->
-                _batchResult.value = result
+                _batchResult.update { result }
             }
 
-            _isBatchProcessing.value = false
+            _isBatchProcessing.update { false }
             loadAudioFiles(forceRefresh = false)
         }
     }
@@ -1245,7 +1256,7 @@ class LibraryViewModel @Inject constructor(
                 val path = getPathFromUri(parsed)
                 if (path.isBlank()) null else SelectedDirectory(uri = uriString, path = path)
             }
-            _selectedDirectories.value = restored
+            _selectedDirectories.update { restored }
             // Always load audio files on first launch (before whitelist is set)
             // This ensures scanning happens after permission is granted
             loadAudioFiles()

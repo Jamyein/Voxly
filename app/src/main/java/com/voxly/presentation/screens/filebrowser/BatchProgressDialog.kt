@@ -6,7 +6,7 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material3.*
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -34,7 +34,7 @@ fun BatchProgressDialog(
     onDismiss: () -> Unit,
     viewModel: LibraryViewModel
 ) {
-    val batchResult by viewModel.batchResult.collectAsState()
+    val batchResult by viewModel.batchResult.collectAsStateWithLifecycle()
     val showFailureList = remember { mutableStateOf(false) }
     val batchResultSnapshot = batchResult
     Dialog(

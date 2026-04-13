@@ -9,9 +9,13 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -36,8 +40,8 @@ class LyricsSelectorViewModel @AssistedInject constructor(
     private val _isLoading = MutableStateFlow(true)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableSharedFlow<String>(replay = 0)
+    val error: SharedFlow<String> = _error.asSharedFlow()
 
     init {
         loadData()
@@ -45,17 +49,16 @@ class LyricsSelectorViewModel @AssistedInject constructor(
 
     private fun loadData() {
         viewModelScope.launch {
-            _isLoading.value = true
-            _error.value = null
+            _isLoading.update { true }
 
             // Load lyrics
             val lyricsResult = lyricsRepository.readLyrics(filePath)
             lyricsResult.fold(
                 onSuccess = { lyrics ->
-                    _lyricsText.value = lyrics?.getPlainText() ?: ""
+                    _lyricsText.update { lyrics?.getPlainText() ?: "" }
                 },
                 onFailure = { error ->
-                    _error.value = error.message ?: "Failed to load lyrics"
+                    _error.emit(error.message ?: "Failed to load lyrics")
                 }
             )
 
@@ -63,12 +66,12 @@ class LyricsSelectorViewModel @AssistedInject constructor(
             val albumArtResult = audioRepository.extractAlbumArt(filePath)
             albumArtResult.fold(
                 onSuccess = { bytes ->
-                    _albumArtBytes.value = bytes
+                    _albumArtBytes.update { bytes }
                 },
                 onFailure = { /* Ignore album art errors */ }
             )
 
-            _isLoading.value = false
+            _isLoading.update { false }
         }
     }
 

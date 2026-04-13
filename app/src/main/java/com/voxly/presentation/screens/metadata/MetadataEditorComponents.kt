@@ -17,7 +17,6 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.viewmodel.ReplayGainScanError
 
 /**
  * Section title component.
@@ -65,7 +64,7 @@ fun ReplayGainSection(
     isScanning: Boolean,
     onScan: () -> Unit,
     onClear: () -> Unit,
-    error: ReplayGainScanError? = null
+    error: String? = null
 ) {
     var expanded by remember { mutableStateOf(false) }
 
@@ -130,13 +129,7 @@ fun ReplayGainSection(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = when (scanError) {
-                                    is ReplayGainScanError.DecodeFailed -> "该文件解码失败，尝试其他来源的版本"
-                                    is ReplayGainScanError.NoAudioTrack -> "未找到音频轨道，文件可能已损坏"
-                                    is ReplayGainScanError.PermissionDenied -> "无读取权限，请检查文件访问权限"
-                                    is ReplayGainScanError.AllFallbacksFailed -> "无法分析该文件，请尝试重新下载"
-                                    is ReplayGainScanError.Unknown -> "扫描失败：${scanError.message}"
-                                },
+                                text = scanError,
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )

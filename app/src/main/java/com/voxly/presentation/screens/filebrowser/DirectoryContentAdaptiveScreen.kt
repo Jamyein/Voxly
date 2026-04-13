@@ -39,7 +39,7 @@ import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaf
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -114,10 +114,10 @@ fun DirectoryContentAdaptiveScreen(
     }
 
     // State collections
-    val directoryFiles by viewModel.directoryFiles.collectAsState()
-    val selectedFiles by viewModel.selectedFiles.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val loadingDirectories by viewModel.directoryLoadingState.collectAsState()
+    val directoryFiles by viewModel.directoryFiles.collectAsStateWithLifecycle()
+    val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val loadingDirectories by viewModel.directoryLoadingState.collectAsStateWithLifecycle()
 
     // Get saved scroll position for this directory
     val savedScrollPosition = remember(directoryUri) {
@@ -135,7 +135,7 @@ fun DirectoryContentAdaptiveScreen(
     // Search and sort
     var showSearchSheet by remember { mutableStateOf(false) }
     var isSortExpanded by remember { mutableStateOf(false) }
-    val sortOption by viewModel.directoryFileSortOption.collectAsState(initial = DirFileSortOption.NAME_ASC.name)
+    val sortOption by viewModel.directoryFileSortOption.collectAsStateWithLifecycle(initialValue = DirFileSortOption.NAME_ASC.name)
     val currentSortOption = remember(sortOption) {
         try {
             DirFileSortOption.valueOf(sortOption)

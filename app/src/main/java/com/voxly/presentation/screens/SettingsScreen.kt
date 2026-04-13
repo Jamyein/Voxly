@@ -83,6 +83,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.zIndex
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlin.math.roundToInt
 import com.voxly.BuildConfig
 import com.voxly.R
@@ -779,7 +780,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     
-    val uiState by viewModel.uiState.collectAsState()
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var languageExpanded by remember { mutableStateOf(false) }
     val languageOptions = remember {
@@ -970,7 +971,7 @@ fun SettingsScreen(
                     count = 6
                 )
 
-                val currentSeparators by viewModel.artistSeparatorsSet.collectAsState()
+                val currentSeparators by viewModel.artistSeparatorsSet.collectAsStateWithLifecycle()
                 SegmentedClickableRow(
                     title = stringResource(R.string.artist_separators),
                     subtitle = currentSeparators.joinToString(" "),
@@ -1321,7 +1322,7 @@ fun SettingsScreen(
     }
 
     // Drag dialog state
-    val dragDialogState by viewModel.dragDialogState.collectAsState()
+    val dragDialogState by viewModel.dragDialogState.collectAsStateWithLifecycle()
     var activeDialogType by remember { mutableStateOf<DataSourceType?>(null) }
 
     if (showMetadataSourceDialog) {

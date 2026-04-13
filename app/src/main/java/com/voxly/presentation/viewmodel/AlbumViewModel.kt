@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.LinkedHashMap
@@ -103,7 +104,7 @@ class AlbumViewModel @Inject constructor(
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             try {
-                _isRefreshing.value = true
+                _isRefreshing.update { true }
                 Timber.d("AlbumViewModel.refresh: starting loadAudioFiles(isIncremental=${!forceRefresh})")
                 audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
                 Timber.d("AlbumViewModel.refresh: loadAudioFiles completed")
@@ -111,7 +112,7 @@ class AlbumViewModel @Inject constructor(
                 Timber.e(e, "Album refresh failed")
             } finally {
                 Timber.d("AlbumViewModel.refresh: finally block, setting isRefreshing=false")
-                _isRefreshing.value = false
+                _isRefreshing.update { false }
             }
         }
     }

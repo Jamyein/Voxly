@@ -33,7 +33,7 @@ import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaf
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -128,17 +128,17 @@ fun FileBrowserAdaptiveScreen(
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
 
     // State collections - use correct property names
-    val allAudios by viewModel.allAudios.collectAsState()
-    val selectedFiles by viewModel.selectedFiles.collectAsState()
-    val selectedDirectories by viewModel.selectedDirectories.collectAsState()
-    val directoryFiles by viewModel.directoryFiles.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val allAudios by viewModel.allAudios.collectAsStateWithLifecycle()
+    val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
+    val selectedDirectories by viewModel.selectedDirectories.collectAsStateWithLifecycle()
+    val directoryFiles by viewModel.directoryFiles.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
     // Root tab state (Directories / All)
     // When user has whitelist directories: default to DIRECTORIES mode, but remember user's choice
     // When user has no whitelist directories: force ALL mode and hide toggle button
-    val hasWhitelistDirectories by viewModel.hasWhitelistDirectories.collectAsState()
-    val rootTabString by viewModel.fileBrowserRootTab.collectAsState(initial = RootTab.DIRECTORIES.name)
+    val hasWhitelistDirectories by viewModel.hasWhitelistDirectories.collectAsStateWithLifecycle()
+    val rootTabString by viewModel.fileBrowserRootTab.collectAsStateWithLifecycle(initialValue = RootTab.DIRECTORIES.name)
     
     // Determine effective root tab based on whitelist state
     val effectiveRootTab = if (hasWhitelistDirectories) {
@@ -156,7 +156,7 @@ fun FileBrowserAdaptiveScreen(
     // Search and sort
     var showSearchSheet by remember { mutableStateOf(false) }
     var isSortExpanded by remember { mutableStateOf(false) }
-    val sortOption by viewModel.fileBrowserSortOption.collectAsState(initial = FileSortOption.NAME_ASC.name)
+    val sortOption by viewModel.fileBrowserSortOption.collectAsStateWithLifecycle(initialValue = FileSortOption.NAME_ASC.name)
     val currentSortOption = remember(sortOption) {
         try {
             FileSortOption.valueOf(sortOption)

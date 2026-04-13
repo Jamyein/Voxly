@@ -34,7 +34,7 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -69,14 +69,14 @@ fun AlbumDetailScreen(
         viewModel.loadAlbum(albumName, albumArtist)
     }
 
-    val albumNameState by viewModel.albumName.collectAsState()
-    val albumArtistState by viewModel.albumArtist.collectAsState()
-    val albumYear by viewModel.albumYear.collectAsState()
-    val albumBitrate by viewModel.albumBitrate.collectAsState()
-    val albumSampleRate by viewModel.albumSampleRate.collectAsState()
-    val files by viewModel.files.collectAsState()
-    val coverPath by viewModel.coverPath.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val albumNameState by viewModel.albumName.collectAsStateWithLifecycle()
+    val albumArtistState by viewModel.albumArtist.collectAsStateWithLifecycle()
+    val albumYear by viewModel.albumYear.collectAsStateWithLifecycle()
+    val albumBitrate by viewModel.albumBitrate.collectAsStateWithLifecycle()
+    val albumSampleRate by viewModel.albumSampleRate.collectAsStateWithLifecycle()
+    val files by viewModel.files.collectAsStateWithLifecycle()
+    val coverPath by viewModel.coverPath.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
     // Pull-to-refresh callback
     val onRefresh: () -> Unit = {

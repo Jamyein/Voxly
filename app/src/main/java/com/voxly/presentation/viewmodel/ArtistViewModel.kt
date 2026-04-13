@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -72,12 +73,12 @@ class ArtistViewModel @Inject constructor(
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             try {
-                _isRefreshing.value = true
+                _isRefreshing.update { true }
                 audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
             } catch (e: Exception) {
                 Timber.e(e, "Artist refresh failed")
             } finally {
-                _isRefreshing.value = false
+                _isRefreshing.update { false }
             }
         }
     }

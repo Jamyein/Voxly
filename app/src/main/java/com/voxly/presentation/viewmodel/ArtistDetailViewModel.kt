@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -91,12 +92,12 @@ class ArtistDetailViewModel @AssistedInject constructor(
                 val cachedArtist = artistCacheRepository.getArtist(artistName)
 
                 if (cachedArtist != null) {
-                    _artistName.value = cachedArtist.name
-                    _files.value = cachedArtist.files
-                    _coverPath.value = cachedArtist.coverPath
-                    _coverAlbumId.value = cachedArtist.files.firstOrNull {
+                    _artistName.update { cachedArtist.name }
+                    _files.update { cachedArtist.files }
+                    _coverPath.update { cachedArtist.coverPath }
+                    _coverAlbumId.update { cachedArtist.files.firstOrNull {
                         it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
-                    }?.mediaStoreAlbumId
+                    }?.mediaStoreAlbumId }
                     calculateStats(cachedArtist.files)
                     loadAlbumYears(cachedArtist.files)
                     // precomputeAlbumCovers is deferred - called by carousel preloadAdjacentAlbumCovers
@@ -110,13 +111,13 @@ class ArtistDetailViewModel @AssistedInject constructor(
                         cacheArtistData(scannerArtist.name, scannerArtist.files, scannerArtist.coverPath)
                         loadAlbumYears(scannerArtist.files)
                     } else {
-                        _artistName.value = artistName
-                        _files.value = emptyList()
+                        _artistName.update { artistName }
+                        _files.update { emptyList() }
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                _artistName.value = artistName
+                _artistName.update { artistName }
             }
         }
     }
@@ -129,12 +130,12 @@ class ArtistDetailViewModel @AssistedInject constructor(
         artistCacheRepository.cacheArtist(artistGroup)
 
         // Also update ViewModel state
-        _artistName.value = artistName
-        _files.value = files
-        _coverPath.value = coverPath
-        _coverAlbumId.value = files.firstOrNull { 
+        _artistName.update { artistName }
+        _files.update { files }
+        _coverPath.update { coverPath }
+        _coverAlbumId.update { files.firstOrNull { 
             it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
-        }?.mediaStoreAlbumId
+        }?.mediaStoreAlbumId }
         calculateStats(files)
         precomputeAlbumCovers(files)
         loadAlbumYears(files)
@@ -143,10 +144,10 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private fun calculateStats(files: List<AudioFile>) {
         // Calculate album count (distinct albums)
         val albums = files.mapNotNull { it.metadata.album }.distinct()
-        _albumCount.value = albums.size
+        _albumCount.update { albums.size }
 
         // Calculate total duration
-        _totalDuration.value = files.sumOf { it.duration }
+        _totalDuration.update { files.sumOf { it.duration } }
     }
 
     /**
@@ -161,7 +162,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     .distinct()
 
                 if (albumNames.isEmpty()) {
-                    _albumYears.value = emptyMap()
+                    _albumYears.update { emptyMap() }
                     return@launch
                 }
 
@@ -171,10 +172,10 @@ class ArtistDetailViewModel @AssistedInject constructor(
                         .getAlbumSummariesByNames(albumNames)
                 }
 
-                _albumYears.value = summaries.associate { it.albumTitle to it.year }
+                _albumYears.update { summaries.associate { it.albumTitle to it.year } }
             } catch (e: Exception) {
                 Timber.e(e, "Error loading album years from view")
-                _albumYears.value = emptyMap()
+                _albumYears.update { emptyMap() }
             }
         }
     }
@@ -202,7 +203,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     albumName to fileWithArt?.path
                 }.toMap()
             }
-            _albumCovers.value = covers
+            _albumCovers.update { covers }
 
             preloadAdjacentAlbumCovers(0)
         }
@@ -260,11 +261,11 @@ class ArtistDetailViewModel @AssistedInject constructor(
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             try {
-                _isRefreshing.value = true
+                _isRefreshing.update { true }
                 audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
                 loadArtist(navKey.artistName)
             } finally {
-                _isRefreshing.value = false
+                _isRefreshing.update { false }
             }
         }
     }

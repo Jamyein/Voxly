@@ -20,6 +20,7 @@ import com.voxly.presentation.screens.settings.SettingsUiState
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /** Timeout for StateFlow sharing in milliseconds */
 private const val STATE_FLOW_TIMEOUT_MS = 5000L
@@ -597,35 +598,39 @@ class SettingsViewModel @Inject constructor(
     fun initDragDialogState(type: DataSourceType) {
         val config = sourceConfigurations.value.getConfig(type)
         val sortedSources = config.sources.sortedBy { it.order }
-        _dragDialogState.value = DragDialogState(
-            sourceType = type,
-            sources = sortedSources.map {
-                DragDialogSourceItem(
-                    sourceId = it.sourceId,
-                    enabled = it.enabled,
-                    order = it.order,
-                    extraOptions = it.extraOptions
-                )
-            }
-        )
+        _dragDialogState.update {
+            DragDialogState(
+                sourceType = type,
+                sources = sortedSources.map {
+                    DragDialogSourceItem(
+                        sourceId = it.sourceId,
+                        enabled = it.enabled,
+                        order = it.order,
+                        extraOptions = it.extraOptions
+                    )
+                }
+            )
+        }
     }
 
     /**
      * Clear drag dialog state
      */
     fun clearDragDialogState() {
-        _dragDialogState.value = null
+        _dragDialogState.update { null }
     }
 
     /**
      * Start dragging an item
      */
     fun startDragging(index: Int) {
-        _dragDialogState.value = _dragDialogState.value?.copy(
-            originalDragIndex = index,
-            draggedIndex = index,
-            dragOffset = 0f
-        )
+        _dragDialogState.update {
+            it?.copy(
+                originalDragIndex = index,
+                draggedIndex = index,
+                dragOffset = 0f
+            )
+        }
     }
 
     /**
@@ -646,13 +651,15 @@ class SettingsViewModel @Inject constructor(
             val item = newList.removeAt(draggedIdx)
             newList.add(newTargetIndex, item)
 
-            _dragDialogState.value = currentState.copy(
-                sources = newList,
-                draggedIndex = newTargetIndex,
-                dragOffset = 0f
-            )
+            _dragDialogState.update {
+                currentState.copy(
+                    sources = newList,
+                    draggedIndex = newTargetIndex,
+                    dragOffset = 0f
+                )
+            }
         } else {
-            _dragDialogState.value = currentState.copy(dragOffset = newDragOffset)
+            _dragDialogState.update { currentState.copy(dragOffset = newDragOffset) }
         }
     }
 
@@ -670,11 +677,13 @@ class SettingsViewModel @Inject constructor(
             reorderSources(currentState.sourceType, reorderedIds)
         }
 
-        _dragDialogState.value = currentState.copy(
-            draggedIndex = null,
-            dragOffset = 0f,
-            originalDragIndex = null
-        )
+        _dragDialogState.update {
+            currentState.copy(
+                draggedIndex = null,
+                dragOffset = 0f,
+                originalDragIndex = null
+            )
+        }
     }
 
     /**
@@ -688,11 +697,13 @@ class SettingsViewModel @Inject constructor(
             // Re-fetch original order from persistent storage
             initDragDialogState(currentState.sourceType)
         } else {
-            _dragDialogState.value = currentState.copy(
-                draggedIndex = null,
-                dragOffset = 0f,
-                originalDragIndex = null
-            )
+            _dragDialogState.update {
+                currentState.copy(
+                    draggedIndex = null,
+                    dragOffset = 0f,
+                    originalDragIndex = null
+                )
+            }
         }
     }
 
@@ -894,5 +905,5 @@ class SettingsViewModel @Inject constructor(
             minDurationFilterEnabled = values[16] as Boolean,
             lyricsTimestampFormatEnabled = values[17] as Boolean
         )
-    }.stateIn(viewModelScope, SharingStarted.Lazily, SettingsUiState())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), SettingsUiState())
 }

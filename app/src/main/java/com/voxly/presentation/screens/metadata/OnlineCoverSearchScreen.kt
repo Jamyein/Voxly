@@ -45,7 +45,7 @@ import androidx.compose.material3.TopAppBarDefaults
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -79,12 +79,12 @@ fun OnlineCoverSearchScreen(
     onNavigateBack: () -> Unit,
     onCoverSelected: (ByteArray) -> Unit
 ) {
-    val isLoading by viewModel.isLoading.collectAsState()
-    val errorMessage by viewModel.errorMessage.collectAsState()
-    val searchProgress by viewModel.searchProgressState.collectAsState()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
+    val errorMessage by viewModel.errorMessage.collectAsStateWithLifecycle(initialValue = null)
+    val searchProgress by viewModel.searchProgressState.collectAsStateWithLifecycle()
     val coverResults = searchProgress.results
-    val searchTitle by viewModel.searchTitle.collectAsState()
-    val searchArtist by viewModel.searchArtist.collectAsState()
+    val searchTitle by viewModel.searchTitle.collectAsStateWithLifecycle()
+    val searchArtist by viewModel.searchArtist.collectAsStateWithLifecycle()
     var isSelectingCover by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     

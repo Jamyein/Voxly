@@ -10,7 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,7 +46,7 @@ class MainActivity : AppCompatActivity() {
             var isReady by remember { mutableStateOf(false) }
 
             val splashViewModel: SplashViewModel = hiltViewModel()
-            val isInitialized by splashViewModel.isInitialized.collectAsState()
+            val isInitialized by splashViewModel.isInitialized.collectAsStateWithLifecycle()
 
             // Keep splash screen visible while initializing
             LaunchedEffect(isInitialized) {
@@ -57,8 +57,8 @@ class MainActivity : AppCompatActivity() {
             splashScreen.setKeepOnScreenCondition { !isReady }
 
             val settingsViewModel: SettingsViewModel = hiltViewModel()
-            val dynamicColors by settingsViewModel.dynamicColors.collectAsState()
-            val themeMode by settingsViewModel.themeMode.collectAsState()
+            val dynamicColors by settingsViewModel.dynamicColors.collectAsStateWithLifecycle()
+            val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
             val systemDarkTheme = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {
                 "dark" -> true

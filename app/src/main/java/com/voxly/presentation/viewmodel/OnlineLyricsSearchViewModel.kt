@@ -13,13 +13,16 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import timber.log.Timber
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.io.File
 
 /**
@@ -52,8 +55,8 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    private val _errorMessage = MutableSharedFlow<String>(replay = 0)
+    val errorMessage: SharedFlow<String> = _errorMessage.asSharedFlow()
 
     private val _searchState = MutableStateFlow(LyricsSearchState())
     val searchState: StateFlow<LyricsSearchState> = _searchState.asStateFlow()
@@ -68,10 +71,9 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
         val targetPath = path.ifBlank { filePath }
 
         viewModelScope.launch {
-            _isLoading.value = true
-            _errorMessage.value = null
-            _lyricsResults.value = emptyList()
-            _searchState.value = LyricsSearchState()
+            _isLoading.update { true }
+            _lyricsResults.update { emptyList() }
+            _searchState.update { LyricsSearchState() }
 
             // 优先从 SearchSeedHolder 获取实时编辑值
             val seed = searchSeedHolder.peekSeed(targetPath)
@@ -98,23 +100,23 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
                         artist = sanitizeSearchTerm(rawArtist)
                         album = sanitizeSearchTerm(rawAlbum)
 
-                        _searchTitle.value = track
-                        _searchArtist.value = artist
-                        _searchAlbum.value = album
+                        _searchTitle.update { track }
+                        _searchArtist.update { artist }
+                        _searchAlbum.update { album }
 
                         performLyricsSearch(track, artist, album)
                     },
                     onFailure = { error ->
-                        _errorMessage.value = "Failed to load audio file: ${error.message}"
-                        _isLoading.value = false
+                        _errorMessage.emit("Failed to load audio file: ${error.message}")
+                        _isLoading.update { false }
                     }
                 )
                 return@launch
             }
 
-            _searchTitle.value = track
-            _searchArtist.value = artist
-            _searchAlbum.value = album
+            _searchTitle.update { track }
+            _searchArtist.update { artist }
+            _searchAlbum.update { album }
 
             performLyricsSearch(track, artist, album)
         }
@@ -135,13 +137,13 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
     private fun performLyricsSearch(track: String, artist: String?, album: String?) {
         viewModelScope.launch {
             try {
-                _searchState.value = LyricsSearchState(isSearching = true)
+                _searchState.update { LyricsSearchState(isSearching = true) }
                 lyricsRepository.searchOnlineLyricsFlow(track, artist, album).collect { result ->
                     when (result) {
                         is LyricsSourceResult.Result -> {
                             val newResults = _searchState.value.results + result.lyrics
                             _searchState.update { it.copy(results = newResults) }
-                            _lyricsResults.value = newResults
+                            _lyricsResults.update { newResults }
                             // Prefetch lyrics content in background (fire-and-forget)
                             prefetchLyricsContent(result.lyrics)
                         }
@@ -158,19 +160,19 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
                                     errorSources = state.errorSources + (result.source to result.message)
                                 )
                             }
-                            _errorMessage.value = result.message
+                            _errorMessage.emit(result.message)
                         }
                     }
                 }
             } catch (e: Exception) {
                 val message = e.message ?: "Lyrics search failed"
-                _errorMessage.value = message
+                _errorMessage.emit(message)
                 _searchState.update { state ->
                     state.copy(errorSources = state.errorSources + ("System" to message))
                 }
             } finally {
                 _searchState.update { it.copy(isSearching = false) }
-                _isLoading.value = false
+                _isLoading.update { false }
             }
         }
     }
@@ -179,7 +181,7 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
      * Select lyrics and fetch the actual lyrics content.
      */
     fun selectLyrics(result: OnlineLyricsResult) {
-        _selectedLyrics.value = result
+        _selectedLyrics.update { result }
     }
 
     /**
@@ -212,13 +214,9 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
                 null
             }
         } catch (e: Exception) {
-            _errorMessage.value = "Failed to load lyrics: ${e.message}"
+            _errorMessage.emit("Failed to load lyrics: ${e.message}")
             null
         }
-    }
-
-    fun clearError() {
-        _errorMessage.value = null
     }
 
     @AssistedFactory

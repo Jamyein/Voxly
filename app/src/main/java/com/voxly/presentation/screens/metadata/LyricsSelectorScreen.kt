@@ -34,7 +34,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,9 +72,9 @@ fun LyricsSelectorScreen(
     onNavigateToLyricsPoster: (lyricsText: String, selectedIndices: List<Int>) -> Unit,
     viewModel: LyricsSelectorViewModel = hiltViewModel()
 ) {
-    val lyricsText by viewModel.lyricsText.collectAsState()
-    val albumArtBytes by viewModel.albumArtBytes.collectAsState()
-    val isLoading by viewModel.isLoading.collectAsState()
+    val lyricsText by viewModel.lyricsText.collectAsStateWithLifecycle()
+    val albumArtBytes by viewModel.albumArtBytes.collectAsStateWithLifecycle()
+    val isLoading by viewModel.isLoading.collectAsStateWithLifecycle()
 
     // Parse lyrics to get all available lines
     val allLyricsLines = remember(lyricsText) {

@@ -19,6 +19,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
 
@@ -82,9 +83,9 @@ class AlbumDetailViewModel @AssistedInject constructor(
                 }
 
                 if (albumGroup != null) {
-                    _albumName.value = albumGroup.name
-                    _albumArtist.value = albumGroup.albumArtist
-                    _coverPath.value = albumGroup.coverPath
+                    _albumName.update { albumGroup.name }
+                    _albumArtist.update { albumGroup.albumArtist }
+                    _coverPath.update { albumGroup.coverPath }
 
                     val filesWithDiscNumber = albumGroup.files.map { file ->
                         if (file.metadata.discNumber == null) {
@@ -101,19 +102,19 @@ class AlbumDetailViewModel @AssistedInject constructor(
                         }
                     }
 
-                    _files.value = filesWithDiscNumber
+                    _files.update { filesWithDiscNumber }
 
                     // Query year and sampleRate from album_summary_view
                     val albumSummary = databaseProvider.getDatabase()
                         .albumSummaryDao()
                         .getAlbumSummary(albumName, albumArtist)
 
-                    _albumYear.value = albumSummary?.year
-                    _albumSampleRate.value = albumSummary?.maxSampleRate ?: 0
-                    _albumBitrate.value = albumSummary?.maxBitrate ?: 0
+                    _albumYear.update { albumSummary?.year }
+                    _albumSampleRate.update { albumSummary?.maxSampleRate ?: 0 }
+                    _albumBitrate.update { albumSummary?.maxBitrate ?: 0 }
                 } else {
-                    _albumName.value = albumName
-                    _albumArtist.value = albumArtist
+                    _albumName.update { albumName }
+                    _albumArtist.update { albumArtist }
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error loading album: $albumName")
@@ -128,11 +129,11 @@ class AlbumDetailViewModel @AssistedInject constructor(
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             try {
-                _isRefreshing.value = true
+                _isRefreshing.update { true }
                 audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
                 loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
             } finally {
-                _isRefreshing.value = false
+                _isRefreshing.update { false }
             }
         }
     }

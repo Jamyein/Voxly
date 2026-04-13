@@ -40,8 +40,11 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -126,8 +129,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val _modifiedFields = MutableStateFlow<Set<MetadataField>>(emptySet())
     val modifiedFields: StateFlow<Set<MetadataField>> = _modifiedFields.asStateFlow()
 
-    private val _saveResult = MutableStateFlow<SaveResult?>(null)
-    val saveResult: StateFlow<SaveResult?> = _saveResult.asStateFlow()
+    private val _saveResult = MutableSharedFlow<String>()
+    val saveResult: SharedFlow<String> = _saveResult.asSharedFlow()
 
     private val _onlineLyricsResults = MutableStateFlow<List<OnlineLyricsResult>>(emptyList())
     val onlineLyricsResults: StateFlow<List<OnlineLyricsResult>> = _onlineLyricsResults.asStateFlow()
@@ -141,8 +144,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val _lyricsSearchState = MutableStateFlow(LyricsSearchState())
     val lyricsSearchState: StateFlow<LyricsSearchState> = _lyricsSearchState.asStateFlow()
 
-    private val _coverFetchMessage = MutableStateFlow<String?>(null)
-    val coverFetchMessage: StateFlow<String?> = _coverFetchMessage.asStateFlow()
+    private val _coverFetchMessage = MutableSharedFlow<String>()
+    val coverFetchMessage: SharedFlow<String> = _coverFetchMessage.asSharedFlow()
 
     private val _onlineCoverResults = MutableStateFlow<List<OnlineRecording>>(emptyList())
     val onlineCoverResults: StateFlow<List<OnlineRecording>> = _onlineCoverResults.asStateFlow()
@@ -164,8 +167,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private var _originalMetadata: AudioMetadata? = null
     val isScanningReplayGain: StateFlow<Boolean> = _isScanningReplayGain.asStateFlow()
 
-    private val _replayGainScanError = MutableStateFlow<ReplayGainScanError?>(null)
-    val replayGainScanError: StateFlow<ReplayGainScanError?> = _replayGainScanError.asStateFlow()
+    private val _replayGainScanError = MutableSharedFlow<String>()
+    val replayGainScanError: SharedFlow<String> = _replayGainScanError.asSharedFlow()
 
     // Search job tracking - cancel previous search when new one starts
     private var _lyricsSearchJob: kotlinx.coroutines.Job? = null
@@ -193,13 +196,12 @@ class MetadataEditorViewModel @AssistedInject constructor(
     // Combined edit state using combine() - reduces multiple StateFlow updates to single UI recomposition
     val editState: StateFlow<EditState> = combine(
         _hasUnsavedChanges,
-        _modifiedFields,
-        _saveResult
-    ) { hasUnsavedChanges, modifiedFields, saveResult ->
+        _modifiedFields
+    ) { hasUnsavedChanges, modifiedFields ->
         EditState(
             hasUnsavedChanges = hasUnsavedChanges,
             modifiedFields = modifiedFields,
-            saveResult = saveResult
+            saveResult = null
         )
     }.stateIn(
         scope = viewModelScope,
@@ -209,8 +211,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     init {
         // Initialize modified fields to empty - will be populated only by actual edits
-        _modifiedFields.value = emptySet()
-        _hasUnsavedChanges.value = false
+        _modifiedFields.update { emptySet() }
+        _hasUnsavedChanges.update { false }
         
         loadAudioFile()
         viewModelScope.launch {
@@ -265,16 +267,16 @@ class MetadataEditorViewModel @AssistedInject constructor(
      */
     fun updateDebouncedTextField(field: MetadataField, value: String?) {
         when (field) {
-            MetadataField.TITLE -> _titleTextFlow.value = value
-            MetadataField.ARTIST -> _artistTextFlow.value = value
-            MetadataField.ALBUM -> _albumTextFlow.value = value
-            MetadataField.ALBUM_ARTIST -> _albumArtistTextFlow.value = value
-            MetadataField.YEAR -> _yearTextFlow.value = value
-            MetadataField.GENRE -> _genreTextFlow.value = value
-            MetadataField.COMPOSER -> _composerTextFlow.value = value
-            MetadataField.LYRICIST -> _lyricistTextFlow.value = value
-            MetadataField.COMMENT -> _commentTextFlow.value = value
-            MetadataField.LYRICS -> _lyricsTextFlow.value = value
+            MetadataField.TITLE -> _titleTextFlow.update { value }
+            MetadataField.ARTIST -> _artistTextFlow.update { value }
+            MetadataField.ALBUM -> _albumTextFlow.update { value }
+            MetadataField.ALBUM_ARTIST -> _albumArtistTextFlow.update { value }
+            MetadataField.YEAR -> _yearTextFlow.update { value }
+            MetadataField.GENRE -> _genreTextFlow.update { value }
+            MetadataField.COMPOSER -> _composerTextFlow.update { value }
+            MetadataField.LYRICIST -> _lyricistTextFlow.update { value }
+            MetadataField.COMMENT -> _commentTextFlow.update { value }
+            MetadataField.LYRICS -> _lyricsTextFlow.update { value }
             MetadataField.CONDUCTOR -> updateMetadataField(field, value ?: "")
             MetadataField.ALBUM_ART -> { /* handled by updateAlbumArt */ }
         }
@@ -287,14 +289,14 @@ class MetadataEditorViewModel @AssistedInject constructor(
      */
     private fun loadAudioFile() {
         viewModelScope.launch {
-            _uiState.value = MetadataEditorUiState.Loading
+            _uiState.update { MetadataEditorUiState.Loading }
 
             val audioFileResult = audioRepository.getAudioFile(filePath)
 
             audioFileResult.fold(
                 onSuccess = { audioFile ->
                     val metadata = audioFile.metadata
-                    _editedMetadata.value = metadata
+                    _editedMetadata.update { metadata }
                     _originalMetadata = metadata
 
                     // 初始化搜索种子，供 Online Search 屏幕使用
@@ -305,10 +307,12 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         album = metadata.album
                     )
 
-                    _uiState.value = MetadataEditorUiState.Success(
-                        audioFile = audioFile,
-                        editedMetadata = metadata
-                    )
+                    _uiState.update {
+                        MetadataEditorUiState.Success(
+                            audioFile = audioFile,
+                            editedMetadata = metadata
+                        )
+                    }
 
                     // Load cover art asynchronously — don't block UI
                     loadCoverArtAsync(filePath)
@@ -317,7 +321,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     viewModelScope.launch {
                         val replayGainResult = replayGainRepository.readReplayGain(filePath)
                         replayGainResult.getOrNull()?.let { replayGainInfo ->
-                            _pendingReplayGainInfo.value = replayGainInfo
+                            _pendingReplayGainInfo.update { replayGainInfo }
                         }
                     }
                     
@@ -325,9 +329,11 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     tryApplyPendingOnlineMetadata()
                 },
                 onFailure = { error ->
-                    _uiState.value = MetadataEditorUiState.Error(
-                        error.message ?: "Failed to load audio file"
-                    )
+                    _uiState.update {
+                        MetadataEditorUiState.Error(
+                            error.message ?: "Failed to load audio file"
+                        )
+                    }
                 }
             )
         }
@@ -346,12 +352,14 @@ class MetadataEditorViewModel @AssistedInject constructor(
             coverBytes?.let { bytes ->
                 val currentMetadata = _editedMetadata.value ?: return@let
                 if (currentMetadata.albumArt == null) {
-                    _editedMetadata.value = currentMetadata.copy(albumArt = bytes)
+                    _editedMetadata.update { currentMetadata.copy(albumArt = bytes) }
                     val currentState = _uiState.value
                     if (currentState is MetadataEditorUiState.Success) {
-                        _uiState.value = currentState.copy(
-                            editedMetadata = currentMetadata.copy(albumArt = bytes)
-                        )
+                        _uiState.update {
+                            currentState.copy(
+                                editedMetadata = currentMetadata.copy(albumArt = bytes)
+                            )
+                        }
                     }
                 }
             }
@@ -459,10 +467,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     private fun setEditedMetadata(updatedMetadata: AudioMetadata, modifiedField: MetadataField? = null) {
         Logger.d("setEditedMetadata: updating editedMetadata, new title=${updatedMetadata.title}", "MetadataEditor")
-        _editedMetadata.value = updatedMetadata
-        _hasUnsavedChanges.value = true
+        _editedMetadata.update { updatedMetadata }
+        _hasUnsavedChanges.update { true }
         if (modifiedField != null) {
-            _modifiedFields.value = _modifiedFields.value + modifiedField
+            _modifiedFields.update { it + modifiedField }
         }
 
         // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
@@ -476,7 +484,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
         val currentState = _uiState.value
         if (currentState is MetadataEditorUiState.Success) {
             Logger.d("setEditedMetadata: updating uiState with new metadata", "MetadataEditor")
-            _uiState.value = currentState.copy(editedMetadata = updatedMetadata)
+            _uiState.update { currentState.copy(editedMetadata = updatedMetadata) }
         }
     }
 
@@ -486,23 +494,23 @@ class MetadataEditorViewModel @AssistedInject constructor(
      * @param replayGainInfo The new ReplayGain info to save
      */
     fun updateReplayGainInfo(replayGainInfo: ReplayGainInfo) {
-        _pendingReplayGainInfo.value = replayGainInfo
-        _hasUnsavedChanges.value = true
+        _pendingReplayGainInfo.update { replayGainInfo }
+        _hasUnsavedChanges.update { true }
     }
 
     /**
      * Clears the pending ReplayGain info.
      */
     fun clearReplayGainInfo() {
-        _pendingReplayGainInfo.value = null
-        _hasUnsavedChanges.value = true
+        _pendingReplayGainInfo.update { null }
+        _hasUnsavedChanges.update { true }
     }
 
     /**
      * Clears the ReplayGain scan error.
      */
     fun clearReplayGainScanError() {
-        _replayGainScanError.value = null
+
     }
 
     /**
@@ -512,16 +520,16 @@ class MetadataEditorViewModel @AssistedInject constructor(
      */
     fun scanReplayGain() {
         viewModelScope.launch {
-            _isScanningReplayGain.value = true
-            _replayGainScanError.value = null // Clear previous error
-            
+            _isScanningReplayGain.update { true }
+             // Clear previous error
+
             // Using ACCURATE mode for best results - dynamic sampling handles high-res files
             val scanQuality = com.voxly.domain.repository.ScanQuality.ACCURATE
-            
+
             try {
                 val currentScanMode = scanMode.value
                 val filesToScan: List<String>
-                
+
                 // Determine which files to scan based on scan mode (foobar2000 compatible)
                 if (currentScanMode == ScanMode.TRACK_ONLY) {
                     // Track Only: scan single file only, no album gain
@@ -534,7 +542,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     // Always scan all found album files (even if only one - foobar2000 behavior)
                     filesToScan = albumFiles.ifEmpty { listOf(filePath) }
                 }
-                
+
                 Logger.i("ReplayGain scan started. mode=${currentScanMode.name} files=${filesToScan.size}", "MetadataEditor")
 
                 // Get target loudness and clip mode from settings
@@ -574,23 +582,23 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 scanFlow.collect { progress ->
                     when (progress.status) {
                         com.voxly.domain.repository.ScanStatus.COMPLETED -> {
-                            _replayGainScanError.value = null
+
                             // Use ReplayGainInfo directly from progress if available
                             val info = progress.replayGainInfo
                             if (info != null) {
-                                _pendingReplayGainInfo.value = info
-                                _hasUnsavedChanges.value = true
+                                _pendingReplayGainInfo.update { info }
+                                _hasUnsavedChanges.update { true }
                                 Logger.i("ReplayGain scan completed (from progress). mode=${currentScanMode.name}", "MetadataEditor")
                             } else {
                                 // Fallback: read from file if not in progress
                                 val replayGainReadResult = replayGainRepository.readReplayGain(filePath)
                                 replayGainReadResult.getOrNull()?.let { readInfo ->
-                                    _pendingReplayGainInfo.value = readInfo
-                                    _hasUnsavedChanges.value = true
+                                    _pendingReplayGainInfo.update { readInfo }
+                                    _hasUnsavedChanges.update { true }
                                 }
                                 Logger.i("ReplayGain scan completed (from file). mode=${currentScanMode.name}", "MetadataEditor")
                             }
-                            _isScanningReplayGain.value = false
+                            _isScanningReplayGain.update { false }
                         }
                         com.voxly.domain.repository.ScanStatus.FAILED -> {
                             // Determine error type based on reason
@@ -612,8 +620,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                 else ->
                                     ReplayGainScanError.Unknown(progress.currentFilePath)
                             }
-                            _replayGainScanError.value = error
-                            _isScanningReplayGain.value = false
+                            _replayGainScanError.emit(error.toString())
+                            _isScanningReplayGain.update { false }
                             Logger.e("ReplayGain scan failed.", null, "MetadataEditor")
                         }
                         else -> { /* scanning in progress */ }
@@ -621,7 +629,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 }
             } catch (e: Exception) {
                 Logger.e("ReplayGain scan exception: ${e.message}", e, "MetadataEditor")
-                _isScanningReplayGain.value = false
+                _isScanningReplayGain.update { false }
             }
         }
     }
@@ -704,19 +712,14 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 "Save metadata started file=$filePath hasReplayGain=${replayGainToSave != null}",
                 "MetadataEditor"
             )
-            _uiState.value = MetadataEditorUiState.Saving
+            _uiState.update { MetadataEditorUiState.Saving }
 
             // First save the metadata
             val metadataResult = try {
                 audioRepository.updateMetadata(filePath, metadataToSave)
             } catch (e: RecoverableMediaStoreException) {
-                _saveResult.value = SaveResult.Error(
-                    message = e.message ?: "MediaStore permission required to edit this file",
-                    requiresReauthorization = true,
-                    errorCode = SaveErrorCode.MEDIASTORE_PERMISSION_REQUIRED,
-                    mediaStoreIntentSender = e.intentSender
-                )
-                _uiState.value = MetadataEditorUiState.Error(e.message ?: "MediaStore permission required")
+                _saveResult.emit(e.message ?: "MediaStore permission required to edit this file")
+                _uiState.update { MetadataEditorUiState.Error(e.message ?: "MediaStore permission required") }
                 return@launch
             }
             
@@ -731,7 +734,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         )
                         replayGainSuccess = replayGainResult.isSuccess
                         if (replayGainSuccess) {
-                            _pendingReplayGainInfo.value = null // Clear after successful save
+                            _pendingReplayGainInfo.update { null } // Clear after successful save
                         } else {
                             Logger.w(
                                 "Save replaygain failed file=$filePath reason=${replayGainResult.exceptionOrNull()?.message ?: "unknown"}",
@@ -740,9 +743,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         }
                     }
                     
-                    _hasUnsavedChanges.value = false
-                    _modifiedFields.value = emptySet()
-                    _saveResult.value = SaveResult.Success
+                    _hasUnsavedChanges.update { false }
+                    _modifiedFields.update { emptySet() }
+                    _saveResult.emit("Save successful")
 
                     // Add to recent edits history
                     _originalMetadata?.let { original ->
@@ -753,28 +756,30 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         )
                     }
                     val currentSuccessState = _uiState.value as? MetadataEditorUiState.Success
-                    _uiState.value = currentSuccessState?.copy(
-                        editedMetadata = metadataToSave,
-                        audioFile = currentSuccessState.audioFile.copy(
-                            metadata = metadataToSave,
-                            replayGainInfo = replayGainToSave ?: currentSuccessState.audioFile.replayGainInfo
+                    _uiState.update {
+                        currentSuccessState?.copy(
+                            editedMetadata = metadataToSave,
+                            audioFile = currentSuccessState.audioFile.copy(
+                                metadata = metadataToSave,
+                                replayGainInfo = replayGainToSave ?: currentSuccessState.audioFile.replayGainInfo
+                            )
+                        ) ?: MetadataEditorUiState.Success(
+                            audioFile = AudioFile(
+                                id = "",
+                                path = filePath,
+                                name = "",
+                                size = 0,
+                                duration = 0L,
+                                format = "",
+                                bitrate = 0,
+                                sampleRate = 0,
+                                channels = 0,
+                                metadata = metadataToSave,
+                                replayGainInfo = replayGainToSave
+                            ),
+                            editedMetadata = metadataToSave
                         )
-                    ) ?: MetadataEditorUiState.Success(
-                        audioFile = AudioFile(
-                            id = "",
-                            path = filePath,
-                            name = "",
-                            size = 0,
-                            duration = 0L,
-                            format = "",
-                            bitrate = 0,
-                            sampleRate = 0,
-                            channels = 0,
-                            metadata = metadataToSave,
-                            replayGainInfo = replayGainToSave
-                        ),
-                        editedMetadata = metadataToSave
-                    )
+                    }
                     Logger.i(
                         "Save metadata success file=$filePath replayGainSuccess=$replayGainSuccess elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
                         "MetadataEditor"
@@ -796,20 +801,14 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             errorMessage.contains("EACCES") ||
                             errorMessage.contains("write permission")
 
-                    _saveResult.value = SaveResult.Error(
-                        message = errorMessage,
-                        requiresReauthorization = requiresReauthorization,
-                        errorCode = if (requiresReauthorization) {
-                            SaveErrorCode.PERMISSION_REQUIRED
-                        } else {
-                            SaveErrorCode.SAVE_FAILED
-                        }
-                    )
+                    _saveResult.emit(errorMessage)
                     val currentState = _uiState.value
                     if (currentState is MetadataEditorUiState.Saving) {
-                        _uiState.value = MetadataEditorUiState.Error(
-                            errorMessage + if (requiresReauthorization) "\n\n请重新选择文件以恢复写入权限。" else ""
-                        )
+                        _uiState.update {
+                            MetadataEditorUiState.Error(
+                                errorMessage + if (requiresReauthorization) "\n\n请重新选择文件以恢复写入权限。" else ""
+                            )
+                        }
                     }
                 }
             )
@@ -823,15 +822,15 @@ class MetadataEditorViewModel @AssistedInject constructor(
         viewModelScope.launch {
             val metadataReadResult = audioRepository.readMetadata(filePath)
             metadataReadResult.onSuccess { originalMetadata ->
-                _editedMetadata.value = originalMetadata
+                _editedMetadata.update { originalMetadata }
                 _originalMetadata = originalMetadata
-                _hasUnsavedChanges.value = false
-                _modifiedFields.value = emptySet()
+                _hasUnsavedChanges.update { false }
+                _modifiedFields.update { emptySet() }
                 // 清除当前文件的搜索种子（放弃修改后不再使用编辑中的值）
                 searchSeedHolder.removeSeedForFile(filePath)
                 val currentState = _uiState.value
                 if (currentState is MetadataEditorUiState.Success) {
-                    _uiState.value = currentState.copy(editedMetadata = originalMetadata)
+                    _uiState.update { currentState.copy(editedMetadata = originalMetadata) }
                 }
             }
         }
@@ -923,7 +922,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
      * Clears the save result after it has been handled.
      */
     fun clearSaveResult() {
-        _saveResult.value = null
+        
     }
 
     fun reauthorizeAndRetrySave(uri: Uri, grantType: SafGrantType) {
@@ -938,12 +937,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     val message = error.message
                         ?: "Failed to persist SAF permission. Please retry selecting the file or directory."
                     Logger.e("SAF reauthorization failed file=$filePath reason=$message", error, TAG)
-                    _saveResult.value = SaveResult.Error(
-                        message = message,
-                        requiresReauthorization = true,
-                        errorCode = SaveErrorCode.PERMISSION_REAUTHORIZE_FAILED
-                    )
-                    _uiState.value = MetadataEditorUiState.Error(message)
+                    _saveResult.emit(message)
+                    _uiState.update { MetadataEditorUiState.Error(message) }
                 }
             )
         }
@@ -965,11 +960,11 @@ class MetadataEditorViewModel @AssistedInject constructor(
         _coverSearchJob?.cancel()
 
         _coverSearchJob = viewModelScope.launch {
-            _coverSearchState.value = CoverSearchState(isSearching = true)
-            _isOnlineCoverLoading.value = true
-            _onlineCoverError.value = null
+            _coverSearchState.update { CoverSearchState(isSearching = true) }
+            _isOnlineCoverLoading.update { true }
+            _onlineCoverError.update { null }
 
-            _onlineCoverResults.value = emptyList()
+            _onlineCoverResults.update { emptyList() }
             try {
                 val coverSearchResult = aggregatedOnlineMetadataRepository.searchByTrackForCover(title, artist)
                 coverSearchResult.fold(
@@ -977,7 +972,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         recordings.forEach { recording ->
                             val newResults = _coverSearchState.value.results + recording
                             _coverSearchState.update { it.copy(results = newResults) }
-                            _onlineCoverResults.value = newResults
+                            _onlineCoverResults.update { newResults }
                         }
                         _coverSearchState.update { it.copy(isSearching = false) }
                     },
@@ -986,7 +981,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         _coverSearchState.update { state ->
                             state.copy(errorSources = state.errorSources + ("System" to message))
                         }
-                        _onlineCoverError.value = message
+                        _onlineCoverError.update { message }
                         _coverSearchState.update { it.copy(isSearching = false) }
                     }
                 )
@@ -995,10 +990,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 _coverSearchState.update { state ->
                     state.copy(errorSources = state.errorSources + ("System" to message))
                 }
-                _onlineCoverError.value = message
+                _onlineCoverError.update { message }
                 _coverSearchState.update { it.copy(isSearching = false) }
             } finally {
-                _isOnlineCoverLoading.value = false
+                _isOnlineCoverLoading.update { false }
             }
         }
     }
@@ -1015,12 +1010,12 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     )
                     if (bytes.isNotEmpty()) {
                         updateAlbumArt(bytes)
-                        _coverFetchMessage.value = "Cover fetched successfully"
+                        _coverFetchMessage.emit("Cover fetched successfully")
                     } else {
-                        _coverFetchMessage.value = "Cover URL is invalid"
+                        _coverFetchMessage.emit("Cover URL is invalid")
                     }
                 } catch (e: Exception) {
-                    _coverFetchMessage.value = "Failed to load cover: ${e.message}"
+                    _coverFetchMessage.emit("Failed to load cover: ${e.message}")
                 }
             }
             return
@@ -1032,12 +1027,12 @@ class MetadataEditorViewModel @AssistedInject constructor(
         
         // If no releaseId, show a message and return
         if (releaseId.isNullOrBlank()) {
-            _coverFetchMessage.value = "无法获取封面：该结果没有关联的专辑信息"
+            viewModelScope.launch { _coverFetchMessage.emit("无法获取封面：该结果没有关联的专辑信息") }
             return
         }
 
         viewModelScope.launch {
-            _coverFetchMessage.value = null
+            
 
             val oldPreferred = aggregatedOnlineMetadataRepository.preferredSource
             try {
@@ -1057,14 +1052,14 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     onSuccess = { cover ->
                         if (cover != null) {
                             updateAlbumArt(cover)
-                            _coverFetchMessage.value = "Cover fetched successfully"
+                            _coverFetchMessage.emit("Cover fetched successfully")
                         } else {
-                            _coverFetchMessage.value = "No online cover found"
+                            _coverFetchMessage.emit("No online cover found")
                         }
                     },
                     onFailure = {
                         Logger.e("applyOnlineCover failed: ${it.message}", it, TAG)
-                        _coverFetchMessage.value = it.message ?: "Cover fetch failed"
+                        _coverFetchMessage.emit(it.message ?: "Cover fetch failed")
                     }
                 )
             } finally {
@@ -1074,13 +1069,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     fun clearCoverFetchMessage() {
-        _coverFetchMessage.value = null
+        
     }
 
     fun clearOnlineCoverResults() {
-        _onlineCoverResults.value = emptyList()
-        _onlineCoverError.value = null
-        _coverSearchState.value = CoverSearchState()
+        _onlineCoverResults.update { emptyList() }
+        _onlineCoverError.update { null }
+        _coverSearchState.update { CoverSearchState() }
     }
 
     fun searchOnlineLyrics() {
@@ -1093,18 +1088,18 @@ class MetadataEditorViewModel @AssistedInject constructor(
         _lyricsSearchJob?.cancel()
 
         _lyricsSearchJob = viewModelScope.launch {
-            _lyricsSearchState.value = LyricsSearchState(isSearching = true)
-            _isOnlineLyricsLoading.value = true
-            _onlineLyricsError.value = null
+            _lyricsSearchState.update { LyricsSearchState(isSearching = true) }
+            _isOnlineLyricsLoading.update { true }
+            _onlineLyricsError.update { null }
 
-            _onlineLyricsResults.value = emptyList()
+            _onlineLyricsResults.update { emptyList() }
             try {
                 lyricsRepository.searchOnlineLyricsFlow(track, artist, album).collect { result ->
                     when (result) {
                         is LyricsSourceResult.Result -> {
                             val newResults = _lyricsSearchState.value.results + result.lyrics
                             _lyricsSearchState.update { it.copy(results = newResults) }
-                            _onlineLyricsResults.value = newResults
+                            _onlineLyricsResults.update { newResults }
                         }
 
                         is LyricsSourceResult.SourceCompleted -> {
@@ -1119,26 +1114,26 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                     errorSources = state.errorSources + (result.source to result.message)
                                 )
                             }
-                            _onlineLyricsError.value = result.message
+                            _onlineLyricsError.update { result.message }
                         }
                     }
                 }
             } catch (e: Exception) {
                 val message = e.message ?: "Lyrics search failed"
-                _onlineLyricsError.value = message
+                _onlineLyricsError.update { message }
                 _lyricsSearchState.update { state ->
                     state.copy(errorSources = state.errorSources + ("System" to message))
                 }
             } finally {
                 _lyricsSearchState.update { it.copy(isSearching = false) }
-                _isOnlineLyricsLoading.value = false
+                _isOnlineLyricsLoading.update { false }
             }
         }
     }
 
     fun applyOnlineLyrics(result: OnlineLyricsResult) {
         viewModelScope.launch {
-            _isOnlineLyricsLoading.value = true
+            _isOnlineLyricsLoading.update { true }
             try {
                 val lyrics = withContext(Dispatchers.IO) {
                     lyricsRepository.getOnlineLyrics(result).getOrNull()
@@ -1147,20 +1142,20 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     val text = if (lyrics.isSynced) lyrics.toLrcFormat() else lyrics.text
                     updateMetadataField(MetadataField.LYRICS, text)
                 } else {
-                    _onlineLyricsError.value = "Failed to load lyrics content"
+                    _onlineLyricsError.update { "Failed to load lyrics content" }
                 }
             } catch (e: Exception) {
-                _onlineLyricsError.value = "Failed to load lyrics: ${e.message}"
+                _onlineLyricsError.update { "Failed to load lyrics: ${e.message}" }
             } finally {
-                _isOnlineLyricsLoading.value = false
+                _isOnlineLyricsLoading.update { false }
             }
         }
     }
 
     fun clearOnlineLyricsResults() {
-        _onlineLyricsResults.value = emptyList()
-        _onlineLyricsError.value = null
-        _lyricsSearchState.value = LyricsSearchState()
+        _onlineLyricsResults.update { emptyList() }
+        _onlineLyricsError.update { null }
+        _lyricsSearchState.update { LyricsSearchState() }
     }
 
     fun applyOnlineMetadata(metadata: AudioMetadata) {
@@ -1230,10 +1225,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
         
         Logger.d("applyOnlineMetadata: setting edited metadata, title=${updatedMetadata.title}, modifiedFields=$modifiedFields", "MetadataEditor")
         
-        _editedMetadata.value = updatedMetadata
-        _hasUnsavedChanges.value = true
+        _editedMetadata.update { updatedMetadata }
+        _hasUnsavedChanges.update { true }
         if (modifiedFields.isNotEmpty()) {
-            _modifiedFields.value = _modifiedFields.value + modifiedFields
+            _modifiedFields.update { it + modifiedFields }
         }
 
         // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
@@ -1248,7 +1243,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
         val currentUiState = _uiState.value
         if (currentUiState is MetadataEditorUiState.Success) {
             Logger.d("applyOnlineMetadata: updating uiState with new metadata", "MetadataEditor")
-            _uiState.value = currentUiState.copy(editedMetadata = updatedMetadata)
+            _uiState.update { currentUiState.copy(editedMetadata = updatedMetadata) }
         }
     }
 
@@ -1266,20 +1261,20 @@ class MetadataEditorViewModel @AssistedInject constructor(
             val newLyrics: String
             if (hasThreeDigit && !currentFormatted) {
                 // If currently has 3-digit, convert to 2-digit
-                _isLyricsTimestampFormatted.value = true
+                _isLyricsTimestampFormatted.update { true }
                 newLyrics = Lyrics.formatTimestamps(currentLyrics)
             } else {
                 // If currently has 2-digit (manually formatted), we can't easily convert back
                 // So just toggle the flag
-                _isLyricsTimestampFormatted.value = !currentFormatted
+                _isLyricsTimestampFormatted.update { !currentFormatted }
                 newLyrics = currentLyrics
             }
-            
+
             val updatedMetadata = currentMetadata.copy(lyrics = newLyrics)
             setEditedMetadata(updatedMetadata)
-            
+
             // Track that lyrics field was modified
-            _modifiedFields.value = _modifiedFields.value + MetadataField.LYRICS
+            _modifiedFields.update { it + MetadataField.LYRICS }
         }
     }
 
