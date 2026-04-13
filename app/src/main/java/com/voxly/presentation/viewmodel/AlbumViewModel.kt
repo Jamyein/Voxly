@@ -67,8 +67,18 @@ class AlbumViewModel @Inject constructor(
         private const val MAX_SCROLL_POSITIONS = 10
     }
 
+    private var initialLoadDone = false
+
     init {
-        refresh(forceRefresh = false)
+        viewModelScope.launch {
+            if (audioFileScanner.hasCachedData()) {
+                Timber.d("AlbumViewModel: Using cached data, skipping initial refresh")
+            } else {
+                Timber.d("AlbumViewModel: No cached data, performing initial load")
+                refresh(forceRefresh = false)
+            }
+            initialLoadDone = true
+        }
     }
 
     /**

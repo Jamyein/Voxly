@@ -21,6 +21,7 @@ import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -137,22 +138,37 @@ internal fun AlbumGridItem(
     onClick: () -> Unit
 ) {
     val coverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
+    val coverFile = remember(album) {
+        album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+            ?: album.files.firstOrNull()
+    }
+    val albumYear = remember(album) { getAlbumDisplayYearString(album) }
+    val trackCountText = stringResource(R.string.track_count, album.files.size)
+    val infoText = remember(album, albumYear, trackCountText) {
+        buildString {
+            append(trackCountText)
+            album.albumArtist?.let {
+                append(" ")
+                append(it)
+            }
+            if (albumYear != null) {
+                append(" ")
+                append(albumYear)
+            }
+        }
+    }
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        // Album cover - square aspect ratio with rounded corners, no shadow
-        // Only the cover image area is clickable
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .sharedBoundsIfAvailable(key = coverKey)
                 .clip(MaterialTheme.shapes.medium)
-            .clickable(onClick = onClick),
+                .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            val coverFile = album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                ?: album.files.firstOrNull()
             if (coverFile != null) {
                 AlbumArtImage(
                     filePath = coverFile.path,
@@ -165,13 +181,11 @@ internal fun AlbumGridItem(
                 DefaultAlbumArtPlaceholder(size = 200.dp)
             }
         }
-        // Album info - transparent background
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 8.dp, vertical = 8.dp)
         ) {
-            // Album name - bold
             Text(
                 text = album.name,
                 style = MaterialTheme.typography.bodyMedium,
@@ -180,19 +194,6 @@ internal fun AlbumGridItem(
                 overflow = TextOverflow.Ellipsis
             )
             Spacer(modifier = Modifier.height(4.dp))
-            // Track count, artist, and year in the same row
-            val albumYear = getAlbumDisplayYearString(album)
-            val infoText = buildString {
-                append(stringResource(R.string.track_count, album.files.size))
-                album.albumArtist?.let {
-                    append(" ")
-                    append(it)
-                }
-                if (albumYear != null) {
-                    append(" ")
-                    append(albumYear)
-                }
-            }
             Text(
                 text = infoText,
                 style = MaterialTheme.typography.bodySmall,

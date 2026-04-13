@@ -83,6 +83,13 @@ class ArtistViewModel @Inject constructor(
     }
 
     init {
-        refresh(forceRefresh = false)
+        viewModelScope.launch {
+            if (audioFileScanner.hasCachedData()) {
+                Timber.d("ArtistViewModel: Using cached data, skipping initial refresh")
+            } else {
+                Timber.d("ArtistViewModel: No cached data, performing initial load")
+                refresh(forceRefresh = false)
+            }
+        }
     }
 }
