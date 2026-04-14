@@ -247,9 +247,11 @@ class AlbumArtistAggregator @Inject constructor(
                 else -> artistName
             }
 
-            val coverFile = artistFiles.firstOrNull {
-                it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
-            } ?: artistFiles.firstOrNull()
+            val sortedForCover = artistFiles.sortedWith(
+                compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    .thenBy { it.metadata.album }
+            )
+            val coverFile = sortedForCover.firstOrNull()
             ArtistGroup(
                 name = displayName,
                 albums = artistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
