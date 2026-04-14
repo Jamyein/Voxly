@@ -359,7 +359,7 @@ class AudioFileScanner @Inject constructor(
         // Fallback to TagLib audio info if not provided by complete metadata
         val audioInfo = completeMetadata?.audioInfo ?: metadataProcessor.readAudioInfo(filePath)
         val finalDuration = if (duration == 0L) audioInfo?.durationMs ?: 0L else duration
-        val finalBitrate = if (bitrate == 0) (audioInfo?.bitrate ?: 0) / 1000 else bitrate
+        val finalBitrate = if (bitrate == 0) (audioInfo?.bitrate ?: 0) / com.voxly.core.util.Constants.BPS_TO_KBPS else bitrate
 
         AudioFile(
             id = filePath.hashCode().toString(),

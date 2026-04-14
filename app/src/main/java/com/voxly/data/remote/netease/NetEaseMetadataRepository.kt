@@ -2,6 +2,7 @@ package com.voxly.data.remote.netease
 
 import android.os.SystemClock
 
+import com.voxly.core.util.Constants
 import com.voxly.core.util.Logger
 import com.voxly.data.remote.SearchQueryBuilder
 import com.voxly.data.remote.mapper.OnlineRecordingMapper
@@ -293,7 +294,7 @@ class NetEaseMetadataRepository @Inject constructor(
                                 title = searchSong.name,
                                 artist = artistName,
                                 album = albumName,
-                                duration = (searchSong.duration / 1000).toInt(),
+                                duration = (searchSong.duration / Constants.MS_PER_SECOND).toInt(),
                                 releaseId = albumId?.toString() ?: searchSong.id.toString(),
                                 source = OnlineSource.NETEASE,
                                 coverArtUrl = coverUrl,
@@ -369,7 +370,7 @@ class NetEaseMetadataRepository @Inject constructor(
                             number = song.position ?: song.trackNo,
                             title = song.name,
                             artist = song.ar.firstOrNull()?.name ?: "",
-                            duration = if (song.dt > 0) (song.dt / 1000).toInt() else null
+                            duration = if (song.dt > 0) (song.dt / Constants.MS_PER_SECOND).toInt() else null
                         )
                     } ?: emptyList(),
                     coverArtUrl = album?.album?.picUrl?.let(::normalizeCoverUrl)

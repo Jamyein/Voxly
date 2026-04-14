@@ -22,7 +22,7 @@ import com.voxly.domain.usecase.BatchProgress
 import com.voxly.domain.model.BatchStatus
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.viewmodel.LibraryViewModel
+import com.voxly.presentation.viewmodel.LibraryBatchViewModel
 
 /**
  * Batch progress dialog showing operation progress.
@@ -32,7 +32,7 @@ import com.voxly.presentation.viewmodel.LibraryViewModel
 fun BatchProgressDialog(
     progress: BatchProgress,
     onDismiss: () -> Unit,
-    viewModel: LibraryViewModel
+    viewModel: LibraryBatchViewModel
 ) {
     val batchResult by viewModel.batchResult.collectAsStateWithLifecycle()
     val showFailureList = remember { mutableStateOf(false) }

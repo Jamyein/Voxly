@@ -169,7 +169,7 @@ fun ScanDirectorySettingsScreen(
                     }
                 }
 
-                items(directories) { directory ->
+                items(directories, key = { it.uri }) { directory ->
                     WhitelistDirectoryItem(
                         directory = directory,
                         onRemove = { viewModel.removeDirectory(directory.uri) }
@@ -234,7 +234,7 @@ fun ScanDirectorySettingsScreen(
                     }
                 }
 
-                items(blacklistDirectories) { directory ->
+                items(blacklistDirectories, key = { it.uri }) { directory ->
                     BlacklistDirectoryItem(
                         directory = directory,
                         onRemove = { viewModel.removeBlacklistDirectory(directory.uri) }

@@ -146,7 +146,7 @@ data class ITunesResult(
      * Gets duration in seconds.
      */
     fun getDurationSeconds(): Int? {
-        return trackTimeMillis?.let { (it / 1000).toInt() }
+        return trackTimeMillis?.let { (it / com.voxly.core.util.Constants.MS_PER_SECOND).toInt() }
     }
 }
 

@@ -27,7 +27,6 @@ import javax.inject.Inject
 import com.voxly.core.util.Constants
 import com.voxly.core.util.PathUtils
 import com.voxly.presentation.ui.extractAndCacheCoverBytes
-import com.voxly.presentation.ui.extractAndCacheCoverBytes
 import javax.inject.Singleton
 
 // Common base directories for path normalization
@@ -67,6 +66,12 @@ class TagLibMetadataProcessor @Inject constructor(
     private val safWriteAccessService: SafWriteAccessService,
     private val musicLibraryCache: MusicLibraryCache
 ) {
+    // Memory cache for hot data (50 entries, ~2-5MB)
+    private val memoryCache = LruCache<String, MetadataCacheEntry>(MEMORY_CACHE_SIZE)
+
+    // Path resolution cache to avoid repeated file system searches
+    private val pathResolutionCache = LruCache<String, String?>(PATH_CACHE_SIZE)
+
     companion object {
         private const val TAG = "TagLibProcessor"
 
@@ -89,11 +94,9 @@ class TagLibMetadataProcessor @Inject constructor(
 
         // Memory cache for hot data (50 entries, ~2-5MB)
         private const val MEMORY_CACHE_SIZE = 50
-        private val memoryCache = LruCache<String, MetadataCacheEntry>(MEMORY_CACHE_SIZE)
 
         // Path resolution cache to avoid repeated file system searches
         private const val PATH_CACHE_SIZE = 100
-        private val pathResolutionCache = LruCache<String, String?>(PATH_CACHE_SIZE)
     }
 
     /**
@@ -157,6 +160,15 @@ class TagLibMetadataProcessor @Inject constructor(
         memoryCache.evictAll()
         pathResolutionCache.evictAll()
         Timber.tag(TAG).d("Memory cache cleared")
+    }
+
+    /**
+     * Clears both caches. Call this when the processor instance needs to be reset.
+     */
+    fun clearCache() {
+        memoryCache.evictAll()
+        pathResolutionCache.evictAll()
+        Timber.tag(TAG).d("Cache cleared")
     }
 
     /**
@@ -336,7 +348,7 @@ class TagLibMetadataProcessor @Inject constructor(
                             val cachedMetadata = CompleteMetadata(
                                 metadata = cachedFile.metadata,
                                 audioInfo = AudioInfo(
-                                    bitrate = cachedFile.bitrate * 1000, // Convert back to bps
+                                    bitrate = cachedFile.bitrate * Constants.BPS_TO_KBPS, // Convert back to bps
                                     sampleRate = cachedFile.sampleRate,
                                     channels = cachedFile.channels,
                                     durationMs = cachedFile.duration
@@ -351,7 +363,7 @@ class TagLibMetadataProcessor @Inject constructor(
                                 val cachedMetadata = CompleteMetadata(
                                     metadata = cachedFile.metadata,
                                     audioInfo = AudioInfo(
-                                        bitrate = cachedFile.bitrate * 1000,
+                                        bitrate = cachedFile.bitrate * Constants.BPS_TO_KBPS,
                                         sampleRate = cachedFile.sampleRate,
                                         channels = cachedFile.channels,
                                         durationMs = cachedFile.duration
@@ -434,7 +446,7 @@ class TagLibMetadataProcessor @Inject constructor(
                     bitrate = it.bitrate,
                     sampleRate = it.sampleRate,
                     channels = it.channels,
-                    durationMs = it.length.toLong() * 1000
+                    durationMs = it.length.toLong() * Constants.MS_PER_SECOND
                 )
             }
 
@@ -1343,7 +1355,7 @@ class TagLibMetadataProcessor @Inject constructor(
                                 bitrate = audioProperties.bitrate,
                                 sampleRate = audioProperties.sampleRate,
                                 channels = audioProperties.channels,
-                                durationMs = audioProperties.length.toLong() * 1000
+                                durationMs = audioProperties.length.toLong() * Constants.MS_PER_SECOND
                             )
                         }
                     }
@@ -1372,7 +1384,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 bitrate = audioProperties.bitrate,
                 sampleRate = audioProperties.sampleRate,
                 channels = audioProperties.channels,
-                durationMs = audioProperties.length.toLong() * 1000
+                durationMs = audioProperties.length.toLong() * Constants.MS_PER_SECOND
             )
         } catch (e: Exception) {
             Timber.tag(TAG).w( "Failed to read audio info: $filePath", e)

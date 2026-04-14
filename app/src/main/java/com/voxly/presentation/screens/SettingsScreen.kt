@@ -208,10 +208,6 @@ private fun <T> ConnectedIconButtonGroup(
 
 /**
  * Draggable source priority dialog with inline switches and extra options.
- * Each source item shows: sequence number, drag handle, source name, switch, and more options menu.
- * Supports drag-and-drop reordering.
- * 
- * Note: State management is now delegated to the ViewModel for better separation of concerns.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -232,8 +228,6 @@ fun DraggableSourcePriorityDialog(
     val density = LocalDensity.current
     val itemHeight = 80.dp
     val itemHeightPx = with(density) { itemHeight.toPx() }
-    // Use key-based remember so localAppleCountry updates when currentAppleCountry changes
-    // (e.g., when user changes country in another dialog instance)
     var localAppleCountry by remember(currentAppleCountry) { mutableStateOf(currentAppleCountry) }
 
     AlertDialog(
@@ -268,8 +262,8 @@ fun DraggableSourcePriorityDialog(
                         onDragStart = { onDragStart(index) },
                         onDragEnd = onDragEnd,
                         onDragCancel = onDragCancel,
-                        onDrag = { dragAmount -> 
-                            onDrag(Offset(0f, dragAmount), itemHeightPx) 
+                        onDrag = { dragAmount ->
+                            onDrag(Offset(0f, dragAmount), itemHeightPx)
                         },
                         onSourceEnabledChange = onSourceEnabledChange,
                         onAppleCountryChange = { countryCode ->
@@ -309,7 +303,6 @@ private fun SourceItemCard(
     onSourceEnabledChange: (String, Boolean) -> Unit,
     onAppleCountryChange: (String) -> Unit
 ) {
-    // Animated hover effects for dragged item
     val animatedScale by animateFloatAsState(
         targetValue = if (isDragging) 1.05f else 1f,
         animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
@@ -358,7 +351,6 @@ private fun SourceItemCard(
         )
     ) {
         Column(modifier = Modifier.fillMaxWidth()) {
-            // Main row: sequence, drag handle, name, switch, more menu
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -366,7 +358,6 @@ private fun SourceItemCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Sequence number
                 Text(
                     text = "${index + 1}",
                     style = MaterialTheme.typography.titleMedium,
@@ -374,7 +365,6 @@ private fun SourceItemCard(
                     modifier = Modifier.width(24.dp)
                 )
 
-                // Drag handle icon (visual indicator for draggable)
                 Icon(
                     imageVector = Icons.Default.DragHandle,
                     contentDescription = stringResource(R.string.settings_drag_handle),
@@ -385,7 +375,6 @@ private fun SourceItemCard(
                     modifier = Modifier.padding(horizontal = 4.dp)
                 )
 
-                // Source name
                 Text(
                     text = sourceToDisplayName(sourceItem.sourceId),
                     style = MaterialTheme.typography.bodyLarge,
@@ -394,7 +383,6 @@ private fun SourceItemCard(
                         .padding(horizontal = 8.dp)
                 )
 
-                // Switch
                 Switch(
                     checked = sourceItem.enabled,
                     onCheckedChange = { enabled ->
@@ -402,7 +390,6 @@ private fun SourceItemCard(
                     }
                 )
 
-                // More options menu button
                 Box {
                     IconButton(onClick = { showMenu = true }) {
                         Icon(
@@ -414,7 +401,6 @@ private fun SourceItemCard(
                         expanded = showMenu,
                         onDismissRequest = { showMenu = false }
                     ) {
-                        // Enable/Disable toggle
                         DropdownMenuItem(
                             text = {
                                 Text(
@@ -439,7 +425,6 @@ private fun SourceItemCard(
 
                         Spacer(modifier = Modifier.height(4.dp))
 
-                        // Extra options (iTunes country code)
                         if (sourceHasExtraOptions(sourceItem.sourceId)) {
                             Text(
                                 text = stringResource(R.string.settings_apple_country),
@@ -466,7 +451,6 @@ private fun SourceItemCard(
                 }
             }
 
-            // Drag hint
             if (!isDragging) {
                 Text(
                     text = stringResource(R.string.settings_drag_hint),
@@ -481,10 +465,6 @@ private fun SourceItemCard(
         }
     }
 }
-
-// ==================== Composable Helpers ====================
-
-// SettingsSection is imported from com.voxly.presentation.components
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -662,14 +642,12 @@ fun SearchLimitDialog(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Per-source limits
                 Text(
                     text = stringResource(R.string.settings_online_search_limit_subtitle),
                     style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.primary
                 )
 
-                // MusicBrainz
                 SearchLimitRow(
                     text = stringResource(R.string.settings_online_search_limit_musicbrainz),
                     currentLimit = musicBrainzLimit,
@@ -677,7 +655,6 @@ fun SearchLimitDialog(
                     onLimitChange = onMusicBrainzLimitChange
                 )
 
-                // iTunes
                 SearchLimitRow(
                     text = stringResource(R.string.settings_online_search_limit_itunes),
                     currentLimit = itunesLimit,
@@ -685,7 +662,6 @@ fun SearchLimitDialog(
                     onLimitChange = onItunesLimitChange
                 )
 
-                // NetEase
                 SearchLimitRow(
                     text = stringResource(R.string.settings_online_search_limit_netease),
                     currentLimit = neteaseLimit,
@@ -693,7 +669,6 @@ fun SearchLimitDialog(
                     onLimitChange = onNeteaseLimitChange
                 )
 
-                // QQ Music
                 SearchLimitRow(
                     text = stringResource(R.string.settings_online_search_limit_qq_music),
                     currentLimit = qqMusicLimit,
@@ -760,8 +735,6 @@ private fun SearchLimitRow(
     }
 }
 
-// ==================== Main Settings Screen ====================
-
 /**
  * Settings screen for application preferences.
  */
@@ -779,23 +752,21 @@ fun SettingsScreen(
 ) {
     val context = LocalContext.current
     val activity = context as? Activity
-    
+
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
 
     var languageExpanded by remember { mutableStateOf(false) }
-    val languageOptions = remember {
-        listOf(
-            LanguageOption(R.string.settings_language_system, null),
-            LanguageOption(R.string.settings_language_english, "en"),
-            LanguageOption(R.string.settings_language_chinese_simplified, "zh-CN")
-        )
-    }
-    
-    // 使用 savedLanguageTag 或解析当前系统语言
     val effectiveLanguageTag = uiState.savedLanguageTag ?: resolveCurrentLanguageTag()
-    val currentLanguageOption = languageOptions.firstOrNull {
-        normalizeLanguageTag(it.languageTag) == normalizeLanguageTag(effectiveLanguageTag)
-    } ?: languageOptions.first()
+
+    var showMetadataSourceDialog by remember { mutableStateOf(false) }
+    var showLyricsSourceDialog by remember { mutableStateOf(false) }
+    var showCoverSourceDialog by remember { mutableStateOf(false) }
+    var showSearchLimitsDialog by remember { mutableStateOf(false) }
+    var showSeparatorDialog by remember { mutableStateOf(false) }
+    var separatorInput by remember { mutableStateOf("") }
+    var pendingDeleteSeparator by remember { mutableStateOf<String?>(null) }
+    var dialogSeparatorTags by remember { mutableStateOf<Set<String>>(emptySet()) }
+    var loudnessExpanded by remember { mutableStateOf(false) }
 
     val appleCountryOptions = remember {
         listOf(
@@ -813,25 +784,6 @@ fun SettingsScreen(
     val currentAppleCountry = appleCountryOptions.firstOrNull { it.countryValue == uiState.appleCountryCode.lowercase() }
         ?: appleCountryOptions.first()
 
-    var showMetadataSourceDialog by remember { mutableStateOf(false) }
-    var showLyricsSourceDialog by remember { mutableStateOf(false) }
-    var showCoverSourceDialog by remember { mutableStateOf(false) }
-    var showSearchLimitsDialog by remember { mutableStateOf(false) }
-    var showSeparatorDialog by remember { mutableStateOf(false) }
-    var separatorInput by remember { mutableStateOf("") }
-    var pendingDeleteSeparator by remember { mutableStateOf<String?>(null) }
-    // Local mutable state for dialog editing - initialized from ViewModel when dialog opens
-    var dialogSeparatorTags by remember { mutableStateOf<Set<String>>(emptySet()) }
-    var loudnessExpanded by remember { mutableStateOf(false) }
-    val loudnessOptions = remember {
-        listOf(
-            LoudnessOption(-23f, R.string.replay_gain_loudness_ebu_r128),
-            LoudnessOption(-18f, R.string.replay_gain_loudness_streaming),
-            LoudnessOption(-16f, R.string.replay_gain_loudness_cd),
-            LoudnessOption(-14f, R.string.replay_gain_loudness_loud)
-        )
-    }
-
     val searchLimitOptions = remember {
         listOf(
             SearchLimitOption(0, R.string.settings_online_search_limit_unlimited),
@@ -840,27 +792,8 @@ fun SettingsScreen(
             SearchLimitOption(50)
         )
     }
-    val currentSearchLimit = searchLimitOptions.firstOrNull { it.limitValue == uiState.onlineSearchLimit }
-        ?: searchLimitOptions[1]
 
-    // Convert SearchLimitOption to SegmentedOption for ConnectedButtonGroup
-    // Note: displayLabel() is @Composable so we use a simple label here
-    val searchLimitSegmentedOptions = remember(searchLimitOptions) {
-        searchLimitOptions.map { option ->
-            SegmentedOption(
-                value = option.limitValue,
-                label = if (option.limitValue == 0) "∞" else option.limitValue.toString()
-            )
-        }
-    }
-
-    val scanModeOptions = remember {
-        listOf(
-            ScanModeOption("TRACK_ONLY", R.string.settings_scan_mode_track_only),
-            ScanModeOption("SINGLE_ALBUM", R.string.settings_scan_mode_album_only),
-            ScanModeOption("ALBUMS", R.string.settings_scan_mode_track_and_album)
-        )
-    }
+    val currentSeparators by viewModel.artistSeparatorsSet.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -883,453 +816,559 @@ fun SettingsScreen(
                 .padding(horizontal = HorizontalPadding)
                 .verticalScroll(rememberScrollState())
         ) {
-            // Basic Settings Section (Appearance + Language)
-            SettingsSection(title = stringResource(R.string.settings_section_appearance)) {
-                ConnectedIconOnlyButtonGroupRow(
-                    title = stringResource(R.string.settings_theme),
-                    options = listOf(
-                        SegmentedOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
-                        SegmentedOption("light", Icons.Default.LightMode, stringResource(R.string.settings_theme_light)),
-                        SegmentedOption("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
-                    ),
-                    selectedValue = uiState.themeMode,
-                    onSelected = viewModel::setThemeMode,
-                    index = 0,
-                    count = 3
-                )
-
-                SegmentedSwitchRow(
-                    title = stringResource(R.string.settings_dynamic_color),
-                    subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
-                    checked = uiState.dynamicColors,
-                    onCheckedChange = { viewModel.setDynamicColors(it) },
-                    index = 1,
-                    count = 3
-                )
-
-                SegmentedClickableRow(
-                    title = stringResource(R.string.settings_language),
-                    subtitle = stringResource(currentLanguageOption.labelResId),
-                    trailingContent = {
-                        val arrowRotation by animateFloatAsState(
-                            targetValue = if (languageExpanded) 180f else 0f,
-            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                            label = "language_dropdown_arrow"
-                        )
-                        SortDropdownMenu(
-                            expanded = languageExpanded,
-                            onExpandedChange = { languageExpanded = it },
-                            anchor = {
-                                TextButton(
-                                    onClick = {},
-                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                                ) {
-                                    Text(
-                                        text = stringResource(currentLanguageOption.labelResId),
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.graphicsLayer { rotationZ = arrowRotation }
-                                    )
-                                }
-                            }
-                        ) {
-                            languageOptions.forEach { option ->
-                                SortMenuItem(
-                                    option = option,
-                                    labelResId = option.labelResId,
-                                    currentSortOption = currentLanguageOption,
-                                    onSortOptionChange = { selected ->
-                                        viewModel.setLanguage(selected.languageTag)
-                                        languageExpanded = false
-                                        activity?.recreate()
-                                    },
-                                    onDismiss = { languageExpanded = false }
-                                )
-                            }
-                        }
-                    },
-                    onClick = { },
-                    index = 2,
-                    count = 3,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
+            AppearanceSettingsSection(
+                themeMode = uiState.themeMode,
+                dynamicColors = uiState.dynamicColors,
+                savedLanguageTag = effectiveLanguageTag,
+                languageExpanded = languageExpanded,
+                onLanguageExpandedChange = { languageExpanded = it },
+                onSetThemeMode = viewModel::setThemeMode,
+                onSetDynamicColors = viewModel::setDynamicColors,
+                onSetLanguage = { tag ->
+                    viewModel.setLanguage(tag)
+                    languageExpanded = false
+                    activity?.recreate()
+                },
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(SectionSpacing))
 
-            // Media Settings Section (Scan Directory + Artist Separator + Min Duration + Scan Mode + ReplayGain)
-            SettingsSection(title = stringResource(R.string.settings_section_scanning)) {
-                SegmentedClickableRow(
-                    title = stringResource(R.string.settings_scan_directory_settings),
-                    subtitle = stringResource(R.string.settings_scan_directory_settings_subtitle),
-                    onClick = { onNavigateToScanDirectorySettings() },
-                    index = 0,
-                    count = 6
-                )
-
-                val currentSeparators by viewModel.artistSeparatorsSet.collectAsStateWithLifecycle()
-                SegmentedClickableRow(
-                    title = stringResource(R.string.artist_separators),
-                    subtitle = currentSeparators.joinToString(" "),
-                    onClick = {
-                        dialogSeparatorTags = currentSeparators
-                        separatorInput = ""
-                        showSeparatorDialog = true
-                    },
-                    index = 1,
-                    count = 6
-                )
-
-                SegmentedSwitchRow(
-                    title = stringResource(R.string.settings_min_duration_filter),
-                    subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
-                    checked = uiState.minDurationFilterEnabled,
-                    onCheckedChange = { viewModel.setMinDurationFilterEnabled(it) },
-                    index = 3,
-                    count = 6
-                )
-
-                ConnectedIconOnlyButtonGroupRow(
-                    title = stringResource(R.string.settings_scan_mode),
-                options = scanModeOptions.map { option ->
-                    SegmentedOption(
-                        value = option.modeValue,
-                        icon = when (option.modeValue) {
-                                "TRACK_ONLY" -> Icons.Default.MusicNote
-                                "SINGLE_ALBUM" -> Icons.Default.Album
-                                else -> Icons.Default.LibraryMusic
-                            },
-                            label = stringResource(option.labelResId)
-                        )
-                    },
-                    selectedValue = uiState.scanMode,
-                    onSelected = viewModel::setScanMode,
-                    index = 4,
-                    count = 6
-                )
-
-                val currentLoudnessOption = loudnessOptions.firstOrNull { it.loudnessValue == uiState.replayGainTargetLoudness }
-                    ?: loudnessOptions.first()
-
-                SegmentedClickableRow(
-                    title = stringResource(R.string.replay_gain_target_loudness),
-                    subtitle = stringResource(R.string.replay_gain_default_loudness),
-                    trailingContent = {
-                        val arrowRotation by animateFloatAsState(
-                            targetValue = if (loudnessExpanded) 180f else 0f,
-                            animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
-                            label = "loudness_dropdown_arrow"
-                        )
-                        SortDropdownMenu(
-                            expanded = loudnessExpanded,
-                            onExpandedChange = { loudnessExpanded = it },
-                            anchor = {
-                                TextButton(
-                                    onClick = {},
-                                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                                ) {
-                                    Text(
-                                        text = stringResource(currentLoudnessOption.labelResId),
-                                        style = MaterialTheme.typography.labelLarge
-                                    )
-                                    Icon(
-                                        imageVector = Icons.Default.ArrowDropDown,
-                                        contentDescription = null,
-                                        modifier = Modifier.graphicsLayer { rotationZ = arrowRotation }
-                                    )
-                                }
-                            }
-                        ) {
-                            loudnessOptions.forEach { option ->
-                                SortMenuItem(
-                                    option = option,
-                                    labelResId = option.labelResId,
-                                    currentSortOption = currentLoudnessOption,
-                                    onSortOptionChange = { selected ->
-                                        viewModel.setReplayGainTargetLoudness(selected.loudnessValue)
-                                        loudnessExpanded = false
-                                    },
-                                    onDismiss = { loudnessExpanded = false }
-                                )
-                            }
-                        }
-                    },
-                    onClick = { },
-                    index = 5,
-                    count = 6
-                )
-            }
-
-            // Separator dialog
-            if (showSeparatorDialog) {
-                AlertDialog(
-                    onDismissRequest = {
-                        dialogSeparatorTags = emptySet()
-                        showSeparatorDialog = false
-                    },
-                    shape = MaterialTheme.shapes.large,
-                    title = { Text(stringResource(R.string.artist_separators)) },
-                    text = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            // Tags display area using FlowRow
-                            FlowRow(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                dialogSeparatorTags.forEach { separator ->
-                                    SeparatorChip(
-                                        separator = separator,
-                                        onDelete = { dialogSeparatorTags = dialogSeparatorTags - separator },
-                                        onLongPress = { pendingDeleteSeparator = separator }
-                                    )
-                                }
-                            }
-
-                            // Input area
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                OutlinedTextField(
-                                    value = separatorInput,
-                                    onValueChange = { separatorInput = it },
-                                    label = { Text(stringResource(R.string.artist_separators)) },
-                                    singleLine = true,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                FilledTonalButton(
-                                    onClick = {
-                                        val trimmed = separatorInput.trim()
-                                        if (trimmed.isNotBlank() && trimmed !in dialogSeparatorTags) {
-                                            dialogSeparatorTags = dialogSeparatorTags + trimmed
-                                            separatorInput = ""
-                                        }
-                                    },
-                                    enabled = separatorInput.isNotBlank()
-                                ) {
-                                    Text(stringResource(R.string.settings_separator_add))
-                                }
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                viewModel.setArtistSeparators(dialogSeparatorTags)
-                                showSeparatorDialog = false
-                            }
-                        ) {
-                            Text(stringResource(R.string.dialog_confirm))
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = {
-                            dialogSeparatorTags = emptySet()
-                            showSeparatorDialog = false
-                        }) {
-                            Text(stringResource(R.string.dialog_cancel))
-                        }
-                    }
-                )
-            }
-
-            // Pending delete confirmation dialog
-            if (pendingDeleteSeparator != null) {
-                AlertDialog(
-                    onDismissRequest = { pendingDeleteSeparator = null },
-                    shape = MaterialTheme.shapes.large,
-                    title = { Text(stringResource(R.string.settings_separator_delete_title)) },
-                    text = { Text(stringResource(R.string.settings_separator_delete_message, pendingDeleteSeparator!!)) },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                dialogSeparatorTags = dialogSeparatorTags - pendingDeleteSeparator!!
-                                pendingDeleteSeparator = null
-                            }
-                        ) {
-                            Text(stringResource(R.string.settings_separator_delete))
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = { pendingDeleteSeparator = null }) {
-                            Text(stringResource(R.string.settings_separator_cancel))
-                        }
-                    }
-                )
-            }
+            ScanningSettingsSection(
+                currentSeparators = currentSeparators,
+                minDurationFilterEnabled = uiState.minDurationFilterEnabled,
+                scanMode = uiState.scanMode,
+                replayGainTargetLoudness = uiState.replayGainTargetLoudness,
+                loudnessExpanded = loudnessExpanded,
+                onLoudnessExpandedChange = { loudnessExpanded = it },
+                onNavigateToScanDirectorySettings = onNavigateToScanDirectorySettings,
+                onShowSeparatorDialog = { tags ->
+                    dialogSeparatorTags = tags
+                    separatorInput = ""
+                    showSeparatorDialog = true
+                },
+                onSetMinDurationFilter = viewModel::setMinDurationFilterEnabled,
+                onSetScanMode = viewModel::setScanMode,
+                onSetReplayGainTargetLoudness = viewModel::setReplayGainTargetLoudness,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(SectionSpacing))
 
-            // Online Services Section
-            SettingsSection(title = stringResource(R.string.settings_section_online_metadata)) {
-                // Metadata source
-                SegmentedClickableRow(
-                    title = stringResource(R.string.settings_source_group_metadata),
-                    subtitle = stringResource(R.string.settings_source_group_metadata_subtitle),
-                    onClick = { showMetadataSourceDialog = true },
-                    index = 0,
-                    count = 4
-                )
-                // Lyrics source
-                SegmentedClickableRow(
-                    title = stringResource(R.string.settings_source_group_lyrics),
-                    subtitle = stringResource(R.string.settings_source_group_lyrics_subtitle),
-                    onClick = { showLyricsSourceDialog = true },
-                    index = 1,
-                    count = 4
-                )
-                // Cover source
-                SegmentedClickableRow(
-                    title = stringResource(R.string.settings_source_group_cover),
-                    subtitle = stringResource(R.string.settings_source_group_cover_subtitle),
-                    onClick = { showCoverSourceDialog = true },
-                    index = 2,
-                    count = 5
-                )
-                // Lyrics timestamp format
-                SegmentedSwitchRow(
-                    title = stringResource(R.string.settings_lyrics_timestamp_format),
-                    subtitle = stringResource(R.string.settings_lyrics_timestamp_format_subtitle),
-                    checked = uiState.lyricsTimestampFormatEnabled,
-                    onCheckedChange = { viewModel.setLyricsTimestampFormatEnabled(it) },
-                    index = 3,
-                    count = 5
-                )
-                // Search limits - global limit with connected button group
-                ConnectedButtonGroupRow(
-                    title = stringResource(R.string.settings_online_search_limit),
-                    options = searchLimitSegmentedOptions,
-                    selectedValue = uiState.onlineSearchLimit,
-                    onSelected = { viewModel.setOnlineSearchLimit(it) },
-                    index = 4,
-                    count = 5
-                )
-            }
+            OnlineSettingsSection(
+                onlineSearchLimit = uiState.onlineSearchLimit,
+                lyricsTimestampFormatEnabled = uiState.lyricsTimestampFormatEnabled,
+                onShowMetadataSourceDialog = { showMetadataSourceDialog = true },
+                onShowLyricsSourceDialog = { showLyricsSourceDialog = true },
+                onShowCoverSourceDialog = { showCoverSourceDialog = true },
+                onShowSearchLimitsDialog = { showSearchLimitsDialog = true },
+                onSetLyricsTimestampFormatEnabled = viewModel::setLyricsTimestampFormatEnabled,
+                onSetOnlineSearchLimit = viewModel::setOnlineSearchLimit,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(SectionSpacing))
 
-            // Logging Section
-            SettingsSection(title = stringResource(R.string.settings_section_logging)) {
-                // Logging enabled switch
-                SegmentedSwitchRow(
-                    title = stringResource(R.string.settings_logging_enabled),
-                    subtitle = stringResource(R.string.settings_logging_enabled_subtitle),
-                    checked = uiState.loggingEnabled,
-                    onCheckedChange = {
-                        LogManager.isLoggingEnabled = it
-                        viewModel.setLoggingEnabled(it)
-                    },
-                    index = 0,
-                    count = 8
-                )
-                // File logging switch
-                SegmentedSwitchRow(
-                    title = stringResource(R.string.settings_logging_file),
-                    subtitle = stringResource(R.string.settings_logging_file_subtitle),
-                    checked = uiState.fileLoggingEnabled,
-                    onCheckedChange = {
-                        LogManager.isFileLoggingEnabled = it
-                        viewModel.setFileLoggingEnabled(it)
-                    },
-                    index = 1,
-                    count = 8
-                )
-                // Console logging switch
-                SegmentedSwitchRow(
-                    title = stringResource(R.string.settings_logging_console),
-                    subtitle = stringResource(R.string.settings_logging_console_subtitle),
-                    checked = uiState.consoleLoggingEnabled,
-                    onCheckedChange = {
-                        LogManager.isConsoleLoggingEnabled = it
-                        viewModel.setConsoleLoggingEnabled(it)
-                    },
-                    index = 2,
-                    count = 8
-                )
-                // Crash reporting switch
-                SegmentedSwitchRow(
-                    title = stringResource(R.string.settings_logging_crash),
-                    subtitle = stringResource(R.string.settings_logging_crash_subtitle),
-                    checked = uiState.crashReportingEnabled,
-                    onCheckedChange = {
-                        LogManager.isCrashReportingEnabled = it
-                        viewModel.setCrashReportingEnabled(it)
-                    },
-                    index = 3,
-                    count = 8
-                )
-                // Log size info
-                SegmentedInfoRow(
-                    title = stringResource(R.string.settings_logging_size),
-                    value = LogManager.formatLogSize(LogManager.getLogDirectorySize()),
-                    index = 4,
-                    count = 8
-                )
-                // View logs
-                SegmentedClickableRow(
-                    title = stringResource(R.string.settings_logging_view),
-                    subtitle = stringResource(R.string.settings_logging_view_subtitle),
-                    onClick = { onNavigateToLogViewer() },
-                    index = 5,
-                    count = 8
-                )
-                // Export logs
-                SegmentedClickableRow(
-                    title = stringResource(R.string.settings_logging_export),
-                    subtitle = stringResource(R.string.settings_logging_export_subtitle),
-                    onClick = { onExportLogs() },
-                    index = 6,
-                    count = 8
-                )
-                // Cleanup logs
-                SegmentedClickableRow(
-                    title = stringResource(R.string.settings_logging_cleanup),
-                    subtitle = stringResource(R.string.settings_logging_cleanup_subtitle),
-                    onClick = { onCleanupLogs() },
-                    index = 7,
-                    count = 8
-                )
-            }
+            LoggingSettingsSection(
+                loggingEnabled = uiState.loggingEnabled,
+                fileLoggingEnabled = uiState.fileLoggingEnabled,
+                consoleLoggingEnabled = uiState.consoleLoggingEnabled,
+                crashReportingEnabled = uiState.crashReportingEnabled,
+                onSetLoggingEnabled = {
+                    LogManager.isLoggingEnabled = it
+                    viewModel.setLoggingEnabled(it)
+                },
+                onSetFileLoggingEnabled = {
+                    LogManager.isFileLoggingEnabled = it
+                    viewModel.setFileLoggingEnabled(it)
+                },
+                onSetConsoleLoggingEnabled = {
+                    LogManager.isConsoleLoggingEnabled = it
+                    viewModel.setConsoleLoggingEnabled(it)
+                },
+                onSetCrashReportingEnabled = {
+                    LogManager.isCrashReportingEnabled = it
+                    viewModel.setCrashReportingEnabled(it)
+                },
+                onNavigateToLogViewer = onNavigateToLogViewer,
+                onExportLogs = onExportLogs,
+                onCleanupLogs = onCleanupLogs,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Spacer(modifier = Modifier.height(SectionSpacing))
 
-            // About Section
-            SettingsSection(title = stringResource(R.string.settings_section_about)) {
-                SegmentedInfoRow(
-                    title = stringResource(R.string.settings_version_label),
-                    value = BuildConfig.VERSION_NAME,
-                    index = 0,
-                    count = 2
-                )
-                SegmentedInfoRow(
-                    title = stringResource(R.string.settings_developer_label),
-                    value = stringResource(R.string.settings_developer_value),
-                    index = 1,
-                    count = 2
-                )
-            }
+            AboutSettingsSection(
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 
-    // Drag dialog state
     val dragDialogState by viewModel.dragDialogState.collectAsStateWithLifecycle()
     var activeDialogType by remember { mutableStateOf<DataSourceType?>(null) }
 
+    SettingsSourceDialogs(
+        showMetadataSourceDialog = showMetadataSourceDialog,
+        onShowMetadataSourceDialogChange = { showMetadataSourceDialog = it },
+        showLyricsSourceDialog = showLyricsSourceDialog,
+        onShowLyricsSourceDialogChange = { showLyricsSourceDialog = it },
+        showCoverSourceDialog = showCoverSourceDialog,
+        onShowCoverSourceDialogChange = { showCoverSourceDialog = it },
+        dragDialogState = dragDialogState,
+        activeDialogType = activeDialogType,
+        onActiveDialogTypeChange = { activeDialogType = it },
+        appleCountryOptions = appleCountryOptions,
+        currentAppleCountry = currentAppleCountry,
+        viewModel = viewModel
+    )
+
+    SettingsInlineDialogs(
+        showSeparatorDialog = showSeparatorDialog,
+        onShowSeparatorDialogChange = { showSeparatorDialog = it },
+        dialogSeparatorTags = dialogSeparatorTags,
+        onDialogSeparatorTagsChange = { dialogSeparatorTags = it },
+        separatorInput = separatorInput,
+        onSeparatorInputChange = { separatorInput = it },
+        pendingDeleteSeparator = pendingDeleteSeparator,
+        onPendingDeleteSeparatorChange = { pendingDeleteSeparator = it },
+        onSetArtistSeparators = viewModel::setArtistSeparators
+    )
+
+    if (showSearchLimitsDialog) {
+        SearchLimitDialog(
+            globalLimit = uiState.onlineSearchLimit,
+            musicBrainzLimit = uiState.onlineSearchLimitMusicBrainz,
+            itunesLimit = uiState.onlineSearchLimitITunes,
+            neteaseLimit = uiState.onlineSearchLimitNetease,
+            qqMusicLimit = uiState.onlineSearchLimitQQMusic,
+            searchLimitOptions = searchLimitOptions,
+            onDismiss = { showSearchLimitsDialog = false },
+            onGlobalLimitChange = { viewModel.setOnlineSearchLimit(it) },
+            onMusicBrainzLimitChange = { viewModel.setOnlineSearchLimitMusicBrainz(it) },
+            onItunesLimitChange = { viewModel.setOnlineSearchLimitITunes(it) },
+            onNeteaseLimitChange = { viewModel.setOnlineSearchLimitNetease(it) },
+            onQQMusicLimitChange = { viewModel.setOnlineSearchLimitQQMusic(it) }
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun AppearanceSettingsSection(
+    themeMode: String,
+    dynamicColors: Boolean,
+    savedLanguageTag: String?,
+    languageExpanded: Boolean,
+    onLanguageExpandedChange: (Boolean) -> Unit,
+    onSetThemeMode: (String) -> Unit,
+    onSetDynamicColors: (Boolean) -> Unit,
+    onSetLanguage: (String?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val languageOptions = remember {
+        listOf(
+            LanguageOption(R.string.settings_language_system, null),
+            LanguageOption(R.string.settings_language_english, "en"),
+            LanguageOption(R.string.settings_language_chinese_simplified, "zh-CN")
+        )
+    }
+    val currentLanguageOption = languageOptions.firstOrNull {
+        normalizeLanguageTag(it.languageTag) == normalizeLanguageTag(savedLanguageTag)
+    } ?: languageOptions.first()
+
+    SettingsSection(title = stringResource(R.string.settings_section_appearance), modifier = modifier) {
+        ConnectedIconOnlyButtonGroupRow(
+            title = stringResource(R.string.settings_theme),
+            options = listOf(
+                SegmentedOption("system", Icons.Default.BrightnessAuto, stringResource(R.string.settings_theme_system)),
+                SegmentedOption("light", Icons.Default.LightMode, stringResource(R.string.settings_theme_light)),
+                SegmentedOption("dark", Icons.Default.DarkMode, stringResource(R.string.settings_theme_dark))
+            ),
+            selectedValue = themeMode,
+            onSelected = onSetThemeMode,
+            index = 0,
+            count = 3
+        )
+
+        SegmentedSwitchRow(
+            title = stringResource(R.string.settings_dynamic_color),
+            subtitle = stringResource(R.string.settings_dynamic_color_subtitle),
+            checked = dynamicColors,
+            onCheckedChange = onSetDynamicColors,
+            index = 1,
+            count = 3
+        )
+
+        SegmentedClickableRow(
+            title = stringResource(R.string.settings_language),
+            subtitle = stringResource(currentLanguageOption.labelResId),
+            trailingContent = {
+                val arrowRotation by animateFloatAsState(
+                    targetValue = if (languageExpanded) 180f else 0f,
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    label = "language_dropdown_arrow"
+                )
+                SortDropdownMenu(
+                    expanded = languageExpanded,
+                    onExpandedChange = onLanguageExpandedChange,
+                    anchor = {
+                        TextButton(
+                            onClick = {},
+                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(currentLanguageOption.labelResId),
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.graphicsLayer { rotationZ = arrowRotation }
+                            )
+                        }
+                    }
+                ) {
+                    languageOptions.forEach { option ->
+                        SortMenuItem(
+                            option = option,
+                            labelResId = option.labelResId,
+                            currentSortOption = currentLanguageOption,
+                            onSortOptionChange = { selected ->
+                                onSetLanguage(selected.languageTag)
+                            },
+                            onDismiss = { onLanguageExpandedChange(false) }
+                        )
+                    }
+                }
+            },
+            onClick = { },
+            index = 2,
+            count = 3,
+            modifier = Modifier.fillMaxWidth()
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun ScanningSettingsSection(
+    currentSeparators: Set<String>,
+    minDurationFilterEnabled: Boolean,
+    scanMode: String,
+    replayGainTargetLoudness: Float,
+    loudnessExpanded: Boolean,
+    onLoudnessExpandedChange: (Boolean) -> Unit,
+    onNavigateToScanDirectorySettings: () -> Unit,
+    onShowSeparatorDialog: (Set<String>) -> Unit,
+    onSetMinDurationFilter: (Boolean) -> Unit,
+    onSetScanMode: (String) -> Unit,
+    onSetReplayGainTargetLoudness: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val loudnessOptions = remember {
+        listOf(
+            LoudnessOption(-23f, R.string.replay_gain_loudness_ebu_r128),
+            LoudnessOption(-18f, R.string.replay_gain_loudness_streaming),
+            LoudnessOption(-16f, R.string.replay_gain_loudness_cd),
+            LoudnessOption(-14f, R.string.replay_gain_loudness_loud)
+        )
+    }
+    val currentLoudnessOption = loudnessOptions.firstOrNull { it.loudnessValue == replayGainTargetLoudness }
+        ?: loudnessOptions.first()
+
+    val scanModeOptions = remember {
+        listOf(
+            ScanModeOption("TRACK_ONLY", R.string.settings_scan_mode_track_only),
+            ScanModeOption("SINGLE_ALBUM", R.string.settings_scan_mode_album_only),
+            ScanModeOption("ALBUMS", R.string.settings_scan_mode_track_and_album)
+        )
+    }
+
+    SettingsSection(title = stringResource(R.string.settings_section_scanning), modifier = modifier) {
+        SegmentedClickableRow(
+            title = stringResource(R.string.settings_scan_directory_settings),
+            subtitle = stringResource(R.string.settings_scan_directory_settings_subtitle),
+            onClick = onNavigateToScanDirectorySettings,
+            index = 0,
+            count = 6
+        )
+
+        SegmentedClickableRow(
+            title = stringResource(R.string.artist_separators),
+            subtitle = currentSeparators.joinToString(" "),
+            onClick = { onShowSeparatorDialog(currentSeparators) },
+            index = 1,
+            count = 6
+        )
+
+        SegmentedSwitchRow(
+            title = stringResource(R.string.settings_min_duration_filter),
+            subtitle = stringResource(R.string.settings_min_duration_filter_subtitle),
+            checked = minDurationFilterEnabled,
+            onCheckedChange = onSetMinDurationFilter,
+            index = 3,
+            count = 6
+        )
+
+        ConnectedIconOnlyButtonGroupRow(
+            title = stringResource(R.string.settings_scan_mode),
+            options = scanModeOptions.map { option ->
+                SegmentedOption(
+                    value = option.modeValue,
+                    icon = when (option.modeValue) {
+                        "TRACK_ONLY" -> Icons.Default.MusicNote
+                        "SINGLE_ALBUM" -> Icons.Default.Album
+                        else -> Icons.Default.LibraryMusic
+                    },
+                    label = stringResource(option.labelResId)
+                )
+            },
+            selectedValue = scanMode,
+            onSelected = onSetScanMode,
+            index = 4,
+            count = 6
+        )
+
+        SegmentedClickableRow(
+            title = stringResource(R.string.replay_gain_target_loudness),
+            subtitle = stringResource(R.string.replay_gain_default_loudness),
+            trailingContent = {
+                val arrowRotation by animateFloatAsState(
+                    targetValue = if (loudnessExpanded) 180f else 0f,
+                    animationSpec = MaterialTheme.motionScheme.defaultSpatialSpec(),
+                    label = "loudness_dropdown_arrow"
+                )
+                SortDropdownMenu(
+                    expanded = loudnessExpanded,
+                    onExpandedChange = onLoudnessExpandedChange,
+                    anchor = {
+                        TextButton(
+                            onClick = {},
+                            modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
+                        ) {
+                            Text(
+                                text = stringResource(currentLoudnessOption.labelResId),
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                            Icon(
+                                imageVector = Icons.Default.ArrowDropDown,
+                                contentDescription = null,
+                                modifier = Modifier.graphicsLayer { rotationZ = arrowRotation }
+                            )
+                        }
+                    }
+                ) {
+                    loudnessOptions.forEach { option ->
+                        SortMenuItem(
+                            option = option,
+                            labelResId = option.labelResId,
+                            currentSortOption = currentLoudnessOption,
+                            onSortOptionChange = { selected ->
+                                onSetReplayGainTargetLoudness(selected.loudnessValue)
+                                onLoudnessExpandedChange(false)
+                            },
+                            onDismiss = { onLoudnessExpandedChange(false) }
+                        )
+                    }
+                }
+            },
+            onClick = { },
+            index = 5,
+            count = 6
+        )
+    }
+}
+
+@Composable
+private fun OnlineSettingsSection(
+    onlineSearchLimit: Int,
+    lyricsTimestampFormatEnabled: Boolean,
+    onShowMetadataSourceDialog: () -> Unit,
+    onShowLyricsSourceDialog: () -> Unit,
+    onShowCoverSourceDialog: () -> Unit,
+    onShowSearchLimitsDialog: () -> Unit,
+    onSetLyricsTimestampFormatEnabled: (Boolean) -> Unit,
+    onSetOnlineSearchLimit: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val searchLimitOptions = remember {
+        listOf(
+            SearchLimitOption(0, R.string.settings_online_search_limit_unlimited),
+            SearchLimitOption(10),
+            SearchLimitOption(25),
+            SearchLimitOption(50)
+        )
+    }
+    val searchLimitSegmentedOptions = remember(searchLimitOptions) {
+        searchLimitOptions.map { option ->
+            SegmentedOption(
+                value = option.limitValue,
+                label = if (option.limitValue == 0) "∞" else option.limitValue.toString()
+            )
+        }
+    }
+
+    SettingsSection(title = stringResource(R.string.settings_section_online_metadata), modifier = modifier) {
+        SegmentedClickableRow(
+            title = stringResource(R.string.settings_source_group_metadata),
+            subtitle = stringResource(R.string.settings_source_group_metadata_subtitle),
+            onClick = onShowMetadataSourceDialog,
+            index = 0,
+            count = 5
+        )
+        SegmentedClickableRow(
+            title = stringResource(R.string.settings_source_group_lyrics),
+            subtitle = stringResource(R.string.settings_source_group_lyrics_subtitle),
+            onClick = onShowLyricsSourceDialog,
+            index = 1,
+            count = 5
+        )
+        SegmentedClickableRow(
+            title = stringResource(R.string.settings_source_group_cover),
+            subtitle = stringResource(R.string.settings_source_group_cover_subtitle),
+            onClick = onShowCoverSourceDialog,
+            index = 2,
+            count = 5
+        )
+        SegmentedSwitchRow(
+            title = stringResource(R.string.settings_lyrics_timestamp_format),
+            subtitle = stringResource(R.string.settings_lyrics_timestamp_format_subtitle),
+            checked = lyricsTimestampFormatEnabled,
+            onCheckedChange = onSetLyricsTimestampFormatEnabled,
+            index = 3,
+            count = 5
+        )
+        ConnectedButtonGroupRow(
+            title = stringResource(R.string.settings_online_search_limit),
+            options = searchLimitSegmentedOptions,
+            selectedValue = onlineSearchLimit,
+            onSelected = onSetOnlineSearchLimit,
+            index = 4,
+            count = 5
+        )
+    }
+}
+
+@Composable
+private fun LoggingSettingsSection(
+    loggingEnabled: Boolean,
+    fileLoggingEnabled: Boolean,
+    consoleLoggingEnabled: Boolean,
+    crashReportingEnabled: Boolean,
+    onSetLoggingEnabled: (Boolean) -> Unit,
+    onSetFileLoggingEnabled: (Boolean) -> Unit,
+    onSetConsoleLoggingEnabled: (Boolean) -> Unit,
+    onSetCrashReportingEnabled: (Boolean) -> Unit,
+    onNavigateToLogViewer: () -> Unit,
+    onExportLogs: () -> Unit,
+    onCleanupLogs: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    SettingsSection(title = stringResource(R.string.settings_section_logging), modifier = modifier) {
+        SegmentedSwitchRow(
+            title = stringResource(R.string.settings_logging_enabled),
+            subtitle = stringResource(R.string.settings_logging_enabled_subtitle),
+            checked = loggingEnabled,
+            onCheckedChange = onSetLoggingEnabled,
+            index = 0,
+            count = 8
+        )
+        SegmentedSwitchRow(
+            title = stringResource(R.string.settings_logging_file),
+            subtitle = stringResource(R.string.settings_logging_file_subtitle),
+            checked = fileLoggingEnabled,
+            onCheckedChange = onSetFileLoggingEnabled,
+            index = 1,
+            count = 8
+        )
+        SegmentedSwitchRow(
+            title = stringResource(R.string.settings_logging_console),
+            subtitle = stringResource(R.string.settings_logging_console_subtitle),
+            checked = consoleLoggingEnabled,
+            onCheckedChange = onSetConsoleLoggingEnabled,
+            index = 2,
+            count = 8
+        )
+        SegmentedSwitchRow(
+            title = stringResource(R.string.settings_logging_crash),
+            subtitle = stringResource(R.string.settings_logging_crash_subtitle),
+            checked = crashReportingEnabled,
+            onCheckedChange = onSetCrashReportingEnabled,
+            index = 3,
+            count = 8
+        )
+        SegmentedInfoRow(
+            title = stringResource(R.string.settings_logging_size),
+            value = LogManager.formatLogSize(LogManager.getLogDirectorySize()),
+            index = 4,
+            count = 8
+        )
+        SegmentedClickableRow(
+            title = stringResource(R.string.settings_logging_view),
+            subtitle = stringResource(R.string.settings_logging_view_subtitle),
+            onClick = onNavigateToLogViewer,
+            index = 5,
+            count = 8
+        )
+        SegmentedClickableRow(
+            title = stringResource(R.string.settings_logging_export),
+            subtitle = stringResource(R.string.settings_logging_export_subtitle),
+            onClick = onExportLogs,
+            index = 6,
+            count = 8
+        )
+        SegmentedClickableRow(
+            title = stringResource(R.string.settings_logging_cleanup),
+            subtitle = stringResource(R.string.settings_logging_cleanup_subtitle),
+            onClick = onCleanupLogs,
+            index = 7,
+            count = 8
+        )
+    }
+}
+
+@Composable
+private fun AboutSettingsSection(
+    modifier: Modifier = Modifier
+) {
+    SettingsSection(title = stringResource(R.string.settings_section_about), modifier = modifier) {
+        SegmentedInfoRow(
+            title = stringResource(R.string.settings_version_label),
+            value = BuildConfig.VERSION_NAME,
+            index = 0,
+            count = 2
+        )
+        SegmentedInfoRow(
+            title = stringResource(R.string.settings_developer_label),
+            value = stringResource(R.string.settings_developer_value),
+            index = 1,
+            count = 2
+        )
+    }
+}
+
+@Composable
+private fun SettingsSourceDialogs(
+    showMetadataSourceDialog: Boolean,
+    onShowMetadataSourceDialogChange: (Boolean) -> Unit,
+    showLyricsSourceDialog: Boolean,
+    onShowLyricsSourceDialogChange: (Boolean) -> Unit,
+    showCoverSourceDialog: Boolean,
+    onShowCoverSourceDialogChange: (Boolean) -> Unit,
+    dragDialogState: DragDialogState?,
+    activeDialogType: DataSourceType?,
+    onActiveDialogTypeChange: (DataSourceType?) -> Unit,
+    appleCountryOptions: List<AppleCountryOption>,
+    currentAppleCountry: AppleCountryOption,
+    viewModel: SettingsViewModel
+) {
     if (showMetadataSourceDialog) {
         LaunchedEffect(Unit) {
             if (activeDialogType != DataSourceType.METADATA) {
                 viewModel.initDragDialogState(DataSourceType.METADATA)
-                activeDialogType = DataSourceType.METADATA
+                onActiveDialogTypeChange(DataSourceType.METADATA)
             }
         }
         dragDialogState?.let { state ->
@@ -1340,8 +1379,8 @@ fun SettingsScreen(
                 currentAppleCountry = currentAppleCountry,
                 onDismiss = {
                     viewModel.clearDragDialogState()
-                    activeDialogType = null
-                    showMetadataSourceDialog = false
+                    onActiveDialogTypeChange(null)
+                    onShowMetadataSourceDialogChange(false)
                 },
                 onSourceEnabledChange = { sourceId, enabled ->
                     viewModel.setSourceEnabled(DataSourceType.METADATA, sourceId, enabled)
@@ -1365,7 +1404,7 @@ fun SettingsScreen(
         LaunchedEffect(Unit) {
             if (activeDialogType != DataSourceType.LYRICS) {
                 viewModel.initDragDialogState(DataSourceType.LYRICS)
-                activeDialogType = DataSourceType.LYRICS
+                onActiveDialogTypeChange(DataSourceType.LYRICS)
             }
         }
         dragDialogState?.let { state ->
@@ -1376,8 +1415,8 @@ fun SettingsScreen(
                 currentAppleCountry = currentAppleCountry,
                 onDismiss = {
                     viewModel.clearDragDialogState()
-                    activeDialogType = null
-                    showLyricsSourceDialog = false
+                    onActiveDialogTypeChange(null)
+                    onShowLyricsSourceDialogChange(false)
                 },
                 onSourceEnabledChange = { sourceId, enabled ->
                     viewModel.setSourceEnabled(DataSourceType.LYRICS, sourceId, enabled)
@@ -1401,7 +1440,7 @@ fun SettingsScreen(
         LaunchedEffect(Unit) {
             if (activeDialogType != DataSourceType.COVER) {
                 viewModel.initDragDialogState(DataSourceType.COVER)
-                activeDialogType = DataSourceType.COVER
+                onActiveDialogTypeChange(DataSourceType.COVER)
             }
         }
         dragDialogState?.let { state ->
@@ -1412,8 +1451,8 @@ fun SettingsScreen(
                 currentAppleCountry = currentAppleCountry,
                 onDismiss = {
                     viewModel.clearDragDialogState()
-                    activeDialogType = null
-                    showCoverSourceDialog = false
+                    onActiveDialogTypeChange(null)
+                    onShowCoverSourceDialogChange(false)
                 },
                 onSourceEnabledChange = { sourceId, enabled ->
                     viewModel.setSourceEnabled(DataSourceType.COVER, sourceId, enabled)
@@ -1432,21 +1471,117 @@ fun SettingsScreen(
             )
         }
     }
+}
 
-    if (showSearchLimitsDialog) {
-        SearchLimitDialog(
-            globalLimit = uiState.onlineSearchLimit,
-            musicBrainzLimit = uiState.onlineSearchLimitMusicBrainz,
-            itunesLimit = uiState.onlineSearchLimitITunes,
-            neteaseLimit = uiState.onlineSearchLimitNetease,
-            qqMusicLimit = uiState.onlineSearchLimitQQMusic,
-            searchLimitOptions = searchLimitOptions,
-            onDismiss = { showSearchLimitsDialog = false },
-            onGlobalLimitChange = { viewModel.setOnlineSearchLimit(it) },
-            onMusicBrainzLimitChange = { viewModel.setOnlineSearchLimitMusicBrainz(it) },
-            onItunesLimitChange = { viewModel.setOnlineSearchLimitITunes(it) },
-            onNeteaseLimitChange = { viewModel.setOnlineSearchLimitNetease(it) },
-            onQQMusicLimitChange = { viewModel.setOnlineSearchLimitQQMusic(it) }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SettingsInlineDialogs(
+    showSeparatorDialog: Boolean,
+    onShowSeparatorDialogChange: (Boolean) -> Unit,
+    dialogSeparatorTags: Set<String>,
+    onDialogSeparatorTagsChange: (Set<String>) -> Unit,
+    separatorInput: String,
+    onSeparatorInputChange: (String) -> Unit,
+    pendingDeleteSeparator: String?,
+    onPendingDeleteSeparatorChange: (String?) -> Unit,
+    onSetArtistSeparators: (Set<String>) -> Unit
+) {
+    if (showSeparatorDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                onDialogSeparatorTagsChange(emptySet())
+                onShowSeparatorDialogChange(false)
+            },
+            shape = MaterialTheme.shapes.large,
+            title = { Text(stringResource(R.string.artist_separators)) },
+            text = {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    FlowRow(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        dialogSeparatorTags.forEach { separator ->
+                            SeparatorChip(
+                                separator = separator,
+                                onDelete = { onDialogSeparatorTagsChange(dialogSeparatorTags - separator) },
+                                onLongPress = { onPendingDeleteSeparatorChange(separator) }
+                            )
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedTextField(
+                            value = separatorInput,
+                            onValueChange = onSeparatorInputChange,
+                            label = { Text(stringResource(R.string.artist_separators)) },
+                            singleLine = true,
+                            modifier = Modifier.weight(1f)
+                        )
+                        FilledTonalButton(
+                            onClick = {
+                                val trimmed = separatorInput.trim()
+                                if (trimmed.isNotBlank() && trimmed !in dialogSeparatorTags) {
+                                    onDialogSeparatorTagsChange(dialogSeparatorTags + trimmed)
+                                    onSeparatorInputChange("")
+                                }
+                            },
+                            enabled = separatorInput.isNotBlank()
+                        ) {
+                            Text(stringResource(R.string.settings_separator_add))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onSetArtistSeparators(dialogSeparatorTags)
+                        onShowSeparatorDialogChange(false)
+                    }
+                ) {
+                    Text(stringResource(R.string.dialog_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = {
+                    onDialogSeparatorTagsChange(emptySet())
+                    onShowSeparatorDialogChange(false)
+                }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            }
+        )
+    }
+
+    if (pendingDeleteSeparator != null) {
+        AlertDialog(
+            onDismissRequest = { onPendingDeleteSeparatorChange(null) },
+            shape = MaterialTheme.shapes.large,
+            title = { Text(stringResource(R.string.settings_separator_delete_title)) },
+            text = { Text(stringResource(R.string.settings_separator_delete_message, pendingDeleteSeparator!!)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        onDialogSeparatorTagsChange(dialogSeparatorTags - pendingDeleteSeparator!!)
+                        onPendingDeleteSeparatorChange(null)
+                    }
+                ) {
+                    Text(stringResource(R.string.settings_separator_delete))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { onPendingDeleteSeparatorChange(null) }) {
+                    Text(stringResource(R.string.settings_separator_cancel))
+                }
+            }
         )
     }
 }

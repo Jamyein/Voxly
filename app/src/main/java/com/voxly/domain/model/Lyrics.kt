@@ -80,7 +80,7 @@ data class Lyrics(
                     }
                     val text = match.groupValues[4].trim()
 
-                    val timestampMs = (minutes * 60 + seconds) * 1000L + millis
+                    val timestampMs = (minutes * 60 + seconds) * com.voxly.core.util.Constants.MS_PER_SECOND + millis
 
                     syncedLines.add(
                         SyncedLyricLine(
@@ -168,10 +168,10 @@ data class SyncedLyricLine(
          * Formats timestamp in LRC format [mm:ss.xx].
          */
         fun formatTimestamp(timestampMs: Long): String {
-            val totalSeconds = timestampMs / 1000
+            val totalSeconds = timestampMs / com.voxly.core.util.Constants.MS_PER_SECOND
             val minutes = totalSeconds / 60
             val seconds = totalSeconds % 60
-            val millis = (timestampMs % 1000) / 10
+            val millis = (timestampMs % com.voxly.core.util.Constants.MS_PER_SECOND) / 10
 
             return String.format("[%02d:%02d.%02d]", minutes, seconds, millis)
         }

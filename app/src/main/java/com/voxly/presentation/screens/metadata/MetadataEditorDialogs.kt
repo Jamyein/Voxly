@@ -29,6 +29,7 @@ import com.voxly.presentation.ui.decodeBitmapFromBytes
 import com.voxly.presentation.ui.loadAlbumArtOriginalBitmap
 import com.voxly.presentation.viewmodel.ConvertibleField
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
+import com.voxly.presentation.viewmodel.MetadataField
 import java.io.ByteArrayOutputStream
 
 /**
@@ -262,6 +263,23 @@ enum class ConversionType {
     TO_TRADITIONAL
 }
 
+fun metadataFieldsToConvertible(fields: Set<MetadataField>): Set<ConvertibleField> {
+    return fields.mapNotNull { field ->
+        when (field) {
+            MetadataField.TITLE -> ConvertibleField.TITLE
+            MetadataField.ARTIST -> ConvertibleField.ARTIST
+            MetadataField.ALBUM -> ConvertibleField.ALBUM
+            MetadataField.ALBUM_ARTIST -> ConvertibleField.ALBUM_ARTIST
+            MetadataField.GENRE -> ConvertibleField.GENRE
+            MetadataField.COMPOSER -> ConvertibleField.COMPOSER
+            MetadataField.LYRICIST -> ConvertibleField.LYRICIST
+            MetadataField.COMMENT -> ConvertibleField.COMMENT
+            MetadataField.LYRICS -> ConvertibleField.LYRICS
+            else -> null
+        }
+    }.toSet()
+}
+
 /**
  * Dialog for selecting metadata fields to convert.
  */
@@ -327,7 +345,7 @@ fun ConversionDialog(
                 LazyColumn(
                     modifier = Modifier.heightIn(max = 320.dp)
                 ) {
-                    items(ConvertibleField.entries.toList()) { field ->
+                    items(ConvertibleField.entries.toList(), key = { it.name }) { field ->
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()

@@ -10,6 +10,18 @@ object Constants {
     /** Default minimum duration filter threshold in milliseconds (1 minute) */
     const val MIN_DURATION_FILTER_THRESHOLD_MS = 60_000L
     
+    /** Milliseconds per second */
+    const val MS_PER_SECOND = 1_000L
+    
+    /** Milliseconds per minute */
+    const val MS_PER_MINUTE = 60_000L
+    
+    /** Milliseconds per hour */
+    const val MS_PER_HOUR = 3_600_000L
+    
+    /** Bits per second to kilobits per second conversion factor */
+    const val BPS_TO_KBPS = 1_000
+    
     /** Default cover art fetch timeout in milliseconds (5 seconds) */
     const val COVER_ART_TIMEOUT_MS = 5_000L
     

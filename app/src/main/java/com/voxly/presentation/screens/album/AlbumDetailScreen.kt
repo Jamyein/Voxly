@@ -45,6 +45,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
+import com.voxly.core.util.Constants
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.sharedBoundsIfAvailable
@@ -88,9 +89,9 @@ fun AlbumDetailScreen(
         files.sumOf { it.duration }
     }
     val formattedTotalDuration = remember(totalDuration) {
-        val hours = totalDuration / 3600000
-        val minutes = (totalDuration % 3600000) / 60000
-        val seconds = (totalDuration % 60000) / 1000
+        val hours = totalDuration / Constants.MS_PER_HOUR
+        val minutes = (totalDuration % Constants.MS_PER_HOUR) / Constants.MS_PER_MINUTE
+        val seconds = (totalDuration % Constants.MS_PER_MINUTE) / Constants.MS_PER_SECOND
         if (hours > 0) {
             String.format("%d:%02d:%02d", hours, minutes, seconds)
         } else {
@@ -290,7 +291,7 @@ fun AlbumDetailScreen(
                 val groupedFiles = sortedFiles.groupBy { it.metadata.discNumber ?: 1 }
                 val sortedDiscNumbers = groupedFiles.keys.sorted()
 
-                items(sortedDiscNumbers.size) { discIndex ->
+                items(sortedDiscNumbers.size, key = { sortedDiscNumbers[it] }) { discIndex ->
                     val discNumber = sortedDiscNumbers[discIndex]
                     val discFiles = groupedFiles[discNumber] ?: return@items
 

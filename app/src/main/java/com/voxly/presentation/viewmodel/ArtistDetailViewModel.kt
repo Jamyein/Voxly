@@ -11,6 +11,7 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.navigation.ArtistDetail
 import com.voxly.presentation.ui.extractAndCacheCoverBytes
 import com.voxly.presentation.ui.loadAlbumArtThumbnail
+import com.voxly.core.util.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
@@ -244,9 +245,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
      */
     fun getFormattedDuration(): String {
         val duration = _totalDuration.value
-        val hours = duration / 3600000
-        val minutes = (duration % 3600000) / 60000
-        val seconds = (duration % 60000) / 1000
+        val hours = duration / Constants.MS_PER_HOUR
+        val minutes = (duration % Constants.MS_PER_HOUR) / Constants.MS_PER_MINUTE
+        val seconds = (duration % Constants.MS_PER_MINUTE) / Constants.MS_PER_SECOND
         return if (hours > 0) {
             String.format("%d:%02d:%02d", hours, minutes, seconds)
         } else {

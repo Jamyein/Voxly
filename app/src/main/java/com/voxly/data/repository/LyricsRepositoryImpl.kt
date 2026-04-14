@@ -354,7 +354,7 @@ class LyricsRepositoryImpl @Inject constructor(
                     trackName = song.name,
                     artistName = resolvedArtistName,
                     albumName = resolvedAlbumName,
-                    duration = song.duration.toDouble() / 1000.0,
+                    duration = song.duration.toDouble() / com.voxly.core.util.Constants.MS_PER_SECOND.toDouble(),
                     hasSyncedLyrics = true,
                     hasPlainLyrics = true,
                     isInstrumental = false,

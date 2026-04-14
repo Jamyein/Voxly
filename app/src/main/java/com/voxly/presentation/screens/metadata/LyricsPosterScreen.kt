@@ -425,7 +425,7 @@ private fun ShapeSelector(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                items(standardShapes) { shape ->
+                items(standardShapes, key = { it.hashCode() }) { shape ->
                     ShapeChip(
                         shape = shape,
                         isSelected = selectedShape == shape,
@@ -452,7 +452,7 @@ private fun ShapeSelector(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                items(expressiveShapes) { shape ->
+                items(expressiveShapes, key = { it.hashCode() }) { shape ->
                     ShapeChip(
                         shape = shape,
                         isSelected = selectedShape == shape,
@@ -543,7 +543,7 @@ private fun ColorThemeSelector(
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(ColorExtractor.colorOptions) { color ->
+                    items(ColorExtractor.colorOptions, key = { it.value.toString() }) { color ->
                         Box(
                             modifier = Modifier
                                 .size(40.dp)

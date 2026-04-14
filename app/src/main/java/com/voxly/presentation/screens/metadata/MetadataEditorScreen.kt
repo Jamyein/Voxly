@@ -6,26 +6,20 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -40,14 +34,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.saf.SafGrantType
-import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
@@ -60,14 +52,13 @@ import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.MetadataField
+import com.voxly.presentation.viewmodel.ConvertibleField
 import com.voxly.presentation.viewmodel.EditHistoryViewModel
+import com.voxly.domain.repository.RecentEdit
 import com.voxly.presentation.viewmodel.ReplayGainScanError
 
 /**
  * Metadata editor screen for viewing and editing audio file metadata.
- *
- * @param sharedElementKey Optional key for shared element transition. When provided,
- *                         the screen will participate in Container Transform animation.
  */
 @OptIn(
     ExperimentalMaterial3Api::class,
@@ -91,11 +82,6 @@ fun MetadataEditorScreen(
     pendingOnlineCoverArt: ByteArray? = null,
     onConsumePendingOnlineCoverArt: () -> Unit = {},
 ) {
-    // Shared element transition setup
-    // Note: Full Container Transform requires AnimatedVisibilityScope which is not directly 
-    // available in Navigation 3 entry blocks. SharedTransitionLayout is set up in MP3TagNavHost
-    // for future use when Navigation 3 provides better support.
-    // Shared bounds modifier for Container Transform transition
     val sharedElementModifier = if (sharedElementKey != null) {
         Modifier.sharedBoundsIfAvailable(key = sharedElementKey)
     } else {
@@ -108,7 +94,6 @@ fun MetadataEditorScreen(
     val saveResult by viewModel.saveResult.collectAsStateWithLifecycle(initialValue = "")
     val modifiedFields by viewModel.modifiedFields.collectAsStateWithLifecycle()
 
-    // Dialog visibility states
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showAlbumArtOptions by remember { mutableStateOf(false) }
     var showAlbumArtPreview by remember { mutableStateOf(false) }
@@ -119,14 +104,11 @@ fun MetadataEditorScreen(
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     var exitAfterSave by remember { mutableStateOf(false) }
 
-    // ReplayGain state from ViewModel
     val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsStateWithLifecycle()
     val pendingReplayGainInfo by viewModel.pendingReplayGainInfo.collectAsStateWithLifecycle()
-    // 使用filePath作为key，确保切换歌曲时重置状态
     var currentReplayGainInfo by remember(filePath) { mutableStateOf<ReplayGainInfo?>(null) }
     val replayGainScanError by viewModel.replayGainScanError.collectAsStateWithLifecycle(initialValue = null)
 
-    // EditHistory state - filter to current file only
     var showEditHistorySheet by remember { mutableStateOf(false) }
     val editHistorySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val editHistoryViewModel: EditHistoryViewModel = hiltViewModel()
@@ -138,28 +120,23 @@ fun MetadataEditorScreen(
     val coverFetchMessage by viewModel.coverFetchMessage.collectAsStateWithLifecycle(initialValue = null)
     val isLyricsTimestampFormatted by viewModel.isLyricsTimestampFormatted.collectAsStateWithLifecycle()
 
-    // Debouncing is now handled in the ViewModel - just call updateDebouncedTextField
-
     LaunchedEffect(coverFetchMessage) {
         coverFetchMessage?.let {
             Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
         }
     }
 
-    // 屏幕进入时检查并应用待处理的在线元数据（来自 OnlineMetadataScreen）
     LaunchedEffect(Unit) {
         Timber.d("MetadataEditorScreen: checking pending online metadata for filePath=$filePath")
         viewModel.tryApplyPendingOnlineMetadata()
     }
 
-    // Handle online lyrics result from search screen
     LaunchedEffect(pendingOnlineLyrics) {
         val lyricsText = pendingOnlineLyrics ?: return@LaunchedEffect
         viewModel.updateMetadataField(MetadataField.LYRICS, lyricsText)
         onConsumePendingOnlineLyrics()
     }
 
-    // Handle online cover art result from search screen
     LaunchedEffect(pendingOnlineCoverArt) {
         val coverBytes = pendingOnlineCoverArt ?: return@LaunchedEffect
         viewModel.updateAlbumArt(coverBytes)
@@ -167,7 +144,7 @@ fun MetadataEditorScreen(
     }
 
     var pendingMediaStoreIntentSender by remember { mutableStateOf<android.content.IntentSender?>(null) }
-    
+
     val mediaStorePermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.StartIntentSenderForResult()
     ) { result ->
@@ -177,7 +154,6 @@ fun MetadataEditorScreen(
         }
     }
 
-    // Handle save result
     LaunchedEffect(saveResult) {
         if (saveResult.isNotBlank()) {
             if (saveResult == "Save successful") {
@@ -186,13 +162,10 @@ fun MetadataEditorScreen(
                     onNavigateBack()
                 }
             }
-            // Reset exit flag for any result
             exitAfterSave = false
         }
     }
 
-    // Back navigation handler — checks for unsaved changes before exiting.
-    // Predictive back is handled centrally by NavDisplay in MP3TagNavHost.
     val handleNavigateBack = {
         if (hasUnsavedChanges) {
             showDiscardDialog = true
@@ -229,8 +202,6 @@ fun MetadataEditorScreen(
     }
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
-
-    // FloatingToolbar scroll behavior using official M3E API
     val floatingToolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
         exitDirection = FloatingToolbarExitDirection.Bottom
     )
@@ -248,9 +219,9 @@ fun MetadataEditorScreen(
                     scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
-                    navigationIcon = {
-                        IconButton(onClick = handleNavigateBack) {
-                            Icon(
+                navigationIcon = {
+                    IconButton(onClick = handleNavigateBack) {
+                        Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.cd_back)
                         )
@@ -270,340 +241,565 @@ fun MetadataEditorScreen(
                 .fillMaxSize()
                 .padding(top = innerPadding.calculateTopPadding())
         ) {
-            when (val state = uiState) {
-                is MetadataEditorUiState.Loading -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        LoadingIndicator()
+            MetadataEditorScaffoldContent(
+                uiState = uiState,
+                filePath = filePath,
+                editedMetadata = editedMetadata,
+                audioFile = (uiState as? MetadataEditorUiState.Success)?.audioFile,
+                albumArt = editedMetadata?.albumArt,
+                mediaStoreAlbumId = (uiState as? MetadataEditorUiState.Success)?.audioFile?.mediaStoreAlbumId,
+                bottomPadding = innerPadding.calculateBottomPadding() + 80.dp,
+                modifiedFields = modifiedFields,
+                coverTag = coverTag,
+                hasUnsavedChanges = hasUnsavedChanges,
+                isScanningReplayGain = isScanningReplayGain,
+                pendingReplayGainInfo = pendingReplayGainInfo,
+                currentReplayGainInfo = currentReplayGainInfo,
+                onCurrentReplayGainInfoChange = { currentReplayGainInfo = it },
+                replayGainScanError = replayGainScanError,
+                onTitleChange = { viewModel.updateDebouncedTextField(MetadataField.TITLE, it) },
+                onArtistChange = { viewModel.updateDebouncedTextField(MetadataField.ARTIST, it) },
+                onAlbumChange = { viewModel.updateDebouncedTextField(MetadataField.ALBUM, it) },
+                onAlbumArtistChange = { viewModel.updateDebouncedTextField(MetadataField.ALBUM_ARTIST, it) },
+                onYearChange = { viewModel.updateDebouncedTextField(MetadataField.YEAR, it) },
+                onGenreChange = { viewModel.updateDebouncedTextField(MetadataField.GENRE, it) },
+                onComposerChange = { viewModel.updateDebouncedTextField(MetadataField.COMPOSER, it) },
+                onLyricistChange = { viewModel.updateDebouncedTextField(MetadataField.LYRICIST, it) },
+                onCommentChange = { viewModel.updateDebouncedTextField(MetadataField.COMMENT, it) },
+                onLyricsChange = { viewModel.updateDebouncedTextField(MetadataField.LYRICS, it) },
+                onTrackNumberChange = { track, total ->
+                    viewModel.updateTrackNumber(track.toIntOrNull(), total.toIntOrNull())
+                },
+                onDiscNumberChange = { disc, total ->
+                    viewModel.updateDiscNumber(disc.toIntOrNull(), total.toIntOrNull())
+                },
+                onPickAlbumArt = { showAlbumArtOptions = true },
+                onZoomAlbumArt = { showAlbumArtPreview = true },
+                onRotateAlbumArt = {
+                    editedMetadata?.albumArt?.let { bytes ->
+                        rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
                     }
+                },
+                onRemoveAlbumArt = { viewModel.updateAlbumArt(null) },
+                onScanReplayGain = { viewModel.scanReplayGain() },
+                onClearReplayGain = {
+                    viewModel.clearReplayGainInfo()
+                    currentReplayGainInfo = null
+                },
+                onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
+                onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
+                onNavigateToLyricsSelector = onNavigateToLyricsSelector,
+                onSave = { viewModel.saveMetadata() },
+                onSyncDebouncedFields = {
+                    val metadata = (uiState as? MetadataEditorUiState.Success)?.editedMetadata ?: return@MetadataEditorScaffoldContent
+                    viewModel.updateDebouncedTextField(MetadataField.TITLE, metadata.title)
+                    viewModel.updateDebouncedTextField(MetadataField.ARTIST, metadata.artist)
+                    viewModel.updateDebouncedTextField(MetadataField.ALBUM, metadata.album)
+                    viewModel.updateDebouncedTextField(MetadataField.ALBUM_ARTIST, metadata.albumArtist)
+                    viewModel.updateDebouncedTextField(MetadataField.YEAR, metadata.year)
+                    viewModel.updateDebouncedTextField(MetadataField.GENRE, metadata.genre)
+                    viewModel.updateDebouncedTextField(MetadataField.COMPOSER, metadata.composer)
+                    viewModel.updateDebouncedTextField(MetadataField.LYRICIST, metadata.lyricist)
+                    viewModel.updateDebouncedTextField(MetadataField.COMMENT, metadata.comment)
+                    viewModel.updateDebouncedTextField(MetadataField.LYRICS, metadata.lyrics)
+                },
+                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
+            )
+        }
+    }
+
+    MetadataEditorDialogsAndSheets(
+        showEditHistorySheet = showEditHistorySheet,
+        onShowEditHistorySheetChange = { showEditHistorySheet = it },
+        editHistorySheetState = editHistorySheetState,
+        currentFileEdits = currentFileEdits,
+        showMoreOptionsSheet = showMoreOptionsSheet,
+        onShowMoreOptionsSheetChange = { showMoreOptionsSheet = it },
+        moreOptionsSheetState = moreOptionsSheetState,
+        isLyricsTimestampFormatted = isLyricsTimestampFormatted,
+        hasLyrics = editedMetadata?.lyrics?.isNotBlank() == true,
+    showDiscardDialog = showDiscardDialog,
+    onShowDiscardDialogChange = { showDiscardDialog = it },
+    onSaveFromDiscardDialog = {
+        viewModel.saveMetadata()
+    },
+    onDiscardChanges = {
+        viewModel.discardChanges()
+        onNavigateBack()
+    },
+        showReauthorizeDialog = showReauthorizeDialog,
+        onShowReauthorizeDialogChange = { showReauthorizeDialog = it },
+        onReauthorizeDirectory = { reauthorizeDirectoryLauncher.launch(null) },
+        onReauthorizeFile = { reauthorizeFileLauncher.launch(arrayOf("audio/*", "*/*")) },
+        showAlbumArtOptions = showAlbumArtOptions,
+        onShowAlbumArtOptionsChange = { showAlbumArtOptions = it },
+        hasAlbumArt = editedMetadata?.albumArt != null,
+        onPickFromGallery = { galleryPickerLauncher.launch("image/*") },
+        onTakePhoto = { cameraLauncher.launch(null) },
+        onFetchOnlineCover = onNavigateToOnlineCoverSearch,
+        onViewArt = { showAlbumArtPreview = true },
+        onRotateArt = {
+            editedMetadata?.albumArt?.let { bytes ->
+                rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
+            }
+        },
+        onRemoveArt = { viewModel.updateAlbumArt(null) },
+        showAlbumArtPreview = showAlbumArtPreview,
+        onShowAlbumArtPreviewChange = { showAlbumArtPreview = it },
+        previewAlbumArt = editedMetadata?.albumArt,
+        audioFilePath = (uiState as? MetadataEditorUiState.Success)?.audioFile?.path,
+        showConversionDialog = showConversionDialog,
+        onShowConversionDialogChange = { showConversionDialog = it },
+        conversionType = conversionType,
+        onConversionTypeChange = { conversionType = it },
+        onConvert = { selectedFields ->
+            if (conversionType == ConversionType.TO_SIMPLIFIED) {
+                viewModel.convertToSimplified(selectedFields)
+            } else {
+                viewModel.convertToTraditional(selectedFields)
+            }
+        },
+        onToggleLyricsTimestampFormat = { viewModel.toggleLyricsTimestampFormat() }
+    )
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun MetadataEditorScaffoldContent(
+    uiState: MetadataEditorUiState,
+    filePath: String,
+    editedMetadata: com.voxly.domain.model.AudioMetadata?,
+    audioFile: com.voxly.domain.model.AudioFile?,
+    albumArt: ByteArray?,
+    mediaStoreAlbumId: Long?,
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    modifiedFields: Set<MetadataField>,
+    coverTag: String?,
+    hasUnsavedChanges: Boolean,
+    isScanningReplayGain: Boolean,
+    pendingReplayGainInfo: ReplayGainInfo?,
+    currentReplayGainInfo: ReplayGainInfo?,
+    onCurrentReplayGainInfoChange: (ReplayGainInfo?) -> Unit,
+    replayGainScanError: String?,
+    onTitleChange: (String) -> Unit,
+    onArtistChange: (String) -> Unit,
+    onAlbumChange: (String) -> Unit,
+    onAlbumArtistChange: (String) -> Unit,
+    onYearChange: (String) -> Unit,
+    onGenreChange: (String) -> Unit,
+    onComposerChange: (String) -> Unit,
+    onLyricistChange: (String) -> Unit,
+    onCommentChange: (String) -> Unit,
+    onLyricsChange: (String) -> Unit,
+    onTrackNumberChange: (String, String) -> Unit,
+    onDiscNumberChange: (String, String) -> Unit,
+    onPickAlbumArt: () -> Unit,
+    onZoomAlbumArt: () -> Unit,
+    onRotateAlbumArt: () -> Unit,
+    onRemoveAlbumArt: () -> Unit,
+    onScanReplayGain: () -> Unit,
+    onClearReplayGain: () -> Unit,
+    onNavigateToOnlineMetadata: () -> Unit,
+    onNavigateToOnlineLyricsSearch: () -> Unit,
+    onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
+    onSave: () -> Unit,
+    onSyncDebouncedFields: () -> Unit,
+    floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
+    modifier: Modifier = Modifier
+) {
+    Box(
+        modifier = modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        when (val state = uiState) {
+            is MetadataEditorUiState.Loading -> {
+                LoadingIndicator()
+            }
+            is MetadataEditorUiState.Saving -> {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    LoadingIndicator()
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(stringResource(R.string.saving_metadata))
                 }
-                is MetadataEditorUiState.Saving -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            LoadingIndicator()
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(stringResource(R.string.saving_metadata))
-                        }
-                    }
-                }
-                is MetadataEditorUiState.Success -> {
-                    // 使用filePath作为key，确保切换歌曲时正确更新ReplayGain信息
-                    LaunchedEffect(filePath, state.audioFile.path) {
-                        // 当歌曲改变时，重置并加载当前歌曲的ReplayGain信息
-                        currentReplayGainInfo = state.audioFile.replayGainInfo
-                    }
-
-                    // Sync text flows with metadata when file changes (reset debounce buffers)
-                    LaunchedEffect(filePath) {
-                        val metadata = state.editedMetadata
-                        viewModel.updateDebouncedTextField(MetadataField.TITLE, metadata.title)
-                        viewModel.updateDebouncedTextField(MetadataField.ARTIST, metadata.artist)
-                        viewModel.updateDebouncedTextField(MetadataField.ALBUM, metadata.album)
-                        viewModel.updateDebouncedTextField(MetadataField.ALBUM_ARTIST, metadata.albumArtist)
-                        viewModel.updateDebouncedTextField(MetadataField.YEAR, metadata.year)
-                        viewModel.updateDebouncedTextField(MetadataField.GENRE, metadata.genre)
-                        viewModel.updateDebouncedTextField(MetadataField.COMPOSER, metadata.composer)
-                        viewModel.updateDebouncedTextField(MetadataField.LYRICIST, metadata.lyricist)
-                        viewModel.updateDebouncedTextField(MetadataField.COMMENT, metadata.comment)
-                        viewModel.updateDebouncedTextField(MetadataField.LYRICS, metadata.lyrics)
-                    }
-
-                    // Box with FloatingToolbar at bottom
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        // Create scroll state for FloatingToolbarScrollBehavior
-                        val scrollState = rememberScrollState()
-
-                        val mediaStoreFallbackBitmap by produceState<Bitmap?>(
-                            initialValue = null,
-                            key1 = state.audioFile.mediaStoreAlbumId,
-                            key2 = editedMetadata?.albumArt
-                        ) {
-                            value = if (editedMetadata?.albumArt == null &&
-                                state.audioFile.mediaStoreAlbumId != null &&
-                                state.audioFile.mediaStoreAlbumId > 0
-                            ) {
-                                withContext(Dispatchers.IO) {
-                                    loadMediaStoreAlbumArt(context, state.audioFile.mediaStoreAlbumId)
-                                }
-                            } else {
-                                null
-                            }
-                        }
-
-                        MetadataFormContent(
-                            metadata = editedMetadata ?: state.editedMetadata,
-                            audioFile = state.audioFile,
-                            albumArtFallback = mediaStoreFallbackBitmap,
-                            bottomPadding = innerPadding.calculateBottomPadding() + 80.dp, // Extra space for toolbar
-                            scrollState = scrollState,
-                            nestedScrollModifier = Modifier,
-                            modifiedFields = modifiedFields,
-                            onTitleChange = { viewModel.updateDebouncedTextField(MetadataField.TITLE, it) },
-                            onArtistChange = { viewModel.updateDebouncedTextField(MetadataField.ARTIST, it) },
-                            onAlbumChange = { viewModel.updateDebouncedTextField(MetadataField.ALBUM, it) },
-                            onAlbumArtistChange = { viewModel.updateDebouncedTextField(MetadataField.ALBUM_ARTIST, it) },
-                            onYearChange = { viewModel.updateDebouncedTextField(MetadataField.YEAR, it) },
-                            onGenreChange = { viewModel.updateDebouncedTextField(MetadataField.GENRE, it) },
-                            onComposerChange = { viewModel.updateDebouncedTextField(MetadataField.COMPOSER, it) },
-                            onLyricistChange = { viewModel.updateDebouncedTextField(MetadataField.LYRICIST, it) },
-                            onCommentChange = { viewModel.updateDebouncedTextField(MetadataField.COMMENT, it) },
-                            onLyricsChange = { viewModel.updateDebouncedTextField(MetadataField.LYRICS, it) },
-                            onTrackNumberChange = { track, total ->
-                                viewModel.updateTrackNumber(track.toIntOrNull(), total.toIntOrNull())
-                            },
-                            onDiscNumberChange = { disc, total ->
-                                viewModel.updateDiscNumber(disc.toIntOrNull(), total.toIntOrNull())
-                            },
-                            onPickAlbumArt = { showAlbumArtOptions = true },
-                            coverTag = coverTag,
-                            onZoomAlbumArt = { showAlbumArtPreview = true },
-                            onRotateAlbumArt = {
-                                editedMetadata?.albumArt?.let { bytes ->
-                                    rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
-                                }
-                            },
-                            onRemoveAlbumArt = { viewModel.updateAlbumArt(null) },
-                            onScanReplayGain = { viewModel.scanReplayGain() },
-                            onClearReplayGain = {
-                                viewModel.clearReplayGainInfo()
-                                currentReplayGainInfo = null
-                            },
-                            isScanningReplayGain = isScanningReplayGain,
-                            replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo,
-                            replayGainScanError = replayGainScanError
-                        )
-
-                        // Toolbar at bottom, above content
-                        Box(
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(
-                                    start = 16.dp,
-                                    end = 16.dp
-                                )
-                        ) {
-                            HorizontalFloatingToolbar(
-                                expanded = true,
-                                modifier = Modifier
-                                    .navigationBarsPadding()
-                                    .padding(bottom = 8.dp),
-                                scrollBehavior = floatingToolbarScrollBehavior,
-                                colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
-                            ) {
-                                // Using IconButton per official M3E FloatingToolbar API
-                                // Lyrics Selection (only show if there are lyrics)
-                                val hasLyrics = editedMetadata?.lyrics?.isNotBlank() == true
-                                if (hasLyrics) {
-                                    IconButton(
-                                        onClick = {
-                                            onNavigateToLyricsSelector(
-                                                editedMetadata?.lyrics ?: "",
-                                                editedMetadata?.getDisplayTitle(state.audioFile.name) ?: state.audioFile.name,
-                                                editedMetadata?.artist ?: "",
-                                                editedMetadata?.album ?: "",
-                                                editedMetadata?.albumArt
-                                            )
-                                        }
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Lyrics,
-                                            contentDescription = stringResource(R.string.select_lyrics_for_poster)
-                                        )
-                                    }
-                                }
-
-                                // Search Online Lyrics
-                                IconButton(
-                                    onClick = { onNavigateToOnlineLyricsSearch() }
-                                ) {
-                                    Icon(
-                                        painter = appIconPainter(AppIcon.MusicNote),
-                                        contentDescription = stringResource(R.string.cd_online_lyrics)
-                                    )
-                                }
-
-                                // Fetch Online Metadata
-                                IconButton(
-                                    onClick = { onNavigateToOnlineMetadata() }
-                                ) {
-                                    Icon(
-                                        painter = appIconPainter(AppIcon.CloudDownload),
-                                        contentDescription = stringResource(R.string.cd_online_metadata)
-                                    )
-                                }
-
-                                // Save
-                                IconButton(
-                                    onClick = {
-                                        if (hasUnsavedChanges && uiState !is MetadataEditorUiState.Saving) {
-                                            viewModel.saveMetadata()
-                                        }
-                                    }
-                                ) {
-                                    Icon(
-                                        Icons.Default.Save,
-                                        contentDescription = stringResource(R.string.cd_save)
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-                is MetadataEditorUiState.Error -> {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                painter = appIconPainter(AppIcon.Error),
-                                contentDescription = stringResource(R.string.cd_error),
-                                tint = MaterialTheme.colorScheme.error
-                            )
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                state.message,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                        }
-                    }
+            }
+            is MetadataEditorUiState.Success -> {
+                MetadataEditorSuccessContent(
+                    filePath = filePath,
+                    state = state,
+                    editedMetadata = editedMetadata ?: state.editedMetadata,
+                    albumArt = albumArt,
+                    mediaStoreAlbumId = mediaStoreAlbumId,
+                    bottomPadding = bottomPadding,
+                    modifiedFields = modifiedFields,
+                    coverTag = coverTag,
+                    hasUnsavedChanges = hasUnsavedChanges,
+                    isScanningReplayGain = isScanningReplayGain,
+                    pendingReplayGainInfo = pendingReplayGainInfo,
+                    currentReplayGainInfo = currentReplayGainInfo,
+                    onCurrentReplayGainInfoChange = onCurrentReplayGainInfoChange,
+                    replayGainScanError = replayGainScanError,
+                    onTitleChange = onTitleChange,
+                    onArtistChange = onArtistChange,
+                    onAlbumChange = onAlbumChange,
+                    onAlbumArtistChange = onAlbumArtistChange,
+                    onYearChange = onYearChange,
+                    onGenreChange = onGenreChange,
+                    onComposerChange = onComposerChange,
+                    onLyricistChange = onLyricistChange,
+                    onCommentChange = onCommentChange,
+                    onLyricsChange = onLyricsChange,
+                    onTrackNumberChange = onTrackNumberChange,
+                    onDiscNumberChange = onDiscNumberChange,
+                    onPickAlbumArt = onPickAlbumArt,
+                    onZoomAlbumArt = onZoomAlbumArt,
+                    onRotateAlbumArt = onRotateAlbumArt,
+                    onRemoveAlbumArt = onRemoveAlbumArt,
+                    onScanReplayGain = onScanReplayGain,
+                    onClearReplayGain = onClearReplayGain,
+                    onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
+                    onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
+                    onNavigateToLyricsSelector = onNavigateToLyricsSelector,
+                    onSave = onSave,
+                    onSyncDebouncedFields = onSyncDebouncedFields,
+                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
+                )
+            }
+            is MetadataEditorUiState.Error -> {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Icon(
+                        painter = appIconPainter(AppIcon.Error),
+                        contentDescription = stringResource(R.string.cd_error),
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        state.message,
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             }
         }
     }
+}
 
-    // EditHistory Sheet
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun MetadataEditorSuccessContent(
+    filePath: String,
+    state: MetadataEditorUiState.Success,
+    editedMetadata: com.voxly.domain.model.AudioMetadata,
+    albumArt: ByteArray?,
+    mediaStoreAlbumId: Long?,
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    modifiedFields: Set<MetadataField>,
+    coverTag: String?,
+    hasUnsavedChanges: Boolean,
+    isScanningReplayGain: Boolean,
+    pendingReplayGainInfo: ReplayGainInfo?,
+    currentReplayGainInfo: ReplayGainInfo?,
+    onCurrentReplayGainInfoChange: (ReplayGainInfo?) -> Unit,
+    replayGainScanError: String?,
+    onTitleChange: (String) -> Unit,
+    onArtistChange: (String) -> Unit,
+    onAlbumChange: (String) -> Unit,
+    onAlbumArtistChange: (String) -> Unit,
+    onYearChange: (String) -> Unit,
+    onGenreChange: (String) -> Unit,
+    onComposerChange: (String) -> Unit,
+    onLyricistChange: (String) -> Unit,
+    onCommentChange: (String) -> Unit,
+    onLyricsChange: (String) -> Unit,
+    onTrackNumberChange: (String, String) -> Unit,
+    onDiscNumberChange: (String, String) -> Unit,
+    onPickAlbumArt: () -> Unit,
+    onZoomAlbumArt: () -> Unit,
+    onRotateAlbumArt: () -> Unit,
+    onRemoveAlbumArt: () -> Unit,
+    onScanReplayGain: () -> Unit,
+    onClearReplayGain: () -> Unit,
+    onNavigateToOnlineMetadata: () -> Unit,
+    onNavigateToOnlineLyricsSearch: () -> Unit,
+    onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
+    onSave: () -> Unit,
+    onSyncDebouncedFields: () -> Unit,
+    floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
+    modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current
+
+    LaunchedEffect(filePath, state.audioFile.path) {
+        onCurrentReplayGainInfoChange(state.audioFile.replayGainInfo)
+    }
+
+    LaunchedEffect(filePath) {
+        onSyncDebouncedFields()
+    }
+
+    val scrollState = rememberScrollState()
+
+    val mediaStoreFallbackBitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = mediaStoreAlbumId,
+        key2 = albumArt
+    ) {
+        value = if (albumArt == null && mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
+            withContext(Dispatchers.IO) {
+                loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
+            }
+        } else {
+            null
+        }
+    }
+
+    Box(modifier = modifier.fillMaxSize()) {
+        MetadataFormContent(
+            metadata = editedMetadata,
+            audioFile = state.audioFile,
+            albumArtFallback = mediaStoreFallbackBitmap,
+            bottomPadding = bottomPadding,
+            scrollState = scrollState,
+            nestedScrollModifier = Modifier,
+            modifiedFields = modifiedFields,
+            onTitleChange = onTitleChange,
+            onArtistChange = onArtistChange,
+            onAlbumChange = onAlbumChange,
+            onAlbumArtistChange = onAlbumArtistChange,
+            onYearChange = onYearChange,
+            onGenreChange = onGenreChange,
+            onComposerChange = onComposerChange,
+            onLyricistChange = onLyricistChange,
+            onCommentChange = onCommentChange,
+            onLyricsChange = onLyricsChange,
+            onTrackNumberChange = onTrackNumberChange,
+            onDiscNumberChange = onDiscNumberChange,
+            onPickAlbumArt = onPickAlbumArt,
+            coverTag = coverTag,
+            onZoomAlbumArt = onZoomAlbumArt,
+            onRotateAlbumArt = onRotateAlbumArt,
+            onRemoveAlbumArt = onRemoveAlbumArt,
+            onScanReplayGain = onScanReplayGain,
+            onClearReplayGain = onClearReplayGain,
+            isScanningReplayGain = isScanningReplayGain,
+            replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo,
+            replayGainScanError = replayGainScanError
+        )
+
+        Box(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(start = 16.dp, end = 16.dp)
+        ) {
+            HorizontalFloatingToolbar(
+                expanded = true,
+                modifier = Modifier
+                    .navigationBarsPadding()
+                    .padding(bottom = 8.dp),
+                scrollBehavior = floatingToolbarScrollBehavior,
+                colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
+            ) {
+                val hasLyrics = editedMetadata.lyrics?.isNotBlank() == true
+                if (hasLyrics) {
+                    IconButton(
+                        onClick = {
+                            onNavigateToLyricsSelector(
+                                editedMetadata.lyrics ?: "",
+                                editedMetadata.getDisplayTitle(state.audioFile.name),
+                                editedMetadata.artist ?: "",
+                                editedMetadata.album ?: "",
+                                editedMetadata.albumArt
+                            )
+                        }
+                    ) {
+                        Icon(
+                            Icons.Default.Lyrics,
+                            contentDescription = stringResource(R.string.select_lyrics_for_poster)
+                        )
+                    }
+                }
+
+                IconButton(onClick = onNavigateToOnlineLyricsSearch) {
+                    Icon(
+                        painter = appIconPainter(AppIcon.MusicNote),
+                        contentDescription = stringResource(R.string.cd_online_lyrics)
+                    )
+                }
+
+                IconButton(onClick = onNavigateToOnlineMetadata) {
+                    Icon(
+                        painter = appIconPainter(AppIcon.CloudDownload),
+                        contentDescription = stringResource(R.string.cd_online_metadata)
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        if (hasUnsavedChanges) {
+                            onSave()
+                        }
+                    }
+                ) {
+                    Icon(
+                        Icons.Default.Save,
+                        contentDescription = stringResource(R.string.cd_save)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MetadataEditorDialogsAndSheets(
+    showEditHistorySheet: Boolean,
+    onShowEditHistorySheetChange: (Boolean) -> Unit,
+    editHistorySheetState: androidx.compose.material3.SheetState,
+    currentFileEdits: List<RecentEdit>,
+    showMoreOptionsSheet: Boolean,
+    onShowMoreOptionsSheetChange: (Boolean) -> Unit,
+    moreOptionsSheetState: androidx.compose.material3.SheetState,
+    isLyricsTimestampFormatted: Boolean,
+    hasLyrics: Boolean,
+    showDiscardDialog: Boolean,
+    onShowDiscardDialogChange: (Boolean) -> Unit,
+    onSaveFromDiscardDialog: () -> Unit,
+    onDiscardChanges: () -> Unit,
+    showReauthorizeDialog: Boolean,
+    onShowReauthorizeDialogChange: (Boolean) -> Unit,
+    onReauthorizeDirectory: () -> Unit,
+    onReauthorizeFile: () -> Unit,
+    showAlbumArtOptions: Boolean,
+    onShowAlbumArtOptionsChange: (Boolean) -> Unit,
+    hasAlbumArt: Boolean,
+    onPickFromGallery: () -> Unit,
+    onTakePhoto: () -> Unit,
+    onFetchOnlineCover: () -> Unit,
+    onViewArt: () -> Unit,
+    onRotateArt: () -> Unit,
+    onRemoveArt: () -> Unit,
+    showAlbumArtPreview: Boolean,
+    onShowAlbumArtPreviewChange: (Boolean) -> Unit,
+    previewAlbumArt: ByteArray?,
+    audioFilePath: String?,
+    showConversionDialog: Boolean,
+    onShowConversionDialogChange: (Boolean) -> Unit,
+    conversionType: ConversionType,
+    onConversionTypeChange: (ConversionType) -> Unit,
+    onConvert: (Set<ConvertibleField>) -> Unit,
+    onToggleLyricsTimestampFormat: () -> Unit
+) {
     if (showEditHistorySheet) {
         EditHistorySheet(
             sheetState = editHistorySheetState,
-            onDismiss = { showEditHistorySheet = false },
+            onDismiss = { onShowEditHistorySheetChange(false) },
             recentEdits = currentFileEdits
         )
     }
 
-    // More Options Sheet
     if (showMoreOptionsSheet) {
-        val hasLyrics = editedMetadata?.lyrics?.isNotBlank() == true
         MoreOptionsSheet(
             sheetState = moreOptionsSheetState,
-            onDismiss = { showMoreOptionsSheet = false },
+            onDismiss = { onShowMoreOptionsSheetChange(false) },
             onEditHistoryClick = {
-                showMoreOptionsSheet = false
-                showEditHistorySheet = true
+                onShowMoreOptionsSheetChange(false)
+                onShowEditHistorySheetChange(true)
             },
             onConvertToSimplifiedClick = {
-                showMoreOptionsSheet = false
-                conversionType = ConversionType.TO_SIMPLIFIED
-                showConversionDialog = true
+                onShowMoreOptionsSheetChange(false)
+                onConversionTypeChange(ConversionType.TO_SIMPLIFIED)
+                onShowConversionDialogChange(true)
             },
             onConvertToTraditionalClick = {
-                showMoreOptionsSheet = false
-                conversionType = ConversionType.TO_TRADITIONAL
-                showConversionDialog = true
+                onShowMoreOptionsSheetChange(false)
+                onConversionTypeChange(ConversionType.TO_TRADITIONAL)
+                onShowConversionDialogChange(true)
             },
             onToggleLyricsTimestampClick = {
-                showMoreOptionsSheet = false
-                viewModel.toggleLyricsTimestampFormat()
+                onShowMoreOptionsSheetChange(false)
+                onToggleLyricsTimestampFormat()
             },
             isLyricsTimestampFormatted = isLyricsTimestampFormatted,
             hasLyrics = hasLyrics
         )
     }
 
-    // Dialogs
     if (showDiscardDialog) {
         DiscardChangesDialog(
-            onDismiss = { showDiscardDialog = false },
+            onDismiss = { onShowDiscardDialogChange(false) },
             onSave = {
-                showDiscardDialog = false
-                viewModel.saveMetadata()
+                onShowDiscardDialogChange(false)
+                onSaveFromDiscardDialog()
             },
             onDiscard = {
-                showDiscardDialog = false
-                viewModel.discardChanges()
-                onNavigateBack()
+                onShowDiscardDialogChange(false)
+                onDiscardChanges()
             }
         )
     }
 
     if (showReauthorizeDialog) {
         ReauthorizeDialog(
-            onDismiss = { showReauthorizeDialog = false },
+            onDismiss = { onShowReauthorizeDialogChange(false) },
             onSelectDirectory = {
-                showReauthorizeDialog = false
-                reauthorizeDirectoryLauncher.launch(null)
+                onShowReauthorizeDialogChange(false)
+                onReauthorizeDirectory()
             },
             onSelectFile = {
-                showReauthorizeDialog = false
-                reauthorizeFileLauncher.launch(arrayOf("audio/*", "*/*"))
+                onShowReauthorizeDialogChange(false)
+                onReauthorizeFile()
             }
         )
     }
 
     if (showAlbumArtOptions) {
-        val hasAlbumArt = editedMetadata?.albumArt != null
         AlbumArtOptionsSheet(
             hasAlbumArt = hasAlbumArt,
-            onDismiss = { showAlbumArtOptions = false },
+            onDismiss = { onShowAlbumArtOptionsChange(false) },
             onPickFromGallery = {
-                showAlbumArtOptions = false
-                galleryPickerLauncher.launch("image/*")
+                onShowAlbumArtOptionsChange(false)
+                onPickFromGallery()
             },
             onTakePhoto = {
-                showAlbumArtOptions = false
-                cameraLauncher.launch(null)
+                onShowAlbumArtOptionsChange(false)
+                onTakePhoto()
             },
             onFetchOnline = {
-                showAlbumArtOptions = false
-                onNavigateToOnlineCoverSearch()
+                onShowAlbumArtOptionsChange(false)
+                onFetchOnlineCover()
             },
             onViewArt = {
-                showAlbumArtOptions = false
-                showAlbumArtPreview = true
+                onShowAlbumArtOptionsChange(false)
+                onViewArt()
             },
             onRotateArt = {
-                showAlbumArtOptions = false
-                editedMetadata?.albumArt?.let { bytes ->
-                    rotateJpegBytes(bytes, 90f)?.let { rotated -> viewModel.updateAlbumArt(rotated) }
-                }
+                onShowAlbumArtOptionsChange(false)
+                onRotateArt()
             },
             onRemoveArt = {
-                showAlbumArtOptions = false
-                viewModel.updateAlbumArt(null)
+                onShowAlbumArtOptionsChange(false)
+                onRemoveArt()
             }
         )
     }
 
     if (showAlbumArtPreview) {
-        val previewBytes = editedMetadata?.albumArt
-        val audioFilePath = (uiState as? MetadataEditorUiState.Success)?.audioFile?.path
         AlbumArtPreviewDialog(
-            albumArt = previewBytes,
+            albumArt = previewAlbumArt,
             filePath = audioFilePath,
-            onDismiss = { showAlbumArtPreview = false }
+            onDismiss = { onShowAlbumArtPreviewChange(false) }
         )
     }
 
     if (showConversionDialog) {
         ConversionDialog(
             conversionType = conversionType,
-            onDismiss = { showConversionDialog = false },
+            onDismiss = { onShowConversionDialogChange(false) },
             onConfirm = { selectedFields ->
-                if (conversionType == ConversionType.TO_SIMPLIFIED) {
-                    viewModel.convertToSimplified(selectedFields)
-                } else {
-                    viewModel.convertToTraditional(selectedFields)
-                }
-                showConversionDialog = false
+                onConvert(selectedFields)
+                onShowConversionDialogChange(false)
             }
         )
     }
-
 }
 
 /**
@@ -624,7 +820,7 @@ private fun fieldLabel(field: MetadataField, baseLabelResId: Int, modifiedFields
  */
 @Composable
 private fun MetadataFormContent(
-    metadata: AudioMetadata,
+    metadata: com.voxly.domain.model.AudioMetadata,
     audioFile: com.voxly.domain.model.AudioFile,
     albumArtFallback: Bitmap? = null,
     modifiedFields: Set<MetadataField>,
@@ -650,12 +846,10 @@ private fun MetadataFormContent(
     isScanningReplayGain: Boolean = false,
     replayGainInfo: ReplayGainInfo? = null,
     replayGainScanError: String? = null,
-    bottomPadding: Dp = 0.dp,
+    bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     nestedScrollModifier: Modifier = Modifier
 ) {
-    // Use LaunchedEffect to clear focus when the screen is first composed
-    // This prevents any TextField from automatically receiving focus
     val focusManager = LocalFocusManager.current
     LaunchedEffect(Unit) {
         focusManager.clearFocus()
@@ -668,11 +862,11 @@ private fun MetadataFormContent(
     var yearText        by remember(metadata.year)        { mutableStateOf(metadata.year ?: "") }
     var genreText       by remember(metadata.genre)       { mutableStateOf(metadata.genre ?: "") }
     var composerText    by remember(metadata.composer)    { mutableStateOf(metadata.composer ?: "") }
-    var lyricistText     by remember(metadata.lyricist)    { mutableStateOf(metadata.lyricist ?: "") }
+    var lyricistText    by remember(metadata.lyricist)    { mutableStateOf(metadata.lyricist ?: "") }
     var commentText     by remember(metadata.comment)     { mutableStateOf(metadata.comment ?: "") }
     var lyricsText      by remember(metadata.lyrics)      { mutableStateOf(metadata.lyrics ?: "") }
     var trackNumberText by remember(metadata.trackNumber) { mutableStateOf(metadata.trackNumber?.toString() ?: "") }
-    var discNumberText  by remember(metadata.discNumber)   { mutableStateOf(metadata.discNumber?.toString() ?: "") }
+    var discNumberText  by remember(metadata.discNumber)  { mutableStateOf(metadata.discNumber?.toString() ?: "") }
 
     Column(
         modifier = Modifier
@@ -681,7 +875,6 @@ private fun MetadataFormContent(
             .verticalScroll(scrollState)
             .padding(start = 16.dp, top = 16.dp, end = 16.dp, bottom = 16.dp + bottomPadding)
     ) {
-        // Album Art Section with shared element transition support
         AlbumArtSection(
             albumArt = metadata.albumArt,
             fallbackBitmap = albumArtFallback,
@@ -695,7 +888,6 @@ private fun MetadataFormContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Basic Information
         SectionTitle(stringResource(R.string.basic_information))
 
         OutlinedTextField(
@@ -755,7 +947,6 @@ private fun MetadataFormContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Track Information
         SectionTitle(stringResource(R.string.track_information))
 
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -768,7 +959,7 @@ private fun MetadataFormContent(
                 label = { Text(stringResource(R.string.label_track)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 shape = MaterialTheme.shapes.extraLarge
             )
 
@@ -783,14 +974,13 @@ private fun MetadataFormContent(
                 label = { Text(stringResource(R.string.label_disc)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 shape = MaterialTheme.shapes.extraLarge
             )
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Additional Information
         SectionTitle(stringResource(R.string.additional_information))
 
         Row(modifier = Modifier.fillMaxWidth()) {
@@ -803,7 +993,7 @@ private fun MetadataFormContent(
                 label = { Text(fieldLabel(MetadataField.YEAR, R.string.metadata_year, modifiedFields)) },
                 modifier = Modifier.weight(1f),
                 singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Number),
                 shape = MaterialTheme.shapes.extraLarge
             )
 
@@ -866,7 +1056,6 @@ private fun MetadataFormContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // Lyrics Section
         SectionTitle(stringResource(R.string.lyrics_section_title))
 
         OutlinedTextField(
@@ -886,7 +1075,6 @@ private fun MetadataFormContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // File Information (read-only)
         SectionTitle(stringResource(R.string.file_information))
 
         FileInfoRow(stringResource(R.string.file_info_format), audioFile.format)
@@ -898,7 +1086,6 @@ private fun MetadataFormContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        // ReplayGain Section (collapsible)
         ReplayGainSection(
             replayGainInfo = replayGainInfo,
             isScanning = isScanningReplayGain,

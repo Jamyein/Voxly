@@ -3,6 +3,7 @@ package com.voxly.data.repository
 import android.content.Context
 import android.os.Environment
 import android.provider.MediaStore
+import com.voxly.core.util.Constants
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.metadata.RecoverableMediaStoreException
@@ -79,26 +80,10 @@ class AudioRepositoryImpl @Inject constructor(
                 val isFileUnchanged = cachedEntity != null && javaFile.exists() &&
                     cachedEntity.fileLastModifiedAt == fileLastModified
 
-                if (cachedFile != null && isFileUnchanged && !includeAlbumArt) {
+                if (cachedFile != null && isFileUnchanged) {
                     val completeMetadata = metadataProcessor.readAllMetadata(
                         filePath,
-                        includeAlbumArt = false,
-                        bypassCache = true
-                    )
-                    val mergedMeta = if (completeMetadata?.metadata != null) {
-                        mergeWithFallback(completeMetadata.metadata, cachedFile.metadata)
-                            ?: completeMetadata.metadata
-                    } else {
-                        cachedFile.metadata
-                    }
-                    val resultFile = cachedFile.copy(metadata = mergedMeta)
-                    return@withContext Result.success(resultFile)
-                }
-
-                if (cachedFile != null && isFileUnchanged && includeAlbumArt) {
-                    val completeMetadata = metadataProcessor.readAllMetadata(
-                        filePath,
-                        includeAlbumArt = true,
+                        includeAlbumArt = includeAlbumArt,
                         bypassCache = true
                     )
                     val mergedMeta = if (completeMetadata?.metadata != null) {
@@ -133,7 +118,7 @@ class AudioRepositoryImpl @Inject constructor(
 
                 completeMetadata?.audioInfo?.let { audioInfo ->
                     if (finalDuration == 0L) finalDuration = audioInfo.durationMs
-                    if (finalBitrate == 0) finalBitrate = audioInfo.bitrate / 1000
+                    if (finalBitrate == 0) finalBitrate = audioInfo.bitrate / Constants.BPS_TO_KBPS
                     finalSampleRate = audioInfo.sampleRate
                     finalChannels = audioInfo.channels
                 }
@@ -190,7 +175,7 @@ class AudioRepositoryImpl @Inject constructor(
                     val durationCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                     val bitrateCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
                     duration = it.getLong(durationCol)
-                    bitrate = it.getInt(bitrateCol) / 1000
+                    bitrate = it.getInt(bitrateCol) / Constants.BPS_TO_KBPS
                 }
             }
         } catch (e: Exception) {

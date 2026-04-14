@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -62,9 +63,11 @@ import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
-import com.voxly.presentation.screens.filebrowser.LoadingContent
 import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
+import com.voxly.presentation.viewmodel.LibraryBatchViewModel
+import com.voxly.presentation.viewmodel.LibraryScanViewModel
+import com.voxly.presentation.viewmodel.LibrarySettingsViewModel
 import com.voxly.presentation.viewmodel.LibraryViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import kotlinx.coroutines.CancellationException
@@ -72,11 +75,6 @@ import kotlinx.coroutines.launch
 
 /**
  * Adaptive DirectoryContent screen using Material3 ListDetailPaneScaffold.
- *
- * This is true adaptive design - Material3 automatically manages:
- * - Small screens: Single pane with full-screen navigation (delegates to NavHost)
- * - Medium screens: Dual pane with adjustable ratio
- * - Large screens: Dual pane with 40:60 split
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
@@ -91,35 +89,28 @@ fun DirectoryContentAdaptiveScreen(
     onNavigateToOnlineCoverSearch: () -> Unit,
     onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: LibraryViewModel = hiltViewModel()
+    viewModel: LibraryViewModel = hiltViewModel(),
+    scanViewModel: LibraryScanViewModel = hiltViewModel(),
+    settingsViewModel: LibrarySettingsViewModel = hiltViewModel(),
+    batchViewModel: LibraryBatchViewModel = hiltViewModel()
 ) {
     val coroutineScope = rememberCoroutineScope()
-
-    // Material3 Adaptive Navigator - automatically handles all screen sizes
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
-
-    // Track file switch counter for proper ViewModel recreation
     var fileSwitchCounter by remember { mutableIntStateOf(0) }
-
-    // Determine if we're in single-pane mode (small screens)
     val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
-
     val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
 
-    // Load directory files
     LaunchedEffect(directoryUri) {
         if (directoryUri.isNotEmpty()) {
-            viewModel.loadFromDirectory(android.net.Uri.parse(directoryUri))
+            scanViewModel.loadFromDirectory(android.net.Uri.parse(directoryUri))
         }
     }
 
-    // State collections
-    val directoryFiles by viewModel.directoryFiles.collectAsStateWithLifecycle()
+    val directoryFiles by scanViewModel.directoryFiles.collectAsStateWithLifecycle()
     val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
-    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
-    val loadingDirectories by viewModel.directoryLoadingState.collectAsStateWithLifecycle()
+    val isRefreshing by scanViewModel.isRefreshing.collectAsStateWithLifecycle()
+    val loadingDirectories by scanViewModel.directoryLoadingState.collectAsStateWithLifecycle()
 
-    // Get saved scroll position for this directory
     val savedScrollPosition = remember(directoryUri) {
         viewModel.getScrollPosition("directory_$directoryUri")
     }
@@ -132,10 +123,8 @@ fun DirectoryContentAdaptiveScreen(
         directoryFiles[directoryUri] ?: emptyList()
     }
 
-    // Search and sort
     var showSearchSheet by remember { mutableStateOf(false) }
-    var isSortExpanded by remember { mutableStateOf(false) }
-    val sortOption by viewModel.directoryFileSortOption.collectAsStateWithLifecycle(initialValue = DirFileSortOption.NAME_ASC.name)
+    val sortOption by settingsViewModel.directoryFileSortOption.collectAsStateWithLifecycle(initialValue = DirFileSortOption.NAME_ASC.name)
     val currentSortOption = remember(sortOption) {
         try {
             DirFileSortOption.valueOf(sortOption)
@@ -144,12 +133,10 @@ fun DirectoryContentAdaptiveScreen(
         }
     }
 
-    // Apply sort only (search handled by SearchBottomSheet)
     val displayedFiles = remember(files, currentSortOption) {
         applySort(files, currentSortOption)
     }
 
-    // List pane state - restore saved scroll position
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = savedScrollPosition.index,
         initialFirstVisibleItemScrollOffset = savedScrollPosition.offset
@@ -167,7 +154,6 @@ fun DirectoryContentAdaptiveScreen(
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
 
-    // Save scroll position when leaving the screen
     DisposableEffect(directoryUri) {
         onDispose {
             viewModel.saveScrollPosition(
@@ -194,12 +180,10 @@ fun DirectoryContentAdaptiveScreen(
         }
     }
 
-    // FloatingToolbar scroll behavior for batch operations
     val floatingToolbarScrollBehavior = FloatingToolbarDefaults.exitAlwaysScrollBehavior(
         exitDirection = FloatingToolbarExitDirection.Bottom
     )
 
-    // Dialog states for batch operations
     var showBatchOperationsMenu by remember { mutableStateOf(false) }
     var showUnifiedFieldDialog by remember { mutableStateOf(false) }
     var showReplaceTextDialog by remember { mutableStateOf(false) }
@@ -208,7 +192,6 @@ fun DirectoryContentAdaptiveScreen(
     var showFixMetadataDialog by remember { mutableStateOf(false) }
     var showOnlineMetadataDialog by remember { mutableStateOf(false) }
 
-    // Material3 ListDetailPaneScaffold - handles all screen sizes automatically
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
@@ -217,340 +200,575 @@ fun DirectoryContentAdaptiveScreen(
             AnimatedPane(
                 modifier = Modifier.fillMaxSize()
             ) {
-                Column(
+                DirectoryListPane(
+                    directoryName = directoryName,
+                    files = files,
+                    displayedFiles = displayedFiles,
+                    selectedFiles = selectedFiles,
+                    isSelectionMode = isSelectionMode,
+                    isRefreshing = isRefreshing,
+                    isDirectoryLoading = isDirectoryLoading,
+                    canScrollToTop = canScrollToTop,
+                    canCloseDetailPane = canCloseDetailPane,
+                    isSinglePane = isSinglePane,
+                    listState = listState,
+                    currentSortOption = currentSortOption,
+                    scrollBehavior = scrollBehavior,
+                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
+                    onNavigateBack = onNavigateBack,
+                    onNavigateToMetadata = { audioFile ->
+                        if (isSinglePane) {
+                            onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                        } else {
+                            coroutineScope.launch {
+                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                            }
+                        }
+                    },
+                    onFileLongClick = { audioFile ->
+                        viewModel.toggleFileSelection(audioFile.path)
+                    },
+                    onClearSelection = { viewModel.clearSelection() },
+                    onSelectAll = { viewModel.selectAll() },
+                    onShowSearchSheet = { showSearchSheet = true },
+                    onSortOptionChange = { settingsViewModel.setDirectoryFileSortOption(it.name) },
+                    onRefresh = { scanViewModel.refresh() },
+                    onNavigateBackWithPane = {
+                        coroutineScope.launch { navigator.navigateBack() }
+                    },
+                    onOnlineMetadata = { showOnlineMetadataDialog = true },
+                    onUnifiedField = { showUnifiedFieldDialog = true },
+                    onReplaceText = { showReplaceTextDialog = true },
+                    onAutoNumber = { showAutoNumberDialog = true },
+                    onRenameFiles = { showRenameFilesDialog = true },
+                    onFixMetadata = { showFixMetadataDialog = true },
+                    onReplayGain = { onNavigateToReplayGain(selectedFiles.toList()) },
                     modifier = Modifier.fillMaxSize()
-                ) {
-                    // List pane TopAppBar
-                    TopAppBar(
-                        title = {
-                            if (isSelectionMode) {
-                                Text("${selectedFiles.size} selected")
-                            } else {
-                                Text(
-                                    text = directoryName,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                        },
-                        scrollBehavior = scrollBehavior,
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                            titleContentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        navigationIcon = {
-                            IconButton(onClick = {
-                                if (isSelectionMode) {
-                                    viewModel.clearSelection()
-                                } else if (!isSinglePane && navigator.currentDestination != null) {
-                                    // Multi-pane with detail showing: go back to list
-                                    coroutineScope.launch {
-                                        navigator.navigateBack()
-                                    }
-                                } else {
-                                    // Single-pane or no detail: exit directory
-                                    onNavigateBack()
-                                }
-                            }) {
-                                Icon(
-                                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                                    contentDescription = stringResource(R.string.back)
-                                )
-                            }
-                        },
-                        actions = {
-                            if (isSelectionMode) {
-                                // Select/Deselect all
-                                IconButton(onClick = {
-                                    if (selectedFiles.size == files.size) {
-                                        viewModel.clearSelection()
-                                    } else {
-                                        viewModel.selectAll()
-                                    }
-                                }) {
-                                    Text(
-                                        if (selectedFiles.size == files.size) {
-                                            stringResource(R.string.deselect_all)
-                                        } else {
-                                            stringResource(R.string.select_all)
-                                        }
-                                    )
-                                }
-                            } else {
-                                // Search and Sort buttons
-                                IconButton(onClick = { showSearchSheet = true }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Search,
-                                        contentDescription = "Search"
-                                    )
-                                }
-                                SortMenuButton(
-                                    expanded = isSortExpanded,
-                                    onExpandedChange = { isSortExpanded = it },
-                                    currentSortOption = currentSortOption,
-                                    options = DirFileSortOption.entries,
-                                    optionLabelResId = { it.labelResId() },
-                                    contentDescription = "Sort",
-                                    onSortOptionChange = { viewModel.setDirectoryFileSortOption(it.name) }
-                                )
-                                IconButton(onClick = { viewModel.refresh() }) {
-                                    Icon(
-                                        imageVector = Icons.Default.Refresh,
-                                        contentDescription = stringResource(R.string.refresh_files)
-                                    )
-                                }
-                            }
-                        }
-                    )
-
-                    // File list content with PullToRefresh
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.BottomCenter
-                    ) {
-                        Surface(
-                            modifier = Modifier.fillMaxSize()
-                        ) {
-                            val pullToRefreshState = rememberPullToRefreshState()
-                            PullToRefreshBox(
-                                isRefreshing = isRefreshing,
-                                onRefresh = { viewModel.refresh() },
-                                state = pullToRefreshState,
-                                modifier = Modifier.fillMaxSize(),
-                                indicator = {
-                                    LoadingIndicator(
-                                        state = pullToRefreshState,
-                                        isRefreshing = isRefreshing,
-                                        modifier = Modifier.align(Alignment.TopCenter)
-                                    )
-                                }
-                            ) {
-                                Box(modifier = Modifier.fillMaxSize()) {
-                                    if (files.isEmpty() && isDirectoryLoading) {
-                                        LoadingContent()
-                                    } else if (files.isEmpty()) {
-                                        DirectoryEmptyContent(
-                                            modifier = Modifier.fillMaxSize()
-                                        )
-                                    } else {
-                                        AudioFileListWithIndexer(
-                                            files = displayedFiles,
-                                            listState = listState,
-                                            modifier = Modifier.fillMaxSize(),
-                                            selectedFiles = selectedFiles,
-                                            onFileClick = { audioFile ->
-                                                if (isSelectionMode) {
-                                                    viewModel.toggleFileSelection(audioFile.path)
-                                                } else if (isSinglePane) {
-                                                    onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
-                                                } else {
-                                                    coroutineScope.launch {
-                                                        navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
-                                                    }
-                                                }
-                                            },
-                                            onFileLongClick = { audioFile ->
-                                                viewModel.toggleFileSelection(audioFile.path)
-                                            },
-                                            onEditFileMetadata = { },
-                                            onRenameFile = { },
-                                            onDeleteFile = { },
-                                            onFetchOnlineMetadata = { },
-                                            onFixMetadata = { },
-                                            bottomPadding = if (isSelectionMode) 80.dp else 16.dp
-                                        )
-                                    }
-                                }
-                            }
-                        }
-
-                                // Batch Operations FloatingToolbar (only in selection mode)
-                                if (isSelectionMode) {
-                                    BatchOperationsToolbar(
-                                        expanded = true,
-                                        scrollBehavior = floatingToolbarScrollBehavior,
-                                        onOnlineMetadata = { showOnlineMetadataDialog = true },
-                                        onUnifiedField = { showUnifiedFieldDialog = true },
-                                        onReplaceText = { showReplaceTextDialog = true },
-                                        onAutoNumber = { showAutoNumberDialog = true },
-                                        onRenameFiles = { showRenameFilesDialog = true },
-                                        onFixMetadata = { showFixMetadataDialog = true },
-                                        onReplayGain = { onNavigateToReplayGain(selectedFiles.toList()) }
-                                    )
-                                }
-
-                        // Back to top FAB
-                        if (canScrollToTop && displayedFiles.isNotEmpty() && !isSelectionMode) {
-                            SmallFloatingActionButton(
-                                onClick = {
-                                    coroutineScope.launch {
-                                        listState.animateScrollToItem(0)
-                                    }
-                                },
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                shape = MaterialTheme.shapes.extraLarge,
-                                modifier = Modifier
-                                    .align(Alignment.BottomEnd)
-                                    .padding(16.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowUp,
-                                    contentDescription = "Back to top"
-                                )
-                            }
-                        }
-                    }
-                }
+                )
             }
         },
         detailPane = {
             AnimatedPane {
-                val currentFile = navigator.currentDestination?.contentKey
-                if (currentFile != null) {
-                    // Create navKey for MetadataEditor
-                    val navKey = MetadataEditor(
-                        filePath = currentFile.path,
-                        coverTag = createAlbumArtSharedElementKey(currentFile.path)
-                    )
-                    // Create ViewModel with proper factory
-                    val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
-                        key = currentFile.path,
-                        creationCallback = { factory -> factory.create(navKey) }
-                    )
-                    AdaptiveMetadataEditorContainer(
-                        filePath = currentFile.path,
-                        viewModel = metadataViewModel,
-                        coverTag = createAlbumArtSharedElementKey(currentFile.path),
-                        sharedElementKey = createAlbumArtSharedElementKey(currentFile.path),
-                        onNavigateBack = {
-                            // Use coroutine for suspend function
-                            coroutineScope.launch {
-                                navigator.navigateBack()
-                            }
-                        },
-                        onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
-                        onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
-                        onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
-                        onNavigateToLyricsSelector = onNavigateToLyricsSelector
-                    )
-                } else {
-                    EmptyDetailPane()
-                }
+                DirectoryDetailPane(
+                    currentFile = navigator.currentDestination?.contentKey,
+                    fileSwitchCounter = fileSwitchCounter,
+                    onFileSwitch = { fileSwitchCounter++ },
+                    onNavigateBack = {
+                        coroutineScope.launch { navigator.navigateBack() }
+                    },
+                    onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
+                    onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
+                    onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
+                    onNavigateToLyricsSelector = onNavigateToLyricsSelector,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
     )
 
-    // Batch Operation Dialogs
+    DirectoryDialogsAndSheets(
+        showBatchOperationsMenu = showBatchOperationsMenu,
+        onShowBatchOperationsMenuChange = { showBatchOperationsMenu = it },
+        showOnlineMetadataDialog = showOnlineMetadataDialog,
+        onShowOnlineMetadataDialogChange = { showOnlineMetadataDialog = it },
+        showUnifiedFieldDialog = showUnifiedFieldDialog,
+        onShowUnifiedFieldDialogChange = { showUnifiedFieldDialog = it },
+        showReplaceTextDialog = showReplaceTextDialog,
+        onShowReplaceTextDialogChange = { showReplaceTextDialog = it },
+        showAutoNumberDialog = showAutoNumberDialog,
+        onShowAutoNumberDialogChange = { showAutoNumberDialog = it },
+        showRenameFilesDialog = showRenameFilesDialog,
+        onShowRenameFilesDialogChange = { showRenameFilesDialog = it },
+        showFixMetadataDialog = showFixMetadataDialog,
+        onShowFixMetadataDialogChange = { showFixMetadataDialog = it },
+        selectedFilesCount = selectedFiles.size,
+        showSearchSheet = showSearchSheet,
+        onShowSearchSheetChange = { showSearchSheet = it },
+        files = files,
+        displayedFiles = displayedFiles,
+        isSinglePane = isSinglePane,
+        onNavigateToMetadata = { audioFile ->
+            if (isSinglePane) {
+                onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+            } else {
+                coroutineScope.launch {
+                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                }
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DirectoryListPane(
+    directoryName: String,
+    files: List<AudioFile>,
+    displayedFiles: List<AudioFile>,
+    selectedFiles: Set<String>,
+    isSelectionMode: Boolean,
+    isRefreshing: Boolean,
+    isDirectoryLoading: Boolean,
+    canScrollToTop: Boolean,
+    canCloseDetailPane: Boolean,
+    isSinglePane: Boolean,
+    listState: LazyListState,
+    currentSortOption: DirFileSortOption,
+    scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
+    floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
+    onNavigateBack: () -> Unit,
+    onNavigateToMetadata: (AudioFile) -> Unit,
+    onFileLongClick: (AudioFile) -> Unit,
+    onClearSelection: () -> Unit,
+    onSelectAll: () -> Unit,
+    onShowSearchSheet: () -> Unit,
+    onSortOptionChange: (DirFileSortOption) -> Unit,
+    onRefresh: () -> Unit,
+    onNavigateBackWithPane: () -> Unit,
+    onOnlineMetadata: () -> Unit,
+    onUnifiedField: () -> Unit,
+    onReplaceText: () -> Unit,
+    onAutoNumber: () -> Unit,
+    onRenameFiles: () -> Unit,
+    onFixMetadata: () -> Unit,
+    onReplayGain: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(modifier = modifier) {
+        DirectoryListTopAppBar(
+            directoryName = directoryName,
+            selectedFilesSize = selectedFiles.size,
+            totalFilesSize = files.size,
+            isSelectionMode = isSelectionMode,
+            canCloseDetailPane = canCloseDetailPane,
+            isSinglePane = isSinglePane,
+            scrollBehavior = scrollBehavior,
+            onClearSelection = onClearSelection,
+            onSelectAll = onSelectAll,
+            onShowSearchSheet = onShowSearchSheet,
+            currentSortOption = currentSortOption,
+            onSortOptionChange = onSortOptionChange,
+            onRefresh = onRefresh,
+            onNavigateBack = onNavigateBack,
+            onNavigateBackWithPane = onNavigateBackWithPane
+        )
+
+        DirectoryListBody(
+            files = files,
+            displayedFiles = displayedFiles,
+            isDirectoryLoading = isDirectoryLoading,
+            isRefreshing = isRefreshing,
+            isSelectionMode = isSelectionMode,
+            selectedFiles = selectedFiles,
+            canScrollToTop = canScrollToTop,
+            listState = listState,
+            floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
+            onFileClick = onNavigateToMetadata,
+            onFileLongClick = onFileLongClick,
+            onRefresh = onRefresh,
+            onOnlineMetadata = onOnlineMetadata,
+            onUnifiedField = onUnifiedField,
+            onReplaceText = onReplaceText,
+            onAutoNumber = onAutoNumber,
+            onRenameFiles = onRenameFiles,
+            onFixMetadata = onFixMetadata,
+            onReplayGain = onReplayGain,
+            modifier = Modifier.fillMaxSize()
+        )
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DirectoryListTopAppBar(
+    directoryName: String,
+    selectedFilesSize: Int,
+    totalFilesSize: Int,
+    isSelectionMode: Boolean,
+    canCloseDetailPane: Boolean,
+    isSinglePane: Boolean,
+    scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
+    onClearSelection: () -> Unit,
+    onSelectAll: () -> Unit,
+    onShowSearchSheet: () -> Unit,
+    currentSortOption: DirFileSortOption,
+    onSortOptionChange: (DirFileSortOption) -> Unit,
+    onRefresh: () -> Unit,
+    onNavigateBack: () -> Unit,
+    onNavigateBackWithPane: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var isSortExpanded by remember { mutableStateOf(false) }
+
+    TopAppBar(
+        title = {
+            if (isSelectionMode) {
+                Text("$selectedFilesSize selected")
+            } else {
+                Text(
+                    text = directoryName,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        },
+        scrollBehavior = scrollBehavior,
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.surface,
+            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+            titleContentColor = MaterialTheme.colorScheme.onSurface
+        ),
+        navigationIcon = {
+            IconButton(onClick = {
+                if (isSelectionMode) {
+                    onClearSelection()
+                } else if (!isSinglePane && canCloseDetailPane) {
+                    onNavigateBackWithPane()
+                } else {
+                    onNavigateBack()
+                }
+            }) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.back)
+                )
+            }
+        },
+        actions = {
+            if (isSelectionMode) {
+                IconButton(onClick = {
+                    if (selectedFilesSize == totalFilesSize) {
+                        onClearSelection()
+                    } else {
+                        onSelectAll()
+                    }
+                }) {
+                    Text(
+                        if (selectedFilesSize == totalFilesSize) {
+                            stringResource(R.string.deselect_all)
+                        } else {
+                            stringResource(R.string.select_all)
+                        }
+                    )
+                }
+            } else {
+                IconButton(onClick = onShowSearchSheet) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search"
+                    )
+                }
+                SortMenuButton(
+                    expanded = isSortExpanded,
+                    onExpandedChange = { isSortExpanded = it },
+                    currentSortOption = currentSortOption,
+                    options = DirFileSortOption.entries,
+                    optionLabelResId = { it.labelResId() },
+                    contentDescription = "Sort",
+                    onSortOptionChange = onSortOptionChange
+                )
+                IconButton(onClick = onRefresh) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = stringResource(R.string.refresh_files)
+                    )
+                }
+            }
+        },
+        modifier = modifier
+    )
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@Composable
+private fun DirectoryListBody(
+    files: List<AudioFile>,
+    displayedFiles: List<AudioFile>,
+    isDirectoryLoading: Boolean,
+    isRefreshing: Boolean,
+    isSelectionMode: Boolean,
+    selectedFiles: Set<String>,
+    canScrollToTop: Boolean,
+    listState: LazyListState,
+    floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
+    onFileClick: (AudioFile) -> Unit,
+    onFileLongClick: (AudioFile) -> Unit,
+    onRefresh: () -> Unit,
+    onOnlineMetadata: () -> Unit,
+    onUnifiedField: () -> Unit,
+    onReplaceText: () -> Unit,
+    onAutoNumber: () -> Unit,
+    onRenameFiles: () -> Unit,
+    onFixMetadata: () -> Unit,
+    onReplayGain: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val coroutineScope = rememberCoroutineScope()
+
+    Box(
+        modifier = modifier,
+        contentAlignment = Alignment.BottomCenter
+    ) {
+        Surface(modifier = Modifier.fillMaxSize()) {
+            val pullToRefreshState = rememberPullToRefreshState()
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
+                state = pullToRefreshState,
+                modifier = Modifier.fillMaxSize(),
+                indicator = {
+                    LoadingIndicator(
+                        state = pullToRefreshState,
+                        isRefreshing = isRefreshing,
+                        modifier = Modifier.align(Alignment.TopCenter)
+                    )
+                }
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    DirectoryFileListContent(
+                        files = files,
+                        displayedFiles = displayedFiles,
+                        isDirectoryLoading = isDirectoryLoading,
+                        isSelectionMode = isSelectionMode,
+                        selectedFiles = selectedFiles,
+                        listState = listState,
+                        onFileClick = onFileClick,
+                        onFileLongClick = onFileLongClick,
+                        bottomPadding = if (isSelectionMode) 80.dp else 16.dp,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
+            }
+        }
+
+        if (isSelectionMode) {
+            BatchOperationsToolbar(
+                expanded = true,
+                scrollBehavior = floatingToolbarScrollBehavior,
+                onOnlineMetadata = onOnlineMetadata,
+                onUnifiedField = onUnifiedField,
+                onReplaceText = onReplaceText,
+                onAutoNumber = onAutoNumber,
+                onRenameFiles = onRenameFiles,
+                onFixMetadata = onFixMetadata,
+                onReplayGain = onReplayGain
+            )
+        }
+
+        if (canScrollToTop && displayedFiles.isNotEmpty() && !isSelectionMode) {
+            SmallFloatingActionButton(
+                onClick = {
+                    coroutineScope.launch {
+                        listState.animateScrollToItem(0)
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                shape = MaterialTheme.shapes.extraLarge,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.KeyboardArrowUp,
+                    contentDescription = "Back to top"
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DirectoryFileListContent(
+    files: List<AudioFile>,
+    displayedFiles: List<AudioFile>,
+    isDirectoryLoading: Boolean,
+    isSelectionMode: Boolean,
+    selectedFiles: Set<String>,
+    listState: LazyListState,
+    onFileClick: (AudioFile) -> Unit,
+    onFileLongClick: (AudioFile) -> Unit,
+    bottomPadding: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier
+) {
+    Box(modifier = modifier) {
+        if (files.isEmpty() && isDirectoryLoading) {
+            LoadingContent()
+        } else if (files.isEmpty()) {
+            DirectoryEmptyContent(
+                modifier = Modifier.fillMaxSize()
+            )
+        } else {
+            AudioFileListWithIndexer(
+                files = displayedFiles,
+                listState = listState,
+                modifier = Modifier.fillMaxSize(),
+                selectedFiles = selectedFiles,
+                onFileClick = onFileClick,
+                onFileLongClick = onFileLongClick,
+                onEditFileMetadata = { },
+                onRenameFile = { },
+                onDeleteFile = { },
+                onFetchOnlineMetadata = { },
+                onFixMetadata = { },
+                bottomPadding = bottomPadding
+            )
+        }
+    }
+}
+
+@Composable
+private fun DirectoryDetailPane(
+    currentFile: AudioFile?,
+    fileSwitchCounter: Int,
+    onFileSwitch: () -> Unit,
+    onNavigateBack: () -> Unit,
+    onNavigateToOnlineMetadata: () -> Unit,
+    onNavigateToOnlineLyricsSearch: () -> Unit,
+    onNavigateToOnlineCoverSearch: () -> Unit,
+    onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (currentFile != null) {
+        val navKey = MetadataEditor(
+            filePath = currentFile.path,
+            coverTag = createAlbumArtSharedElementKey(currentFile.path)
+        )
+        val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
+            key = currentFile.path,
+            creationCallback = { factory -> factory.create(navKey) }
+        )
+        AdaptiveMetadataEditorContainer(
+            filePath = currentFile.path,
+            viewModel = metadataViewModel,
+            coverTag = createAlbumArtSharedElementKey(currentFile.path),
+            sharedElementKey = createAlbumArtSharedElementKey(currentFile.path),
+            onNavigateBack = {
+                onFileSwitch()
+                onNavigateBack()
+            },
+            onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
+            onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
+            onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
+            onNavigateToLyricsSelector = onNavigateToLyricsSelector
+        )
+    } else {
+        EmptyDetailPane()
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DirectoryDialogsAndSheets(
+    showBatchOperationsMenu: Boolean,
+    onShowBatchOperationsMenuChange: (Boolean) -> Unit,
+    showOnlineMetadataDialog: Boolean,
+    onShowOnlineMetadataDialogChange: (Boolean) -> Unit,
+    showUnifiedFieldDialog: Boolean,
+    onShowUnifiedFieldDialogChange: (Boolean) -> Unit,
+    showReplaceTextDialog: Boolean,
+    onShowReplaceTextDialogChange: (Boolean) -> Unit,
+    showAutoNumberDialog: Boolean,
+    onShowAutoNumberDialogChange: (Boolean) -> Unit,
+    showRenameFilesDialog: Boolean,
+    onShowRenameFilesDialogChange: (Boolean) -> Unit,
+    showFixMetadataDialog: Boolean,
+    onShowFixMetadataDialogChange: (Boolean) -> Unit,
+    selectedFilesCount: Int,
+    showSearchSheet: Boolean,
+    onShowSearchSheetChange: (Boolean) -> Unit,
+    files: List<AudioFile>,
+    displayedFiles: List<AudioFile>,
+    isSinglePane: Boolean,
+    onNavigateToMetadata: (AudioFile) -> Unit
+) {
     if (showBatchOperationsMenu) {
         BatchOperationsMenuDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showBatchOperationsMenu = false },
+            targetFilesCount = selectedFilesCount,
+            onDismiss = { onShowBatchOperationsMenuChange(false) },
             onOnlineMetadata = {
-                showBatchOperationsMenu = false
-                showOnlineMetadataDialog = true
+                onShowBatchOperationsMenuChange(false)
+                onShowOnlineMetadataDialogChange(true)
             },
             onUnifiedField = {
-                showBatchOperationsMenu = false
-                showUnifiedFieldDialog = true
+                onShowBatchOperationsMenuChange(false)
+                onShowUnifiedFieldDialogChange(true)
             },
             onReplaceText = {
-                showBatchOperationsMenu = false
-                showReplaceTextDialog = true
+                onShowBatchOperationsMenuChange(false)
+                onShowReplaceTextDialogChange(true)
             },
             onAutoNumber = {
-                showBatchOperationsMenu = false
-                showAutoNumberDialog = true
+                onShowBatchOperationsMenuChange(false)
+                onShowAutoNumberDialogChange(true)
             },
             onRenameFiles = {
-                showBatchOperationsMenu = false
-                showRenameFilesDialog = true
+                onShowBatchOperationsMenuChange(false)
+                onShowRenameFilesDialogChange(true)
             },
             onFixMetadata = {
-                showBatchOperationsMenu = false
-                showFixMetadataDialog = true
+                onShowBatchOperationsMenuChange(false)
+                onShowFixMetadataDialogChange(true)
             }
         )
     }
 
     if (showOnlineMetadataDialog) {
         BatchOnlineMetadataDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showOnlineMetadataDialog = false },
-            onConfirm = { /* TODO: Implement batch online metadata */ }
+            targetFilesCount = selectedFilesCount,
+            onDismiss = { onShowOnlineMetadataDialogChange(false) },
+            onConfirm = { }
         )
     }
 
     if (showUnifiedFieldDialog) {
         UnifiedFieldDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showUnifiedFieldDialog = false },
-            onConfirm = { field, value ->
-                showUnifiedFieldDialog = false
-                // TODO: Implement batch unified field edit
-            }
+            targetFilesCount = selectedFilesCount,
+            onDismiss = { onShowUnifiedFieldDialogChange(false) },
+            onConfirm = { _, _ -> }
         )
     }
 
     if (showReplaceTextDialog) {
         ReplaceTextDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showReplaceTextDialog = false },
-            onConfirm = { field, searchText, replaceText, useRegex ->
-                showReplaceTextDialog = false
-                // TODO: Implement batch replace text
-            }
+            targetFilesCount = selectedFilesCount,
+            onDismiss = { onShowReplaceTextDialogChange(false) },
+            onConfirm = { _, _, _, _ -> }
         )
     }
 
     if (showAutoNumberDialog) {
         AutoNumberDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showAutoNumberDialog = false },
-            onConfirm = { startNumber, step, totalTracks ->
-                showAutoNumberDialog = false
-                // TODO: Implement batch auto number
-            }
+            targetFilesCount = selectedFilesCount,
+            onDismiss = { onShowAutoNumberDialogChange(false) },
+            onConfirm = { _, _, _ -> }
         )
     }
 
     if (showRenameFilesDialog) {
         BatchRenameDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showRenameFilesDialog = false },
-            onConfirm = { pattern, startNumber ->
-                showRenameFilesDialog = false
-                // TODO: Implement batch rename
-            }
+            targetFilesCount = selectedFilesCount,
+            onDismiss = { onShowRenameFilesDialogChange(false) },
+            onConfirm = { _, _ -> }
         )
     }
 
     if (showFixMetadataDialog) {
         BatchFixMetadataDialog(
-            targetFilesCount = selectedFiles.size,
-            onDismiss = { showFixMetadataDialog = false },
-            onConfirm = { options ->
-                showFixMetadataDialog = false
-                // TODO: Implement batch fix metadata
-            }
+            targetFilesCount = selectedFilesCount,
+            onDismiss = { onShowFixMetadataDialogChange(false) },
+            onConfirm = { }
         )
     }
 
     if (showSearchSheet) {
         SearchBottomSheet(
             sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
-            onDismiss = { showSearchSheet = false },
+            onDismiss = { onShowSearchSheetChange(false) },
             allFiles = files,
             onFileClick = { audioFile ->
-                showSearchSheet = false
-                if (isSinglePane) {
-                    onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
-                } else {
-                    coroutineScope.launch {
-                        navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
-                    }
-                }
+                onShowSearchSheetChange(false)
+                onNavigateToMetadata(audioFile)
             }
         )
     }

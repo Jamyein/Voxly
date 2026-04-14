@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import com.voxly.core.util.Constants
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioFormat
@@ -147,7 +148,7 @@ class MediaStoreDataSource @Inject constructor(
                 val extension = displayName.substringAfterLast('.', "")
 
                 if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
-                    val lastModified = cursor.getLong(modifiedCol) * 1000
+                    val lastModified = cursor.getLong(modifiedCol) * Constants.MS_PER_SECOND
                     output.add(filePath to lastModified)
                 }
             }
@@ -220,14 +221,14 @@ class MediaStoreDataSource @Inject constructor(
         )?.use { cursor ->
             if (cursor.moveToFirst()) {
                 duration = cursor.getLong(0)
-                bitrate = cursor.getInt(1) / 1000
+                bitrate = cursor.getInt(1) / Constants.BPS_TO_KBPS
             }
         }
 
         // Fallback to TagLib audio info if not provided by complete metadata
         val audioInfo = completeMetadata?.audioInfo ?: metadataProcessor.readAudioInfo(filePath)
         if (duration == 0L) duration = audioInfo?.durationMs ?: 0L
-        if (bitrate == 0) bitrate = (audioInfo?.bitrate ?: 0) / 1000
+        if (bitrate == 0) bitrate = (audioInfo?.bitrate ?: 0) / Constants.BPS_TO_KBPS
 
         return AudioFile(
             id = filePath.hashCode().toString(),
@@ -272,7 +273,7 @@ class MediaStoreDataSource @Inject constructor(
         )?.use { cursor ->
             if (cursor.moveToFirst()) {
                 duration = cursor.getLong(0)
-                bitrate = cursor.getInt(1) / 1000
+                bitrate = cursor.getInt(1) / Constants.BPS_TO_KBPS
             }
         }
 
@@ -369,7 +370,7 @@ class MediaStoreDataSource @Inject constructor(
                     duration = duration,
                     format = extension.uppercase(),
                     mimeType = cursor.getString(columns.mimeType),
-                    bitrate = cursor.getInt(columns.bitrate) / 1000,
+                    bitrate = cursor.getInt(columns.bitrate) / Constants.BPS_TO_KBPS,
                     sampleRate = 0,
                     channels = 0,
                     mediaStoreAlbumId = albumId,

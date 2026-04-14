@@ -2,6 +2,7 @@ package com.voxly.domain.model
 
 import android.net.Uri
 import androidx.compose.runtime.Immutable
+import com.voxly.core.util.Constants
 import java.io.Serializable
 
 /**
@@ -45,9 +46,9 @@ data class AudioFile(
      * Returns a human-readable duration string.
      */
     fun getFormattedDuration(): String {
-        val hours = duration / 3600000
-        val minutes = (duration % 3600000) / 60000
-        val seconds = (duration % 60000) / 1000
+        val hours = duration / Constants.MS_PER_HOUR
+        val minutes = (duration % Constants.MS_PER_HOUR) / Constants.MS_PER_MINUTE
+        val seconds = (duration % Constants.MS_PER_MINUTE) / Constants.MS_PER_SECOND
 
         return if (hours > 0) {
             String.format("%d:%02d:%02d", hours, minutes, seconds)
