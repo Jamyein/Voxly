@@ -161,14 +161,16 @@ class LibraryScanViewModel @Inject constructor(
                 }
 
                 if (forceRefresh || isIncremental || !audioFileScanner.hasCachedData()) {
-                    audioFileScanner.scan(
+                    val files = audioFileScanner.scan(
                         directoryPaths = emptyList(),
                         incremental = isIncremental,
                         forceRefresh = forceRefresh
                     )
+                    _directoryFiles.update { files.groupBy { it.path } }
                 }
-
-                _directoryFiles.update { emptyMap() }
+            } catch (e: CancellationException) {
+                Timber.tag(TAG).d("Audio files load cancelled")
+                throw e
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to load audio files")
             } finally {
@@ -268,9 +270,9 @@ class LibraryScanViewModel @Inject constructor(
         val dirUris = directories.map { it.uri }.toSet()
         _directoryLoadingState.update { it + dirUris }
 
-        runCatching {
+        try {
             val paths = directories.map { it.path }.filter { it.isNotBlank() }
-            if (paths.isEmpty()) {
+            val filesByDir = if (paths.isEmpty()) {
                 emptyMap<String, List<AudioFile>>()
             } else {
                 val files = audioFileScanner.scan(
@@ -279,25 +281,25 @@ class LibraryScanViewModel @Inject constructor(
                     forceRefresh = forceRefresh
                 )
 
-                val filesByDir = mutableMapOf<String, List<AudioFile>>()
-                directories.forEach { dir ->
-                    val dirFiles = files.filter { isFileInDirectory(it.path, dir.path) }
-                    filesByDir[dir.uri] = dirFiles
+                buildMap<String, List<AudioFile>> {
+                    directories.forEach { dir ->
+                        val dirFiles = files.filter { isFileInDirectory(it.path, dir.path) }
+                        put(dir.uri, dirFiles)
+                    }
                 }
-                filesByDir
             }
-        }.onSuccess { filesByDirectory ->
-            _directoryFiles.update { filesByDirectory }
+            
+            _directoryFiles.update { filesByDir }
 
-            if (_openedDirectoryUri.value != null && _openedDirectoryUri.value !in filesByDirectory.keys) {
+            if (_openedDirectoryUri.value != null && _openedDirectoryUri.value !in filesByDir.keys) {
                 _openedDirectoryUri.update { null }
             }
-        }.onFailure { error ->
-            if (error is CancellationException) {
-                return@onFailure
-            }
-            Timber.tag(TAG).e("Directory scan failed for ${directories.joinToString { it.path }}", error)
-        }.also {
+        } catch (e: CancellationException) {
+            Timber.tag(TAG).d("Directory scan cancelled")
+            throw e
+        } catch (e: Exception) {
+            Timber.tag(TAG).e("Directory scan failed for ${directories.joinToString { it.path }}", e)
+        } finally {
             _directoryLoadingState.update { it - dirUris }
         }
     }

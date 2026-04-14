@@ -7,6 +7,7 @@ import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.core.util.Logger
+import timber.log.Timber
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.data.local.saf.SafWriteAccessService
@@ -38,6 +39,7 @@ import android.icu.text.Transliterator
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -291,51 +293,60 @@ class MetadataEditorViewModel @AssistedInject constructor(
         viewModelScope.launch {
             _uiState.update { MetadataEditorUiState.Loading }
 
-            val audioFileResult = audioRepository.getAudioFile(filePath)
+            try {
+                val audioFileResult = audioRepository.getAudioFile(filePath)
 
-            audioFileResult.fold(
-                onSuccess = { audioFile ->
-                    val metadata = audioFile.metadata
-                    _editedMetadata.update { metadata }
-                    _originalMetadata = metadata
+                audioFileResult.fold(
+                    onSuccess = { audioFile ->
+                        val metadata = audioFile.metadata
+                        _editedMetadata.update { metadata }
+                        _originalMetadata = metadata
 
-                    // 初始化搜索种子，供 Online Search 屏幕使用
-                    searchSeedHolder.updateSeed(
-                        filePath = filePath,
-                        title = metadata.title.orEmpty(),
-                        artist = metadata.artist,
-                        album = metadata.album
-                    )
-
-                    _uiState.update {
-                        MetadataEditorUiState.Success(
-                            audioFile = audioFile,
-                            editedMetadata = metadata
+                        // 初始化搜索种子，供 Online Search 屏幕使用
+                        searchSeedHolder.updateSeed(
+                            filePath = filePath,
+                            title = metadata.title.orEmpty(),
+                            artist = metadata.artist,
+                            album = metadata.album
                         )
-                    }
 
-                    // Load cover art asynchronously — don't block UI
-                    loadCoverArtAsync(filePath)
+                        _uiState.update {
+                            MetadataEditorUiState.Success(
+                                audioFile = audioFile,
+                                editedMetadata = metadata
+                            )
+                        }
 
-                    // Load ReplayGain asynchronously — don't block UI
-                    viewModelScope.launch {
-                        val replayGainResult = replayGainRepository.readReplayGain(filePath)
-                        replayGainResult.getOrNull()?.let { replayGainInfo ->
-                            _pendingReplayGainInfo.update { replayGainInfo }
+                        // Load cover art asynchronously — don't block UI
+                        loadCoverArtAsync(filePath)
+
+                        // Load ReplayGain asynchronously — don't block UI
+                        viewModelScope.launch {
+                            val replayGainResult = replayGainRepository.readReplayGain(filePath)
+                            replayGainResult.getOrNull()?.let { replayGainInfo ->
+                                _pendingReplayGainInfo.update { replayGainInfo }
+                            }
+                        }
+                        
+                        // 检查并应用待处理的在线元数据
+                        tryApplyPendingOnlineMetadata()
+                    },
+                    onFailure = { error ->
+                        _uiState.update {
+                            MetadataEditorUiState.Error(
+                                error.message ?: "Failed to load audio file"
+                            )
                         }
                     }
-                    
-                    // 检查并应用待处理的在线元数据
-                    tryApplyPendingOnlineMetadata()
-                },
-                onFailure = { error ->
-                    _uiState.update {
-                        MetadataEditorUiState.Error(
-                            error.message ?: "Failed to load audio file"
-                        )
-                    }
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Failed to load audio file")
+                _uiState.update {
+                    MetadataEditorUiState.Error(e.message ?: "Failed to load audio file")
                 }
-            )
+            }
         }
     }
 

@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.coroutineScope
@@ -383,9 +384,9 @@ class AudioFileScanner @Inject constructor(
         maxConcurrency: Int = 4
     ): List<AudioFile> = withContext(Dispatchers.IO) {
         coroutineScope {
-            filePaths.chunked(maxConcurrency * 2).flatMap { batch: List<String> ->
+            filePaths.chunked(maxConcurrency).flatMap { batch ->
                 val deferreds = batch.map { path ->
-                    async<AudioFile?> {
+                    async {
                         try {
                             createAudioFileFromPath(path)
                         } catch (e: Exception) {
@@ -394,7 +395,7 @@ class AudioFileScanner @Inject constructor(
                         }
                     }
                 }
-                deferreds.mapNotNull { it.await() }
+                deferreds.awaitAll().filterNotNull()
             }
         }
     }

@@ -148,8 +148,11 @@ fun FileBrowserAdaptiveScreen(
         }
     }
 
-    val displayedFiles = remember(allAudios, currentSortOption) {
-        applyFileSort(allAudios, currentSortOption)
+    val sortedFiles = remember(allAudios, currentSortOption) {
+        allAudios.toList()
+    }
+    val displayedFiles = remember(sortedFiles, currentSortOption) {
+        applyFileSort(sortedFiles, currentSortOption)
     }
 
     val listState = rememberLazyListState()
@@ -205,20 +208,24 @@ fun FileBrowserAdaptiveScreen(
                     isSinglePane = isSinglePane,
                     isSelectionMode = isSelectionMode,
                     selectedFiles = selectedFiles,
-                    onFileClick = { audioFile ->
-                        if (isSelectionMode) {
-                            viewModel.toggleFileSelection(audioFile.path)
-                        } else if (isSinglePane) {
-                            onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
-                        } else {
-                            coroutineScope.launch {
-                                fileSwitchCounter++
-                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                    onFileClick = remember(viewModel, isSelectionMode, isSinglePane, coroutineScope, navigator, onNavigateToMetadata) {
+                        { audioFile ->
+                            if (isSelectionMode) {
+                                viewModel.toggleFileSelection(audioFile.path)
+                            } else if (isSinglePane) {
+                                onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                            } else {
+                                coroutineScope.launch {
+                                    fileSwitchCounter++
+                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                                }
                             }
                         }
                     },
-                    onFileLongClick = { audioFile ->
-                        viewModel.toggleFileSelection(audioFile.path)
+                    onFileLongClick = remember(viewModel) {
+                        { audioFile ->
+                            viewModel.toggleFileSelection(audioFile.path)
+                        }
                     },
                     listState = listState,
                     currentSortOption = currentSortOption,
@@ -405,12 +412,16 @@ private fun FileBrowserListPane(
                     )
                 }
 
-                val showFab = canScrollToTop &&
-                    if (effectiveRootTab == RootTab.DIRECTORIES) {
-                        selectedDirectories.isNotEmpty()
-                    } else {
-                        displayedFiles.isNotEmpty()
+                val showFab by remember {
+                    derivedStateOf {
+                        canScrollToTop &&
+                            if (effectiveRootTab == RootTab.DIRECTORIES) {
+                                selectedDirectories.isNotEmpty()
+                            } else {
+                                displayedFiles.isNotEmpty()
+                            }
                     }
+                }
                 if (showFab) {
                     SmallFloatingActionButton(
                         onClick = {

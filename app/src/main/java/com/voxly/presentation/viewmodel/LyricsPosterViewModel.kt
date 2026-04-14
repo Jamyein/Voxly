@@ -44,16 +44,18 @@ class LyricsPosterViewModel @AssistedInject constructor(
         viewModelScope.launch {
             _isLoading.update { true }
 
-            // Load album art
-            val albumArtResult = audioRepository.extractAlbumArt(filePath)
-            albumArtResult.fold(
-                onSuccess = { bytes ->
-                    _albumArtBytes.update { bytes }
-                },
-                onFailure = { /* Ignore album art errors */ }
-            )
-
-            _isLoading.update { false }
+            try {
+                // Load album art
+                val albumArtResult = audioRepository.extractAlbumArt(filePath)
+                albumArtResult.fold(
+                    onSuccess = { bytes ->
+                        _albumArtBytes.update { bytes }
+                    },
+                    onFailure = { /* Ignore album art errors */ }
+                )
+            } finally {
+                _isLoading.update { false }
+            }
         }
     }
 

@@ -65,15 +65,23 @@ class LibraryBatchViewModel @Inject constructor(
         batchJob?.cancel()
         return viewModelScope.launch {
             _isBatchProcessing.update { true }
-            batchEngine.execute(
-                items = items,
-                operation = operation,
-                itemName = itemName
-            ).collect { result ->
-                _batchResult.update { result }
+            try {
+                batchEngine.execute(
+                    items = items,
+                    operation = operation,
+                    itemName = itemName
+                ).collect { result ->
+                    _batchResult.update { result }
+                }
+            } catch (e: CancellationException) {
+                Timber.tag(TAG).d("Batch operation cancelled")
+                throw e
+            } catch (e: Exception) {
+                Timber.tag(TAG).e(e, "Batch operation failed")
+            } finally {
+                _isBatchProcessing.update { false }
+                libraryDataHolder.requestRefresh(forceRefresh = false)
             }
-            _isBatchProcessing.update { false }
-            libraryDataHolder.requestRefresh(forceRefresh = false)
         }.also { batchJob = it }
     }
 

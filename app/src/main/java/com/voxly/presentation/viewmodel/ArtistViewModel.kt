@@ -25,12 +25,6 @@ class ArtistViewModel @Inject constructor(
 ) : ViewModel() {
 
     val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
-        .distinctUntilChanged { oldList, newList ->
-            // Compare by artist names and sizes to prevent unnecessary emissions
-            if (oldList.size != newList.size) return@distinctUntilChanged false
-            oldList.map { it.name to it.albums.size to it.files.size } ==
-                    newList.map { it.name to it.albums.size to it.files.size }
-        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
