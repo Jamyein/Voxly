@@ -101,7 +101,7 @@ fun AlbumDetailScreen(
 
     // Sort by disc number and track number
     val sortedFiles = remember(files) {
-        files.sortedWith(
+        files.toList().sortedWith(
             compareBy({ it.metadata.discNumber ?: 1 }, { it.metadata.trackNumber ?: 0 })
         )
     }

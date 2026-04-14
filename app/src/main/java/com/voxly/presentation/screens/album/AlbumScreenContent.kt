@@ -294,13 +294,13 @@ internal fun AlbumYearGroupedContent(
         }
     }
     
-    val albumsByYear = remember(albums, isDescending) {
+    val albumsByYear = remember(albums.hashCode(), isDescending) {
         albums.groupBy { album ->
             getAlbumDisplayYear(album) ?: 0
         }.toSortedMap(if (isDescending) compareByDescending { it } else compareBy { it })
     }
 
-    val yearGroups = remember(albumsByYear) {
+    val yearGroups = remember(albumsByYear.hashCode()) {
         albumsByYear.map { (year, yearAlbums) ->
             YearGroup(year, yearAlbums)
         }
