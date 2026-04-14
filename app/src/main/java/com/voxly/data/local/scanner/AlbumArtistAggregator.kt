@@ -142,11 +142,13 @@ class AlbumArtistAggregator @Inject constructor(
             val coverFile = albumFiles.firstOrNull {
                 it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
             } ?: albumFiles.firstOrNull()
+            val albumYear = albumFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
             AlbumGroup(
                 name = albumName,
                 albumArtist = albumArtist?.takeIf { it.isNotBlank() },
                 files = albumFiles.sortedBy { it.metadata.trackNumber },
-                coverPath = coverFile?.path
+                coverPath = coverFile?.path,
+                year = albumYear
             )
         }.sortedBy { SortUtil.toSortablePinyin(it.name) }
 
@@ -161,15 +163,17 @@ class AlbumArtistAggregator @Inject constructor(
             AlbumSortOption.NAME_ASC to albumsList.sortedBy { SortUtil.toSortablePinyin(it.name) },
             AlbumSortOption.TRACK_COUNT_DESC to albumsList.sortedByDescending { it.files.size },
             AlbumSortOption.YEAR_DESC to albumsList.sortedByDescending { album ->
-                album.files.mapNotNull { audioFile ->
-                    audioFile.metadata.year
-                        ?.let { Regex("""\d{4}""").find(it)?.value }
-                        ?.toIntOrNull()
-                }.maxOrNull() ?: Int.MIN_VALUE
+                album.year ?: Int.MIN_VALUE
             }
         )
 
         _albumsBySort.value = sortedAlbumsByOption
+    }
+
+    private fun extractAlbumYear(file: AudioFile): Int? {
+        return file.metadata.year
+            ?.let { Regex("""\d{4}""").find(it)?.value }
+            ?.toIntOrNull()
     }
 
     /**

@@ -16,6 +16,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -40,7 +41,9 @@ internal fun ArtistListItem(
     artist: ArtistListItemState,
     onClick: () -> Unit
 ) {
-    val avatarKey = createArtistAvatarSharedElementKey(artist.name)
+    val avatarKey = remember(artist.name) {
+        createArtistAvatarSharedElementKey(artist.name)
+    }
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,

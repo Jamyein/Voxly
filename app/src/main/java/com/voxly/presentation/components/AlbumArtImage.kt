@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asAndroidBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -103,11 +104,11 @@ fun AlbumArtImage(
     val density = LocalDensity.current
     val targetSizePx = with(density) { size.roundToPx() }
     val coverUriProvider = remember { CoverUriProvider(context) }
-    
+
     val coverUri = remember(albumId, filePath) {
         coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
     }
-    
+
     val embeddedBitmap by produceState<Bitmap?>(
         initialValue = null,
         key1 = filePath,
@@ -117,9 +118,9 @@ fun AlbumArtImage(
             loadAlbumArtThumbnail(context, filePath, targetSizePx)
         } else null
     }
-    
+
     var loadFailed by remember { mutableStateOf(false) }
-    
+
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center

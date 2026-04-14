@@ -120,7 +120,7 @@ internal fun ArtistTabContent(
 ) {
     val lazyListState = listState ?: rememberLazyListState()
     
-    val artistFilePaths = remember(artistListItems.size) {
+    val artistFilePaths = remember(artistListItems) {
         artistListItems.mapNotNull { it.coverPath }
     }
     LazyListCoverPreloader(listState = lazyListState, filePaths = artistFilePaths)

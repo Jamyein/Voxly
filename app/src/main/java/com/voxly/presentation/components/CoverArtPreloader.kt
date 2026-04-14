@@ -10,8 +10,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.voxly.presentation.ui.preloadAlbumArtRange
 
-private const val PRELOAD_AHEAD = 5
-private const val PRELOAD_BEHIND = 3
+private const val PRELOAD_AHEAD = 15
+private const val PRELOAD_BEHIND = 5
 
 @Composable
 fun LazyListCoverPreloader(

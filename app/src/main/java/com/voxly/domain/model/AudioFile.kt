@@ -257,7 +257,8 @@ data class AlbumGroup(
     val name: String,
     val albumArtist: String?,
     val files: List<AudioFile>,
-    val coverPath: String? = null
+    val coverPath: String? = null,
+    val year: Int? = null
 )
 
 /**
