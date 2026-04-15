@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
@@ -70,21 +72,24 @@ class DeepEnrichProcessor @Inject constructor(
 
     /**
      * Enriches multiple files in parallel with controlled concurrency.
-     * Uses chunked processing to avoid exhausting memory with large libraries.
+     * Uses Semaphore-based pipeline to avoid exhausting memory with large libraries
+     * and to keep the pipeline full (unlike chunked processing which waits for the
+     * slowest task in each batch).
      */
     suspend fun enrichBatch(
         files: List<AudioFile>,
         maxConcurrency: Int = 4
     ): List<AudioFile> = coroutineScope {
-        files.chunked(maxConcurrency).flatMap { batch ->
-            batch.map { file ->
-                async(Dispatchers.IO) {
+        val semaphore = Semaphore(maxConcurrency)
+        files.map { file ->
+            async(Dispatchers.IO) {
+                semaphore.withPermit {
                     val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
                     val albumName = file.metadata.album
                     enrich(file, albumArtist, albumName)
                 }
-            }.awaitAll()
-        }
+            }
+        }.awaitAll()
     }
 
     /**

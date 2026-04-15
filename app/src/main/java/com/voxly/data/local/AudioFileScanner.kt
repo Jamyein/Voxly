@@ -3,6 +3,7 @@ package com.voxly.data.local
 import android.content.Context
 import com.voxly.core.util.SortUtil
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
+import com.voxly.data.local.metadata.lightweight.LightweightMetadataParser
 import com.voxly.data.local.scanner.AlbumArtistAggregator
 import com.voxly.data.local.scanner.FilterEngine
 import com.voxly.data.local.scanner.MediaStoreDataSource
@@ -17,8 +18,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,6 +34,8 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
@@ -137,17 +138,9 @@ class AudioFileScanner @Inject constructor(
         forceRefresh: Boolean = false
     ): List<AudioFile> {
         val files = when {
-            // Specific directories scan
-            !directoryPaths.isNullOrEmpty() -> {
-                scanDirectories(directoryPaths, incremental, forceRefresh)
-            }
-            // Global scan
-            incremental && hasCachedData() -> {
-                scanIncremental()
-            }
-            else -> {
-                scanGlobal(forceRefresh)
-            }
+            !directoryPaths.isNullOrEmpty() -> scanDirectories(directoryPaths, incremental, forceRefresh)
+            incremental && hasCachedData() -> scanIncremental()
+            else -> scanGlobal(forceRefresh)
         }
 
         // Update cache with scan results only if we actually scanned new data
@@ -266,7 +259,6 @@ class AudioFileScanner @Inject constructor(
      * Global full scan of all audio files.
      */
     private suspend fun scanGlobal(forceRefresh: Boolean): List<AudioFile> = withContext(Dispatchers.IO) {
-        // Check cache first
         if (!forceRefresh && hasCachedData()) {
             val cachedCount = getCachedFileCount()
             if (cachedCount > 0) {
@@ -274,8 +266,6 @@ class AudioFileScanner @Inject constructor(
                 return@withContext libraryCache.getCachedAudioFilesOnce()
             }
         }
-
-        // Full scan
         val files = mutableListOf<AudioFile>()
         scanAllFilesForCache(files)
         files.sortWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
@@ -361,15 +351,20 @@ class AudioFileScanner @Inject constructor(
         val file = File(filePath)
         val extension = file.extension.lowercase()
 
-        // OPTIMIZATION: Read metadata + audio info in one TagLib call when possible
-        val completeMetadata = metadataProcessor.readAllMetadata(filePath, includeAlbumArt = false)
-        val fullMetadata = completeMetadata?.metadata ?: com.voxly.domain.model.AudioMetadata()
-
-        // Try MediaStore first for duration
         val (duration, bitrate) = mediaStoreDataSource.queryFileDurationAndBitrate(filePath)
 
-        // Fallback to TagLib audio info if not provided by complete metadata
-        val audioInfo = completeMetadata?.audioInfo ?: metadataProcessor.readAudioInfo(filePath)
+        // FAST PATH: try lightweight native parser for MP3/FLAC before full TagLib
+        val lightweightResult = LightweightMetadataParser.parse(file)
+        val fullMetadata = if (lightweightResult != null) {
+            lightweightResult.metadata
+        } else {
+            // FALLBACK: full TagLib read
+            metadataProcessor.readAllMetadata(filePath, includeAlbumArt = false)?.metadata
+                ?: com.voxly.domain.model.AudioMetadata()
+        }
+
+        // Use lightweight audio info if available, otherwise fall back to TagLib
+        val audioInfo = lightweightResult?.audioInfo ?: metadataProcessor.readAudioInfo(filePath)
         val finalDuration = if (duration == 0L) audioInfo?.durationMs ?: 0L else duration
         val finalBitrate = if (bitrate == 0) (audioInfo?.bitrate ?: 0) / com.voxly.core.util.Constants.BPS_TO_KBPS else bitrate
 
@@ -393,11 +388,14 @@ class AudioFileScanner @Inject constructor(
     private suspend fun scanFilesInParallel(
         filePaths: List<String>,
         maxConcurrency: Int = 4
-    ): List<AudioFile> = withContext(Dispatchers.IO) {
-        coroutineScope {
-            filePaths.chunked(maxConcurrency).flatMap { batch ->
-                val deferreds = batch.map { path ->
-                    async {
+    ): List<AudioFile> = coroutineScope {
+        val semaphore = Semaphore(maxConcurrency)
+        // Sort by file size ascending so smaller files are processed first
+        filePaths
+            .sortedBy { File(it).length() }
+            .map { path ->
+                async(Dispatchers.IO) {
+                    semaphore.withPermit {
                         try {
                             createAudioFileFromPath(path)
                         } catch (e: Exception) {
@@ -406,9 +404,7 @@ class AudioFileScanner @Inject constructor(
                         }
                     }
                 }
-                deferreds.awaitAll().filterNotNull()
-            }
-        }
+            }.awaitAll().filterNotNull()
     }
 
     /**
