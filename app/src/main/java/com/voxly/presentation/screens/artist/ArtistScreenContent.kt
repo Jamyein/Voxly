@@ -152,11 +152,13 @@ internal fun ArtistTabContent(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(artistListItems, key = { it.name }) { listItem ->
+                    val targetArtist = artistMap[listItem.name]
+                    val onItemClick = remember(targetArtist) {
+                        { if (targetArtist != null) onArtistClick(targetArtist) }
+                    }
                     ArtistListItem(
                         artist = listItem,
-                        onClick = {
-                            artistMap[listItem.name]?.let { onArtistClick(it) }
-                        }
+                        onClick = onItemClick
                     )
                 }
             }

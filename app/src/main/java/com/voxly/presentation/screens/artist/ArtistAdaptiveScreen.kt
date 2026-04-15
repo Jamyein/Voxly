@@ -83,29 +83,32 @@ fun ArtistAdaptiveScreen(
         }
     }
 
+    val onArtistClick: (ArtistGroup) -> Unit = remember(isSinglePane, onNavigateToArtistDetail, coroutineScope) {
+        { artist ->
+            coroutineScope.launch {
+                selectedFileForEditing = null
+                selectedAlbumNavKey = null
+                fileSwitchCounter++
+                val navKey = ArtistDetail(artistName = artist.name)
+                if (isSinglePane && onNavigateToArtistDetail != null) {
+                    onNavigateToArtistDetail(artist)
+                } else {
+                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, navKey)
+                }
+            }
+            Unit
+        }
+    }
+
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
         listPane = {
-            AnimatedPane {
-                ArtistScreenContent(
-                    viewModel = viewModel,
-                    onArtistClick = { artist ->
-                        coroutineScope.launch {
-                            selectedFileForEditing = null
-                            selectedAlbumNavKey = null
-                            fileSwitchCounter++
-                            val navKey = ArtistDetail(artistName = artist.name)
-                            if (isSinglePane && onNavigateToArtistDetail != null) {
-                                onNavigateToArtistDetail(artist)
-                            } else {
-                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, navKey)
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            ArtistScreenContent(
+                viewModel = viewModel,
+                onArtistClick = onArtistClick,
+                modifier = Modifier.fillMaxSize()
+            )
         },
         detailPane = {
             AnimatedPane {

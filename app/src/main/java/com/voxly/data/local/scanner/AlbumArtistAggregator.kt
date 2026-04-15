@@ -52,7 +52,13 @@ class AlbumArtistAggregator @Inject constructor(
     val filteredFiles: StateFlow<List<AudioFile>> = _filteredFiles.asStateFlow()
 
     // Albums sorted by different sort options
-    private val _albumsBySort = MutableStateFlow<Map<AlbumSortOption, List<AlbumGroup>>>(emptyMap())
+    private val _albumsBySort = MutableStateFlow<Map<AlbumSortOption, List<AlbumGroup>>>(
+        mapOf(
+            AlbumSortOption.NAME_ASC to emptyList(),
+            AlbumSortOption.TRACK_COUNT_DESC to emptyList(),
+            AlbumSortOption.YEAR_DESC to emptyList()
+        )
+    )
     val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = _albumsBySort.asStateFlow()
 
     init {
@@ -152,10 +158,11 @@ class AlbumArtistAggregator @Inject constructor(
             )
         }.sortedBy { SortUtil.toSortablePinyin(it.name) }
 
-        _albums.value = albumsList
-        timber.log.Timber.d("AlbumArtistAggregator: Updated albums count = ${albumsList.size}")
-
-        computeAndCacheSortOrders(albumsList)
+        if (!areAlbumListsEqual(albumsList, _albums.value)) {
+            _albums.value = albumsList
+            timber.log.Timber.d("AlbumArtistAggregator: Updated albums count = ${albumsList.size}")
+            computeAndCacheSortOrders(albumsList)
+        }
     }
 
     private fun computeAndCacheSortOrders(albumsList: List<AlbumGroup>) {
@@ -167,7 +174,9 @@ class AlbumArtistAggregator @Inject constructor(
             }
         )
 
-        _albumsBySort.value = sortedAlbumsByOption
+        if (!areSortedAlbumMapsEqual(sortedAlbumsByOption, _albumsBySort.value)) {
+            _albumsBySort.value = sortedAlbumsByOption
+        }
     }
 
     private fun extractAlbumYear(file: AudioFile): Int? {
@@ -264,7 +273,61 @@ class AlbumArtistAggregator @Inject constructor(
             )
         }.sortedBy { SortUtil.toSortablePinyin(it.name) }
 
-        _artists.value = artistsList
+        if (!areArtistListsEqual(artistsList, _artists.value)) {
+            _artists.value = artistsList
+        }
+    }
+
+    /**
+     * Lightweight equality check for album lists to avoid unnecessary emissions.
+     */
+    private fun areAlbumListsEqual(a: List<AlbumGroup>, b: List<AlbumGroup>): Boolean {
+        if (a.size != b.size) return false
+        for (i in a.indices) {
+            val ai = a[i]
+            val bi = b[i]
+            if (ai.name != bi.name ||
+                ai.albumArtist != bi.albumArtist ||
+                ai.files.size != bi.files.size ||
+                ai.coverPath != bi.coverPath ||
+                ai.year != bi.year
+            ) {
+                return false
+            }
+        }
+        return true
+    }
+
+    /**
+     * Lightweight equality check for sorted album maps.
+     */
+    private fun areSortedAlbumMapsEqual(
+        a: Map<AlbumSortOption, List<AlbumGroup>>,
+        b: Map<AlbumSortOption, List<AlbumGroup>>
+    ): Boolean {
+        if (a.size != b.size || a.keys != b.keys) return false
+        for (key in a.keys) {
+            if (!areAlbumListsEqual(a.getValue(key), b.getValue(key))) return false
+        }
+        return true
+    }
+
+    /**
+     * Lightweight equality check for artist lists to avoid unnecessary emissions.
+     */
+    private fun areArtistListsEqual(a: List<ArtistGroup>, b: List<ArtistGroup>): Boolean {
+        if (a.size != b.size) return false
+        for (i in a.indices) {
+            val ai = a[i]
+            val bi = b[i]
+            if (ai.name != bi.name ||
+                ai.files.size != bi.files.size ||
+                ai.coverPath != bi.coverPath
+            ) {
+                return false
+            }
+        }
+        return true
     }
 
     /**

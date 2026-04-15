@@ -342,12 +342,37 @@ suspend fun loadAlbumArtThumbnail(
     if (filePath.isBlank()) return null
 
     val safeTargetSize = if (targetSizePx > 0) targetSizePx else 300
+    val cacheKey = getLocalArtCacheKey(filePath, safeTargetSize)
 
-    // 1. Try embedded album art via MediaMetadataRetriever
-    loadEmbeddedAlbumArtSized(filePath, safeTargetSize)?.let { return it }
+    // 1. Check cache
+    localCacheLock.lock()
+    val cachedRef = localAlbumArtCache[cacheKey]
+    localCacheLock.unlock()
+    val cached = cachedRef?.get()
+    if (cached != null && !cached.isRecycled) {
+        return cached
+    }
 
-    // 2. Final fallback: folder cover art (cover.jpg, folder.jpg, etc.)
-    return loadFolderCoverArt(filePath, safeTargetSize)
+    return withContext(Dispatchers.IO) {
+        // 2. Try embedded album art via MediaMetadataRetriever
+        val bitmap = loadEmbeddedAlbumArtSized(filePath, safeTargetSize)
+            ?: loadFolderCoverArt(filePath, safeTargetSize)
+
+        // 3. Cache result
+        if (bitmap != null) {
+            localCacheLock.lock()
+            try {
+                while (localAlbumArtCache.size >= MAX_LOCAL_CACHE_SIZE) {
+                    localAlbumArtCache.keys.firstOrNull()?.let { localAlbumArtCache.remove(it) }
+                }
+                localAlbumArtCache[cacheKey] = SoftReference(bitmap)
+            } finally {
+                localCacheLock.unlock()
+            }
+        }
+
+        bitmap
+    }
 }
 
 /**

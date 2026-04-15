@@ -40,10 +40,7 @@ class CoverUriProvider @Inject constructor(
         filePath: String? = null
     ): Uri? {
         if (albumId != null && albumId > 0) {
-            val mediaStoreUri = ContentUris.withAppendedId(albumArtUri, albumId)
-            if (uriExistsCached(mediaStoreUri)) {
-                return mediaStoreUri
-            }
+            return ContentUris.withAppendedId(albumArtUri, albumId)
         }
 
         if (!filePath.isNullOrBlank()) {
