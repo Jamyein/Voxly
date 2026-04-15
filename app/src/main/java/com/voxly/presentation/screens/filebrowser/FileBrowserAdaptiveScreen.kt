@@ -123,12 +123,14 @@ fun FileBrowserAdaptiveScreen(
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
     val scanUiState by scanViewModel.fileBrowserUiState.collectAsStateWithLifecycle()
     val allAudios = scanUiState.allAudios
+    val displayedFiles by scanViewModel.sortedAllAudios.collectAsStateWithLifecycle()
     val selectedDirectories = scanUiState.selectedDirectories
     val directoryFiles = scanUiState.directoryFiles
     val isRefreshing = scanUiState.isRefreshing
     val hasWhitelistDirectories = scanUiState.hasWhitelistDirectories
     val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
     val rootTabString by settingsViewModel.fileBrowserRootTab.collectAsStateWithLifecycle(initialValue = RootTab.DIRECTORIES.name)
+    val currentSortOption by scanViewModel.currentFileSortOption.collectAsStateWithLifecycle()
     val effectiveRootTab = if (hasWhitelistDirectories) {
         try {
             RootTab.valueOf(rootTabString)
@@ -140,21 +142,6 @@ fun FileBrowserAdaptiveScreen(
     }
 
     var showSearchSheet by remember { mutableStateOf(false) }
-    val sortOption by settingsViewModel.fileBrowserSortOption.collectAsStateWithLifecycle(initialValue = FileSortOption.NAME_ASC.name)
-    val currentSortOption = remember(sortOption) {
-        try {
-            FileSortOption.valueOf(sortOption)
-        } catch (e: IllegalArgumentException) {
-            FileSortOption.NAME_ASC
-        }
-    }
-
-    val sortedFiles = remember(allAudios, currentSortOption) {
-        allAudios.toList()
-    }
-    val displayedFiles = remember(sortedFiles, currentSortOption) {
-        applyFileSort(sortedFiles, currentSortOption)
-    }
 
     val listState = rememberLazyListState()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -489,17 +476,3 @@ private fun FileBrowserDetailPane(
         EmptyDetailPane()
     }
 }
-
-/**
- * Applies sorting to audio files.
- */
-private fun applyFileSort(files: List<AudioFile>, sortOption: FileSortOption): List<AudioFile> {
-    return when (sortOption) {
-        FileSortOption.NAME_ASC -> files.sortedBy { it.metadata.getDisplayTitle(it.name) }
-        FileSortOption.NAME_DESC -> files.sortedByDescending { it.metadata.getDisplayTitle(it.name) }
-        FileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
-        FileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
-    }
-}
-
-

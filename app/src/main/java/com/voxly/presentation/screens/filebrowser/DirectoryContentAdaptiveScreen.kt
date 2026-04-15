@@ -107,9 +107,11 @@ fun DirectoryContentAdaptiveScreen(
     }
 
     val directoryFiles by scanViewModel.directoryFiles.collectAsStateWithLifecycle()
+    val sortedDirectoryFiles by scanViewModel.sortedDirectoryFiles.collectAsStateWithLifecycle()
     val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
     val isRefreshing by scanViewModel.isRefreshing.collectAsStateWithLifecycle()
     val loadingDirectories by scanViewModel.directoryLoadingState.collectAsStateWithLifecycle()
+    val currentSortOption by scanViewModel.currentDirectorySortOption.collectAsStateWithLifecycle()
 
     val savedScrollPosition = remember(directoryUri) {
         viewModel.getScrollPosition("directory_$directoryUri")
@@ -122,20 +124,11 @@ fun DirectoryContentAdaptiveScreen(
     val files = remember(directoryUri, directoryFiles) {
         directoryFiles[directoryUri] ?: emptyList()
     }
+    val displayedFiles = remember(directoryUri, sortedDirectoryFiles) {
+        sortedDirectoryFiles[directoryUri] ?: emptyList()
+    }
 
     var showSearchSheet by remember { mutableStateOf(false) }
-    val sortOption by settingsViewModel.directoryFileSortOption.collectAsStateWithLifecycle(initialValue = DirFileSortOption.NAME_ASC.name)
-    val currentSortOption = remember(sortOption) {
-        try {
-            DirFileSortOption.valueOf(sortOption)
-        } catch (e: IllegalArgumentException) {
-            DirFileSortOption.NAME_ASC
-        }
-    }
-
-    val displayedFiles = remember(files, currentSortOption) {
-        applySort(files, currentSortOption)
-    }
 
     val listState = rememberLazyListState(
         initialFirstVisibleItemIndex = savedScrollPosition.index,
@@ -771,22 +764,6 @@ private fun DirectoryDialogsAndSheets(
                 onNavigateToMetadata(audioFile)
             }
         )
-    }
-}
-
-/**
- * Applies sorting to audio files.
- */
-private fun applySort(files: List<AudioFile>, sortOption: DirFileSortOption): List<AudioFile> {
-    return when (sortOption) {
-        DirFileSortOption.NAME_ASC -> files.sortedWith(
-            compareBy { com.voxly.core.util.SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name)) }
-        )
-        DirFileSortOption.NAME_DESC -> files.sortedWith(
-            compareByDescending { com.voxly.core.util.SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name)) }
-        )
-        DirFileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
-        DirFileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
     }
 }
 

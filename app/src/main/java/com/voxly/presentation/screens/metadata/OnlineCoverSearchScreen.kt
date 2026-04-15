@@ -85,7 +85,7 @@ fun OnlineCoverSearchScreen(
     val coverResults = searchProgress.results
     val searchTitle by viewModel.searchTitle.collectAsStateWithLifecycle()
     val searchArtist by viewModel.searchArtist.collectAsStateWithLifecycle()
-    var isSelectingCover by remember { mutableStateOf(false) }
+    var selectingCoverId by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
     
     val coverDimensions = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
@@ -191,14 +191,14 @@ fun OnlineCoverSearchScreen(
                     ) { item ->
                         CoverResultItem(
                             item = item,
-                            isLoading = isSelectingCover,
+                            isLoading = selectingCoverId == item.id,
                             onClick = {
-                                isSelectingCover = true
+                                selectingCoverId = item.id
                                 coroutineScope.launch {
                                     viewModel.getCoverBytes(item)?.let { bytes ->
                                         onCoverSelected(bytes)
                                     }
-                                    isSelectingCover = false
+                                    selectingCoverId = null
                                 }
                             },
                             onDimensionsLoaded = { w, h ->

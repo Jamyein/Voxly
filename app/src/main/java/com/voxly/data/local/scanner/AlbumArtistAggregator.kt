@@ -4,23 +4,18 @@ import com.voxly.core.util.SortUtil
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
-import com.voxly.data.local.UiStateDataStore
-import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AlbumGroup
-import com.voxly.domain.repository.WhitelistRepository
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -33,10 +28,9 @@ import javax.inject.Singleton
 class AlbumArtistAggregator @Inject constructor(
     private val libraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
-    private val uiStateDataStore: UiStateDataStore,
     private val mediaStoreDataSource: MediaStoreDataSource,
     private val filterEngine: FilterEngine,
-    private val whitelistRepository: WhitelistRepository,
+    private val whitelistRepository: com.voxly.domain.repository.WhitelistRepository,
     @Named("ApplicationScope") private val applicationScope: CoroutineScope
 ) {
     // Albums derived from cached audio files - auto-updated when cache changes
@@ -61,14 +55,81 @@ class AlbumArtistAggregator @Inject constructor(
     )
     val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = _albumsBySort.asStateFlow()
 
+    private data class AggregationConfig(
+        val whitelistEnabled: Boolean,
+        val blacklistEnabled: Boolean,
+        val minDurationEnabled: Boolean,
+        val minDurationMs: Long,
+        val whitelistPaths: List<String>,
+        val blacklistPaths: List<String>,
+        val separatorEnabled: Boolean,
+        val separators: Set<String>
+    )
+
+    private data class FilterConfig(
+        val whitelistEnabled: Boolean,
+        val blacklistEnabled: Boolean,
+        val minDurationEnabled: Boolean,
+        val minDurationMs: Long,
+        val whitelistPaths: List<String>,
+        val blacklistPaths: List<String>
+    )
+
+    private val baseFilterConfig = combine(
+        settingsDataStore.whitelistEnabled,
+        settingsDataStore.blacklistEnabled,
+        settingsDataStore.minDurationFilterEnabled,
+        settingsDataStore.minDurationFilterThresholdMs
+    ) { whitelistEnabled, blacklistEnabled, minDurationEnabled, minDurationMs ->
+        FilterConfig(
+            whitelistEnabled = whitelistEnabled,
+            blacklistEnabled = blacklistEnabled,
+            minDurationEnabled = minDurationEnabled,
+            minDurationMs = minDurationMs.toLong(),
+            whitelistPaths = emptyList(),
+            blacklistPaths = emptyList()
+        )
+    }
+
+    private val filterConfig = combine(
+        baseFilterConfig,
+        whitelistRepository.getValidWhitelistPaths().distinctUntilChanged(),
+        whitelistRepository.getValidBlacklistPaths().distinctUntilChanged()
+    ) { baseConfig, whitelistPaths, blacklistPaths ->
+        baseConfig.copy(
+            whitelistPaths = whitelistPaths,
+            blacklistPaths = blacklistPaths
+        )
+    }
+
+    private val aggregationConfig = combine(
+        filterConfig,
+        settingsDataStore.artistSeparatorEnabled,
+        settingsDataStore.artistSeparatorsSet
+    ) { filterConfig, separatorEnabled, separators ->
+        AggregationConfig(
+            whitelistEnabled = filterConfig.whitelistEnabled,
+            blacklistEnabled = filterConfig.blacklistEnabled,
+            minDurationEnabled = filterConfig.minDurationEnabled,
+            minDurationMs = filterConfig.minDurationMs,
+            whitelistPaths = filterConfig.whitelistPaths,
+            blacklistPaths = filterConfig.blacklistPaths,
+            separatorEnabled = separatorEnabled,
+            separators = separators
+        )
+    }.distinctUntilChanged()
+
     init {
         applicationScope.launch(Dispatchers.Default) {
-            libraryCache.getCachedAudioFiles()
-                .collectLatest { files ->
-                    kotlinx.coroutines.delay(50)
-                    updateAlbumsAndArtistsFromFilesInternal(files)
+            combine(
+                libraryCache.getCachedAudioFiles(),
+                aggregationConfig
+            ) { files, config ->
+                files to config
+            }.collectLatest { (files, config) ->
+                    updateAlbumsAndArtistsFromFilesInternal(files, config)
                 }
-        }
+            }
     }
 
     /**
@@ -76,29 +137,28 @@ class AlbumArtistAggregator @Inject constructor(
      * Called automatically when cache changes.
      * Applies whitelist/blacklist filtering before aggregation.
      */
-    private suspend fun updateAlbumsAndArtistsFromFilesInternal(files: List<AudioFile>) {
-        val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
-        val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
-        val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
-        val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
-
-        val whitelistPaths = whitelistRepository.getValidWhitelistPathsOnce()
-        val blacklistPaths = whitelistRepository.getValidBlacklistPathsOnce()
-
+    private suspend fun updateAlbumsAndArtistsFromFilesInternal(
+        files: List<AudioFile>,
+        config: AggregationConfig
+    ) {
         val filtered = filterEngine.applyFilters(
             files,
             FilterEngine.FilterSettings(
-                whitelistEnabled = whitelistEnabled,
-                blacklistEnabled = blacklistEnabled,
-                minDurationEnabled = minDurationEnabled,
-                whitelistUris = whitelistPaths,
-                blacklistUris = blacklistPaths,
-                minDurationMs = minDurationMs
+                whitelistEnabled = config.whitelistEnabled,
+                blacklistEnabled = config.blacklistEnabled,
+                minDurationEnabled = config.minDurationEnabled,
+                whitelistUris = config.whitelistPaths,
+                blacklistUris = config.blacklistPaths,
+                minDurationMs = config.minDurationMs
             )
         )
         _filteredFiles.value = filtered
         updateAlbumsFromFiles(filtered)
-        updateArtistsFromFiles(filtered)
+        updateArtistsFromFiles(
+            files = filtered,
+            separatorEnabled = config.separatorEnabled,
+            customSeparators = config.separators
+        )
     }
 
     /**
@@ -160,7 +220,6 @@ class AlbumArtistAggregator @Inject constructor(
 
         if (!areAlbumListsEqual(albumsList, _albums.value)) {
             _albums.value = albumsList
-            timber.log.Timber.d("AlbumArtistAggregator: Updated albums count = ${albumsList.size}")
             computeAndCacheSortOrders(albumsList)
         }
     }
@@ -192,10 +251,11 @@ class AlbumArtistAggregator @Inject constructor(
      * 2. Secondary splitting by separator within each artistId group
      * A file can belong to multiple artist groups if separator splits its artist string.
      */
-    private suspend fun updateArtistsFromFiles(files: List<AudioFile>) {
-        val isSeparatorEnabled = settingsDataStore.artistSeparatorEnabled.first()
-        val customSeparators = settingsDataStore.artistSeparatorsSet.first()
-
+    private suspend fun updateArtistsFromFiles(
+        files: List<AudioFile>,
+        separatorEnabled: Boolean,
+        customSeparators: Set<String>
+    ) {
         // First level: group by artistId or artist string
         val primaryGroups = mutableMapOf<String?, MutableList<AudioFile>>()
         val artistIdSet = mutableSetOf<Long>()
@@ -238,7 +298,7 @@ class AlbumArtistAggregator @Inject constructor(
             for (file in groupFiles) {
                 val artistName = file.metadata.artist ?: continue
 
-                if (isSeparatorEnabled && customSeparators.isNotEmpty()) {
+                if (separatorEnabled && customSeparators.isNotEmpty()) {
                     val splitArtists = splitArtist(artistName, customSeparators)
                     for (splitName in splitArtists) {
                         artistFilesMap.getOrPut(splitName) { mutableListOf() }.add(file)

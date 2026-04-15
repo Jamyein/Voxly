@@ -90,9 +90,10 @@ fun MetadataEditorScreen(
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val editedMetadata by viewModel.editedMetadata.collectAsStateWithLifecycle()
-    val hasUnsavedChanges by viewModel.hasUnsavedChanges.collectAsStateWithLifecycle()
+    val editState by viewModel.editState.collectAsStateWithLifecycle()
+    val hasUnsavedChanges = editState.hasUnsavedChanges
     val saveResult by viewModel.saveResult.collectAsStateWithLifecycle(initialValue = "")
-    val modifiedFields by viewModel.modifiedFields.collectAsStateWithLifecycle()
+    val modifiedFields = editState.modifiedFields
 
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showAlbumArtOptions by remember { mutableStateOf(false) }
@@ -104,10 +105,7 @@ fun MetadataEditorScreen(
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     var exitAfterSave by remember { mutableStateOf(false) }
 
-    val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsStateWithLifecycle()
-    val pendingReplayGainInfo by viewModel.pendingReplayGainInfo.collectAsStateWithLifecycle()
     var currentReplayGainInfo by remember(filePath) { mutableStateOf<ReplayGainInfo?>(null) }
-    val replayGainScanError by viewModel.replayGainScanError.collectAsStateWithLifecycle(initialValue = null)
 
     var showEditHistorySheet by remember { mutableStateOf(false) }
     val editHistorySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
@@ -252,11 +250,9 @@ fun MetadataEditorScreen(
                 modifiedFields = modifiedFields,
                 coverTag = coverTag,
                 hasUnsavedChanges = hasUnsavedChanges,
-                isScanningReplayGain = isScanningReplayGain,
-                pendingReplayGainInfo = pendingReplayGainInfo,
+                viewModel = viewModel,
                 currentReplayGainInfo = currentReplayGainInfo,
                 onCurrentReplayGainInfoChange = { currentReplayGainInfo = it },
-                replayGainScanError = replayGainScanError,
                 onTitleChange = { viewModel.updateDebouncedTextField(MetadataField.TITLE, it) },
                 onArtistChange = { viewModel.updateDebouncedTextField(MetadataField.ARTIST, it) },
                 onAlbumChange = { viewModel.updateDebouncedTextField(MetadataField.ALBUM, it) },
@@ -376,11 +372,9 @@ private fun MetadataEditorScaffoldContent(
     modifiedFields: Set<MetadataField>,
     coverTag: String?,
     hasUnsavedChanges: Boolean,
-    isScanningReplayGain: Boolean,
-    pendingReplayGainInfo: ReplayGainInfo?,
+    viewModel: MetadataEditorViewModel,
     currentReplayGainInfo: ReplayGainInfo?,
     onCurrentReplayGainInfoChange: (ReplayGainInfo?) -> Unit,
-    replayGainScanError: String?,
     onTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
     onAlbumChange: (String) -> Unit,
@@ -433,11 +427,9 @@ private fun MetadataEditorScaffoldContent(
                     modifiedFields = modifiedFields,
                     coverTag = coverTag,
                     hasUnsavedChanges = hasUnsavedChanges,
-                    isScanningReplayGain = isScanningReplayGain,
-                    pendingReplayGainInfo = pendingReplayGainInfo,
+                    viewModel = viewModel,
                     currentReplayGainInfo = currentReplayGainInfo,
                     onCurrentReplayGainInfoChange = onCurrentReplayGainInfoChange,
-                    replayGainScanError = replayGainScanError,
                     onTitleChange = onTitleChange,
                     onArtistChange = onArtistChange,
                     onAlbumChange = onAlbumChange,
@@ -494,11 +486,9 @@ private fun MetadataEditorSuccessContent(
     modifiedFields: Set<MetadataField>,
     coverTag: String?,
     hasUnsavedChanges: Boolean,
-    isScanningReplayGain: Boolean,
-    pendingReplayGainInfo: ReplayGainInfo?,
+    viewModel: MetadataEditorViewModel,
     currentReplayGainInfo: ReplayGainInfo?,
     onCurrentReplayGainInfoChange: (ReplayGainInfo?) -> Unit,
-    replayGainScanError: String?,
     onTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
     onAlbumChange: (String) -> Unit,
@@ -577,11 +567,14 @@ private fun MetadataEditorSuccessContent(
             onZoomAlbumArt = onZoomAlbumArt,
             onRotateAlbumArt = onRotateAlbumArt,
             onRemoveAlbumArt = onRemoveAlbumArt,
-            onScanReplayGain = onScanReplayGain,
-            onClearReplayGain = onClearReplayGain,
-            isScanningReplayGain = isScanningReplayGain,
-            replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo,
-            replayGainScanError = replayGainScanError
+            replayGainSection = {
+                MetadataReplayGainSection(
+                    viewModel = viewModel,
+                    currentReplayGainInfo = currentReplayGainInfo,
+                    onScanReplayGain = onScanReplayGain,
+                    onClearReplayGain = onClearReplayGain
+                )
+            }
         )
 
         Box(
@@ -602,7 +595,7 @@ private fun MetadataEditorSuccessContent(
                     IconButton(
                         onClick = {
                             onNavigateToLyricsSelector(
-                                editedMetadata.lyrics ?: "",
+                                editedMetadata.lyrics,
                                 editedMetadata.getDisplayTitle(state.audioFile.name),
                                 editedMetadata.artist ?: "",
                                 editedMetadata.album ?: "",
@@ -802,6 +795,26 @@ private fun MetadataEditorDialogsAndSheets(
     }
 }
 
+@Composable
+private fun MetadataReplayGainSection(
+    viewModel: MetadataEditorViewModel,
+    currentReplayGainInfo: ReplayGainInfo?,
+    onScanReplayGain: () -> Unit,
+    onClearReplayGain: () -> Unit
+) {
+    val isScanningReplayGain by viewModel.isScanningReplayGain.collectAsStateWithLifecycle()
+    val pendingReplayGainInfo by viewModel.pendingReplayGainInfo.collectAsStateWithLifecycle()
+    val replayGainScanError by viewModel.replayGainScanError.collectAsStateWithLifecycle(initialValue = null)
+
+    ReplayGainSection(
+        replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo,
+        isScanning = isScanningReplayGain,
+        onScan = onScanReplayGain,
+        onClear = onClearReplayGain,
+        error = replayGainScanError
+    )
+}
+
 /**
  * Generates a field label with modified indicator if the field is in the modified set.
  */
@@ -841,11 +854,7 @@ private fun MetadataFormContent(
     onZoomAlbumArt: () -> Unit,
     onRotateAlbumArt: () -> Unit,
     onRemoveAlbumArt: () -> Unit,
-    onScanReplayGain: () -> Unit = {},
-    onClearReplayGain: () -> Unit = {},
-    isScanningReplayGain: Boolean = false,
-    replayGainInfo: ReplayGainInfo? = null,
-    replayGainScanError: String? = null,
+    replayGainSection: (@Composable () -> Unit)? = null,
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
     nestedScrollModifier: Modifier = Modifier
@@ -1086,12 +1095,6 @@ private fun MetadataFormContent(
 
         Spacer(modifier = Modifier.height(16.dp))
 
-        ReplayGainSection(
-            replayGainInfo = replayGainInfo,
-            isScanning = isScanningReplayGain,
-            onScan = onScanReplayGain,
-            onClear = onClearReplayGain,
-            error = replayGainScanError
-        )
+        replayGainSection?.invoke()
     }
 }

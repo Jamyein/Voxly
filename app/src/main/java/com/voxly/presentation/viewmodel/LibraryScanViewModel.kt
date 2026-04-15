@@ -6,7 +6,11 @@ import android.os.Environment
 import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.core.util.SortUtil
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.UiStateDataStore
+import com.voxly.data.local.DirFileSortOption
+import com.voxly.data.local.FileSortOption
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.repository.AlbumCacheRepository
 import com.voxly.data.repository.ArtistCacheRepository
@@ -32,6 +36,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -51,6 +56,7 @@ class LibraryScanViewModel @Inject constructor(
     private val audioFileScanner: com.voxly.data.local.AudioFileScanner,
     private val musicLibraryCache: com.voxly.data.local.MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
+    private val uiStateDataStore: UiStateDataStore,
     private val unifiedScanManager: UnifiedScanManager,
     private val safWriteAccessService: SafWriteAccessService,
     private val albumCacheRepository: AlbumCacheRepository,
@@ -97,11 +103,55 @@ class LibraryScanViewModel @Inject constructor(
             initialValue = false
         )
 
+    val currentFileSortOption: StateFlow<FileSortOption> = uiStateDataStore.fileBrowserSortOption
+        .map { it.toFileSortOption() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = FileSortOption.NAME_ASC
+        )
+
+    val currentDirectorySortOption: StateFlow<DirFileSortOption> = uiStateDataStore.directoryFileSortOption
+        .map { it.toDirFileSortOption() }
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = DirFileSortOption.NAME_ASC
+        )
+
+    val sortedAllAudios: StateFlow<List<AudioFile>> = combine(
+        allAudios,
+        currentFileSortOption
+    ) { audios, sortOption ->
+        audios to sortOption
+    }.map { (audios, sortOption) ->
+        sortAudioFiles(audios, sortOption)
+    }.flowOn(Dispatchers.Default).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+        initialValue = emptyList()
+    )
+
     private val _selectedDirectories = MutableStateFlow<List<SelectedDirectory>>(emptyList())
     val selectedDirectories: StateFlow<List<SelectedDirectory>> = _selectedDirectories.asStateFlow()
 
     private val _directoryFiles = MutableStateFlow<Map<String, List<AudioFile>>>(emptyMap())
     val directoryFiles: StateFlow<Map<String, List<AudioFile>>> = _directoryFiles.asStateFlow()
+
+    val sortedDirectoryFiles: StateFlow<Map<String, List<AudioFile>>> = combine(
+        directoryFiles,
+        currentDirectorySortOption
+    ) { filesByDirectory, sortOption ->
+        filesByDirectory to sortOption
+    }.map { (filesByDirectory, sortOption) ->
+        filesByDirectory.mapValues { (_, files) ->
+            sortAudioFiles(files, sortOption)
+        }
+    }.flowOn(Dispatchers.Default).stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+        initialValue = emptyMap()
+    )
 
     private val _directoryLoadingState = MutableStateFlow<Set<String>>(emptySet())
     val directoryLoadingState: StateFlow<Set<String>> = _directoryLoadingState.asStateFlow()
@@ -182,12 +232,12 @@ class LibraryScanViewModel @Inject constructor(
                 }
 
                 if (forceRefresh || isIncremental || !audioFileScanner.hasCachedData()) {
-                    val files = audioFileScanner.scan(
+                    audioFileScanner.scan(
                         directoryPaths = emptyList(),
                         incremental = isIncremental,
                         forceRefresh = forceRefresh
                     )
-                    _directoryFiles.update { files.groupBy { it.path } }
+                    _directoryFiles.update { emptyMap() }
                 }
             } catch (e: CancellationException) {
                 Timber.tag(TAG).d("Audio files load cancelled")
@@ -303,15 +353,10 @@ class LibraryScanViewModel @Inject constructor(
                 )
 
                 withContext(Dispatchers.Default) {
-                    buildMap<String, List<AudioFile>> {
-                        directories.forEach { dir ->
-                            val dirFiles = files.filter { isFileInDirectory(it.path, dir.path) }
-                            put(dir.uri, dirFiles)
-                        }
-                    }
+                    groupFilesBySelectedDirectory(files, directories)
                 }
             }
-            
+
             _directoryFiles.update { filesByDir }
 
             if (_openedDirectoryUri.value != null && _openedDirectoryUri.value !in filesByDir.keys) {
@@ -324,6 +369,89 @@ class LibraryScanViewModel @Inject constructor(
             Timber.tag(TAG).e("Directory scan failed for ${directories.joinToString { it.path }}", e)
         } finally {
             _directoryLoadingState.update { it - dirUris }
+        }
+    }
+
+    private fun groupFilesBySelectedDirectory(
+        files: List<AudioFile>,
+        directories: List<SelectedDirectory>
+    ): Map<String, List<AudioFile>> {
+        val normalizedDirectories = directories.map {
+            NormalizedDirectory(
+                uri = it.uri,
+                path = it.path.trimEnd('/', '\\')
+            )
+        }.sortedByDescending { it.path.length }
+
+        val groupedFiles = LinkedHashMap<String, MutableList<AudioFile>>(normalizedDirectories.size)
+        normalizedDirectories.forEach { groupedFiles[it.uri] = mutableListOf() }
+
+        files.forEach { file ->
+            val normalizedFilePath = file.path.trimEnd('/', '\\')
+            val matchedDirectory = normalizedDirectories.firstOrNull { directory ->
+                normalizedFilePath == directory.path ||
+                    normalizedFilePath.startsWith("${directory.path}/") ||
+                    normalizedFilePath.startsWith("${directory.path}\\")
+            }
+
+            if (matchedDirectory != null) {
+                groupedFiles.getValue(matchedDirectory.uri).add(file)
+            }
+        }
+
+        return groupedFiles.mapValues { (_, grouped) -> grouped.toList() }
+    }
+
+    private data class NormalizedDirectory(
+        val uri: String,
+        val path: String
+    )
+
+    private fun sortAudioFiles(
+        files: List<AudioFile>,
+        sortOption: FileSortOption
+    ): List<AudioFile> {
+        return when (sortOption) {
+            FileSortOption.NAME_ASC -> files.sortedBy {
+                SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name))
+            }
+            FileSortOption.NAME_DESC -> files.sortedByDescending {
+                SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name))
+            }
+            FileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
+            FileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
+        }
+    }
+
+    private fun sortAudioFiles(
+        files: List<AudioFile>,
+        sortOption: DirFileSortOption
+    ): List<AudioFile> {
+        return when (sortOption) {
+            DirFileSortOption.NAME_ASC -> files.sortedBy {
+                SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name))
+            }
+            DirFileSortOption.NAME_DESC -> files.sortedByDescending {
+                SortUtil.toSortablePinyin(it.metadata.getDisplayTitle(it.name))
+            }
+            DirFileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
+            DirFileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
+        }
+    }
+
+    private fun String.toFileSortOption(): FileSortOption {
+        return try {
+            FileSortOption.valueOf(this)
+        } catch (_: IllegalArgumentException) {
+            FileSortOption.NAME_ASC
+        }
+    }
+
+    private fun String.toDirFileSortOption(): DirFileSortOption {
+        return try {
+            DirFileSortOption.valueOf(this)
+        } catch (_: IllegalArgumentException) {
+            DirFileSortOption.NAME_ASC
         }
     }
 
@@ -412,14 +540,6 @@ class LibraryScanViewModel @Inject constructor(
         }.getOrElse {
             uri.path.orEmpty()
         }
-    }
-
-    private fun isFileInDirectory(filePath: String, directoryPath: String): Boolean {
-        val normalizedFile = filePath.trimEnd('/', '\\')
-        val normalizedDirectory = directoryPath.trimEnd('/', '\\')
-        return normalizedFile == normalizedDirectory ||
-            normalizedFile.startsWith("$normalizedDirectory/") ||
-            normalizedFile.startsWith("$normalizedDirectory\\")
     }
 
     fun renameSingleFile(
