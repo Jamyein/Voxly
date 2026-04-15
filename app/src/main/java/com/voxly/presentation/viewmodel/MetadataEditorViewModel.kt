@@ -723,6 +723,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 "Save metadata started file=$filePath hasReplayGain=${replayGainToSave != null}",
                 "MetadataEditor"
             )
+            val currentSuccessState = _uiState.value as? MetadataEditorUiState.Success
             _uiState.update { MetadataEditorUiState.Saving }
 
             // First save the metadata
@@ -766,7 +767,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             newMetadata = metadataToSave
                         )
                     }
-                    val currentSuccessState = _uiState.value as? MetadataEditorUiState.Success
                     _uiState.update {
                         currentSuccessState?.copy(
                             editedMetadata = metadataToSave,

@@ -229,7 +229,7 @@ class MusicLibraryCache @Inject constructor(
             
             currentFiles.filter { (path, lastModified) ->
                 val cached = cachedMap[path]
-                cached == null || cached != lastModified
+                cached == null || (cached / 1000) != (lastModified / 1000)
             }.map { it.first }
         }
     

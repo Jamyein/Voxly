@@ -341,9 +341,10 @@ class TagLibMetadataProcessor @Inject constructor(
                     val file = File(normalizedPath)
                     // Check if file exists and hasn't been modified since cache
                     if (file.exists()) {
+                        val hasValidAudioInfo = cachedFile.sampleRate > 0 && cachedFile.duration > 0
                         // If we need album art, try cache first
                         // Otherwise use cached data (no file read needed)
-                        if (!includeAlbumArt) {
+                        if (hasValidAudioInfo && !includeAlbumArt) {
                             Timber.tag(TAG).d("Database cache hit for: $filePath")
                             val cachedMetadata = CompleteMetadata(
                                 metadata = cachedFile.metadata,
@@ -356,7 +357,7 @@ class TagLibMetadataProcessor @Inject constructor(
                                 albumArt = null // No album art needed
                             )
                             return@withContext cachedMetadata
-                        } else {
+                        } else if (hasValidAudioInfo) {
                             val cachedAlbumArt = extractAndCacheCoverBytes(normalizedPath)
                             if (cachedAlbumArt != null) {
                                 Timber.tag(TAG).d("Album art cache hit for: $filePath")

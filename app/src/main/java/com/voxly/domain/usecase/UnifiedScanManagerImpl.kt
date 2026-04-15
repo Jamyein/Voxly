@@ -1,5 +1,6 @@
 package com.voxly.domain.usecase
 
+import com.voxly.core.util.Constants
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.AudioFile
@@ -15,6 +16,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import timber.log.Timber
+import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -116,21 +118,23 @@ class UnifiedScanManagerImpl @Inject constructor(
         return try {
             Timber.d(TAG, "Syncing file to cache: $filePath")
             // Re-scan the single file to get updated metadata
-            val audioFile = audioFileScanner.loadDetailedMetadata(filePath, includeAlbumArt = false)
-                ?.let { metadata ->
-                    AudioFile(
-                        id = filePath.hashCode().toString(),
-                        path = filePath,
-                        name = filePath.substringAfterLast('/'),
-                        size = 0,
-                        duration = 0,
-                        format = filePath.substringAfterLast('.', "").uppercase(),
-                        bitrate = 0,
-                        sampleRate = 0,
-                        channels = 0,
-                        metadata = metadata
-                    )
-                } ?: throw IllegalStateException("Failed to read metadata for: $filePath")
+            val metadata = audioFileScanner.loadDetailedMetadata(filePath, includeAlbumArt = false)
+                ?: throw IllegalStateException("Failed to read metadata for: $filePath")
+            val audioInfo = audioFileScanner.loadAudioProperties(filePath)
+            val fileSize = File(filePath).length()
+
+            val audioFile = AudioFile(
+                id = filePath.hashCode().toString(),
+                path = filePath,
+                name = filePath.substringAfterLast('/'),
+                size = fileSize,
+                duration = audioInfo?.durationMs ?: 0L,
+                format = filePath.substringAfterLast('.', "").uppercase(),
+                bitrate = audioInfo?.bitrate?.let { it / Constants.BPS_TO_KBPS } ?: 0,
+                sampleRate = audioInfo?.sampleRate ?: 0,
+                channels = audioInfo?.channels ?: 0,
+                metadata = metadata
+            )
 
             // Update cache
             audioFileScanner.syncFileToCache(audioFile)
