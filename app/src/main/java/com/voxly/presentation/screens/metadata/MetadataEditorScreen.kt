@@ -31,6 +31,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.platform.LocalContext
@@ -401,13 +402,26 @@ private fun MetadataEditorScaffoldContent(
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
     modifier: Modifier = Modifier
 ) {
+    var showLoadingIndicator by remember { mutableStateOf(false) }
+
+    LaunchedEffect(uiState) {
+        if (uiState is MetadataEditorUiState.Loading) {
+            delay(200L)
+            showLoadingIndicator = true
+        } else {
+            showLoadingIndicator = false
+        }
+    }
+
     Box(
         modifier = modifier.fillMaxSize(),
         contentAlignment = Alignment.Center
     ) {
         when (val state = uiState) {
             is MetadataEditorUiState.Loading -> {
-                LoadingIndicator()
+                if (showLoadingIndicator) {
+                    LoadingIndicator()
+                }
             }
             is MetadataEditorUiState.Saving -> {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
