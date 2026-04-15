@@ -48,7 +48,17 @@ class MusicLibraryCache @Inject constructor(
 
     private val cacheVersion = MutableStateFlow(0L)
     val cacheVersionFlow: StateFlow<Long> = cacheVersion.asStateFlow()
-    
+
+    // Hot in-memory cache for all audio files to avoid full entity re-mapping on every Room emission.
+    private val hotCacheLock = Any()
+    private var hotAudioFiles: List<AudioFile>? = null
+
+    private fun invalidateHotCache() {
+        synchronized(hotCacheLock) {
+            hotAudioFiles = null
+        }
+    }
+
     // ==================== Audio File Cache Operations ====================
     
     /**
@@ -56,7 +66,14 @@ class MusicLibraryCache @Inject constructor(
      */
     fun getCachedAudioFiles(): Flow<List<AudioFile>> {
         return audioFileDao.getAllAudioFiles().map { entities ->
-            entities.map { it.toAudioFile() }
+            synchronized(hotCacheLock) {
+                hotAudioFiles?.let { return@map it }
+            }
+            entities.map { it.toAudioFile() }.also { mapped ->
+                synchronized(hotCacheLock) {
+                    hotAudioFiles = mapped
+                }
+            }
         }
     }
 
@@ -64,7 +81,14 @@ class MusicLibraryCache @Inject constructor(
      * Gets all cached audio files as a one-shot query.
      */
     suspend fun getCachedAudioFilesOnce(): List<AudioFile> = withContext(Dispatchers.IO) {
-        audioFileDao.getAllAudioFiles().first().map { it.toAudioFile() }
+        synchronized(hotCacheLock) {
+            hotAudioFiles?.let { return@withContext it }
+        }
+        val mapped = audioFileDao.getAllAudioFiles().first().map { it.toAudioFile() }
+        synchronized(hotCacheLock) {
+            hotAudioFiles = mapped
+        }
+        mapped
     }
     
     /**
@@ -131,10 +155,11 @@ class MusicLibraryCache @Inject constructor(
         
         // Use chunked insert for large libraries
         audioFileDao.insertAllChunked(entities)
-        
+
         // Update artist links for split artists
         updateArtistLinksForFiles(audioFiles)
-        
+
+        invalidateHotCache()
         bumpCacheVersion()
         
         Timber.d(TAG, "Cached ${entities.size} audio files")
@@ -156,14 +181,16 @@ class MusicLibraryCache @Inject constructor(
         )
         
         audioFileDao.insert(entity)
+        invalidateHotCache()
         bumpCacheVersion()
     }
-    
+
     /**
      * Removes a file from cache.
      */
     suspend fun removeFromCache(filePath: String) = withContext(Dispatchers.IO) {
         audioFileDao.deleteByPath(filePath)
+        invalidateHotCache()
         bumpCacheVersion()
     }
 
@@ -173,10 +200,11 @@ class MusicLibraryCache @Inject constructor(
     suspend fun removeFromCache(filePaths: List<String>) = withContext(Dispatchers.IO) {
         if (filePaths.isNotEmpty()) {
             audioFileDao.deleteByPaths(filePaths)
+            invalidateHotCache()
             bumpCacheVersion()
         }
     }
-    
+
     /**
      * Clears the entire cache.
      */
@@ -184,6 +212,7 @@ class MusicLibraryCache @Inject constructor(
         audioFileDao.deleteAll()
         albumThumbnailDao.deleteAll()
         artistLinkDao.deleteAll()
+        invalidateHotCache()
         bumpCacheVersion()
         Timber.d(TAG, "Cache cleared")
     }
@@ -224,6 +253,7 @@ class MusicLibraryCache @Inject constructor(
     suspend fun cleanupDeletedFiles(currentPaths: List<String>): Int = withContext(Dispatchers.IO) {
         val deletedCount = audioFileDao.deleteNotInPaths(currentPaths)
         if (deletedCount > 0) {
+            invalidateHotCache()
             bumpCacheVersion()
         }
         deletedCount

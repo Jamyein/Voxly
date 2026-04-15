@@ -20,7 +20,6 @@ import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.core.util.Constants
 import androidx.paging.PagingData
 import androidx.paging.cachedIn
-import androidx.paging.map
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -31,6 +30,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -63,13 +63,6 @@ class LibraryScanViewModel @Inject constructor(
         private const val TAG = "LibraryScanViewModel"
         private const val STATE_FLOW_TIMEOUT_MS = 5000L
     }
-
-    // Paging support for large libraries
-    val pagedAudios: Flow<PagingData<AudioFile>> = musicLibraryCache.getPagedAudioFiles()
-        .map { pagingData ->
-            pagingData.map { entity -> entity.toAudioFile() }
-        }
-        .cachedIn(viewModelScope)
 
     // Keep original allAudios for backward compatibility
     @Suppress("DEPRECATION")
@@ -118,6 +111,34 @@ class LibraryScanViewModel @Inject constructor(
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    data class FileBrowserUiState(
+        val allAudios: List<AudioFile> = emptyList(),
+        val selectedDirectories: List<SelectedDirectory> = emptyList(),
+        val directoryFiles: Map<String, List<AudioFile>> = emptyMap(),
+        val isRefreshing: Boolean = false,
+        val hasWhitelistDirectories: Boolean = false
+    )
+
+    val fileBrowserUiState: StateFlow<FileBrowserUiState> = combine(
+        allAudios,
+        selectedDirectories,
+        directoryFiles,
+        isRefreshing,
+        hasWhitelistDirectories
+    ) { audios, dirs, files, refreshing, hasWhitelist ->
+        FileBrowserUiState(
+            allAudios = audios,
+            selectedDirectories = dirs,
+            directoryFiles = files,
+            isRefreshing = refreshing,
+            hasWhitelistDirectories = hasWhitelist
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+        initialValue = FileBrowserUiState()
+    )
 
     private var scanJob: Job? = null
 
@@ -281,10 +302,12 @@ class LibraryScanViewModel @Inject constructor(
                     forceRefresh = forceRefresh
                 )
 
-                buildMap<String, List<AudioFile>> {
-                    directories.forEach { dir ->
-                        val dirFiles = files.filter { isFileInDirectory(it.path, dir.path) }
-                        put(dir.uri, dirFiles)
+                withContext(Dispatchers.Default) {
+                    buildMap<String, List<AudioFile>> {
+                        directories.forEach { dir ->
+                            val dirFiles = files.filter { isFileInDirectory(it.path, dir.path) }
+                            put(dir.uri, dirFiles)
+                        }
                     }
                 }
             }

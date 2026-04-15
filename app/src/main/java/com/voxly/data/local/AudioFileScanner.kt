@@ -250,6 +250,10 @@ class AudioFileScanner @Inject constructor(
         val deletedPaths = cachedInDirs.map { it.path }.filter { it !in currentPaths }
         libraryCache.removeFromCache(deletedPaths)
 
+        if (updatedFiles.isEmpty()) {
+            return@withContext retainedFiles
+        }
+
         (retainedFiles + updatedFiles)
             .distinctBy { it.path }
             .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
@@ -295,6 +299,10 @@ class AudioFileScanner @Inject constructor(
 
         // Cleanup deleted files
         libraryCache.cleanupDeletedFiles(currentFiles.map { it.first })
+
+        if (updatedFiles.isEmpty()) {
+            return@withContext retainedFiles
+        }
 
         (retainedFiles + updatedFiles)
             .distinctBy { it.path }

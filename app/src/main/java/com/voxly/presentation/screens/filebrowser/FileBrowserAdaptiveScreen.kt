@@ -121,12 +121,13 @@ fun FileBrowserAdaptiveScreen(
     }
 
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
-    val allAudios by scanViewModel.allAudios.collectAsStateWithLifecycle()
+    val scanUiState by scanViewModel.fileBrowserUiState.collectAsStateWithLifecycle()
+    val allAudios = scanUiState.allAudios
+    val selectedDirectories = scanUiState.selectedDirectories
+    val directoryFiles = scanUiState.directoryFiles
+    val isRefreshing = scanUiState.isRefreshing
+    val hasWhitelistDirectories = scanUiState.hasWhitelistDirectories
     val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
-    val selectedDirectories by scanViewModel.selectedDirectories.collectAsStateWithLifecycle()
-    val directoryFiles by scanViewModel.directoryFiles.collectAsStateWithLifecycle()
-    val isRefreshing by scanViewModel.isRefreshing.collectAsStateWithLifecycle()
-    val hasWhitelistDirectories by scanViewModel.hasWhitelistDirectories.collectAsStateWithLifecycle()
     val rootTabString by settingsViewModel.fileBrowserRootTab.collectAsStateWithLifecycle(initialValue = RootTab.DIRECTORIES.name)
     val effectiveRootTab = if (hasWhitelistDirectories) {
         try {

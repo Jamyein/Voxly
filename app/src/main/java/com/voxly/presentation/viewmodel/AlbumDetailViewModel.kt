@@ -14,6 +14,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -21,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 @HiltViewModel(assistedFactory = AlbumDetailViewModel.Factory::class)
@@ -87,18 +89,20 @@ class AlbumDetailViewModel @AssistedInject constructor(
                     _albumArtist.update { albumGroup.albumArtist }
                     _coverPath.update { albumGroup.coverPath }
 
-                    val filesWithDiscNumber = albumGroup.files.map { file ->
-                        if (file.metadata.discNumber == null) {
-                            val cached = tagLibReadCache.getOrPut(file.path) {
-                                metadataProcessor.readMetadata(file.path) ?: file.metadata
-                            }
-                            if (cached.discNumber != null) {
-                                file.copy(metadata = file.metadata.copy(discNumber = cached.discNumber))
+                    val filesWithDiscNumber = withContext(Dispatchers.Default) {
+                        albumGroup.files.map { file ->
+                            if (file.metadata.discNumber == null) {
+                                val cached = tagLibReadCache.getOrPut(file.path) {
+                                    metadataProcessor.readMetadata(file.path) ?: file.metadata
+                                }
+                                if (cached.discNumber != null) {
+                                    file.copy(metadata = file.metadata.copy(discNumber = cached.discNumber))
+                                } else {
+                                    file
+                                }
                             } else {
                                 file
                             }
-                        } else {
-                            file
                         }
                     }
 
