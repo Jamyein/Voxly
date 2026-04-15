@@ -157,9 +157,12 @@ class AudioFileScanner @Inject constructor(
             libraryCache.updateCache(files)
         }
 
-        // Two-pass: Background enrichment for cover art pre-caching
+        // Two-pass: Background enrichment for cover art pre-caching + year from TagLib
         if (!servedFromCache) {
             enrichCoversInBackground(files)
+        } else {
+            // servedFromCache: check for files with missing year or sampleRate and backfill asynchronously
+            backfillMissingMetadataInBackground()
         }
 
         return files
@@ -473,18 +476,47 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Background enrichment for cover art pre-caching.
-     * Uses DeepEnrichProcessor to extract and cache cover art.
+     * Uses DeepEnrichProcessor to extract and cache cover art + year from file tags.
+     * Results are written back to cache so AlbumArtistAggregator picks up updates.
      */
     private fun enrichCoversInBackground(files: List<AudioFile>) {
         if (files.isEmpty()) return
-        
+
         applicationScope.launch {
             try {
                 Timber.d(TAG, "Starting background cover enrichment for ${files.size} files")
-                deepEnrichProcessor.enrichBatch(files)
-                Timber.d(TAG, "Background cover enrichment completed")
+                val enriched = deepEnrichProcessor.enrichBatch(files)
+                // Write enriched data (year, sampleRate, etc. from TagLib) back to cache
+                libraryCache.updateCache(enriched)
+                Timber.d(TAG, "Background cover enrichment completed and written to cache")
             } catch (e: Exception) {
                 Timber.w(TAG, "Background cover enrichment failed", e)
+            }
+        }
+    }
+
+    /**
+     * Checks cached files for missing year or sampleRate and triggers
+     * asynchronous enrichment to backfill from TagLib. Skips files that
+     * already have valid data to minimize unnecessary I/O.
+     */
+    private fun backfillMissingMetadataInBackground() {
+        applicationScope.launch {
+            try {
+                val cached = libraryCache.getCachedAudioFilesOnce()
+                val needsEnrichment = cached.filter { audioFile ->
+                    audioFile.metadata.year.isNullOrBlank() || audioFile.sampleRate == 0
+                }
+                if (needsEnrichment.isEmpty()) {
+                    Timber.d(TAG, "No files need year/sampleRate backfill")
+                    return@launch
+                }
+                Timber.d(TAG, "Backfilling year/sampleRate for ${needsEnrichment.size} cached files")
+                val enriched = deepEnrichProcessor.enrichBatch(needsEnrichment)
+                libraryCache.updateCache(enriched)
+                Timber.d(TAG, "Year/sampleRate backfill completed for ${enriched.size} files")
+            } catch (e: Exception) {
+                Timber.w(TAG, "Year/sampleRate backfill failed", e)
             }
         }
     }

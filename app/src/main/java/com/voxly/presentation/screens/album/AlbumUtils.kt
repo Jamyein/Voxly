@@ -14,6 +14,15 @@ data class YearGroup(
 )
 
 /**
+ * Gets the display year for an album.
+ * Prefers the pre-computed album.year (from TagLib via aggregator).
+ * Falls back to re-extracting from files if not available.
+ */
+fun getAlbumDisplayYear(album: AlbumGroup): Int? {
+    return album.year ?: albumDisplayYearInt(album)
+}
+
+/**
  * Extracts a 4-digit year from the album metadata.
  */
 fun albumDisplayYearInt(album: AlbumGroup): Int? {
@@ -23,19 +32,11 @@ fun albumDisplayYearInt(album: AlbumGroup): Int? {
 }
 
 /**
- * Gets the display year for an album from file metadata.
- */
-fun getAlbumDisplayYear(album: AlbumGroup): Int? {
-    return albumDisplayYearInt(album)
-}
-
-/**
  * Gets the display year string for an album.
  */
 fun getAlbumDisplayYearString(album: AlbumGroup): String? {
-    return album.files
-        .mapNotNull { it.metadata.year }
-        .maxOrNull()
+    return album.year?.toString()
+        ?: album.files.mapNotNull { it.metadata.year }.maxOrNull()
 }
 
 /**
@@ -69,7 +70,7 @@ fun applyAlbumSort(
         )
         AlbumSortOption.TRACK_COUNT_DESC -> albums.sortedByDescending { it.files.size }
         AlbumSortOption.YEAR_DESC -> albums.sortedByDescending { album ->
-            album.files.mapNotNull { audioFile ->
+            album.year ?: album.files.mapNotNull { audioFile ->
                 audioFile.metadata.year
                     ?.let { Regex("""\d{4}""").find(it)?.value }
                     ?.toIntOrNull()
