@@ -12,6 +12,7 @@ import com.voxly.data.local.scanner.DeepEnrichProcessor
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.repository.WhitelistRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -72,6 +73,7 @@ class AudioFileScanner @Inject constructor(
     // New injected components for separation of concerns
     private val mediaStoreDataSource: MediaStoreDataSource,
     private val filterEngine: FilterEngine,
+    private val whitelistRepository: WhitelistRepository,
     private val albumArtistAggregator: AlbumArtistAggregator,
     // Two-pass scanning processors
     private val fastScanProcessor: FastScanProcessor,
@@ -289,8 +291,29 @@ class AudioFileScanner @Inject constructor(
                     Timber.d(TAG, "No files need year/sampleRate backfill")
                     return@launch
                 }
-                Timber.d(TAG, "Backfilling year/sampleRate for ${needsEnrichment.size} cached files")
-                val enriched = deepEnrichProcessor.enrichBatch(needsEnrichment)
+                val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
+                val whitelistPaths = if (whitelistEnabled) {
+                    whitelistRepository.getValidWhitelistPathsOnce()
+                } else emptyList()
+                val filtered = if (whitelistEnabled && whitelistPaths.isNotEmpty()) {
+                    filterEngine.applyFilters(
+                        needsEnrichment,
+                        FilterEngine.FilterSettings(
+                            whitelistEnabled = true,
+                            blacklistEnabled = false,
+                            minDurationEnabled = false,
+                            whitelistUris = whitelistPaths,
+                            blacklistUris = emptyList(),
+                            minDurationMs = 0L
+                        )
+                    )
+                } else needsEnrichment
+                if (filtered.isEmpty()) {
+                    Timber.d(TAG, "No files need year/sampleRate backfill after whitelist filtering")
+                    return@launch
+                }
+                Timber.d(TAG, "Backfilling year/sampleRate for ${filtered.size} cached files (whitelistEnabled=$whitelistEnabled)")
+                val enriched = deepEnrichProcessor.enrichBatch(filtered, includeAlbumArt = false)
                 libraryCache.updateCache(enriched)
                 Timber.d(TAG, "Year/sampleRate backfill completed for ${enriched.size} files")
             } catch (e: Exception) {
