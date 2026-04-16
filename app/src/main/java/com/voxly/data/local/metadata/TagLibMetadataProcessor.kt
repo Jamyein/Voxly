@@ -487,11 +487,16 @@ class TagLibMetadataProcessor @Inject constructor(
                 return@withContext cached.metadata
             }
 
-            // Check database cache
-            val cachedFile = musicLibraryCache.getCachedFile(filePath)
-            if (cachedFile != null) {
-                // CachedAudioFile has metadata, we can use it directly
-                return@withContext cachedFile.metadata
+            // Check database cache with mtime validation
+            val cachedEntity = musicLibraryCache.getCachedFileEntity(filePath)
+            if (cachedEntity != null) {
+                val normalizedPath = PathUtils.normalizeFilePath(filePath)
+                val file = File(normalizedPath)
+                // Validate cache by comparing file mtime
+                // If file was modified since cache, re-read from file to get fresh data
+                if (file.exists() && cachedEntity.fileLastModifiedAt == file.lastModified()) {
+                    return@withContext cachedEntity.toAudioFile().metadata
+                }
             }
 
             // Try complete metadata read (will cache result)

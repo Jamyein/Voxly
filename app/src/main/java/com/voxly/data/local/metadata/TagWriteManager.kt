@@ -2,6 +2,7 @@ package com.voxly.data.local.metadata
 
 import android.content.Context
 import android.media.MediaScannerConnection
+import com.voxly.core.util.Constants
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.domain.repository.WhitelistRepository
 import com.voxly.domain.model.AudioFile
@@ -84,17 +85,37 @@ class TagWriteManager @Inject constructor(
 
     /**
      * Syncs written file to Room cache.
+     * Reads directly from file with bypassCache=true to ensure we get freshly written data.
      */
     private suspend fun syncToRoom(filePath: String) {
         try {
-            val audioFile = musicLibraryCache.getCachedFile(filePath)
-            if (audioFile != null) {
-                val metadata = tagLibMetadataProcessor.readMetadata(filePath, includeAlbumArt = false)
-                metadata?.let { updatedMetadata ->
-                    val updated = audioFile.copy(metadata = updatedMetadata)
-                    musicLibraryCache.syncFileToCache(updated)
-                }
+            val cachedAudioFile = musicLibraryCache.getCachedFile(filePath)
+            if (cachedAudioFile == null) {
+                Timber.d(TAG, "No cached file found for: $filePath, skipping sync")
+                return
             }
+
+            // Read directly from file with bypassCache=true to get freshly written metadata
+            val completeMetadata = tagLibMetadataProcessor.readAllMetadata(
+                filePath,
+                includeAlbumArt = false,
+                bypassCache = true
+            ) ?: run {
+                Timber.w(TAG, "Failed to read metadata after write for: $filePath")
+                return
+            }
+
+            // Preserve original technical fields from cache, update metadata
+            val updated = cachedAudioFile.copy(
+                metadata = completeMetadata.metadata,
+                duration = completeMetadata.audioInfo?.durationMs ?: cachedAudioFile.duration,
+                sampleRate = completeMetadata.audioInfo?.sampleRate ?: cachedAudioFile.sampleRate,
+                channels = completeMetadata.audioInfo?.channels ?: cachedAudioFile.channels,
+                bitrate = completeMetadata.audioInfo?.bitrate?.let { it / Constants.BPS_TO_KBPS }
+                    ?: cachedAudioFile.bitrate
+            )
+            musicLibraryCache.syncFileToCache(updated)
+            Timber.d(TAG, "Successfully synced to Room: $filePath")
         } catch (e: Exception) {
             Timber.tag(TAG).w("Failed to sync to Room: $filePath", e)
         }
