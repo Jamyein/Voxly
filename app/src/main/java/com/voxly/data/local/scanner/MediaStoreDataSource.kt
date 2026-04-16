@@ -313,6 +313,63 @@ class MediaStoreDataSource @Inject constructor(
     }
 
     /**
+     * Query MediaStore for a single file's basic metadata.
+     */
+    suspend fun queryBasicMetadata(filePath: String): com.voxly.domain.model.AudioMetadata? = withContext(Dispatchers.IO) {
+        val file = File(filePath)
+        val relativePath = getRelativePathFromAbsolute(file.parentFile?.absolutePath.orEmpty())
+        val selection: String
+        val selectionArgs: Array<String>
+
+        if (relativePath != null) {
+            selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ? AND ${MediaStore.Audio.Media.RELATIVE_PATH} = ?"
+            selectionArgs = arrayOf(file.name, relativePath)
+        } else {
+            selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ?"
+            selectionArgs = arrayOf(file.name)
+        }
+
+        contentResolver.query(
+            AUDIO_URI,
+            arrayOf(
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.Audio.Media.YEAR,
+                MediaStore.Audio.Media.TRACK,
+                MediaStore.Audio.Media.ALBUM_ARTIST,
+                MediaStore.Audio.Media.COMPOSER
+            ),
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val trackValue = cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TRACK))
+                val (parsedTrack, parsedTotal) = parseMediaStoreTrackField(trackValue)
+                val yearInt = cursor.getInt(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.YEAR))
+                com.voxly.domain.model.AudioMetadata(
+                    title = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.TITLE))
+                        ?.takeIf { it.isNotBlank() },
+                    artist = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST))
+                        ?.takeIf { it.isNotBlank() },
+                    album = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM))
+                        ?.takeIf { it.isNotBlank() },
+                    year = if (yearInt > 0) yearInt.toString() else null,
+                    trackNumber = parsedTrack,
+                    totalTracks = parsedTotal,
+                    albumArtist = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ARTIST))
+                        ?.takeIf { it.isNotBlank() },
+                    composer = cursor.getString(cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.COMPOSER))
+                        ?.takeIf { it.isNotBlank() }
+                )
+            } else {
+                null
+            }
+        }
+    }
+
+    /**
      * Convert MediaStore cursor to AudioFile list.
      */
     private fun cursorToAudioFiles(

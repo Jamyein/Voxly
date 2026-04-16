@@ -18,7 +18,8 @@ class GlobalScanStrategy @Inject constructor(
     private val libraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
     private val metadataProcessor: TagLibMetadataProcessor,
-    private val fileProcessor: FileProcessor
+    private val fileProcessor: FileProcessor,
+    private val fastScanProcessor: FastScanProcessor
 ) : ScanStrategy {
     companion object {
         private const val TAG = "GlobalScanStrategy"
@@ -32,6 +33,7 @@ class GlobalScanStrategy @Inject constructor(
         val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
 
         val files: List<AudioFile> = mediaStoreDataSource.queryAll(minDurationEnabled, minDurationMs)
-        files.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
+        val enrichedFiles = fastScanProcessor.enrichAll(files)
+        enrichedFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
     }
 }

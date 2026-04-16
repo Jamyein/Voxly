@@ -32,8 +32,49 @@ class FastScanProcessor @Inject constructor(
     }
 
     /**
-     * Performs fast scan - reads only essential metadata from MediaStore.
-     * Returns minimal AudioFile for instant display.
+     * Enriches a list of AudioFiles (already populated with MediaStore system data)
+     * by parsing metadata via [LightweightMetadataParser] for all files.
+     *
+     * Preserves MediaStore-specific fields such as [mediaStoreAlbumId], [dateAdded],
+     * [duration] and [bitrate]. Metadata fields are overwritten only when the
+     * lightweight parser returns a non-null value.
+     */
+    suspend fun enrichAll(audioFiles: List<AudioFile>): List<AudioFile> = withContext(Dispatchers.IO) {
+        audioFiles.map { audioFile ->
+            try {
+                val file = File(audioFile.path)
+                if (!file.exists() || !file.canRead()) return@map audioFile
+
+                val lightweightResult = LightweightMetadataParser.parse(file)
+                    ?: return@map audioFile
+
+                audioFile.copy(
+                    sampleRate = lightweightResult.audioInfo?.sampleRate ?: audioFile.sampleRate,
+                    channels = lightweightResult.audioInfo?.channels ?: audioFile.channels,
+                    metadata = audioFile.metadata.copy(
+                        title = lightweightResult.metadata.title ?: audioFile.metadata.title,
+                        artist = lightweightResult.metadata.artist ?: audioFile.metadata.artist,
+                        album = lightweightResult.metadata.album ?: audioFile.metadata.album,
+                        albumArtist = lightweightResult.metadata.albumArtist ?: audioFile.metadata.albumArtist,
+                        year = lightweightResult.metadata.year ?: audioFile.metadata.year,
+                        genre = lightweightResult.metadata.genre ?: audioFile.metadata.genre,
+                        trackNumber = lightweightResult.metadata.trackNumber ?: audioFile.metadata.trackNumber,
+                        totalTracks = lightweightResult.metadata.totalTracks ?: audioFile.metadata.totalTracks,
+                        discNumber = lightweightResult.metadata.discNumber ?: audioFile.metadata.discNumber,
+                        totalDiscs = lightweightResult.metadata.totalDiscs ?: audioFile.metadata.totalDiscs,
+                        composer = lightweightResult.metadata.composer ?: audioFile.metadata.composer
+                    )
+                )
+            } catch (e: Exception) {
+                Timber.w(TAG, "Fast scan enrichment failed: ${audioFile.path}", e)
+                audioFile
+            }
+        }
+    }
+
+    /**
+     * Legacy fast-scan entry point that reads per-file duration/bitrate from MediaStore.
+     * Kept for compatibility; prefer [enrichAll] when MediaStore data is already available.
      */
     suspend fun fastScan(files: List<Pair<String, Long>>): List<AudioFile> = withContext(Dispatchers.IO) {
         val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()

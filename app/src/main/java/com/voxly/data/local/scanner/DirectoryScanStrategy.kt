@@ -18,7 +18,8 @@ class DirectoryScanStrategy @Inject constructor(
     private val libraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
     private val metadataProcessor: TagLibMetadataProcessor,
-    private val fileProcessor: FileProcessor
+    private val fileProcessor: FileProcessor,
+    private val fastScanProcessor: FastScanProcessor
 ) : ScanStrategy {
     companion object {
         private const val TAG = "DirectoryScanStrategy"
@@ -106,7 +107,8 @@ class DirectoryScanStrategy @Inject constructor(
 
         val relativeDir = mediaStoreDataSource.getRelativePathFromAbsolute(normalizedDir)
         val audioFiles = if (relativeDir != null) {
-            mediaStoreDataSource.queryFromDirectory(relativeDir, minDurationEnabled, minDurationMs)
+            val storeFiles = mediaStoreDataSource.queryFromDirectory(relativeDir, minDurationEnabled, minDurationMs)
+            fastScanProcessor.enrichAll(storeFiles)
         } else {
             emptyList()
         }

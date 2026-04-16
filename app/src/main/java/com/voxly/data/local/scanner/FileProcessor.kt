@@ -31,13 +31,13 @@ class FileProcessor @Inject constructor(
         val extension = file.extension.lowercase()
 
         val (duration, bitrate) = mediaStoreDataSource.queryFileDurationAndBitrate(filePath)
+        val mediaStoreMetadata = mediaStoreDataSource.queryBasicMetadata(filePath) ?: AudioMetadata()
 
         val lightweightResult = LightweightMetadataParser.parse(file)
-        val fullMetadata = if (lightweightResult != null) {
-            lightweightResult.metadata
-        } else {
-            metadataProcessor.readAllMetadata(filePath, includeAlbumArt = false)?.metadata
-                ?: AudioMetadata()
+        val fullMetadata = when {
+            lightweightResult != null -> mergeMetadata(lightweightResult.metadata, mediaStoreMetadata)
+            else -> metadataProcessor.readAllMetadata(filePath, includeAlbumArt = false)?.metadata
+                ?: mediaStoreMetadata
         }
 
         val audioInfo = lightweightResult?.audioInfo ?: metadataProcessor.readAudioInfo(filePath)
@@ -55,6 +55,25 @@ class FileProcessor @Inject constructor(
             sampleRate = audioInfo?.sampleRate ?: 0,
             channels = audioInfo?.channels ?: 0,
             metadata = fullMetadata
+        )
+    }
+
+    private fun mergeMetadata(
+        primary: AudioMetadata,
+        fallback: AudioMetadata
+    ): AudioMetadata {
+        return primary.copy(
+            title = primary.title.takeIf { !it.isNullOrBlank() } ?: fallback.title,
+            artist = primary.artist.takeIf { !it.isNullOrBlank() } ?: fallback.artist,
+            album = primary.album.takeIf { !it.isNullOrBlank() } ?: fallback.album,
+            albumArtist = primary.albumArtist.takeIf { !it.isNullOrBlank() } ?: fallback.albumArtist,
+            year = primary.year.takeIf { !it.isNullOrBlank() } ?: fallback.year,
+            genre = primary.genre.takeIf { !it.isNullOrBlank() } ?: fallback.genre,
+            trackNumber = primary.trackNumber ?: fallback.trackNumber,
+            totalTracks = primary.totalTracks ?: fallback.totalTracks,
+            discNumber = primary.discNumber ?: fallback.discNumber,
+            totalDiscs = primary.totalDiscs ?: fallback.totalDiscs,
+            composer = primary.composer.takeIf { !it.isNullOrBlank() } ?: fallback.composer
         )
     }
 
