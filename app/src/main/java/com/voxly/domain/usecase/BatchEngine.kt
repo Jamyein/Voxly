@@ -221,7 +221,7 @@ class BatchEngine<T>(
                 }
             }
 
-            val finalFailedItems = retryFailedItems + originalFailedItems
+            val finalFailedItems = (retryFailedItems + originalFailedItems).distinctBy { it.filePath }
 
             emit(
                 BatchResult(

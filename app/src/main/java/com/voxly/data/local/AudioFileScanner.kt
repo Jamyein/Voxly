@@ -75,7 +75,12 @@ class AudioFileScanner @Inject constructor(
     private val albumArtistAggregator: AlbumArtistAggregator,
     // Two-pass scanning processors
     private val fastScanProcessor: FastScanProcessor,
-    private val deepEnrichProcessor: DeepEnrichProcessor
+    private val deepEnrichProcessor: DeepEnrichProcessor,
+    // Scan strategies
+    private val globalScanStrategy: com.voxly.data.local.scanner.GlobalScanStrategy,
+    private val incrementalScanStrategy: com.voxly.data.local.scanner.IncrementalScanStrategy,
+    private val directoryScanStrategy: com.voxly.data.local.scanner.DirectoryScanStrategy,
+    private val fileProcessor: com.voxly.data.local.scanner.FileProcessor
 ) {
     companion object {
         private const val TAG = "AudioFileScanner"
@@ -138,9 +143,18 @@ class AudioFileScanner @Inject constructor(
         forceRefresh: Boolean = false
     ): List<AudioFile> {
         val files = when {
-            !directoryPaths.isNullOrEmpty() -> scanDirectories(directoryPaths, incremental, forceRefresh)
-            incremental && hasCachedData() -> scanIncremental()
-            else -> scanGlobal(forceRefresh)
+            !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, false)
+            incremental && hasCachedData() -> incrementalScanStrategy.scan()
+            else -> {
+                if (!forceRefresh && hasCachedData()) {
+                    val cachedCount = getCachedFileCount()
+                    if (cachedCount > 0) {
+                        Timber.d(TAG, "Using cache: $cachedCount files")
+                        return libraryCache.getCachedAudioFilesOnce()
+                    }
+                }
+                globalScanStrategy.scan()
+            }
         }
 
         // Update cache with scan results only if we actually scanned new data
@@ -173,238 +187,6 @@ class AudioFileScanner @Inject constructor(
             incremental = isIncremental,
             forceRefresh = false
         )
-    }
-
-    /**
-     * Scans audio files within specific directories.
-     */
-    private suspend fun scanDirectories(
-        directoryPaths: List<String>,
-        incremental: Boolean,
-        forceRefresh: Boolean
-    ): List<AudioFile> {
-        val normalizedDirs = directoryPaths
-            .map { it.trimEnd('/', '\\') }
-            .filter { it.isNotBlank() }
-            .distinct()
-
-        if (normalizedDirs.isEmpty()) return emptyList()
-
-        return if (incremental) {
-            scanDirectoriesIncremental(normalizedDirs)
-        } else {
-            scanDirectoriesFull(normalizedDirs, forceRefresh)
-        }
-    }
-
-    /**
-     * Full scan of specific directories.
-     */
-    private suspend fun scanDirectoriesFull(
-        directoryPaths: List<String>,
-        forceRefresh: Boolean
-    ): List<AudioFile> = withContext(Dispatchers.IO) {
-        directoryPaths.flatMap { dir ->
-            scanDirectoryInternal(dir, forceRefresh)
-        }.distinctBy { it.path }
-            .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
-    }
-
-    /**
-     * Incremental scan of specific directories.
-     */
-    private suspend fun scanDirectoriesIncremental(
-        directoryPaths: List<String>
-    ): List<AudioFile> = withContext(Dispatchers.IO) {
-        val currentFiles = mutableListOf<Pair<String, Long>>()
-        directoryPaths.forEach { dir ->
-            val dirFile = File(dir)
-            currentFiles.addAll(mediaStoreDataSource.queryDirectoryFilePathsAndModificationTimes(dirFile))
-        }
-
-        val currentPaths = currentFiles.map { it.first }.toSet()
-        val pathsNeedingRescan = libraryCache.getFilesNeedingRescan(currentFiles)
-
-        Timber.i(TAG, "Directory incremental scan: ${pathsNeedingRescan.size} files need rescanning")
-
-        val cachedFiles = libraryCache.getCachedAudioFilesOnce()
-        val cachedInDirs = cachedFiles.filter { cached ->
-            directoryPaths.any { mediaStoreDataSource.isPathInsideDirectory(cached.path, it) }
-        }
-
-        val retainedFiles = cachedInDirs.filter { cached ->
-            cached.path !in pathsNeedingRescan && cached.path in currentPaths
-        }
-
-        val updatedFiles = if (pathsNeedingRescan.isNotEmpty()) {
-            scanFilesInParallel(pathsNeedingRescan)
-        } else {
-            emptyList()
-        }
-
-        // Remove deleted files from cache
-        val deletedPaths = cachedInDirs.map { it.path }.filter { it !in currentPaths }
-        libraryCache.removeFromCache(deletedPaths)
-
-        if (updatedFiles.isEmpty()) {
-            return@withContext retainedFiles
-        }
-
-        (retainedFiles + updatedFiles)
-            .distinctBy { it.path }
-            .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
-    }
-
-    /**
-     * Global full scan of all audio files.
-     */
-    private suspend fun scanGlobal(forceRefresh: Boolean): List<AudioFile> = withContext(Dispatchers.IO) {
-        if (!forceRefresh && hasCachedData()) {
-            val cachedCount = getCachedFileCount()
-            if (cachedCount > 0) {
-                Timber.d(TAG, "Using cache: $cachedCount files")
-                return@withContext libraryCache.getCachedAudioFilesOnce()
-            }
-        }
-        val files = mutableListOf<AudioFile>()
-        scanAllFilesForCache(files)
-        files.sortWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
-        files
-    }
-
-    /**
-     * Global incremental scan.
-     */
-    private suspend fun scanIncremental(): List<AudioFile> = withContext(Dispatchers.IO) {
-        val currentFiles = mediaStoreDataSource.queryFilePathsAndModificationTimes()
-
-        val pathsNeedingRescan = libraryCache.getFilesNeedingRescan(currentFiles)
-        Timber.i(TAG, "Incremental scan: ${pathsNeedingRescan.size} files need rescanning")
-
-        val cachedFiles = libraryCache.getCachedAudioFilesOnce()
-        val retainedFiles = cachedFiles.filter { it.path !in pathsNeedingRescan }
-
-        val updatedFiles = if (pathsNeedingRescan.isNotEmpty()) {
-            scanFilesInParallel(pathsNeedingRescan)
-        } else {
-            emptyList()
-        }
-
-        // Cleanup deleted files
-        libraryCache.cleanupDeletedFiles(currentFiles.map { it.first })
-
-        if (updatedFiles.isEmpty()) {
-            return@withContext retainedFiles
-        }
-
-        (retainedFiles + updatedFiles)
-            .distinctBy { it.path }
-            .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
-    }
-
-    /**
-     * Internal directory scan using MediaStore.
-     */
-    private suspend fun scanDirectoryInternal(
-        directoryPath: String,
-        forceRefresh: Boolean
-    ): List<AudioFile> = withContext(Dispatchers.IO) {
-        val normalizedDir = directoryPath.trimEnd('/', '\\')
-
-        val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
-        val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
-
-        val relativeDir = mediaStoreDataSource.getRelativePathFromAbsolute(normalizedDir)
-        val audioFiles = if (relativeDir != null) {
-            mediaStoreDataSource.queryFromDirectory(relativeDir, minDurationEnabled, minDurationMs)
-        } else {
-            emptyList()
-        }
-
-        // Fallback for files not yet indexed
-        if (audioFiles.isEmpty()) {
-            val dir = File(directoryPath)
-            if (dir.exists() && dir.isDirectory) {
-                mediaStoreDataSource.scanDirectoryRecursive(dir)
-            } else {
-                emptyList()
-            }
-        } else {
-            audioFiles
-        }
-    }
-
-    /**
-     * Scan all audio files for caching.
-     */
-    private suspend fun scanAllFilesForCache(output: MutableList<AudioFile>) {
-        val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
-        val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
-
-        output.addAll(mediaStoreDataSource.queryAll(minDurationEnabled, minDurationMs))
-    }
-
-    /**
-     * Create AudioFile from path by reading file metadata.
-     */
-    private suspend fun createAudioFileFromPath(filePath: String): AudioFile = withContext(Dispatchers.IO) {
-        val file = File(filePath)
-        val extension = file.extension.lowercase()
-
-        val (duration, bitrate) = mediaStoreDataSource.queryFileDurationAndBitrate(filePath)
-
-        // FAST PATH: try lightweight native parser for MP3/FLAC before full TagLib
-        val lightweightResult = LightweightMetadataParser.parse(file)
-        val fullMetadata = if (lightweightResult != null) {
-            lightweightResult.metadata
-        } else {
-            // FALLBACK: full TagLib read
-            metadataProcessor.readAllMetadata(filePath, includeAlbumArt = false)?.metadata
-                ?: com.voxly.domain.model.AudioMetadata()
-        }
-
-        // Use lightweight audio info if available, otherwise fall back to TagLib
-        val audioInfo = lightweightResult?.audioInfo ?: metadataProcessor.readAudioInfo(filePath)
-        val finalDuration = if (duration == 0L) audioInfo?.durationMs ?: 0L else duration
-        val finalBitrate = if (bitrate == 0) (audioInfo?.bitrate ?: 0) / com.voxly.core.util.Constants.BPS_TO_KBPS else bitrate
-
-        AudioFile(
-            id = filePath.hashCode().toString(),
-            path = filePath,
-            name = file.name,
-            size = file.length(),
-            duration = finalDuration,
-            format = extension.uppercase(),
-            bitrate = finalBitrate,
-            sampleRate = audioInfo?.sampleRate ?: 0,
-            channels = audioInfo?.channels ?: 0,
-            metadata = fullMetadata
-        )
-    }
-
-    /**
-     * Scan files in parallel.
-     */
-    private suspend fun scanFilesInParallel(
-        filePaths: List<String>,
-        maxConcurrency: Int = 4
-    ): List<AudioFile> = coroutineScope {
-        val semaphore = Semaphore(maxConcurrency)
-        // Sort by file size ascending so smaller files are processed first
-        filePaths
-            .sortedBy { File(it).length() }
-            .map { path ->
-                async(Dispatchers.IO) {
-                    semaphore.withPermit {
-                        try {
-                            createAudioFileFromPath(path)
-                        } catch (e: Exception) {
-                            Timber.w(TAG, "Failed to scan: $path", e)
-                            null
-                        }
-                    }
-                }
-            }.awaitAll().filterNotNull()
     }
 
     /**

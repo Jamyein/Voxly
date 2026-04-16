@@ -91,6 +91,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val replayGainRepository: ReplayGainRepository,
     private val lyricsRepository: LyricsRepository,
     private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository,
+    private val onlineLyricsSearchStrategy: OnlineLyricsSearchStrategy,
+    private val onlineCoverSearchStrategy: OnlineCoverSearchStrategy,
     private val settingsDataStore: SettingsDataStore,
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
@@ -192,10 +194,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val _commentTextFlow = MutableStateFlow<String?>(null)
     private val _lyricsTextFlow = MutableStateFlow<String?>(null)
 
-    // Debounce jobs for cancellation on ViewModel clear
     private val debounceJobs = mutableListOf<Job>()
 
-    // Combined edit state using combine() - reduces multiple StateFlow updates to single UI recomposition
+    @Suppress("Unused")
     val editState: StateFlow<EditState> = combine(
         _hasUnsavedChanges,
         _modifiedFields
@@ -967,7 +968,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
         val title = metadata.title.orEmpty()
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
 
-        // Cancel previous search before starting new one (flatMapLatest pattern)
         _coverSearchJob?.cancel()
 
         _coverSearchJob = viewModelScope.launch {
@@ -977,7 +977,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
             _onlineCoverResults.update { emptyList() }
             try {
-                val coverSearchResult = aggregatedOnlineMetadataRepository.searchByTrackForCover(title, artist)
+                val coverSearchResult = onlineCoverSearchStrategy.searchByTrack(title, artist)
                 coverSearchResult.fold(
                     onSuccess = { recordings ->
                         recordings.forEach { recording ->
@@ -1095,7 +1095,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
         val album = metadata.album?.takeIf { it.isNotBlank() }
 
-        // Cancel previous search before starting new one (flatMapLatest pattern)
         _lyricsSearchJob?.cancel()
 
         _lyricsSearchJob = viewModelScope.launch {
@@ -1105,21 +1104,21 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
             _onlineLyricsResults.update { emptyList() }
             try {
-                lyricsRepository.searchOnlineLyricsFlow(track, artist, album).collect { result ->
+                onlineLyricsSearchStrategy.search(track, artist, album).collect { result ->
                     when (result) {
-                        is LyricsSourceResult.Result -> {
+                        is LyricsSearchResult.Result -> {
                             val newResults = _lyricsSearchState.value.results + result.lyrics
                             _lyricsSearchState.update { it.copy(results = newResults) }
                             _onlineLyricsResults.update { newResults }
                         }
 
-                        is LyricsSourceResult.SourceCompleted -> {
+                        is LyricsSearchResult.SourceCompleted -> {
                             _lyricsSearchState.update { state ->
                                 state.copy(completedSources = state.completedSources + result.source)
                             }
                         }
 
-                        is LyricsSourceResult.Error -> {
+                        is LyricsSearchResult.Error -> {
                             _lyricsSearchState.update { state ->
                                 state.copy(
                                     errorSources = state.errorSources + (result.source to result.message)

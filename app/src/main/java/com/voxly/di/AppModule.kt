@@ -38,6 +38,10 @@ import com.voxly.domain.usecase.BatchReplayGainUseCase
 import com.voxly.domain.usecase.MemoryPressureMonitor
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.domain.usecase.UnifiedScanManagerImpl
+import com.voxly.presentation.viewmodel.CoverRepositorySearchStrategy
+import com.voxly.presentation.viewmodel.LyricsRepositorySearchStrategy
+import com.voxly.presentation.viewmodel.OnlineCoverSearchStrategy
+import com.voxly.presentation.viewmodel.OnlineLyricsSearchStrategy
 import dagger.Binds
 import dagger.Module
 import dagger.Provides
@@ -377,4 +381,16 @@ abstract class RepositoryModule {
     abstract fun bindWhitelistRepository(
         whitelistRepositoryImpl: WhitelistRepositoryImpl
     ): WhitelistRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindOnlineLyricsSearchStrategy(
+        lyricsRepositorySearchStrategy: LyricsRepositorySearchStrategy
+    ): OnlineLyricsSearchStrategy
+
+    @Binds
+    @Singleton
+    abstract fun bindOnlineCoverSearchStrategy(
+        coverRepositorySearchStrategy: CoverRepositorySearchStrategy
+    ): OnlineCoverSearchStrategy
 }
