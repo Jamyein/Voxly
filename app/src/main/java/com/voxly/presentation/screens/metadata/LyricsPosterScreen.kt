@@ -105,11 +105,28 @@ fun LyricsPosterScreen(
 
     val albumArtBytes by viewModel.albumArtBytes.collectAsStateWithLifecycle()
 
-    // Decode album art
+    // Decode album art with size constraint to avoid OOM on large covers
     val albumArtBitmap = remember(albumArtBytes) {
-        albumArtBytes?.let {
+        albumArtBytes?.let { bytes ->
             try {
-                BitmapFactory.decodeByteArray(it, 0, it.size)
+                val maxDimension = 1024
+                val options = BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+
+                var inSampleSize = 1
+                while (
+                    options.outWidth / inSampleSize > maxDimension ||
+                    options.outHeight / inSampleSize > maxDimension
+                ) {
+                    inSampleSize *= 2
+                }
+
+                BitmapFactory.decodeByteArray(
+                    bytes, 0, bytes.size,
+                    BitmapFactory.Options().apply { this.inSampleSize = inSampleSize }
+                )
             } catch (e: Exception) {
                 null
             }

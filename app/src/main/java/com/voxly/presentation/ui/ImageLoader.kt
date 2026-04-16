@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.voxly.data.remote.NetworkConstants
@@ -64,10 +65,10 @@ private const val MAX_LOCAL_CACHE_SIZE = 50
 
 // LRU cache for cover art bytes to avoid repeated MediaMetadataRetriever calls
 // Key: file path, Value: extracted cover bytes
-// Avoids expensive I/O when same file is queried multiple times (e.g., scrolling, recomposition)
-private val coverBytesCache = LinkedHashMap<String, ByteArray>(100, 0.75f, true)
-private val coverBytesCacheLock = ReentrantLock()
-private const val MAX_COVER_BYTES_CACHE_SIZE = 100
+// Sized to ~8MB max to prevent OOM with high-resolution embedded covers.
+private val coverBytesCache = object : LruCache<String, ByteArray>(8 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: ByteArray): Int = value.size
+}
 
 // Carousel dedicated cover cache (15 entries, 384px)
 private val carouselCoverCache = LinkedHashMap<String, Bitmap>(15, 0.75f, true)
@@ -423,13 +424,8 @@ private fun loadEmbeddedAlbumArt(filePath: String): Bitmap? {
 internal fun extractAndCacheCoverBytes(filePath: String): ByteArray? {
     if (filePath.isBlank()) return null
 
-    // Check LRU cache first
-    coverBytesCacheLock.lock()
-    try {
-        coverBytesCache[filePath]?.let { return it }
-    } finally {
-        coverBytesCacheLock.unlock()
-    }
+    // Check LRU cache first (LruCache is thread-safe)
+    coverBytesCache[filePath]?.let { return it }
 
     // Cache miss: extract from file
     val bytes: ByteArray? = try {
@@ -446,17 +442,7 @@ internal fun extractAndCacheCoverBytes(filePath: String): ByteArray? {
 
     // Store in LRU cache
     if (bytes != null) {
-        coverBytesCacheLock.lock()
-        try {
-            while (coverBytesCache.size >= MAX_COVER_BYTES_CACHE_SIZE) {
-                coverBytesCache.entries.firstOrNull()?.let {
-                    coverBytesCache.remove(it.key)
-                }
-            }
-            coverBytesCache[filePath] = bytes
-        } finally {
-            coverBytesCacheLock.unlock()
-        }
+        coverBytesCache.put(filePath, bytes)
     }
 
     return bytes
