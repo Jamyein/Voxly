@@ -2,6 +2,7 @@ package com.voxly.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.core.util.SortUtil
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.ArtistListItemState
@@ -47,7 +48,7 @@ class ArtistViewModel @Inject constructor(
                     albumCount = albumNames.size,
                     trackCount = artist.files.size
                 )
-            }.sortedBy { it.name }
+            }.sortedBy { SortUtil.toSortablePinyin(it.name) }
         }
         .flowOn(Dispatchers.Default)
         .distinctUntilChanged()
