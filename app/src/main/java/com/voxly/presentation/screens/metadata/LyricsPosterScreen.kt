@@ -425,7 +425,7 @@ private fun ShapeSelector(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                items(standardShapes, key = { it.hashCode() }) { shape ->
+                items(standardShapes, key = { it }) { shape ->
                     ShapeChip(
                         shape = shape,
                         isSelected = selectedShape == shape,
@@ -452,7 +452,7 @@ private fun ShapeSelector(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                items(expressiveShapes, key = { it.hashCode() }) { shape ->
+                items(expressiveShapes, key = { it }) { shape ->
                     ShapeChip(
                         shape = shape,
                         isSelected = selectedShape == shape,
