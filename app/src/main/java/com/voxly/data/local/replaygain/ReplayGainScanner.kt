@@ -19,6 +19,7 @@ import com.voxly.domain.repository.ScanStatus
 import com.voxly.data.local.replaygain.native.EbuR128NativeScanner
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.sample
@@ -55,7 +56,7 @@ class ReplayGainScanner @Inject constructor(
     /**
      * Scans audio files and calculates ReplayGain values.
      */
-    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    @OptIn(FlowPreview::class)
     fun scanReplayGain(
         filePaths: List<String>,
         scanQuality: ScanQuality,
@@ -176,7 +177,7 @@ class ReplayGainScanner @Inject constructor(
      * Scans audio files with album grouping.
      * Reads metadata from each file to group by album, then calculates both track and album gain.
      */
-    @OptIn(kotlinx.coroutines.FlowPreview::class)
+    @OptIn(FlowPreview::class)
     fun scanReplayGainWithAlbumGrouping(
         filePaths: List<String>,
         scanQuality: ScanQuality,

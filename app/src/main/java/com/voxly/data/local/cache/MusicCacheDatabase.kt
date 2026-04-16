@@ -23,8 +23,9 @@ import javax.inject.Singleton
         AlbumThumbnailEntity::class,
         ArtistLinkEntity::class,
         RecentEditEntity::class,
+        EnrichmentJobEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -34,6 +35,7 @@ abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun artistLinkDao(): ArtistLinkDao
     abstract fun albumSummaryDao(): AlbumSummaryDao
     abstract fun recentEditDao(): RecentEditDao
+    abstract fun enrichmentJobDao(): EnrichmentJobDao
 
     companion object {
         const val DATABASE_NAME = "music_cache.db"
@@ -201,6 +203,23 @@ class MusicCacheDatabaseProvider @Inject constructor(
                             INSERT INTO cached_audio_files_fts(rowid, title, artist, album)
                             SELECT rowid, title, artist, album FROM cached_audio_files
                         """)
+                    }
+                })
+                // Migration from version 10 to 11: adds enrichment_jobs table
+                .addMigrations(object : Migration(10, 11) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("""
+                            CREATE TABLE IF NOT EXISTS `enrichment_jobs` (
+                                `id` TEXT PRIMARY KEY NOT NULL,
+                                `filePath` TEXT NOT NULL,
+                                `status` INTEGER NOT NULL,
+                                `attemptCount` INTEGER NOT NULL DEFAULT 0,
+                                `createdAt` INTEGER NOT NULL,
+                                `updatedAt` INTEGER NOT NULL
+                            )
+                        """)
+                        db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_enrichment_jobs_filePath` ON `enrichment_jobs` (`filePath`)")
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_enrichment_jobs_status` ON `enrichment_jobs` (`status`)")
                     }
                 })
 

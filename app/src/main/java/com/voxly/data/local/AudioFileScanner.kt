@@ -8,7 +8,10 @@ import com.voxly.data.local.scanner.AlbumArtistAggregator
 import com.voxly.data.local.scanner.FilterEngine
 import com.voxly.data.local.scanner.MediaStoreDataSource
 import com.voxly.data.local.scanner.FastScanProcessor
-import com.voxly.data.local.scanner.DeepEnrichProcessor
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.voxly.data.local.worker.EnrichmentWorker
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -75,9 +78,6 @@ class AudioFileScanner @Inject constructor(
     private val filterEngine: FilterEngine,
     private val whitelistRepository: WhitelistRepository,
     private val albumArtistAggregator: AlbumArtistAggregator,
-    // Two-pass scanning processors
-    private val fastScanProcessor: FastScanProcessor,
-    private val deepEnrichProcessor: DeepEnrichProcessor,
     // Scan strategies
     private val globalScanStrategy: com.voxly.data.local.scanner.GlobalScanStrategy,
     private val incrementalScanStrategy: com.voxly.data.local.scanner.IncrementalScanStrategy,
@@ -166,12 +166,9 @@ class AudioFileScanner @Inject constructor(
             libraryCache.updateCache(files)
         }
 
-        // Two-pass: Background enrichment for cover art pre-caching + year from TagLib
-        if (!servedFromCache) {
-            enrichCoversInBackground(files)
-        } else {
-            // servedFromCache: check for files with missing year or sampleRate and backfill asynchronously
-            backfillMissingMetadataInBackground()
+        // Background backfill for missing year/sampleRate via persistent WorkManager queue
+        if (servedFromCache) {
+            scheduleMetadataBackfill()
         }
 
         return files
@@ -255,32 +252,11 @@ class AudioFileScanner @Inject constructor(
     }
 
     /**
-     * Background enrichment for cover art pre-caching.
-     * Uses DeepEnrichProcessor to extract and cache cover art + year from file tags.
-     * Results are written back to cache so AlbumArtistAggregator picks up updates.
+     * Schedules background metadata backfill for cached files missing year or sampleRate.
+     * Uses a persistent Room queue + WorkManager to avoid OOM from loading cover art.
+     * Applies whitelist/blacklist filters before enqueuing.
      */
-    private fun enrichCoversInBackground(files: List<AudioFile>) {
-        if (files.isEmpty()) return
-
-        applicationScope.launch {
-            try {
-                Timber.d(TAG, "Starting background cover enrichment for ${files.size} files")
-                val enriched = deepEnrichProcessor.enrichBatch(files)
-                // Write enriched data (year, sampleRate, etc. from TagLib) back to cache
-                libraryCache.updateCache(enriched)
-                Timber.d(TAG, "Background cover enrichment completed and written to cache")
-            } catch (e: Exception) {
-                Timber.w(TAG, "Background cover enrichment failed", e)
-            }
-        }
-    }
-
-    /**
-     * Checks cached files for missing year or sampleRate and triggers
-     * asynchronous enrichment to backfill from TagLib. Skips files that
-     * already have valid data to minimize unnecessary I/O.
-     */
-    private fun backfillMissingMetadataInBackground() {
+    private fun scheduleMetadataBackfill() {
         applicationScope.launch {
             try {
                 val cached = libraryCache.getCachedAudioFilesOnce()
@@ -291,33 +267,54 @@ class AudioFileScanner @Inject constructor(
                     Timber.d(TAG, "No files need year/sampleRate backfill")
                     return@launch
                 }
+
                 val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
                 val whitelistPaths = if (whitelistEnabled) {
                     whitelistRepository.getValidWhitelistPathsOnce()
                 } else emptyList()
-                val filtered = if (whitelistEnabled && whitelistPaths.isNotEmpty()) {
-                    filterEngine.applyFilters(
-                        needsEnrichment,
-                        FilterEngine.FilterSettings(
-                            whitelistEnabled = true,
-                            blacklistEnabled = false,
-                            minDurationEnabled = false,
-                            whitelistUris = whitelistPaths,
-                            blacklistUris = emptyList(),
-                            minDurationMs = 0L
-                        )
+
+                val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
+                val blacklistPaths = if (blacklistEnabled) {
+                    settingsDataStore.blacklistDirectoryUris.first()
+                } else emptyList()
+
+                val filtered = filterEngine.applyFilters(
+                    needsEnrichment,
+                    FilterEngine.FilterSettings(
+                        whitelistEnabled = whitelistEnabled && whitelistPaths.isNotEmpty(),
+                        blacklistEnabled = blacklistEnabled && blacklistPaths.isNotEmpty(),
+                        minDurationEnabled = false,
+                        whitelistUris = whitelistPaths,
+                        blacklistUris = blacklistPaths,
+                        minDurationMs = 0L
                     )
-                } else needsEnrichment
+                )
+
                 if (filtered.isEmpty()) {
-                    Timber.d(TAG, "No files need year/sampleRate backfill after whitelist filtering")
+                    Timber.d(TAG, "No files need backfill after filtering")
                     return@launch
                 }
-                Timber.d(TAG, "Backfilling year/sampleRate for ${filtered.size} cached files (whitelistEnabled=$whitelistEnabled)")
-                val enriched = deepEnrichProcessor.enrichBatch(filtered, includeAlbumArt = false)
-                libraryCache.updateCache(enriched)
-                Timber.d(TAG, "Year/sampleRate backfill completed for ${enriched.size} files")
+
+                // Only enqueue files that don't already have a pending job
+                val pathsToEnqueue = filtered
+                    .map { it.path }
+                    .filter { path -> !libraryCache.hasEnrichmentJobForPath(path) }
+
+                if (pathsToEnqueue.isNotEmpty()) {
+                    libraryCache.enqueueEnrichmentJobs(pathsToEnqueue)
+                    Timber.d(TAG, "Enqueued ${pathsToEnqueue.size} files for metadata backfill")
+                }
+
+                // Trigger WorkManager (existing policy keeps only one active worker)
+                val workRequest = OneTimeWorkRequestBuilder<EnrichmentWorker>()
+                    .build()
+                WorkManager.getInstance(context).enqueueUniqueWork(
+                    EnrichmentWorker.workName(),
+                    ExistingWorkPolicy.KEEP,
+                    workRequest
+                )
             } catch (e: Exception) {
-                Timber.w(TAG, "Year/sampleRate backfill failed", e)
+                Timber.w(TAG, "scheduleMetadataBackfill failed", e)
             }
         }
     }

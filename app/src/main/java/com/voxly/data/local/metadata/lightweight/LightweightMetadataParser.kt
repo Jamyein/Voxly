@@ -32,6 +32,7 @@ object LightweightMetadataParser {
             when (file.extension.lowercase()) {
                 "mp3" -> ID3v2Parser.parse(file, readLimit)
                 "flac" -> FlacVorbisCommentParser.parse(file, readLimit)
+                "m4a", "aac" -> M4aMetadataParser.parse(file, readLimit)
                 else -> null
             }
         } catch (e: Exception) {
@@ -253,7 +254,7 @@ internal object FlacVorbisCommentParser {
         val combined = (b0 shl 56) or (b1 shl 48) or (b2 shl 40) or (b3 shl 32) or
                 (b4 shl 24) or (b5 shl 16) or (b6 shl 8) or b7
 
-        val sampleRate = ((combined ushr 44) and 0xFFFFF).toInt()
+val sampleRate = ((combined ushr 44) and 0xFFFFF).toInt()
         val channels = ((combined ushr 41) and 0x7).toInt() + 1
         val bitsPerSample = ((combined ushr 36) and 0x1F).toInt() + 1
         val totalSamples = (combined and 0xFFFFFFFFFL).toLong()
@@ -305,5 +306,117 @@ internal object FlacVorbisCommentParser {
                 ((bytes[offset + 1].toLong() and 0xFF) shl 8) or
                 ((bytes[offset + 2].toLong() and 0xFF) shl 16) or
                 ((bytes[offset + 3].toLong() and 0xFF) shl 24)
+    }
+}
+
+/**
+ * Lightweight M4A / AAC metadata parser.
+ * Reads iTunes-style text tags (©day, ©nam, ©ART, etc.) from the moov/udta/meta/ilst atom hierarchy.
+ */
+internal object M4aMetadataParser {
+    private const val TAG = "M4aMetadataParser"
+    private val TEXT_ATOMS = setOf("©nam", "©ART", "©alb", "©day", "©gen", "©wrt", "aART")
+
+    fun parse(file: File, readLimit: Int): LightweightMetadataParser.Result? {
+        val bytes = readHead(file, readLimit)
+        if (bytes.size < 8) return null
+
+        val ilstOffset = findIlstBox(bytes) ?: return null
+        val tags = parseIlst(bytes, ilstOffset)
+
+        val metadata = AudioMetadata(
+            title = tags["©nam"],
+            artist = tags["©ART"],
+            album = tags["©alb"],
+            albumArtist = tags["aART"] ?: tags["©ART"],
+            year = tags["©day"]?.take(4),
+            genre = tags["©gen"],
+            composer = tags["©wrt"]
+        )
+
+        val hasCoreData = !metadata.title.isNullOrBlank() ||
+                !metadata.artist.isNullOrBlank() ||
+                !metadata.album.isNullOrBlank()
+        return if (hasCoreData) LightweightMetadataParser.Result(metadata) else null
+    }
+
+    private fun readHead(file: File, limit: Int): ByteArray {
+        return FileInputStream(file).use { fis ->
+            val toRead = limit.coerceAtMost(file.length().toInt().coerceAtLeast(limit))
+            val buf = ByteArray(toRead)
+            val read = fis.read(buf)
+            if (read < buf.size) buf.copyOf(read) else buf
+        }
+    }
+
+    private fun findIlstBox(bytes: ByteArray): Int? {
+        val moovOffset = findBox(bytes, 0, bytes.size, "moov") ?: return null
+        val udtaOffset = findBox(bytes, moovOffset + 8, moovOffset + boxSize(bytes, moovOffset), "udta") ?: return null
+        val metaOffset = findBox(bytes, udtaOffset + 8, udtaOffset + boxSize(bytes, udtaOffset), "meta") ?: return null
+        // meta box has a 4-byte version/flags header after the 8-byte box header
+        return findBox(bytes, metaOffset + 12, metaOffset + boxSize(bytes, metaOffset), "ilst")
+    }
+
+    private fun boxSize(bytes: ByteArray, offset: Int): Int {
+        if (offset + 4 > bytes.size) return 0
+        return readInt32BE(bytes, offset)
+    }
+
+    private fun findBox(bytes: ByteArray, start: Int, end: Int, type: String): Int? {
+        var offset = start.coerceAtLeast(0)
+        val limit = end.coerceAtMost(bytes.size)
+        while (offset + 8 <= limit) {
+            val size = readInt32BE(bytes, offset)
+            val boxType = bytes.decodeAscii(offset + 4, 4)
+            if (boxType == type) return offset
+            if (size <= 0 || offset + size > limit) break
+            offset += size
+        }
+        return null
+    }
+
+    private fun parseIlst(bytes: ByteArray, ilstOffset: Int): Map<String, String> {
+        val tags = mutableMapOf<String, String>()
+        val ilstSize = boxSize(bytes, ilstOffset)
+        var offset = ilstOffset + 8
+        val end = (ilstOffset + ilstSize).coerceAtMost(bytes.size)
+
+        while (offset + 8 <= end) {
+            val itemSize = readInt32BE(bytes, offset)
+            val itemType = bytes.decodeAscii(offset + 4, 4)
+            if (itemSize <= 0 || offset + itemSize > end) break
+
+            if (itemType in TEXT_ATOMS) {
+                val dataOffset = findBox(bytes, offset + 8, offset + itemSize, "data")
+                if (dataOffset != null) {
+                    val dataSize = boxSize(bytes, dataOffset)
+                    // data atom: 8 bytes header + 4 bytes version/flags + 4 bytes reserved + text
+                    val textStart = dataOffset + 16
+                    val textEnd = (dataOffset + dataSize).coerceAtMost(bytes.size)
+                    if (textStart < textEnd) {
+                        val text = String(bytes, textStart, textEnd - textStart, Charsets.UTF_8)
+                            .trim()
+                            .replace("\u0000", " ")
+                            .trim()
+                        if (text.isNotBlank()) {
+                            tags[itemType] = text
+                        }
+                    }
+                }
+            }
+            offset += itemSize
+        }
+        return tags
+    }
+
+    private fun readInt32BE(data: ByteArray, offset: Int): Int {
+        return ((data[offset].toInt() and 0xFF) shl 24) or
+                ((data[offset + 1].toInt() and 0xFF) shl 16) or
+                ((data[offset + 2].toInt() and 0xFF) shl 8) or
+                (data[offset + 3].toInt() and 0xFF)
+    }
+
+    private fun ByteArray.decodeAscii(offset: Int, length: Int): String {
+        return String(this, offset, length, Charsets.ISO_8859_1)
     }
 }

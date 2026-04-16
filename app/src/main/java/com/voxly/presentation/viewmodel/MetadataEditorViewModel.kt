@@ -41,6 +41,7 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -243,6 +244,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
      * Sets up debounced collection for a text field.
      * The flow is debounced 300ms to reduce metadata processing on rapid keystrokes.
      */
+        @OptIn(FlowPreview::class)
     private fun setupDebouncedTextField(field: MetadataField, flow: MutableStateFlow<String?>) {
         val job = viewModelScope.launch {
             flow

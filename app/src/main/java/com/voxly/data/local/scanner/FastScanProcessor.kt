@@ -3,6 +3,7 @@ package com.voxly.data.local.scanner
 import android.content.Context
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
+import com.voxly.data.local.metadata.lightweight.LightweightMetadataParser
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -45,7 +46,10 @@ class FastScanProcessor @Inject constructor(
 
                 val extension = file.extension.lowercase()
                 val (duration, bitrate) = mediaStoreDataSource.queryFileDurationAndBitrate(path)
-                val year = mediaStoreDataSource.queryYearFromMediaStore(path)
+
+                val lightweightResult = LightweightMetadataParser.parse(file)
+                val metadata = lightweightResult?.metadata
+                    ?: AudioMetadata(year = mediaStoreDataSource.queryYearFromMediaStore(path))
 
                 AudioFile(
                     id = path.hashCode().toString(),
@@ -55,9 +59,9 @@ class FastScanProcessor @Inject constructor(
                     duration = duration,
                     format = extension.uppercase(),
                     bitrate = bitrate,
-                    sampleRate = 0,
-                    channels = 0,
-                    metadata = AudioMetadata(year = year)
+                    sampleRate = lightweightResult?.audioInfo?.sampleRate ?: 0,
+                    channels = lightweightResult?.audioInfo?.channels ?: 0,
+                    metadata = metadata
                 )
             } catch (e: Exception) {
                 Timber.w(TAG, "Fast scan failed: $path", e)

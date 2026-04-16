@@ -1566,11 +1566,11 @@ private fun SettingsInlineDialogs(
             onDismissRequest = { onPendingDeleteSeparatorChange(null) },
             shape = MaterialTheme.shapes.large,
             title = { Text(stringResource(R.string.settings_separator_delete_title)) },
-            text = { Text(stringResource(R.string.settings_separator_delete_message, pendingDeleteSeparator!!)) },
+            text = { Text(stringResource(R.string.settings_separator_delete_message, pendingDeleteSeparator)) },
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onDialogSeparatorTagsChange(dialogSeparatorTags - pendingDeleteSeparator!!)
+                        onDialogSeparatorTagsChange(dialogSeparatorTags - pendingDeleteSeparator)
                         onPendingDeleteSeparatorChange(null)
                     }
                 ) {

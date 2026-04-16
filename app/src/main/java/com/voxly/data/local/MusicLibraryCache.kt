@@ -45,6 +45,7 @@ class MusicLibraryCache @Inject constructor(
     private val audioFileDao: CachedAudioFileDao by lazy { database.audioFileDao() }
     private val albumThumbnailDao: AlbumThumbnailDao by lazy { database.albumThumbnailDao() }
     private val artistLinkDao: ArtistLinkDao by lazy { database.artistLinkDao() }
+    private val enrichmentJobDao: EnrichmentJobDao by lazy { database.enrichmentJobDao() }
 
     private val cacheVersion = MutableStateFlow(0L)
     val cacheVersionFlow: StateFlow<Long> = cacheVersion.asStateFlow()
@@ -439,6 +440,39 @@ class MusicLibraryCache @Inject constructor(
      */
     suspend fun clearArtistLinks() = withContext(Dispatchers.IO) {
         artistLinkDao.deleteAll()
+    }
+
+    // ==================== Enrichment Job Queue ====================
+
+    suspend fun enqueueEnrichmentJobs(filePaths: List<String>) = withContext(Dispatchers.IO) {
+        val jobs = filePaths.map { path ->
+            EnrichmentJobEntity(
+                id = path.hashCode().toString(),
+                filePath = path,
+                status = EnrichmentJobEntity.STATUS_PENDING
+            )
+        }
+        enrichmentJobDao.upsertPendingJobs(jobs)
+    }
+
+    suspend fun getPendingEnrichmentJobs(limit: Int): List<EnrichmentJobEntity> = withContext(Dispatchers.IO) {
+        enrichmentJobDao.getPendingJobs(limit)
+    }
+
+    suspend fun updateEnrichmentJobStatus(id: String, status: Int) = withContext(Dispatchers.IO) {
+        enrichmentJobDao.updateStatus(id, status)
+    }
+
+    suspend fun hasEnrichmentJobForPath(path: String): Boolean = withContext(Dispatchers.IO) {
+        enrichmentJobDao.hasJobForPath(path)
+    }
+
+    suspend fun clearCompletedEnrichmentJobs() = withContext(Dispatchers.IO) {
+        enrichmentJobDao.deleteByStatus(EnrichmentJobEntity.STATUS_COMPLETED)
+    }
+
+    suspend fun clearFailedEnrichmentJobs() = withContext(Dispatchers.IO) {
+        enrichmentJobDao.deleteByStatus(EnrichmentJobEntity.STATUS_FAILED)
     }
 
     // ==================== Paging Support ====================
