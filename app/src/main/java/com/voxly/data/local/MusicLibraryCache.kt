@@ -6,6 +6,7 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import com.google.gson.Gson
 import com.voxly.data.local.SettingsDataStore
+import timber.log.Timber
 import com.voxly.data.local.cache.*
 import com.voxly.data.local.cover.CoverDiskCache
 import com.voxly.domain.model.AudioFile
@@ -19,7 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -162,8 +162,8 @@ class MusicLibraryCache @Inject constructor(
 
         invalidateHotCache()
         bumpCacheVersion()
-        
-        Timber.d(TAG, "Cached ${entities.size} audio files")
+
+        Timber.i("DB batch insert: ${entities.size} records")
     }
     
     /**
@@ -174,16 +174,17 @@ class MusicLibraryCache @Inject constructor(
         val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
             gson.toJson(audioFile.metadata.customFields)
         } else null
-        
+
         val entity = CachedAudioFileEntity.fromAudioFile(
             audioFile = audioFile,
             fileLastModified = file.lastModified(),
             customFieldsJson = customFieldsJson
         )
-        
+
         audioFileDao.insert(entity)
         invalidateHotCache()
         bumpCacheVersion()
+        Timber.i("DB sync: ${audioFile.path}")
     }
 
     /**
@@ -193,6 +194,7 @@ class MusicLibraryCache @Inject constructor(
         audioFileDao.deleteByPath(filePath)
         invalidateHotCache()
         bumpCacheVersion()
+        Timber.i("DB delete: $filePath")
     }
 
     /**
@@ -203,6 +205,7 @@ class MusicLibraryCache @Inject constructor(
             audioFileDao.deleteByPaths(filePaths)
             invalidateHotCache()
             bumpCacheVersion()
+            Timber.i("DB batch delete: ${filePaths.size} files")
         }
     }
 
@@ -215,7 +218,7 @@ class MusicLibraryCache @Inject constructor(
         artistLinkDao.deleteAll()
         invalidateHotCache()
         bumpCacheVersion()
-        Timber.d(TAG, "Cache cleared")
+        Timber.i("DB: Cache cleared")
     }
     
     // ==================== Incremental Scan Support ====================
@@ -453,6 +456,7 @@ class MusicLibraryCache @Inject constructor(
             )
         }
         enrichmentJobDao.upsertPendingJobs(jobs)
+        Timber.d("Enqueued ${jobs.size} enrichment jobs")
     }
 
     suspend fun getPendingEnrichmentJobs(limit: Int): List<EnrichmentJobEntity> = withContext(Dispatchers.IO) {
@@ -469,10 +473,12 @@ class MusicLibraryCache @Inject constructor(
 
     suspend fun clearCompletedEnrichmentJobs() = withContext(Dispatchers.IO) {
         enrichmentJobDao.deleteByStatus(EnrichmentJobEntity.STATUS_COMPLETED)
+        Timber.d("Cleared completed enrichment jobs")
     }
 
     suspend fun clearFailedEnrichmentJobs() = withContext(Dispatchers.IO) {
         enrichmentJobDao.deleteByStatus(EnrichmentJobEntity.STATUS_FAILED)
+        Timber.d("Cleared failed enrichment jobs")
     }
 
     // ==================== Paging Support ====================

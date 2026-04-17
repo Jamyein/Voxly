@@ -1,5 +1,6 @@
 package com.voxly.domain.usecase
 
+import timber.log.Timber
 import com.voxly.domain.model.BatchResult
 import com.voxly.domain.model.BatchStatus
 import com.voxly.domain.model.FailedItem
@@ -39,6 +40,9 @@ class BatchEngine<T>(
         var lastEmittedPercent = -1f
         var lastEmitTime = 0L
         val minEmitIntervalMs = 200L
+        val startTime = System.currentTimeMillis()
+
+        Timber.i("Batch started: $totalFiles items, maxConcurrency=$maxConcurrency")
 
         try {
             emit(
@@ -61,6 +65,7 @@ class BatchEngine<T>(
                         .coerceIn(1, maxConcurrency)
                     val batch = items.subList(nextIndex, minOf(nextIndex + concurrency, items.size))
                     nextIndex += batch.size
+                    Timber.d("Processing batch: ${batch.size} items, index=$nextIndex/$totalFiles, concurrency=$concurrency")
 
                     val deferreds = batch.map { item ->
                         async {
@@ -85,8 +90,10 @@ class BatchEngine<T>(
                         } else {
                             failureCount++
                             failedItems.add(FailedItem(itemName(item), error))
+                            Timber.w("Batch item failed: ${itemName(item)}, error: $error")
                         }
                     }
+                    Timber.d("Batch completed: ${batch.size} items, success=$successCount, failed=$failureCount")
 
                     val processedCount = successCount + failureCount
                     val currentPercent = if (totalFiles > 0) {
@@ -124,6 +131,8 @@ class BatchEngine<T>(
                     status = BatchStatus.COMPLETED
                 )
             )
+            val elapsed = System.currentTimeMillis() - startTime
+            Timber.i("Batch finished: $successCount success, $failureCount failed, ${failedItems.size} errors, elapsed=${elapsed}ms")
             mutex.withLock {
                 lastFailedItems = failedItems.toList()
             }
@@ -145,6 +154,9 @@ class BatchEngine<T>(
         var lastEmittedPercent = -1f
         var lastEmitTime = 0L
         val minEmitIntervalMs = 200L
+        val startTime = System.currentTimeMillis()
+
+        Timber.i("Batch retry started: $totalFiles items")
 
         try {
             emit(
@@ -167,6 +179,7 @@ class BatchEngine<T>(
                         .coerceIn(1, maxConcurrency)
                     val batch = itemsToRetry.subList(nextIndex, minOf(nextIndex + concurrency, itemsToRetry.size))
                     nextIndex += batch.size
+                    Timber.d("Retry batch: ${batch.size} items, index=$nextIndex/$totalFiles, concurrency=$concurrency")
 
                     val deferreds = batch.map { item ->
                         async {
@@ -191,8 +204,10 @@ class BatchEngine<T>(
                         } else {
                             failureCount++
                             retryFailedItems.add(FailedItem(item, error))
+                            Timber.w("Retry item failed: $item, error: $error")
                         }
                     }
+                    Timber.d("Retry batch completed: ${batch.size} items, success=$successCount, failed=$failureCount")
 
                     val processedCount = successCount + failureCount
                     val currentPercent = if (totalFiles > 0) {
@@ -232,6 +247,8 @@ class BatchEngine<T>(
                     status = BatchStatus.COMPLETED
                 )
             )
+            val elapsed = System.currentTimeMillis() - startTime
+            Timber.i("Batch retry finished: $successCount success, $failureCount failed, ${finalFailedItems.size} errors, elapsed=${elapsed}ms")
         } catch (e: CancellationException) {
             throw e
         }

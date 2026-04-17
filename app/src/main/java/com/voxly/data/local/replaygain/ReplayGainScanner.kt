@@ -8,7 +8,7 @@ import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.os.SystemClock
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
-import com.voxly.core.util.Logger
+import timber.log.Timber
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ClipMode
 import com.voxly.domain.model.ReplayGainConfig
@@ -66,16 +66,14 @@ class ReplayGainScanner @Inject constructor(
         val totalFiles = filePaths.size
         var processedFiles = 0
         val scanStartedAt = SystemClock.elapsedRealtime()
-        Logger.i(
-            "ReplayGain scan started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS clipMode=${config.clipMode}",
-            "ReplayGainScanner"
+        Timber.i(
+            "ReplayGain scan started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS clipMode=${config.clipMode}"
         )
 
         filePaths.forEachIndexed { index, filePath ->
             if (!kotlin.coroutines.coroutineContext.isActive) {
-                Logger.w(
-                    "ReplayGain scan cancelled at index=$index processed=$processedFiles total=$totalFiles",
-                    "ReplayGainScanner"
+                Timber.w(
+                    "ReplayGain scan cancelled at index=$index processed=$processedFiles total=$totalFiles"
                 )
                 emit(
                     ScanProgress(
@@ -101,29 +99,25 @@ class ReplayGainScanner @Inject constructor(
 
             try {
                 val fileStartedAt = SystemClock.elapsedRealtime()
-                Logger.v(
-                    "Analyzing ReplayGain file=${File(filePath).name} path=$filePath",
-                    "ReplayGainScanner"
+                Timber.v(
+                    "Analyzing ReplayGain file=${File(filePath).name} path=$filePath"
                 )
                 val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness, config)
 
                 if (replayGainInfo != null) {
                     val saved = saveReplayGainToFile(filePath, replayGainInfo)
                     if (saved) {
-                        Logger.i(
-                            "ReplayGain success file=${File(filePath).name} gain=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}",
-                            "ReplayGainScanner"
+                        Timber.i(
+                            "ReplayGain success file=${File(filePath).name} gain=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}"
                         )
                     } else {
-                        Logger.w(
-                            "ReplayGain analysis done but save failed file=${File(filePath).name} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}",
-                            "ReplayGainScanner"
+                        Timber.w(
+                            "ReplayGain analysis done but save failed file=${File(filePath).name} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}"
                         )
                     }
                 } else {
-                    Logger.w(
-                        "ReplayGain failed file=${File(filePath).name} reason=analyze_returned_null",
-                        "ReplayGainScanner"
+                    Timber.w(
+                        "ReplayGain failed file=${File(filePath).name} reason=analyze_returned_null"
                     )
                 }
 
@@ -140,10 +134,9 @@ class ReplayGainScanner @Inject constructor(
                     )
                 )
             } catch (e: Exception) {
-                Logger.e(
-                    "ReplayGain failed file=${File(filePath).name} reason=${e.message ?: "unknown"}",
+                Timber.e(
                     e,
-                    "ReplayGainScanner"
+                    "ReplayGain failed file=${File(filePath).name} reason=${e.message ?: "unknown"}"
                 )
                 emit(
                     ScanProgress(
@@ -167,9 +160,8 @@ class ReplayGainScanner @Inject constructor(
                 status = ScanStatus.COMPLETED
             )
         )
-        Logger.i(
-            "ReplayGain scan finished. files=$totalFiles processed=$processedFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
-            "ReplayGainScanner"
+        Timber.i(
+            "ReplayGain scan finished. files=$totalFiles processed=$processedFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}"
         )
     }.sample(50)
 
@@ -187,9 +179,8 @@ class ReplayGainScanner @Inject constructor(
         val scanStartedAt = SystemClock.elapsedRealtime()
         val totalFiles = filePaths.size
 
-        Logger.i(
-            "ReplayGain album grouping started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS",
-            "ReplayGainScanner"
+        Timber.i(
+            "ReplayGain album grouping started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS"
         )
 
         emit(
@@ -223,22 +214,20 @@ class ReplayGainScanner @Inject constructor(
             } catch (e: Exception) {
                 val singletonKey = "singleton_${singletonIndex++}"
                 filesByAlbum.getOrPut(singletonKey) { mutableListOf() }.add(filePath)
-                Logger.w("Failed to read metadata for grouping: $filePath", "ReplayGainScanner")
+                Timber.w("Failed to read metadata for grouping: $filePath")
             }
         }
 
-        Logger.i(
-            "Grouped $totalFiles files into ${filesByAlbum.size} albums",
-            "ReplayGainScanner"
+        Timber.i(
+            "Grouped $totalFiles files into ${filesByAlbum.size} albums"
         )
 
         scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness, config).collect { progress ->
             emit(progress)
         }
 
-        Logger.i(
-            "ReplayGain album grouping finished. elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
-            "ReplayGainScanner"
+        Timber.i(
+            "ReplayGain album grouping finished. elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}"
         )
     }
 
@@ -257,16 +246,14 @@ class ReplayGainScanner @Inject constructor(
         var processedAlbums = 0
         val scanStartedAt = SystemClock.elapsedRealtime()
 
-        Logger.i(
-            "ReplayGain album scan started. albums=$totalAlbums files=$totalFiles targetLoudness=$targetLoudness LUFS",
-            "ReplayGainScanner"
+        Timber.i(
+            "ReplayGain album scan started. albums=$totalAlbums files=$totalFiles targetLoudness=$targetLoudness LUFS"
         )
 
         for ((albumKey, albumFiles) in filesByAlbum) {
             if (!kotlin.coroutines.coroutineContext.isActive) {
-                Logger.w(
-                    "ReplayGain album scan cancelled at album=$albumKey",
-                    "ReplayGainScanner"
+                Timber.w(
+                    "ReplayGain album scan cancelled at album=$albumKey"
                 )
                 emit(
                     ScanProgress(
@@ -299,21 +286,18 @@ class ReplayGainScanner @Inject constructor(
 
                     if (replayGainInfo != null) {
                         trackGains.add(filePath to replayGainInfo)
-                        Logger.v(
-                            "Track gain calculated file=${File(filePath).name} gain=${replayGainInfo.trackGain} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}",
-                            "ReplayGainScanner"
+                        Timber.v(
+                            "Track gain calculated file=${File(filePath).name} gain=${replayGainInfo.trackGain} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}"
                         )
                     } else {
-                        Logger.w(
-                            "Track gain analysis failed file=${File(filePath).name}",
-                            "ReplayGainScanner"
+                        Timber.w(
+                            "Track gain analysis failed file=${File(filePath).name}"
                         )
                     }
                 } catch (e: Exception) {
-                    Logger.e(
-                        "Track scan failed file=${File(filePath).name} reason=${e.message}",
+                    Timber.e(
                         e,
-                        "ReplayGainScanner"
+                        "Track scan failed file=${File(filePath).name} reason=${e.message}"
                     )
                 }
 
@@ -332,9 +316,8 @@ class ReplayGainScanner @Inject constructor(
 
             if (trackGains.isNotEmpty()) {
                 val albumGainInfo = calculateAlbumGain(trackGains.map { it.second }, config)
-                Logger.i(
-                    "Album gain calculated album=$albumKey tracks=${trackGains.size} albumGain=${albumGainInfo.albumGain} albumPeak=${albumGainInfo.albumPeak}",
-                    "ReplayGainScanner"
+                Timber.i(
+                    "Album gain calculated album=$albumKey tracks=${trackGains.size} albumGain=${albumGainInfo.albumGain} albumPeak=${albumGainInfo.albumPeak}"
                 )
 
                 for ((filePath, trackInfo) in trackGains) {
@@ -365,10 +348,9 @@ class ReplayGainScanner @Inject constructor(
                             )
                         }
                     } catch (e: Exception) {
-                        Logger.e(
-                            "Failed to save album gain for file=$filePath reason=${e.message}",
+                        Timber.e(
                             e,
-                            "ReplayGainScanner"
+                            "Failed to save album gain for file=$filePath reason=${e.message}"
                         )
                     }
                 }
@@ -377,9 +359,8 @@ class ReplayGainScanner @Inject constructor(
             processedAlbums++
         }
 
-        Logger.i(
-            "ReplayGain album scan finished. albums=$totalAlbums files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}",
-            "ReplayGainScanner"
+        Timber.i(
+            "ReplayGain album scan finished. albums=$totalAlbums files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}"
         )
     }.sample(50)
 
@@ -433,7 +414,7 @@ class ReplayGainScanner @Inject constructor(
                     dualMono = config.dualMono
                 )
             } catch (e: Exception) {
-                Logger.e("Failed to create native scanner for $filePath", e, "ReplayGainScanner")
+                Timber.e(e, "Failed to create native scanner for $filePath")
                 extractor.release()
                 return@withContext null
             }
@@ -448,13 +429,12 @@ class ReplayGainScanner @Inject constructor(
 
                 val replayGainInfo = nativeScanner.getResult()
                     ?: run {
-                        Logger.w("Native scanner returned null for $filePath", "ReplayGainScanner")
+                        Timber.w("Native scanner returned null for $filePath")
                         return@withContext null
                     }
 
-                Logger.v(
-                    "Native ReplayGain result: file=${file.name} loudness=${replayGainInfo.trackLoudness} LUFS gainDb=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak}",
-                    "ReplayGainScanner"
+                Timber.v(
+                    "Native ReplayGain result: file=${file.name} loudness=${replayGainInfo.trackLoudness} LUFS gainDb=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak}"
                 )
 
                 val clampedTrackGain = applyClipProtection(
@@ -467,7 +447,7 @@ class ReplayGainScanner @Inject constructor(
                 replayGainInfo.copy(trackGain = clampedTrackGain)
             }
         } catch (e: Exception) {
-            Logger.e("analyzeAudioFile exception: ${e.message}", e, "ReplayGainScanner")
+            Timber.e(e, "analyzeAudioFile exception: ${e.message}")
             null
         }
     }
@@ -487,14 +467,14 @@ class ReplayGainScanner @Inject constructor(
         val codec = findBestDecoder(mime)?.let { name ->
             try {
                 MediaCodec.createByCodecName(name).also {
-                    Logger.i("Using decoder: $name (hw=${isHardwareAccelerated(name)})", "ReplayGainScanner")
+                    Timber.i("Using decoder: $name (hw=${isHardwareAccelerated(name)})")
                 }
             } catch (e: Exception) {
-                Logger.w("Failed to create codec $name, falling back: ${e.message}", "ReplayGainScanner")
+                Timber.w("Failed to create codec $name, falling back: ${e.message}")
                 null
             }
         } ?: MediaCodec.createDecoderByType(mime).also {
-            Logger.i("Using default decoder for $mime", "ReplayGainScanner")
+            Timber.i("Using default decoder for $mime")
         }
 
         try {
@@ -578,9 +558,8 @@ class ReplayGainScanner @Inject constructor(
                         val newChannelCount =
                             newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
                         if (newChannelCount != channelCount) {
-                            Logger.w(
-                                "Native ReplayGain channelCount changed $channelCount -> $newChannelCount",
-                                "ReplayGainScanner"
+                            Timber.w(
+                                "Native ReplayGain channelCount changed $channelCount -> $newChannelCount"
                             )
                         }
                     }
@@ -672,9 +651,8 @@ class ReplayGainScanner @Inject constructor(
             }
 
             val protectedGain = gain - effectiveAdjustment
-            Logger.w(
-                "Clipping protection applied: gain=$gain -> $protectedGain (peak=$newPeak > $maxPeakLinear)",
-                "ReplayGainScanner"
+            Timber.w(
+                "Clipping protection applied: gain=$gain -> $protectedGain (peak=$newPeak > $maxPeakLinear)"
             )
             return protectedGain.coerceIn(MIN_GAIN_DB, MAX_GAIN_DB)
         }
@@ -689,9 +667,8 @@ class ReplayGainScanner @Inject constructor(
         trackGains: List<ReplayGainInfo>,
         config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): ReplayGainInfo {
-        Logger.i(
-            "calculateAlbumGain: input trackGains count=${trackGains.size} gains=${trackGains.map { it.trackGain }}",
-            "ReplayGainScanner"
+        Timber.i(
+            "calculateAlbumGain: input trackGains count=${trackGains.size} gains=${trackGains.map { it.trackGain }}"
         )
 
         if (trackGains.isEmpty()) return ReplayGainInfo()
@@ -702,10 +679,10 @@ class ReplayGainScanner @Inject constructor(
             trackGain.trackGain < 100f
         }
 
-        Logger.i("calculateAlbumGain: valid trackGains count=${validTrackGains.size}", "ReplayGainScanner")
+        Timber.i("calculateAlbumGain: valid trackGains count=${validTrackGains.size}")
 
         if (validTrackGains.isEmpty()) {
-            Logger.w("calculateAlbumGain: no valid track gains found", "ReplayGainScanner")
+            Timber.w("calculateAlbumGain: no valid track gains found")
             return ReplayGainInfo()
         }
 
@@ -742,9 +719,8 @@ class ReplayGainScanner @Inject constructor(
 
         val albumRange = validTrackGains.mapNotNull { it.trackRange }.maxOrNull()
 
-        Logger.v(
-            "Album gain calculated: trackCount=${validTrackGains.size} albumGainDb=$clampedAlbumGain albumLoudness=$albumLoudness",
-            "ReplayGainScanner"
+        Timber.v(
+            "Album gain calculated: trackCount=${validTrackGains.size} albumGainDb=$clampedAlbumGain albumLoudness=$albumLoudness"
         )
 
         return ReplayGainInfo(
@@ -817,7 +793,7 @@ class ReplayGainScanner @Inject constructor(
             val result = metadataProcessor.updateMetadata(filePath, updatedMetadata)
             result.isSuccess
         } catch (e: Exception) {
-            Logger.e("saveReplayGainToFile exception: ${e.message}", e, "ReplayGainScanner")
+            Timber.e(e, "saveReplayGainToFile exception: ${e.message}")
             false
         }
     }

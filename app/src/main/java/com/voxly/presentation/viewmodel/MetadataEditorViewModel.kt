@@ -6,7 +6,6 @@ import android.os.SystemClock
 import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.voxly.core.util.Logger
 import timber.log.Timber
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafGrantType
@@ -409,7 +408,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
      */
     fun updateMetadataField(field: MetadataField, value: String) {
         val currentMetadata = _editedMetadata.value ?: return
-        Logger.d(
+        Timber.d(
             "Metadata field update file=$filePath field=$field valueLength=${value.length}",
             "MetadataEditor"
         )
@@ -430,7 +429,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
             MetadataField.LYRICS -> currentMetadata.copy(lyrics = value)
             MetadataField.ALBUM_ART -> {
                 // ALBUM_ART is handled by updateAlbumArt() which takes ByteArray, not String
-                Logger.w("updateMetadataField called for ALBUM_ART with String value, ignoring. Use updateAlbumArt() instead.", "MetadataEditor")
+                Timber.w("updateMetadataField called for ALBUM_ART with String value, ignoring. Use updateAlbumArt() instead.", "MetadataEditor")
                 currentMetadata
             }
         }
@@ -480,7 +479,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     private fun setEditedMetadata(updatedMetadata: AudioMetadata, modifiedField: MetadataField? = null) {
-        Logger.d("setEditedMetadata: updating editedMetadata, new title=${updatedMetadata.title}", "MetadataEditor")
+        Timber.d("setEditedMetadata: updating editedMetadata, new title=${updatedMetadata.title}", "MetadataEditor")
         _editedMetadata.update { updatedMetadata }
         _hasUnsavedChanges.update { true }
         if (modifiedField != null) {
@@ -497,7 +496,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
         val currentState = _uiState.value
         if (currentState is MetadataEditorUiState.Success) {
-            Logger.d("setEditedMetadata: updating uiState with new metadata", "MetadataEditor")
+            Timber.d("setEditedMetadata: updating uiState with new metadata", "MetadataEditor")
             _uiState.update { currentState.copy(editedMetadata = updatedMetadata) }
         }
     }
@@ -557,7 +556,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     filesToScan = albumFiles.ifEmpty { listOf(filePath) }
                 }
 
-                Logger.i("ReplayGain scan started. mode=${currentScanMode.name} files=${filesToScan.size}", "MetadataEditor")
+                Timber.i("ReplayGain scan started. mode=${currentScanMode.name} files=${filesToScan.size}", "MetadataEditor")
 
                 // Get target loudness and clip mode from settings
                 val targetLoudness = settingsDataStore.replayGainTargetLoudness.first()
@@ -602,7 +601,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             if (info != null) {
                                 _pendingReplayGainInfo.update { info }
                                 _hasUnsavedChanges.update { true }
-                                Logger.i("ReplayGain scan completed (from progress). mode=${currentScanMode.name}", "MetadataEditor")
+                                Timber.i("ReplayGain scan completed (from progress). mode=${currentScanMode.name}", "MetadataEditor")
                             } else {
                                 // Fallback: read from file if not in progress
                                 val replayGainReadResult = replayGainRepository.readReplayGain(filePath)
@@ -610,7 +609,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                     _pendingReplayGainInfo.update { readInfo }
                                     _hasUnsavedChanges.update { true }
                                 }
-                                Logger.i("ReplayGain scan completed (from file). mode=${currentScanMode.name}", "MetadataEditor")
+                                Timber.i("ReplayGain scan completed (from file). mode=${currentScanMode.name}", "MetadataEditor")
                             }
                             _isScanningReplayGain.update { false }
                         }
@@ -636,13 +635,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             }
                             _replayGainScanError.emit(error.toString())
                             _isScanningReplayGain.update { false }
-                            Logger.e("ReplayGain scan failed.", null, "MetadataEditor")
+                            Timber.e("ReplayGain scan failed.", null, "MetadataEditor")
                         }
                         else -> { /* scanning in progress */ }
                     }
                 }
             } catch (e: Exception) {
-                Logger.e("ReplayGain scan exception: ${e.message}", e, "MetadataEditor")
+                Timber.e("ReplayGain scan exception: ${e.message}", e, "MetadataEditor")
                 _isScanningReplayGain.update { false }
             }
         }
@@ -696,7 +695,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 }
             }
         } catch (e: Exception) {
-            Logger.e("Failed to find album files: ${e.message}", e, "MetadataEditor")
+            Timber.e("Failed to find album files: ${e.message}", e, "MetadataEditor")
         }
         
         files
@@ -722,7 +721,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
         viewModelScope.launch {
             val startedAt = SystemClock.elapsedRealtime()
-            Logger.i(
+            Timber.i(
                 "Save metadata started file=$filePath hasReplayGain=${replayGainToSave != null}",
                 "MetadataEditor"
             )
@@ -751,7 +750,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         if (replayGainSuccess) {
                             _pendingReplayGainInfo.update { null } // Clear after successful save
                         } else {
-                            Logger.w(
+                            Timber.w(
                                 "Save replaygain failed file=$filePath reason=${replayGainResult.exceptionOrNull()?.message ?: "unknown"}",
                                 "MetadataEditor"
                             )
@@ -794,7 +793,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             editedMetadata = metadataToSave
                         )
                     }
-                    Logger.i(
+                    Timber.i(
                         "Save metadata success file=$filePath replayGainSuccess=$replayGainSuccess elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
                         "MetadataEditor"
                     )
@@ -803,7 +802,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     unifiedScanManager.syncFile(filePath)
                 },
                 onFailure = { error ->
-                    Logger.e(
+                    Timber.e(
                         "Save metadata failed file=$filePath reason=${error.message ?: "unknown"} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
                         error,
                         "MetadataEditor"
@@ -944,13 +943,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
             val permissionResult = safWriteAccessService.persistPermission(uri, grantType)
             permissionResult.fold(
                 onSuccess = {
-                    Logger.i("SAF permission updated for file=$filePath grantType=$grantType", TAG)
+                    Timber.i("SAF permission updated for file=$filePath grantType=$grantType", TAG)
                     saveMetadata()
                 },
                 onFailure = { error ->
                     val message = error.message
                         ?: "Failed to persist SAF permission. Please retry selecting the file or directory."
-                    Logger.e("SAF reauthorization failed file=$filePath reason=$message", error, TAG)
+                    Timber.e("SAF reauthorization failed file=$filePath reason=$message", error, TAG)
                     _saveResult.emit(message)
                     _uiState.update { MetadataEditorUiState.Error(message) }
                 }
@@ -960,7 +959,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     fun retrySaveAfterMediaStorePermission() {
         viewModelScope.launch {
-            Logger.i("MediaStore permission granted, retrying save for file=$filePath", TAG)
+            Timber.i("MediaStore permission granted, retrying save for file=$filePath", TAG)
             saveMetadata()
         }
     }
@@ -1036,7 +1035,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
         val releaseId = recording.releaseId
         
-        Logger.d("applyOnlineCover: releaseId=$releaseId, source=${recording.source}", TAG)
+        Timber.d("applyOnlineCover: releaseId=$releaseId, source=${recording.source}", TAG)
         
         // If no releaseId, show a message and return
         if (releaseId.isNullOrBlank()) {
@@ -1056,11 +1055,11 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     OnlineSource.QQ_MUSIC -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
                     else -> AggregatedOnlineMetadataRepository.DataSource.BOTH
                 }
-                Logger.d("applyOnlineCover: setting preferredSource=$targetSource", TAG)
+                Timber.d("applyOnlineCover: setting preferredSource=$targetSource", TAG)
                 aggregatedOnlineMetadataRepository.preferredSource = targetSource
 
                 val coverResult = aggregatedOnlineMetadataRepository.getCoverArt(releaseId)
-                Logger.d("applyOnlineCover: coverResult isSuccess=${coverResult.isSuccess}, isFailure=${coverResult.isFailure}", TAG)
+                Timber.d("applyOnlineCover: coverResult isSuccess=${coverResult.isSuccess}, isFailure=${coverResult.isFailure}", TAG)
                 coverResult.fold(
                     onSuccess = { cover ->
                         if (cover != null) {
@@ -1071,7 +1070,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         }
                     },
                     onFailure = {
-                        Logger.e("applyOnlineCover failed: ${it.message}", it, TAG)
+                        Timber.e("applyOnlineCover failed: ${it.message}", it, TAG)
                         _coverFetchMessage.emit(it.message ?: "Cover fetch failed")
                     }
                 )
@@ -1180,17 +1179,17 @@ class MetadataEditorViewModel @AssistedInject constructor(
      */
     fun tryApplyPendingOnlineMetadata() {
         val pending = pendingMetadataHolder.consume(filePath) ?: return
-        Logger.d("tryApplyPendingOnlineMetadata: applying pending metadata for $filePath", "MetadataEditor")
+        Timber.d("tryApplyPendingOnlineMetadata: applying pending metadata for $filePath", "MetadataEditor")
         applyOnlineMetadataInternal(pending)
     }
 
     private fun applyOnlineMetadataInternal(metadata: AudioMetadata) {
         val currentMetadata = _editedMetadata.value ?: run {
-            Logger.w("applyOnlineMetadata: _editedMetadata is null, re-putting pending for later", "MetadataEditor")
+            Timber.w("applyOnlineMetadata: _editedMetadata is null, re-putting pending for later", "MetadataEditor")
             pendingMetadataHolder.put(filePath, metadata)
             return
         }
-        Logger.d("applyOnlineMetadata: current title=${currentMetadata.title}, new title=${metadata.title}", "MetadataEditor")
+        Timber.d("applyOnlineMetadata: current title=${currentMetadata.title}, new title=${metadata.title}", "MetadataEditor")
 
         // Track which fields are being modified
         val modifiedFields = mutableSetOf<MetadataField>()
@@ -1235,7 +1234,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
             }
         }
         
-        Logger.d("applyOnlineMetadata: setting edited metadata, title=${updatedMetadata.title}, modifiedFields=$modifiedFields", "MetadataEditor")
+        Timber.d("applyOnlineMetadata: setting edited metadata, title=${updatedMetadata.title}, modifiedFields=$modifiedFields", "MetadataEditor")
         
         _editedMetadata.update { updatedMetadata }
         _hasUnsavedChanges.update { true }
@@ -1254,7 +1253,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
         // 更新 uiState
         val currentUiState = _uiState.value
         if (currentUiState is MetadataEditorUiState.Success) {
-            Logger.d("applyOnlineMetadata: updating uiState with new metadata", "MetadataEditor")
+            Timber.d("applyOnlineMetadata: updating uiState with new metadata", "MetadataEditor")
             _uiState.update { currentUiState.copy(editedMetadata = updatedMetadata) }
         }
     }

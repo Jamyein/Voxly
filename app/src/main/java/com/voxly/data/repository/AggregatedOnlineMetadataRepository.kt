@@ -4,7 +4,7 @@ import android.icu.text.Transliterator
 
 import android.os.SystemClock
 
-import com.voxly.core.util.Logger
+import timber.log.Timber
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.remote.musicbrainz.MusicBrainzMetadataRepository
 import com.voxly.data.remote.itunes.ItunesMetadataRepository
@@ -24,7 +24,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Semaphore
-import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -80,13 +79,13 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         album: String
     ): Result<List<OnlineRelease>> {
         val requestStartedAt = SystemClock.elapsedRealtime()
-        Logger.i(
+        Timber.i(
             "Online query start type=artist_album artist=$artist album=$album source=$preferredSource",
             TAG
         )
         val settings = getOnlineSourceSettings()
         if (!settings.hasAnyEnabledSource) {
-            Logger.w("Online query rejected: no metadata source enabled", TAG)
+            Timber.w("Online query rejected: no metadata source enabled", TAG)
             return Result.failure(Exception("No metadata sources enabled"))
         }
         val result = when (preferredSource) {
@@ -153,7 +152,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             DataSource.BOTH -> aggregationStrategy.searchAllByArtistAlbum(artist, album, settings)
                 .map { finalizeReleaseResults(it, artist, album, settings) }
         }
-        Logger.i(
+        Timber.i(
             "Online query end type=artist_album elapsedMs=${SystemClock.elapsedRealtime() - requestStartedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
             TAG
         )
@@ -217,13 +216,13 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String?
     ): Result<List<OnlineRecording>> {
         val requestStartedAt = SystemClock.elapsedRealtime()
-        Logger.i(
+        Timber.i(
             "Online query start type=track title=$title artist=${artist ?: ""} source=$preferredSource",
             TAG
         )
         val settings = getOnlineSourceSettings()
         if (!settings.hasAnyEnabledSource) {
-            Logger.w("Online query rejected: no metadata source enabled", TAG)
+            Timber.w("Online query rejected: no metadata source enabled", TAG)
             return Result.failure(Exception("No metadata sources enabled"))
         }
         val result = when (preferredSource) {
@@ -302,7 +301,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                     )
                 }
         }
-        Logger.i(
+        Timber.i(
             "Online query end type=track elapsedMs=${SystemClock.elapsedRealtime() - requestStartedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
             TAG
         )
@@ -549,9 +548,9 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     }
 
     override suspend fun getCoverArt(releaseId: String): Result<ByteArray?> {
-        Logger.d("getCoverArt: releaseId=$releaseId, preferredSource=$preferredSource", TAG)
+        Timber.d("getCoverArt: releaseId=$releaseId, preferredSource=$preferredSource", TAG)
         val settings = getOnlineSourceSettings()
-        Logger.d("getCoverArt: coverEnableMB=${settings.coverEnableMusicBrainz}, coverEnableITunes=${settings.coverEnableITunes}, coverEnableNetease=${settings.coverEnableNetease}, coverEnableQQ=${settings.coverEnableQQMusic}", TAG)
+        Timber.d("getCoverArt: coverEnableMB=${settings.coverEnableMusicBrainz}, coverEnableITunes=${settings.coverEnableITunes}, coverEnableNetease=${settings.coverEnableNetease}, coverEnableQQ=${settings.coverEnableQQMusic}", TAG)
 
         return when (preferredSource) {
             DataSource.MUSICBRAINZ -> if (settings.coverEnableMusicBrainz) {

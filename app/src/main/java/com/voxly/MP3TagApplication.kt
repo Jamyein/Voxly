@@ -6,7 +6,6 @@ import androidx.work.Configuration
 import com.voxly.core.util.CrashHandler
 import com.voxly.core.util.FileLoggingTree
 import com.voxly.core.util.LogManager
-import com.voxly.core.util.Logger
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.presentation.ui.clearAllCaches
@@ -86,7 +85,6 @@ class MP3TagApplication : Application(), Configuration.Provider {
         LogManager.init(this)
         // Apply settings asynchronously
         applyLoggingSettings()
-        Logger.init()
 
         // Always plant file logging tree - it checks isFileLoggingEnabled internally
         fileLoggingTree = FileLoggingTree()

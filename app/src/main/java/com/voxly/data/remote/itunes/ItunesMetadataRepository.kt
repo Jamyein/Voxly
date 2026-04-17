@@ -2,7 +2,7 @@ package com.voxly.data.remote.itunes
 
 import android.os.SystemClock
 
-import com.voxly.core.util.Logger
+import timber.log.Timber
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineRelease
@@ -19,7 +19,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.net.UnknownHostException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,7 +44,7 @@ class ItunesMetadataRepository @Inject constructor(
         limit: Int
     ): Flow<OnlineSourceResult> = callbackFlow {
         val startedAt = SystemClock.elapsedRealtime()
-        Logger.i(
+        Timber.i(
             "iTunes query start type=artist_album artist=$artist album=$album",
             TAG
         )
@@ -85,7 +84,7 @@ class ItunesMetadataRepository @Inject constructor(
         limit: Int
     ): Flow<OnlineSourceResult> = callbackFlow {
         val startedAt = SystemClock.elapsedRealtime()
-        Logger.i(
+        Timber.i(
             "iTunes query start type=track title=$title artist=${artist ?: ""}",
             TAG
         )
