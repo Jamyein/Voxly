@@ -75,18 +75,20 @@ internal object ID3v2Parser {
         }
 
         val end = 10 + tagSize
-        while (offset + 10 <= end) {
+        val frameHeaderSize = 10 // 4 ID + 4 size + 2 flags
+        while (offset + frameHeaderSize <= end) {
             val frameId = bytes.decodeAscii(offset, 4)
             if (frameId.isBlank() || frameId.any { it.code < 0x20 || it.code > 0x7A }) {
                 break // padding reached
             }
             val frameSize = if (majorVersion == 4) readSyncSafeInt(bytes, offset + 4) else readInt32BE(bytes, offset + 4)
-            if (frameSize < 0 || offset + 10 + frameSize > bytes.size) break
-            val frameData = bytes.copyOfRange(offset + 10, offset + 10 + frameSize)
+            if (frameSize < 0 || offset + frameHeaderSize + frameSize > bytes.size) break
+            // Skip 10-byte header + 2-byte flags = 12 bytes before text content
+            val frameData = bytes.copyOfRange(offset + frameHeaderSize, offset + frameHeaderSize + frameSize)
             if (frameId.startsWith("T")) {
                 parseTextFrame(frameData)?.let { frames[frameId] = it }
             }
-            offset += 10 + frameSize
+            offset += frameHeaderSize + frameSize
         }
 
         val metadata = AudioMetadata(
@@ -110,14 +112,6 @@ internal object ID3v2Parser {
                 !metadata.year.isNullOrBlank() ||
                 !metadata.albumArtist.isNullOrBlank()
         return if (hasCoreData) LightweightMetadataParser.Result(metadata) else null
-    }
-
-    private fun readHead(file: File, limit: Int): ByteArray {
-        return FileInputStream(file).use { fis ->
-            val buf = ByteArray(limit.coerceAtMost(file.length().toInt().coerceAtLeast(limit)))
-            val read = fis.read(buf)
-            if (read < buf.size) buf.copyOf(read) else buf
-        }
     }
 
     private fun readSyncSafeInt(data: ByteArray, offset: Int): Int {
@@ -235,15 +229,6 @@ internal object FlacVorbisCommentParser {
         return if (hasCoreData) LightweightMetadataParser.Result(metadata, streamInfo) else null
     }
 
-    private fun readHead(file: File, limit: Int): ByteArray {
-        return FileInputStream(file).use { fis ->
-            val toRead = limit.coerceAtMost(file.length().toInt().coerceAtLeast(limit))
-            val buf = ByteArray(toRead)
-            val read = fis.read(buf)
-            if (read < buf.size) buf.copyOf(read) else buf
-        }
-    }
-
     private fun parseStreamInfo(bytes: ByteArray, offset: Int): TagLibMetadataProcessor.AudioInfo? {
         // STREAMINFO is exactly 34 bytes
         if (offset + 34 > bytes.size) return null
@@ -290,7 +275,7 @@ val sampleRate = ((combined ushr 44) and 0xFFFFF).toInt()
         val commentCount = readUInt32LE(bytes, pos)
         pos += 4
 
-        repeat(commentCount.coerceAtMost(100).toInt()) {
+        repeat(commentCount.coerceAtMost(10000).toInt()) {
             if (pos + 4 > end) return
             val commentLen = readUInt32LE(bytes, pos)
             pos += 4
@@ -321,22 +306,27 @@ val sampleRate = ((combined ushr 44) and 0xFFFFF).toInt()
 internal object M4aMetadataParser {
     private const val TAG = "M4aMetadataParser"
     private val TEXT_ATOMS = setOf("©nam", "©ART", "©alb", "©day", "©gen", "©wrt", "aART")
+    private val NUMERIC_ATOMS = setOf("trkn", "disk")
 
     fun parse(file: File, readLimit: Int): LightweightMetadataParser.Result? {
         val bytes = readHead(file, readLimit)
         if (bytes.size < 8) return null
 
         val ilstOffset = findIlstBox(bytes) ?: return null
-        val tags = parseIlst(bytes, ilstOffset)
+        val (textTags, numericTags) = parseIlst(bytes, ilstOffset)
 
         val metadata = AudioMetadata(
-            title = tags["©nam"],
-            artist = tags["©ART"],
-            album = tags["©alb"],
-            albumArtist = tags["aART"] ?: tags["©ART"],
-            year = tags["©day"]?.take(4),
-            genre = tags["©gen"],
-            composer = tags["©wrt"]
+            title = textTags["©nam"],
+            artist = textTags["©ART"],
+            album = textTags["©alb"],
+            albumArtist = textTags["aART"] ?: textTags["©ART"],
+            year = textTags["©day"]?.take(4),
+            genre = textTags["©gen"],
+            composer = textTags["©wrt"],
+            trackNumber = numericTags["trkn"]?.first,
+            totalTracks = numericTags["trkn"]?.second,
+            discNumber = numericTags["disk"]?.first,
+            totalDiscs = numericTags["disk"]?.second
         )
 
         val hasCoreData = !metadata.title.isNullOrBlank() ||
@@ -347,21 +337,12 @@ internal object M4aMetadataParser {
         return if (hasCoreData) LightweightMetadataParser.Result(metadata) else null
     }
 
-    private fun readHead(file: File, limit: Int): ByteArray {
-        return FileInputStream(file).use { fis ->
-            val toRead = limit.coerceAtMost(file.length().toInt().coerceAtLeast(limit))
-            val buf = ByteArray(toRead)
-            val read = fis.read(buf)
-            if (read < buf.size) buf.copyOf(read) else buf
-        }
-    }
-
     private fun findIlstBox(bytes: ByteArray): Int? {
         val moovOffset = findBox(bytes, 0, bytes.size, "moov") ?: return null
         val udtaOffset = findBox(bytes, moovOffset + 8, moovOffset + boxSize(bytes, moovOffset), "udta") ?: return null
         val metaOffset = findBox(bytes, udtaOffset + 8, udtaOffset + boxSize(bytes, udtaOffset), "meta") ?: return null
-        // meta box has a 4-byte version/flags header after the 8-byte box header
-        return findBox(bytes, metaOffset + 12, metaOffset + boxSize(bytes, metaOffset), "ilst")
+        val metaContentEnd = metaOffset + boxSize(bytes, metaOffset) - 8
+        return findBox(bytes, metaOffset + 12, metaContentEnd, "ilst")
     }
 
     private fun boxSize(bytes: ByteArray, offset: Int): Int {
@@ -382,8 +363,9 @@ internal object M4aMetadataParser {
         return null
     }
 
-    private fun parseIlst(bytes: ByteArray, ilstOffset: Int): Map<String, String> {
-        val tags = mutableMapOf<String, String>()
+    private fun parseIlst(bytes: ByteArray, ilstOffset: Int): Pair<Map<String, String>, Map<String, Pair<Int?, Int?>>> {
+        val textTags = mutableMapOf<String, String>()
+        val numericTags = mutableMapOf<String, Pair<Int?, Int?>>()
         val ilstSize = boxSize(bytes, ilstOffset)
         var offset = ilstOffset + 8
         val end = (ilstOffset + ilstSize).coerceAtMost(bytes.size)
@@ -393,27 +375,60 @@ internal object M4aMetadataParser {
             val itemType = bytes.decodeAscii(offset + 4, 4)
             if (itemSize <= 0 || offset + itemSize > end) break
 
-            if (itemType in TEXT_ATOMS) {
-                val dataOffset = findBox(bytes, offset + 8, offset + itemSize, "data")
-                if (dataOffset != null) {
-                    val dataSize = boxSize(bytes, dataOffset)
-                    // data atom: 8 bytes header + 4 bytes version/flags + 4 bytes reserved + text
-                    val textStart = dataOffset + 16
-                    val textEnd = (dataOffset + dataSize).coerceAtMost(bytes.size)
-                    if (textStart < textEnd) {
-                        val text = String(bytes, textStart, textEnd - textStart, Charsets.UTF_8)
-                            .trim()
-                            .replace("\u0000", " ")
-                            .trim()
-                        if (text.isNotBlank()) {
-                            tags[itemType] = text
+            when {
+                itemType in TEXT_ATOMS -> {
+                    val dataOffset = findBox(bytes, offset + 8, offset + itemSize, "data")
+                    if (dataOffset != null) {
+                        val dataSize = boxSize(bytes, dataOffset)
+                        val textStart = dataOffset + 16
+                        val textEnd = (dataOffset + dataSize).coerceAtMost(bytes.size)
+                        if (textStart < textEnd) {
+                            val charset = when {
+                                dataOffset + 15 < bytes.size -> {
+                                    val dataType = bytes[dataOffset + 13].toInt() and 0xFF
+                                    when (dataType) {
+                                        0x02 -> Charsets.UTF_16
+                                        else -> Charsets.UTF_8
+                                    }
+                                }
+                                else -> Charsets.UTF_8
+                            }
+                            val text = String(bytes, textStart, textEnd - textStart, charset)
+                                .trim()
+                                .replace("\u0000", " ")
+                                .trim()
+                            if (text.isNotBlank()) {
+                                textTags[itemType] = text
+                            }
+                        }
+                    }
+                }
+                itemType in NUMERIC_ATOMS -> {
+                    val dataOffset = findBox(bytes, offset + 8, offset + itemSize, "data")
+                    if (dataOffset != null) {
+                        val pair = parseNumericAtom(bytes, dataOffset)
+                        if (pair != null) {
+                            numericTags[itemType] = pair
                         }
                     }
                 }
             }
             offset += itemSize
         }
-        return tags
+        return Pair(textTags, numericTags)
+    }
+
+    private fun parseNumericAtom(bytes: ByteArray, dataOffset: Int): Pair<Int?, Int?>? {
+        if (dataOffset + 28 > bytes.size) return null
+        val dataSize = boxSize(bytes, dataOffset)
+        if (dataSize < 28) return null
+        val value1 = readUInt16BE(bytes, dataOffset + 24)
+        val value2 = readUInt16BE(bytes, dataOffset + 26)
+        return if (value1 != 0) Pair(value1, if (value2 != 0) value2 else null) else null
+    }
+
+    private fun readUInt16BE(data: ByteArray, offset: Int): Int {
+        return ((data[offset].toInt() and 0xFF) shl 8) or (data[offset + 1].toInt() and 0xFF)
     }
 
     private fun readInt32BE(data: ByteArray, offset: Int): Int {
@@ -447,6 +462,7 @@ internal object OggVorbisCommentParser {
         var offset = 0
         var pageCount = 0
         var foundComment = false
+        var pendingPacket: ByteArray? = null
 
         while (offset + 27 <= bytes.size && pageCount < 10) {
             if (bytes[offset] != 'O'.code.toByte() || bytes[offset + 1] != 'g'.code.toByte() ||
@@ -464,9 +480,25 @@ internal object OggVorbisCommentParser {
 
             if (offset + headerSize + pageDataSize > bytes.size) break
 
-            if (!foundComment) {
-                val pageData = bytes.copyOfRange(offset + headerSize, offset + headerSize + pageDataSize)
-                // Vorbis Comment packet starts with packet type 0x03 followed by "vorbis" or "OpusTags"
+            val pageData = bytes.copyOfRange(offset + headerSize, offset + headerSize + pageDataSize)
+
+            // Handle continued packet: if previous page ended with segment of 255, append to pending
+            val continuedPacket = pendingPacket
+            pendingPacket = null
+
+            // Check if packet continues to next page (last segment == 255)
+            val lastSegmentSize = segmentSizes.lastOrNull() ?: 0
+            if (lastSegmentSize == 255) {
+                // Packet continues on next page; accumulate data
+                pendingPacket = if (continuedPacket != null) {
+                    continuedPacket + pageData
+                } else {
+                    pageData
+                }
+            }
+
+            // Only process if we have a complete packet (not pending) and haven't found comment
+            if (!foundComment && continuedPacket == null) {
                 if (pageData.size >= 7 && pageData[0] == 0x03.toByte() &&
                     pageData[1] == 'v'.code.toByte() && pageData[2] == 'o'.code.toByte() &&
                     pageData[3] == 'r'.code.toByte() && pageData[4] == 'b'.code.toByte() &&
@@ -479,6 +511,22 @@ internal object OggVorbisCommentParser {
                     pageData[5] == 'a'.code.toByte() && pageData[6] == 'g'.code.toByte() &&
                     pageData[7] == 's'.code.toByte()) {
                     parseOpusTags(pageData, 8, comments)
+                    foundComment = true
+                }
+            } else if (!foundComment && continuedPacket != null) {
+                // Check the accumulated packet for comment header
+                if (continuedPacket.size >= 7 && continuedPacket[0] == 0x03.toByte() &&
+                    continuedPacket[1] == 'v'.code.toByte() && continuedPacket[2] == 'o'.code.toByte() &&
+                    continuedPacket[3] == 'r'.code.toByte() && continuedPacket[4] == 'b'.code.toByte() &&
+                    continuedPacket[5] == 'i'.code.toByte() && continuedPacket[6] == 's'.code.toByte()) {
+                    parseVorbisComment(continuedPacket, 7, comments)
+                    foundComment = true
+                } else if (continuedPacket.size >= 8 && continuedPacket[0] == 'O'.code.toByte() &&
+                    continuedPacket[1] == 'p'.code.toByte() && continuedPacket[2] == 'u'.code.toByte() &&
+                    continuedPacket[3] == 's'.code.toByte() && continuedPacket[4] == 'T'.code.toByte() &&
+                    continuedPacket[5] == 'a'.code.toByte() && continuedPacket[6] == 'g'.code.toByte() &&
+                    continuedPacket[7] == 's'.code.toByte()) {
+                    parseOpusTags(continuedPacket, 8, comments)
                     foundComment = true
                 }
             }
@@ -511,15 +559,6 @@ internal object OggVorbisCommentParser {
         return if (hasCoreData) LightweightMetadataParser.Result(metadata) else null
     }
 
-    private fun readHead(file: File, limit: Int): ByteArray {
-        return FileInputStream(file).use { fis ->
-            val toRead = limit.coerceAtMost(file.length().toInt().coerceAtLeast(limit))
-            val buf = ByteArray(toRead)
-            val read = fis.read(buf)
-            if (read < buf.size) buf.copyOf(read) else buf
-        }
-    }
-
     private fun parseVorbisComment(data: ByteArray, offset: Int, out: MutableMap<String, String>) {
         if (offset + 4 > data.size) return
         val vendorLen = readUInt32LE(data, offset)
@@ -528,7 +567,7 @@ internal object OggVorbisCommentParser {
         val commentCount = readUInt32LE(data, pos)
         pos += 4
 
-        repeat(commentCount.coerceAtMost(100).toInt()) {
+        repeat(commentCount.coerceAtMost(10000).toInt()) {
             if (pos + 4 > data.size) return
             val commentLen = readUInt32LE(data, pos)
             pos += 4
@@ -554,5 +593,13 @@ internal object OggVorbisCommentParser {
                 ((bytes[offset + 1].toLong() and 0xFF) shl 8) or
                 ((bytes[offset + 2].toLong() and 0xFF) shl 16) or
                 ((bytes[offset + 3].toLong() and 0xFF) shl 24)
+    }
+}
+
+internal fun readHead(file: File, limit: Int): ByteArray {
+    return FileInputStream(file).use { fis ->
+        val buf = ByteArray(limit.coerceAtMost(file.length().toInt().coerceAtLeast(limit)))
+        val read = fis.read(buf)
+        if (read < buf.size) buf.copyOf(read) else buf
     }
 }

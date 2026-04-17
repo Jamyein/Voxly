@@ -390,6 +390,43 @@ class LightweightMetadataParserTest {
         assertEquals("Artist Only", result.metadata.albumArtist)
     }
 
+    @Test
+    fun `M4aMetadataParser extracts trackNumber and totalTracks`() {
+        val file = M4aTestDataFactory.createTempFile(
+            tags = mapOf("©nam" to "Title"),
+            numericTag = M4aTestDataFactory.NumericTag(
+                trackNumber = 5,
+                totalTracks = 12,
+                discNumber = null,
+                totalDiscs = null
+            )
+        ).track()
+        val result = M4aMetadataParser.parse(file, 128 * 1024)
+        assertNotNull(result)
+        assertEquals(5, result!!.metadata.trackNumber)
+        assertEquals(12, result.metadata.totalTracks)
+        assertNull(result.metadata.discNumber)
+    }
+
+    @Test
+    fun `M4aMetadataParser extracts discNumber and totalDiscs`() {
+        val file = M4aTestDataFactory.createTempFile(
+            tags = mapOf("©nam" to "Title"),
+            numericTag = M4aTestDataFactory.NumericTag(
+                trackNumber = 3,
+                totalTracks = 10,
+                discNumber = 2,
+                totalDiscs = 3
+            )
+        ).track()
+        val result = M4aMetadataParser.parse(file, 128 * 1024)
+        assertNotNull(result)
+        assertEquals(3, result!!.metadata.trackNumber)
+        assertEquals(10, result.metadata.totalTracks)
+        assertEquals(2, result.metadata.discNumber)
+        assertEquals(3, result.metadata.totalDiscs)
+    }
+
     // ==================== OggVorbisCommentParser ====================
 
     @Test

@@ -8,14 +8,17 @@ import java.nio.charset.Charset
  */
 object M4aTestDataFactory {
 
+    data class NumericTag(val trackNumber: Int, val totalTracks: Int?, val discNumber: Int?, val totalDiscs: Int?)
+
     /**
      * Creates a temporary M4A file with moov/udta/meta/ilst hierarchy.
      *
      * @param tags Map of atom types (e.g. "©nam") to text values
+     * @param numericTag Optional numeric tag for track/disc numbers
      * @return File handle to the temp file
      */
-    fun createTempFile(tags: Map<String, String>): File {
-        val ilst = buildIlstBox(tags)
+    fun createTempFile(tags: Map<String, String>, numericTag: NumericTag? = null): File {
+        val ilst = buildIlstBox(tags, numericTag)
         val meta = buildMetaBox(ilst)
         val udta = buildUdtaBox(meta)
         val moov = buildMoovBox(udta)
@@ -36,12 +39,34 @@ object M4aTestDataFactory {
         return sizeBytes + typeBytes + data
     }
 
-    private fun buildIlstBox(tags: Map<String, String>): ByteArray {
-        val items = tags.map { (type, text) ->
+    private fun buildIlstBox(tags: Map<String, String>, numericTag: NumericTag?): ByteArray {
+        val items = mutableListOf<ByteArray>()
+        tags.forEach { (type, text) ->
             val dataBox = buildDataBox(text)
-            buildBox(type, dataBox)
-        }.reduceOrNull { a, b -> a + b } ?: ByteArray(0)
-        return buildBox("ilst", items)
+            items.add(buildBox(type, dataBox))
+        }
+        numericTag?.let { nt ->
+            nt.trackNumber.let { trk ->
+                items.add(buildNumericBox("trkn", trk, nt.totalTracks))
+            }
+            nt.discNumber?.let { disk ->
+                items.add(buildNumericBox("disk", disk, nt.totalDiscs))
+            }
+        }
+        val combined = items.reduceOrNull { a, b -> a + b } ?: ByteArray(0)
+        return buildBox("ilst", combined)
+    }
+
+    private fun buildNumericBox(type: String, value: Int, total: Int?): ByteArray {
+        val dataContent = ByteArray(20)
+        dataContent[16] = (value shr 8 and 0xFF).toByte()
+        dataContent[17] = (value and 0xFF).toByte()
+        total?.let {
+            dataContent[18] = (it shr 8 and 0xFF).toByte()
+            dataContent[19] = (it and 0xFF).toByte()
+        }
+        val dataBox = buildBox("data", dataContent)
+        return buildBox(type, dataBox)
     }
 
     private fun buildDataBox(text: String): ByteArray {
