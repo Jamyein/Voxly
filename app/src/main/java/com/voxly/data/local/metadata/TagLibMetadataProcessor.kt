@@ -17,6 +17,7 @@ import com.voxly.data.local.SafPermissionCache
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.parseMediaStoreTrackField
+import com.voxly.data.local.metadata.lightweight.LightweightMetadataParser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -442,13 +443,16 @@ class TagLibMetadataProcessor @Inject constructor(
             }
 
             val metadata = parseTagLibMetadata(taglibMetadata, includeAlbumArt)
-            val audioInfo = audioProperties?.let {
+            val audioInfo = if (audioProperties != null && audioProperties.sampleRate > 0 && audioProperties.length > 0) {
                 AudioInfo(
-                    bitrate = it.bitrate,
-                    sampleRate = it.sampleRate,
-                    channels = it.channels,
-                    durationMs = it.length.toLong() * Constants.MS_PER_SECOND
+                    bitrate = audioProperties.bitrate,
+                    sampleRate = audioProperties.sampleRate,
+                    channels = audioProperties.channels,
+                    durationMs = audioProperties.length.toLong() * Constants.MS_PER_SECOND
                 )
+            } else {
+                Timber.tag(TAG).w("TagLib returned invalid audio properties in readAllFromFile, setting audioInfo to null")
+                null
             }
 
             CompleteMetadata(
@@ -1353,10 +1357,13 @@ class TagLibMetadataProcessor @Inject constructor(
                         val fdForTagLib = pfd.dup().detachFd()
                         val audioProperties = try {
                             TagLib.getAudioProperties(fdForTagLib)
+                        } catch (e: Exception) {
+                            Timber.tag(TAG).w("Failed to read audio properties via MediaStore", e)
+                            null
                         } finally {
                             pfd.close()
                         }
-                        if (audioProperties != null) {
+                        if (audioProperties != null && audioProperties.sampleRate > 0 && audioProperties.length > 0) {
                             return@withContext AudioInfo(
                                 bitrate = audioProperties.bitrate,
                                 sampleRate = audioProperties.sampleRate,
@@ -1379,10 +1386,25 @@ class TagLibMetadataProcessor @Inject constructor(
             val fdForTagLib = pfd.dup().detachFd()
             
             // TagLib takes ownership and closes its copy
-            val audioProperties = TagLib.getAudioProperties(fdForTagLib)
-            pfd.close()
+            val audioProperties = try {
+                TagLib.getAudioProperties(fdForTagLib)
+            } catch (e: Exception) {
+                Timber.tag(TAG).w("Failed to read audio properties", e)
+                null
+            } finally {
+                pfd.close()
+            }
 
-            if (audioProperties == null) {
+            if (audioProperties == null || audioProperties.sampleRate <= 0 || audioProperties.length <= 0) {
+                Timber.tag(TAG).w("TagLib returned invalid audio properties, trying LightweightMetadataParser")
+                val lightweightResult = try {
+                    LightweightMetadataParser.parse(file)
+                } catch (e: Exception) {
+                    null
+                }
+                if (lightweightResult?.audioInfo != null) {
+                    return@withContext lightweightResult.audioInfo
+                }
                 return@withContext null
             }
 
