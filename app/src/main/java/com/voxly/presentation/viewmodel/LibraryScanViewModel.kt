@@ -193,7 +193,7 @@ class LibraryScanViewModel @Inject constructor(
     private var scanJob: Job? = null
 
     init {
-        restoreSelectedDirectories()
+        unifiedScanManager.startWatchingSettings()
 
         viewModelScope.launch {
             libraryDataHolder.collectRefreshTriggers { forceRefresh ->
@@ -210,6 +210,14 @@ class LibraryScanViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Entry point for app initialization during the splash screen.
+     * Restores selected directories and performs the initial scan.
+     */
+    fun initializeApp() {
+        restoreSelectedDirectories()
     }
 
     /**

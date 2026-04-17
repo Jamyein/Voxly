@@ -38,7 +38,9 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -102,6 +104,8 @@ class AudioFileScanner @Inject constructor(
     val artists: StateFlow<List<ArtistGroup>> = albumArtistAggregator.artists
     val filteredFiles: StateFlow<List<AudioFile>> = albumArtistAggregator.filteredFiles
 
+    private val scanMutex = Mutex()
+
     // Raw cached audio files from database
     val cachedAudioFilesFlow: Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
         .catch { e ->
@@ -143,7 +147,7 @@ class AudioFileScanner @Inject constructor(
         directoryPaths: List<String>? = null,
         incremental: Boolean = false,
         forceRefresh: Boolean = false
-    ): List<AudioFile> {
+    ): List<AudioFile> = scanMutex.withLock {
         val files = when {
             !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, false)
             incremental && hasCachedData() -> incrementalScanStrategy.scan()
@@ -152,7 +156,7 @@ class AudioFileScanner @Inject constructor(
                     val cachedCount = getCachedFileCount()
                     if (cachedCount > 0) {
                         Timber.d(TAG, "Using cache: $cachedCount files")
-                        return libraryCache.getCachedAudioFilesOnce()
+                        return@withLock libraryCache.getCachedAudioFilesOnce()
                     }
                 }
                 globalScanStrategy.scan()
@@ -171,7 +175,7 @@ class AudioFileScanner @Inject constructor(
             scheduleMetadataBackfill()
         }
 
-        return files
+        files
     }
 
     /**

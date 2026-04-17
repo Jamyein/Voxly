@@ -70,18 +70,6 @@ class AlbumViewModel @Inject constructor(
 
     private var initialLoadDone = false
 
-    init {
-        viewModelScope.launch {
-            if (audioFileScanner.hasCachedData()) {
-                Timber.d("AlbumViewModel: Using cached data, skipping initial refresh")
-            } else {
-                Timber.d("AlbumViewModel: No cached data, performing initial load")
-                refresh(forceRefresh = false)
-            }
-            initialLoadDone = true
-        }
-    }
-
     /**
      * Save scroll position for a list key
      */

@@ -21,8 +21,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.presentation.navigation.MP3TagNavHost
 import com.voxly.presentation.theme.MP3TagTheme
+import com.voxly.presentation.viewmodel.LibraryScanViewModel
 import com.voxly.presentation.viewmodel.SettingsViewModel
-import com.voxly.presentation.viewmodel.SplashViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -45,12 +45,16 @@ class MainActivity : AppCompatActivity() {
             val splashScreen = remember { installSplashScreen() }
             var isReady by remember { mutableStateOf(false) }
 
-            val splashViewModel: SplashViewModel = hiltViewModel()
-            val isInitialized by splashViewModel.isInitialized.collectAsStateWithLifecycle()
+            val libraryScanViewModel: LibraryScanViewModel = hiltViewModel()
+            val isRefreshing by libraryScanViewModel.isRefreshing.collectAsStateWithLifecycle()
 
             // Keep splash screen visible while initializing
-            LaunchedEffect(isInitialized) {
-                if (isInitialized) {
+            LaunchedEffect(Unit) {
+                libraryScanViewModel.initializeApp()
+            }
+
+            LaunchedEffect(isRefreshing) {
+                if (!isRefreshing) {
                     isReady = true
                 }
             }
