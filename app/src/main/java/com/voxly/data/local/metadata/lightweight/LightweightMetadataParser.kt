@@ -33,6 +33,7 @@ object LightweightMetadataParser {
                 "mp3" -> ID3v2Parser.parse(file, readLimit)
                 "flac" -> FlacVorbisCommentParser.parse(file, readLimit)
                 "m4a", "aac" -> M4aMetadataParser.parse(file, readLimit)
+                "ogg", "oga", "opus" -> OggVorbisCommentParser.parse(file, readLimit)
                 else -> null
             }
         } catch (e: Exception) {
@@ -93,7 +94,7 @@ internal object ID3v2Parser {
             artist = frames["TPE1"],
             album = frames["TALB"],
             albumArtist = frames["TPE2"] ?: frames["TPE1"],
-            year = frames["TYER"] ?: frames["TDRC"]?.take(4),
+            year = frames["TYER"] ?: frames["TDRC"]?.take(4) ?: frames["TDRL"]?.take(4) ?: frames["TDOR"]?.take(4),
             genre = frames["TCON"],
             trackNumber = parseTrackDisc(frames["TRCK"])?.first,
             totalTracks = parseTrackDisc(frames["TRCK"])?.second,
@@ -105,7 +106,9 @@ internal object ID3v2Parser {
         // Consider parse successful if we got at least one core field
         val hasCoreData = !metadata.title.isNullOrBlank() ||
                 !metadata.artist.isNullOrBlank() ||
-                !metadata.album.isNullOrBlank()
+                !metadata.album.isNullOrBlank() ||
+                !metadata.year.isNullOrBlank() ||
+                !metadata.albumArtist.isNullOrBlank()
         return if (hasCoreData) LightweightMetadataParser.Result(metadata) else null
     }
 
@@ -226,7 +229,9 @@ internal object FlacVorbisCommentParser {
 
         val hasCoreData = !metadata.title.isNullOrBlank() ||
                 !metadata.artist.isNullOrBlank() ||
-                !metadata.album.isNullOrBlank()
+                !metadata.album.isNullOrBlank() ||
+                !metadata.year.isNullOrBlank() ||
+                !metadata.albumArtist.isNullOrBlank()
         return if (hasCoreData) LightweightMetadataParser.Result(metadata, streamInfo) else null
     }
 
@@ -257,7 +262,7 @@ internal object FlacVorbisCommentParser {
 val sampleRate = ((combined ushr 44) and 0xFFFFF).toInt()
         val channels = ((combined ushr 41) and 0x7).toInt() + 1
         val bitsPerSample = ((combined ushr 36) and 0x1F).toInt() + 1
-        val totalSamples = (combined and 0xFFFFFFFFFL).toLong()
+        val totalSamples = combined and 0xFFFFFFFFFL
 
         if (sampleRate <= 0) return null
         val durationMs = (totalSamples * 1000L) / sampleRate
@@ -336,7 +341,9 @@ internal object M4aMetadataParser {
 
         val hasCoreData = !metadata.title.isNullOrBlank() ||
                 !metadata.artist.isNullOrBlank() ||
-                !metadata.album.isNullOrBlank()
+                !metadata.album.isNullOrBlank() ||
+                !metadata.year.isNullOrBlank() ||
+                !metadata.albumArtist.isNullOrBlank()
         return if (hasCoreData) LightweightMetadataParser.Result(metadata) else null
     }
 
@@ -418,5 +425,134 @@ internal object M4aMetadataParser {
 
     private fun ByteArray.decodeAscii(offset: Int, length: Int): String {
         return String(this, offset, length, Charsets.ISO_8859_1)
+    }
+}
+
+/**
+ * Lightweight OGG/OPUS Vorbis Comment parser.
+ * Reads OGG pages to locate the Vorbis Comment packet.
+ */
+internal object OggVorbisCommentParser {
+    private const val TAG = "OggVorbisCommentParser"
+
+    fun parse(file: File, readLimit: Int): LightweightMetadataParser.Result? {
+        val bytes = readHead(file, readLimit)
+        if (bytes.size < 27) return null
+        if (bytes[0] != 'O'.code.toByte() || bytes[1] != 'g'.code.toByte() ||
+            bytes[2] != 'g'.code.toByte() || bytes[3] != 'S'.code.toByte()) {
+            return null
+        }
+
+        val comments = mutableMapOf<String, String>()
+        var offset = 0
+        var pageCount = 0
+        var foundComment = false
+
+        while (offset + 27 <= bytes.size && pageCount < 10) {
+            if (bytes[offset] != 'O'.code.toByte() || bytes[offset + 1] != 'g'.code.toByte() ||
+                bytes[offset + 2] != 'g'.code.toByte() || bytes[offset + 3] != 'S'.code.toByte()) {
+                break
+            }
+
+            val pageSegments = bytes[offset + 26].toInt() and 0xFF
+            if (offset + 27 + pageSegments > bytes.size) break
+
+            val segmentTable = bytes.copyOfRange(offset + 27, offset + 27 + pageSegments)
+            val segmentSizes = segmentTable.map { it.toInt() and 0xFF }
+            val pageDataSize = segmentSizes.sum()
+            val headerSize = 27 + pageSegments
+
+            if (offset + headerSize + pageDataSize > bytes.size) break
+
+            if (!foundComment) {
+                val pageData = bytes.copyOfRange(offset + headerSize, offset + headerSize + pageDataSize)
+                // Vorbis Comment packet starts with packet type 0x03 followed by "vorbis" or "OpusTags"
+                if (pageData.size >= 7 && pageData[0] == 0x03.toByte() &&
+                    pageData[1] == 'v'.code.toByte() && pageData[2] == 'o'.code.toByte() &&
+                    pageData[3] == 'r'.code.toByte() && pageData[4] == 'b'.code.toByte() &&
+                    pageData[5] == 'i'.code.toByte() && pageData[6] == 's'.code.toByte()) {
+                    parseVorbisComment(pageData, 7, comments)
+                    foundComment = true
+                } else if (pageData.size >= 8 && pageData[0] == 'O'.code.toByte() &&
+                    pageData[1] == 'p'.code.toByte() && pageData[2] == 'u'.code.toByte() &&
+                    pageData[3] == 's'.code.toByte() && pageData[4] == 'T'.code.toByte() &&
+                    pageData[5] == 'a'.code.toByte() && pageData[6] == 'g'.code.toByte() &&
+                    pageData[7] == 's'.code.toByte()) {
+                    parseOpusTags(pageData, 8, comments)
+                    foundComment = true
+                }
+            }
+
+            offset += headerSize + pageDataSize
+            pageCount++
+        }
+
+        if (!foundComment) return null
+
+        val metadata = AudioMetadata(
+            title = comments["TITLE"],
+            artist = comments["ARTIST"],
+            album = comments["ALBUM"],
+            albumArtist = comments["ALBUMARTIST"] ?: comments["ARTIST"],
+            year = comments["DATE"] ?: comments["YEAR"],
+            genre = comments["GENRE"],
+            trackNumber = comments["TRACKNUMBER"]?.toIntOrNull(),
+            totalTracks = comments["TRACKTOTAL"]?.toIntOrNull() ?: comments["TOTALTRACKS"]?.toIntOrNull(),
+            discNumber = comments["DISCNUMBER"]?.toIntOrNull(),
+            totalDiscs = comments["DISCTOTAL"]?.toIntOrNull() ?: comments["TOTALDISCS"]?.toIntOrNull(),
+            composer = comments["COMPOSER"]
+        )
+
+        val hasCoreData = !metadata.title.isNullOrBlank() ||
+                !metadata.artist.isNullOrBlank() ||
+                !metadata.album.isNullOrBlank() ||
+                !metadata.year.isNullOrBlank() ||
+                !metadata.albumArtist.isNullOrBlank()
+        return if (hasCoreData) LightweightMetadataParser.Result(metadata) else null
+    }
+
+    private fun readHead(file: File, limit: Int): ByteArray {
+        return FileInputStream(file).use { fis ->
+            val toRead = limit.coerceAtMost(file.length().toInt().coerceAtLeast(limit))
+            val buf = ByteArray(toRead)
+            val read = fis.read(buf)
+            if (read < buf.size) buf.copyOf(read) else buf
+        }
+    }
+
+    private fun parseVorbisComment(data: ByteArray, offset: Int, out: MutableMap<String, String>) {
+        if (offset + 4 > data.size) return
+        val vendorLen = readUInt32LE(data, offset)
+        var pos = offset + 4 + vendorLen.toInt()
+        if (pos + 4 > data.size) return
+        val commentCount = readUInt32LE(data, pos)
+        pos += 4
+
+        repeat(commentCount.coerceAtMost(100).toInt()) {
+            if (pos + 4 > data.size) return
+            val commentLen = readUInt32LE(data, pos)
+            pos += 4
+            if (pos + commentLen.toInt() > data.size) return
+            val comment = String(data, pos, commentLen.toInt(), Charsets.UTF_8)
+            pos += commentLen.toInt()
+            val eq = comment.indexOf('=')
+            if (eq > 0) {
+                val key = comment.substring(0, eq).uppercase()
+                val value = comment.substring(eq + 1)
+                out[key] = value.trim()
+            }
+        }
+    }
+
+    private fun parseOpusTags(data: ByteArray, offset: Int, out: MutableMap<String, String>) {
+        // OpusTags format is the same as Vorbis Comment after the "OpusTags" header
+        parseVorbisComment(data, offset, out)
+    }
+
+    private fun readUInt32LE(bytes: ByteArray, offset: Int): Long {
+        return (bytes[offset].toLong() and 0xFF) or
+                ((bytes[offset + 1].toLong() and 0xFF) shl 8) or
+                ((bytes[offset + 2].toLong() and 0xFF) shl 16) or
+                ((bytes[offset + 3].toLong() and 0xFF) shl 24)
     }
 }

@@ -113,7 +113,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
                         .albumSummaryDao()
                         .getAlbumSummary(albumName, albumArtist)
 
-                    _albumYear.update { albumSummary?.year }
+                    _albumYear.update { albumSummary?.year?.takeIf { it.isNotBlank() } }
                     _albumSampleRate.update { albumSummary?.maxSampleRate ?: 0 }
                     _albumBitrate.update { albumSummary?.maxBitrate ?: 0 }
                 } else {

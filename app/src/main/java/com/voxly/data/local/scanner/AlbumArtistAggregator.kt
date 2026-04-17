@@ -239,9 +239,9 @@ class AlbumArtistAggregator @Inject constructor(
     }
 
     private fun extractAlbumYear(file: AudioFile): Int? {
-        return file.metadata.year
-            ?.let { Regex("""\d{4}""").find(it)?.value }
-            ?.toIntOrNull()
+        val rawYear = file.metadata.year?.trim().orEmpty()
+        if (rawYear.isEmpty()) return null
+        return Regex("""\d{4}""").find(rawYear)?.value?.toIntOrNull()
     }
 
     /**

@@ -392,8 +392,9 @@ internal fun AlbumYearGroupedContent(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                val yearStr = getAlbumDisplayYearString(album)
                                 Text(
-                                    text = album.albumArtist ?: "",
+                                    text = if (yearStr != null) "${album.albumArtist ?: ""} · $yearStr" else (album.albumArtist ?: ""),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
