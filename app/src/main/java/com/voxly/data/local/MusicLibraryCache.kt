@@ -180,6 +180,7 @@ class MusicLibraryCache @Inject constructor(
      * Syncs a single file to cache (e.g., after metadata edit).
      */
     suspend fun syncFileToCache(audioFile: AudioFile) = withContext(Dispatchers.IO) {
+        Timber.d("syncFileToCache: path=${audioFile.path}, album=${audioFile.metadata.album}, albumArtist=${audioFile.metadata.albumArtist}, albumId=${audioFile.mediaStoreAlbumId}")
         val file = File(audioFile.path)
         val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
             gson.toJson(audioFile.metadata.customFields)
@@ -192,9 +193,10 @@ class MusicLibraryCache @Inject constructor(
         )
 
         audioFileDao.insert(entity)
+        Timber.d("syncFileToCache: inserted to DB, invalidating hotCache")
         invalidateHotCache()
         bumpCacheVersion()
-        Timber.i("DB sync: ${audioFile.path}")
+        Timber.d("syncFileToCache: done, cacheVersion=${cacheVersion.value}")
     }
 
     /**

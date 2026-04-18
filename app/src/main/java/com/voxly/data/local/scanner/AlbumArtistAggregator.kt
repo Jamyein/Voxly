@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import timber.log.Timber
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
@@ -121,6 +122,10 @@ class AlbumArtistAggregator @Inject constructor(
         )
     }.distinctUntilChanged()
 
+    companion object {
+        private const val TAG = "AlbumArtistAggregator"
+    }
+
     init {
         runBlocking(Dispatchers.IO) {
             val cachedFiles = libraryCache.getCachedAudioFilesOnce()
@@ -132,7 +137,8 @@ class AlbumArtistAggregator @Inject constructor(
 
         applicationScope.launch(Dispatchers.Default) {
             libraryCache.cacheVersionFlow
-                .flatMapLatest { _ ->
+                .flatMapLatest { version ->
+                    Timber.d(TAG, "cacheVersionFlow emitted: $version, re-reading cached files")
                     combine(
                         libraryCache.getCachedAudioFiles(),
                         aggregationConfig
@@ -141,6 +147,7 @@ class AlbumArtistAggregator @Inject constructor(
                     }
                 }
                 .collect { (files, config) ->
+                    Timber.d(TAG, "AlbumArtistAggregator received ${files.size} files, updating albums/artists")
                     updateAlbumsAndArtistsFromFilesInternal(files, config)
                 }
         }
