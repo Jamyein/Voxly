@@ -7,6 +7,8 @@ import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.CacheChange
+import com.voxly.domain.model.CacheChangeKeys
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -77,6 +79,9 @@ class AlbumArtistAggregator @Inject constructor(
         val blacklistPaths: List<String>
     )
 
+    private val _albumsMap = MutableStateFlow<Map<String, AlbumGroup>>(emptyMap())
+    private val _artistsMap = MutableStateFlow<Map<String, ArtistGroup>>(emptyMap())
+
     private val baseFilterConfig = combine(
         settingsDataStore.whitelistEnabled,
         settingsDataStore.blacklistEnabled,
@@ -130,28 +135,239 @@ class AlbumArtistAggregator @Inject constructor(
             val cachedFiles = libraryCache.getCachedAudioFilesOnce()
             if (cachedFiles.isNotEmpty()) {
                 val config = aggregationConfig.first()
-                updateAlbumsAndArtistsFromFilesInternal(cachedFiles, config)
+                buildAggregatesFromFiles(cachedFiles, config)
             }
         }
 
         applicationScope.launch(Dispatchers.Default) {
-            libraryCache.cacheVersionFlow
-                .collect { version ->
-                    Timber.d(TAG, "cacheVersionFlow emitted: $version, re-reading cached files")
-                    val config = aggregationConfig.first()
-                    val files = libraryCache.getCachedAudioFilesOnce()
-                    Timber.d(TAG, "AlbumArtistAggregator received ${files.size} files, updating albums/artists")
-                    updateAlbumsAndArtistsFromFilesInternal(files, config)
+            libraryCache.changeFlow.collect { change ->
+                when (change) {
+                    is CacheChange.FullRefresh -> {
+                        Timber.d(TAG, "FullRefresh received, re-building aggregates")
+                        val config = aggregationConfig.first()
+                        val files = libraryCache.getCachedAudioFilesOnce()
+                        buildAggregatesFromFiles(files, config)
+                    }
+                    is CacheChange.FileUpdated -> {
+                        Timber.d(TAG, "FileUpdated: ${change.filePath}, albumKey=${change.albumKey}, artistKey=${change.artistKey}")
+                        incrementalUpdateFile(change.filePath, change.albumKey, change.artistKey)
+                    }
+                    is CacheChange.FileDeleted -> {
+                        Timber.d(TAG, "FileDeleted: ${change.filePath}, albumKey=${change.albumKey}, artistKey=${change.artistKey}")
+                        removeFileFromAggregates(change.filePath, change.albumKey, change.artistKey)
+                    }
+                    is CacheChange.FilesBatchUpdated -> {
+                        Timber.d(TAG, "FilesBatchUpdated: ${change.filePaths.size} files")
+                        val config = aggregationConfig.first()
+                        val files = libraryCache.getCachedAudioFilesOnce()
+                        buildAggregatesFromFiles(files, config)
+                    }
+                    is CacheChange.AlbumMetadataChanged -> {
+                        Timber.d(TAG, "AlbumMetadataChanged: ${change.albumKey}")
+                        rebuildAlbum(change.albumKey)
+                    }
+                    is CacheChange.ArtistMetadataChanged -> {
+                        Timber.d(TAG, "ArtistMetadataChanged: ${change.artistKey}")
+                        rebuildArtist(change.artistKey)
+                    }
                 }
+            }
         }
     }
 
-    /**
-     * Updates albums and artists from audio files.
-     * Called automatically when cache changes.
-     * Applies whitelist/blacklist filtering before aggregation.
+    private suspend fun incrementalUpdateFile(
+        filePath: String,
+        albumKey: String?,
+        artistKey: String?
+    ) {
+        val config = aggregationConfig.first()
+        val file = libraryCache.getCachedFile(filePath) ?: return
+
+        if (albumKey != null) {
+            updateAlbumIncremental(file, albumKey)
+        }
+        if (artistKey != null) {
+            updateArtistIncremental(file, artistKey, config.separators)
+        }
+
+        emitUpdatedLists()
+    }
+
+    private suspend fun updateAlbumIncremental(file: AudioFile, albumKey: String) {
+        val currentMap = _albumsMap.value.toMutableMap()
+        val currentAlbum = currentMap[albumKey]
+
+        val newAlbumFiles = if (currentAlbum != null) {
+            currentAlbum.files.filter { it.path != file.path } + file
+        } else {
+            listOf(file)
+        }
+
+        val albumName = file.metadata.album ?: albumKey.removePrefix("id:").removePrefix("str:")
+        val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
+        val coverFile = newAlbumFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+            ?: newAlbumFiles.firstOrNull()
+        val albumYear = newAlbumFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
+
+        currentMap[albumKey] = AlbumGroup(
+            name = albumName,
+            albumArtist = albumArtist?.takeIf { it.isNotBlank() },
+            files = newAlbumFiles.sortedBy { it.metadata.trackNumber },
+            coverPath = coverFile?.path,
+            year = albumYear
+        )
+
+        _albumsMap.value = currentMap
+    }
+
+    private suspend fun updateArtistIncremental(
+        file: AudioFile,
+        artistKey: String,
+        separators: Set<String>
+    ) {
+        val currentMap = _artistsMap.value.toMutableMap()
+
+        val artistKeys = CacheChangeKeys.extractArtistKeysWithSeparators(file, separators)
+        for (key in artistKeys) {
+            val currentArtist = currentMap[key]
+            val newArtistFiles = if (currentArtist != null) {
+                currentArtist.files.filter { it.path != file.path } + file
+            } else {
+                listOf(file)
+            }
+
+            val sortedForCover = newArtistFiles.sortedWith(
+                compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    .thenBy { it.metadata.album }
+            )
+            val coverFile = sortedForCover.firstOrNull()
+
+            currentMap[key] = ArtistGroup(
+                name = key.removePrefix("id:"),
+                albums = newArtistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
+                files = newArtistFiles.sortedBy { it.metadata.album },
+                coverPath = coverFile?.path
+            )
+        }
+
+        _artistsMap.value = currentMap
+    }
+
+    private suspend fun removeFileFromAggregates(
+        filePath: String,
+        albumKey: String?,
+        artistKey: String?
+    ) {
+        val config = aggregationConfig.first()
+
+        if (albumKey != null) {
+            val currentMap = _albumsMap.value.toMutableMap()
+            val currentAlbum = currentMap[albumKey] ?: return
+            val newFiles = currentAlbum.files.filter { it.path != filePath }
+
+            if (newFiles.isEmpty()) {
+                currentMap.remove(albumKey)
+            } else {
+                val coverFile = newFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    ?: newFiles.firstOrNull()
+                val albumYear = newFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
+
+                currentMap[albumKey] = currentAlbum.copy(
+                    files = newFiles.sortedBy { it.metadata.trackNumber },
+                    coverPath = coverFile?.path,
+                    year = albumYear
+                )
+            }
+
+            _albumsMap.value = currentMap
+        }
+
+        if (artistKey != null) {
+            val artistKeys = listOf(artistKey)
+            val currentMap = _artistsMap.value.toMutableMap()
+
+            for (key in artistKeys) {
+                val currentArtist = currentMap[key] ?: continue
+                val newFiles = currentArtist.files.filter { it.path != filePath }
+
+                if (newFiles.isEmpty()) {
+                    currentMap.remove(key)
+                } else {
+                    val sortedForCover = newFiles.sortedWith(
+                        compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                            .thenBy { it.metadata.album }
+                    )
+                    val coverFile = sortedForCover.firstOrNull()
+
+                    currentMap[key] = currentArtist.copy(
+                        albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
+                        files = newFiles.sortedBy { it.metadata.album },
+                        coverPath = coverFile?.path
+                    )
+                }
+            }
+
+            _artistsMap.value = currentMap
+        }
+
+        emitUpdatedLists()
+    }
+
+    private suspend fun rebuildAlbum(albumKey: String) {
+        val allFiles = libraryCache.getCachedAudioFilesOnce()
+        val config = aggregationConfig.first()
+
+        val filtered = filterEngine.applyFilters(
+            allFiles,
+            FilterEngine.FilterSettings(
+                whitelistEnabled = config.whitelistEnabled,
+                blacklistEnabled = config.blacklistEnabled,
+                minDurationEnabled = config.minDurationEnabled,
+                whitelistUris = config.whitelistPaths,
+                blacklistUris = config.blacklistPaths,
+                minDurationMs = config.minDurationMs
+            )
+        )
+
+        val filesForAlbum = filtered.filter { CacheChangeKeys.extractAlbumKey(it) == albumKey }
+        if (filesForAlbum.isEmpty()) {
+            _albumsMap.value = _albumsMap.value.toMutableMap().apply { remove(albumKey) }
+        } else {
+            updateAlbumIncremental(filesForAlbum.first(), albumKey)
+        }
+
+        emitUpdatedLists()
+    }
+
+    private suspend fun rebuildArtist(artistKey: String) {
+        val config = aggregationConfig.first()
+        incrementalUpdateFile(
+            libraryCache.getCachedAudioFilesOnce().firstOrNull()?.path ?: return,
+            CacheChangeKeys.extractArtistKey(libraryCache.getCachedAudioFilesOnce().first()),
+            artistKey
+        )
+    }
+
+    private fun emitUpdatedLists() {
+        val albumsList = _albumsMap.value.values.sortedBy { SortUtil.toSortablePinyin(it.name) }
+        if (!areAlbumListsEqual(albumsList, _albums.value)) {
+            _albums.value = albumsList
+            computeAndCacheSortOrders(albumsList)
+        }
+
+        val artistsList = _artistsMap.value.values.sortedBy { SortUtil.toSortablePinyin(it.name) }
+        if (!areArtistListsEqual(artistsList, _artists.value)) {
+            _artists.value = artistsList
+        }
+
+        _filteredFiles.value = _albumsMap.value.values.flatMap { it.files }.distinctBy { it.path }
+    }
+
+/**
+     * Builds complete aggregates from audio files.
+     * Called on full refresh to rebuild all maps from scratch.
      */
-    private suspend fun updateAlbumsAndArtistsFromFilesInternal(
+    private suspend fun buildAggregatesFromFiles(
         files: List<AudioFile>,
         config: AggregationConfig
     ) {
@@ -167,12 +383,136 @@ class AlbumArtistAggregator @Inject constructor(
             )
         )
         _filteredFiles.value = filtered
-        updateAlbumsFromFiles(filtered)
-        updateArtistsFromFiles(
+        buildAlbumsFromFiles(filtered)
+        buildArtistsFromFiles(
             files = filtered,
             separatorEnabled = config.separatorEnabled,
             customSeparators = config.separators
         )
+    }
+
+    /**
+     * Builds albums map from audio files (full rebuild).
+     */
+    private suspend fun buildAlbumsFromFiles(files: List<AudioFile>) {
+        val primaryGroups = mutableMapOf<String?, MutableList<AudioFile>>()
+        val albumIdSet = mutableSetOf<Long>()
+
+        files.forEach { file ->
+            val key = CacheChangeKeys.extractAlbumKey(file)
+            if (key != null) {
+                primaryGroups.getOrPut(key) { mutableListOf() }.add(file)
+                val id = file.mediaStoreAlbumId?.takeIf { it > 0 }
+                if (id != null) albumIdSet.add(id)
+            }
+        }
+
+        val albumsMap = primaryGroups.map { (key, albumFiles) ->
+            val albumName: String
+            val albumArtist: String?
+
+            if (key?.startsWith("id:") == true) {
+                albumName = albumFiles.firstOrNull()?.metadata?.album
+                    ?: key.removePrefix("id:")
+                albumArtist = albumFiles.firstOrNull()?.metadata?.albumArtist
+                    ?: albumFiles.firstOrNull()?.metadata?.artist
+            } else {
+                val parts = key?.removePrefix("str:")?.split("|") ?: listOf()
+                albumName = parts.firstOrNull() ?: ""
+                albumArtist = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+            }
+
+            val coverFile = albumFiles.firstOrNull {
+                it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+            } ?: albumFiles.firstOrNull()
+            val albumYear = albumFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
+
+            key!! to AlbumGroup(
+                name = albumName,
+                albumArtist = albumArtist?.takeIf { it.isNotBlank() },
+                files = albumFiles.sortedBy { it.metadata.trackNumber },
+                coverPath = coverFile?.path,
+                year = albumYear
+            )
+        }.toMap()
+
+        _albumsMap.value = albumsMap
+        emitUpdatedLists()
+    }
+
+    /**
+     * Builds artists map from audio files (full rebuild).
+     */
+    private suspend fun buildArtistsFromFiles(
+        files: List<AudioFile>,
+        separatorEnabled: Boolean,
+        customSeparators: Set<String>
+    ) {
+        val primaryGroups = mutableMapOf<String?, MutableList<AudioFile>>()
+        val artistIdSet = mutableSetOf<Long>()
+
+        files.forEach { file ->
+            val key = CacheChangeKeys.extractArtistKey(file)
+            if (key != null) {
+                primaryGroups.getOrPut(key) { mutableListOf() }.add(file)
+                val id = file.mediaStoreArtistId?.takeIf { it > 0 }
+                if (id != null) artistIdSet.add(id)
+            }
+        }
+
+        val artistIdNameMap = if (artistIdSet.isNotEmpty()) {
+            mediaStoreDataSource.queryArtistNames(artistIdSet.toList())
+        } else {
+            emptyMap()
+        }
+
+        val artistFilesMap = mutableMapOf<String, MutableList<AudioFile>>()
+        val artistNameToId = mutableMapOf<String, Long?>()
+        val artistNameUseRawString = mutableSetOf<String>()
+
+        primaryGroups.forEach { (primaryKey, groupFiles) ->
+            val artistId = primaryKey?.removePrefix("id:")?.toLongOrNull()
+
+            for (file in groupFiles) {
+                val artistName = file.metadata.artist ?: continue
+
+                if (separatorEnabled && customSeparators.isNotEmpty()) {
+                    val splitArtists = CacheChangeKeys.extractArtistKeysWithSeparators(file, customSeparators)
+                    for (splitName in splitArtists) {
+                        artistFilesMap.getOrPut(splitName) { mutableListOf() }.add(file)
+                        artistNameToId[splitName] = artistId
+                        artistNameUseRawString.add(splitName)
+                    }
+                } else {
+                    artistFilesMap.getOrPut(artistName) { mutableListOf() }.add(file)
+                    artistNameToId[artistName] = artistId
+                }
+            }
+        }
+
+        val artistsMap = artistFilesMap.map { (artistName, artistFiles) ->
+            val artistId = artistNameToId[artistName]
+            val displayName = when {
+                artistName in artistNameUseRawString -> artistName
+                artistId != null -> artistIdNameMap[artistId] ?: artistName
+                else -> artistName
+            }
+
+            val sortedForCover = artistFiles.sortedWith(
+                compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    .thenBy { it.metadata.album }
+            )
+            val coverFile = sortedForCover.firstOrNull()
+
+            artistName to ArtistGroup(
+                name = displayName,
+                albums = artistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
+                files = artistFiles.sortedBy { it.metadata.album },
+                coverPath = coverFile?.path
+            )
+        }.toMap()
+
+        _artistsMap.value = artistsMap
     }
 
     /**
