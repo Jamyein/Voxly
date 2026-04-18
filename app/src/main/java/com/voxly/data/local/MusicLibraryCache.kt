@@ -178,6 +178,7 @@ class MusicLibraryCache @Inject constructor(
     
     /**
      * Syncs a single file to cache (e.g., after metadata edit).
+     * Preserves lastEditedByUserAt if already set.
      */
     suspend fun syncFileToCache(audioFile: AudioFile) = withContext(Dispatchers.IO) {
         Timber.d("syncFileToCache: path=${audioFile.path}, album=${audioFile.metadata.album}, albumArtist=${audioFile.metadata.albumArtist}, albumId=${audioFile.mediaStoreAlbumId}")
@@ -185,11 +186,15 @@ class MusicLibraryCache @Inject constructor(
         val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
             gson.toJson(audioFile.metadata.customFields)
         } else null
+        
+        val existingEntity = audioFileDao.getAudioFileByPath(audioFile.path)
+        val lastEditedByUserAt = existingEntity?.lastEditedByUserAt
 
         val entity = CachedAudioFileEntity.fromAudioFile(
             audioFile = audioFile,
             fileLastModified = file.lastModified(),
-            customFieldsJson = customFieldsJson
+            customFieldsJson = customFieldsJson,
+            lastEditedByUserAt = lastEditedByUserAt
         )
 
         audioFileDao.insert(entity)
@@ -197,6 +202,17 @@ class MusicLibraryCache @Inject constructor(
         invalidateHotCache()
         bumpCacheVersion()
         Timber.d("syncFileToCache: done, cacheVersion=${cacheVersion.value}")
+    }
+
+    /**
+     * Marks a file as edited by user with current timestamp.
+     * This prevents EnrichmentWorker from overwriting user's manual edits.
+     */
+    suspend fun markFileAsEditedByUser(filePath: String) = withContext(Dispatchers.IO) {
+        audioFileDao.updateLastEditedByUserAt(filePath, System.currentTimeMillis())
+        invalidateHotCache()
+        bumpCacheVersion()
+        Timber.d("markFileAsEditedByUser: path=$filePath")
     }
 
     /**
@@ -275,7 +291,7 @@ class MusicLibraryCache @Inject constructor(
         deletedCount
     }
 
-    private fun bumpCacheVersion() {
+    internal fun bumpCacheVersion() {
         cacheVersion.update { current -> current + 1 }
     }
     

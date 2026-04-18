@@ -68,7 +68,12 @@ data class CachedAudioFileEntity(
     
     // Timestamps for incremental scanning
     val lastScannedAt: Long,
-    val fileLastModifiedAt: Long
+    val fileLastModifiedAt: Long,
+    
+    // Timestamp when user last edited metadata via MetadataEditor.
+    // Used to prevent EnrichmentWorker from overwriting user edits.
+    // Set only when saveMetadata() succeeds; null otherwise.
+    val lastEditedByUserAt: Long?
 ) {
     /**
      * Converts entity to domain model.
@@ -126,7 +131,8 @@ data class CachedAudioFileEntity(
         fun fromAudioFile(
             audioFile: AudioFile,
             fileLastModified: Long,
-            customFieldsJson: String? = null
+            customFieldsJson: String? = null,
+            lastEditedByUserAt: Long? = null
         ): CachedAudioFileEntity {
             return CachedAudioFileEntity(
                 id = audioFile.id,
@@ -164,7 +170,8 @@ data class CachedAudioFileEntity(
                 replayGainAlbumGain = audioFile.replayGainInfo?.albumGain,
                 replayGainAlbumPeak = audioFile.replayGainInfo?.albumPeak,
                 lastScannedAt = System.currentTimeMillis(),
-                fileLastModifiedAt = fileLastModified
+                fileLastModifiedAt = fileLastModified,
+                lastEditedByUserAt = lastEditedByUserAt
             )
         }
     }

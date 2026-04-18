@@ -8,6 +8,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import timber.log.Timber
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.remote.downloadImageBytes
@@ -99,6 +100,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
     private val unifiedScanManager: UnifiedScanManager,
+    private val musicLibraryCache: MusicLibraryCache,
     private val searchSeedHolder: SearchSeedHolder,
     private val pendingMetadataHolder: PendingMetadataHolder,
     private val saveMetadataUseCase: SaveMetadataUseCase,
@@ -792,6 +794,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
                         // Sync file to cache so FileBrowser gets updated data
                         unifiedScanManager.syncFile(filePath)
+                        
+                        // Mark file as edited by user to prevent EnrichmentWorker overwrites
+                        musicLibraryCache.markFileAsEditedByUser(filePath)
                     }
                     is SaveMetadataResult.RecoverableError -> {
                         _saveResult.emit(result.message)
