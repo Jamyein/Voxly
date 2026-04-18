@@ -98,7 +98,7 @@ class SettingsViewModel @Inject constructor(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = ThemeConstants.MODE_SYSTEM
+            initialValue = "system"
         )
 
     val appleCountryCode: StateFlow<String> = settingsDataStore.appleCountryCode
