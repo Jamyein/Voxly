@@ -285,34 +285,51 @@ object ExpressiveAnimations {
 
     // ===== Material Motion Transitions (v1.13.0+) =====
     // Container Transform - for list item to detail page transitions
-    val ContainerTransformEnter: EnterTransition = fadeIn(
-        animationSpec = PageEffectsSpring
-    ) + scaleIn(
-        initialScale = 0.85f,
-        animationSpec = PageEnterSpring
-    )
+    // Combines slide (for spatial movement), scale, and fade for smooth expand/collapse feel
+    val ContainerTransformEnter: EnterTransition =
+        slideInHorizontally(
+            initialOffsetX = { it / 3 },
+            animationSpec = PageEnterSpringSlide
+        ) +
+        fadeIn(animationSpec = PageEffectsSpring) +
+        scaleIn(
+            initialScale = 0.92f,
+            animationSpec = PageEnterSpring
+        )
 
-    val ContainerTransformExit: ExitTransition = fadeOut(
-        animationSpec = PageEffectsSpring
-    ) + scaleOut(
-        targetScale = 0.85f,
-        animationSpec = PageExitSpring
-    )
+    val ContainerTransformExit: ExitTransition =
+        slideOutHorizontally(
+            targetOffsetX = { -it / 3 },
+            animationSpec = PageExitSpringSlide
+        ) +
+        fadeOut(animationSpec = PageEffectsSpring) +
+        scaleOut(
+            targetScale = 0.92f,
+            animationSpec = PageExitSpring
+        )
 
-    // Container Transform Pop (return)
-    val ContainerTransformPopEnter: EnterTransition = scaleIn(
-        initialScale = 0.85f,
-        animationSpec = PageEnterSpring
-    ) + fadeIn(
-        animationSpec = PageEffectsSpring
-    )
+    // Container Transform Pop (return) - reverse of enter
+    val ContainerTransformPopEnter: EnterTransition =
+        slideInHorizontally(
+            initialOffsetX = { -it / 3 },
+            animationSpec = PageEnterSpringSlide
+        ) +
+        scaleIn(
+            initialScale = 0.92f,
+            animationSpec = PageEnterSpring
+        ) +
+        fadeIn(animationSpec = PageEffectsSpring)
 
-    val ContainerTransformPopExit: ExitTransition = fadeOut(
-        animationSpec = PageEffectsSpring
-    ) + scaleOut(
-        targetScale = 0.85f,
-        animationSpec = PageExitSpring
-    )
+    val ContainerTransformPopExit: ExitTransition =
+        slideOutHorizontally(
+            targetOffsetX = { it / 3 },
+            animationSpec = PageExitSpringSlide
+        ) +
+        fadeOut(animationSpec = PageEffectsSpring) +
+        scaleOut(
+            targetScale = 0.92f,
+            animationSpec = PageExitSpring
+        )
 
     // Shared Axis X - for lateral navigation (settings, log viewer)
     val SharedAxisXEnter: EnterTransition = slideInHorizontally(

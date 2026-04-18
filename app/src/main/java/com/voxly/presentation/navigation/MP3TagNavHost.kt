@@ -19,6 +19,7 @@ import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffo
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -97,6 +98,15 @@ private val sharedAxisXMetadata = metadata {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun <T : Any> rememberListDetailSceneStrategy(): ListDetailSceneStrategy<T> {
+    val windowSizeClass = currentWindowAdaptiveInfoV2().windowSizeClass
+    return remember(windowSizeClass) {
+        ListDetailSceneStrategy(windowSizeClass)
+    }
+}
+
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalMaterial3ExpressiveApi::class,
@@ -140,11 +150,28 @@ fun MP3TagNavHost() {
         }
 
         if (isMainScreen) {
+            val targetKey = currentKey
+            val isFileSelected = targetKey is FileBrowser
+            val isAlbumsSelected = targetKey is Albums
+            val isArtistsSelected = targetKey is Artists
+            val isSettingsSelected = targetKey is Settings
+
+            val onFileBrowserClick = dropUnlessResumed {
+                if (!isFileSelected) navigateToMainScreen(backStack, FileBrowser)
+            }
+            val onAlbumsClick = dropUnlessResumed {
+                if (!isAlbumsSelected) navigateToMainScreen(backStack, Albums)
+            }
+            val onArtistsClick = dropUnlessResumed {
+                if (!isArtistsSelected) navigateToMainScreen(backStack, Artists)
+            }
+            val onSettingsClick = dropUnlessResumed {
+                if (!isSettingsSelected) navigateToMainScreen(backStack, Settings)
+            }
+
             NavigationSuiteScaffold(
                 layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo),
                 navigationSuiteItems = {
-                    val targetKey = currentKey
-                    val isFileSelected = targetKey is FileBrowser
                     item(
                         icon = {
                             Icon(
@@ -154,12 +181,9 @@ fun MP3TagNavHost() {
                         },
                         label = { Text("Files") },
                         selected = isFileSelected,
-                        onClick = {
-                            if (!isFileSelected) navigateToMainScreen(backStack, FileBrowser)
-                        }
+                        onClick = onFileBrowserClick
                     )
 
-                    val isAlbumsSelected = targetKey is Albums
                     item(
                         icon = {
                             Icon(
@@ -169,12 +193,9 @@ fun MP3TagNavHost() {
                         },
                         label = { Text("Albums") },
                         selected = isAlbumsSelected,
-                        onClick = {
-                            if (!isAlbumsSelected) navigateToMainScreen(backStack, Albums)
-                        }
+                        onClick = onAlbumsClick
                     )
 
-                    val isArtistsSelected = targetKey is Artists
                     item(
                         icon = {
                             Icon(
@@ -184,12 +205,9 @@ fun MP3TagNavHost() {
                         },
                         label = { Text("Artists") },
                         selected = isArtistsSelected,
-                        onClick = {
-                            if (!isArtistsSelected) navigateToMainScreen(backStack, Artists)
-                        }
+                        onClick = onArtistsClick
                     )
 
-                    val isSettingsSelected = targetKey is Settings
                     item(
                         icon = {
                             Icon(
@@ -199,9 +217,7 @@ fun MP3TagNavHost() {
                         },
                         label = { Text("Settings") },
                         selected = isSettingsSelected,
-                        onClick = {
-                            if (!isSettingsSelected) navigateToMainScreen(backStack, Settings)
-                        }
+                        onClick = onSettingsClick
                     )
                 },
                 containerColor = MaterialTheme.colorScheme.background
@@ -243,6 +259,7 @@ private fun MP3TagNavDisplay(
         predictivePopTransitionSpec = {
             computeTransition(isPush = false)
         },
+        sceneStrategies = listOf(rememberListDetailSceneStrategy()),
         entryProvider = entryProvider<NavKey> {
             entry<FileBrowser> {
                 SharedTransitionWrapper(sharedTransitionScope) {
