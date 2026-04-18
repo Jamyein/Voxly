@@ -60,6 +60,16 @@ class MusicLibraryCache @Inject constructor(
         }
     }
 
+    /**
+     * Warms up the cache by ensuring database is initialized.
+     * Call this early in app startup to avoid first-access delays.
+     */
+    suspend fun warmUp() {
+        withContext(Dispatchers.IO) {
+            hasCache()
+        }
+    }
+
     // ==================== Audio File Cache Operations ====================
     
     /**

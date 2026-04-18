@@ -14,8 +14,10 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -120,6 +122,14 @@ class AlbumArtistAggregator @Inject constructor(
     }.distinctUntilChanged()
 
     init {
+        runBlocking(Dispatchers.IO) {
+            val cachedFiles = libraryCache.getCachedAudioFilesOnce()
+            if (cachedFiles.isNotEmpty()) {
+                val config = aggregationConfig.first()
+                updateAlbumsAndArtistsFromFilesInternal(cachedFiles, config)
+            }
+        }
+
         applicationScope.launch(Dispatchers.Default) {
             combine(
                 libraryCache.getCachedAudioFiles(),

@@ -6,6 +6,7 @@ import androidx.work.Configuration
 import com.voxly.core.util.CrashHandler
 import com.voxly.core.util.FileLoggingTree
 import com.voxly.core.util.LogManager
+import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.presentation.ui.clearAllCaches
@@ -38,9 +39,13 @@ class MP3TagApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
+    @Inject
+    lateinit var musicLibraryCache: MusicLibraryCache
+
     override fun onCreate() {
         super.onCreate()
 
+        warmUpCache()
         initLogging()
         initImageLoaderScope(applicationScope)
     }
@@ -104,6 +109,16 @@ class MP3TagApplication : Application(), Configuration.Provider {
         Thread.setDefaultUncaughtExceptionHandler(CrashHandler())
 
         Timber.i("Application started - Version ${BuildConfig.VERSION_NAME}")
+    }
+
+    private fun warmUpCache() {
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                musicLibraryCache.warmUp()
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to warm up music library cache")
+            }
+        }
     }
 
     private fun applyLoggingSettings() {
