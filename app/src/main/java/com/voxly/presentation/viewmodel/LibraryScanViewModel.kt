@@ -12,8 +12,6 @@ import com.voxly.data.local.UiStateDataStore
 import com.voxly.data.local.DirFileSortOption
 import com.voxly.data.local.FileSortOption
 import com.voxly.data.local.saf.SafWriteAccessService
-import com.voxly.data.repository.AlbumCacheRepository
-import com.voxly.data.repository.ArtistCacheRepository
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -59,8 +57,6 @@ class LibraryScanViewModel @Inject constructor(
     private val uiStateDataStore: UiStateDataStore,
     private val unifiedScanManager: UnifiedScanManager,
     private val safWriteAccessService: SafWriteAccessService,
-    private val albumCacheRepository: AlbumCacheRepository,
-    private val artistCacheRepository: ArtistCacheRepository,
     private val audioRepository: AudioRepository,
     private val libraryDataHolder: LibraryDataHolder
 ) : ViewModel() {
@@ -499,14 +495,6 @@ class LibraryScanViewModel @Inject constructor(
         viewModelScope.launch {
             settingsDataStore.setSelectedDirectoryUris(directories.map { it.uri })
         }
-    }
-
-    fun cacheAlbum(album: AlbumGroup) {
-        albumCacheRepository.cacheAlbum(album)
-    }
-
-    fun cacheArtist(artist: ArtistGroup) {
-        artistCacheRepository.cacheArtist(artist)
     }
 
     /**

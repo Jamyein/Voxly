@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
-import com.voxly.data.repository.ArtistCacheRepository
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.navigation.ArtistDetail
@@ -30,13 +29,12 @@ import timber.log.Timber
 
 /**
  * ViewModel for ArtistDetailScreen.
- * Loads artist data from memory cache or database.
+ * Loads artist data directly from AudioFileScanner.artists (single source of truth).
  */
 @HiltViewModel(assistedFactory = ArtistDetailViewModel.Factory::class)
 class ArtistDetailViewModel @AssistedInject constructor(
     @Assisted val navKey: ArtistDetail,
     @ApplicationContext private val context: Context,
-    private val artistCacheRepository: ArtistCacheRepository,
     private val audioFileScanner: AudioFileScanner,
     private val databaseProvider: MusicCacheDatabaseProvider
 ) : ViewModel() {
@@ -79,42 +77,30 @@ class ArtistDetailViewModel @AssistedInject constructor(
 
     /**
      * Load artist data by artist name.
-     * First tries to get from cache, then falls back to database query.
+     * Gets data directly from AudioFileScanner.artists (single source of truth).
      */
     fun loadArtist(artistName: String) {
         viewModelScope.launch {
             try {
-                // Skip if state already has this artist's data (works across ViewModel recreations)
                 if (_artistName.value == artistName && _files.value.isNotEmpty()) {
                     return@launch
                 }
 
-                // First try to get from cache
-                val cachedArtist = artistCacheRepository.getArtist(artistName)
+                val scannerArtist = audioFileScanner.artists.first()
+                    .find { it.name.equals(artistName, ignoreCase = true) }
 
-                if (cachedArtist != null) {
-                    _artistName.update { cachedArtist.name }
-                    _files.update { cachedArtist.files }
-                    _coverPath.update { cachedArtist.coverPath }
-                    _coverAlbumId.update { cachedArtist.files.firstOrNull {
+                if (scannerArtist != null) {
+                    _artistName.update { scannerArtist.name }
+                    _files.update { scannerArtist.files }
+                    _coverPath.update { scannerArtist.coverPath }
+                    _coverAlbumId.update { scannerArtist.files.firstOrNull {
                         it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
                     }?.mediaStoreAlbumId }
-                    calculateStats(cachedArtist.files)
-                    loadAlbumYears(cachedArtist.files)
-                    // precomputeAlbumCovers is deferred - called by carousel preloadAdjacentAlbumCovers
+                    calculateStats(scannerArtist.files)
+                    loadAlbumYears(scannerArtist.files)
                 } else {
-                    // Cache miss: look up from AudioFileScanner (source of truth)
-                    val scannerArtist = audioFileScanner.artists.first()
-                        .find { it.name.equals(artistName, ignoreCase = true) }
-
-                    if (scannerArtist != null) {
-                        // Populate cache and ViewModel state
-                        cacheArtistData(scannerArtist.name, scannerArtist.files, scannerArtist.coverPath)
-                        loadAlbumYears(scannerArtist.files)
-                    } else {
-                        _artistName.update { artistName }
-                        _files.update { emptyList() }
-                    }
+                    _artistName.update { artistName }
+                    _files.update { emptyList() }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -124,18 +110,15 @@ class ArtistDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * Cache artist data for navigation.
+     * Update ViewModel state with artist data.
+     * No manual caching needed - data comes from AudioFileScanner.artists.
      */
     fun cacheArtistData(artistName: String, files: List<AudioFile>, coverPath: String? = null) {
-        val artistGroup = ArtistGroup(name = artistName, albums = emptyList(), files = files, coverPath = coverPath)
-        artistCacheRepository.cacheArtist(artistGroup)
-
-        // Also update ViewModel state
         _artistName.update { artistName }
         _files.update { files }
         _coverPath.update { coverPath }
-        _coverAlbumId.update { files.firstOrNull { 
-            it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
+        _coverAlbumId.update { files.firstOrNull {
+            it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
         }?.mediaStoreAlbumId }
         calculateStats(files)
         precomputeAlbumCovers(files)

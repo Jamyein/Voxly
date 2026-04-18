@@ -9,13 +9,15 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
@@ -24,8 +26,10 @@ import javax.inject.Singleton
 
 /**
  * Aggregates audio files into albums and artists.
- * Directly observes Room database and applies filters before aggregation.
+ * Listens to cacheVersionFlow to trigger re-aggregation only when cache version changes,
+ * avoiding unnecessary recomputation on every Flow emission.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @Singleton
 class AlbumArtistAggregator @Inject constructor(
     private val libraryCache: MusicLibraryCache,
@@ -35,19 +39,15 @@ class AlbumArtistAggregator @Inject constructor(
     private val whitelistRepository: com.voxly.domain.repository.WhitelistRepository,
     @Named("ApplicationScope") private val applicationScope: CoroutineScope
 ) {
-    // Albums derived from cached audio files - auto-updated when cache changes
     private val _albums = MutableStateFlow<List<AlbumGroup>>(emptyList())
     val albums: StateFlow<List<AlbumGroup>> = _albums.asStateFlow()
 
-    // Artists derived from cached audio files - auto-updated when cache changes
     private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
     val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
 
-    // Filtered audio files - exposed for LibraryViewModel and other consumers
     private val _filteredFiles = MutableStateFlow<List<AudioFile>>(emptyList())
     val filteredFiles: StateFlow<List<AudioFile>> = _filteredFiles.asStateFlow()
 
-    // Albums sorted by different sort options
     private val _albumsBySort = MutableStateFlow<Map<AlbumSortOption, List<AlbumGroup>>>(
         mapOf(
             AlbumSortOption.NAME_ASC to emptyList(),
@@ -131,15 +131,19 @@ class AlbumArtistAggregator @Inject constructor(
         }
 
         applicationScope.launch(Dispatchers.Default) {
-            combine(
-                libraryCache.getCachedAudioFiles(),
-                aggregationConfig
-            ) { files, config ->
-                files to config
-            }.collectLatest { (files, config) ->
+            libraryCache.cacheVersionFlow
+                .flatMapLatest { _ ->
+                    combine(
+                        libraryCache.getCachedAudioFiles(),
+                        aggregationConfig
+                    ) { files, config ->
+                        files to config
+                    }
+                }
+                .collect { (files, config) ->
                     updateAlbumsAndArtistsFromFilesInternal(files, config)
                 }
-            }
+        }
     }
 
     /**
