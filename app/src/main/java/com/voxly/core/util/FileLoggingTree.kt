@@ -167,17 +167,6 @@ class FileLoggingTree : Timber.Tree() {
         } ?: emptyList()
     }
 
-    private fun rotateFiles() {
-        // Delete oldest files until we're under MAX_FILES
-        val files = getLogFilesWithIndex().sortedBy { it.first }
-        for ((index, file) in files) {
-            if (getLogFilesWithIndex().size <= MAX_FILES) break
-            if (file.exists()) {
-                file.delete()
-            }
-        }
-    }
-
     private fun getPriorityString(priority: Int): String {
         return when (priority) {
             Log.VERBOSE -> "VERBOSE"

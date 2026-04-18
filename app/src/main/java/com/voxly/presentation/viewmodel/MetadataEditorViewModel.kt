@@ -10,7 +10,6 @@ import timber.log.Timber
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.data.local.saf.SafWriteAccessService
-import com.voxly.data.local.metadata.RecoverableMediaStoreException
 import com.voxly.data.remote.downloadImageBytes
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.domain.model.AudioFile
@@ -29,6 +28,9 @@ import com.voxly.domain.repository.OnlineSource
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.repository.ScanMode
+import com.voxly.domain.usecase.ApplyOnlineMetadataUseCase
+import com.voxly.domain.usecase.SaveMetadataResult
+import com.voxly.domain.usecase.SaveMetadataUseCase
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.viewmodel.SearchSeedHolder
@@ -98,7 +100,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val recentEditsRepository: RecentEditsRepository,
     private val unifiedScanManager: UnifiedScanManager,
     private val searchSeedHolder: SearchSeedHolder,
-    private val pendingMetadataHolder: PendingMetadataHolder
+    private val pendingMetadataHolder: PendingMetadataHolder,
+    private val saveMetadataUseCase: SaveMetadataUseCase,
+    private val applyOnlineMetadataUseCase: ApplyOnlineMetadataUseCase
 ) : ViewModel() {
 
     private val TAG = "MetadataEditorVM"
@@ -728,103 +732,90 @@ class MetadataEditorViewModel @AssistedInject constructor(
             val currentSuccessState = _uiState.value as? MetadataEditorUiState.Success
             _uiState.update { MetadataEditorUiState.Saving }
 
-            // First save the metadata
-            val metadataResult = try {
-                audioRepository.updateMetadata(filePath, metadataToSave)
-            } catch (e: RecoverableMediaStoreException) {
-                _saveResult.emit(e.message ?: "MediaStore permission required to edit this file")
-                _uiState.update { MetadataEditorUiState.Error(e.message ?: "MediaStore permission required") }
-                return@launch
-            }
-            
-            metadataResult.fold(
-                onSuccess = {
-                    // If we have pending ReplayGain info, save it too
-                    var replayGainSuccess = true
-                    if (replayGainToSave != null) {
-                        val replayGainResult = replayGainRepository.saveReplayGain(
-                            filePath,
-                            replayGainToSave
-                        )
-                        replayGainSuccess = replayGainResult.isSuccess
-                        if (replayGainSuccess) {
-                            _pendingReplayGainInfo.update { null } // Clear after successful save
-                        } else {
-                            Timber.w(
-                                "Save replaygain failed file=$filePath reason=${replayGainResult.exceptionOrNull()?.message ?: "unknown"}",
-                                "MetadataEditor"
+            saveMetadataUseCase(
+                filePath = filePath,
+                originalMetadata = _originalMetadata ?: metadataToSave,
+                editedMetadata = metadataToSave
+            ).collect { result ->
+                when (result) {
+                    is SaveMetadataResult.Success -> {
+                        // If we have pending ReplayGain info, save it too
+                        var replayGainSuccess = true
+                        if (replayGainToSave != null) {
+                            val replayGainResult = replayGainRepository.saveReplayGain(
+                                filePath,
+                                replayGainToSave
+                            )
+                            replayGainSuccess = replayGainResult.isSuccess
+                            if (replayGainSuccess) {
+                                _pendingReplayGainInfo.update { null }
+                            } else {
+                                Timber.w(
+                                    "Save replaygain failed file=$filePath reason=${replayGainResult.exceptionOrNull()?.message ?: "unknown"}",
+                                    "MetadataEditor"
+                                )
+                            }
+                        }
+                        
+                        _hasUnsavedChanges.update { false }
+                        _modifiedFields.update { emptySet() }
+                        _saveResult.emit("Save successful")
+
+                        _uiState.update {
+                            currentSuccessState?.copy(
+                                editedMetadata = metadataToSave,
+                                audioFile = currentSuccessState.audioFile.copy(
+                                    metadata = metadataToSave,
+                                    replayGainInfo = replayGainToSave ?: currentSuccessState.audioFile.replayGainInfo
+                                )
+                            ) ?: MetadataEditorUiState.Success(
+                                audioFile = AudioFile(
+                                    id = "",
+                                    path = filePath,
+                                    name = "",
+                                    size = 0,
+                                    duration = 0L,
+                                    format = "",
+                                    bitrate = 0,
+                                    sampleRate = 0,
+                                    channels = 0,
+                                    metadata = metadataToSave,
+                                    replayGainInfo = replayGainToSave
+                                ),
+                                editedMetadata = metadataToSave
                             )
                         }
-                    }
-                    
-                    _hasUnsavedChanges.update { false }
-                    _modifiedFields.update { emptySet() }
-                    _saveResult.emit("Save successful")
-
-                    // Add to recent edits history
-                    _originalMetadata?.let { original ->
-                        recentEditsRepository.addRecentEdit(
-                            filePath = filePath,
-                            originalMetadata = original,
-                            newMetadata = metadataToSave
+                        Timber.i(
+                            "Save metadata success file=$filePath replayGainSuccess=$replayGainSuccess elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+                            "MetadataEditor"
                         )
-                    }
-                    _uiState.update {
-                        currentSuccessState?.copy(
-                            editedMetadata = metadataToSave,
-                            audioFile = currentSuccessState.audioFile.copy(
-                                metadata = metadataToSave,
-                                replayGainInfo = replayGainToSave ?: currentSuccessState.audioFile.replayGainInfo
-                            )
-                        ) ?: MetadataEditorUiState.Success(
-                            audioFile = AudioFile(
-                                id = "",
-                                path = filePath,
-                                name = "",
-                                size = 0,
-                                duration = 0L,
-                                format = "",
-                                bitrate = 0,
-                                sampleRate = 0,
-                                channels = 0,
-                                metadata = metadataToSave,
-                                replayGainInfo = replayGainToSave
-                            ),
-                            editedMetadata = metadataToSave
-                        )
-                    }
-                    Timber.i(
-                        "Save metadata success file=$filePath replayGainSuccess=$replayGainSuccess elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
-                        "MetadataEditor"
-                    )
 
-                    // Sync file to cache so FileBrowser gets updated data
-                    unifiedScanManager.syncFile(filePath)
-                },
-                onFailure = { error ->
-                    Timber.e(
-                        "Save metadata failed file=$filePath reason=${error.message ?: "unknown"} elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
-                        error,
-                        "MetadataEditor"
-                    )
-                    // Check if this is a permission-related error
-                    val errorMessage = error.message ?: "Failed to save"
-                    val requiresReauthorization = errorMessage.contains("SAF write permission") ||
-                            errorMessage.contains("Permission denied") ||
-                            errorMessage.contains("EACCES") ||
-                            errorMessage.contains("write permission")
+                        // Sync file to cache so FileBrowser gets updated data
+                        unifiedScanManager.syncFile(filePath)
+                    }
+                    is SaveMetadataResult.RecoverableError -> {
+                        _saveResult.emit(result.message)
+                        _uiState.update { MetadataEditorUiState.Error(result.message) }
+                    }
+                    is SaveMetadataResult.Error -> {
+                        val errorMessage = result.message
+                        val requiresReauthorization = errorMessage.contains("SAF write permission") ||
+                                errorMessage.contains("Permission denied") ||
+                                errorMessage.contains("EACCES") ||
+                                errorMessage.contains("write permission")
 
-                    _saveResult.emit(errorMessage)
-                    val currentState = _uiState.value
-                    if (currentState is MetadataEditorUiState.Saving) {
-                        _uiState.update {
-                            MetadataEditorUiState.Error(
-                                errorMessage + if (requiresReauthorization) "\n\n请重新选择文件以恢复写入权限。" else ""
-                            )
+                        _saveResult.emit(errorMessage)
+                        val currentState = _uiState.value
+                        if (currentState is MetadataEditorUiState.Saving) {
+                            _uiState.update {
+                                MetadataEditorUiState.Error(
+                                    errorMessage + if (requiresReauthorization) "\n\n请重新选择文件以恢复写入权限。" else ""
+                                )
+                            }
                         }
                     }
                 }
-            )
+            }
         }
     }
 
@@ -1189,57 +1180,20 @@ class MetadataEditorViewModel @AssistedInject constructor(
             pendingMetadataHolder.put(filePath, metadata)
             return
         }
-        Timber.d("applyOnlineMetadata: current title=${currentMetadata.title}, new title=${metadata.title}", "MetadataEditor")
 
-        // Track which fields are being modified
-        val modifiedFields = mutableSetOf<MetadataField>()
-
-        // 在线源在字段缺失时可能用 "Unknown" 等占位文本填充，回填时应视为无效值
-        fun String?.isValidValue(): Boolean {
-            if (this.isNullOrBlank()) return false
-            val lower = this.trim().lowercase()
-            return lower !in setOf(
-                "unknown", "unknown artist", "unknown album", "unknown track",
-                "0", "null", "n/a", "tbd", "-"
-            )
-        }
-
-        // 过滤掉只有时间戳壳的空歌词（如 [00:00.000]\n[00:01.000]）
-        fun String?.isMeaningfulLyrics(): Boolean {
-            if (this.isNullOrBlank()) return false
-            val cleaned = this.replace(Regex("""\[\d{2}:\d{2}\.\d{2,3}\]"""), "")
-                .replace(Regex("""\[\d{2}:\d{2}\]"""), "")
-                .replace(Regex("""\[ti:.*?\]|\[ar:.*?\]|\[al:.*?\]"""), "")
-                .trim()
-            return cleaned.isNotBlank()
-        }
-
-        val updatedMetadata = currentMetadata.copy(
-            title = metadata.title.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.title) modifiedFields.add(MetadataField.TITLE) } ?: currentMetadata.title,
-            artist = metadata.artist.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.artist) modifiedFields.add(MetadataField.ARTIST) } ?: currentMetadata.artist,
-            album = metadata.album.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.album) modifiedFields.add(MetadataField.ALBUM) } ?: currentMetadata.album,
-            albumArtist = metadata.albumArtist.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.albumArtist) modifiedFields.add(MetadataField.ALBUM_ARTIST) } ?: currentMetadata.albumArtist,
-            year = metadata.year?.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.year) modifiedFields.add(MetadataField.YEAR) } ?: currentMetadata.year,
-            genre = metadata.genre.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.genre) modifiedFields.add(MetadataField.GENRE) } ?: currentMetadata.genre,
-            trackNumber = metadata.trackNumber?.takeIf { it > 0 } ?: currentMetadata.trackNumber,
-            totalTracks = metadata.totalTracks?.takeIf { it > 0 } ?: currentMetadata.totalTracks,
-            discNumber = metadata.discNumber?.takeIf { it > 0 } ?: currentMetadata.discNumber,
-            totalDiscs = metadata.totalDiscs?.takeIf { it > 0 } ?: currentMetadata.totalDiscs,
-            comment = metadata.comment.takeIf { it.isValidValue() }?.also { if (it != currentMetadata.comment) modifiedFields.add(MetadataField.COMMENT) } ?: currentMetadata.comment,
-            lyrics = metadata.lyrics.takeIf { it.isValidValue() && it.isMeaningfulLyrics() }?.also { if (it != currentMetadata.lyrics) modifiedFields.add(MetadataField.LYRICS) } ?: currentMetadata.lyrics,
-            albumArt = metadata.albumArt ?: currentMetadata.albumArt
-        ).also {
-            if (metadata.albumArt != null && !metadata.albumArt.contentEquals(currentMetadata.albumArt)) {
-                modifiedFields.add(MetadataField.ALBUM_ART)
-            }
-        }
+        val result = applyOnlineMetadataUseCase(currentMetadata, metadata)
+        val updatedMetadata = result.metadata
+        val modifiedFieldNames = result.modifiedFields
         
-        Timber.d("applyOnlineMetadata: setting edited metadata, title=${updatedMetadata.title}, modifiedFields=$modifiedFields", "MetadataEditor")
+        Timber.d("applyOnlineMetadata: setting edited metadata, title=${updatedMetadata.title}, modifiedFields=$modifiedFieldNames", "MetadataEditor")
         
         _editedMetadata.update { updatedMetadata }
         _hasUnsavedChanges.update { true }
-        if (modifiedFields.isNotEmpty()) {
-            _modifiedFields.update { it + modifiedFields }
+        if (modifiedFieldNames.isNotEmpty()) {
+            val enumFields = modifiedFieldNames.mapNotNull { name ->
+                try { MetadataField.valueOf(name) } catch (_: Exception) { null }
+            }.toSet()
+            _modifiedFields.update { it + enumFields }
         }
 
         // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值

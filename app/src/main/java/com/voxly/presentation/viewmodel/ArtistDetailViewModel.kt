@@ -103,7 +103,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     _files.update { emptyList() }
                 }
             } catch (e: Exception) {
-                e.printStackTrace()
+                Timber.e(e, "Error loading artist: $artistName")
                 _artistName.update { artistName }
             }
         }

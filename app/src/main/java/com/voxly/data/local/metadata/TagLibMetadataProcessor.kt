@@ -978,7 +978,8 @@ class TagLibMetadataProcessor @Inject constructor(
                         Timber.tag(TAG).w( "Failed to save album art for: $filePath")
                     }
                 } finally {
-                    try { pfd2.close() } catch (_: Exception) { }
+                    // Best-effort cleanup; file descriptor will be released by system
+                    try { pfd2.close() } catch (_: Exception) { /* ignore - best effort */ }
                 }
             }
 
@@ -1011,7 +1012,8 @@ class TagLibMetadataProcessor @Inject constructor(
             }
             Result.failure(IllegalStateException(errorMessage, e))
         } finally {
-            try { pfd?.close() } catch (_: Exception) { }
+            // Best-effort cleanup; file descriptor will be released by system
+            try { pfd?.close() } catch (_: Exception) { /* ignore - best effort */ }
         }
         return Result.failure(IllegalStateException("Unexpected exit in updateMetadataViaMediaStoreUri"))
     }
