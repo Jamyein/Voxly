@@ -113,8 +113,8 @@ class BatchEngineTest {
         engine.retry(originalFailed) { Result.failure(Exception("Retry Error")) }.collect { retryResults.add(it) }
 
         val final = retryResults.last()
-        // Should have both original failure and retry failure
-        assertEquals(2, final.failedCount)
+        // Should be deduplicated - same file fails again, only one entry
+        assertEquals(1, final.failedCount)
     }
 
     @Test

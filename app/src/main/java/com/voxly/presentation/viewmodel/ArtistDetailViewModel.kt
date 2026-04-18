@@ -11,6 +11,7 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.navigation.ArtistDetail
 import com.voxly.presentation.ui.extractAndCacheCoverBytes
 import com.voxly.presentation.ui.loadAlbumArtThumbnail
+import com.voxly.core.util.Constants
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
@@ -22,6 +23,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -69,7 +71,6 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private var preloadJob: Job? = null
     private var refreshJob: Job? = null
     private var albumYearJob: Job? = null
-    private var hasLoadedArtistData = false
     private val preloadMutex = kotlinx.coroutines.sync.Mutex()
 
     init {
@@ -83,8 +84,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
     fun loadArtist(artistName: String) {
         viewModelScope.launch {
             try {
-                // Skip if already loaded for this artist
-                if (hasLoadedArtistData && _artistName.value == artistName && _files.value.isNotEmpty()) {
+                // Skip if state already has this artist's data (works across ViewModel recreations)
+                if (_artistName.value == artistName && _files.value.isNotEmpty()) {
                     return@launch
                 }
 
@@ -92,18 +93,15 @@ class ArtistDetailViewModel @AssistedInject constructor(
                 val cachedArtist = artistCacheRepository.getArtist(artistName)
 
                 if (cachedArtist != null) {
-                    _artistName.value = cachedArtist.name
-                    _files.value = cachedArtist.files
-                    _coverPath.value = cachedArtist.coverPath
-                    _coverAlbumId.value = cachedArtist.files.firstOrNull { 
-                        it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
-                    }?.mediaStoreAlbumId
+                    _artistName.update { cachedArtist.name }
+                    _files.update { cachedArtist.files }
+                    _coverPath.update { cachedArtist.coverPath }
+                    _coverAlbumId.update { cachedArtist.files.firstOrNull {
+                        it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+                    }?.mediaStoreAlbumId }
                     calculateStats(cachedArtist.files)
-                    if (!hasLoadedArtistData) {
-                        precomputeAlbumCovers(cachedArtist.files)
-                        loadAlbumYears(cachedArtist.files)
-                    }
-                    hasLoadedArtistData = true
+                    loadAlbumYears(cachedArtist.files)
+                    // precomputeAlbumCovers is deferred - called by carousel preloadAdjacentAlbumCovers
                 } else {
                     // Cache miss: look up from AudioFileScanner (source of truth)
                     val scannerArtist = audioFileScanner.artists.first()
@@ -112,14 +110,15 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     if (scannerArtist != null) {
                         // Populate cache and ViewModel state
                         cacheArtistData(scannerArtist.name, scannerArtist.files, scannerArtist.coverPath)
+                        loadAlbumYears(scannerArtist.files)
                     } else {
-                        _artistName.value = artistName
-                        _files.value = emptyList()
+                        _artistName.update { artistName }
+                        _files.update { emptyList() }
                     }
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                _artistName.value = artistName
+                _artistName.update { artistName }
             }
         }
     }
@@ -132,12 +131,12 @@ class ArtistDetailViewModel @AssistedInject constructor(
         artistCacheRepository.cacheArtist(artistGroup)
 
         // Also update ViewModel state
-        _artistName.value = artistName
-        _files.value = files
-        _coverPath.value = coverPath
-        _coverAlbumId.value = files.firstOrNull { 
+        _artistName.update { artistName }
+        _files.update { files }
+        _coverPath.update { coverPath }
+        _coverAlbumId.update { files.firstOrNull { 
             it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
-        }?.mediaStoreAlbumId
+        }?.mediaStoreAlbumId }
         calculateStats(files)
         precomputeAlbumCovers(files)
         loadAlbumYears(files)
@@ -146,10 +145,10 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private fun calculateStats(files: List<AudioFile>) {
         // Calculate album count (distinct albums)
         val albums = files.mapNotNull { it.metadata.album }.distinct()
-        _albumCount.value = albums.size
+        _albumCount.update { albums.size }
 
         // Calculate total duration
-        _totalDuration.value = files.sumOf { it.duration }
+        _totalDuration.update { files.sumOf { it.duration } }
     }
 
     /**
@@ -164,7 +163,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     .distinct()
 
                 if (albumNames.isEmpty()) {
-                    _albumYears.value = emptyMap()
+                    _albumYears.update { emptyMap() }
                     return@launch
                 }
 
@@ -174,18 +173,18 @@ class ArtistDetailViewModel @AssistedInject constructor(
                         .getAlbumSummariesByNames(albumNames)
                 }
 
-                _albumYears.value = summaries.associate { it.albumTitle to it.year }
+                _albumYears.update { summaries.associate { it.albumTitle to it.year } }
             } catch (e: Exception) {
                 Timber.e(e, "Error loading album years from view")
-                _albumYears.value = emptyMap()
+                _albumYears.update { emptyMap() }
             }
         }
     }
 
     /**
-     * 预计算专辑封面路径。
-     * 修复：每封面仅调用一次MediaMetadataRetriever。
-     * 使用extractAndCacheCoverBytes直接获取bytes，null表示无封面。
+     * Precompute album cover paths for the carousel.
+     * Deferred until carousel needs covers - not called on every loadArtist.
+     * Uses extractAndCacheCoverBytes which has LRU byte caching.
      */
     private fun precomputeAlbumCovers(files: List<AudioFile>) {
         viewModelScope.launch {
@@ -194,10 +193,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
                 albumGroups.mapNotNull { (albumName, albumFiles) ->
                     if (albumName.isEmpty()) return@mapNotNull null
 
-                    // 找第一张有封面的文件（单次调用）
                     val fileWithArt = albumFiles.firstOrNull { file ->
                         try {
-                            // extractAndCacheCoverBytes会写入Bytes Cache
                             extractAndCacheCoverBytes(file.path) != null
                         } catch (e: Exception) {
                             false
@@ -207,10 +204,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     albumName to fileWithArt?.path
                 }.toMap()
             }
-            _albumCovers.value = covers
+            _albumCovers.update { covers }
 
-            // 封面计算完成后立即预加载第 0 页封面到 carouselCoverCache
-            // 不依赖 UI recomposition，确保首次渲染时缓存已准备好
             preloadAdjacentAlbumCovers(0)
         }
     }
@@ -250,9 +245,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
      */
     fun getFormattedDuration(): String {
         val duration = _totalDuration.value
-        val hours = duration / 3600000
-        val minutes = (duration % 3600000) / 60000
-        val seconds = (duration % 60000) / 1000
+        val hours = duration / Constants.MS_PER_HOUR
+        val minutes = (duration % Constants.MS_PER_HOUR) / Constants.MS_PER_MINUTE
+        val seconds = (duration % Constants.MS_PER_MINUTE) / Constants.MS_PER_SECOND
         return if (hours > 0) {
             String.format("%d:%02d:%02d", hours, minutes, seconds)
         } else {
@@ -267,11 +262,11 @@ class ArtistDetailViewModel @AssistedInject constructor(
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             try {
-                _isRefreshing.value = true
+                _isRefreshing.update { true }
                 audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
                 loadArtist(navKey.artistName)
             } finally {
-                _isRefreshing.value = false
+                _isRefreshing.update { false }
             }
         }
     }

@@ -2,7 +2,8 @@ package com.voxly.data.remote.netease
 
 import android.os.SystemClock
 
-import com.voxly.core.util.Logger
+import com.voxly.core.util.Constants
+import timber.log.Timber
 import com.voxly.data.remote.SearchQueryBuilder
 import com.voxly.data.remote.mapper.OnlineRecordingMapper
 import com.voxly.data.remote.mapper.OnlineRecordingMapper.AlbumInfo
@@ -26,7 +27,6 @@ import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.net.UnknownHostException
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -54,7 +54,7 @@ class NetEaseMetadataRepository @Inject constructor(
         limit: Int
     ): Flow<OnlineSourceResult> = callbackFlow {
         val startedAt = SystemClock.elapsedRealtime()
-        Logger.i(
+        Timber.i(
             "NetEase query start type=artist_album artist=$artist album=$album",
             TAG
         )
@@ -93,7 +93,7 @@ class NetEaseMetadataRepository @Inject constructor(
         limit: Int
     ): Flow<OnlineSourceResult> = callbackFlow {
         val startedAt = SystemClock.elapsedRealtime()
-        Logger.i(
+        Timber.i(
             "NetEase query start type=track title=$title artist=${artist ?: ""}",
             TAG
         )
@@ -212,7 +212,7 @@ class NetEaseMetadataRepository @Inject constructor(
             Timber.e(TAG, "NetEase search exception: ${e.message}", e)
             Result.failure(e)
         }.also { result ->
-            Logger.i(
+            Timber.i(
                 "Online query source=NetEase type=artist_album elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
                 TAG
             )
@@ -293,7 +293,7 @@ class NetEaseMetadataRepository @Inject constructor(
                                 title = searchSong.name,
                                 artist = artistName,
                                 album = albumName,
-                                duration = (searchSong.duration / 1000).toInt(),
+                                duration = (searchSong.duration / Constants.MS_PER_SECOND).toInt(),
                                 releaseId = albumId?.toString() ?: searchSong.id.toString(),
                                 source = OnlineSource.NETEASE,
                                 coverArtUrl = coverUrl,
@@ -316,7 +316,7 @@ class NetEaseMetadataRepository @Inject constructor(
             Timber.e(TAG, "NetEase track search exception: ${e.message}", e)
             Result.failure(e)
         }.also { result ->
-            Logger.i(
+            Timber.i(
                 "Online query source=NetEase type=track elapsedMs=${SystemClock.elapsedRealtime() - startedAt} resultCount=${result.getOrNull()?.size ?: 0} success=${result.isSuccess}",
                 TAG
             )
@@ -369,7 +369,7 @@ class NetEaseMetadataRepository @Inject constructor(
                             number = song.position ?: song.trackNo,
                             title = song.name,
                             artist = song.ar.firstOrNull()?.name ?: "",
-                            duration = if (song.dt > 0) (song.dt / 1000).toInt() else null
+                            duration = if (song.dt > 0) (song.dt / Constants.MS_PER_SECOND).toInt() else null
                         )
                     } ?: emptyList(),
                     coverArtUrl = album?.album?.picUrl?.let(::normalizeCoverUrl)

@@ -17,6 +17,7 @@ import com.voxly.data.local.SafPermissionCache
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.parseMediaStoreTrackField
+import com.voxly.data.local.metadata.lightweight.LightweightMetadataParser
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -26,7 +27,6 @@ import java.text.Normalizer
 import javax.inject.Inject
 import com.voxly.core.util.Constants
 import com.voxly.core.util.PathUtils
-import com.voxly.presentation.ui.extractAndCacheCoverBytes
 import com.voxly.presentation.ui.extractAndCacheCoverBytes
 import javax.inject.Singleton
 
@@ -67,6 +67,12 @@ class TagLibMetadataProcessor @Inject constructor(
     private val safWriteAccessService: SafWriteAccessService,
     private val musicLibraryCache: MusicLibraryCache
 ) {
+    // Memory cache for hot data (50 entries, ~2-5MB)
+    private val memoryCache = LruCache<String, MetadataCacheEntry>(MEMORY_CACHE_SIZE)
+
+    // Path resolution cache to avoid repeated file system searches
+    private val pathResolutionCache = LruCache<String, String?>(PATH_CACHE_SIZE)
+
     companion object {
         private const val TAG = "TagLibProcessor"
 
@@ -89,11 +95,9 @@ class TagLibMetadataProcessor @Inject constructor(
 
         // Memory cache for hot data (50 entries, ~2-5MB)
         private const val MEMORY_CACHE_SIZE = 50
-        private val memoryCache = LruCache<String, MetadataCacheEntry>(MEMORY_CACHE_SIZE)
 
         // Path resolution cache to avoid repeated file system searches
         private const val PATH_CACHE_SIZE = 100
-        private val pathResolutionCache = LruCache<String, String?>(PATH_CACHE_SIZE)
     }
 
     /**
@@ -157,6 +161,15 @@ class TagLibMetadataProcessor @Inject constructor(
         memoryCache.evictAll()
         pathResolutionCache.evictAll()
         Timber.tag(TAG).d("Memory cache cleared")
+    }
+
+    /**
+     * Clears both caches. Call this when the processor instance needs to be reset.
+     */
+    fun clearCache() {
+        memoryCache.evictAll()
+        pathResolutionCache.evictAll()
+        Timber.tag(TAG).d("Cache cleared")
     }
 
     /**
@@ -329,14 +342,15 @@ class TagLibMetadataProcessor @Inject constructor(
                     val file = File(normalizedPath)
                     // Check if file exists and hasn't been modified since cache
                     if (file.exists()) {
+                        val hasValidAudioInfo = cachedFile.sampleRate > 0 && cachedFile.duration > 0
                         // If we need album art, try cache first
                         // Otherwise use cached data (no file read needed)
-                        if (!includeAlbumArt) {
+                        if (hasValidAudioInfo && !includeAlbumArt) {
                             Timber.tag(TAG).d("Database cache hit for: $filePath")
                             val cachedMetadata = CompleteMetadata(
                                 metadata = cachedFile.metadata,
                                 audioInfo = AudioInfo(
-                                    bitrate = cachedFile.bitrate * 1000, // Convert back to bps
+                                    bitrate = cachedFile.bitrate * Constants.BPS_TO_KBPS, // Convert back to bps
                                     sampleRate = cachedFile.sampleRate,
                                     channels = cachedFile.channels,
                                     durationMs = cachedFile.duration
@@ -344,14 +358,14 @@ class TagLibMetadataProcessor @Inject constructor(
                                 albumArt = null // No album art needed
                             )
                             return@withContext cachedMetadata
-                        } else {
+                        } else if (hasValidAudioInfo) {
                             val cachedAlbumArt = extractAndCacheCoverBytes(normalizedPath)
                             if (cachedAlbumArt != null) {
                                 Timber.tag(TAG).d("Album art cache hit for: $filePath")
                                 val cachedMetadata = CompleteMetadata(
                                     metadata = cachedFile.metadata,
                                     audioInfo = AudioInfo(
-                                        bitrate = cachedFile.bitrate * 1000,
+                                        bitrate = cachedFile.bitrate * Constants.BPS_TO_KBPS,
                                         sampleRate = cachedFile.sampleRate,
                                         channels = cachedFile.channels,
                                         durationMs = cachedFile.duration
@@ -429,13 +443,16 @@ class TagLibMetadataProcessor @Inject constructor(
             }
 
             val metadata = parseTagLibMetadata(taglibMetadata, includeAlbumArt)
-            val audioInfo = audioProperties?.let {
+            val audioInfo = if (audioProperties != null && audioProperties.sampleRate > 0 && audioProperties.length > 0) {
                 AudioInfo(
-                    bitrate = it.bitrate,
-                    sampleRate = it.sampleRate,
-                    channels = it.channels,
-                    durationMs = it.length.toLong() * 1000
+                    bitrate = audioProperties.bitrate,
+                    sampleRate = audioProperties.sampleRate,
+                    channels = audioProperties.channels,
+                    durationMs = audioProperties.length.toLong() * Constants.MS_PER_SECOND
                 )
+            } else {
+                Timber.tag(TAG).w("TagLib returned invalid audio properties in readAllFromFile, setting audioInfo to null")
+                null
             }
 
             CompleteMetadata(
@@ -474,11 +491,16 @@ class TagLibMetadataProcessor @Inject constructor(
                 return@withContext cached.metadata
             }
 
-            // Check database cache
-            val cachedFile = musicLibraryCache.getCachedFile(filePath)
-            if (cachedFile != null) {
-                // CachedAudioFile has metadata, we can use it directly
-                return@withContext cachedFile.metadata
+            // Check database cache with mtime validation
+            val cachedEntity = musicLibraryCache.getCachedFileEntity(filePath)
+            if (cachedEntity != null) {
+                val normalizedPath = PathUtils.normalizeFilePath(filePath)
+                val file = File(normalizedPath)
+                // Validate cache by comparing file mtime
+                // If file was modified since cache, re-read from file to get fresh data
+                if (file.exists() && cachedEntity.fileLastModifiedAt == file.lastModified()) {
+                    return@withContext cachedEntity.toAudioFile().metadata
+                }
             }
 
             // Try complete metadata read (will cache result)
@@ -1335,15 +1357,18 @@ class TagLibMetadataProcessor @Inject constructor(
                         val fdForTagLib = pfd.dup().detachFd()
                         val audioProperties = try {
                             TagLib.getAudioProperties(fdForTagLib)
+                        } catch (e: Exception) {
+                            Timber.tag(TAG).w("Failed to read audio properties via MediaStore", e)
+                            null
                         } finally {
                             pfd.close()
                         }
-                        if (audioProperties != null) {
+                        if (audioProperties != null && audioProperties.sampleRate > 0 && audioProperties.length > 0) {
                             return@withContext AudioInfo(
                                 bitrate = audioProperties.bitrate,
                                 sampleRate = audioProperties.sampleRate,
                                 channels = audioProperties.channels,
-                                durationMs = audioProperties.length.toLong() * 1000
+                                durationMs = audioProperties.length.toLong() * Constants.MS_PER_SECOND
                             )
                         }
                     }
@@ -1361,10 +1386,25 @@ class TagLibMetadataProcessor @Inject constructor(
             val fdForTagLib = pfd.dup().detachFd()
             
             // TagLib takes ownership and closes its copy
-            val audioProperties = TagLib.getAudioProperties(fdForTagLib)
-            pfd.close()
+            val audioProperties = try {
+                TagLib.getAudioProperties(fdForTagLib)
+            } catch (e: Exception) {
+                Timber.tag(TAG).w("Failed to read audio properties", e)
+                null
+            } finally {
+                pfd.close()
+            }
 
-            if (audioProperties == null) {
+            if (audioProperties == null || audioProperties.sampleRate <= 0 || audioProperties.length <= 0) {
+                Timber.tag(TAG).w("TagLib returned invalid audio properties, trying LightweightMetadataParser")
+                val lightweightResult = try {
+                    LightweightMetadataParser.parse(file)
+                } catch (e: Exception) {
+                    null
+                }
+                if (lightweightResult?.audioInfo != null) {
+                    return@withContext lightweightResult.audioInfo
+                }
                 return@withContext null
             }
 
@@ -1372,7 +1412,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 bitrate = audioProperties.bitrate,
                 sampleRate = audioProperties.sampleRate,
                 channels = audioProperties.channels,
-                durationMs = audioProperties.length.toLong() * 1000
+                durationMs = audioProperties.length.toLong() * Constants.MS_PER_SECOND
             )
         } catch (e: Exception) {
             Timber.tag(TAG).w( "Failed to read audio info: $filePath", e)

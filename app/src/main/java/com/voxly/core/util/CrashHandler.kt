@@ -16,9 +16,9 @@ class CrashHandler : Thread.UncaughtExceptionHandler {
     private val defaultHandler = Thread.getDefaultUncaughtExceptionHandler()
 
     override fun uncaughtException(thread: Thread, throwable: Throwable) {
-        Logger.wtf(
-            "Uncaught exception thread=${thread.name} id=${thread.threadId()}",
-            throwable
+        Timber.wtf(
+            throwable,
+            "Uncaught exception thread=${thread.name} id=${thread.threadId()}"
         )
         if (LogManager.isCrashReportingEnabled) {
             saveCrashReport(throwable)

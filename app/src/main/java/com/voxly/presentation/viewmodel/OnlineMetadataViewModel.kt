@@ -32,8 +32,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.first
@@ -81,8 +84,8 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     private val _searchQuery = MutableStateFlow(OnlineSearchQuery())
     val searchQuery: StateFlow<OnlineSearchQuery> = _searchQuery.asStateFlow()
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    private val _errorMessage = MutableSharedFlow<String>()
+    val errorMessage: SharedFlow<String> = _errorMessage.asSharedFlow()
 
     private val _syncedLyricsByReleaseId = MutableStateFlow<Map<String, Lyrics>>(emptyMap())
     private var selectedSyncedLyrics: Lyrics? = null
@@ -153,12 +156,14 @@ class OnlineMetadataViewModel @AssistedInject constructor(
             val artist = sanitizeSearchSeed(rawArtist) ?: rawArtist
             val album = sanitizeSearchSeed(rawAlbum) ?: rawAlbum
 
-            _searchQuery.value = OnlineSearchQuery(
-                title = title.orEmpty(),
-                artist = artist,
-                album = album,
-                fromTags = seed != null || (!rawTitle.isNullOrBlank() && !rawArtist.isNullOrBlank() && !rawAlbum.isNullOrBlank())
-            )
+            _searchQuery.update {
+                OnlineSearchQuery(
+                    title = title.orEmpty(),
+                    artist = artist,
+                    album = album,
+                    fromTags = seed != null || (!rawTitle.isNullOrBlank() && !rawArtist.isNullOrBlank() && !rawAlbum.isNullOrBlank())
+                )
+            }
             autoSearch()
         }
     }
@@ -170,13 +175,13 @@ class OnlineMetadataViewModel @AssistedInject constructor(
 
     fun searchByArtistAlbum(artist: String, album: String) {
         val updated = _searchQuery.value.copy(artist = artist, album = album)
-        _searchQuery.value = updated
+        _searchQuery.update { updated }
         searchInternal(updated, searchByArtistAlbumFlow(artist, album))
     }
 
     fun searchByTrack(title: String, artist: String? = null) {
         val updated = _searchQuery.value.copy(title = title, artist = artist)
-        _searchQuery.value = updated
+        _searchQuery.update { updated }
         searchInternal(updated, searchByTrackFlow(title, artist))
     }
 
@@ -190,8 +195,8 @@ class OnlineMetadataViewModel @AssistedInject constructor(
 
         activeSearchJob = viewModelScope.launch {
             try {
-                _syncedLyricsByReleaseId.value = emptyMap()
-                _searchState.value = SearchProgressState(isSearching = true)
+                _syncedLyricsByReleaseId.update { emptyMap() }
+                _searchState.update { SearchProgressState(isSearching = true) }
                 publishLegacySearchState()
 
                 searcher.collect { result ->
@@ -325,22 +330,24 @@ class OnlineMetadataViewModel @AssistedInject constructor(
 
     private fun publishLegacySearchState() {
         val state = _searchState.value
-        _searchResults.value = state.results
-        _isLoading.value = state.isSearching || state.isLyricsSearching
+        _searchResults.update { state.results }
+        _isLoading.update { state.isSearching || state.isLyricsSearching }
 
-        _uiState.value = when {
-            state.isSearching && state.results.isEmpty() -> OnlineMetadataUiState.Searching
-            (state.isSearching || state.isLyricsSearching) && state.results.isNotEmpty() -> {
-                OnlineMetadataUiState.PartialResults(state.results)
+        _uiState.update {
+            when {
+                state.isSearching && state.results.isEmpty() -> OnlineMetadataUiState.Searching
+                (state.isSearching || state.isLyricsSearching) && state.results.isNotEmpty() -> {
+                    OnlineMetadataUiState.PartialResults(state.results)
+                }
+                state.results.isNotEmpty() -> OnlineMetadataUiState.Results(state.results)
+                state.errorSources.isNotEmpty() -> {
+                    OnlineMetadataUiState.Error(
+                        state.errorSources.values.firstOrNull() ?: "Search failed"
+                    )
+                }
+                !state.isSearching && !state.isLyricsSearching -> OnlineMetadataUiState.NoResults
+                else -> OnlineMetadataUiState.Searching
             }
-            state.results.isNotEmpty() -> OnlineMetadataUiState.Results(state.results)
-            state.errorSources.isNotEmpty() -> {
-                OnlineMetadataUiState.Error(
-                    state.errorSources.values.firstOrNull() ?: "Search failed"
-                )
-            }
-            !state.isSearching && !state.isLyricsSearching -> OnlineMetadataUiState.NoResults
-            else -> OnlineMetadataUiState.Searching
         }
     }
 
@@ -360,7 +367,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                     return@launch
                 }
 
-                _syncedLyricsByReleaseId.value = emptyMap()
+                _syncedLyricsByReleaseId.update { emptyMap() }
 
                 coroutineScope {
                     val deferred: List<kotlinx.coroutines.Deferred<Pair<String, Lyrics?>>> = limited.map { release ->
@@ -525,17 +532,17 @@ class OnlineMetadataViewModel @AssistedInject constructor(
         Timber.d("selectRelease called: id=${release.id}, title=${release.title}, source=${release.source}")
 
         // 重置应用状态，允许新的选择触发自动回填
-        _hasAppliedForCurrentSelection.value = false
+        _hasAppliedForCurrentSelection.update { false }
 
         // Cancel previous release selection coroutines before starting new ones
         activeSelectReleaseJob?.cancel()
 
-        _selectedReleaseCandidate.value = release
-        _selectedRelease.value = null
+        _selectedReleaseCandidate.update { release }
+        _selectedRelease.update { null }
         selectedSyncedLyrics = _syncedLyricsByReleaseId.value[release.id]
         // 清除之前的封面图和超时标志
-        _downloadedAlbumArt.value = null
-        _isCoverArtTimeout.value = false
+        _downloadedAlbumArt.update { null }
+        _isCoverArtTimeout.update { false }
 
         Timber.d("selectRelease: candidate set, launching coroutines for details, cover and lyrics")
 
@@ -556,23 +563,23 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                         getCoverArtBytes(release.coverArtUrl)
                     }
                     if (cover != null) {
-                        _downloadedAlbumArt.value = cover
+                        _downloadedAlbumArt.update { cover }
                         coverDownloaded = true
                         Timber.d("selectRelease: cover art loaded from cache, size=${cover.size}")
                     } else {
                         // 超时或下载失败
-                        _isCoverArtTimeout.value = true
+                        _isCoverArtTimeout.update { true }
                         Timber.w("selectRelease: cover art load timeout or failed for ${release.coverArtUrl}")
                     }
                 } catch (e: Exception) {
-                    _isCoverArtTimeout.value = true
+                    _isCoverArtTimeout.update { true }
                     Timber.e(e, "selectRelease: cover art load error")
                 }
             }
         }
 
         viewModelScope.launch(parentJob) {
-            _isLoading.value = true
+            _isLoading.update { true }
             try {
                 setRepositoryPreferredSource(release.source)
                 Timber.d("selectRelease: calling getReleaseDetails for ${release.id}")
@@ -580,7 +587,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                 result.fold(
                     onSuccess = { details ->
                         Timber.d("selectRelease: got details, title=${details.title}, tracks=${details.tracks.size}")
-                        _selectedRelease.value = details
+                        _selectedRelease.update { details }
                         // 获取封面图（如果尚未下载）
                         val coverUrl = details.coverArtUrl ?: release.coverArtUrl
                         if (!coverUrl.isNullOrBlank() && !coverDownloaded) {
@@ -589,7 +596,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                                     getCoverArtBytes(coverUrl)
                                 }
                                 if (cover != null) {
-                                    _downloadedAlbumArt.value = cover
+                                    _downloadedAlbumArt.update { cover }
                                     coverDownloaded = true
                                     Timber.d("selectRelease: cover art loaded, size=${_downloadedAlbumArt.value?.size}")
                                 }
@@ -600,15 +607,15 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                     },
                     onFailure = { error ->
                         Timber.e(error, "Failed to get release details for ${release.id} from ${release.source}")
-                        _errorMessage.value = "无法获取专辑详情，将应用基本信息 (来源: ${release.source})"
-                        _selectedRelease.value = null
+                        _errorMessage.emit("无法获取专辑详情，将应用基本信息 (来源: ${release.source})")
+                        _selectedRelease.update { null }
                         // 即使获取详情失败，也尝试获取候选的封面图（如果尚未下载）
                         if (!release.coverArtUrl.isNullOrBlank() && !coverDownloaded) {
                             try {
                                 val cover = kotlinx.coroutines.withTimeoutOrNull(Constants.COVER_ART_TIMEOUT_MS) {
                                     getCoverArtBytes(release.coverArtUrl)
                                 }
-                                _downloadedAlbumArt.value = cover
+                                _downloadedAlbumArt.update { cover }
                                 coverDownloaded = true
                             } catch (e: Exception) {
                                 Timber.e(e, "selectRelease: fallback cover art load failed")
@@ -618,11 +625,11 @@ class OnlineMetadataViewModel @AssistedInject constructor(
                 )
             } catch (e: Exception) {
                 Timber.e(e, "Exception while getting release details for ${release.id}")
-                _errorMessage.value = "获取专辑详情失败，将应用基本信息 (来源: ${release.source})"
-                _selectedRelease.value = null
+                _errorMessage.emit("获取专辑详情失败，将应用基本信息 (来源: ${release.source})")
+                _selectedRelease.update { null }
             } finally {
                 setRepositoryPreferredSource(OnlineSource.UNKNOWN)
-                _isLoading.value = false
+                _isLoading.update { false }
                 Timber.d("selectRelease: coroutine finished, isLoading=false")
             }
         }
@@ -632,8 +639,10 @@ class OnlineMetadataViewModel @AssistedInject constructor(
             try {
                 val lyrics = fetchSyncedLyrics(release)
                 if (lyrics != null) {
-                    _syncedLyricsByReleaseId.value = _syncedLyricsByReleaseId.value.toMutableMap().apply {
-                        put(release.id, lyrics)
+                    _syncedLyricsByReleaseId.update {
+                        _syncedLyricsByReleaseId.value.toMutableMap().apply {
+                            put(release.id, lyrics)
+                        }
                     }
                     // 如果是当前选中的候选，也更新 selectedSyncedLyrics
                     if (_selectedReleaseCandidate.value?.id == release.id) {
@@ -726,7 +735,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
         }
 
         if (result != null) {
-            _hasAppliedForCurrentSelection.value = true
+            _hasAppliedForCurrentSelection.update { true }
             pendingMetadataHolder.put(filePath, result)
             Timber.d("applyMetadata: marked current selection as applied and stored pending metadata")
         }
@@ -735,15 +744,15 @@ class OnlineMetadataViewModel @AssistedInject constructor(
     }
 
     fun clearSelection() {
-        _selectedRelease.value = null
-        _selectedReleaseCandidate.value = null
+        _selectedRelease.update { null }
+        _selectedReleaseCandidate.update { null }
         selectedSyncedLyrics = null
-        _downloadedAlbumArt.value = null
-        _errorMessage.value = null
+        _downloadedAlbumArt.update { null }
+
     }
 
     fun clearErrorMessage() {
-        _errorMessage.value = null
+        
     }
 
     private fun decodeNavArg(value: String?): String {

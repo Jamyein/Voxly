@@ -20,7 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -47,9 +47,9 @@ internal fun ArtistScreenContent(
     onArtistClick: (ArtistGroup) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val artists by viewModel.artists.collectAsState()
-    val artistListItems by viewModel.artistListItems.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val artists by viewModel.artists.collectAsStateWithLifecycle()
+    val artistListItems by viewModel.artistListItems.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val coroutineScope = rememberCoroutineScope()
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
@@ -120,18 +120,16 @@ internal fun ArtistTabContent(
 ) {
     val lazyListState = listState ?: rememberLazyListState()
     
-    // Preload cover art based on visible items
     val artistFilePaths = remember(artistListItems) {
         artistListItems.mapNotNull { it.coverPath }
     }
     LazyListCoverPreloader(listState = lazyListState, filePaths = artistFilePaths)
     
-    // Build lookup map for artist groups (depends on artists since we need ArtistGroup objects)
     val artistMap = remember(artists) {
         artists.associateBy { it.name }
     }
     
-    val bubbleFormatter: ((Int) -> String) = remember(artistListItems) {
+    val bubbleFormatter: ((Int) -> String) = remember(artistListItems.size) {
         { index: Int ->
             artistListItems.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
         }
@@ -154,11 +152,13 @@ internal fun ArtistTabContent(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(artistListItems, key = { it.name }) { listItem ->
+                    val targetArtist = artistMap[listItem.name]
+                    val onItemClick = remember(targetArtist) {
+                        { if (targetArtist != null) onArtistClick(targetArtist) }
+                    }
                     ArtistListItem(
                         artist = listItem,
-                        onClick = {
-                            artistMap[listItem.name]?.let { onArtistClick(it) }
-                        }
+                        onClick = onItemClick
                     )
                 }
             }

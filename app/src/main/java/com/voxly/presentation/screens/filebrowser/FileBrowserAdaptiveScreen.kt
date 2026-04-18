@@ -1,7 +1,6 @@
 package com.voxly.presentation.screens.filebrowser
 
 import android.content.pm.PackageManager
-import android.net.Uri
 import android.os.Build
 import android.widget.Toast
 import androidx.activity.compose.PredictiveBackHandler
@@ -33,7 +32,7 @@ import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaf
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -64,6 +63,8 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
+import com.voxly.presentation.viewmodel.LibraryScanViewModel
+import com.voxly.presentation.viewmodel.LibrarySettingsViewModel
 import com.voxly.presentation.viewmodel.LibraryViewModel
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.SelectedDirectory
@@ -72,13 +73,6 @@ import kotlinx.coroutines.launch
 
 /**
  * Adaptive FileBrowser screen using Material3 ListDetailPaneScaffold.
- *
- * This is true adaptive design - Material3 automatically manages:
- * - Small screens: Single pane with full-screen navigation
- * - Medium screens: Dual pane with adjustable ratio
- * - Large screens: Dual pane with 40:60 split
- *
- * No conditional logic needed - Material3 handles all screen sizes.
  */
 @OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
 @Composable
@@ -91,7 +85,9 @@ fun FileBrowserAdaptiveScreen(
     onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
-    viewModel: LibraryViewModel = hiltViewModel()
+    viewModel: LibraryViewModel = hiltViewModel(),
+    scanViewModel: LibraryScanViewModel = hiltViewModel(),
+    settingsViewModel: LibrarySettingsViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -107,7 +103,7 @@ fun FileBrowserAdaptiveScreen(
     ) { granted ->
         hasAudioPermission = granted
         if (granted) {
-            viewModel.refresh(forceRefresh = true)
+            scanViewModel.refresh(forceRefresh = true)
         } else {
             Toast.makeText(
                 context,
@@ -124,67 +120,40 @@ fun FileBrowserAdaptiveScreen(
         }
     }
 
-    // Material3 Adaptive Navigator - automatically handles all screen sizes
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
-
-    // State collections - use correct property names
-    val allAudios by viewModel.allAudios.collectAsState()
-    val selectedFiles by viewModel.selectedFiles.collectAsState()
-    val selectedDirectories by viewModel.selectedDirectories.collectAsState()
-    val directoryFiles by viewModel.directoryFiles.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-
-    // Root tab state (Directories / All)
-    // When user has whitelist directories: default to DIRECTORIES mode, but remember user's choice
-    // When user has no whitelist directories: force ALL mode and hide toggle button
-    val hasWhitelistDirectories by viewModel.hasWhitelistDirectories.collectAsState()
-    val rootTabString by viewModel.fileBrowserRootTab.collectAsState(initial = RootTab.DIRECTORIES.name)
-    
-    // Determine effective root tab based on whitelist state
+    val scanUiState by scanViewModel.fileBrowserUiState.collectAsStateWithLifecycle()
+    val allAudios = scanUiState.allAudios
+    val displayedFiles by scanViewModel.sortedAllAudios.collectAsStateWithLifecycle()
+    val selectedDirectories = scanUiState.selectedDirectories
+    val directoryFiles = scanUiState.directoryFiles
+    val isRefreshing = scanUiState.isRefreshing
+    val hasWhitelistDirectories = scanUiState.hasWhitelistDirectories
+    val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
+    val rootTabString by settingsViewModel.fileBrowserRootTab.collectAsStateWithLifecycle(initialValue = RootTab.DIRECTORIES.name)
+    val currentSortOption by scanViewModel.currentFileSortOption.collectAsStateWithLifecycle()
     val effectiveRootTab = if (hasWhitelistDirectories) {
-        // User has whitelist: respect their saved preference
         try {
             RootTab.valueOf(rootTabString)
         } catch (e: IllegalArgumentException) {
             RootTab.DIRECTORIES
         }
     } else {
-        // No whitelist: force ALL mode
         RootTab.ALL
     }
 
-    // Search and sort
     var showSearchSheet by remember { mutableStateOf(false) }
-    var isSortExpanded by remember { mutableStateOf(false) }
-    val sortOption by viewModel.fileBrowserSortOption.collectAsState(initial = FileSortOption.NAME_ASC.name)
-    val currentSortOption = remember(sortOption) {
-        try {
-            FileSortOption.valueOf(sortOption)
-        } catch (e: IllegalArgumentException) {
-            FileSortOption.NAME_ASC
-        }
-    }
 
-    // Sort audio files (search handled by SearchBottomSheet)
-    val displayedFiles = remember(allAudios, currentSortOption) {
-        applyFileSort(allAudios, currentSortOption)
-    }
-
-    // List pane state
     val listState = rememberLazyListState()
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val isSelectionMode = selectedFiles.isNotEmpty()
     val canScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
-    
-    // Track file switch counter for proper ViewModel recreation
-    var fileSwitchCounter by remember { mutableIntStateOf(0) }
-    
-    // Determine if we're in single-pane mode (small screens)
-    val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
 
+    var fileSwitchCounter by remember { mutableIntStateOf(0) }
+    val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
     val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
+
     PredictiveBackHandler(enabled = isSelectionMode || canCloseDetailPane) { progress ->
         try {
             progress.collect { }
@@ -201,217 +170,79 @@ fun FileBrowserAdaptiveScreen(
         }
     }
 
-    // Material3 ListDetailPaneScaffold - handles all screen sizes automatically
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
         listPane = {
             AnimatedPane {
-                Column(
-                    modifier = Modifier.fillMaxSize()
-                ) {
-                    // List pane TopAppBar
-                    TopAppBar(
-                        title = {
-                            Text(
-                                text = stringResource(R.string.nav_file_browser),
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        },
-                        scrollBehavior = scrollBehavior,
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = MaterialTheme.colorScheme.surface,
-                            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                            titleContentColor = MaterialTheme.colorScheme.onSurface
-                        ),
-                        actions = {
-                            IconButton(onClick = { showSearchSheet = true }) {
-                                Icon(
-                                    imageVector = Icons.Default.Search,
-                                    contentDescription = "Search"
-                                )
-                            }
-                            // Toggle between Directories and All modes (only show when whitelist directories exist)
-                            if (hasWhitelistDirectories) {
-                                IconButton(
-                                    onClick = {
-                                        val newTab = if (effectiveRootTab == RootTab.DIRECTORIES)
-                                            RootTab.ALL.name
-                                        else
-                                            RootTab.DIRECTORIES.name
-                                        viewModel.setFileBrowserRootTab(newTab)
-                                    }
-                                ) {
-                                    Icon(
-                                        painter = appIconPainter(
-                                            if (effectiveRootTab == RootTab.DIRECTORIES)
-                                                AppIcon.MusicNote
-                                            else
-                                                AppIcon.Folder
-                                        ),
-                                        contentDescription = stringResource(
-                                            if (effectiveRootTab == RootTab.DIRECTORIES)
-                                                R.string.switch_to_all_audios
-                                            else
-                                                R.string.switch_to_directories
-                                        )
-                                    )
-                                }
-                            }
-                            // Only show sort button in All mode
-                            if (effectiveRootTab == RootTab.ALL) {
-                                SortMenuButton(
-                                    expanded = isSortExpanded,
-                                    onExpandedChange = { isSortExpanded = it },
-                                    currentSortOption = currentSortOption,
-                                    options = FileSortOption.entries,
-                                    optionLabelResId = { it.labelResId() },
-                                    contentDescription = "Sort",
-                                    onSortOptionChange = { viewModel.setFileBrowserSortOption(it.name) }
-                                )
-                            }
-                            IconButton(onClick = {
-                                if (hasAudioPermission) {
-                                    viewModel.refresh()
-                                } else {
-                                    requestAudioPermission.launch(audioPermission)
-                                }
-                            }) {
-                                Icon(
-                                    imageVector = Icons.Default.Refresh,
-                                    contentDescription = stringResource(R.string.refresh_files)
-                                )
-                            }
-                        }
-                    )
-
-                    // Content based on selected tab
-                    Surface(
-                        modifier = Modifier.fillMaxSize()
-                    ) {
-                        Box(modifier = Modifier.fillMaxSize()) {
-                            if (effectiveRootTab == RootTab.DIRECTORIES) {
-                                // Show directory list
-                                DirectoryOverviewContent(
-                                    directories = selectedDirectories,
-                                    directoryFiles = directoryFiles,
-                                    onOpenDirectory = { directoryUri, directoryName ->
-                                        onNavigateToDirectory(directoryUri, directoryName)
-                                    },
-                                    isRefreshing = isRefreshing,
-                                    onRefresh = {
-                                        if (hasAudioPermission) {
-                                            viewModel.refresh()
-                                        } else {
-                                            requestAudioPermission.launch(audioPermission)
-                                        }
-                                    },
-                                    listState = listState,
-                                    bottomPadding = 16.dp
-                                )
+                FileBrowserListPane(
+                    effectiveRootTab = effectiveRootTab,
+                    hasWhitelistDirectories = hasWhitelistDirectories,
+                    displayedFiles = displayedFiles,
+                    selectedDirectories = selectedDirectories,
+                    directoryFiles = directoryFiles,
+                    isRefreshing = isRefreshing,
+                    hasAudioPermission = hasAudioPermission,
+                    onRequestAudioPermission = { requestAudioPermission.launch(audioPermission) },
+                    onRefresh = { scanViewModel.refresh() },
+                    onToggleRootTab = {
+                        val newTab = if (effectiveRootTab == RootTab.DIRECTORIES)
+                            RootTab.ALL.name
+                        else
+                            RootTab.DIRECTORIES.name
+                        settingsViewModel.setFileBrowserRootTab(newTab)
+                    },
+                    onNavigateToDirectory = onNavigateToDirectory,
+                    isSinglePane = isSinglePane,
+                    isSelectionMode = isSelectionMode,
+                    selectedFiles = selectedFiles,
+                    onFileClick = remember(viewModel, isSelectionMode, isSinglePane, coroutineScope, navigator, onNavigateToMetadata) {
+                        { audioFile ->
+                            if (isSelectionMode) {
+                                viewModel.toggleFileSelection(audioFile.path)
+                            } else if (isSinglePane) {
+                                onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
                             } else {
-                                // Show all files
-                                AllAudiosTabContent(
-                                    audios = displayedFiles,
-                                    selectedFiles = selectedFiles,
-                                onFileClick = { audioFile ->
-                                    if (isSelectionMode) {
-                                        viewModel.toggleFileSelection(audioFile.path)
-                                    } else if (isSinglePane) {
-                                        // Small screen: navigate to independent MetadataEditor
-                                        onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
-                                    } else {
-                                        // Multi-pane: show in detail pane
-                                        coroutineScope.launch {
-                                            fileSwitchCounter++
-                                            navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
-                                        }
-                                    }
-                                },
-                                    onFileLongClick = { audioFile ->
-                                        viewModel.toggleFileSelection(audioFile.path)
-                                    },
-                                    isRefreshing = isRefreshing,
-                                    onRefresh = {
-                                        if (hasAudioPermission) {
-                                            viewModel.refresh()
-                                        } else {
-                                            requestAudioPermission.launch(audioPermission)
-                                        }
-                                    },
-                                    listState = listState
-                                )
-                            }
-
-                            // Back to top FAB
-                            val showFab = canScrollToTop && 
-                                if (effectiveRootTab == RootTab.DIRECTORIES) {
-                                    selectedDirectories.isNotEmpty()
-                                } else {
-                                    displayedFiles.isNotEmpty()
-                                }
-                            if (showFab) {
-                                SmallFloatingActionButton(
-                                    onClick = {
-                                        coroutineScope.launch {
-                                            listState.animateScrollToItem(0)
-                                        }
-                                    },
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    shape = MaterialTheme.shapes.extraLarge,
-                                    modifier = Modifier
-                                        .align(Alignment.BottomEnd)
-                                        .padding(16.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.KeyboardArrowUp,
-                                        contentDescription = "Back to top"
-                                    )
+                                coroutineScope.launch {
+                                    fileSwitchCounter++
+                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
                                 }
                             }
                         }
-                    }
-                }
+                    },
+                    onFileLongClick = remember(viewModel) {
+                        { audioFile ->
+                            viewModel.toggleFileSelection(audioFile.path)
+                        }
+                    },
+                    listState = listState,
+                    currentSortOption = currentSortOption,
+                    onSortOptionChange = { settingsViewModel.setFileBrowserSortOption(it.name) },
+                    onShowSearchSheet = { showSearchSheet = true },
+                    canScrollToTop = canScrollToTop,
+                    scrollBehavior = scrollBehavior,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         },
         detailPane = {
             AnimatedPane {
-                val currentFile = navigator.currentDestination?.contentKey
-                if (currentFile != null) {
-                    key(currentFile.path, fileSwitchCounter) {
-                        // Create navKey for MetadataEditor
-                        val navKey = MetadataEditor(
-                            filePath = currentFile.path,
-                            coverTag = createAlbumArtSharedElementKey(currentFile.path)
-                        )
-                        // Create ViewModel with proper factory and unique key
-                        val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
-                            key = "${currentFile.path}_$fileSwitchCounter",
-                            creationCallback = { factory -> factory.create(navKey) }
-                        )
-                        AdaptiveMetadataEditorContainer(
-                            filePath = currentFile.path,
-                            viewModel = metadataViewModel,
-                            coverTag = createAlbumArtSharedElementKey(currentFile.path),
-                            sharedElementKey = createAlbumArtSharedElementKey(currentFile.path),
-                            onNavigateBack = {
-                                // Use coroutine for suspend function
-                                coroutineScope.launch {
-                                    fileSwitchCounter++
-                                    navigator.navigateBack()
-                                }
-                            },
-                            onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
-                            onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
-                            onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
-                            onNavigateToLyricsSelector = onNavigateToLyricsSelector
-                        )
-                    }
-                } else {
-                    EmptyDetailPane()
-                }
+                FileBrowserDetailPane(
+                    currentFile = navigator.currentDestination?.contentKey,
+                    fileSwitchCounter = fileSwitchCounter,
+                    onFileSwitch = { fileSwitchCounter++ },
+                    onNavigateBack = {
+                        coroutineScope.launch {
+                            fileSwitchCounter++
+                            navigator.navigateBack()
+                        }
+                    },
+                    onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
+                    onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
+                    onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
+                    onNavigateToLyricsSelector = onNavigateToLyricsSelector,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         },
         modifier = modifier
@@ -437,16 +268,211 @@ fun FileBrowserAdaptiveScreen(
     }
 }
 
-/**
- * Applies sorting to audio files.
- */
-private fun applyFileSort(files: List<AudioFile>, sortOption: FileSortOption): List<AudioFile> {
-    return when (sortOption) {
-        FileSortOption.NAME_ASC -> files.sortedBy { it.metadata.getDisplayTitle(it.name) }
-        FileSortOption.NAME_DESC -> files.sortedByDescending { it.metadata.getDisplayTitle(it.name) }
-        FileSortOption.SIZE_DESC -> files.sortedByDescending { it.size }
-        FileSortOption.DURATION_DESC -> files.sortedByDescending { it.duration }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FileBrowserListPane(
+    effectiveRootTab: RootTab,
+    hasWhitelistDirectories: Boolean,
+    displayedFiles: List<AudioFile>,
+    selectedDirectories: List<com.voxly.presentation.viewmodel.SelectedDirectory>,
+    directoryFiles: Map<String, List<AudioFile>>,
+    isRefreshing: Boolean,
+    hasAudioPermission: Boolean,
+    onRequestAudioPermission: () -> Unit,
+    onRefresh: () -> Unit,
+    onToggleRootTab: () -> Unit,
+    onNavigateToDirectory: (String, String) -> Unit,
+    isSinglePane: Boolean,
+    isSelectionMode: Boolean,
+    selectedFiles: Set<String>,
+    onFileClick: (AudioFile) -> Unit,
+    onFileLongClick: (AudioFile) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState,
+    currentSortOption: FileSortOption,
+    onSortOptionChange: (FileSortOption) -> Unit,
+    onShowSearchSheet: () -> Unit,
+    canScrollToTop: Boolean,
+    scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
+    modifier: Modifier = Modifier
+) {
+    var isSortExpanded by remember { mutableStateOf(false) }
+    val coroutineScope = rememberCoroutineScope()
+
+    Column(modifier = modifier) {
+        TopAppBar(
+            title = {
+                Text(
+                    text = stringResource(R.string.nav_file_browser),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            scrollBehavior = scrollBehavior,
+            colors = TopAppBarDefaults.topAppBarColors(
+                containerColor = MaterialTheme.colorScheme.surface,
+                scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                titleContentColor = MaterialTheme.colorScheme.onSurface
+            ),
+            actions = {
+                IconButton(onClick = onShowSearchSheet) {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search"
+                    )
+                }
+                if (hasWhitelistDirectories) {
+                    IconButton(onClick = onToggleRootTab) {
+                        Icon(
+                            painter = appIconPainter(
+                                if (effectiveRootTab == RootTab.DIRECTORIES)
+                                    AppIcon.MusicNote
+                                else
+                                    AppIcon.Folder
+                            ),
+                            contentDescription = stringResource(
+                                if (effectiveRootTab == RootTab.DIRECTORIES)
+                                    R.string.switch_to_all_audios
+                                else
+                                    R.string.switch_to_directories
+                            )
+                        )
+                    }
+                }
+                if (effectiveRootTab == RootTab.ALL) {
+                    SortMenuButton(
+                        expanded = isSortExpanded,
+                        onExpandedChange = { isSortExpanded = it },
+                        currentSortOption = currentSortOption,
+                        options = FileSortOption.entries,
+                        optionLabelResId = { it.labelResId() },
+                        contentDescription = "Sort",
+                        onSortOptionChange = onSortOptionChange
+                    )
+                }
+                IconButton(onClick = {
+                    if (hasAudioPermission) {
+                        onRefresh()
+                    } else {
+                        onRequestAudioPermission()
+                    }
+                }) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = stringResource(R.string.refresh_files)
+                    )
+                }
+            }
+        )
+
+        Surface(modifier = Modifier.fillMaxSize()) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (effectiveRootTab == RootTab.DIRECTORIES) {
+                    DirectoryOverviewContent(
+                        directories = selectedDirectories,
+                        directoryFiles = directoryFiles,
+                        onOpenDirectory = onNavigateToDirectory,
+                        isRefreshing = isRefreshing,
+                        onRefresh = {
+                            if (hasAudioPermission) {
+                                onRefresh()
+                            } else {
+                                onRequestAudioPermission()
+                            }
+                        },
+                        listState = listState,
+                        bottomPadding = 16.dp
+                    )
+                } else {
+                    AllAudiosTabContent(
+                        audios = displayedFiles,
+                        selectedFiles = selectedFiles,
+                        onFileClick = onFileClick,
+                        onFileLongClick = onFileLongClick,
+                        isRefreshing = isRefreshing,
+                        onRefresh = {
+                            if (hasAudioPermission) {
+                                onRefresh()
+                            } else {
+                                onRequestAudioPermission()
+                            }
+                        },
+                        listState = listState
+                    )
+                }
+
+                val showFab by remember {
+                    derivedStateOf {
+                        canScrollToTop &&
+                            if (effectiveRootTab == RootTab.DIRECTORIES) {
+                                selectedDirectories.isNotEmpty()
+                            } else {
+                                displayedFiles.isNotEmpty()
+                            }
+                    }
+                }
+                if (showFab) {
+                    SmallFloatingActionButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                listState.animateScrollToItem(0)
+                            }
+                        },
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        shape = MaterialTheme.shapes.extraLarge,
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.KeyboardArrowUp,
+                            contentDescription = "Back to top"
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
-
+@Composable
+private fun FileBrowserDetailPane(
+    currentFile: AudioFile?,
+    fileSwitchCounter: Int,
+    onFileSwitch: () -> Unit,
+    onNavigateBack: () -> Unit,
+    onNavigateToOnlineMetadata: () -> Unit,
+    onNavigateToOnlineLyricsSearch: () -> Unit,
+    onNavigateToOnlineCoverSearch: () -> Unit,
+    onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (currentFile != null) {
+        key(currentFile.path, fileSwitchCounter) {
+            val navKey = MetadataEditor(
+                filePath = currentFile.path,
+                coverTag = createAlbumArtSharedElementKey(currentFile.path)
+            )
+            val metadataViewModel = hiltViewModel<MetadataEditorViewModel, MetadataEditorViewModel.Factory>(
+                key = "${currentFile.path}_$fileSwitchCounter",
+                creationCallback = { factory -> factory.create(navKey) }
+            )
+            AdaptiveMetadataEditorContainer(
+                filePath = currentFile.path,
+                viewModel = metadataViewModel,
+                coverTag = createAlbumArtSharedElementKey(currentFile.path),
+                sharedElementKey = createAlbumArtSharedElementKey(currentFile.path),
+                onNavigateBack = {
+                    onFileSwitch()
+                    onNavigateBack()
+                },
+                onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
+                onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
+                onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
+                onNavigateToLyricsSelector = onNavigateToLyricsSelector
+            )
+        }
+    } else {
+        EmptyDetailPane()
+    }
+}

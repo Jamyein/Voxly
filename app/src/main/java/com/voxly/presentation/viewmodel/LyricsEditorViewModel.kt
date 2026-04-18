@@ -11,6 +11,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.net.URLDecoder
 import javax.inject.Inject
@@ -62,20 +63,20 @@ class LyricsEditorViewModel @Inject constructor(
      */
     private fun loadLyrics() {
         viewModelScope.launch {
-            _uiState.value = LyricsEditorUiState.Loading
+            _uiState.update { LyricsEditorUiState.Loading }
 
             val lyricsReadResult = lyricsRepository.readLyrics(filePath)
 
             lyricsReadResult.fold(
                 onSuccess = { lyrics ->
-                    _lyrics.value = lyrics
-                    _editedLyricsText.value = lyrics?.getPlainText() ?: ""
-                    _isSynced.value = lyrics?.isSynced ?: false
-                    _hasChanges.value = false
-                    _uiState.value = LyricsEditorUiState.Success(lyrics)
+                    _lyrics.update { lyrics }
+                    _editedLyricsText.update { lyrics?.getPlainText() ?: "" }
+                    _isSynced.update { lyrics?.isSynced ?: false }
+                    _hasChanges.update { false }
+                    _uiState.update { LyricsEditorUiState.Success(lyrics) }
                 },
                 onFailure = { error ->
-                    _uiState.value = LyricsEditorUiState.Error(error.message ?: "Failed to load lyrics")
+                    _uiState.update { LyricsEditorUiState.Error(error.message ?: "Failed to load lyrics") }
                 }
             )
         }
@@ -85,16 +86,16 @@ class LyricsEditorViewModel @Inject constructor(
      * Updates the edited lyrics text.
      */
     fun updateLyricsText(text: String) {
-        _editedLyricsText.value = text
-        _hasChanges.value = true
+        _editedLyricsText.update { text }
+        _hasChanges.update { true }
     }
 
     /**
      * Toggles synced lyrics mode.
      */
     fun toggleSyncedMode(isSynced: Boolean) {
-        _isSynced.value = isSynced
-        _hasChanges.value = true
+        _isSynced.update { isSynced }
+        _hasChanges.update { true }
     }
 
     /**
@@ -102,7 +103,7 @@ class LyricsEditorViewModel @Inject constructor(
      */
     fun saveLyrics() {
         viewModelScope.launch {
-            _uiState.value = LyricsEditorUiState.Saving
+            _uiState.update { LyricsEditorUiState.Saving }
 
             val lyricsToSave = if (_isSynced.value) {
                 runCatching { Lyrics.parseLrc(_editedLyricsText.value) }
@@ -115,12 +116,12 @@ class LyricsEditorViewModel @Inject constructor(
 
             lyricsSaveResult.fold(
                 onSuccess = {
-                    _lyrics.value = lyricsToSave
-                    _hasChanges.value = false
-                    _uiState.value = LyricsEditorUiState.Success(lyricsToSave)
+                    _lyrics.update { lyricsToSave }
+                    _hasChanges.update { false }
+                    _uiState.update { LyricsEditorUiState.Success(lyricsToSave) }
                 },
                 onFailure = { error ->
-                    _uiState.value = LyricsEditorUiState.Error(error.message ?: "Failed to save lyrics")
+                    _uiState.update { LyricsEditorUiState.Error(error.message ?: "Failed to save lyrics") }
                 }
             )
         }
@@ -131,19 +132,19 @@ class LyricsEditorViewModel @Inject constructor(
      */
     fun removeLyrics() {
         viewModelScope.launch {
-            _uiState.value = LyricsEditorUiState.Saving
+            _uiState.update { LyricsEditorUiState.Saving }
 
             val lyricsRemoveResult = lyricsRepository.removeLyrics(filePath)
 
             lyricsRemoveResult.fold(
                 onSuccess = {
-                    _lyrics.value = null
-                    _editedLyricsText.value = ""
-                    _hasChanges.value = false
-                    _uiState.value = LyricsEditorUiState.Success(null)
+                    _lyrics.update { null }
+                    _editedLyricsText.update { "" }
+                    _hasChanges.update { false }
+                    _uiState.update { LyricsEditorUiState.Success(null) }
                 },
                 onFailure = { error ->
-                    _uiState.value = LyricsEditorUiState.Error(error.message ?: "Failed to remove lyrics")
+                    _uiState.update { LyricsEditorUiState.Error(error.message ?: "Failed to remove lyrics") }
                 }
             )
         }
@@ -154,8 +155,8 @@ class LyricsEditorViewModel @Inject constructor(
      */
     fun searchOnlineLyrics() {
         viewModelScope.launch {
-            _isSearching.value = true
-            _showOnlineSearch.value = true
+            _isSearching.update { true }
+            _showOnlineSearch.update { true }
 
             val lyricsSearchResult = lyricsRepository.searchOnlineLyrics(
                 trackName = trackName,
@@ -164,14 +165,14 @@ class LyricsEditorViewModel @Inject constructor(
 
             lyricsSearchResult.fold(
                 onSuccess = { results ->
-                    _onlineSearchResults.value = results
+                    _onlineSearchResults.update { results }
                 },
                 onFailure = { error ->
-                    _onlineSearchResults.value = emptyList()
+                    _onlineSearchResults.update { emptyList() }
                 }
             )
 
-            _isSearching.value = false
+            _isSearching.update { false }
         }
     }
 
@@ -180,21 +181,21 @@ class LyricsEditorViewModel @Inject constructor(
      */
     fun fetchOnlineLyrics(resultItem: OnlineLyricsResult) {
         viewModelScope.launch {
-            _uiState.value = LyricsEditorUiState.Loading
+            _uiState.update { LyricsEditorUiState.Loading }
 
             val onlineLyricsResult = lyricsRepository.getOnlineLyrics(resultItem)
 
             onlineLyricsResult.fold(
                 onSuccess = { lyrics ->
-                    _lyrics.value = lyrics
-                    _editedLyricsText.value = lyrics.getPlainText()
-                    _isSynced.value = lyrics.isSynced
-                    _hasChanges.value = true
-                    _showOnlineSearch.value = false
-                    _uiState.value = LyricsEditorUiState.Success(lyrics)
+                    _lyrics.update { lyrics }
+                    _editedLyricsText.update { lyrics.getPlainText() }
+                    _isSynced.update { lyrics.isSynced }
+                    _hasChanges.update { true }
+                    _showOnlineSearch.update { false }
+                    _uiState.update { LyricsEditorUiState.Success(lyrics) }
                 },
                 onFailure = { error ->
-                    _uiState.value = LyricsEditorUiState.Error(error.message ?: "Failed to fetch lyrics")
+                    _uiState.update { LyricsEditorUiState.Error(error.message ?: "Failed to fetch lyrics") }
                 }
             )
         }
@@ -204,8 +205,8 @@ class LyricsEditorViewModel @Inject constructor(
      * Closes the online search dialog.
      */
     fun closeOnlineSearch() {
-        _showOnlineSearch.value = false
-        _onlineSearchResults.value = emptyList()
+        _showOnlineSearch.update { false }
+        _onlineSearchResults.update { emptyList() }
     }
 
     /**
@@ -219,9 +220,9 @@ class LyricsEditorViewModel @Inject constructor(
             val timestamp = SyncedLyricLine.formatTimestamp(timeMs)
             "$timestamp$line"
         }
-        _editedLyricsText.value = lrcLines.joinToString("\n")
-        _isSynced.value = true
-        _hasChanges.value = true
+        _editedLyricsText.update { lrcLines.joinToString("\n") }
+        _isSynced.update { true }
+        _hasChanges.update { true }
     }
 
     /**
@@ -229,9 +230,9 @@ class LyricsEditorViewModel @Inject constructor(
      */
     fun discardChanges() {
         val originalLyrics = _lyrics.value
-        _editedLyricsText.value = originalLyrics?.getPlainText() ?: ""
-        _isSynced.value = originalLyrics?.isSynced ?: false
-        _hasChanges.value = false
+        _editedLyricsText.update { originalLyrics?.getPlainText() ?: "" }
+        _isSynced.update { originalLyrics?.isSynced ?: false }
+        _hasChanges.update { false }
     }
 
     /**
@@ -239,7 +240,7 @@ class LyricsEditorViewModel @Inject constructor(
      */
     fun clearError() {
         if (_uiState.value is LyricsEditorUiState.Error) {
-            _uiState.value = LyricsEditorUiState.Success(_lyrics.value)
+            _uiState.update { LyricsEditorUiState.Success(_lyrics.value) }
         }
     }
 

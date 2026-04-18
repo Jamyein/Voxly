@@ -35,7 +35,8 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.LaunchedEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableIntStateOf
@@ -95,9 +96,9 @@ internal fun AlbumScreenContent(
     onAlbumClick: (AlbumGroup) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val albums by viewModel.sortedAlbums.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
-    val sortOption by viewModel.sortOption.collectAsState(initial = AlbumSortOption.NAME_ASC.name)
+    val albums by viewModel.sortedAlbums.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val sortOption by viewModel.sortOption.collectAsStateWithLifecycle(initialValue = AlbumSortOption.NAME_ASC.name)
     var scrollToTopTrigger by remember { mutableIntStateOf(0) }
     var isSortExpanded by remember { mutableStateOf(false) }
 
@@ -168,18 +169,16 @@ internal fun AlbumScreenContent(
                     )
                 }
             } else {
-                key(scrollToTopTrigger) {
-                    AlbumTabContent(
-                        albums = albums,
-                        onAlbumClick = onAlbumClick,
-                        scrollToTopTrigger = scrollToTopTrigger,
-                        sortOption = currentSortOption,
-                        savedScrollPosition = savedScrollPosition,
-                        onSaveScrollPosition = { index, offset ->
-                            viewModel.saveScrollPosition("album_list_${currentSortOption.name}", index, offset)
-                        }
-                    )
-                }
+                AlbumTabContent(
+                    albums = albums,
+                    onAlbumClick = onAlbumClick,
+                    scrollToTopTrigger = scrollToTopTrigger,
+                    sortOption = currentSortOption,
+                    savedScrollPosition = savedScrollPosition,
+                    onSaveScrollPosition = { index, offset ->
+                        viewModel.saveScrollPosition("album_list_${currentSortOption.name}", index, offset)
+                    }
+                )
             }
         }
     }
@@ -195,79 +194,85 @@ internal fun AlbumTabContent(
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
     onSaveScrollPosition: ((Int, Int) -> Unit)? = null
 ) {
-    key(scrollToTopTrigger) {
-        val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
-        
-        // Restore scroll position for grid
-        val gridState = rememberLazyGridState(
-            initialFirstVisibleItemIndex = savedScrollPosition?.index ?: 0,
-            initialFirstVisibleItemScrollOffset = savedScrollPosition?.offset ?: 0
-        )
-        
-        // Save scroll position when leaving
-        DisposableEffect(sortOption) {
-            onDispose {
-                onSaveScrollPosition?.invoke(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
+    val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
+
+    // Restore scroll position for grid
+    val gridState = rememberLazyGridState(
+        initialFirstVisibleItemIndex = savedScrollPosition?.index ?: 0,
+        initialFirstVisibleItemScrollOffset = savedScrollPosition?.offset ?: 0
+    )
+
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) {
+            gridState.scrollToItem(0)
+        }
+    }
+
+    // Save scroll position when leaving
+    DisposableEffect(sortOption) {
+        onDispose {
+            onSaveScrollPosition?.invoke(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
+        }
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        if (albums.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Text(
+                    text = stringResource(R.string.no_albums_found),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+        } else {
+            if (isYearSort) {
+                AlbumYearGroupedContent(
+                    albums = albums,
+                    onAlbumClick = onAlbumClick,
+                    isDescending = true,
+                    scrollToTopTrigger = scrollToTopTrigger,
+                    savedScrollPosition = savedScrollPosition,
+                    onSaveScrollPosition = onSaveScrollPosition
+                )
+            } else {
+                val albumFilePaths = remember(albums) {
+                    albums.mapNotNull { it.coverFilePath() }
+                }
+                LazyGridCoverPreloader(gridState = gridState, filePaths = albumFilePaths)
+                LazyVerticalGrid(
+                    state = gridState,
+                    columns = GridCells.Fixed(2),
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+                ) {
+                    items(
+                        count = albums.size,
+                        key = { index -> albumStableKey(albums[index]) }
+                    ) { index ->
+                        val album = albums[index]
+                        val onItemClick = remember(album) { { onAlbumClick(album) } }
+                        AlbumGridItem(
+                            album = album,
+                            onClick = onItemClick
+                        )
+                    }
+                }
             }
         }
 
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-            if (albums.isEmpty()) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = stringResource(R.string.no_albums_found),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+        if (!isYearSort && albums.isNotEmpty()) {
+            LazyVerticalGridScrollbar(
+                state = gridState,
+                modifier = Modifier
+                    .align(Alignment.CenterEnd)
+                    .padding(end = 4.dp),
+                showBubble = true,
+                bubbleFormatter = { index ->
+                    albums.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
                 }
-            } else {
-                if (isYearSort) {
-                    AlbumYearGroupedContent(
-                        albums = albums,
-                        onAlbumClick = onAlbumClick,
-                        isDescending = true,
-                        savedScrollPosition = savedScrollPosition,
-                        onSaveScrollPosition = onSaveScrollPosition
-                    )
-                } else {
-                    val albumFilePaths = remember(albums) {
-                        albums.mapNotNull { it.coverFilePath() }
-                    }
-                    LazyGridCoverPreloader(gridState = gridState, filePaths = albumFilePaths)
-                    LazyVerticalGrid(
-                        state = gridState,
-                        columns = GridCells.Fixed(2),
-                        modifier = Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-                        verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
-                    ) {
-                        items(
-                            count = albums.size,
-                            key = { index -> albumStableKey(albums[index]) }
-                        ) { index ->
-                            val album = albums[index]
-                            AlbumGridItem(
-                                album = album,
-                                onClick = { onAlbumClick(album) }
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (!isYearSort && albums.isNotEmpty()) {
-                LazyVerticalGridScrollbar(
-                    state = gridState,
-                    modifier = Modifier
-                        .align(Alignment.CenterEnd)
-                        .padding(end = 4.dp),
-                    showBubble = true,
-                    bubbleFormatter = { index ->
-                        albums.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
-                    }
-                )
-            }
+            )
         }
     }
 }
@@ -278,6 +283,7 @@ internal fun AlbumYearGroupedContent(
     albums: List<AlbumGroup>,
     onAlbumClick: (AlbumGroup) -> Unit,
     isDescending: Boolean = false,
+    scrollToTopTrigger: Int = 0,
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
     onSaveScrollPosition: ((Int, Int) -> Unit)? = null
 ) {
@@ -286,7 +292,13 @@ internal fun AlbumYearGroupedContent(
         initialFirstVisibleItemIndex = savedScrollPosition?.index ?: 0,
         initialFirstVisibleItemScrollOffset = savedScrollPosition?.offset ?: 0
     )
-    
+
+    LaunchedEffect(scrollToTopTrigger) {
+        if (scrollToTopTrigger > 0) {
+            listState.scrollToItem(0)
+        }
+    }
+
     // Save scroll position when leaving
     DisposableEffect(albums.size) {
         onDispose {
@@ -328,8 +340,9 @@ internal fun AlbumYearGroupedContent(
                     key = { index -> "album_${yearGroup.year}_${albumStableKey(yearGroup.albums[index])}" }
                 ) { albumIndex ->
                     val album = yearGroup.albums[albumIndex]
+                    val onItemClick = remember(album) { { onAlbumClick(album) } }
                     SegmentedListItem(
-                        onClick = { onAlbumClick(album) },
+                        onClick = onItemClick,
                         shapes = ListItemDefaults.segmentedShapes(
                             index = albumIndex,
                             count = yearGroup.albums.size
@@ -379,8 +392,9 @@ internal fun AlbumYearGroupedContent(
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
+                                val yearStr = getAlbumDisplayYearString(album)
                                 Text(
-                                    text = album.albumArtist ?: "",
+                                    text = if (yearStr != null) "${album.albumArtist ?: ""} · $yearStr" else (album.albumArtist ?: ""),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,

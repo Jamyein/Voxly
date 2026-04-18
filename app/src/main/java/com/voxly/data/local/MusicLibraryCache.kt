@@ -6,6 +6,7 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import com.google.gson.Gson
 import com.voxly.data.local.SettingsDataStore
+import timber.log.Timber
 import com.voxly.data.local.cache.*
 import com.voxly.data.local.cover.CoverDiskCache
 import com.voxly.domain.model.AudioFile
@@ -19,7 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.withContext
-import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -45,10 +45,21 @@ class MusicLibraryCache @Inject constructor(
     private val audioFileDao: CachedAudioFileDao by lazy { database.audioFileDao() }
     private val albumThumbnailDao: AlbumThumbnailDao by lazy { database.albumThumbnailDao() }
     private val artistLinkDao: ArtistLinkDao by lazy { database.artistLinkDao() }
+    private val enrichmentJobDao: EnrichmentJobDao by lazy { database.enrichmentJobDao() }
 
     private val cacheVersion = MutableStateFlow(0L)
     val cacheVersionFlow: StateFlow<Long> = cacheVersion.asStateFlow()
-    
+
+    // Hot in-memory cache for all audio files to avoid full entity re-mapping on every Room emission.
+    private val hotCacheLock = Any()
+    private var hotAudioFiles: List<AudioFile>? = null
+
+    private fun invalidateHotCache() {
+        synchronized(hotCacheLock) {
+            hotAudioFiles = null
+        }
+    }
+
     // ==================== Audio File Cache Operations ====================
     
     /**
@@ -56,7 +67,14 @@ class MusicLibraryCache @Inject constructor(
      */
     fun getCachedAudioFiles(): Flow<List<AudioFile>> {
         return audioFileDao.getAllAudioFiles().map { entities ->
-            entities.map { it.toAudioFile() }
+            synchronized(hotCacheLock) {
+                hotAudioFiles?.let { return@map it }
+            }
+            entities.map { it.toAudioFile() }.also { mapped ->
+                synchronized(hotCacheLock) {
+                    hotAudioFiles = mapped
+                }
+            }
         }
     }
 
@@ -64,7 +82,14 @@ class MusicLibraryCache @Inject constructor(
      * Gets all cached audio files as a one-shot query.
      */
     suspend fun getCachedAudioFilesOnce(): List<AudioFile> = withContext(Dispatchers.IO) {
-        audioFileDao.getAllAudioFiles().first().map { it.toAudioFile() }
+        synchronized(hotCacheLock) {
+            hotAudioFiles?.let { return@withContext it }
+        }
+        val mapped = audioFileDao.getAllAudioFiles().first().map { it.toAudioFile() }
+        synchronized(hotCacheLock) {
+            hotAudioFiles = mapped
+        }
+        mapped
     }
     
     /**
@@ -131,13 +156,14 @@ class MusicLibraryCache @Inject constructor(
         
         // Use chunked insert for large libraries
         audioFileDao.insertAllChunked(entities)
-        
+
         // Update artist links for split artists
         updateArtistLinksForFiles(audioFiles)
-        
+
+        invalidateHotCache()
         bumpCacheVersion()
-        
-        Timber.d(TAG, "Cached ${entities.size} audio files")
+
+        Timber.i("DB batch insert: ${entities.size} records")
     }
     
     /**
@@ -148,23 +174,27 @@ class MusicLibraryCache @Inject constructor(
         val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
             gson.toJson(audioFile.metadata.customFields)
         } else null
-        
+
         val entity = CachedAudioFileEntity.fromAudioFile(
             audioFile = audioFile,
             fileLastModified = file.lastModified(),
             customFieldsJson = customFieldsJson
         )
-        
+
         audioFileDao.insert(entity)
+        invalidateHotCache()
         bumpCacheVersion()
+        Timber.i("DB sync: ${audioFile.path}")
     }
-    
+
     /**
      * Removes a file from cache.
      */
     suspend fun removeFromCache(filePath: String) = withContext(Dispatchers.IO) {
         audioFileDao.deleteByPath(filePath)
+        invalidateHotCache()
         bumpCacheVersion()
+        Timber.i("DB delete: $filePath")
     }
 
     /**
@@ -173,10 +203,12 @@ class MusicLibraryCache @Inject constructor(
     suspend fun removeFromCache(filePaths: List<String>) = withContext(Dispatchers.IO) {
         if (filePaths.isNotEmpty()) {
             audioFileDao.deleteByPaths(filePaths)
+            invalidateHotCache()
             bumpCacheVersion()
+            Timber.i("DB batch delete: ${filePaths.size} files")
         }
     }
-    
+
     /**
      * Clears the entire cache.
      */
@@ -184,8 +216,9 @@ class MusicLibraryCache @Inject constructor(
         audioFileDao.deleteAll()
         albumThumbnailDao.deleteAll()
         artistLinkDao.deleteAll()
+        invalidateHotCache()
         bumpCacheVersion()
-        Timber.d(TAG, "Cache cleared")
+        Timber.i("DB: Cache cleared")
     }
     
     // ==================== Incremental Scan Support ====================
@@ -200,7 +233,7 @@ class MusicLibraryCache @Inject constructor(
             
             currentFiles.filter { (path, lastModified) ->
                 val cached = cachedMap[path]
-                cached == null || cached != lastModified
+                cached == null || (cached / 1000) != (lastModified / 1000)
             }.map { it.first }
         }
     
@@ -224,6 +257,7 @@ class MusicLibraryCache @Inject constructor(
     suspend fun cleanupDeletedFiles(currentPaths: List<String>): Int = withContext(Dispatchers.IO) {
         val deletedCount = audioFileDao.deleteNotInPaths(currentPaths)
         if (deletedCount > 0) {
+            invalidateHotCache()
             bumpCacheVersion()
         }
         deletedCount
@@ -409,6 +443,42 @@ class MusicLibraryCache @Inject constructor(
      */
     suspend fun clearArtistLinks() = withContext(Dispatchers.IO) {
         artistLinkDao.deleteAll()
+    }
+
+    // ==================== Enrichment Job Queue ====================
+
+    suspend fun enqueueEnrichmentJobs(filePaths: List<String>) = withContext(Dispatchers.IO) {
+        val jobs = filePaths.map { path ->
+            EnrichmentJobEntity(
+                id = path.hashCode().toString(),
+                filePath = path,
+                status = EnrichmentJobEntity.STATUS_PENDING
+            )
+        }
+        enrichmentJobDao.upsertPendingJobs(jobs)
+        Timber.d("Enqueued ${jobs.size} enrichment jobs")
+    }
+
+    suspend fun getPendingEnrichmentJobs(limit: Int): List<EnrichmentJobEntity> = withContext(Dispatchers.IO) {
+        enrichmentJobDao.getPendingJobs(limit)
+    }
+
+    suspend fun updateEnrichmentJobStatus(id: String, status: Int) = withContext(Dispatchers.IO) {
+        enrichmentJobDao.updateStatus(id, status)
+    }
+
+    suspend fun hasEnrichmentJobForPath(path: String): Boolean = withContext(Dispatchers.IO) {
+        enrichmentJobDao.hasJobForPath(path)
+    }
+
+    suspend fun clearCompletedEnrichmentJobs() = withContext(Dispatchers.IO) {
+        enrichmentJobDao.deleteByStatus(EnrichmentJobEntity.STATUS_COMPLETED)
+        Timber.d("Cleared completed enrichment jobs")
+    }
+
+    suspend fun clearFailedEnrichmentJobs() = withContext(Dispatchers.IO) {
+        enrichmentJobDao.deleteByStatus(EnrichmentJobEntity.STATUS_FAILED)
+        Timber.d("Cleared failed enrichment jobs")
     }
 
     // ==================== Paging Support ====================

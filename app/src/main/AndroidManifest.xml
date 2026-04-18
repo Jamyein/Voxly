@@ -30,6 +30,17 @@
         android:enableOnBackInvokedCallback="true"
         tools:targetApi="34">
 
+        <!-- Disable default WorkManager initializer so Hilt can provide custom Configuration -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup" />
+        </provider>
+
         <service
             android:name="androidx.appcompat.app.AppLocalesMetadataHolderService"
             android:exported="false">

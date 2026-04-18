@@ -10,7 +10,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -21,8 +21,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.presentation.navigation.MP3TagNavHost
 import com.voxly.presentation.theme.MP3TagTheme
+import com.voxly.presentation.viewmodel.LibraryScanViewModel
 import com.voxly.presentation.viewmodel.SettingsViewModel
-import com.voxly.presentation.viewmodel.SplashViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
 /**
@@ -45,20 +45,24 @@ class MainActivity : AppCompatActivity() {
             val splashScreen = remember { installSplashScreen() }
             var isReady by remember { mutableStateOf(false) }
 
-            val splashViewModel: SplashViewModel = hiltViewModel()
-            val isInitialized by splashViewModel.isInitialized.collectAsState()
+            val libraryScanViewModel: LibraryScanViewModel = hiltViewModel()
+            val isRefreshing by libraryScanViewModel.isRefreshing.collectAsStateWithLifecycle()
 
             // Keep splash screen visible while initializing
-            LaunchedEffect(isInitialized) {
-                if (isInitialized) {
+            LaunchedEffect(Unit) {
+                libraryScanViewModel.initializeApp()
+            }
+
+            LaunchedEffect(isRefreshing) {
+                if (!isRefreshing) {
                     isReady = true
                 }
             }
             splashScreen.setKeepOnScreenCondition { !isReady }
 
             val settingsViewModel: SettingsViewModel = hiltViewModel()
-            val dynamicColors by settingsViewModel.dynamicColors.collectAsState()
-            val themeMode by settingsViewModel.themeMode.collectAsState()
+            val dynamicColors by settingsViewModel.dynamicColors.collectAsStateWithLifecycle()
+            val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
             val systemDarkTheme = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {
                 "dark" -> true

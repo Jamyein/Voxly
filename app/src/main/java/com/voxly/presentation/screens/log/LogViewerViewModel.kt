@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -56,7 +57,7 @@ class LogViewerViewModel @Inject constructor() : ViewModel() {
 
     fun loadLogFiles() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.update { it.copy(isLoading = true) }
 
             val files = withContext(Dispatchers.IO) {
                 LogManager.getLogFiles() + LogManager.getCrashFiles()
@@ -73,42 +74,42 @@ class LogViewerViewModel @Inject constructor() : ViewModel() {
                     )
                 }
 
-            _uiState.value = _uiState.value.copy(
+            _uiState.update { it.copy(
                 logFiles = logFileItems,
                 isLoading = false
-            )
+            ) }
         }
     }
 
     fun selectLogFile(item: LogFileItem) {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
+            _uiState.update { it.copy(isLoading = true) }
 
             val content = withContext(Dispatchers.IO) {
                 LogManager.getLogFileContent(item.file)
             }
 
-            _uiState.value = _uiState.value.copy(
+            _uiState.update { it.copy(
                 selectedLogFile = item,
                 logContent = content,
                 isLoading = false
-            )
+            ) }
         }
     }
 
     fun clearSelectedLog() {
-        _uiState.value = _uiState.value.copy(
+        _uiState.update { it.copy(
             selectedLogFile = null,
             logContent = ""
-        )
+        ) }
     }
 
     fun setSearchQuery(query: String) {
-        _uiState.value = _uiState.value.copy(searchQuery = query)
+        _uiState.update { it.copy(searchQuery = query) }
     }
 
     fun setFilter(filter: LogFilter) {
-        _uiState.value = _uiState.value.copy(selectedFilter = filter)
+        _uiState.update { it.copy(selectedFilter = filter) }
     }
 
     fun deleteLogFile(item: LogFileItem) {

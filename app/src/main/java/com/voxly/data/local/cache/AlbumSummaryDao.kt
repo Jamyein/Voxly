@@ -10,7 +10,7 @@ interface AlbumSummaryDao {
             album AS albumTitle,
             albumArtist AS albumArtist,
             COUNT(*) AS songCount,
-            MAX(year) AS year,
+            MAX(NULLIF(year, '')) AS year,
             MAX(sampleRate) AS maxSampleRate,
             MAX(bitrate) AS maxBitrate
         FROM cached_audio_files
@@ -25,7 +25,7 @@ interface AlbumSummaryDao {
             album AS albumTitle,
             albumArtist AS albumArtist,
             COUNT(*) AS songCount,
-            MAX(year) AS year,
+            MAX(NULLIF(year, '')) AS year,
             MAX(sampleRate) AS maxSampleRate,
             MAX(bitrate) AS maxBitrate
         FROM cached_audio_files
@@ -39,7 +39,7 @@ interface AlbumSummaryDao {
             album AS albumTitle,
             albumArtist AS albumArtist,
             COUNT(*) AS songCount,
-            MAX(year) AS year,
+            MAX(NULLIF(year, '')) AS year,
             MAX(sampleRate) AS maxSampleRate,
             MAX(bitrate) AS maxBitrate
         FROM cached_audio_files

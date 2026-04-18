@@ -13,6 +13,8 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.ByteArrayOutputStream
@@ -47,14 +49,15 @@ class DeepEnrichProcessor @Inject constructor(
     suspend fun enrich(
         audioFile: AudioFile,
         albumArtist: String?,
-        albumName: String?
+        albumName: String?,
+        includeAlbumArt: Boolean = true
     ): AudioFile = withContext(Dispatchers.IO) {
         try {
-            val completeMetadata = metadataProcessor.readAllMetadata(audioFile.path, includeAlbumArt = true)
+            val completeMetadata = metadataProcessor.readAllMetadata(audioFile.path, includeAlbumArt = includeAlbumArt)
             val metadata = completeMetadata?.metadata ?: audioFile.metadata
             val audioInfo = completeMetadata?.audioInfo
 
-            val coverKey = if (albumArtist != null && albumName != null) {
+            val coverKey = if (includeAlbumArt && albumArtist != null && albumName != null) {
                 cacheCoverArt(audioFile.path, albumArtist, albumName, completeMetadata?.albumArt)
             } else null
 
@@ -70,21 +73,36 @@ class DeepEnrichProcessor @Inject constructor(
 
     /**
      * Enriches multiple files in parallel with controlled concurrency.
-     * Uses chunked processing to avoid exhausting memory with large libraries.
+     * Processes files in chunks to avoid spawning thousands of coroutines
+     * and to keep peak memory usage bounded.
      */
     suspend fun enrichBatch(
         files: List<AudioFile>,
-        maxConcurrency: Int = 4
-    ): List<AudioFile> = coroutineScope {
-        files.chunked(maxConcurrency).flatMap { batch ->
-            batch.map { file ->
-                async(Dispatchers.IO) {
-                    val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
-                    val albumName = file.metadata.album
-                    enrich(file, albumArtist, albumName)
-                }
-            }.awaitAll()
+        maxConcurrency: Int = 4,
+        includeAlbumArt: Boolean = true
+    ): List<AudioFile> {
+        if (files.isEmpty()) return emptyList()
+
+        val chunkSize = 200
+        val results = mutableListOf<AudioFile>()
+
+        files.chunked(chunkSize).forEach { chunk ->
+            val chunkResults = coroutineScope {
+                val semaphore = Semaphore(maxConcurrency)
+                chunk.map { file ->
+                    async(Dispatchers.IO) {
+                        semaphore.withPermit {
+                            val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
+                            val albumName = file.metadata.album
+                            enrich(file, albumArtist, albumName, includeAlbumArt = includeAlbumArt)
+                        }
+                    }
+                }.awaitAll()
+            }
+            results.addAll(chunkResults)
         }
+
+        return results
     }
 
     /**

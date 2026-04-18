@@ -71,7 +71,7 @@ import com.voxly.presentation.components.lyricsposter.PosterShape
 import com.voxly.presentation.components.lyricsposter.WatermarkPosition
 import com.voxly.presentation.components.lyricsposter.rememberPosterCapture
 import com.voxly.presentation.viewmodel.LyricsPosterViewModel
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 
 /**
  * 歌词海报生成器 Screen
@@ -103,13 +103,30 @@ fun LyricsPosterScreen(
     // GraphicsLayer 海报捕获器 - 用于预览和导出
     val posterCapture = rememberPosterCapture()
 
-    val albumArtBytes by viewModel.albumArtBytes.collectAsState()
+    val albumArtBytes by viewModel.albumArtBytes.collectAsStateWithLifecycle()
 
-    // Decode album art
+    // Decode album art with size constraint to avoid OOM on large covers
     val albumArtBitmap = remember(albumArtBytes) {
-        albumArtBytes?.let {
+        albumArtBytes?.let { bytes ->
             try {
-                BitmapFactory.decodeByteArray(it, 0, it.size)
+                val maxDimension = 1024
+                val options = BitmapFactory.Options().apply {
+                    inJustDecodeBounds = true
+                }
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+
+                var inSampleSize = 1
+                while (
+                    options.outWidth / inSampleSize > maxDimension ||
+                    options.outHeight / inSampleSize > maxDimension
+                ) {
+                    inSampleSize *= 2
+                }
+
+                BitmapFactory.decodeByteArray(
+                    bytes, 0, bytes.size,
+                    BitmapFactory.Options().apply { this.inSampleSize = inSampleSize }
+                )
             } catch (e: Exception) {
                 null
             }
@@ -425,7 +442,7 @@ private fun ShapeSelector(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                items(standardShapes) { shape ->
+                items(standardShapes, key = { it }) { shape ->
                     ShapeChip(
                         shape = shape,
                         isSelected = selectedShape == shape,
@@ -452,7 +469,7 @@ private fun ShapeSelector(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 contentPadding = PaddingValues(vertical = 8.dp)
             ) {
-                items(expressiveShapes) { shape ->
+                items(expressiveShapes, key = { it }) { shape ->
                     ShapeChip(
                         shape = shape,
                         isSelected = selectedShape == shape,
@@ -543,7 +560,7 @@ private fun ColorThemeSelector(
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    items(ColorExtractor.colorOptions) { color ->
+                    items(ColorExtractor.colorOptions, key = { it.value.toString() }) { color ->
                         Box(
                             modifier = Modifier
                                 .size(40.dp)

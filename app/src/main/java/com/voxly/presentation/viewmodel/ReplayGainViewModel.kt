@@ -14,10 +14,14 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
@@ -39,8 +43,8 @@ class ReplayGainViewModel @AssistedInject constructor(
     private val _scanComplete = MutableStateFlow(false)
     val scanComplete: StateFlow<Boolean> = _scanComplete.asStateFlow()
 
-    private val _error = MutableStateFlow<String?>(null)
-    val error: StateFlow<String?> = _error.asStateFlow()
+    private val _error = MutableSharedFlow<String>(replay = 0)
+    val error: SharedFlow<String> = _error.asSharedFlow()
 
     init {
         // Auto-start scan with navKey filePaths
@@ -56,9 +60,8 @@ class ReplayGainViewModel @AssistedInject constructor(
      */
     fun startScan(filePaths: List<String>, scanQuality: ScanQuality = ScanQuality.NORMAL) {
         viewModelScope.launch {
-            _isScanning.value = true
-            _scanComplete.value = false
-            _error.value = null
+            _isScanning.update { true }
+            _scanComplete.update { false }
 
             try {
                 // Get target loudness and clip mode from settings
@@ -104,19 +107,19 @@ class ReplayGainViewModel @AssistedInject constructor(
                 }
 
                 scanFlow.collect { progress ->
-                        _scanProgress.value = progress
+                        _scanProgress.update { progress }
 
                         if (progress.status.name == "COMPLETED") {
-                            _scanComplete.value = true
-                            _isScanning.value = false
+                            _scanComplete.update { true }
+                            _isScanning.update { false }
                         } else if (progress.status.name == "FAILED") {
-                            _error.value = "Scan failed for: ${progress.currentFilePath}"
-                            _isScanning.value = false
+                            _error.emit("Scan failed for: ${progress.currentFilePath}")
+                            _isScanning.update { false }
                         }
                     }
             } catch (e: Exception) {
-                _error.value = e.message ?: "Unknown error during scan"
-                _isScanning.value = false
+                _error.emit(e.message ?: "Unknown error during scan")
+                _isScanning.update { false }
             }
         }
     }
@@ -127,24 +130,16 @@ class ReplayGainViewModel @AssistedInject constructor(
     fun cancelScan() {
         // Note: Actual cancellation would require more complex implementation
         // with Job management and cooperative cancellation
-        _isScanning.value = false
-    }
-
-    /**
-     * Clears the error state.
-     */
-    fun clearError() {
-        _error.value = null
+        _isScanning.update { false }
     }
 
     /**
      * Resets the scan state.
      */
     fun resetScan() {
-        _scanProgress.value = null
-        _scanComplete.value = false
-        _error.value = null
-        _isScanning.value = false
+        _scanProgress.update { null }
+        _scanComplete.update { false }
+        _isScanning.update { false }
     }
 
     @AssistedFactory

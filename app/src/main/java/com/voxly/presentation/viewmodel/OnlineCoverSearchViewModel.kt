@@ -17,9 +17,12 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.first
@@ -77,11 +80,11 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
 
-    private val _errorMessage = MutableStateFlow<String?>(null)
-    val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
+    private val _errorMessage = MutableSharedFlow<String>(replay = 0)
+    val errorMessage: SharedFlow<String> = _errorMessage.asSharedFlow()
 
-    private val _coverFetchMessage = MutableStateFlow<String?>(null)
-    val coverFetchMessage: StateFlow<String?> = _coverFetchMessage.asStateFlow()
+    private val _coverFetchMessage = MutableSharedFlow<String>(replay = 0)
+    val coverFetchMessage: SharedFlow<String> = _coverFetchMessage.asSharedFlow()
 
     // 兼容旧 UI - 从新的 progress state 派生
     val coverResults: StateFlow<List<OnlineRecording>> = 
@@ -99,10 +102,8 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
         Timber.d(TAG, "search() called, path=$targetPath")
 
         viewModelScope.launch {
-            _isLoading.value = true
-            _errorMessage.value = null
-            _searchProgressState.value = CoverSearchProgressState()
-            _coverFetchMessage.value = null
+            _isLoading.update { true }
+            _searchProgressState.update { CoverSearchProgressState() }
 
             // 优先从 SearchSeedHolder 获取实时编辑值
             val seed = searchSeedHolder.peekSeed(targetPath)
@@ -117,8 +118,8 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                 val sanitizedArtist = sanitizeSearchTerm(seed.artist)
                 title = sanitizedTitle.orEmpty()
                 artist = sanitizedArtist
-                _searchTitle.value = title
-                _searchArtist.value = artist
+                _searchTitle.update { title }
+                _searchArtist.update { artist }
                 Timber.d(TAG, "search() using seed - title='$title', artist='$artist'")
                 performCoverSearch(title, artist)
             } else {
@@ -133,16 +134,16 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                         title = sanitizeSearchTerm(rawTitle) ?: rawTitle
                         artist = sanitizeSearchTerm(rawArtist) ?: rawArtist
 
-                        _searchTitle.value = title
-                        _searchArtist.value = artist
+                        _searchTitle.update { title }
+                        _searchArtist.update { artist }
                         Timber.d(TAG, "search() loaded from file - title='$title', artist='$artist'")
 
                         performCoverSearch(title, artist)
                     },
                     onFailure = { error ->
                         Timber.e(TAG, "search() failed to load audio file: ${error.message}")
-                        _errorMessage.value = "Failed to load audio file: ${error.message}"
-                        _isLoading.value = false
+                        _errorMessage.emit("Failed to load audio file: ${error.message}")
+                        _isLoading.update { false }
                     }
                 )
             }
@@ -159,9 +160,8 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
         Timber.d(TAG, "performCoverSearch() title='$title', artist='$artist'")
         
         // 重置状态
-        _searchProgressState.value = CoverSearchProgressState(isSearching = true)
-        _isLoading.value = true
-        _errorMessage.value = null
+        _searchProgressState.update { CoverSearchProgressState(isSearching = true) }
+        _isLoading.update { true }
         
         viewModelScope.launch {
             try {
@@ -264,11 +264,11 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
             } catch (e: Exception) {
                 Timber.e(TAG, "performCoverSearch() error: ${e.message}")
                 if (e !is CancellationException) {
-                    _errorMessage.value = e.message ?: "Search failed"
+                    _errorMessage.emit(e.message ?: "Search failed")
                 }
             } finally {
                 _searchProgressState.update { it.copy(isSearching = false) }
-                _isLoading.value = false
+                _isLoading.update { false }
             }
         }
     }
@@ -351,14 +351,14 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
             return try {
                 getCoverArtBytes(existingCoverUrl)
             } catch (e: Exception) {
-                _coverFetchMessage.value = "Failed to load cover: ${e.message}"
+                _coverFetchMessage.emit("Failed to load cover: ${e.message}")
                 null
             }
         }
 
         val releaseId = recording.releaseId
         if (releaseId.isNullOrBlank()) {
-            _coverFetchMessage.value = "无法获取封面：该结果没有关联的专辑信息"
+            _coverFetchMessage.emit("无法获取封面：该结果没有关联的专辑信息")
             return null
         }
 
@@ -377,14 +377,14 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
             coverResult.fold(
                 onSuccess = { cover ->
                     if (cover != null) {
-                        _coverFetchMessage.value = "Cover fetched successfully"
+                        _coverFetchMessage.emit("Cover fetched successfully")
                     } else {
-                        _coverFetchMessage.value = "No online cover found"
+                        _coverFetchMessage.emit("No online cover found")
                     }
                     cover
                 },
                 onFailure = { error ->
-                    _coverFetchMessage.value = error.message ?: "Cover fetch failed"
+                    _coverFetchMessage.emit(error.message ?: "Cover fetch failed")
                     null
                 }
             )
@@ -405,7 +405,7 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
 
         val releaseId = recording.releaseId
         if (releaseId.isNullOrBlank()) {
-            _coverFetchMessage.value = "无法获取封面：该结果没有关联的专辑信息"
+            _coverFetchMessage.emit("无法获取封面：该结果没有关联的专辑信息")
             return null
         }
 
@@ -427,13 +427,13 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
                 onSuccess = { cover ->
                     resultBytes = cover
                     if (cover != null) {
-                        _coverFetchMessage.value = "Cover fetched successfully"
+                        _coverFetchMessage.emit("Cover fetched successfully")
                     } else {
-                        _coverFetchMessage.value = "No online cover found"
+                        _coverFetchMessage.emit("No online cover found")
                     }
                 },
                 onFailure = {
-                    _coverFetchMessage.value = it.message ?: "Cover fetch failed"
+                    _coverFetchMessage.emit(it.message ?: "Cover fetch failed")
                 }
             )
         } finally {
@@ -441,14 +441,6 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
         }
 
         return resultBytes
-    }
-
-    fun clearCoverFetchMessage() {
-        _coverFetchMessage.value = null
-    }
-
-    fun clearError() {
-        _errorMessage.value = null
     }
 
     private fun sanitizeSearchTerm(value: String?): String? {

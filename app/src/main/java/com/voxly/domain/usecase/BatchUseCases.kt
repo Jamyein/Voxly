@@ -1,7 +1,7 @@
 package com.voxly.domain.usecase
 
 import android.os.SystemClock
-import com.voxly.core.util.Logger
+import timber.log.Timber
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.BatchResult
 import com.voxly.domain.model.BatchStatus
@@ -33,9 +33,8 @@ class BatchEditMetadataUseCase @Inject constructor(
     ): Flow<BatchProgress> = flow {
         val startedAt = SystemClock.elapsedRealtime()
         val totalFiles = filePaths.size
-        Logger.i(
-            "Batch metadata edit started. files=$totalFiles fields=${fieldsToUpdate.joinToString(",")}",
-            "BatchEdit"
+        Timber.i(
+            "Batch metadata edit started. files=$totalFiles fields=${fieldsToUpdate.joinToString(",")}"
         )
 
         batchEngine.execute(
@@ -58,19 +57,17 @@ class BatchEditMetadataUseCase @Inject constructor(
                     val updateResult = audioRepository.updateMetadata(filePath, updatedMetadata)
 
                     if (updateResult.isSuccess) {
-                        Logger.v("Batch metadata edit success file=$filePath", "BatchEdit")
+                        Timber.v("Batch metadata edit success file=$filePath")
                         Result.success(Unit)
                     } else {
-                        Logger.w(
-                            "Batch metadata edit failed file=$filePath reason=${updateResult.exceptionOrNull()?.message ?: "unknown"}",
-                            "BatchEdit"
+                        Timber.w(
+                            "Batch metadata edit failed file=$filePath reason=${updateResult.exceptionOrNull()?.message ?: "unknown"}"
                         )
                         Result.failure(updateResult.exceptionOrNull() ?: Exception("Update failed"))
                     }
                 } else {
-                    Logger.w(
-                        "Batch metadata read failed file=$filePath reason=${existingMetadataResult.exceptionOrNull()?.message ?: "unknown"}",
-                        "BatchEdit"
+                    Timber.w(
+                        "Batch metadata read failed file=$filePath reason=${existingMetadataResult.exceptionOrNull()?.message ?: "unknown"}"
                     )
                     Result.failure(existingMetadataResult.exceptionOrNull() ?: Exception("Read failed"))
                 }
@@ -80,9 +77,8 @@ class BatchEditMetadataUseCase @Inject constructor(
             emit(result.toBatchProgress())
         }
 
-        Logger.i(
-            "Batch metadata edit finished. files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
-            "BatchEdit"
+        Timber.i(
+            "Batch metadata edit finished. files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - startedAt}"
         )
     }
 
@@ -195,7 +191,7 @@ class BatchAlbumArtUseCase @Inject constructor(
     ): Flow<BatchProgress> = flow {
         val startedAt = SystemClock.elapsedRealtime()
         val totalFiles = filePaths.size
-        Logger.i("Batch album art set started. files=$totalFiles", "BatchAlbumArt")
+        Timber.i("Batch album art set started. files=$totalFiles")
 
         try {
             batchEngine.execute(
@@ -208,9 +204,8 @@ class BatchAlbumArtUseCase @Inject constructor(
                 emit(result.toBatchProgress())
             }
         } finally {
-            Logger.i(
-                "Batch album art set finished. files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
-                "BatchAlbumArt"
+            Timber.i(
+                "Batch album art set finished. files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - startedAt}"
             )
         }
     }
@@ -223,7 +218,7 @@ class BatchAlbumArtUseCase @Inject constructor(
     fun removeAlbumArt(filePaths: List<String>): Flow<BatchProgress> = flow {
         val startedAt = SystemClock.elapsedRealtime()
         val totalFiles = filePaths.size
-        Logger.i("Batch album art remove started. files=$totalFiles", "BatchAlbumArt")
+        Timber.i("Batch album art remove started. files=$totalFiles")
 
         try {
             batchEngine.execute(
@@ -236,9 +231,8 @@ class BatchAlbumArtUseCase @Inject constructor(
                 emit(result.toBatchProgress())
             }
         } finally {
-            Logger.i(
-                "Batch album art remove finished. files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
-                "BatchAlbumArt"
+            Timber.i(
+                "Batch album art remove finished. files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - startedAt}"
             )
         }
     }

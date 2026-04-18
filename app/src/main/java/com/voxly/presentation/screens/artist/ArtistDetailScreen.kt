@@ -33,7 +33,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
@@ -91,13 +91,13 @@ fun ArtistDetailScreen(
         viewModel.loadArtist(artistName)
     }
 
-    val artistNameState by viewModel.artistName.collectAsState()
-    val files by viewModel.files.collectAsState()
-    val coverPath by viewModel.coverPath.collectAsState()
-    val coverAlbumId by viewModel.coverAlbumId.collectAsState()
-    val albumCovers by viewModel.albumCovers.collectAsState()
-    val albumYears by viewModel.albumYears.collectAsState()
-    val isRefreshing by viewModel.isRefreshing.collectAsState()
+    val artistNameState by viewModel.artistName.collectAsStateWithLifecycle()
+    val files by viewModel.files.collectAsStateWithLifecycle()
+    val coverPath by viewModel.coverPath.collectAsStateWithLifecycle()
+    val coverAlbumId by viewModel.coverAlbumId.collectAsStateWithLifecycle()
+    val albumCovers by viewModel.albumCovers.collectAsStateWithLifecycle()
+    val albumYears by viewModel.albumYears.collectAsStateWithLifecycle()
+    val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
     // Pull-to-refresh callback
     val onRefresh: () -> Unit = {

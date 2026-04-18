@@ -1,6 +1,6 @@
 package com.voxly.data.local.replaygain.native
 
-import com.voxly.core.util.Logger
+import timber.log.Timber
 import com.voxly.domain.model.ReplayGainInfo
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext

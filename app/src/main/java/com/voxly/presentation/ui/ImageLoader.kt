@@ -6,6 +6,7 @@ import android.graphics.BitmapFactory
 import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.provider.MediaStore
+import android.util.LruCache
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import com.voxly.data.remote.NetworkConstants
@@ -61,6 +62,13 @@ private const val MAX_SEARCH_CACHE_SIZE = 15
 private val localAlbumArtCache = LinkedHashMap<String, SoftReference<Bitmap>>(50, 0.75f, true)
 private val localCacheLock = ReentrantLock()
 private const val MAX_LOCAL_CACHE_SIZE = 50
+
+// LRU cache for cover art bytes to avoid repeated MediaMetadataRetriever calls
+// Key: file path, Value: extracted cover bytes
+// Sized to ~8MB max to prevent OOM with high-resolution embedded covers.
+private val coverBytesCache = object : LruCache<String, ByteArray>(8 * 1024 * 1024) {
+    override fun sizeOf(key: String, value: ByteArray): Int = value.size
+}
 
 // Carousel dedicated cover cache (15 entries, 384px)
 private val carouselCoverCache = LinkedHashMap<String, Bitmap>(15, 0.75f, true)
@@ -335,12 +343,37 @@ suspend fun loadAlbumArtThumbnail(
     if (filePath.isBlank()) return null
 
     val safeTargetSize = if (targetSizePx > 0) targetSizePx else 300
+    val cacheKey = getLocalArtCacheKey(filePath, safeTargetSize)
 
-    // 1. Try embedded album art via MediaMetadataRetriever
-    loadEmbeddedAlbumArtSized(filePath, safeTargetSize)?.let { return it }
+    // 1. Check cache
+    localCacheLock.lock()
+    val cachedRef = localAlbumArtCache[cacheKey]
+    localCacheLock.unlock()
+    val cached = cachedRef?.get()
+    if (cached != null && !cached.isRecycled) {
+        return cached
+    }
 
-    // 2. Final fallback: folder cover art (cover.jpg, folder.jpg, etc.)
-    return loadFolderCoverArt(filePath, safeTargetSize)
+    return withContext(Dispatchers.IO) {
+        // 2. Try embedded album art via MediaMetadataRetriever
+        val bitmap = loadEmbeddedAlbumArtSized(filePath, safeTargetSize)
+            ?: loadFolderCoverArt(filePath, safeTargetSize)
+
+        // 3. Cache result
+        if (bitmap != null) {
+            localCacheLock.lock()
+            try {
+                while (localAlbumArtCache.size >= MAX_LOCAL_CACHE_SIZE) {
+                    localAlbumArtCache.keys.firstOrNull()?.let { localAlbumArtCache.remove(it) }
+                }
+                localAlbumArtCache[cacheKey] = SoftReference(bitmap)
+            } finally {
+                localCacheLock.unlock()
+            }
+        }
+
+        bitmap
+    }
 }
 
 /**
@@ -383,52 +416,46 @@ private fun loadEmbeddedAlbumArt(filePath: String): Bitmap? {
 }
 
 /**
- * Extracts cover art bytes from file without caching.
- * Single MediaMetadataRetriever call for existence check and bytes extraction.
- * Note: Byte caching has been removed to eliminate duplicate storage.
+ * Extracts cover art bytes from file with LRU caching.
+ * Single MediaMetadataRetriever call per unique file (cached for session).
+ * Prevents repeated I/O during scrolling and recomposition.
  */
 @PublishedApi
 internal fun extractAndCacheCoverBytes(filePath: String): ByteArray? {
-    return try {
+    if (filePath.isBlank()) return null
+
+    // Check LRU cache first (LruCache is thread-safe)
+    coverBytesCache[filePath]?.let { return it }
+
+    // Cache miss: extract from file
+    val bytes: ByteArray? = try {
         val retriever = MediaMetadataRetriever()
         try {
             retriever.setDataSource(filePath)
-            retriever.embeddedPicture  // Direct return, no byte caching
+            retriever.embeddedPicture
         } finally {
-            retriever.release()  // Ensure release in finally
+            retriever.release()
         }
     } catch (e: Exception) {
         null
     }
+
+    // Store in LRU cache
+    if (bytes != null) {
+        coverBytesCache.put(filePath, bytes)
+    }
+
+    return bytes
 }
 
 /**
  * Loads embedded album art with explicit target size.
+ * Uses cached bytes from extractAndCacheCoverBytes to avoid repeated I/O.
  */
 private fun loadEmbeddedAlbumArtSized(filePath: String, targetSizePx: Int): Bitmap? {
-    return try {
-        val retriever = MediaMetadataRetriever()
-        try {
-            retriever.setDataSource(filePath)
-            val artBytes = retriever.embeddedPicture
-            if (artBytes != null) {
-                decodeSampledBitmapFromBytes(artBytes, targetSizePx)
-            } else {
-                // Try to load from folder cover (cover.jpg, folder.jpg, etc.)
-                loadFolderCoverArt(filePath, targetSizePx)
-            }
-        } catch (e: Exception) {
-            null
-        } finally {
-            try {
-                retriever.release()
-            } catch (e: Exception) {
-                // Ignore
-            }
-        }
-    } catch (e: Exception) {
-        null
-    }
+    return extractAndCacheCoverBytes(filePath)?.let { artBytes ->
+        decodeSampledBitmapFromBytes(artBytes, targetSizePx)
+    } ?: loadFolderCoverArt(filePath, targetSizePx)
 }
 
 /**

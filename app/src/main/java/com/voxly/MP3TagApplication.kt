@@ -1,10 +1,11 @@
 package com.voxly
 
 import android.app.Application
+import androidx.hilt.work.HiltWorkerFactory
+import androidx.work.Configuration
 import com.voxly.core.util.CrashHandler
 import com.voxly.core.util.FileLoggingTree
 import com.voxly.core.util.LogManager
-import com.voxly.core.util.Logger
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.presentation.ui.clearAllCaches
@@ -26,7 +27,7 @@ import javax.inject.Named
  * Annotated with @HiltAndroidApp to enable Hilt dependency injection.
  */
 @HiltAndroidApp
-class MP3TagApplication : Application() {
+class MP3TagApplication : Application(), Configuration.Provider {
 
     private lateinit var fileLoggingTree: FileLoggingTree
 
@@ -34,12 +35,21 @@ class MP3TagApplication : Application() {
     @Named("ApplicationScope")
     lateinit var applicationScope: CoroutineScope
 
+    @Inject
+    lateinit var workerFactory: HiltWorkerFactory
+
     override fun onCreate() {
         super.onCreate()
 
         initLogging()
         initImageLoaderScope(applicationScope)
     }
+
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder()
+            .setWorkerFactory(workerFactory)
+            .setMinimumLoggingLevel(android.util.Log.INFO)
+            .build()
 
     @Suppress("DEPRECATION")
     override fun onTrimMemory(level: Int) {
@@ -75,7 +85,6 @@ class MP3TagApplication : Application() {
         LogManager.init(this)
         // Apply settings asynchronously
         applyLoggingSettings()
-        Logger.init()
 
         // Always plant file logging tree - it checks isFileLoggingEnabled internally
         fileLoggingTree = FileLoggingTree()

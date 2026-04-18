@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import com.voxly.core.util.Constants
 import com.voxly.domain.model.DataSourceConfig
 import com.voxly.domain.model.DataSourceType
 import com.voxly.domain.model.SourceConfigurations
@@ -330,7 +331,7 @@ class SettingsDataStore @Inject constructor(
      */
     val minDurationFilterThresholdMs: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[MIN_DURATION_FILTER_THRESHOLD_MS] ?: 60000
+            preferences[MIN_DURATION_FILTER_THRESHOLD_MS] ?: Constants.MIN_DURATION_FILTER_THRESHOLD_MS.toInt()
         }
 
     /**

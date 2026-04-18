@@ -37,15 +37,18 @@ internal fun AudioFileItem(
     onFixMetadata: () -> Unit,
     compactMode: Boolean = false,
     modifier: Modifier = Modifier,
-    sharedElementKey: String? = createAlbumArtSharedElementKey(audioFile.path)
+    sharedElementKey: String? = null
 ) {
+    val computedSharedElementKey = remember(audioFile.path) {
+        sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
+    }
     if (compactMode) {
         AudioFileStandardRowCompact(
             audioFile = audioFile,
             isSelected = isSelected,
             onClick = onClick,
             modifier = modifier,
-            sharedElementKey = sharedElementKey
+            sharedElementKey = computedSharedElementKey
         )
     } else if (showActions) {
         AudioFileStandardRowWithMenu(
@@ -70,7 +73,7 @@ internal fun AudioFileItem(
             isSelected = isSelected,
             onClick = onClick,
             onLongClick = onLongClick,
-            sharedElementKey = sharedElementKey,
+            sharedElementKey = computedSharedElementKey,
             modifier = modifier
         )
     }

@@ -2,6 +2,7 @@ package com.voxly.presentation.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.core.util.SortUtil
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.ArtistListItemState
@@ -10,10 +11,14 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import javax.inject.Inject
@@ -24,12 +29,6 @@ class ArtistViewModel @Inject constructor(
 ) : ViewModel() {
 
     val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
-        .distinctUntilChanged { oldList, newList ->
-            // Compare by artist names and sizes to prevent unnecessary emissions
-            if (oldList.size != newList.size) return@distinctUntilChanged false
-            oldList.map { it.name to it.albums.size to it.files.size } ==
-                    newList.map { it.name to it.albums.size to it.files.size }
-        }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -39,24 +38,20 @@ class ArtistViewModel @Inject constructor(
     val artistListItems: StateFlow<List<ArtistListItemState>> = artists
         .map { artistGroups ->
             artistGroups.map { artist ->
-                // Select best cover file: prefer MediaStore album ID for faster loading
-                val coverFile = artist.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                    ?: artist.files.firstOrNull()
+                val albumNames = mutableSetOf<String>()
+                artist.files.forEach { file ->
+                    file.metadata?.album?.takeIf { it.isNotBlank() }?.let { albumNames.add(it) }
+                }
                 ArtistListItemState(
                     name = artist.name,
-                    coverPath = coverFile?.path,
-                    coverAlbumId = coverFile?.mediaStoreAlbumId,
-                    albumCount = artist.albums.size,
+                    coverPath = artist.coverPath,
+                    albumCount = albumNames.size,
                     trackCount = artist.files.size
                 )
-            }
+            }.sortedBy { SortUtil.toSortablePinyin(it.name) }
         }
-        .distinctUntilChanged { oldList, newList ->
-            // Compare by essential fields to prevent unnecessary emissions
-            if (oldList.size != newList.size) return@distinctUntilChanged false
-            oldList.map { it.name to it.coverAlbumId to it.albumCount to it.trackCount } ==
-                    newList.map { it.name to it.coverAlbumId to it.albumCount to it.trackCount }
-        }
+        .flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
@@ -72,17 +67,15 @@ class ArtistViewModel @Inject constructor(
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             try {
-                _isRefreshing.value = true
+                _isRefreshing.update { true }
                 audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
             } catch (e: Exception) {
                 Timber.e(e, "Artist refresh failed")
             } finally {
-                _isRefreshing.value = false
+                _isRefreshing.update { false }
             }
         }
     }
 
-    init {
-        refresh(forceRefresh = false)
-    }
+
 }

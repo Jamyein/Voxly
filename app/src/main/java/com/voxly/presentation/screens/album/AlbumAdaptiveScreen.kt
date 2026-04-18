@@ -72,27 +72,30 @@ fun AlbumAdaptiveScreen(
         }
     }
 
+    val onAlbumClick: (AlbumGroup) -> Unit = remember(isSinglePane, onNavigateToAlbumDetail, coroutineScope) {
+        { album ->
+            coroutineScope.launch {
+                selectedFileForEditing = null
+                fileSwitchCounter++
+                if (isSinglePane && onNavigateToAlbumDetail != null) {
+                    onNavigateToAlbumDetail(album)
+                } else {
+                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, album)
+                }
+            }
+            Unit
+        }
+    }
+
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
         listPane = {
-            AnimatedPane {
-                AlbumScreenContent(
-                    viewModel = viewModel,
-                    onAlbumClick = { album ->
-                        coroutineScope.launch {
-                            selectedFileForEditing = null
-                            fileSwitchCounter++
-                            if (isSinglePane && onNavigateToAlbumDetail != null) {
-                                onNavigateToAlbumDetail(album)
-                            } else {
-                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, album)
-                            }
-                        }
-                    },
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+            AlbumScreenContent(
+                viewModel = viewModel,
+                onAlbumClick = onAlbumClick,
+                modifier = Modifier.fillMaxSize()
+            )
         },
         detailPane = {
             AnimatedPane {

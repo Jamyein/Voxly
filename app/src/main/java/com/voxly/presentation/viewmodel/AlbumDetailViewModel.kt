@@ -14,12 +14,15 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 
 @HiltViewModel(assistedFactory = AlbumDetailViewModel.Factory::class)
@@ -56,7 +59,6 @@ class AlbumDetailViewModel @AssistedInject constructor(
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
     private var refreshJob: Job? = null
-    private var hasLoadedAlbum = false
     private val tagLibReadCache = mutableMapOf<String, AudioMetadata>()
 
     init {
@@ -71,7 +73,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
      * For files with missing discNumber, uses TagLib to read from file tags.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
-        if (hasLoadedAlbum && _albumName.value == albumName && _albumArtist.value == albumArtist && _files.value.isNotEmpty()) {
+        if (_albumName.value == albumName && _albumArtist.value == albumArtist && _files.value.isNotEmpty()) {
             return
         }
 
@@ -83,39 +85,40 @@ class AlbumDetailViewModel @AssistedInject constructor(
                 }
 
                 if (albumGroup != null) {
-                    _albumName.value = albumGroup.name
-                    _albumArtist.value = albumGroup.albumArtist
-                    _coverPath.value = albumGroup.coverPath
+                    _albumName.update { albumGroup.name }
+                    _albumArtist.update { albumGroup.albumArtist }
+                    _coverPath.update { albumGroup.coverPath }
 
-                    val filesWithDiscNumber = albumGroup.files.map { file ->
-                        if (file.metadata.discNumber == null) {
-                            val cached = tagLibReadCache.getOrPut(file.path) {
-                                metadataProcessor.readMetadata(file.path) ?: file.metadata
-                            }
-                            if (cached.discNumber != null) {
-                                file.copy(metadata = file.metadata.copy(discNumber = cached.discNumber))
+                    val filesWithDiscNumber = withContext(Dispatchers.Default) {
+                        albumGroup.files.map { file ->
+                            if (file.metadata.discNumber == null) {
+                                val cached = tagLibReadCache.getOrPut(file.path) {
+                                    metadataProcessor.readMetadata(file.path) ?: file.metadata
+                                }
+                                if (cached.discNumber != null) {
+                                    file.copy(metadata = file.metadata.copy(discNumber = cached.discNumber))
+                                } else {
+                                    file
+                                }
                             } else {
                                 file
                             }
-                        } else {
-                            file
                         }
                     }
 
-                    _files.value = filesWithDiscNumber
+                    _files.update { filesWithDiscNumber }
 
                     // Query year and sampleRate from album_summary_view
                     val albumSummary = databaseProvider.getDatabase()
                         .albumSummaryDao()
                         .getAlbumSummary(albumName, albumArtist)
 
-                    _albumYear.value = albumSummary?.year
-                    _albumSampleRate.value = albumSummary?.maxSampleRate ?: 0
-                    _albumBitrate.value = albumSummary?.maxBitrate ?: 0
-                    hasLoadedAlbum = true
+                    _albumYear.update { albumSummary?.year?.takeIf { it.isNotBlank() } }
+                    _albumSampleRate.update { albumSummary?.maxSampleRate ?: 0 }
+                    _albumBitrate.update { albumSummary?.maxBitrate ?: 0 }
                 } else {
-                    _albumName.value = albumName
-                    _albumArtist.value = albumArtist
+                    _albumName.update { albumName }
+                    _albumArtist.update { albumArtist }
                 }
             } catch (e: Exception) {
                 Timber.e(e, "Error loading album: $albumName")
@@ -130,11 +133,11 @@ class AlbumDetailViewModel @AssistedInject constructor(
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             try {
-                _isRefreshing.value = true
+                _isRefreshing.update { true }
                 audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
                 loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
             } finally {
-                _isRefreshing.value = false
+                _isRefreshing.update { false }
             }
         }
     }

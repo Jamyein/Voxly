@@ -33,7 +33,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,10 +53,10 @@ fun ScanDirectorySettingsScreen(
     viewModel: DirectoryManagementViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
-    val whitelistEnabled by viewModel.whitelistEnabled.collectAsState()
-    val blacklistEnabled by viewModel.blacklistEnabled.collectAsState()
-    val directories by viewModel.directories.collectAsState()
-    val blacklistDirectories by viewModel.blacklistDirectories.collectAsState()
+    val whitelistEnabled by viewModel.whitelistEnabled.collectAsStateWithLifecycle()
+    val blacklistEnabled by viewModel.blacklistEnabled.collectAsStateWithLifecycle()
+    val directories by viewModel.directories.collectAsStateWithLifecycle()
+    val blacklistDirectories by viewModel.blacklistDirectories.collectAsStateWithLifecycle()
 
     LaunchedEffect(directories) {
         directories.forEach { directory ->
@@ -169,7 +169,7 @@ fun ScanDirectorySettingsScreen(
                     }
                 }
 
-                items(directories) { directory ->
+                items(directories, key = { it.uri }) { directory ->
                     WhitelistDirectoryItem(
                         directory = directory,
                         onRemove = { viewModel.removeDirectory(directory.uri) }
@@ -234,7 +234,7 @@ fun ScanDirectorySettingsScreen(
                     }
                 }
 
-                items(blacklistDirectories) { directory ->
+                items(blacklistDirectories, key = { it.uri }) { directory ->
                     BlacklistDirectoryItem(
                         directory = directory,
                         onRemove = { viewModel.removeBlacklistDirectory(directory.uri) }
