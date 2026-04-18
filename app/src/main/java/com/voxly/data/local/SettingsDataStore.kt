@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.voxly.data.local
 
 import android.content.Context
@@ -896,6 +898,7 @@ class SettingsDataStore @Inject constructor(
      * Note: This encrypts proxy host and port. If proxy authentication (username/password)
      * is added in the future, those should also be stored here.
      */
+    @Suppress("DEPRECATION")
     private val encryptedProxyPrefs: SharedPreferences by lazy {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)

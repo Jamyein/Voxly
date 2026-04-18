@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.voxly.presentation.theme
 
 import androidx.compose.animation.core.AnimationSpec
@@ -506,7 +508,7 @@ fun rememberPulseScale(
             animation = keyframes {
                 this.durationMillis = durationMillis
                 initialScale at 0
-                pulsedScale at durationMillis with FastOutSlowInEasing
+                (pulsedScale at durationMillis).with(FastOutSlowInEasing)
             },
             repeatMode = RepeatMode.Reverse
         ),
@@ -524,8 +526,8 @@ fun rememberShimmerOffset(width: Float, durationMillis: Int = 1200): Offset {
             animationSpec = infiniteRepeatable(
                 animation = keyframes {
                     this.durationMillis = durationMillis
-                    (-width) at 0 with LinearEasing
-                    (width * 2) at durationMillis with LinearEasing
+                    (-width at 0).with(LinearEasing)
+                    (width * 2 at durationMillis).with(LinearEasing)
                 },
                 repeatMode = RepeatMode.Restart
             ),

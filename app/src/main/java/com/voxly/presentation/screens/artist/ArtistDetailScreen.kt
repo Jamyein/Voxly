@@ -52,7 +52,6 @@ import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 
@@ -182,7 +181,6 @@ fun ArtistDetailScreen(
                         Box(
                             modifier = Modifier
                                 .size(150.dp)
-                                .sharedBoundsIfAvailable(key = avatarKey)
                                 .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
@@ -435,7 +433,6 @@ fun AlbumCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .sharedBoundsIfAvailable(key = albumCoverKey)
                     .clip(MaterialTheme.shapes.medium),
                 contentAlignment = Alignment.Center
             ) {

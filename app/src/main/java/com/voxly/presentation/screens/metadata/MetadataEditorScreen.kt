@@ -49,7 +49,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import com.voxly.presentation.viewmodel.MetadataField
@@ -84,7 +83,7 @@ fun MetadataEditorScreen(
     onConsumePendingOnlineCoverArt: () -> Unit = {},
 ) {
     val sharedElementModifier = if (sharedElementKey != null) {
-        Modifier.sharedBoundsIfAvailable(key = sharedElementKey)
+        Modifier
     } else {
         Modifier
     }

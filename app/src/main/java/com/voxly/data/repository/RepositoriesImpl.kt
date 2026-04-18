@@ -300,12 +300,6 @@ class AudioRepositoryImpl @Inject constructor(
                 // Use TagWriteManager for Android 16 safe write with whitelist support
                 tagWriteManager.writeMetadata(filePath, metadata).fold(
                     onSuccess = {
-                        // Re-read the updated file and sync to cache
-                        // This ensures Room has the latest metadata immediately
-                        val updatedFile = getAudioFile(filePath, includeAlbumArt = false).getOrNull()
-                        if (updatedFile != null) {
-                            libraryCache.syncFileToCache(updatedFile)
-                        }
                         Result.success(Unit)
                     },
                     onFailure = { cause ->

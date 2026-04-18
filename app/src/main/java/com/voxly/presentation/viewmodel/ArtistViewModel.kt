@@ -40,7 +40,7 @@ class ArtistViewModel @Inject constructor(
             artistGroups.map { artist ->
                 val albumNames = mutableSetOf<String>()
                 artist.files.forEach { file ->
-                    file.metadata?.album?.takeIf { it.isNotBlank() }?.let { albumNames.add(it) }
+                    file.metadata.album?.takeIf { it.isNotBlank() }?.let { albumNames.add(it) }
                 }
                 ArtistListItemState(
                     name = artist.name,

@@ -42,7 +42,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 /**
@@ -204,7 +203,6 @@ fun SearchResultItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .sharedBoundsIfAvailable(key = albumArtKey)
                     .clip(MaterialTheme.shapes.small),
                 contentAlignment = Alignment.Center
             ) {

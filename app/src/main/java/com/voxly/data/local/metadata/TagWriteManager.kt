@@ -52,10 +52,7 @@ class TagWriteManager @Inject constructor(
             val result = tagLibMetadataProcessor.updateMetadata(filePath, metadata)
             
             if (result.isSuccess) {
-                // Sync to Room cache
-                syncToRoom(filePath)
-                
-                // Refresh system MediaStore
+                // Refresh system MediaStore for other apps visibility
                 refreshSystemMedia(filePath)
             }
             
@@ -80,44 +77,6 @@ class TagWriteManager @Inject constructor(
         } catch (e: Exception) {
             Timber.w(TAG, "Error checking whitelist", e)
             false
-        }
-    }
-
-    /**
-     * Syncs written file to Room cache.
-     * Reads directly from file with bypassCache=true to ensure we get freshly written data.
-     */
-    private suspend fun syncToRoom(filePath: String) {
-        try {
-            val cachedAudioFile = musicLibraryCache.getCachedFile(filePath)
-            if (cachedAudioFile == null) {
-                Timber.d(TAG, "No cached file found for: $filePath, skipping sync")
-                return
-            }
-
-            // Read directly from file with bypassCache=true to get freshly written metadata
-            val completeMetadata = tagLibMetadataProcessor.readAllMetadata(
-                filePath,
-                includeAlbumArt = false,
-                bypassCache = true
-            ) ?: run {
-                Timber.w(TAG, "Failed to read metadata after write for: $filePath")
-                return
-            }
-
-            // Preserve original technical fields from cache, update metadata
-            val updated = cachedAudioFile.copy(
-                metadata = completeMetadata.metadata,
-                duration = completeMetadata.audioInfo?.durationMs ?: cachedAudioFile.duration,
-                sampleRate = completeMetadata.audioInfo?.sampleRate ?: cachedAudioFile.sampleRate,
-                channels = completeMetadata.audioInfo?.channels ?: cachedAudioFile.channels,
-                bitrate = completeMetadata.audioInfo?.bitrate?.let { it / Constants.BPS_TO_KBPS }
-                    ?: cachedAudioFile.bitrate
-            )
-            musicLibraryCache.syncFileToCache(updated)
-            Timber.d(TAG, "Successfully synced to Room: $filePath")
-        } catch (e: Exception) {
-            Timber.tag(TAG).w("Failed to sync to Room: $filePath", e)
         }
     }
 

@@ -60,7 +60,6 @@ import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.LazyGridCoverPreloader
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
@@ -356,7 +355,6 @@ internal fun AlbumYearGroupedContent(
                             Box(
                                 modifier = Modifier
                                     .size(40.dp)
-                                    .sharedBoundsIfAvailable(key = albumCoverKey)
                                     .clip(MaterialTheme.shapes.small),
                                 contentAlignment = Alignment.Center
                             ) {

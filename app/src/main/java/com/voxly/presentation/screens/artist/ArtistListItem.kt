@@ -27,7 +27,6 @@ import com.voxly.R
 import com.voxly.domain.model.ArtistListItemState
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.MaterialShapes
@@ -61,7 +60,6 @@ internal fun ArtistListItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .sharedBoundsIfAvailable(key = avatarKey)
                     .clip(MaterialShapes.Sunny.toShape()),
                 contentAlignment = Alignment.Center
             ) {

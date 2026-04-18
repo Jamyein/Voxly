@@ -64,7 +64,6 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.MaterialShapes
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import kotlinx.coroutines.launch
 
@@ -858,7 +857,6 @@ fun AudioFileStandardRow(
         Box(
             modifier = Modifier
                 .size(AlbumArtSizeLarge)
-                .sharedBoundsIfAvailable(key = albumArtKey)
                 .clip(cookieShape),
             contentAlignment = Alignment.Center
         ) {
@@ -1030,7 +1028,6 @@ fun AudioFileStandardRowWithMenu(
         Box(
             modifier = Modifier
                 .size(AlbumArtSizeLarge)
-                .sharedBoundsIfAvailable(key = albumArtKey)
                 .clip(cookieShape),
             contentAlignment = Alignment.Center
         ) {
@@ -1100,8 +1097,7 @@ fun AudioFileStandardRowCompact(
         val cookieShape = MaterialShapes.Cookie9Sided.toShape()
         Box(
             modifier = Modifier
-                .size(AlbumArtSizeSmall)
-                .sharedBoundsIfAvailable(key = albumArtKey)
+                .size(AlbumArtSizeLarge)
                 .clip(cookieShape),
             contentAlignment = Alignment.Center
         ) {

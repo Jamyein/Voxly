@@ -1,5 +1,7 @@
-cmake_minimum_required(VERSION 3.22.1)
+cmake_minimum_required(VERSION 4.1.2)
 project("ebur128-scanner")
+
+option(ENABLE_LINKER_WARNINGS_AS_ERROR "Treat linker warnings as errors" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -30,12 +32,17 @@ target_compile_options(ebur128-scanner PRIVATE
 )
 
 # 16 KB page size alignment for Android 15+ compatibility
+# LINKER: prefix used for clarity with CMake 4.x linker flag separation
 target_link_options(ebur128-scanner PRIVATE
-    "-Wl,-z,max-page-size=16384"
-    "-Wl,-z,relro"
-    "-Wl,-z,now"
+    LINKER:-z,max-page-size=16384
+    LINKER:-z,relro
+    LINKER:-z,now
 )
 
 target_link_libraries(ebur128-scanner
     ${log-lib}
 )
+
+if(ENABLE_LINKER_WARNINGS_AS_ERROR)
+    set(CMAKE_LINK_WARNING_AS_ERROR TRUE)
+endif()

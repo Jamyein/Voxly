@@ -47,8 +47,8 @@ import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.core.util.Constants
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.screens.album.formatBitrate
 import com.voxly.presentation.screens.album.formatSampleRate
@@ -167,7 +167,6 @@ fun AlbumDetailScreen(
                             Box(
                                 modifier = Modifier
                                     .size(120.dp)
-                                    .sharedBoundsIfAvailable(key = albumCoverKey)
                                     .clip(MaterialTheme.shapes.medium),
                                 contentAlignment = Alignment.Center
                             ) {
@@ -310,7 +309,7 @@ fun AlbumDetailScreen(
                     ) {
                         discFiles.forEachIndexed { index, audioFile ->
                             SegmentedListItem(
-                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumCoverSharedElementKey(albumNameState, albumArtistState)) },
+                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
                                 shapes = ListItemDefaults.segmentedShapes(
                                     index = index,
                                     count = discFiles.size

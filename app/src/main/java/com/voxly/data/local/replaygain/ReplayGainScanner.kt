@@ -234,6 +234,7 @@ class ReplayGainScanner @Inject constructor(
     /**
      * Scans audio files grouped by album and calculates both track and album gain.
      */
+    @OptIn(FlowPreview::class)
     fun scanReplayGainByAlbum(
         filesByAlbum: Map<String, List<String>>,
         scanQuality: ScanQuality,

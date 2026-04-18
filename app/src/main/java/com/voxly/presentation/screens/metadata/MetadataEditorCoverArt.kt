@@ -21,7 +21,6 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import com.voxly.R
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 /**
@@ -59,7 +58,7 @@ fun AlbumArtSection(
             .aspectRatio(1f)
             .then(
                 if (coverKey != null) {
-                    Modifier.sharedBoundsIfAvailable(key = coverKey)
+                    Modifier
                 } else {
                     Modifier
                 }
