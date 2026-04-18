@@ -21,7 +21,6 @@ import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
 import com.voxly.core.util.getFirstLetter
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
-import com.voxly.presentation.components.LazyListCoverPreloader
 
 @Composable
 internal fun AudioFileItem(
@@ -103,9 +102,6 @@ internal fun AudioFileList(
     bottomPadding: Dp = 0.dp
 ) {
     val isSelectionMode = selectedFiles.isNotEmpty()
-    val filePaths = remember(files) { files.map { it.path } }
-
-    LazyListCoverPreloader(listState = listState, filePaths = filePaths)
 
     LazyColumn(
         modifier = modifier,

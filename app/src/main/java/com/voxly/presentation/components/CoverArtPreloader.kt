@@ -7,8 +7,9 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.ui.platform.LocalContext
-import com.voxly.presentation.ui.preloadAlbumArtRange
+import coil3.compose.LocalPlatformContext
+import coil3.imageLoader
+import coil3.request.ImageRequest
 
 private const val PRELOAD_AHEAD = 15
 private const val PRELOAD_BEHIND = 5
@@ -47,7 +48,8 @@ private fun CoverPreloader(
     visibleItemCount: Int,
     filePaths: List<String>
 ) {
-    val context = LocalContext.current
+    val imageLoader = LocalPlatformContext.current.imageLoader
+    val platformContext = LocalPlatformContext.current
     val preloadRange by remember(firstVisibleIndex, visibleItemCount, filePaths.size) {
         derivedStateOf {
             val start = (firstVisibleIndex - PRELOAD_BEHIND).coerceAtLeast(0)
@@ -60,7 +62,13 @@ private fun CoverPreloader(
     LaunchedEffect(preloadRange, filePaths.size) {
         val (start, end) = preloadRange
         if (start <= end && filePaths.isNotEmpty()) {
-            preloadAlbumArtRange(context, filePaths, start, end)
+            filePaths.subList(start, end + 1).forEach { path ->
+                imageLoader.enqueue(
+                    ImageRequest.Builder(platformContext)
+                        .data(path)
+                        .build()
+                )
+            }
         }
     }
 }

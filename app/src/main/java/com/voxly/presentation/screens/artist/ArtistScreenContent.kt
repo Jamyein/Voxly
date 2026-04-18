@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -35,7 +36,6 @@ import com.voxly.R
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.ArtistListItemState
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
-import com.voxly.presentation.components.LazyListCoverPreloader
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import kotlinx.coroutines.launch
@@ -54,6 +54,12 @@ internal fun ArtistScreenContent(
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val listState = rememberLazyListState()
+
+    LaunchedEffect(artists, isRefreshing) {
+        if (artists.isEmpty() && !isRefreshing) {
+            viewModel.refresh()
+        }
+    }
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
@@ -119,11 +125,6 @@ internal fun ArtistTabContent(
     listState: LazyListState? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
-    
-    val artistFilePaths = remember(artistListItems) {
-        artistListItems.mapNotNull { it.coverPath }
-    }
-    LazyListCoverPreloader(listState = lazyListState, filePaths = artistFilePaths)
     
     val artistMap = remember(artists) {
         artists.associateBy { it.name }

@@ -1,7 +1,6 @@
 package com.voxly.presentation.components
 
-import android.graphics.Bitmap
-import androidx.compose.foundation.Image
+import android.content.Context
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -10,14 +9,10 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.asAndroidBitmap
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -33,10 +28,6 @@ import com.voxly.R
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.ui.loadAlbumArtThumbnail
-import com.voxly.presentation.ui.loadImageBitmapFromUrl
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 @Composable
 fun NetworkCoverImage(
@@ -44,7 +35,6 @@ fun NetworkCoverImage(
     contentDescription: String? = null,
     modifier: Modifier = Modifier,
     contentScale: ContentScale = ContentScale.Crop,
-    onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null,
     placeholder: @Composable () -> Unit = {
         Box(
             modifier = modifier,
@@ -59,34 +49,21 @@ fun NetworkCoverImage(
         }
     }
 ) {
-    val imageBitmap by produceState<android.graphics.Bitmap?>(
-        initialValue = null,
-        key1 = url
-    ) {
-        value = withContext(Dispatchers.IO) {
-            loadImageBitmapFromUrl(url)?.let { imageBitmap ->
-                onDimensionsLoaded?.invoke(imageBitmap.width, imageBitmap.height)
-                imageBitmap.asAndroidBitmap()
-            }
-        }
+    if (url.isNullOrBlank()) {
+        placeholder()
+        return
     }
 
-    Box(
+    AsyncImage(
+        model = ImageRequest.Builder(LocalPlatformContext.current)
+            .data(url)
+            .crossfade(true)
+            .build(),
+        contentDescription = contentDescription,
         modifier = modifier,
-        contentAlignment = Alignment.Center
-    ) {
-        val bitmap = imageBitmap
-        if (bitmap != null) {
-            Image(
-                bitmap = bitmap.asImageBitmap(),
-                contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = contentScale
-            )
-        } else {
-            placeholder()
-        }
-    }
+        contentScale = contentScale,
+        onError = { /* silently fail for network images */ }
+    )
 }
 
 @Composable
@@ -100,23 +77,17 @@ fun AlbumArtImage(
     crossfade: Boolean = true,
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
-    val context = LocalContext.current
     val density = LocalDensity.current
     val targetSizePx = with(density) { size.roundToPx() }
-    val coverUriProvider = remember { CoverUriProvider(context) }
+    val context = LocalContext.current
+    val coverUriProvider = remember(context) { CoverUriProvider(context) }
 
-    val coverUri = remember(albumId, filePath) {
-        coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
-    }
-
-    val embeddedBitmap by produceState<Bitmap?>(
-        initialValue = null,
-        key1 = filePath,
-        key2 = targetSizePx
-    ) {
-        value = if (coverUri == null && !filePath.isNullOrBlank()) {
-            loadAlbumArtThumbnail(context, filePath, targetSizePx)
-        } else null
+    val model = remember(albumId, filePath, coverUriProvider) {
+        when {
+            albumId != null && albumId > 0 -> coverUriProvider.getCoverUri(albumId = albumId)
+            !filePath.isNullOrBlank() -> coverUriProvider.getCoverUri(null, filePath)
+            else -> null
+        }
     }
 
     var loadFailed by remember { mutableStateOf(false) }
@@ -125,33 +96,21 @@ fun AlbumArtImage(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
-        when {
-            coverUri != null && !loadFailed -> {
-                AsyncImage(
-                    model = ImageRequest.Builder(LocalPlatformContext.current)
-                        .data(coverUri)
-                        .size(targetSizePx)
-                        .scale(Scale.FILL)
-                        .crossfade(crossfade)
-                        .build(),
-                    contentDescription = contentDescription,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = contentScale,
-                    onError = { loadFailed = true }
-                )
-            }
-            embeddedBitmap != null -> {
-                val bitmap = embeddedBitmap
-                Image(
-                    bitmap = bitmap?.asImageBitmap()!!,
-                    contentDescription = contentDescription,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = contentScale
-                )
-            }
-            else -> {
-                placeholder()
-            }
+        if (model != null && !loadFailed) {
+            AsyncImage(
+                model = ImageRequest.Builder(LocalPlatformContext.current)
+                    .data(model)
+                    .size(targetSizePx)
+                    .scale(Scale.FILL)
+                    .crossfade(crossfade)
+                    .build(),
+                contentDescription = contentDescription,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = contentScale,
+                onError = { loadFailed = true }
+            )
+        } else {
+            placeholder()
         }
     }
 }

@@ -219,8 +219,6 @@ private fun OnlineReleaseList(
     onSelect: (OnlineRelease) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val coverDimensions = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
-
     if (releases.isEmpty()) {
         Box(
             modifier = modifier
@@ -250,10 +248,7 @@ private fun OnlineReleaseList(
                     Row(modifier = Modifier.padding(16.dp)) {
                         ReleaseCover(
                             coverArtUrl = release.coverArtUrl,
-                            modifier = Modifier.size(140.dp),
-                            onDimensionsLoaded = { w, h ->
-                                coverDimensions[release.id] = w to h
-                            }
+                            modifier = Modifier.size(140.dp)
                         )
                         Spacer(modifier = Modifier.size(16.dp))
                         Column(modifier = Modifier.weight(1f)) {
@@ -284,16 +279,6 @@ private fun OnlineReleaseList(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            val dims = coverDimensions[release.id]
-                            if (dims != null) {
-                                Text(
-                                    text = "Cover: ${dims.first}×${dims.second}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
                         }
                     }
                 }
@@ -458,14 +443,12 @@ private fun SourceStatusChip(
 @Composable
 private fun ReleaseCover(
     coverArtUrl: String?,
-    modifier: Modifier = Modifier,
-    onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null
+    modifier: Modifier = Modifier
 ) {
     NetworkCoverImage(
         url = coverArtUrl,
         contentDescription = "Album cover",
-        modifier = modifier.clip(MaterialShapes.Cookie9Sided.toShape()),
-        onDimensionsLoaded = onDimensionsLoaded
+        modifier = modifier.clip(MaterialShapes.Cookie9Sided.toShape())
     )
 }
 

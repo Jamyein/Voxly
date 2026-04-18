@@ -60,7 +60,6 @@ import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.LazyGridCoverPreloader
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
@@ -100,6 +99,12 @@ internal fun AlbumScreenContent(
     val sortOption by viewModel.sortOption.collectAsStateWithLifecycle(initialValue = AlbumSortOption.NAME_ASC.name)
     var scrollToTopTrigger by remember { mutableIntStateOf(0) }
     var isSortExpanded by remember { mutableStateOf(false) }
+
+    LaunchedEffect(albums, isRefreshing) {
+        if (albums.isEmpty() && !isRefreshing) {
+            viewModel.refresh()
+        }
+    }
 
     val currentSortOption = remember(sortOption) {
         try {
@@ -234,10 +239,6 @@ internal fun AlbumTabContent(
                     onSaveScrollPosition = onSaveScrollPosition
                 )
             } else {
-                val albumFilePaths = remember(albums) {
-                    albums.mapNotNull { it.coverFilePath() }
-                }
-                LazyGridCoverPreloader(gridState = gridState, filePaths = albumFilePaths)
                 LazyVerticalGrid(
                     state = gridState,
                     columns = GridCells.Fixed(2),

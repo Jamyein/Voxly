@@ -219,7 +219,7 @@ dependencies {
 
     // Audio Processing - Kyant0/taglib from Maven Central (supports Android SAF)
     // Replaces KTagLib which had JitPack reliability issues
-    implementation("io.github.kyant0:taglib:1.0.5")
+    implementation("io.github.kyant0:taglib:1.0.6")
 
     // Note: Retrofit 2.9.0 + OkHttp 4.12.0 is the stable combination
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
@@ -265,6 +265,7 @@ dependencies {
     implementation("androidx.palette:palette-ktx:1.0.0")
 
     // Coil 3 - Image loading library
+    implementation("io.coil-kt.coil3:coil:3.4.0")
     implementation("io.coil-kt.coil3:coil-compose:3.4.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
 

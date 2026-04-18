@@ -12,6 +12,8 @@ import androidx.compose.ui.graphics.asImageBitmap
 import com.voxly.data.remote.NetworkConstants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.sync.Semaphore
@@ -28,7 +30,12 @@ import timber.log.Timber
 
 // Semaphore for limiting concurrent album art preloading
 // Prevents thread pool exhaustion when preloading large lists
-private val preloadSemaphore = Semaphore(8)
+private val preloadSemaphore = Semaphore(4)
+
+// Batch preloading buffer to coalesce rapid scroll events
+private val preloadBuffer = mutableListOf<String>()
+private val preloadBufferLock = ReentrantLock()
+private var preloadJob: Job? = null
 
 @Volatile
 private var imageLoaderScope: CoroutineScope? = null
@@ -578,23 +585,41 @@ internal fun decodeBitmapFromBytes(bytes: ByteArray, targetSize: Int): Bitmap? {
 
 /**
  * Preloads multiple album arts in the background (fire-and-forget).
- * Uses parallel dispatch with limited concurrency for faster loading.
+ * Uses batch buffering with 500ms delay to coalesce rapid scroll events.
  * Semaphore limits concurrent loads to prevent thread pool exhaustion.
  */
 fun preloadLocalAlbumArts(context: Context, filePaths: List<String>) {
     if (filePaths.isEmpty()) return
-    getImageLoaderScope().launch(Dispatchers.IO) {
-        filePaths.forEach { path ->
-            launch {
-                preloadSemaphore.withPermit {
-                    try {
-                        loadAlbumArtThumbnail(context, path)
-                    } catch (e: Exception) {
-                        // Silently ignore preload failures
+
+    preloadBufferLock.lock()
+    try {
+        preloadBuffer.addAll(filePaths.filter { it.isNotBlank() })
+        preloadJob?.cancel()
+        preloadJob = getImageLoaderScope().launch(Dispatchers.IO) {
+            delay(500)
+            val batch = mutableListOf<String>()
+            preloadBufferLock.lock()
+            try {
+                batch.addAll(preloadBuffer.distinct())
+                preloadBuffer.clear()
+            } finally {
+                preloadBufferLock.unlock()
+            }
+
+            batch.forEach { path ->
+                launch {
+                    preloadSemaphore.withPermit {
+                        try {
+                            loadAlbumArtThumbnail(context, path)
+                        } catch (e: Exception) {
+                            // Silently ignore preload failures
+                        }
                     }
                 }
             }
         }
+    } finally {
+        preloadBufferLock.unlock()
     }
 }
 
@@ -644,35 +669,35 @@ fun clearLocalAlbumArtCache() {
  * @param albumId MediaStore album ID
  * @return Bitmap of the album art, or null if not found
  */
-fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
+suspend fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
     if (albumId <= 0L) return null
 
     val cacheKey = "mediastore_$albumId"
 
-    // Check cache first
+    // Check cache first (thread-safe LRU cache)
     mediaStoreAlbumCache[cacheKey]?.let { cached ->
         if (!cached.isRecycled) return cached
     }
 
-    // Load from MediaStore
-    val uri = Uri.withAppendedPath(
-        Uri.parse("content://media/external/audio/albumart"),
-        albumId.toString()
-    )
+    // Load from MediaStore on IO thread
+    val bitmap = withContext(Dispatchers.IO) {
+        val uri = Uri.withAppendedPath(
+            Uri.parse("content://media/external/audio/albumart"),
+            albumId.toString()
+        )
 
-    val bitmap = try {
-        context.contentResolver.openInputStream(uri)?.use { stream ->
-            val bytes = stream.readBytes()
-            decodeSampledBitmapFromBytes(bytes, 300)
+        try {
+            context.contentResolver.openInputStream(uri)?.use { stream ->
+                val bytes = stream.readBytes()
+                decodeSampledBitmapFromBytes(bytes, 300)
+            }
+        } catch (e: Exception) {
+            null
         }
-    } catch (e: Exception) {
-        null
     }
 
-    // Cache the result
+    // Cache the result on the calling thread
     if (bitmap != null) {
-        // Don't recycle immediately on eviction - let GC handle memory.
-        // This prevents crashes when old bitmaps are still referenced by Compose.
         while (mediaStoreAlbumCache.size >= MAX_MEDIASTORE_CACHE_SIZE) {
             mediaStoreAlbumCache.keys.firstOrNull()?.let { key ->
                 mediaStoreAlbumCache.remove(key)

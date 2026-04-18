@@ -4,8 +4,8 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Build
-import android.util.Log
 import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -83,7 +83,7 @@ class CoverDiskCache @Inject constructor(
             bitmap.recycle()
             true
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to put thumbnail for key: $key", e)
+            Timber.w(e, "Failed to put thumbnail for key: $key")
             false
         }
     }
@@ -95,7 +95,7 @@ class CoverDiskCache @Inject constructor(
         try {
             file.readBytes()
         } catch (e: Exception) {
-            Log.w(TAG, "Failed to read thumbnail for key: $key", e)
+            Timber.w(e, "Failed to read thumbnail for key: $key")
             null
         }
     }
@@ -132,7 +132,7 @@ class CoverDiskCache @Inject constructor(
                 }
             }
 
-            Log.d(TAG, "Evicted $deletedCount files, freed ${freedBytes / 1024}KB")
+            Timber.d("Evicted $deletedCount files, freed ${freedBytes / 1024}KB")
             deletedCount
         }
     }
@@ -147,7 +147,7 @@ class CoverDiskCache @Inject constructor(
                     if (file.delete()) deletedCount++
                 }
             }
-            Log.d(TAG, "Cleaned up $deletedCount orphaned cover files")
+            Timber.d("Cleaned up $deletedCount orphaned cover files")
             deletedCount
         }
     }
@@ -159,7 +159,7 @@ class CoverDiskCache @Inject constructor(
             for (file in files) {
                 if (file.delete()) deletedCount++
             }
-            Log.d(TAG, "Cleared $deletedCount cover files")
+            Timber.d("Cleared $deletedCount cover files")
             deletedCount
         }
     }

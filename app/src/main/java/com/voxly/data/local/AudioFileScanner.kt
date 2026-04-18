@@ -170,6 +170,11 @@ class AudioFileScanner @Inject constructor(
             libraryCache.updateCache(files)
         }
 
+        // Bump cache version when serving from cache to trigger AlbumArtistAggregator's flatMapLatest
+        if (servedFromCache) {
+            libraryCache.bumpCacheVersion()
+        }
+
         // Background backfill for missing year/sampleRate via persistent WorkManager queue
         if (servedFromCache) {
             scheduleMetadataBackfill()

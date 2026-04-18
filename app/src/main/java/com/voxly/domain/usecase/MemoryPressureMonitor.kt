@@ -4,6 +4,7 @@ import android.app.ActivityManager
 import android.content.Context
 import android.os.SystemClock
 import dagger.hilt.android.qualifiers.ApplicationContext
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -13,6 +14,10 @@ import javax.inject.Inject
 class MemoryPressureMonitor @Inject constructor(
     @ApplicationContext context: Context
 ) {
+    companion object {
+        private const val TAG = "MemoryPressureMonitor"
+    }
+
     private val activityManager = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
 
     // Low memory device flag from system
@@ -43,13 +48,19 @@ class MemoryPressureMonitor @Inject constructor(
             maxConcurrency
         }
 
-        return when {
-            memoryInfo.lowMemory -> 1 // System is in low memory state
+        val concurrency = when {
+            memoryInfo.lowMemory -> {
+                Timber.w("$TAG: Low memory detected! Available: ${"%.1f".format(availablePercent * 100)}%")
+                1 // System is in low memory state
+            }
             availablePercent > 0.5f -> effectiveMax
             availablePercent > 0.3f -> 2
             availablePercent > 0.15f -> 1
             else -> 1
         }
+
+        Timber.d("$TAG: getCurrentConcurrency=$concurrency (max=$effectiveMax, avail=${"%.1f".format(availablePercent * 100)}%)")
+        return concurrency
     }
 
     /**
@@ -60,7 +71,11 @@ class MemoryPressureMonitor @Inject constructor(
      */
     fun canContinueBatch(): Boolean {
         refreshMemoryInfoIfNeeded()
-        return cachedMemoryInfo?.lowMemory != true
+        val canContinue = cachedMemoryInfo?.lowMemory != true
+        if (!canContinue) {
+            Timber.w("$TAG: canContinueBatch=false (low memory)")
+        }
+        return canContinue
     }
 
     /**

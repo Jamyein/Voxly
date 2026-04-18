@@ -40,6 +40,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import timber.log.Timber
 
 /**
  * Material Design 3 Expressive Motion System
@@ -655,7 +656,15 @@ object MotionPresets {
 // ============================================================================
 
 object MotionLogger {
-    const val TAG = "Motion"
-    fun logMotionEvent(event: String, details: String = "") { }
+    private const val TAG = "Motion"
+    fun logMotionEvent(event: String, details: String = "") {
+        Timber.tag(TAG).d("$event | $details")
+    }
+    fun logMotionStart(animationType: String, spec: String = "") {
+        Timber.tag(TAG).d("Animation START: $animationType $spec")
+    }
+    fun logMotionEnd(animationType: String, durationMs: Long = 0) {
+        Timber.tag(TAG).d("Animation END: $animationType (${durationMs}ms)")
+    }
 }
 }

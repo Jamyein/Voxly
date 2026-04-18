@@ -9,6 +9,7 @@ import com.voxly.domain.repository.LyricsException
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -19,6 +20,10 @@ class LocalLyricsRepositoryImpl @Inject constructor(
     private val metadataProcessor: TagLibMetadataProcessor
 ) : LocalLyricsRepository {
 
+    companion object {
+        private const val TAG = "LocalLyricsRepo"
+    }
+
     private val multipleSlashesRegex = Regex("//+")
 
     override suspend fun readLyrics(filePath: String): Result<Lyrics?> =
@@ -26,6 +31,7 @@ class LocalLyricsRepositoryImpl @Inject constructor(
             try {
                 val normalizedPath = normalizeFilePath(filePath)
                 if (!File(normalizedPath).exists() && !File(filePath).exists()) {
+                    Timber.w("$TAG: File not found: $filePath")
                     return@withContext Result.failure(
                         LyricsException("File not found: $filePath. The file may have been moved or deleted.")
                     )
@@ -39,8 +45,10 @@ class LocalLyricsRepositoryImpl @Inject constructor(
                 if (lyricsText.isNullOrBlank()) {
                     val comment = metadata?.comment
                     if (!comment.isNullOrBlank() && comment.contains("[")) {
+                        Timber.d("$TAG: Read lyrics from comment for: $filePath")
                         return@withContext Result.success(Lyrics.parseLrc(comment))
                     }
+                    Timber.d("$TAG: No lyrics found for: $filePath")
                     return@withContext Result.success(null)
                 }
 
@@ -50,8 +58,10 @@ class LocalLyricsRepositoryImpl @Inject constructor(
                     Lyrics.createUnsynced(lyricsText)
                 }
 
+                Timber.d("$TAG: Read lyrics (${if (lyrics.isSynced) "synced" else "un_synced"}) for: $filePath")
                 Result.success(lyrics)
             } catch (e: Exception) {
+                Timber.e(e, "$TAG: Failed to read lyrics for: $filePath")
                 Result.failure(LyricsException("Failed to read lyrics", e))
             }
         }
@@ -61,6 +71,7 @@ class LocalLyricsRepositoryImpl @Inject constructor(
             try {
                 val normalizedPath = normalizeFilePath(filePath)
                 if (!File(normalizedPath).exists() && !File(filePath).exists()) {
+                    Timber.w("$TAG: File not accessible: $filePath")
                     return@withContext Result.failure(
                         LyricsException("File not accessible: $filePath. The file may have been moved or deleted.")
                     )
@@ -85,11 +96,14 @@ class LocalLyricsRepositoryImpl @Inject constructor(
                 val metadataUpdateResult = metadataProcessor.updateMetadata(normalizedPath, updatedMetadata)
                     .recover { metadataProcessor.updateMetadata(filePath, updatedMetadata) }
                 if (metadataUpdateResult.isFailure) {
+                    Timber.e("$TAG: Failed to save lyrics for: $filePath")
                     return@withContext Result.failure(LyricsException("Failed to save lyrics"))
                 }
 
+                Timber.i("$TAG: Saved lyrics (${if (lyrics.isSynced) "synced" else "un_synced"}) for: $filePath")
                 Result.success(Unit)
             } catch (e: Exception) {
+                Timber.e(e, "$TAG: Exception saving lyrics for: $filePath")
                 Result.failure(LyricsException("Failed to save lyrics", e))
             }
         }
@@ -99,6 +113,7 @@ class LocalLyricsRepositoryImpl @Inject constructor(
             try {
                 val normalizedPath = normalizeFilePath(filePath)
                 if (!File(normalizedPath).exists() && !File(filePath).exists()) {
+                    Timber.w("$TAG: File not accessible: $filePath")
                     return@withContext Result.failure(
                         LyricsException("File not accessible: $filePath. The file may have been moved or deleted.")
                     )
@@ -112,11 +127,14 @@ class LocalLyricsRepositoryImpl @Inject constructor(
                 val metadataUpdateResult = metadataProcessor.updateMetadata(normalizedPath, updatedMetadata)
                     .recover { metadataProcessor.updateMetadata(filePath, updatedMetadata) }
                 if (metadataUpdateResult.isFailure) {
+                    Timber.e("$TAG: Failed to remove lyrics for: $filePath")
                     return@withContext Result.failure(LyricsException("Failed to remove lyrics"))
                 }
 
+                Timber.i("$TAG: Removed lyrics for: $filePath")
                 Result.success(Unit)
             } catch (e: Exception) {
+                Timber.e(e, "$TAG: Exception removing lyrics for: $filePath")
                 Result.failure(LyricsException("Failed to remove lyrics", e))
             }
         }

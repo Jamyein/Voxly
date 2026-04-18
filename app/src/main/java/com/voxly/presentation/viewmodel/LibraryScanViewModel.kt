@@ -33,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -122,11 +123,13 @@ class LibraryScanViewModel @Inject constructor(
         audios to sortOption
     }.map { (audios, sortOption) ->
         sortAudioFiles(audios, sortOption)
-    }.flowOn(Dispatchers.Default).stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-        initialValue = emptyList()
-    )
+    }.flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = emptyList()
+        )
 
     private val _selectedDirectories = MutableStateFlow<List<SelectedDirectory>>(emptyList())
     val selectedDirectories: StateFlow<List<SelectedDirectory>> = _selectedDirectories.asStateFlow()
@@ -143,11 +146,13 @@ class LibraryScanViewModel @Inject constructor(
         filesByDirectory.mapValues { (_, files) ->
             sortAudioFiles(files, sortOption)
         }
-    }.flowOn(Dispatchers.Default).stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-        initialValue = emptyMap()
-    )
+    }.flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = emptyMap()
+        )
 
     private val _directoryLoadingState = MutableStateFlow<Set<String>>(emptySet())
     val directoryLoadingState: StateFlow<Set<String>> = _directoryLoadingState.asStateFlow()
@@ -157,6 +162,8 @@ class LibraryScanViewModel @Inject constructor(
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    private val _isInitialLoad = MutableStateFlow(true)
 
     data class FileBrowserUiState(
         val allAudios: List<AudioFile> = emptyList(),
@@ -189,7 +196,9 @@ class LibraryScanViewModel @Inject constructor(
     private var scanJob: Job? = null
 
     init {
-        unifiedScanManager.startWatchingSettings()
+        viewModelScope.launch {
+            unifiedScanManager.startWatchingSettings()
+        }
 
         viewModelScope.launch {
             libraryDataHolder.collectRefreshTriggers { forceRefresh ->
@@ -222,7 +231,7 @@ class LibraryScanViewModel @Inject constructor(
     fun loadAudioFiles(forceRefresh: Boolean = false, isIncremental: Boolean = false) {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            val shouldShowRefresh = forceRefresh || isIncremental
+            val shouldShowRefresh = forceRefresh || isIncremental || _isInitialLoad.value
             try {
                 if (shouldShowRefresh) {
                     _isRefreshing.update { true }
@@ -232,6 +241,7 @@ class LibraryScanViewModel @Inject constructor(
 
                 if (_selectedDirectories.value.isNotEmpty()) {
                     scanSelectedDirectories(_selectedDirectories.value, isIncremental, forceRefresh)
+                    _isInitialLoad.update { false }
                     return@launch
                 }
 
@@ -243,6 +253,7 @@ class LibraryScanViewModel @Inject constructor(
                     )
                     _directoryFiles.update { emptyMap() }
                 }
+                _isInitialLoad.update { false }
             } catch (e: CancellationException) {
                 Timber.tag(TAG).d("Audio files load cancelled")
                 throw e
