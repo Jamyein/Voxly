@@ -4,6 +4,7 @@ import com.voxly.data.remote.NetworkConstants
 
 import android.content.Context
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
@@ -337,11 +338,12 @@ object AppModule {
     @Singleton
     fun provideUnifiedScanManager(
         audioFileScanner: AudioFileScanner,
+        musicLibraryCache: MusicLibraryCache,
         settingsDataStore: SettingsDataStore,
         @ApplicationContext context: Context,
         @Named("ApplicationScope") scope: CoroutineScope
     ): UnifiedScanManager {
-        return UnifiedScanManagerImpl(audioFileScanner, settingsDataStore, scope)
+        return UnifiedScanManagerImpl(audioFileScanner, musicLibraryCache, settingsDataStore, scope)
     }
 }
 

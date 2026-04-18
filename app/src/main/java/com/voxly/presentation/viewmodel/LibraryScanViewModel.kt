@@ -258,10 +258,11 @@ class LibraryScanViewModel @Inject constructor(
 
     /**
      * Unified refresh entry point for all screens.
-     * When forceRefresh=false and cache exists, uses cache without scanning.
+     * - forceRefresh=true: Full rescan, ignores cache
+     * - forceRefresh=false: Incremental scan, detects new/modified files
      */
     fun refresh(forceRefresh: Boolean = false) {
-        loadAudioFiles(forceRefresh = forceRefresh, isIncremental = false)
+        loadAudioFiles(forceRefresh = forceRefresh, isIncremental = !forceRefresh)
     }
 
     /**
