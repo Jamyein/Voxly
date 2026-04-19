@@ -21,14 +21,13 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
+import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.metadata
@@ -120,13 +119,14 @@ fun MP3TagNavHost() {
     val librarySettingsViewModel: LibrarySettingsViewModel = hiltViewModel()
     val libraryBatchViewModel: LibraryBatchViewModel = hiltViewModel()
 
-    val backStack = remember { mutableStateListOf<NavKey>(FileBrowser) }
+    val navigationState = rememberNavigationState(FileBrowser)
+    val navigator = remember { Navigator(navigationState) }
 
     var pendingLyrics by remember { mutableStateOf<String?>(null) }
     var pendingCoverArt by remember { mutableStateOf<ByteArray?>(null) }
 
-    val currentKey = backStack.lastOrNull()
-    val isMainScreen = isMainScreenKey(currentKey)
+    val topLevelRoute = navigationState.topLevelRoute
+    val isMainScreen = isMainScreenKey(topLevelRoute)
     val adaptiveInfo = currentWindowAdaptiveInfoV2()
 
     SharedTransitionLayout {
@@ -134,7 +134,7 @@ fun MP3TagNavHost() {
 
         val navDisplayContent: @Composable () -> Unit = {
             MP3TagNavDisplay(
-                backStack = backStack,
+                navigationState = navigationState,
                 sharedTransitionScope = sharedTransitionScope,
                 libraryViewModel = libraryViewModel,
                 libraryScanViewModel = libraryScanViewModel,
@@ -150,23 +150,22 @@ fun MP3TagNavHost() {
         }
 
         if (isMainScreen) {
-            val targetKey = currentKey
-            val isFileSelected = targetKey is FileBrowser
-            val isAlbumsSelected = targetKey is Albums
-            val isArtistsSelected = targetKey is Artists
-            val isSettingsSelected = targetKey is Settings
+            val isFileSelected = topLevelRoute is FileBrowser
+            val isAlbumsSelected = topLevelRoute is Albums
+            val isArtistsSelected = topLevelRoute is Artists
+            val isSettingsSelected = topLevelRoute is Settings
 
             val onFileBrowserClick = dropUnlessResumed {
-                if (!isFileSelected) navigateToMainScreen(backStack, FileBrowser)
+                if (!isFileSelected) navigator.navigate(FileBrowser)
             }
             val onAlbumsClick = dropUnlessResumed {
-                if (!isAlbumsSelected) navigateToMainScreen(backStack, Albums)
+                if (!isAlbumsSelected) navigator.navigate(Albums)
             }
             val onArtistsClick = dropUnlessResumed {
-                if (!isArtistsSelected) navigateToMainScreen(backStack, Artists)
+                if (!isArtistsSelected) navigator.navigate(Artists)
             }
             val onSettingsClick = dropUnlessResumed {
-                if (!isSettingsSelected) navigateToMainScreen(backStack, Settings)
+                if (!isSettingsSelected) navigator.navigate(Settings)
             }
 
             NavigationSuiteScaffold(
@@ -233,7 +232,7 @@ fun MP3TagNavHost() {
 @OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 private fun MP3TagNavDisplay(
-    backStack: SnapshotStateList<NavKey>,
+    navigationState: NavigationState,
     sharedTransitionScope: SharedTransitionScope,
     libraryViewModel: LibraryViewModel,
     libraryScanViewModel: LibraryScanViewModel,
@@ -246,219 +245,232 @@ private fun MP3TagNavDisplay(
     onPendingLyricsSet: (String) -> Unit,
     onPendingCoverArtSet: (ByteArray) -> Unit
 ) {
+    val navigator = remember { Navigator(navigationState) }
+
     NavDisplay(
-        backStack = backStack,
-        onBack = { backStack.removeLastOrNull() },
+        entries = navigationState.toDecoratedEntries(
+            entryProvider = entryProvider<NavKey> {
+                entry<FileBrowser> {
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        FileBrowserAdaptiveScreen(
+                            viewModel = libraryViewModel,
+                            scanViewModel = libraryScanViewModel,
+                            settingsViewModel = librarySettingsViewModel,
+                            onNavigateToDirectory = { directoryUri, directoryName ->
+                                navigator.navigate(DirectoryContent(directoryUri, directoryName))
+                            },
+                            onNavigateToMetadata = { filePath, coverTag ->
+                                navigator.navigate(MetadataEditor(filePath, coverTag ?: ""))
+                            },
+                            onNavigateToOnlineMetadata = {},
+                            onNavigateToOnlineLyricsSearch = {},
+                            onNavigateToOnlineCoverSearch = {},
+                            onNavigateToLyricsSelector = { _, _, _, _, _ -> },
+                            onNavigateBack = {}
+                        )
+                    }
+                }
+
+                entry<Albums> {
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        AlbumAdaptiveScreen(
+                            onNavigateBack = {},
+                            onNavigateToMetadata = { filePath, coverTag ->
+                                navigator.navigate(MetadataEditor(filePath, coverTag ?: ""))
+                            },
+                            onNavigateToAlbumDetail = { albumGroup ->
+                                navigator.navigate(AlbumDetail(albumGroup.name, albumGroup.albumArtist ?: ""))
+                            }
+                        )
+                    }
+                }
+
+                entry<Artists> {
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        ArtistAdaptiveScreen(
+                            onNavigateBack = {},
+                            onNavigateToMetadata = { filePath, coverTag ->
+                                navigator.navigate(MetadataEditor(filePath, coverTag ?: ""))
+                            },
+                            onNavigateToArtistDetail = { artistGroup ->
+                                navigator.navigate(ArtistDetail(artistGroup.name))
+                            }
+                        )
+                    }
+                }
+
+                entry<Settings> {
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        SettingsEntry(navigator, LocalContext.current)
+                    }
+                }
+
+                entry<DirectoryContent>(
+                    clazzContentKey = { key -> "DirectoryContent_${key.directoryUri}" },
+                    metadata = sharedAxisXMetadata
+                ) { key ->
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        DirectoryContentAdaptiveScreen(
+                            directoryUri = key.directoryUri,
+                            directoryName = key.directoryName,
+                            viewModel = libraryViewModel,
+                            scanViewModel = libraryScanViewModel,
+                            settingsViewModel = librarySettingsViewModel,
+                            batchViewModel = libraryBatchViewModel,
+                            onNavigateBack = { navigator.goBack() },
+                            onNavigateToMetadata = { filePath, coverTag ->
+                                navigator.navigate(MetadataEditor(filePath, coverTag ?: ""))
+                            },
+                            onNavigateToReplayGain = { filePaths ->
+                                navigator.navigate(ReplayGainScanner(filePaths))
+                            },
+                            onNavigateToOnlineMetadata = {
+                                navigator.navigate(OnlineMetadata(key.directoryUri))
+                            },
+                            onNavigateToOnlineLyricsSearch = {
+                                navigator.navigate(OnlineLyricsSearch(key.directoryUri))
+                            },
+                            onNavigateToOnlineCoverSearch = {
+                                navigator.navigate(OnlineCoverSearch(key.directoryUri))
+                            },
+                            onNavigateToLyricsSelector = { filePath, title, artist, album, _ ->
+                                navigator.navigate(
+                                    LyricsSelector(
+                                        filePath = filePath,
+                                        title = title,
+                                        artist = artist,
+                                        album = album
+                                    )
+                                )
+                            }
+                        )
+                    }
+                }
+
+                entry<MetadataEditor>(
+                    clazzContentKey = { key -> "MetadataEditor_${key.filePath}" },
+                    metadata = containerTransformMetadata
+                ) { key ->
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        MetadataEditorEntry(
+                            key = key,
+                            navigator = navigator,
+                            pendingLyrics = pendingLyrics,
+                            onPendingLyricsConsumed = onPendingLyricsConsumed,
+                            pendingCoverArt = pendingCoverArt,
+                            onPendingCoverArtConsumed = onPendingCoverArtConsumed
+                        )
+                    }
+                }
+
+                entry<ReplayGainScanner>(
+                    clazzContentKey = { key -> "ReplayGainScanner_${key.filePaths.hashCode()}" },
+                    metadata = sharedAxisXMetadata
+                ) { key ->
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        ReplayGainScannerEntry(key, navigator)
+                    }
+                }
+
+                entry<OnlineMetadata>(
+                    clazzContentKey = { key -> "OnlineMetadata_${key.filePath}" },
+                    metadata = sharedAxisXMetadata
+                ) { key ->
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        OnlineMetadataEntry(key, navigator)
+                    }
+                }
+
+                entry<OnlineLyricsSearch>(
+                    clazzContentKey = { key -> "OnlineLyricsSearch_${key.filePath}" },
+                    metadata = sharedAxisXMetadata
+                ) { key ->
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        OnlineLyricsSearchEntry(key, navigator, onPendingLyricsSet = onPendingLyricsSet)
+                    }
+                }
+
+                entry<OnlineCoverSearch>(
+                    clazzContentKey = { key -> "OnlineCoverSearch_${key.filePath}" },
+                    metadata = sharedAxisXMetadata
+                ) { key ->
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        OnlineCoverSearchEntry(key, navigator, onPendingCoverArtSet = onPendingCoverArtSet)
+                    }
+                }
+
+                entry<LyricsSelector>(
+                    clazzContentKey = { key -> "LyricsSelector_${key.filePath}" },
+                    metadata = sharedAxisXMetadata
+                ) { key ->
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        LyricsSelectorEntry(key, navigator)
+                    }
+                }
+
+                entry<LyricsPoster>(
+                    clazzContentKey = { key -> "LyricsPoster_${key.filePath}" },
+                    metadata = sharedAxisXMetadata
+                ) { key ->
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        LyricsPosterEntry(key, navigator)
+                    }
+                }
+
+                entry<AlbumDetail>(
+                    clazzContentKey = { key -> "AlbumDetail_${key.albumName}_${key.albumArtist}" },
+                    metadata = containerTransformMetadata
+                ) { key ->
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        AlbumDetailEntry(key, navigator)
+                    }
+                }
+
+                entry<ArtistDetail>(
+                    clazzContentKey = { key -> "ArtistDetail_${key.artistName}" },
+                    metadata = containerTransformMetadata
+                ) { key ->
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        ArtistDetailEntry(key, navigator)
+                    }
+                }
+
+                entry<ScanDirectorySettings>(
+                    metadata = sharedAxisXMetadata
+                ) {
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        com.voxly.presentation.screens.ScanDirectorySettingsScreen(
+                            onNavigateBack = { navigator.goBack() }
+                        )
+                    }
+                }
+
+                entry<LogViewer>(
+                    metadata = sharedAxisXMetadata
+                ) {
+                    SharedTransitionWrapper(sharedTransitionScope) {
+                        LogViewerScreen(
+                            onBack = { navigator.goBack() }
+                        )
+                    }
+                }
+            }
+        ),
+        onBack = { navigator.goBack() },
         sharedTransitionScope = sharedTransitionScope,
         transitionSpec = {
-            computeTransition(isPush = true)
+            computeTransition(isPush = true, transitionType = TransitionType.TRANSITION)
         },
         popTransitionSpec = {
-            computeTransition(isPush = false)
+            computeTransition(isPush = false, transitionType = TransitionType.POP)
         },
         predictivePopTransitionSpec = {
-            computeTransition(isPush = false)
+            computeTransition(isPush = false, transitionType = TransitionType.PREDICTIVE_POP)
         },
-        sceneStrategies = listOf(rememberListDetailSceneStrategy()),
-        entryProvider = entryProvider<NavKey> {
-            entry<FileBrowser> {
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    FileBrowserAdaptiveScreen(
-                        viewModel = libraryViewModel,
-                        scanViewModel = libraryScanViewModel,
-                        settingsViewModel = librarySettingsViewModel,
-                        onNavigateToDirectory = { directoryUri, directoryName ->
-                            backStack.add(DirectoryContent(directoryUri, directoryName))
-                        },
-                        onNavigateToMetadata = { filePath, coverTag ->
-                            backStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                        },
-                        onNavigateToOnlineMetadata = {},
-                        onNavigateToOnlineLyricsSearch = {},
-                        onNavigateToOnlineCoverSearch = {},
-                        onNavigateToLyricsSelector = { _, _, _, _, _ -> },
-                        onNavigateBack = {}
-                    )
-                }
-            }
-
-            entry<Albums> {
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    AlbumAdaptiveScreen(
-                        onNavigateBack = {},
-                        onNavigateToMetadata = { filePath, coverTag ->
-                            backStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                        },
-                        onNavigateToAlbumDetail = { albumGroup ->
-                            backStack.add(AlbumDetail(albumGroup.name, albumGroup.albumArtist ?: ""))
-                        }
-                    )
-                }
-            }
-
-            entry<Artists> {
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    ArtistAdaptiveScreen(
-                        onNavigateBack = {},
-                        onNavigateToMetadata = { filePath, coverTag ->
-                            backStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                        },
-                        onNavigateToArtistDetail = { artistGroup ->
-                            backStack.add(ArtistDetail(artistGroup.name))
-                        }
-                    )
-                }
-            }
-
-            entry<Settings> {
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    SettingsEntry(backStack, LocalContext.current)
-                }
-            }
-
-            entry<DirectoryContent>(
-                clazzContentKey = { key -> "DirectoryContent_${key.directoryUri}" }
-            ) { key ->
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    DirectoryContentAdaptiveScreen(
-                        directoryUri = key.directoryUri,
-                        directoryName = key.directoryName,
-                        viewModel = libraryViewModel,
-                        scanViewModel = libraryScanViewModel,
-                        settingsViewModel = librarySettingsViewModel,
-                        batchViewModel = libraryBatchViewModel,
-                        onNavigateBack = { backStack.removeLastOrNull() },
-                        onNavigateToMetadata = { filePath, coverTag ->
-                            backStack.add(MetadataEditor(filePath, coverTag ?: ""))
-                        },
-                        onNavigateToReplayGain = { filePaths ->
-                            backStack.add(ReplayGainScanner(filePaths))
-                        },
-                        onNavigateToOnlineMetadata = {
-                            backStack.add(OnlineMetadata(key.directoryUri))
-                        },
-                        onNavigateToOnlineLyricsSearch = {
-                            backStack.add(OnlineLyricsSearch(key.directoryUri))
-                        },
-                        onNavigateToOnlineCoverSearch = {
-                            backStack.add(OnlineCoverSearch(key.directoryUri))
-                        },
-                        onNavigateToLyricsSelector = { filePath, title, artist, album, _ ->
-                            backStack.add(
-                                LyricsSelector(
-                                    filePath = filePath,
-                                    title = title,
-                                    artist = artist,
-                                    album = album
-                                )
-                            )
-                        }
-                    )
-                }
-            }
-
-            entry<MetadataEditor>(
-                clazzContentKey = { key -> "MetadataEditor_${key.filePath}" },
-                metadata = containerTransformMetadata
-            ) { key ->
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    MetadataEditorEntry(
-                        key = key,
-                        backStack = backStack,
-                        pendingLyrics = pendingLyrics,
-                        onPendingLyricsConsumed = onPendingLyricsConsumed,
-                        pendingCoverArt = pendingCoverArt,
-                        onPendingCoverArtConsumed = onPendingCoverArtConsumed
-                    )
-                }
-            }
-
-            entry<ReplayGainScanner>(
-                clazzContentKey = { key -> "ReplayGainScanner_${key.filePaths.hashCode()}" }
-            ) { key ->
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    ReplayGainScannerEntry(key, backStack)
-                }
-            }
-
-            entry<OnlineMetadata>(
-                clazzContentKey = { key -> "OnlineMetadata_${key.filePath}" }
-            ) { key ->
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    OnlineMetadataEntry(key, backStack)
-                }
-            }
-
-            entry<OnlineLyricsSearch>(
-                clazzContentKey = { key -> "OnlineLyricsSearch_${key.filePath}" }
-            ) { key ->
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    OnlineLyricsSearchEntry(key, backStack, onPendingLyricsSet = onPendingLyricsSet)
-                }
-            }
-
-            entry<OnlineCoverSearch>(
-                clazzContentKey = { key -> "OnlineCoverSearch_${key.filePath}" }
-            ) { key ->
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    OnlineCoverSearchEntry(key, backStack, onPendingCoverArtSet = onPendingCoverArtSet)
-                }
-            }
-
-            entry<LyricsSelector>(
-                clazzContentKey = { key -> "LyricsSelector_${key.filePath}" }
-            ) { key ->
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    LyricsSelectorEntry(key, backStack)
-                }
-            }
-
-            entry<LyricsPoster>(
-                clazzContentKey = { key -> "LyricsPoster_${key.filePath}" }
-            ) { key ->
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    LyricsPosterEntry(key, backStack)
-                }
-            }
-
-            entry<AlbumDetail>(
-                clazzContentKey = { key -> "AlbumDetail_${key.albumName}_${key.albumArtist}" },
-                metadata = containerTransformMetadata
-            ) { key ->
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    AlbumDetailEntry(key, backStack)
-                }
-            }
-
-            entry<ArtistDetail>(
-                clazzContentKey = { key -> "ArtistDetail_${key.artistName}" },
-                metadata = containerTransformMetadata
-            ) { key ->
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    ArtistDetailEntry(key, backStack)
-                }
-            }
-
-            entry<ScanDirectorySettings>(
-                metadata = sharedAxisXMetadata
-            ) {
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    com.voxly.presentation.screens.ScanDirectorySettingsScreen(
-                        onNavigateBack = { backStack.removeLastOrNull() }
-                    )
-                }
-            }
-
-            entry<LogViewer>(
-                metadata = sharedAxisXMetadata
-            ) {
-                SharedTransitionWrapper(sharedTransitionScope) {
-                    LogViewerScreen(
-                        onBack = { backStack.removeLastOrNull() }
-                    )
-                }
-            }
-        }
+        sceneStrategies = listOf(
+            rememberListDetailSceneStrategy(),
+            remember { BottomSheetSceneStrategy() }
+        )
     )
 }
 
@@ -475,11 +487,11 @@ private fun SharedTransitionWrapper(
 }
 
 @Composable
-private fun SettingsEntry(backStack: SnapshotStateList<NavKey>, context: android.content.Context) {
+private fun SettingsEntry(navigator: Navigator, context: android.content.Context) {
     val logViewerViewModel = hiltViewModel<com.voxly.presentation.screens.log.LogViewerViewModel>()
     SettingsScreen(
         outerPadding = PaddingValues(),
-        onNavigateToLogViewer = { backStack.add(LogViewer) },
+        onNavigateToLogViewer = { navigator.navigate(LogViewer) },
         onExportLogs = {
             logViewerViewModel.exportLogs(context) { uri ->
                 if (uri != null) {
@@ -494,7 +506,7 @@ private fun SettingsEntry(backStack: SnapshotStateList<NavKey>, context: android
                 }
             }
         },
-        onNavigateToScanDirectorySettings = { backStack.add(ScanDirectorySettings) },
+        onNavigateToScanDirectorySettings = { navigator.navigate(ScanDirectorySettings) },
         onCleanupLogs = {
             val deletedCount = LogManager.clearAllLogs()
             Toast.makeText(
@@ -509,7 +521,7 @@ private fun SettingsEntry(backStack: SnapshotStateList<NavKey>, context: android
 @Composable
 private fun MetadataEditorEntry(
     key: MetadataEditor,
-    backStack: SnapshotStateList<NavKey>,
+    navigator: Navigator,
     pendingLyrics: String?,
     onPendingLyricsConsumed: () -> Unit,
     pendingCoverArt: ByteArray?,
@@ -524,18 +536,18 @@ private fun MetadataEditorEntry(
         viewModel = viewModel,
         coverTag = key.coverTag.takeIf { it.isNotEmpty() },
         sharedElementKey = key.coverTag.takeIf { it.isNotEmpty() },
-        onNavigateBack = { backStack.removeLastOrNull() },
+        onNavigateBack = { navigator.goBack() },
         onNavigateToOnlineMetadata = {
-            backStack.add(OnlineMetadata(key.filePath))
+            navigator.navigate(OnlineMetadata(key.filePath))
         },
         onNavigateToOnlineLyricsSearch = {
-            backStack.add(OnlineLyricsSearch(key.filePath))
+            navigator.navigate(OnlineLyricsSearch(key.filePath))
         },
         onNavigateToOnlineCoverSearch = {
-            backStack.add(OnlineCoverSearch(key.filePath))
+            navigator.navigate(OnlineCoverSearch(key.filePath))
         },
         onNavigateToLyricsSelector = { _, title, artist, album, _ ->
-            backStack.add(
+            navigator.navigate(
                 LyricsSelector(
                     filePath = key.filePath,
                     title = title,
@@ -552,22 +564,22 @@ private fun MetadataEditorEntry(
 }
 
 @Composable
-private fun ReplayGainScannerEntry(key: ReplayGainScanner, backStack: SnapshotStateList<NavKey>) {
+private fun ReplayGainScannerEntry(key: ReplayGainScanner, navigator: Navigator) {
     val viewModel = hiltViewModel<ReplayGainViewModel, ReplayGainViewModel.Factory>(
         creationCallback = { factory -> factory.create(key) }
     )
     ReplayGainScannerScreen(
         filePaths = key.filePaths,
-        onNavigateBack = { backStack.removeLastOrNull() },
+        onNavigateBack = { navigator.goBack() },
         onNavigateToMetadata = { filePath, coverTag ->
-            backStack.removeLastOrNull()
-            backStack.add(MetadataEditor(filePath, coverTag ?: ""))
+            navigator.goBack()
+            navigator.navigate(MetadataEditor(filePath, coverTag ?: ""))
         }
     )
 }
 
 @Composable
-private fun OnlineMetadataEntry(key: OnlineMetadata, backStack: SnapshotStateList<NavKey>) {
+private fun OnlineMetadataEntry(key: OnlineMetadata, navigator: Navigator) {
     val viewModel = hiltViewModel<OnlineMetadataViewModel, OnlineMetadataViewModel.Factory>(
         key = key.filePath,
         creationCallback = { factory -> factory.create(key) }
@@ -575,11 +587,11 @@ private fun OnlineMetadataEntry(key: OnlineMetadata, backStack: SnapshotStateLis
     OnlineMetadataScreen(
         filePath = key.filePath,
         viewModel = viewModel,
-        onNavigateBack = { backStack.removeLastOrNull() },
+        onNavigateBack = { navigator.goBack() },
         onApplyMetadata = { metadata ->
             Timber.d("MP3TagNavHost: onApplyMetadata called, title=${metadata.title}")
-            backStack.removeLastOrNull()
-            Timber.d("MP3TagNavHost: backStack popped, size=${backStack.size}")
+            navigator.goBack()
+            Timber.d("MP3TagNavHost: backStack popped")
         }
     )
 }
@@ -587,7 +599,7 @@ private fun OnlineMetadataEntry(key: OnlineMetadata, backStack: SnapshotStateLis
 @Composable
 private fun OnlineLyricsSearchEntry(
     key: OnlineLyricsSearch,
-    backStack: SnapshotStateList<NavKey>,
+    navigator: Navigator,
     onPendingLyricsSet: (String) -> Unit
 ) {
     val viewModel = hiltViewModel<OnlineLyricsSearchViewModel, OnlineLyricsSearchViewModel.Factory>(
@@ -596,10 +608,10 @@ private fun OnlineLyricsSearchEntry(
     OnlineLyricsSearchScreen(
         filePath = key.filePath,
         viewModel = viewModel,
-        onNavigateBack = { backStack.removeLastOrNull() },
+        onNavigateBack = { navigator.goBack() },
         onLyricsSelected = { lyricsText ->
             onPendingLyricsSet(lyricsText)
-            backStack.removeLastOrNull()
+            navigator.goBack()
         }
     )
 }
@@ -607,7 +619,7 @@ private fun OnlineLyricsSearchEntry(
 @Composable
 private fun OnlineCoverSearchEntry(
     key: OnlineCoverSearch,
-    backStack: SnapshotStateList<NavKey>,
+    navigator: Navigator,
     onPendingCoverArtSet: (ByteArray) -> Unit
 ) {
     val viewModel = hiltViewModel<OnlineCoverSearchViewModel, OnlineCoverSearchViewModel.Factory>(
@@ -616,16 +628,16 @@ private fun OnlineCoverSearchEntry(
     OnlineCoverSearchScreen(
         filePath = key.filePath,
         viewModel = viewModel,
-        onNavigateBack = { backStack.removeLastOrNull() },
+        onNavigateBack = { navigator.goBack() },
         onCoverSelected = { coverBytes ->
             onPendingCoverArtSet(coverBytes)
-            backStack.removeLastOrNull()
+            navigator.goBack()
         }
     )
 }
 
 @Composable
-private fun LyricsSelectorEntry(key: LyricsSelector, backStack: SnapshotStateList<NavKey>) {
+private fun LyricsSelectorEntry(key: LyricsSelector, navigator: Navigator) {
     val viewModel = hiltViewModel<LyricsSelectorViewModel, LyricsSelectorViewModel.Factory>(
         creationCallback = { factory -> factory.create(key) }
     )
@@ -633,10 +645,10 @@ private fun LyricsSelectorEntry(key: LyricsSelector, backStack: SnapshotStateLis
         title = key.title,
         artist = key.artist,
         album = key.album,
-        onNavigateBack = { backStack.removeLastOrNull() },
-        onDismiss = { backStack.removeLastOrNull() },
+        onNavigateBack = { navigator.goBack() },
+        onDismiss = { navigator.goBack() },
         onNavigateToLyricsPoster = { lyricsText, selectedIndices ->
-            backStack.add(
+            navigator.navigate(
                 LyricsPoster(
                     filePath = key.filePath,
                     title = key.title,
@@ -651,7 +663,7 @@ private fun LyricsSelectorEntry(key: LyricsSelector, backStack: SnapshotStateLis
 }
 
 @Composable
-private fun LyricsPosterEntry(key: LyricsPoster, backStack: SnapshotStateList<NavKey>) {
+private fun LyricsPosterEntry(key: LyricsPoster, navigator: Navigator) {
     val viewModel = hiltViewModel<LyricsPosterViewModel, LyricsPosterViewModel.Factory>(
         creationCallback = { factory -> factory.create(key) }
     )
@@ -662,50 +674,79 @@ private fun LyricsPosterEntry(key: LyricsPoster, backStack: SnapshotStateList<Na
         album = key.album,
         lyricsText = key.lyricsText,
         selectedLyricsIndices = key.selectedLyricsIndices,
-        onNavigateBack = { backStack.removeLastOrNull() }
+        onNavigateBack = { navigator.goBack() }
     )
 }
 
 @Composable
-private fun AlbumDetailEntry(key: AlbumDetail, backStack: SnapshotStateList<NavKey>) {
+private fun AlbumDetailEntry(key: AlbumDetail, navigator: Navigator) {
     val viewModel = hiltViewModel<AlbumDetailViewModel, AlbumDetailViewModel.Factory>(
         creationCallback = { factory -> factory.create(key) }
     )
     AlbumDetailScreen(
         albumName = key.albumName,
         albumArtist = key.albumArtist.takeIf { it.isNotEmpty() },
-        onNavigateBack = { backStack.removeLastOrNull() },
+        onNavigateBack = { navigator.goBack() },
         onNavigateToMetadata = { filePath, coverTag ->
-            backStack.add(MetadataEditor(filePath, coverTag ?: ""))
+            navigator.navigate(MetadataEditor(filePath, coverTag ?: ""))
         },
         viewModel = viewModel
     )
 }
 
 @Composable
-private fun ArtistDetailEntry(key: ArtistDetail, backStack: SnapshotStateList<NavKey>) {
+private fun ArtistDetailEntry(key: ArtistDetail, navigator: Navigator) {
     val viewModel = hiltViewModel<ArtistDetailViewModel, ArtistDetailViewModel.Factory>(
         creationCallback = { factory -> factory.create(key) }
     )
     ArtistDetailScreen(
         artistName = key.artistName,
-        onNavigateBack = { backStack.removeLastOrNull() },
+        onNavigateBack = { navigator.goBack() },
         onNavigateToMetadata = { filePath, coverTag ->
-            backStack.add(MetadataEditor(filePath, coverTag ?: ""))
+            navigator.navigate(MetadataEditor(filePath, coverTag ?: ""))
         },
         onNavigateToAlbumDetail = { albumName, albumArtist ->
-            backStack.add(AlbumDetail(albumName, albumArtist ?: ""))
+            navigator.navigate(AlbumDetail(albumName, albumArtist ?: ""))
         },
         viewModel = viewModel
     )
 }
 
+private enum class TransitionType {
+    TRANSITION, POP, PREDICTIVE_POP
+}
+
 private fun AnimatedContentTransitionScope<Scene<NavKey>>.computeTransition(
-    isPush: Boolean
+    isPush: Boolean,
+    transitionType: TransitionType = TransitionType.TRANSITION
 ): androidx.compose.animation.ContentTransform {
     val from = initialState.key
     val to = targetState.key
     val isMainToMain = isMainScreenKey(from) && isMainScreenKey(to)
+
+    // 根据 transitionType 选择正确的 key
+    val transitionKey = when (transitionType) {
+        TransitionType.TRANSITION -> NavDisplay.TransitionKey
+        TransitionType.POP -> NavDisplay.PopTransitionKey
+        TransitionType.PREDICTIVE_POP -> NavDisplay.PredictivePopTransitionKey
+    }
+
+    // 检查 target entry 是否有自定义 metadata
+    val targetEntry = targetState.entries.lastOrNull()
+    val metadataMap = targetEntry?.metadata
+
+    Timber.d("computeTransition: from=$from, to=$to, isPush=$isPush, transitionType=$transitionType, " +
+            "transitionKey=$transitionKey, metadataKeys=${metadataMap?.keys}")
+
+    // 尝试获取 entry-level 自定义 transition
+    @Suppress("UNCHECKED_CAST")
+    val customTransition = metadataMap?.get(transitionKey as String) as? androidx.compose.animation.ContentTransform
+
+    // 如果有 entry-level 自定义 metadata，优先使用它
+    if (customTransition != null) {
+        Timber.d("computeTransition: using custom $transitionType transition for $to")
+        return customTransition
+    }
 
     return if (isMainToMain) {
         ExpressiveAnimations.FadeThroughEnter togetherWith ExpressiveAnimations.FadeThroughExit
@@ -726,15 +767,3 @@ private fun isMainScreenKey(key: Any?): Boolean = key == FileBrowser ||
     key == Albums ||
     key == Artists ||
     key == Settings
-
-private fun navigateToMainScreen(backStack: SnapshotStateList<NavKey>, targetMainScreen: NavKey) {
-    val mainScreenIndex = backStack.indexOfFirst {
-        it is FileBrowser || it is Albums || it is Artists || it is Settings
-    }
-    if (mainScreenIndex >= 0) {
-        while (backStack.size > mainScreenIndex + 1) {
-            backStack.removeAt(backStack.lastIndex)
-        }
-        backStack[mainScreenIndex] = targetMainScreen
-    }
-}
