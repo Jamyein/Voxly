@@ -89,11 +89,7 @@ fun AlbumArtImage(
 
     LaunchedEffect(albumId, filePath, coverUriProvider) {
         scope.launch {
-            model = when {
-                albumId != null && albumId > 0 -> coverUriProvider.getCoverUri(albumId = albumId)
-                !filePath.isNullOrBlank() -> coverUriProvider.getCoverUri(null, filePath)
-                else -> null
-            }
+            model = coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
         }
     }
 

@@ -46,6 +46,8 @@ class FastScanProcessor @Inject constructor(
                 if (!file.exists() || !file.canRead()) return@map audioFile
 
                 val lightweightResult = LightweightMetadataParser.parse(file)
+                val mediaStoreAlbumId = audioFile.mediaStoreAlbumId
+                    ?: mediaStoreDataSource.queryMediaStoreAlbumId(audioFile.path)
 
                 val effectiveYear = when {
                     lightweightResult != null && !lightweightResult.metadata.year.isNullOrBlank() -> lightweightResult.metadata.year
@@ -56,6 +58,7 @@ class FastScanProcessor @Inject constructor(
                 audioFile.copy(
                     sampleRate = lightweightResult?.audioInfo?.sampleRate ?: audioFile.sampleRate,
                     channels = lightweightResult?.audioInfo?.channels ?: audioFile.channels,
+                    mediaStoreAlbumId = mediaStoreAlbumId,
                     metadata = audioFile.metadata.copy(
                         title = lightweightResult?.metadata?.title ?: audioFile.metadata.title,
                         artist = lightweightResult?.metadata?.artist ?: audioFile.metadata.artist,

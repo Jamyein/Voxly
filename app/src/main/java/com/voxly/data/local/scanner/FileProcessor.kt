@@ -32,6 +32,7 @@ class FileProcessor @Inject constructor(
 
         val (duration, bitrate) = mediaStoreDataSource.queryFileDurationAndBitrate(filePath)
         val mediaStoreMetadata = mediaStoreDataSource.queryBasicMetadata(filePath) ?: AudioMetadata()
+        val mediaStoreAlbumId = mediaStoreDataSource.queryMediaStoreAlbumId(filePath)
 
         val lightweightResult = LightweightMetadataParser.parse(file)
         val fullMetadata = when {
@@ -54,6 +55,7 @@ class FileProcessor @Inject constructor(
             bitrate = finalBitrate,
             sampleRate = audioInfo?.sampleRate ?: 0,
             channels = audioInfo?.channels ?: 0,
+            mediaStoreAlbumId = mediaStoreAlbumId,
             metadata = fullMetadata
         )
     }
