@@ -120,8 +120,16 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Check if cache has data.
+     * Uses warmup state to skip redundant DB queries if warmup already succeeded.
      */
-    suspend fun hasCachedData(): Boolean = libraryCache.hasCache()
+    suspend fun hasCachedData(): Boolean {
+        if (libraryCache.isWarm()) {
+            val count = libraryCache.getCachedFileCount()
+            Timber.d(TAG, "hasCachedData: warm cache confirmed, $count files")
+            return count > 0
+        }
+        return libraryCache.hasCache()
+    }
 
     /**
      * Get count of cached files.

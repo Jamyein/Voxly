@@ -45,8 +45,8 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
     override fun onCreate() {
         super.onCreate()
 
-        warmUpCache()
         initLogging()
+        warmUpCache()
         VoxlyImageLoader.getInstance(this)
     }
 

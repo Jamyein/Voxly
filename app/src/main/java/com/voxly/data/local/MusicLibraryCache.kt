@@ -59,6 +59,10 @@ class MusicLibraryCache @Inject constructor(
     private val hotCacheLock = Any()
     private var hotAudioFiles: List<AudioFile>? = null
 
+    // Tracks whether warmup completed successfully - used to skip redundant hasCache() queries
+    @Volatile
+    private var wasWarmedUp = false
+
     private fun invalidateHotCache() {
         synchronized(hotCacheLock) {
             hotAudioFiles = null
@@ -71,10 +75,23 @@ class MusicLibraryCache @Inject constructor(
      */
     suspend fun warmUp() {
         withContext(Dispatchers.IO) {
-            hasCache()
-            getCachedAudioFilesOnce()
+            try {
+                hasCache()
+                getCachedAudioFilesOnce()
+                wasWarmedUp = true
+                Timber.d(TAG, "warmUp completed successfully, hotCache size: ${hotAudioFiles?.size ?: 0}")
+            } catch (e: Exception) {
+                Timber.e(TAG, "warmUp failed", e)
+                wasWarmedUp = false
+            }
         }
     }
+
+    /**
+     * Returns true if warmUp has completed successfully and cache is ready.
+     * This avoids redundant hasCache() queries on startup.
+     */
+    fun isWarm(): Boolean = wasWarmedUp
 
     // ==================== Audio File Cache Operations ====================
     
