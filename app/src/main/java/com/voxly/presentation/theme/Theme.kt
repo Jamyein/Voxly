@@ -152,7 +152,9 @@ fun MP3TagTheme(
             val window = (view.context as Activity).window
             @Suppress("DEPRECATION")
             window.statusBarColor = android.graphics.Color.TRANSPARENT
-            WindowCompat.getInsetsController(window, view).isAppearanceLightStatusBars = !darkTheme
+            val controller = WindowCompat.getInsetsController(window, view)
+            controller.isAppearanceLightStatusBars = !darkTheme
+            controller.isAppearanceLightNavigationBars = !darkTheme
         }
     }
 

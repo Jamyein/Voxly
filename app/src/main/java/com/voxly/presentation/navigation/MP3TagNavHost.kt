@@ -126,7 +126,7 @@ fun MP3TagNavHost() {
     var pendingCoverArt by remember { mutableStateOf<ByteArray?>(null) }
 
     val topLevelRoute = navigationState.topLevelRoute
-    val isMainScreen = isMainScreenKey(topLevelRoute)
+    val showNavigationBar = isMainScreenKey(topLevelRoute) && navigationState.isAtTabRoot()
     val adaptiveInfo = currentWindowAdaptiveInfoV2()
 
     SharedTransitionLayout {
@@ -149,7 +149,7 @@ fun MP3TagNavHost() {
             )
         }
 
-        if (isMainScreen) {
+        if (showNavigationBar) {
             val isFileSelected = topLevelRoute is FileBrowser
             val isAlbumsSelected = topLevelRoute is Albums
             val isArtistsSelected = topLevelRoute is Artists
@@ -740,7 +740,7 @@ private fun AnimatedContentTransitionScope<Scene<NavKey>>.computeTransition(
 
     // 尝试获取 entry-level 自定义 transition
     @Suppress("UNCHECKED_CAST")
-    val customTransition = metadataMap?.get(transitionKey as String) as? androidx.compose.animation.ContentTransform
+    val customTransition = metadataMap?.get(transitionKey.toString()) as? androidx.compose.animation.ContentTransform
 
     // 如果有 entry-level 自定义 metadata，优先使用它
     if (customTransition != null) {

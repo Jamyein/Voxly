@@ -45,6 +45,11 @@ class NavigationState(
         get() = topLevelRouteState.value
         set(value) { topLevelRouteState.value = value }
 
+    fun isAtTabRoot(): Boolean {
+        val currentStack = backStacks[topLevelRoute] ?: return true
+        return currentStack.lastOrNull() == topLevelRoute
+    }
+
     @Composable
     fun toDecoratedEntries(
         entryProvider: (NavKey) -> NavEntry<NavKey>
