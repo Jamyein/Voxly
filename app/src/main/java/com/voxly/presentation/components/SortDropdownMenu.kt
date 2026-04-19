@@ -14,7 +14,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
@@ -67,6 +70,7 @@ fun <T> SortMenuButton(
     modifier: Modifier = Modifier,
     onSortOptionChange: (T) -> Unit
 ) {
+    val focusRequester = remember { FocusRequester() }
     SortDropdownMenu(
         expanded = expanded,
         onExpandedChange = onExpandedChange,
@@ -74,7 +78,9 @@ fun <T> SortMenuButton(
         anchor = {
             IconButton(
                 onClick = { onExpandedChange(!expanded) },
-                modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                modifier = Modifier
+                    .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                    .focusRequester(focusRequester)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Sort,
