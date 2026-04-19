@@ -1,17 +1,18 @@
 package com.voxly
 
 import android.app.Application
+import android.content.Context
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
+import coil3.ImageLoader
+import coil3.SingletonImageLoader
 import com.voxly.core.util.CrashHandler
 import com.voxly.core.util.FileLoggingTree
 import com.voxly.core.util.LogManager
+import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.SettingsDataStore
-import com.voxly.presentation.ui.clearAllCaches
-import com.voxly.presentation.ui.initImageLoaderScope
-import com.voxly.presentation.ui.trimToCoreCache
-import com.voxly.presentation.ui.trimToEssentialCache
+import com.voxly.presentation.ui.coil.VoxlyImageLoader
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -27,7 +28,7 @@ import javax.inject.Named
  * Annotated with @HiltAndroidApp to enable Hilt dependency injection.
  */
 @HiltAndroidApp
-class MP3TagApplication : Application(), Configuration.Provider {
+class MP3TagApplication : Application(), Configuration.Provider, SingletonImageLoader.Factory {
 
     private lateinit var fileLoggingTree: FileLoggingTree
 
@@ -38,11 +39,15 @@ class MP3TagApplication : Application(), Configuration.Provider {
     @Inject
     lateinit var workerFactory: HiltWorkerFactory
 
+    @Inject
+    lateinit var musicLibraryCache: MusicLibraryCache
+
     override fun onCreate() {
         super.onCreate()
 
         initLogging()
-        initImageLoaderScope(applicationScope)
+        warmUpCache()
+        VoxlyImageLoader.getInstance(this)
     }
 
     override val workManagerConfiguration: Configuration
@@ -56,21 +61,10 @@ class MP3TagApplication : Application(), Configuration.Provider {
         super.onTrimMemory(level)
         when (level) {
             TRIM_MEMORY_RUNNING_LOW,
-            TRIM_MEMORY_RUNNING_CRITICAL -> {
-                Timber.d(TAG, "Low memory, trimming to core cache")
-                trimToCoreCache(this)
-                CoverUriProvider.clearCaches()
-            }
-            TRIM_MEMORY_UI_HIDDEN -> {
-                // User switched to another app, release non-essential caches
-                Timber.d(TAG, "UI hidden, trimming to essential")
-                trimToEssentialCache(this)
-                CoverUriProvider.clearCaches()
-            }
+            TRIM_MEMORY_RUNNING_CRITICAL,
+            TRIM_MEMORY_UI_HIDDEN,
             TRIM_MEMORY_COMPLETE,
             TRIM_MEMORY_MODERATE -> {
-                Timber.d(TAG, "Memory pressure, clearing caches")
-                clearAllCaches(this)
                 CoverUriProvider.clearCaches()
             }
         }
@@ -80,30 +74,38 @@ class MP3TagApplication : Application(), Configuration.Provider {
         private const val TAG = "MP3TagApplication"
     }
 
+    override fun newImageLoader(context: Context): ImageLoader {
+        return VoxlyImageLoader.getInstance(context).imageLoader
+    }
+
     private fun initLogging() {
-        // Initialize LogManager first with default values
         LogManager.init(this)
-        // Apply settings asynchronously
         applyLoggingSettings()
 
-        // Always plant file logging tree - it checks isFileLoggingEnabled internally
         fileLoggingTree = FileLoggingTree()
         Timber.plant(fileLoggingTree)
 
-        // Plant debug tree only in debug builds
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())
         }
 
-        // Cleanup excess logs on startup
         if (LogManager.isLoggingEnabled) {
             fileLoggingTree.cleanupExcessLogs()
         }
 
-        // Setup crash handler
         Thread.setDefaultUncaughtExceptionHandler(CrashHandler())
 
         Timber.i("Application started - Version ${BuildConfig.VERSION_NAME}")
+    }
+
+    private fun warmUpCache() {
+        applicationScope.launch(Dispatchers.IO) {
+            try {
+                musicLibraryCache.warmUp()
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to warm up music library cache")
+            }
+        }
     }
 
     private fun applyLoggingSettings() {

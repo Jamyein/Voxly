@@ -35,14 +35,14 @@ class MainActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
+        val splashScreen = installSplashScreen()
+
         enableEdgeToEdge(
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
         )
 
         setContent {
-            // Install splash screen inside setContent to access ViewModel
-            val splashScreen = remember { installSplashScreen() }
             var isReady by remember { mutableStateOf(false) }
 
             val libraryScanViewModel: LibraryScanViewModel = hiltViewModel()

@@ -151,8 +151,7 @@ class TengxRepositoryImpl(
                 Result.failure(Exception("QQ Music search failed: ${response.code()}"))
             }
         } catch (e: Exception) {
-            Timber.e(TAG, "QQ Music search exception: ${e.message}")
-            e.printStackTrace()
+            Timber.e(e, "QQ Music search exception: ${e.message}")
             Result.failure(e)
         }
     }

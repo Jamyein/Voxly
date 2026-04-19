@@ -10,6 +10,8 @@ import timber.log.Timber
 import com.voxly.data.local.cache.*
 import com.voxly.data.local.cover.CoverDiskCache
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.CacheChange
+import com.voxly.domain.model.CacheChangeKeys
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -50,15 +52,46 @@ class MusicLibraryCache @Inject constructor(
     private val cacheVersion = MutableStateFlow(0L)
     val cacheVersionFlow: StateFlow<Long> = cacheVersion.asStateFlow()
 
+    private val _changeFlow = MutableStateFlow<CacheChange>(CacheChange.FullRefresh())
+    val changeFlow: Flow<CacheChange> = _changeFlow.asStateFlow()
+
     // Hot in-memory cache for all audio files to avoid full entity re-mapping on every Room emission.
     private val hotCacheLock = Any()
     private var hotAudioFiles: List<AudioFile>? = null
+
+    // Tracks whether warmup completed successfully - used to skip redundant hasCache() queries
+    @Volatile
+    private var wasWarmedUp = false
 
     private fun invalidateHotCache() {
         synchronized(hotCacheLock) {
             hotAudioFiles = null
         }
     }
+
+    /**
+     * Warms up the cache by ensuring database is initialized and cache data is preloaded.
+     * Call this early in app startup to avoid first-access delays and race conditions.
+     */
+    suspend fun warmUp() {
+        withContext(Dispatchers.IO) {
+            try {
+                hasCache()
+                getCachedAudioFilesOnce()
+                wasWarmedUp = true
+                Timber.d(TAG, "warmUp completed successfully, hotCache size: ${hotAudioFiles?.size ?: 0}")
+            } catch (e: Exception) {
+                Timber.e(TAG, "warmUp failed", e)
+                wasWarmedUp = false
+            }
+        }
+    }
+
+    /**
+     * Returns true if warmUp has completed successfully and cache is ready.
+     * This avoids redundant hasCache() queries on startup.
+     */
+    fun isWarm(): Boolean = wasWarmedUp
 
     // ==================== Audio File Cache Operations ====================
     
@@ -146,14 +179,14 @@ class MusicLibraryCache @Inject constructor(
             val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
                 gson.toJson(audioFile.metadata.customFields)
             } else null
-            
+
             CachedAudioFileEntity.fromAudioFile(
                 audioFile = audioFile,
                 fileLastModified = file.lastModified(),
                 customFieldsJson = customFieldsJson
             )
         }
-        
+
         // Use chunked insert for large libraries
         audioFileDao.insertAllChunked(entities)
 
@@ -161,6 +194,15 @@ class MusicLibraryCache @Inject constructor(
         updateArtistLinksForFiles(audioFiles)
 
         invalidateHotCache()
+
+        val albumKeys = audioFiles.mapNotNull { CacheChangeKeys.extractAlbumKey(it) }.toSet()
+        val artistKeys = audioFiles.mapNotNull { CacheChangeKeys.extractArtistKey(it) }.toSet()
+        _changeFlow.value = CacheChange.FilesBatchUpdated(
+            filePaths = audioFiles.map { it.path },
+            albumKeys = albumKeys,
+            artistKeys = artistKeys
+        )
+
         bumpCacheVersion()
 
         Timber.i("DB batch insert: ${entities.size} records")
@@ -168,31 +210,75 @@ class MusicLibraryCache @Inject constructor(
     
     /**
      * Syncs a single file to cache (e.g., after metadata edit).
+     * Preserves lastEditedByUserAt if already set.
      */
     suspend fun syncFileToCache(audioFile: AudioFile) = withContext(Dispatchers.IO) {
+        Timber.d("syncFileToCache: path=${audioFile.path}, album=${audioFile.metadata.album}, albumArtist=${audioFile.metadata.albumArtist}, albumId=${audioFile.mediaStoreAlbumId}")
         val file = File(audioFile.path)
         val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
             gson.toJson(audioFile.metadata.customFields)
         } else null
 
+        val existingEntity = audioFileDao.getAudioFileByPath(audioFile.path)
+        val lastEditedByUserAt = existingEntity?.lastEditedByUserAt
+
         val entity = CachedAudioFileEntity.fromAudioFile(
             audioFile = audioFile,
             fileLastModified = file.lastModified(),
-            customFieldsJson = customFieldsJson
+            customFieldsJson = customFieldsJson,
+            lastEditedByUserAt = lastEditedByUserAt
         )
 
         audioFileDao.insert(entity)
+        Timber.d("syncFileToCache: inserted to DB, invalidating hotCache")
+        invalidateHotCache()
+
+        val albumKey = CacheChangeKeys.extractAlbumKey(audioFile)
+        val artistKey = CacheChangeKeys.extractArtistKey(audioFile)
+        _changeFlow.value = CacheChange.FileUpdated(
+            filePath = audioFile.path,
+            albumKey = albumKey,
+            artistKey = artistKey
+        )
+
+        bumpCacheVersion()
+        Timber.d("syncFileToCache: done, cacheVersion=${cacheVersion.value}")
+    }
+
+    /**
+     * Marks a file as edited by user with current timestamp.
+     * This prevents EnrichmentWorker from overwriting user's manual edits.
+     */
+    suspend fun markFileAsEditedByUser(filePath: String) = withContext(Dispatchers.IO) {
+        audioFileDao.updateLastEditedByUserAt(filePath, System.currentTimeMillis())
         invalidateHotCache()
         bumpCacheVersion()
-        Timber.i("DB sync: ${audioFile.path}")
+        Timber.d("markFileAsEditedByUser: path=$filePath")
     }
 
     /**
      * Removes a file from cache.
      */
     suspend fun removeFromCache(filePath: String) = withContext(Dispatchers.IO) {
+        val existingFile = audioFileDao.getAudioFileByPath(filePath)
+        val albumKey = existingFile?.let {
+            val af = it.toAudioFile()
+            CacheChangeKeys.extractAlbumKey(af)
+        }
+        val artistKey = existingFile?.let {
+            val af = it.toAudioFile()
+            CacheChangeKeys.extractArtistKey(af)
+        }
+
         audioFileDao.deleteByPath(filePath)
         invalidateHotCache()
+
+        _changeFlow.value = CacheChange.FileDeleted(
+            filePath = filePath,
+            albumKey = albumKey,
+            artistKey = artistKey
+        )
+
         bumpCacheVersion()
         Timber.i("DB delete: $filePath")
     }
@@ -202,8 +288,25 @@ class MusicLibraryCache @Inject constructor(
      */
     suspend fun removeFromCache(filePaths: List<String>) = withContext(Dispatchers.IO) {
         if (filePaths.isNotEmpty()) {
+            val existingFiles = filePaths.mapNotNull { audioFileDao.getAudioFileByPath(it) }
+            val albumKeys = existingFiles.mapNotNull {
+                val af = it.toAudioFile()
+                CacheChangeKeys.extractAlbumKey(af)
+            }.toSet()
+            val artistKeys = existingFiles.mapNotNull {
+                val af = it.toAudioFile()
+                CacheChangeKeys.extractArtistKey(af)
+            }.toSet()
+
             audioFileDao.deleteByPaths(filePaths)
             invalidateHotCache()
+
+            _changeFlow.value = CacheChange.FilesBatchUpdated(
+                filePaths = filePaths,
+                albumKeys = albumKeys,
+                artistKeys = artistKeys
+            )
+
             bumpCacheVersion()
             Timber.i("DB batch delete: ${filePaths.size} files")
         }
@@ -225,15 +328,16 @@ class MusicLibraryCache @Inject constructor(
     
     /**
      * Gets files that need rescanning based on modification times.
+     * Compares modification times directly (both in milliseconds).
      */
-    suspend fun getFilesNeedingRescan(currentFiles: List<Pair<String, Long>>): List<String> = 
+    suspend fun getFilesNeedingRescan(currentFiles: List<Pair<String, Long>>): List<String> =
         withContext(Dispatchers.IO) {
             val cachedFiles = audioFileDao.getFilePathsWithModificationTimes()
             val cachedMap = cachedFiles.associate { it.path to it.fileLastModifiedAt }
-            
+
             currentFiles.filter { (path, lastModified) ->
                 val cached = cachedMap[path]
-                cached == null || (cached / 1000) != (lastModified / 1000)
+                cached == null || cached != lastModified
             }.map { it.first }
         }
     
@@ -263,7 +367,7 @@ class MusicLibraryCache @Inject constructor(
         deletedCount
     }
 
-    private fun bumpCacheVersion() {
+    internal fun bumpCacheVersion() {
         cacheVersion.update { current -> current + 1 }
     }
     

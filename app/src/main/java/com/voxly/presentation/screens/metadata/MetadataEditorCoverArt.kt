@@ -1,42 +1,38 @@
 package com.voxly.presentation.screens.metadata
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Size
 import com.voxly.R
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 /**
  * Album art section for metadata editor.
- * 
+ *
  * Displays the original cover art from the audio file without any caching
  * or compression. Shows the exact bytes stored in the file's metadata.
- * 
+ * Uses Coil for background decoding to prevent main thread jank.
+ *
  * @param albumArt Raw cover art bytes from ViewModel (direct from audio file)
  * @param fallbackBitmap MediaStore fallback bitmap (shown if no embedded cover)
  * @param onPickAlbumArt Callback to open album art picker
  * @param coverTag Optional shared element transition tag
  * @param onZoomAlbumArt Callback to zoom/view the cover art
  * @param onRotateAlbumArt Callback to rotate the cover art
- * @param onRemoveAlbumArt Callback to remove the cover art
+ * @param onRemoveAlbumArt Callback to remove the album art
  * @param filePath File path for shared element transition key
  */
 @OptIn(ExperimentalSharedTransitionApi::class)
@@ -52,18 +48,12 @@ fun AlbumArtSection(
     filePath: String? = null
 ) {
     val coverKey = filePath?.let { createAlbumArtSharedElementKey(it) }
+    val context = LocalContext.current
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .then(
-                if (coverKey != null) {
-                    Modifier.sharedBoundsIfAvailable(key = coverKey)
-                } else {
-                    Modifier
-                }
-            )
             .clickable(onClick = onPickAlbumArt),
         shape = MaterialTheme.shapes.extraLarge
     ) {
@@ -71,21 +61,22 @@ fun AlbumArtSection(
             modifier = Modifier.fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            // Display original cover art from audio file
-            val displayBitmap = when {
-                // 1. Use edited albumArt bytes (from ViewModel state)
-                albumArt != null -> remember(albumArt) {
-                    BitmapFactory.decodeByteArray(albumArt, 0, albumArt.size)
+            val albumArtRequest = remember(albumArt) {
+                albumArt?.let { bytes ->
+                    ImageRequest.Builder(context)
+                        .data(bytes)
+                        .size(Size.ORIGINAL)
+                        .memoryCacheKey("album_art_${bytes.contentHashCode()}")
+                        .build()
                 }
-                // 2. Fallback to MediaStore bitmap
-                else -> fallbackBitmap
             }
 
-            if (displayBitmap != null) {
-                Image(
-                    bitmap = displayBitmap.asImageBitmap(),
+            if (albumArt != null && albumArtRequest != null) {
+                AsyncImage(
+                    model = albumArtRequest,
                     contentDescription = stringResource(R.string.cd_album_art),
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Fit
                 )
             } else {
                 EmptyAlbumArtContent()
@@ -127,7 +118,7 @@ fun CoverCandidateThumbnail(
     modifier: Modifier = Modifier
 ) {
     AsyncImage(
-        model = ImageRequest.Builder(LocalPlatformContext.current)
+        model = ImageRequest.Builder(LocalContext.current)
             .data(coverArtUrl)
             .crossfade(true)
             .build(),

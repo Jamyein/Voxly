@@ -87,8 +87,6 @@ fun OnlineCoverSearchScreen(
     val searchArtist by viewModel.searchArtist.collectAsStateWithLifecycle()
     var selectingCoverId by remember { mutableStateOf<String?>(null) }
     val coroutineScope = rememberCoroutineScope()
-    
-    val coverDimensions = remember { mutableStateMapOf<String, Pair<Int, Int>>() }
 
     LaunchedEffect(filePath) {
         viewModel.search(filePath)
@@ -200,11 +198,7 @@ fun OnlineCoverSearchScreen(
                                     }
                                     selectingCoverId = null
                                 }
-                            },
-                            onDimensionsLoaded = { w, h ->
-                                coverDimensions[item.id] = w to h
-                            },
-                            dimensions = coverDimensions[item.id]
+                            }
                         )
                         Spacer(modifier = Modifier.height(4.dp))
                     }
@@ -219,9 +213,7 @@ fun OnlineCoverSearchScreen(
 private fun CoverResultItem(
     item: OnlineRecording,
     isLoading: Boolean,
-    onClick: () -> Unit,
-    onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null,
-    dimensions: Pair<Int, Int>? = null
+    onClick: () -> Unit
 ) {
     val containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
 
@@ -245,8 +237,7 @@ private fun CoverResultItem(
             ) {
                 CoverThumbnail(
                     coverArtUrl = item.coverArtUrl,
-                    modifier = Modifier.size(100.dp),
-                    onDimensionsLoaded = onDimensionsLoaded
+                    modifier = Modifier.size(100.dp)
                 )
                 if (isLoading) {
                     LoadingIndicator(
@@ -269,25 +260,16 @@ private fun CoverResultItem(
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-            // Source tag - unified with tertiary color scheme
-            Surface(
-                shape = MaterialTheme.shapes.small,
-                color = MaterialTheme.colorScheme.tertiaryContainer
-            ) {
-                Text(
-                    text = item.source.toDisplayString(),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                )
-            }
-                if (dimensions != null) {
+                // Source tag - unified with tertiary color scheme
+                Surface(
+                    shape = MaterialTheme.shapes.small,
+                    color = MaterialTheme.colorScheme.tertiaryContainer
+                ) {
                     Text(
-                        text = "${dimensions.first}×${dimensions.second}",
+                        text = item.source.toDisplayString(),
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        color = MaterialTheme.colorScheme.onTertiaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
                     )
                 }
             }
@@ -298,14 +280,12 @@ private fun CoverResultItem(
 @Composable
 private fun CoverThumbnail(
     coverArtUrl: String?,
-    modifier: Modifier = Modifier,
-    onDimensionsLoaded: ((width: Int, height: Int) -> Unit)? = null
+    modifier: Modifier = Modifier
 ) {
     NetworkCoverImage(
         url = coverArtUrl,
         contentDescription = "Album cover",
-        modifier = modifier.clip(MaterialShapes.SoftBurst.toShape()),
-        onDimensionsLoaded = onDimensionsLoaded
+        modifier = modifier.clip(MaterialShapes.SoftBurst.toShape())
     )
 }
 

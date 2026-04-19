@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -22,6 +23,7 @@ class RoomRecentEditsRepository @Inject constructor(
 ) : RecentEditsRepository {
 
     companion object {
+        private const val TAG = "RoomRecentEditsRepo"
         private const val MAX_ENTRIES = 1000
     }
 
@@ -32,9 +34,11 @@ class RoomRecentEditsRepository @Inject constructor(
 
     override fun getRecentEdits(limit: Int): Flow<List<RecentEdit>> {
         val safeLimit = if (limit <= 0) MAX_ENTRIES else limit
+        Timber.d("$TAG: Fetching recent edits, limit=$safeLimit")
         return databaseProvider.getDatabase().recentEditDao()
             .getRecentEdits(safeLimit)
             .map { entities ->
+                Timber.d("$TAG: Retrieved ${entities.size} recent edits")
                 entities.map { it.toDomain() }
             }
     }
@@ -44,6 +48,7 @@ class RoomRecentEditsRepository @Inject constructor(
         originalMetadata: AudioMetadata,
         newMetadata: AudioMetadata
     ) {
+        Timber.d("$TAG: Recording edit for: $filePath")
         val database = databaseProvider.getDatabase()
         val entity = RecentEditEntity(
             filePath = filePath,
@@ -53,12 +58,14 @@ class RoomRecentEditsRepository @Inject constructor(
             newMetadataJson = encodeMetadata(newMetadata)
         )
         database.recentEditDao().insert(entity)
-        // Clean up old entries
         database.recentEditDao().deleteOldEntries(MAX_ENTRIES)
+        Timber.i("$TAG: Recorded edit: $filePath")
     }
 
     override suspend fun clearRecentEdits() {
+        Timber.i("$TAG: Clearing all recent edits")
         databaseProvider.getDatabase().recentEditDao().deleteAll()
+        Timber.i("$TAG: Cleared all recent edits")
     }
 
     private fun RecentEditEntity.toDomain(): RecentEdit {

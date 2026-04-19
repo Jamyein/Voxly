@@ -16,12 +16,12 @@ import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.AudioFileStandardRow
+import com.voxly.presentation.components.LazyListCoverPreloader
 import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
 import com.voxly.core.util.getFirstLetter
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
-import com.voxly.presentation.components.LazyListCoverPreloader
 
 @Composable
 internal fun AudioFileItem(
@@ -103,9 +103,6 @@ internal fun AudioFileList(
     bottomPadding: Dp = 0.dp
 ) {
     val isSelectionMode = selectedFiles.isNotEmpty()
-    val filePaths = remember(files) { files.map { it.path } }
-
-    LazyListCoverPreloader(listState = listState, filePaths = filePaths)
 
     LazyColumn(
         modifier = modifier,
@@ -164,6 +161,11 @@ internal fun AudioFileListWithIndexer(
             onFetchOnlineMetadata = onFetchOnlineMetadata,
             onFixMetadata = onFixMetadata,
             bottomPadding = bottomPadding
+        )
+
+        LazyListCoverPreloader(
+            listState = listState,
+            filePaths = files.map { it.path }
         )
 
         if (showIndexer) {

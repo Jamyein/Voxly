@@ -4,6 +4,7 @@ import com.voxly.data.remote.NetworkConstants
 
 import android.content.Context
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
@@ -63,20 +64,25 @@ import kotlinx.serialization.json.Json
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
 import javax.inject.Singleton
+import androidx.work.Configuration
 import com.voxly.BuildConfig
+import com.voxly.presentation.viewmodel.SearchSeedHolder
+import dagger.hilt.android.components.ActivityRetainedComponent
+import dagger.hilt.android.scopes.ActivityRetainedScoped
 import timber.log.Timber
 
-/**
- * Hilt module providing application-level dependencies.
- */
 @Module
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
-    /**
-     * Provides the application-level CoroutineScope.
-     * Used for long-running operations that should outlive individual screens.
-     */
+    @Provides
+    @Singleton
+    fun provideWorkManagerConfiguration(): Configuration {
+        return Configuration.Builder()
+            .setMinimumLoggingLevel(android.util.Log.INFO)
+            .build()
+    }
+
     @Provides
     @Singleton
     @Named("ApplicationScope")
@@ -337,12 +343,22 @@ object AppModule {
     @Singleton
     fun provideUnifiedScanManager(
         audioFileScanner: AudioFileScanner,
+        musicLibraryCache: MusicLibraryCache,
         settingsDataStore: SettingsDataStore,
         @ApplicationContext context: Context,
         @Named("ApplicationScope") scope: CoroutineScope
     ): UnifiedScanManager {
-        return UnifiedScanManagerImpl(audioFileScanner, settingsDataStore, scope)
+        return UnifiedScanManagerImpl(audioFileScanner, musicLibraryCache, settingsDataStore, scope)
     }
+}
+
+@Module
+@InstallIn(ActivityRetainedComponent::class)
+object SearchSeedModule {
+
+    @ActivityRetainedScoped
+    @Provides
+    fun provideSearchSeedHolder(): SearchSeedHolder = SearchSeedHolder()
 }
 
 /**

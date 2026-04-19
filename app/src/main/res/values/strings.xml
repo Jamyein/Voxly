@@ -29,6 +29,7 @@
     <string name="album_count">%d albums</string>
     <string name="singles">Singles</string>
     <string name="albums">Albums</string>
+    <string name="all_songs">All Songs</string>
 
     <!-- Metadata -->
     <string name="metadata_title">Title</string>

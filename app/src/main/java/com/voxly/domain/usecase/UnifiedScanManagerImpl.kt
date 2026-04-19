@@ -2,6 +2,7 @@ package com.voxly.domain.usecase
 
 import com.voxly.core.util.Constants
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.AudioFile
 import kotlinx.coroutines.CancellationException
@@ -34,6 +35,7 @@ import javax.inject.Singleton
 @Singleton
 class UnifiedScanManagerImpl @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
+    private val musicLibraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
     private val scope: CoroutineScope
 ) : UnifiedScanManager {
@@ -117,6 +119,9 @@ class UnifiedScanManagerImpl @Inject constructor(
     override suspend fun syncFile(filePath: String): Result<AudioFile> {
         return try {
             Timber.d(TAG, "Syncing file to cache: $filePath")
+            // Get existing cached entity to preserve mediaStoreAlbumId/ArtistId and audio properties
+            val existingEntity = musicLibraryCache.getCachedFileEntity(filePath)
+
             // Re-scan the single file to get updated metadata
             val metadata = audioFileScanner.loadDetailedMetadata(filePath, includeAlbumArt = false)
                 ?: throw IllegalStateException("Failed to read metadata for: $filePath")
@@ -128,11 +133,14 @@ class UnifiedScanManagerImpl @Inject constructor(
                 path = filePath,
                 name = filePath.substringAfterLast('/'),
                 size = fileSize,
-                duration = audioInfo?.durationMs ?: 0L,
+                duration = audioInfo?.durationMs ?: existingEntity?.duration ?: 0L,
                 format = filePath.substringAfterLast('.', "").uppercase(),
-                bitrate = audioInfo?.bitrate?.let { it / Constants.BPS_TO_KBPS } ?: 0,
-                sampleRate = audioInfo?.sampleRate ?: 0,
-                channels = audioInfo?.channels ?: 0,
+                bitrate = audioInfo?.bitrate?.let { it / Constants.BPS_TO_KBPS } ?: existingEntity?.bitrate ?: 0,
+                sampleRate = audioInfo?.sampleRate ?: existingEntity?.sampleRate ?: 0,
+                channels = audioInfo?.channels ?: existingEntity?.channels ?: 0,
+                mediaStoreAlbumId = existingEntity?.albumId,
+                mediaStoreArtistId = existingEntity?.artistId,
+                dateAdded = existingEntity?.dateAdded ?: System.currentTimeMillis() / 1000,
                 metadata = metadata
             )
 
@@ -162,6 +170,7 @@ class UnifiedScanManagerImpl @Inject constructor(
         val blacklistEnabled = settingsDataStore.blacklistEnabled
             .stateIn(scope, SharingStarted.WhileSubscribed(30000), false)
 
+        var isFirstEmission = true
         scope.launch {
             combine(
                 minDurationFilterEnabled,
@@ -170,6 +179,14 @@ class UnifiedScanManagerImpl @Inject constructor(
             ) { minDuration, whitelist, blacklist ->
                 Triple(minDuration, whitelist, blacklist)
             }.collect { (minDuration, whitelist, blacklist) ->
+                if (isFirstEmission) {
+                    isFirstEmission = false
+                    lastMinDurationFilterEnabled = minDuration
+                    lastWhitelistEnabled = whitelist
+                    lastBlacklistEnabled = blacklist
+                    Timber.d(TAG, "Settings initial values received, skipping initial scan")
+                    return@collect
+                }
                 // Check and trigger refresh for each setting that changed
                 if (lastMinDurationFilterEnabled != minDuration) {
                     lastMinDurationFilterEnabled = minDuration

@@ -188,8 +188,9 @@ fun M3EScrollbar(
 
                     detectDragGestures(
                         onDragStart = { offset ->
+                            val touchOffsetInThumb = offset.y - displayThumbOffset
                             isDragging = true
-                            dragY = displayThumbOffset.coerceIn(0f, (containerHeight - thumbHeightPx).coerceAtLeast(0f))
+                            dragY = (offset.y - touchOffsetInThumb).coerceIn(0f, (containerHeight - thumbHeightPx).coerceAtLeast(0f))
                             velocityTracker.resetTracking()
                             haptic.performHapticFeedback(HapticFeedbackType.LongPress)
                         },

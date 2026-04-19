@@ -4,6 +4,7 @@ import android.app.RecoverableSecurityException
 import android.content.Context
 import android.content.ContentUris
 import android.content.IntentSender
+import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Environment
 import android.os.ParcelFileDescriptor
@@ -824,7 +825,7 @@ class TagLibMetadataProcessor @Inject constructor(
      */
     suspend fun updateMetadata(filePath: String, metadata: AudioMetadata): Result<Unit> =
         withContext(Dispatchers.IO) {
-            if (isExternalStorage(filePath)) {
+            val result = if (isExternalStorage(filePath)) {
                 val safResult = tryUpdateMetadataViaSaf(filePath, metadata)
                 if (safResult.isSuccess) {
                     Timber.d(TAG, "SAF write successful: $filePath")
@@ -844,21 +845,26 @@ class TagLibMetadataProcessor @Inject constructor(
                     "Please add a working directory containing this file, " +
                     "or re-select the file through the file browser to grant write access."
                 Timber.tag(TAG).e( errorMsg)
-                return@withContext Result.failure(
+                Result.failure(
                     IllegalStateException(errorMsg)
                 )
+            } else {
+                try {
+                    val directResult = updateMetadataDirect(filePath, metadata)
+                    if (directResult.isSuccess) {
+                        Timber.d(TAG, "Direct write successful: $filePath")
+                    }
+                    directResult
+                } catch (e: Exception) {
+                    Timber.tag(TAG).e( "Direct write failed: $filePath", e)
+                    Result.failure(e)
+                }
             }
 
-            try {
-                val result = updateMetadataDirect(filePath, metadata)
-                if (result.isSuccess) {
-                    Timber.d(TAG, "Direct write successful: $filePath")
-                }
-                return@withContext result
-            } catch (e: Exception) {
-                Timber.tag(TAG).e( "Direct write failed: $filePath", e)
-                return@withContext Result.failure(e)
+            if (result.isSuccess) {
+                scanMediaStore(filePath)
             }
+            result
         }
 
     /**
@@ -972,10 +978,11 @@ class TagLibMetadataProcessor @Inject constructor(
                         Timber.tag(TAG).w( "Failed to save album art for: $filePath")
                     }
                 } finally {
-                    try { pfd2.close() } catch (_: Exception) { }
+                    // Best-effort cleanup; file descriptor will be released by system
+                    try { pfd2.close() } catch (_: Exception) { /* ignore - best effort */ }
                 }
             }
-            
+
             Result.success(Unit)
         } catch (e: RecoverableSecurityException) {
             val intentSender = try {
@@ -1005,7 +1012,8 @@ class TagLibMetadataProcessor @Inject constructor(
             }
             Result.failure(IllegalStateException(errorMessage, e))
         } finally {
-            try { pfd?.close() } catch (_: Exception) { }
+            // Best-effort cleanup; file descriptor will be released by system
+            try { pfd?.close() } catch (_: Exception) { /* ignore - best effort */ }
         }
         return Result.failure(IllegalStateException("Unexpected exit in updateMetadataViaMediaStoreUri"))
     }
@@ -1292,6 +1300,26 @@ class TagLibMetadataProcessor @Inject constructor(
             ?: context.contentResolver.openOutputStream(uri)
     } catch (e: Exception) {
         null
+    }
+
+    /**
+     * Notifies MediaStore to scan the updated file so other apps can see metadata changes.
+     */
+    private fun scanMediaStore(filePath: String) {
+        try {
+            val file = File(filePath)
+            if (file.exists()) {
+                MediaScannerConnection.scanFile(
+                    context,
+                    arrayOf(file.absolutePath),
+                    null,
+                    null
+                )
+                Timber.tag(TAG).d("MediaStore scan requested for: $filePath")
+            }
+        } catch (e: Exception) {
+            Timber.tag(TAG).w("Failed to scan file in MediaStore: $filePath", e)
+        }
     }
 
     /**

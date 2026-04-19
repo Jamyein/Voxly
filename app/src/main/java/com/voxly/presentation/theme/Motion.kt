@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.voxly.presentation.theme
 
 import androidx.compose.animation.core.AnimationSpec
@@ -38,6 +40,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import timber.log.Timber
 
 /**
  * Material Design 3 Expressive Motion System
@@ -283,34 +286,51 @@ object ExpressiveAnimations {
 
     // ===== Material Motion Transitions (v1.13.0+) =====
     // Container Transform - for list item to detail page transitions
-    val ContainerTransformEnter: EnterTransition = fadeIn(
-        animationSpec = PageEffectsSpring
-    ) + scaleIn(
-        initialScale = 0.85f,
-        animationSpec = PageEnterSpring
-    )
+    // Combines slide (for spatial movement), scale, and fade for smooth expand/collapse feel
+    val ContainerTransformEnter: EnterTransition =
+        slideInHorizontally(
+            initialOffsetX = { it / 3 },
+            animationSpec = PageEnterSpringSlide
+        ) +
+        fadeIn(animationSpec = PageEffectsSpring) +
+        scaleIn(
+            initialScale = 0.92f,
+            animationSpec = PageEnterSpring
+        )
 
-    val ContainerTransformExit: ExitTransition = fadeOut(
-        animationSpec = PageEffectsSpring
-    ) + scaleOut(
-        targetScale = 0.85f,
-        animationSpec = PageExitSpring
-    )
+    val ContainerTransformExit: ExitTransition =
+        slideOutHorizontally(
+            targetOffsetX = { -it / 3 },
+            animationSpec = PageExitSpringSlide
+        ) +
+        fadeOut(animationSpec = PageEffectsSpring) +
+        scaleOut(
+            targetScale = 0.92f,
+            animationSpec = PageExitSpring
+        )
 
-    // Container Transform Pop (return)
-    val ContainerTransformPopEnter: EnterTransition = scaleIn(
-        initialScale = 0.85f,
-        animationSpec = PageEnterSpring
-    ) + fadeIn(
-        animationSpec = PageEffectsSpring
-    )
+    // Container Transform Pop (return) - reverse of enter
+    val ContainerTransformPopEnter: EnterTransition =
+        slideInHorizontally(
+            initialOffsetX = { -it / 3 },
+            animationSpec = PageEnterSpringSlide
+        ) +
+        scaleIn(
+            initialScale = 0.92f,
+            animationSpec = PageEnterSpring
+        ) +
+        fadeIn(animationSpec = PageEffectsSpring)
 
-    val ContainerTransformPopExit: ExitTransition = fadeOut(
-        animationSpec = PageEffectsSpring
-    ) + scaleOut(
-        targetScale = 0.85f,
-        animationSpec = PageExitSpring
-    )
+    val ContainerTransformPopExit: ExitTransition =
+        slideOutHorizontally(
+            targetOffsetX = { it / 3 },
+            animationSpec = PageExitSpringSlide
+        ) +
+        fadeOut(animationSpec = PageEffectsSpring) +
+        scaleOut(
+            targetScale = 0.92f,
+            animationSpec = PageExitSpring
+        )
 
     // Shared Axis X - for lateral navigation (settings, log viewer)
     val SharedAxisXEnter: EnterTransition = slideInHorizontally(
@@ -506,7 +526,7 @@ fun rememberPulseScale(
             animation = keyframes {
                 this.durationMillis = durationMillis
                 initialScale at 0
-                pulsedScale at durationMillis with FastOutSlowInEasing
+                (pulsedScale at durationMillis).with(FastOutSlowInEasing)
             },
             repeatMode = RepeatMode.Reverse
         ),
@@ -524,8 +544,8 @@ fun rememberShimmerOffset(width: Float, durationMillis: Int = 1200): Offset {
             animationSpec = infiniteRepeatable(
                 animation = keyframes {
                     this.durationMillis = durationMillis
-                    (-width) at 0 with LinearEasing
-                    (width * 2) at durationMillis with LinearEasing
+                    (-width at 0).with(LinearEasing)
+                    (width * 2 at durationMillis).with(LinearEasing)
                 },
                 repeatMode = RepeatMode.Restart
             ),
@@ -636,7 +656,15 @@ object MotionPresets {
 // ============================================================================
 
 object MotionLogger {
-    const val TAG = "Motion"
-    fun logMotionEvent(event: String, details: String = "") { }
+    private const val TAG = "Motion"
+    fun logMotionEvent(event: String, details: String = "") {
+        Timber.tag(TAG).d("$event | $details")
+    }
+    fun logMotionStart(animationType: String, spec: String = "") {
+        Timber.tag(TAG).d("Animation START: $animationType $spec")
+    }
+    fun logMotionEnd(animationType: String, durationMs: Long = 0) {
+        Timber.tag(TAG).d("Animation END: $animationType (${durationMs}ms)")
+    }
 }
 }

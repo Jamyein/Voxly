@@ -12,8 +12,6 @@ import com.voxly.data.local.UiStateDataStore
 import com.voxly.data.local.DirFileSortOption
 import com.voxly.data.local.FileSortOption
 import com.voxly.data.local.saf.SafWriteAccessService
-import com.voxly.data.repository.AlbumCacheRepository
-import com.voxly.data.repository.ArtistCacheRepository
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -35,6 +33,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -59,8 +58,6 @@ class LibraryScanViewModel @Inject constructor(
     private val uiStateDataStore: UiStateDataStore,
     private val unifiedScanManager: UnifiedScanManager,
     private val safWriteAccessService: SafWriteAccessService,
-    private val albumCacheRepository: AlbumCacheRepository,
-    private val artistCacheRepository: ArtistCacheRepository,
     private val audioRepository: AudioRepository,
     private val libraryDataHolder: LibraryDataHolder
 ) : ViewModel() {
@@ -126,11 +123,13 @@ class LibraryScanViewModel @Inject constructor(
         audios to sortOption
     }.map { (audios, sortOption) ->
         sortAudioFiles(audios, sortOption)
-    }.flowOn(Dispatchers.Default).stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-        initialValue = emptyList()
-    )
+    }.flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = emptyList()
+        )
 
     private val _selectedDirectories = MutableStateFlow<List<SelectedDirectory>>(emptyList())
     val selectedDirectories: StateFlow<List<SelectedDirectory>> = _selectedDirectories.asStateFlow()
@@ -147,11 +146,13 @@ class LibraryScanViewModel @Inject constructor(
         filesByDirectory.mapValues { (_, files) ->
             sortAudioFiles(files, sortOption)
         }
-    }.flowOn(Dispatchers.Default).stateIn(
-        scope = viewModelScope,
-        started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-        initialValue = emptyMap()
-    )
+    }.flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = emptyMap()
+        )
 
     private val _directoryLoadingState = MutableStateFlow<Set<String>>(emptySet())
     val directoryLoadingState: StateFlow<Set<String>> = _directoryLoadingState.asStateFlow()
@@ -161,6 +162,8 @@ class LibraryScanViewModel @Inject constructor(
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    private val _isInitialLoad = MutableStateFlow(true)
 
     data class FileBrowserUiState(
         val allAudios: List<AudioFile> = emptyList(),
@@ -193,7 +196,9 @@ class LibraryScanViewModel @Inject constructor(
     private var scanJob: Job? = null
 
     init {
-        unifiedScanManager.startWatchingSettings()
+        viewModelScope.launch {
+            unifiedScanManager.startWatchingSettings()
+        }
 
         viewModelScope.launch {
             libraryDataHolder.collectRefreshTriggers { forceRefresh ->
@@ -222,11 +227,15 @@ class LibraryScanViewModel @Inject constructor(
 
     /**
      * Loads all audio files from device storage.
+     *
+     * At startup: prefer cache, no incremental scan by default.
+     * User manual refresh (pull-to-refresh) triggers incremental scan.
+     * Force refresh triggers full rescan.
      */
     fun loadAudioFiles(forceRefresh: Boolean = false, isIncremental: Boolean = false) {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            val shouldShowRefresh = forceRefresh || isIncremental
+            val shouldShowRefresh = forceRefresh || _isInitialLoad.value
             try {
                 if (shouldShowRefresh) {
                     _isRefreshing.update { true }
@@ -235,18 +244,34 @@ class LibraryScanViewModel @Inject constructor(
                 syncSelectedDirectoriesFromStorage()
 
                 if (_selectedDirectories.value.isNotEmpty()) {
-                    scanSelectedDirectories(_selectedDirectories.value, isIncremental, forceRefresh)
+                    val hasCache = audioFileScanner.hasCachedData()
+                    if (!forceRefresh && hasCache) {
+                        val cachedFiles = musicLibraryCache.getCachedAudioFilesOnce()
+                        val grouped = groupFilesBySelectedDirectory(cachedFiles, _selectedDirectories.value)
+                        _directoryFiles.update { grouped }
+                        _isRefreshing.update { false }
+                        _isInitialLoad.update { false }
+                        return@launch
+                    }
+                    val useIncremental = isIncremental && hasCache
+                    scanSelectedDirectories(_selectedDirectories.value, useIncremental, forceRefresh)
+                    _isInitialLoad.update { false }
                     return@launch
                 }
 
-                if (forceRefresh || isIncremental || !audioFileScanner.hasCachedData()) {
+                if (forceRefresh || !audioFileScanner.hasCachedData()) {
                     audioFileScanner.scan(
                         directoryPaths = emptyList(),
                         incremental = isIncremental,
                         forceRefresh = forceRefresh
                     )
                     _directoryFiles.update { emptyMap() }
+                } else if (isIncremental) {
+                    audioFileScanner.loadAudioFiles(isIncremental = true)
+                } else {
+                    _isRefreshing.update { false }
                 }
+                _isInitialLoad.update { false }
             } catch (e: CancellationException) {
                 Timber.tag(TAG).d("Audio files load cancelled")
                 throw e
@@ -262,6 +287,8 @@ class LibraryScanViewModel @Inject constructor(
 
     /**
      * Unified refresh entry point for all screens.
+     * - forceRefresh=true: Full rescan, ignores cache
+     * - forceRefresh=false: Incremental scan, detects new/modified files
      */
     fun refresh(forceRefresh: Boolean = false) {
         loadAudioFiles(forceRefresh = forceRefresh, isIncremental = !forceRefresh)
@@ -284,15 +311,15 @@ class LibraryScanViewModel @Inject constructor(
         }
 
         val uriString = directoryUri.toString()
+
+        if (uriString in _directoryFiles.value || uriString in _directoryLoadingState.value) {
+            return
+        }
+
         val updatedDirectories = (_selectedDirectories.value + SelectedDirectory(
             uri = uriString,
             path = filePath
         )).distinctBy { it.uri }
-
-        val alreadyLoaded = uriString in _directoryFiles.value || uriString in _directoryLoadingState.value
-        if (updatedDirectories.size == _selectedDirectories.value.size && alreadyLoaded) {
-            return
-        }
 
         _selectedDirectories.update { updatedDirectories }
         persistSelectedDirectories(updatedDirectories)
@@ -300,8 +327,8 @@ class LibraryScanViewModel @Inject constructor(
         scanJob = viewModelScope.launch {
             scanSelectedDirectories(
                 directories = updatedDirectories,
-                isIncremental = alreadyLoaded,
-                forceRefresh = !alreadyLoaded
+                isIncremental = false,
+                forceRefresh = true
             )
         }
     }
@@ -345,6 +372,12 @@ class LibraryScanViewModel @Inject constructor(
         forceRefresh: Boolean = false
     ) {
         Timber.d(TAG, "Scanning ${directories.size} directories (incremental=$isIncremental, force=$forceRefresh)")
+
+        val allDirsLoaded = directories.all { it.uri in _directoryFiles.value }
+        if (allDirsLoaded && !forceRefresh) {
+            Timber.d(TAG, "All directories already loaded in _directoryFiles, skipping scan")
+            return
+        }
 
         val dirUris = directories.map { it.uri }.toSet()
         _directoryLoadingState.update { it + dirUris }
@@ -498,14 +531,6 @@ class LibraryScanViewModel @Inject constructor(
         viewModelScope.launch {
             settingsDataStore.setSelectedDirectoryUris(directories.map { it.uri })
         }
-    }
-
-    fun cacheAlbum(album: AlbumGroup) {
-        albumCacheRepository.cacheAlbum(album)
-    }
-
-    fun cacheArtist(artist: ArtistGroup) {
-        artistCacheRepository.cacheArtist(artist)
     }
 
     /**

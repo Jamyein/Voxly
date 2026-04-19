@@ -53,6 +53,7 @@
             android:name=".presentation.MainActivity"
             android:exported="true"
             android:enableOnBackInvokedCallback="true"
+            android:windowSoftInputMode="adjustResize"
             android:theme="@style/Theme.MP3TagAndroid">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />

@@ -185,6 +185,13 @@ interface CachedAudioFileDao {
     @Update
     suspend fun update(audioFile: CachedAudioFileEntity)
     
+    /**
+     * Updates the lastEditedByUserAt timestamp for a specific file path.
+     * Used to mark that user has edited this file, preventing EnrichmentWorker overwrites.
+     */
+    @Query("UPDATE cached_audio_files SET lastEditedByUserAt = :timestamp WHERE path = :path")
+    suspend fun updateLastEditedByUserAt(path: String, timestamp: Long)
+    
     // ==================== Deletes ====================
     
     /**

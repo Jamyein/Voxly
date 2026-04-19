@@ -148,6 +148,7 @@ fun LogViewerScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .imePadding()
                 .padding(top = innerPadding.calculateTopPadding())
         ) {
             if (uiState.selectedLogFile == null) {

@@ -5,6 +5,9 @@ import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.File
 import java.util.LinkedHashMap
 import javax.inject.Inject
@@ -21,6 +24,7 @@ class CoverUriProvider @Inject constructor(
     companion object {
         private const val MAX_URI_EXISTS_CACHE = 200
         private const val MAX_FOLDER_COVER_CACHE = 200
+        private val albumArtUriCompanion = Uri.parse("content://media/external/audio/albumart")
 
         private val uriExistsCache = LinkedHashMap<Uri, Boolean>(MAX_URI_EXISTS_CACHE, 0.75f, true)
         private val folderCoverCache = LinkedHashMap<String, Uri?>(MAX_FOLDER_COVER_CACHE, 0.75f, true)
@@ -33,21 +37,33 @@ class CoverUriProvider @Inject constructor(
                 folderCoverCache.clear()
             }
         }
+
+        fun invalidateAlbumId(albumId: Long) {
+            if (albumId <= 0) return
+            synchronized(uriExistsCache) {
+                val uri = ContentUris.withAppendedId(albumArtUriCompanion, albumId)
+                uriExistsCache.remove(uri)
+                Timber.d("Invalidated album ID cache: $albumId")
+            }
+        }
     }
 
-    fun getCoverUri(
+    suspend fun getCoverUri(
         albumId: Long?,
         filePath: String? = null
-    ): Uri? {
+    ): Uri? = withContext(Dispatchers.IO) {
         if (albumId != null && albumId > 0) {
-            return ContentUris.withAppendedId(albumArtUri, albumId)
+            val uri = ContentUris.withAppendedId(albumArtUri, albumId)
+            if (uriExistsCached(uri)) {
+                return@withContext uri
+            }
         }
 
         if (!filePath.isNullOrBlank()) {
-            findFolderCoverCached(filePath)?.let { return it }
+            findFolderCoverCached(filePath)?.let { return@withContext it }
         }
 
-        return null
+        return@withContext null
     }
 
     private fun uriExistsCached(uri: Uri): Boolean = synchronized(uriExistsCache) {

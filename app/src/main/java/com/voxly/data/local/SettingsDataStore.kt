@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.voxly.data.local
 
 import android.content.Context
@@ -23,6 +25,7 @@ import com.voxly.domain.model.DataSourceConfig
 import com.voxly.domain.model.DataSourceType
 import com.voxly.domain.model.SourceConfigurations
 import com.voxly.domain.model.SourceTypeConfig
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,6 +40,7 @@ class SettingsDataStore @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
     companion object {
+        private const val TAG = "SettingsDataStore"
         val DARK_THEME = booleanPreferencesKey("dark_theme")
         val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
         val LANGUAGE_TAG = stringPreferencesKey("language_tag")
@@ -460,6 +464,7 @@ class SettingsDataStore @Inject constructor(
      * Save unified source configurations
      */
     suspend fun setSourceConfigurations(config: SourceConfigurations) {
+        Timber.d("$TAG: setSourceConfigurations: metadata=${config.metadata.sources.map { "${it.sourceId}=${it.enabled}" }}, lyrics=${config.lyrics.sources.map { "${it.sourceId}=${it.enabled}" }}, cover=${config.cover.sources.map { "${it.sourceId}=${it.enabled}" }}")
         context.settingsDataStore.edit { preferences ->
             preferences[SOURCE_CONFIGURATIONS] = json.encodeToString(config)
         }
@@ -561,6 +566,7 @@ class SettingsDataStore @Inject constructor(
      * Save dark theme preference
      */
     suspend fun setDarkTheme(enabled: Boolean) {
+        Timber.d("$TAG: setDarkTheme: $enabled")
         context.settingsDataStore.edit { preferences ->
             preferences[DARK_THEME] = enabled
         }
@@ -570,6 +576,7 @@ class SettingsDataStore @Inject constructor(
      * Save dynamic colors preference
      */
     suspend fun setDynamicColors(enabled: Boolean) {
+        Timber.d("$TAG: setDynamicColors: $enabled")
         context.settingsDataStore.edit { preferences ->
             preferences[DYNAMIC_COLORS] = enabled
         }
@@ -579,6 +586,7 @@ class SettingsDataStore @Inject constructor(
      * Save theme mode preference
      */
     suspend fun setThemeMode(mode: String) {
+        Timber.d("$TAG: setThemeMode: $mode")
         context.settingsDataStore.edit { preferences ->
             preferences[THEME_MODE] = mode
         }
@@ -792,6 +800,7 @@ class SettingsDataStore @Inject constructor(
      * Save ReplayGain target loudness preference
      */
     suspend fun setReplayGainTargetLoudness(loudness: Float) {
+        Timber.d("$TAG: setReplayGainTargetLoudness: $loudness LUFS")
         context.settingsDataStore.edit { preferences ->
             preferences[REPLAY_GAIN_TARGET_LOUDNESS] = loudness.coerceIn(-24f, -14f)
         }
@@ -801,6 +810,7 @@ class SettingsDataStore @Inject constructor(
      * Save scan mode preference
      */
     suspend fun setScanMode(mode: String) {
+        Timber.d("$TAG: setScanMode: $mode")
         context.settingsDataStore.edit { preferences ->
             preferences[SCAN_MODE] = mode
         }
@@ -810,6 +820,7 @@ class SettingsDataStore @Inject constructor(
      * Save ReplayGain clip mode preference
      */
     suspend fun setReplayGainClipMode(mode: String) {
+        Timber.d("$TAG: setReplayGainClipMode: $mode")
         context.settingsDataStore.edit { preferences ->
             preferences[REPLAY_GAIN_CLIP_MODE] = mode
         }
@@ -820,6 +831,7 @@ class SettingsDataStore @Inject constructor(
      * Save minimum duration filter enabled preference
      */
     suspend fun setMinDurationFilterEnabled(enabled: Boolean) {
+        Timber.d("$TAG: setMinDurationFilterEnabled: $enabled")
         context.settingsDataStore.edit { preferences ->
             preferences[MIN_DURATION_FILTER_ENABLED] = enabled
         }
@@ -829,6 +841,7 @@ class SettingsDataStore @Inject constructor(
      * Save minimum duration filter threshold preference (in milliseconds)
      */
     suspend fun setMinDurationFilterThresholdMs(thresholdMs: Int) {
+        Timber.d("$TAG: setMinDurationFilterThresholdMs: $thresholdMs")
         context.settingsDataStore.edit { preferences ->
             preferences[MIN_DURATION_FILTER_THRESHOLD_MS] = thresholdMs.coerceAtLeast(0)
         }
@@ -839,6 +852,7 @@ class SettingsDataStore @Inject constructor(
      * Save whitelist enabled preference
      */
     suspend fun setWhitelistEnabled(enabled: Boolean) {
+        Timber.d("$TAG: setWhitelistEnabled: $enabled")
         context.settingsDataStore.edit { preferences ->
             preferences[WHITELIST_ENABLED] = enabled
         }
@@ -848,6 +862,7 @@ class SettingsDataStore @Inject constructor(
      * Save blacklist enabled preference
      */
     suspend fun setBlacklistEnabled(enabled: Boolean) {
+        Timber.d("$TAG: setBlacklistEnabled: $enabled")
         context.settingsDataStore.edit { preferences ->
             preferences[BLACKLIST_ENABLED] = enabled
         }
@@ -896,6 +911,7 @@ class SettingsDataStore @Inject constructor(
      * Note: This encrypts proxy host and port. If proxy authentication (username/password)
      * is added in the future, those should also be stored here.
      */
+    @Suppress("DEPRECATION")
     private val encryptedProxyPrefs: SharedPreferences by lazy {
         val masterKey = MasterKey.Builder(context)
             .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
@@ -1014,6 +1030,7 @@ class SettingsDataStore @Inject constructor(
      * Save proxy enabled preference
      */
     suspend fun setProxyEnabled(enabled: Boolean) {
+        Timber.d("$TAG: setProxyEnabled: $enabled")
         context.settingsDataStore.edit { preferences ->
             preferences[PROXY_ENABLED] = enabled
         }
@@ -1023,6 +1040,7 @@ class SettingsDataStore @Inject constructor(
      * Save proxy type preference
      */
     suspend fun setProxyType(type: String) {
+        Timber.d("$TAG: setProxyType: $type")
         context.settingsDataStore.edit { preferences ->
             preferences[PROXY_TYPE] = type
         }

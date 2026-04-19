@@ -25,7 +25,7 @@ import javax.inject.Singleton
         RecentEditEntity::class,
         EnrichmentJobEntity::class,
     ],
-    version = 11,
+    version = 12,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -220,6 +220,12 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         """)
                         db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS `index_enrichment_jobs_filePath` ON `enrichment_jobs` (`filePath`)")
                         db.execSQL("CREATE INDEX IF NOT EXISTS `index_enrichment_jobs_status` ON `enrichment_jobs` (`status`)")
+                    }
+                })
+                // Migration from version 11 to 12: adds lastEditedByUserAt column
+                .addMigrations(object : Migration(11, 12) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `lastEditedByUserAt` INTEGER")
                     }
                 })
 

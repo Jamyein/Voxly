@@ -99,6 +99,13 @@ class EnrichmentWorker @AssistedInject constructor(
             return@withContext null
         }
 
+        val cachedEntity = musicLibraryCache.getCachedFileEntity(job.filePath)
+        if (cachedEntity?.lastEditedByUserAt != null) {
+            Timber.d(TAG, "Skipping enrichment for ${job.filePath}: user edited at ${cachedEntity.lastEditedByUserAt}")
+            musicLibraryCache.updateEnrichmentJobStatus(job.id, EnrichmentJobEntity.STATUS_COMPLETED)
+            return@withContext null
+        }
+
         try {
             val lightweightResult = LightweightMetadataParser.parse(file)
             val hasMissingData = cachedFile.metadata.year.isNullOrBlank() || cachedFile.sampleRate == 0

@@ -38,7 +38,7 @@ fun BatchRenameDialog(
         icon = { Icon(painter = appIconPainter(AppIcon.Rename), contentDescription = stringResource(R.string.cd_batch_rename)) },
         title = { Text(stringResource(R.string.batch_rename_title)) },
         text = {
-            Column {
+            Column(modifier = Modifier.imePadding()) {
                 Text(
                     text = stringResource(R.string.batch_target_files, targetFilesCount),
                     style = MaterialTheme.typography.bodyMedium,

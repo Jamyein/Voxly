@@ -52,7 +52,6 @@ import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 
@@ -127,6 +126,11 @@ fun ArtistDetailScreen(
             .sortedByDescending { it.year ?: 0 }
     }
 
+    // All songs sorted by title
+    val allSongsSorted = remember(files) {
+        files.sortedBy { it.metadata.title?.lowercase() ?: "" }
+    }
+
     // Use the same AlbumArtImage component as ArtistListItem for consistency
     // This ensures the avatar displays the same way as in the artist list
     val avatarKey = createArtistAvatarSharedElementKey(artistName)
@@ -182,7 +186,6 @@ fun ArtistDetailScreen(
                         Box(
                             modifier = Modifier
                                 .size(150.dp)
-                                .sharedBoundsIfAvailable(key = avatarKey)
                                 .clip(CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
@@ -313,19 +316,18 @@ fun ArtistDetailScreen(
                         }
                     }
 
-                    // Show songs grouped by album below (sorted by year)
-                    albumsSorted.forEach { albumInfo ->
+                    // All Songs Section (flat list, sorted by album + track number)
+                    if (allSongsSorted.isNotEmpty()) {
                         item {
-                            val yearText = albumInfo.year?.let { " ($it)" } ?: ""
                             Text(
-                                text = albumInfo.name + yearText,
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                text = stringResource(R.string.all_songs),
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.primary,
                                 modifier = Modifier.padding(top = 8.dp)
                             )
                         }
 
-                        items(albumInfo.files.take(3), key = { "album_${albumInfo.name}_${it.path}" }) { audioFile ->
+                        items(allSongsSorted, key = { "song_${it.path}" }) { audioFile ->
                             AudioFileItem(
                                 audioFile = audioFile,
                                 isSelected = false,
@@ -339,17 +341,6 @@ fun ArtistDetailScreen(
                                 onFixMetadata = {},
                                 compactMode = true
                             )
-                        }
-
-                        if (albumInfo.files.size > 3) {
-                            item {
-                                Text(
-                                    text = "+${albumInfo.files.size - 3} more",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.padding(start = 16.dp)
-                                )
-                            }
                         }
                     }
                 }
@@ -435,7 +426,6 @@ fun AlbumCard(
                 modifier = Modifier
                     .fillMaxWidth()
                     .weight(1f)
-                    .sharedBoundsIfAvailable(key = albumCoverKey)
                     .clip(MaterialTheme.shapes.medium),
                 contentAlignment = Alignment.Center
             ) {

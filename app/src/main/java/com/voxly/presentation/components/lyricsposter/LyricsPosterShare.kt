@@ -14,6 +14,7 @@ import java.io.FileOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import timber.log.Timber
 
 /**
  * Handles sharing of lyrics poster images with preview support.
@@ -137,7 +138,7 @@ object LyricsPosterShare {
                 onSaved(imageUri)
             } ?: onSaved(null)
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Failed to save poster to gallery")
             onSaved(null)
         }
     }

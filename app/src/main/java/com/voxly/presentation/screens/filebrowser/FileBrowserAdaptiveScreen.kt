@@ -51,7 +51,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
-import com.voxly.core.util.MediaPermission
+import com.voxly.core.util.Constants
 import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.RootTab
@@ -91,7 +91,7 @@ fun FileBrowserAdaptiveScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val audioPermission = remember { MediaPermission.audioReadPermission(Build.VERSION.SDK_INT) }
+    val audioPermission = remember { Constants.mediaReadPermission(Build.VERSION.SDK_INT) }
     var hasAudioPermission by remember {
         mutableStateOf(
             ContextCompat.checkSelfPermission(context, audioPermission) == PackageManager.PERMISSION_GRANTED

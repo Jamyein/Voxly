@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Checkbox
@@ -289,7 +290,7 @@ internal fun UnifiedFieldDialog(
         icon = { Icon(painter = appIconPainter(AppIcon.Edit), contentDescription = stringResource(R.string.cd_edit_file)) },
         title = { Text(stringResource(R.string.batch_unified_field_title)) },
         text = {
-            Column {
+            Column(modifier = Modifier.imePadding()) {
                 Text(
                     text = stringResource(R.string.batch_target_files, targetFilesCount),
                     style = MaterialTheme.typography.bodyMedium,
@@ -382,7 +383,7 @@ internal fun ReplaceTextDialog(
         icon = { Icon(painter = appIconPainter(AppIcon.AutoFix), contentDescription = stringResource(R.string.cd_batch_fix)) },
         title = { Text(stringResource(R.string.batch_replace_text_title)) },
         text = {
-            Column {
+            Column(modifier = Modifier.imePadding()) {
                 Text(
                     text = stringResource(R.string.batch_target_files, targetFilesCount),
                     style = MaterialTheme.typography.bodyMedium,
@@ -500,7 +501,7 @@ internal fun AutoNumberDialog(
         icon = { Icon(painter = appIconPainter(AppIcon.Schedule), contentDescription = stringResource(R.string.replay_gain_scan)) },
         title = { Text(stringResource(R.string.batch_auto_number_title)) },
         text = {
-            Column {
+            Column(modifier = Modifier.imePadding()) {
                 Text(
                     text = stringResource(R.string.batch_target_files, targetFilesCount),
                     style = MaterialTheme.typography.bodyMedium,

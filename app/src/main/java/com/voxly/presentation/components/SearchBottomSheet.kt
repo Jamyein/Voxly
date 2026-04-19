@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -42,7 +43,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.sharedBoundsIfAvailable
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 /**
@@ -92,6 +92,7 @@ fun SearchBottomSheet(
             modifier = Modifier
                 .fillMaxWidth()
                 .fillMaxHeight()
+                .imePadding()
                 .padding(horizontal = 16.dp)
         ) {
             Text(
@@ -204,7 +205,6 @@ fun SearchResultItem(
             Box(
                 modifier = Modifier
                     .size(48.dp)
-                    .sharedBoundsIfAvailable(key = albumArtKey)
                     .clip(MaterialTheme.shapes.small),
                 contentAlignment = Alignment.Center
             ) {

@@ -90,7 +90,6 @@ class ListDetailScene<T : Any>(
     override val entries: List<NavEntry<T>> = listOf(listEntry, detailEntry)
 
     override val content: @Composable () -> Unit = {
-        // Simple implementation - can be expanded with proper animations
         Row(
             modifier = Modifier.fillMaxSize()
         ) {
@@ -122,7 +121,6 @@ class ListDetailScene<T : Any>(
 class ListDetailSceneStrategy<T : Any>(val windowSizeClass: WindowSizeClass) : SceneStrategy<T> {
 
     override fun SceneStrategyScope<T>.calculateScene(entries: List<NavEntry<T>>): Scene<T>? {
-        // Only show on wide screens (tablets)
         if (!windowSizeClass.isWidthAtLeastBreakpoint(WIDTH_DP_MEDIUM_LOWER_BOUND)) {
             return null
         }

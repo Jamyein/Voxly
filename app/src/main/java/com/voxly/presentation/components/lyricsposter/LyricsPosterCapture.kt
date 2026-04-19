@@ -18,6 +18,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 
 /**
  * 歌词海报 GraphicsLayer 捕获器
@@ -55,7 +56,7 @@ class PosterCapture(
         try {
             graphicsLayer.toImageBitmap().asAndroidBitmap()
         } catch (e: Exception) {
-            e.printStackTrace()
+            Timber.e(e, "Failed to capture poster")
             null
         }
     }

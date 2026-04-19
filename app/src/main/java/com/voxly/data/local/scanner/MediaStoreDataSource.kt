@@ -281,6 +281,39 @@ class MediaStoreDataSource @Inject constructor(
     }
 
     /**
+     * Query MediaStore for a single file's album ID.
+     * Returns the album ID that maps to content://media/external/audio/albumart/{albumId}.
+     */
+    suspend fun queryMediaStoreAlbumId(filePath: String): Long? = withContext(Dispatchers.IO) {
+        val file = File(filePath)
+        val relativePath = getRelativePathFromAbsolute(file.parentFile?.absolutePath.orEmpty())
+        val selection: String
+        val selectionArgs: Array<String>
+
+        if (relativePath != null) {
+            selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ? AND ${MediaStore.Audio.Media.RELATIVE_PATH} = ?"
+            selectionArgs = arrayOf(file.name, relativePath)
+        } else {
+            selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ?"
+            selectionArgs = arrayOf(file.name)
+        }
+
+        contentResolver.query(
+            AUDIO_URI,
+            arrayOf(MediaStore.Audio.Media.ALBUM_ID),
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val albumId = cursor.getLong(0)
+                return@withContext if (albumId > 0L) albumId else null
+            }
+        }
+        null
+    }
+
+    /**
      * Query MediaStore for a single file's year.
      */
     suspend fun queryYearFromMediaStore(filePath: String): String? = withContext(Dispatchers.IO) {

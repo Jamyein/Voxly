@@ -31,14 +31,14 @@ plugins {
 
 android {
     namespace = "com.voxly"
-    compileSdk = 36
+    compileSdk = 37
 
     defaultConfig {
         applicationId = "com.voxly"
         minSdk = 30
         targetSdk = 36
-        versionCode = 42
-        versionName = "1.6.4"
+        versionCode = 45
+        versionName = "1.6.5"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -131,15 +131,14 @@ android {
         checkDependencies = true
     }
 
-    // NDK native ReplayGain scanner (FFmpeg + libebur128)
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
+            version = "4.1.2"
         }
     }
 
-    ndkVersion = "26.1.10909125"
+    ndkVersion = "29.0.14206865"
 
 }
 
@@ -170,8 +169,6 @@ dependencies {
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.10.0")
     implementation("androidx.activity:activity-compose:1.13.0")
 
-    // Chinese conversion (ICU4J)
-
     // Compose BOM (用于其他 Compose 依赖)
     implementation(platform("androidx.compose:compose-bom:2026.03.01"))
     implementation("androidx.compose.ui:ui")
@@ -183,11 +180,11 @@ dependencies {
     implementation("androidx.compose.animation:animation-core:1.11.0-rc01")
     implementation("androidx.compose.animation:animation-graphics:1.11.0-rc01")
     // Material3 Alpha 版本 - 覆盖 BOM 中的稳定版以使用最新特性
-    implementation("androidx.compose.material3:material3:1.5.0-alpha16")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha17")
     // Material Design 3 Expressive - RoundedPolygon 形状支持
     implementation("androidx.graphics:graphics-shapes:1.1.0")
-    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha16")
-    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha16")
+    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha17")
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha17")
     // Material3 Adaptive Layout - for dual-pane and three-pane layouts
     implementation("androidx.compose.material3.adaptive:adaptive-layout:1.2.0")
     implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.2.0")
@@ -203,8 +200,8 @@ dependencies {
     implementation("androidx.navigation3:navigation3-ui:1.1.0")
     implementation("androidx.lifecycle:lifecycle-viewmodel-navigation3:2.10.0")
     // Navigation3 Scene Strategies (BottomSheet, ListDetail)
-    // Using 1.3.0-alpha09 (latest available version with Navigation 3 + Adaptive integration)
-    implementation("androidx.compose.material3.adaptive:adaptive-navigation3:1.3.0-alpha09")
+    // Using 1.3.0-alpha10 (latest available version with Navigation 3 + Adaptive integration)
+    implementation("androidx.compose.material3.adaptive:adaptive-navigation3:1.3.0-alpha10")
     implementation("androidx.window:window:1.5.1")
 
     // Lifecycle
@@ -222,9 +219,8 @@ dependencies {
 
     // Audio Processing - Kyant0/taglib from Maven Central (supports Android SAF)
     // Replaces KTagLib which had JitPack reliability issues
-    implementation("io.github.kyant0:taglib:1.0.5")
+    implementation("io.github.kyant0:taglib:1.0.6")
 
-    // Networking for MusicBrainz API
     // Note: Retrofit 2.9.0 + OkHttp 4.12.0 is the stable combination
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
     implementation("com.squareup.retrofit2:converter-gson:3.0.0")
@@ -236,8 +232,8 @@ dependencies {
     implementation("androidx.datastore:datastore-preferences:1.2.1")
 
     // Security - EncryptedSharedPreferences for proxy credentials
-    implementation("androidx.security:security-crypto:1.1.0-alpha06")
-    implementation("com.google.crypto.tink:tink-android:1.12.0")
+    implementation("androidx.security:security-crypto:1.1.0")
+    implementation("com.google.crypto.tink:tink-android:1.21.0")
 
     // Gson for JSON serialization (Retrofit)
     implementation("com.google.code.gson:gson:2.13.2")
@@ -254,7 +250,7 @@ dependencies {
     ksp("androidx.room:room-compiler:2.8.4")
 
     // WorkManager for background enrichment jobs
-    implementation("androidx.work:work-runtime-ktx:2.10.0")
+    implementation("androidx.work:work-runtime-ktx:2.11.2")
     implementation("androidx.hilt:hilt-work:1.3.0")
     ksp("androidx.hilt:hilt-compiler:1.3.0")
 
@@ -269,6 +265,7 @@ dependencies {
     implementation("androidx.palette:palette-ktx:1.0.0")
 
     // Coil 3 - Image loading library
+    implementation("io.coil-kt.coil3:coil:3.4.0")
     implementation("io.coil-kt.coil3:coil-compose:3.4.0")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.4.0")
 

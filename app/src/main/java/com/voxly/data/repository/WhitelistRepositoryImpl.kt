@@ -14,7 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+
+import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -24,12 +25,16 @@ class WhitelistRepositoryImpl @Inject constructor(
     private val safAccessService: SafWriteAccessService
 ) : WhitelistRepository {
 
+    companion object {
+        private const val TAG = "WhitelistRepository"
+    }
+
     private val repositoryScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val _whitelistDirectories = MutableStateFlow<List<WhitelistDirectory>>(emptyList())
     private val _blacklistDirectories = MutableStateFlow<List<WhitelistDirectory>>(emptyList())
 
     init {
-        runBlocking(Dispatchers.IO) {
+        repositoryScope.launch {
             try {
                 val uris = settingsDataStore.selectedDirectoryUris.first()
                 _whitelistDirectories.value = uris.mapNotNull { uriString ->
@@ -37,10 +42,12 @@ class WhitelistRepositoryImpl @Inject constructor(
                     if (path != null) WhitelistDirectory(uri = uriString, path = path)
                     else null
                 }
+                Timber.d("$TAG: Initial whitelist loaded: ${_whitelistDirectories.value.size} directories")
             } catch (e: Exception) {
+                Timber.e(e, "$TAG: Failed to load whitelist")
             }
         }
-        runBlocking(Dispatchers.IO) {
+        repositoryScope.launch {
             try {
                 val uris = settingsDataStore.blacklistDirectoryUris.first()
                 _blacklistDirectories.value = uris.mapNotNull { uriString ->
@@ -48,7 +55,9 @@ class WhitelistRepositoryImpl @Inject constructor(
                     if (path != null) WhitelistDirectory(uri = uriString, path = path)
                     else null
                 }
+                Timber.d("$TAG: Initial blacklist loaded: ${_blacklistDirectories.value.size} directories")
             } catch (e: Exception) {
+                Timber.e(e, "$TAG: Failed to load blacklist")
             }
         }
 
@@ -92,39 +101,49 @@ class WhitelistRepositoryImpl @Inject constructor(
         _blacklistDirectories.value.filter { it.isValid }.map { it.path }
 
     override suspend fun addWhitelistDirectory(uri: String, path: String) {
+        Timber.d("$TAG: addWhitelistDirectory: $path")
         val current = _whitelistDirectories.value.toMutableList()
         if (current.none { it.uri == uri }) {
             current.add(WhitelistDirectory(uri = uri, path = path))
             settingsDataStore.setSelectedDirectoryUris(current.map { it.uri })
+            Timber.i("$TAG: Added whitelist directory: $path")
         }
     }
 
     override suspend fun removeWhitelistDirectory(uri: String) {
+        Timber.d("$TAG: removeWhitelistDirectory: $uri")
         val current = _whitelistDirectories.value.toMutableList()
         current.removeAll { it.uri == uri }
         settingsDataStore.setSelectedDirectoryUris(current.map { it.uri })
+        Timber.i("$TAG: Removed whitelist directory: $uri")
     }
 
     override suspend fun clearWhitelist() {
+        Timber.i("$TAG: Clearing whitelist")
         _whitelistDirectories.value = emptyList()
         settingsDataStore.setSelectedDirectoryUris(emptyList())
     }
 
     override suspend fun addBlacklistDirectory(uri: String, path: String) {
+        Timber.d("$TAG: addBlacklistDirectory: $path")
         val current = _blacklistDirectories.value.toMutableList()
         if (current.none { it.uri == uri }) {
             current.add(WhitelistDirectory(uri = uri, path = path))
             settingsDataStore.setBlacklistDirectoryUris(current.map { it.uri })
+            Timber.i("$TAG: Added blacklist directory: $path")
         }
     }
 
     override suspend fun removeBlacklistDirectory(uri: String) {
+        Timber.d("$TAG: removeBlacklistDirectory: $uri")
         val current = _blacklistDirectories.value.toMutableList()
         current.removeAll { it.uri == uri }
         settingsDataStore.setBlacklistDirectoryUris(current.map { it.uri })
+        Timber.i("$TAG: Removed blacklist directory: $uri")
     }
 
     override suspend fun clearBlacklist() {
+        Timber.i("$TAG: Clearing blacklist")
         _blacklistDirectories.value = emptyList()
         settingsDataStore.setBlacklistDirectoryUris(emptyList())
     }
@@ -141,5 +160,9 @@ class WhitelistRepositoryImpl @Inject constructor(
             dir.copy(path = path ?: dir.path, isValid = path != null)
         }
         _blacklistDirectories.value = validatedBlacklist
+        
+        val invalidWhitelist = validatedWhitelist.count { !it.isValid }
+        val invalidBlacklist = validatedBlacklist.count { !it.isValid }
+        Timber.d("$TAG: validateDirectories: whitelist invalid=$invalidWhitelist, blacklist invalid=$invalidBlacklist")
     }
 }

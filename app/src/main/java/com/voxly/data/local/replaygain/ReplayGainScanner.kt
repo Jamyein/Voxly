@@ -234,6 +234,7 @@ class ReplayGainScanner @Inject constructor(
     /**
      * Scans audio files grouped by album and calculates both track and album gain.
      */
+    @OptIn(FlowPreview::class)
     fun scanReplayGainByAlbum(
         filesByAlbum: Map<String, List<String>>,
         scanQuality: ScanQuality,
@@ -571,8 +572,9 @@ class ReplayGainScanner @Inject constructor(
                 nativeScanner.processBuffer(batchBuffer, batchPos)
             }
         } finally {
-            try { codec.stop() } catch (_: Exception) {}
-            try { codec.release() } catch (_: Exception) {}
+            // Best-effort cleanup; codec state is unknown after error
+            try { codec.stop() } catch (_: Exception) { /* ignore - best effort */ }
+            try { codec.release() } catch (_: Exception) { /* ignore - best effort */ }
         }
     }
 

@@ -120,8 +120,16 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Check if cache has data.
+     * Uses warmup state to skip redundant DB queries if warmup already succeeded.
      */
-    suspend fun hasCachedData(): Boolean = libraryCache.hasCache()
+    suspend fun hasCachedData(): Boolean {
+        if (libraryCache.isWarm()) {
+            val count = libraryCache.getCachedFileCount()
+            Timber.d(TAG, "hasCachedData: warm cache confirmed, $count files")
+            return count > 0
+        }
+        return libraryCache.hasCache()
+    }
 
     /**
      * Get count of cached files.
@@ -170,6 +178,11 @@ class AudioFileScanner @Inject constructor(
             libraryCache.updateCache(files)
         }
 
+        // Bump cache version when serving from cache to trigger AlbumArtistAggregator's flatMapLatest
+        if (servedFromCache) {
+            libraryCache.bumpCacheVersion()
+        }
+
         // Background backfill for missing year/sampleRate via persistent WorkManager queue
         if (servedFromCache) {
             scheduleMetadataBackfill()
@@ -180,11 +193,15 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Loads audio files - compatibility method for existing code.
-     * Automatically determines whether to use incremental or full scan.
-     *
-     * @param isIncremental If true, only scan changed files; if false, full scan
+     * ALWAYS uses cached data if available. Never triggers a scan.
+     * For explicit scans, use scan() directly.
      */
-    suspend fun loadAudioFiles(isIncremental: Boolean = false) {
+    suspend fun loadAudioFiles(isIncremental: Boolean = false): List<AudioFile> = scanMutex.withLock {
+        val hasCached = hasCachedData() && getCachedFileCount() > 0
+        if (hasCached) {
+            Timber.d(TAG, "loadAudioFiles: returning cached data directly, no scan")
+            return@withLock libraryCache.getCachedAudioFilesOnce()
+        }
         scan(
             directoryPaths = emptyList(),
             incremental = isIncremental,
