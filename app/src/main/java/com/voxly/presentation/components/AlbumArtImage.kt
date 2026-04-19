@@ -14,16 +14,15 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
-import coil3.compose.LocalPlatformContext
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Scale
+import androidx.compose.ui.platform.LocalContext
 import com.voxly.R
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.presentation.icons.AppIcon
@@ -55,7 +54,7 @@ fun NetworkCoverImage(
     }
 
     AsyncImage(
-        model = ImageRequest.Builder(LocalPlatformContext.current)
+        model = ImageRequest.Builder(LocalContext.current)
             .data(url)
             .crossfade(true)
             .build(),
@@ -98,7 +97,7 @@ fun AlbumArtImage(
     ) {
         if (model != null && !loadFailed) {
             AsyncImage(
-                model = ImageRequest.Builder(LocalPlatformContext.current)
+                model = ImageRequest.Builder(LocalContext.current)
                     .data(model)
                     .size(targetSizePx)
                     .scale(Scale.FILL)

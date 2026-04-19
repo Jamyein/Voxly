@@ -7,7 +7,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import coil3.compose.LocalPlatformContext
+import androidx.compose.ui.platform.LocalContext
 import coil3.imageLoader
 import coil3.request.ImageRequest
 
@@ -48,8 +48,8 @@ private fun CoverPreloader(
     visibleItemCount: Int,
     filePaths: List<String>
 ) {
-    val imageLoader = LocalPlatformContext.current.imageLoader
-    val platformContext = LocalPlatformContext.current
+    val imageLoader = LocalContext.current.imageLoader
+    val platformContext = LocalContext.current
     val preloadRange by remember(firstVisibleIndex, visibleItemCount, filePaths.size) {
         derivedStateOf {
             val start = (firstVisibleIndex - PRELOAD_BEHIND).coerceAtLeast(0)
