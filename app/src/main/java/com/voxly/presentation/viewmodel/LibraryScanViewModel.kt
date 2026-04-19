@@ -245,6 +245,11 @@ class LibraryScanViewModel @Inject constructor(
 
                 if (_selectedDirectories.value.isNotEmpty()) {
                     val hasCache = audioFileScanner.hasCachedData()
+                    if (!forceRefresh && hasCache) {
+                        _isRefreshing.update { false }
+                        _isInitialLoad.update { false }
+                        return@launch
+                    }
                     val useIncremental = isIncremental && hasCache
                     scanSelectedDirectories(_selectedDirectories.value, useIncremental, forceRefresh)
                     _isInitialLoad.update { false }
