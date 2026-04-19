@@ -6,6 +6,7 @@ import android.provider.MediaStore
 import com.voxly.core.util.Constants
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
+import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.metadata.RecoverableMediaStoreException
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.metadata.TagWriteManager
@@ -40,7 +41,8 @@ class AudioRepositoryImpl @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
     private val metadataProcessor: TagLibMetadataProcessor,
     private val tagWriteManager: TagWriteManager,
-    private val libraryCache: MusicLibraryCache
+    private val libraryCache: MusicLibraryCache,
+    private val coverUriProvider: CoverUriProvider
 ) : AudioRepository {
     companion object {
         private const val TAG = "AudioRepositoryImpl"
@@ -300,6 +302,14 @@ class AudioRepositoryImpl @Inject constructor(
                 // Use TagWriteManager for Android 16 safe write with whitelist support
                 tagWriteManager.writeMetadata(filePath, metadata).fold(
                     onSuccess = {
+                        // Invalidate cover cache after metadata update to force fresh cover check
+                        // This fixes the issue where modifying album/albumArtist didn't update the cover display
+                        val updatedFile = getAudioFile(filePath, includeAlbumArt = true).getOrNull()
+                        updatedFile?.mediaStoreAlbumId?.let { albumId ->
+                            CoverUriProvider.invalidateAlbumId(albumId)
+                        }
+                        // Sync updated file to local cache
+                        updatedFile?.let { libraryCache.syncFileToCache(it) }
                         Result.success(Unit)
                     },
                     onFailure = { cause ->

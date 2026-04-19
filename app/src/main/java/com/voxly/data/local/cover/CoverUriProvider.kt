@@ -24,6 +24,7 @@ class CoverUriProvider @Inject constructor(
     companion object {
         private const val MAX_URI_EXISTS_CACHE = 200
         private const val MAX_FOLDER_COVER_CACHE = 200
+        private val albumArtUriCompanion = Uri.parse("content://media/external/audio/albumart")
 
         private val uriExistsCache = LinkedHashMap<Uri, Boolean>(MAX_URI_EXISTS_CACHE, 0.75f, true)
         private val folderCoverCache = LinkedHashMap<String, Uri?>(MAX_FOLDER_COVER_CACHE, 0.75f, true)
@@ -34,6 +35,15 @@ class CoverUriProvider @Inject constructor(
             }
             synchronized(folderCoverCache) {
                 folderCoverCache.clear()
+            }
+        }
+
+        fun invalidateAlbumId(albumId: Long) {
+            if (albumId <= 0) return
+            synchronized(uriExistsCache) {
+                val uri = ContentUris.withAppendedId(albumArtUriCompanion, albumId)
+                uriExistsCache.remove(uri)
+                Timber.d("Invalidated album ID cache: $albumId")
             }
         }
     }
