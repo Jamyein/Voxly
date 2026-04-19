@@ -246,6 +246,9 @@ class LibraryScanViewModel @Inject constructor(
                 if (_selectedDirectories.value.isNotEmpty()) {
                     val hasCache = audioFileScanner.hasCachedData()
                     if (!forceRefresh && hasCache) {
+                        val cachedFiles = musicLibraryCache.getCachedAudioFilesOnce()
+                        val grouped = groupFilesBySelectedDirectory(cachedFiles, _selectedDirectories.value)
+                        _directoryFiles.update { grouped }
                         _isRefreshing.update { false }
                         _isInitialLoad.update { false }
                         return@launch
@@ -308,15 +311,15 @@ class LibraryScanViewModel @Inject constructor(
         }
 
         val uriString = directoryUri.toString()
+
+        if (uriString in _directoryFiles.value || uriString in _directoryLoadingState.value) {
+            return
+        }
+
         val updatedDirectories = (_selectedDirectories.value + SelectedDirectory(
             uri = uriString,
             path = filePath
         )).distinctBy { it.uri }
-
-        val alreadyLoaded = uriString in _directoryFiles.value || uriString in _directoryLoadingState.value
-        if (updatedDirectories.size == _selectedDirectories.value.size && alreadyLoaded) {
-            return
-        }
 
         _selectedDirectories.update { updatedDirectories }
         persistSelectedDirectories(updatedDirectories)
@@ -324,8 +327,8 @@ class LibraryScanViewModel @Inject constructor(
         scanJob = viewModelScope.launch {
             scanSelectedDirectories(
                 directories = updatedDirectories,
-                isIncremental = alreadyLoaded,
-                forceRefresh = !alreadyLoaded
+                isIncremental = false,
+                forceRefresh = true
             )
         }
     }
@@ -369,6 +372,12 @@ class LibraryScanViewModel @Inject constructor(
         forceRefresh: Boolean = false
     ) {
         Timber.d(TAG, "Scanning ${directories.size} directories (incremental=$isIncremental, force=$forceRefresh)")
+
+        val allDirsLoaded = directories.all { it.uri in _directoryFiles.value }
+        if (allDirsLoaded && !forceRefresh) {
+            Timber.d(TAG, "All directories already loaded in _directoryFiles, skipping scan")
+            return
+        }
 
         val dirUris = directories.map { it.uri }.toSet()
         _directoryLoadingState.update { it + dirUris }
