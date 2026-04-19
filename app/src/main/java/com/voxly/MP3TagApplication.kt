@@ -99,12 +99,12 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
     }
 
     private fun warmUpCache() {
-        try {
-            kotlinx.coroutines.runBlocking(Dispatchers.IO) {
+        applicationScope.launch(Dispatchers.IO) {
+            try {
                 musicLibraryCache.warmUp()
+            } catch (e: Exception) {
+                Timber.w(e, "Failed to warm up music library cache")
             }
-        } catch (e: Exception) {
-            Timber.w(e, "Failed to warm up music library cache")
         }
     }
 

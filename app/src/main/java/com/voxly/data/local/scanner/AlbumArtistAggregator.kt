@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -483,7 +484,7 @@ class AlbumArtistAggregator @Inject constructor(
     private suspend fun buildAggregatesFromFiles(
         files: List<AudioFile>,
         config: AggregationConfig
-    ) {
+    ) = withContext(Dispatchers.Default) {
         val filtered = filterEngine.applyFilters(
             files,
             FilterEngine.FilterSettings(
