@@ -170,6 +170,7 @@ class UnifiedScanManagerImpl @Inject constructor(
         val blacklistEnabled = settingsDataStore.blacklistEnabled
             .stateIn(scope, SharingStarted.WhileSubscribed(30000), false)
 
+        var isFirstEmission = true
         scope.launch {
             combine(
                 minDurationFilterEnabled,
@@ -178,6 +179,14 @@ class UnifiedScanManagerImpl @Inject constructor(
             ) { minDuration, whitelist, blacklist ->
                 Triple(minDuration, whitelist, blacklist)
             }.collect { (minDuration, whitelist, blacklist) ->
+                if (isFirstEmission) {
+                    isFirstEmission = false
+                    lastMinDurationFilterEnabled = minDuration
+                    lastWhitelistEnabled = whitelist
+                    lastBlacklistEnabled = blacklist
+                    Timber.d(TAG, "Settings initial values received, skipping initial scan")
+                    return@collect
+                }
                 // Check and trigger refresh for each setting that changed
                 if (lastMinDurationFilterEnabled != minDuration) {
                     lastMinDurationFilterEnabled = minDuration
