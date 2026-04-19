@@ -227,11 +227,15 @@ class LibraryScanViewModel @Inject constructor(
 
     /**
      * Loads all audio files from device storage.
+     *
+     * At startup: prefer cache, no incremental scan by default.
+     * User manual refresh (pull-to-refresh) triggers incremental scan.
+     * Force refresh triggers full rescan.
      */
     fun loadAudioFiles(forceRefresh: Boolean = false, isIncremental: Boolean = false) {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
-            val shouldShowRefresh = forceRefresh || isIncremental || _isInitialLoad.value
+            val shouldShowRefresh = forceRefresh || _isInitialLoad.value
             try {
                 if (shouldShowRefresh) {
                     _isRefreshing.update { true }
@@ -240,18 +244,22 @@ class LibraryScanViewModel @Inject constructor(
                 syncSelectedDirectoriesFromStorage()
 
                 if (_selectedDirectories.value.isNotEmpty()) {
-                    scanSelectedDirectories(_selectedDirectories.value, isIncremental, forceRefresh)
+                    val hasCache = audioFileScanner.hasCachedData()
+                    val useIncremental = isIncremental && hasCache
+                    scanSelectedDirectories(_selectedDirectories.value, useIncremental, forceRefresh)
                     _isInitialLoad.update { false }
                     return@launch
                 }
 
-                if (forceRefresh || isIncremental || !audioFileScanner.hasCachedData()) {
+                if (forceRefresh || !audioFileScanner.hasCachedData()) {
                     audioFileScanner.scan(
                         directoryPaths = emptyList(),
                         incremental = isIncremental,
                         forceRefresh = forceRefresh
                     )
                     _directoryFiles.update { emptyMap() }
+                } else if (isIncremental) {
+                    audioFileScanner.loadAudioFiles(isIncremental = true)
                 }
                 _isInitialLoad.update { false }
             } catch (e: CancellationException) {

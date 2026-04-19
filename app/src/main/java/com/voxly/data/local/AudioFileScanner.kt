@@ -195,12 +195,16 @@ class AudioFileScanner @Inject constructor(
      * Loads audio files - compatibility method for existing code.
      * Automatically determines whether to use incremental or full scan.
      *
-     * @param isIncremental If true, only scan changed files; if false, full scan
+     * IMPORTANT: This method now uses scanMutex to prevent concurrent scans.
+     * At startup, prefers cached data if available (no incremental scan).
+     *
+     * @param isIncremental If true, only scan changed files; if false, use cached data
      */
-    suspend fun loadAudioFiles(isIncremental: Boolean = false) {
+    suspend fun loadAudioFiles(isIncremental: Boolean = false) = scanMutex.withLock {
+        val hasCached = hasCachedData() && getCachedFileCount() > 0
         scan(
             directoryPaths = emptyList(),
-            incremental = isIncremental,
+            incremental = isIncremental && !hasCached,
             forceRefresh = false
         )
     }

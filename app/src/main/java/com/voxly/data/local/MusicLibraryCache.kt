@@ -328,15 +328,16 @@ class MusicLibraryCache @Inject constructor(
     
     /**
      * Gets files that need rescanning based on modification times.
+     * Compares modification times directly (both in milliseconds).
      */
-    suspend fun getFilesNeedingRescan(currentFiles: List<Pair<String, Long>>): List<String> = 
+    suspend fun getFilesNeedingRescan(currentFiles: List<Pair<String, Long>>): List<String> =
         withContext(Dispatchers.IO) {
             val cachedFiles = audioFileDao.getFilePathsWithModificationTimes()
             val cachedMap = cachedFiles.associate { it.path to it.fileLastModifiedAt }
-            
+
             currentFiles.filter { (path, lastModified) ->
                 val cached = cachedMap[path]
-                cached == null || (cached / 1000) != (lastModified / 1000)
+                cached == null || cached != lastModified
             }.map { it.first }
         }
     
