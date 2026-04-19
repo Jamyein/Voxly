@@ -14,7 +14,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
+
 import timber.log.Timber
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -34,7 +34,7 @@ class WhitelistRepositoryImpl @Inject constructor(
     private val _blacklistDirectories = MutableStateFlow<List<WhitelistDirectory>>(emptyList())
 
     init {
-        runBlocking(Dispatchers.IO) {
+        repositoryScope.launch {
             try {
                 val uris = settingsDataStore.selectedDirectoryUris.first()
                 _whitelistDirectories.value = uris.mapNotNull { uriString ->
@@ -47,7 +47,7 @@ class WhitelistRepositoryImpl @Inject constructor(
                 Timber.e(e, "$TAG: Failed to load whitelist")
             }
         }
-        runBlocking(Dispatchers.IO) {
+        repositoryScope.launch {
             try {
                 val uris = settingsDataStore.blacklistDirectoryUris.first()
                 _blacklistDirectories.value = uris.mapNotNull { uriString ->

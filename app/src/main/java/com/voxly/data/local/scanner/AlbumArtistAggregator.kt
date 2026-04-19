@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -132,7 +133,7 @@ class AlbumArtistAggregator @Inject constructor(
     }
 
     init {
-        applicationScope.launch(Dispatchers.IO) {
+        runBlocking(Dispatchers.Default) {
             val cachedFiles = libraryCache.getCachedAudioFilesOnce()
             if (cachedFiles.isNotEmpty()) {
                 val config = aggregationConfig.first()
