@@ -493,21 +493,20 @@ class MetadataEditorViewModel @AssistedInject constructor(
             if (modifiedField != null) {
                 _modifiedFields.update { it + modifiedField }
             }
-        }
-    }
 
-        // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
-        searchSeedHolder.updateSeed(
-            filePath = filePath,
-            title = updatedMetadata.title.orEmpty(),
-            artist = updatedMetadata.artist,
-            album = updatedMetadata.album
-        )
+            // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
+            searchSeedHolder.updateSeed(
+                filePath = filePath,
+                title = updatedMetadata.title.orEmpty(),
+                artist = updatedMetadata.artist,
+                album = updatedMetadata.album
+            )
 
-        val currentState = _uiState.value
-        if (currentState is MetadataEditorUiState.Success) {
-            Timber.d("setEditedMetadata: updating uiState with new metadata", "MetadataEditor")
-            _uiState.update { currentState.copy(editedMetadata = updatedMetadata) }
+            val currentState = _uiState.value
+            if (currentState is MetadataEditorUiState.Success) {
+                Timber.d("setEditedMetadata: updating uiState with new metadata", "MetadataEditor")
+                _uiState.update { currentState.copy(editedMetadata = updatedMetadata) }
+            }
         }
     }
 

@@ -14,14 +14,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import androidx.compose.ui.platform.LocalContext
 import com.voxly.R
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Album art section for metadata editor.
@@ -71,14 +73,19 @@ fun AlbumArtSection(
             contentAlignment = Alignment.Center
         ) {
             // Display original cover art from audio file
-            val displayBitmap = when {
-                // 1. Use edited albumArt bytes (from ViewModel state)
-                albumArt != null -> remember(albumArt) {
-                    BitmapFactory.decodeByteArray(albumArt, 0, albumArt.size)
+            // Use produceState to decode bitmap off main thread to prevent jank
+            val displayBitmap: Bitmap? = produceState<Bitmap?>(
+                initialValue = null,
+                key1 = albumArt?.contentHashCode()
+            ) {
+                value = if (albumArt != null) {
+                    withContext(Dispatchers.Default) {
+                        BitmapFactory.decodeByteArray(albumArt, 0, albumArt.size)
+                    }
+                } else {
+                    value = fallbackBitmap
                 }
-                // 2. Fallback to MediaStore bitmap
-                else -> fallbackBitmap
-            }
+            }.value
 
             if (displayBitmap != null) {
                 Image(
