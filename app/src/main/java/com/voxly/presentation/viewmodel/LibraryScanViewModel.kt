@@ -260,6 +260,8 @@ class LibraryScanViewModel @Inject constructor(
                     _directoryFiles.update { emptyMap() }
                 } else if (isIncremental) {
                     audioFileScanner.loadAudioFiles(isIncremental = true)
+                } else {
+                    _isRefreshing.update { false }
                 }
                 _isInitialLoad.update { false }
             } catch (e: CancellationException) {
