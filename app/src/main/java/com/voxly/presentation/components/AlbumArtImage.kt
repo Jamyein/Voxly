@@ -1,20 +1,23 @@
 package com.voxly.presentation.components
 
-import android.content.Context
+import android.net.Uri
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -22,11 +25,11 @@ import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Scale
-import androidx.compose.ui.platform.LocalContext
 import com.voxly.R
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import kotlinx.coroutines.launch
 
 @Composable
 fun NetworkCoverImage(
@@ -81,11 +84,16 @@ fun AlbumArtImage(
     val context = LocalContext.current
     val coverUriProvider = remember(context) { CoverUriProvider(context) }
 
-    val model = remember(albumId, filePath, coverUriProvider) {
-        when {
-            albumId != null && albumId > 0 -> coverUriProvider.getCoverUri(albumId = albumId)
-            !filePath.isNullOrBlank() -> coverUriProvider.getCoverUri(null, filePath)
-            else -> null
+    var model by remember { mutableStateOf<Uri?>(null) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(albumId, filePath, coverUriProvider) {
+        scope.launch {
+            model = when {
+                albumId != null && albumId > 0 -> coverUriProvider.getCoverUri(albumId = albumId)
+                !filePath.isNullOrBlank() -> coverUriProvider.getCoverUri(null, filePath)
+                else -> null
+            }
         }
     }
 

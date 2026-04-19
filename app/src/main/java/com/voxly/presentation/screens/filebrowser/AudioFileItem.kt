@@ -16,6 +16,7 @@ import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.AudioFileStandardRow
+import com.voxly.presentation.components.LazyListCoverPreloader
 import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
@@ -160,6 +161,11 @@ internal fun AudioFileListWithIndexer(
             onFetchOnlineMetadata = onFetchOnlineMetadata,
             onFixMetadata = onFixMetadata,
             bottomPadding = bottomPadding
+        )
+
+        LazyListCoverPreloader(
+            listState = listState,
+            filePaths = files.map { it.path }
         )
 
         if (showIndexer) {

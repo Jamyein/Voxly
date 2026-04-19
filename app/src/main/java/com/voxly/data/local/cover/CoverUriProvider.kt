@@ -5,6 +5,8 @@ import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.LinkedHashMap
 import javax.inject.Inject
@@ -35,19 +37,22 @@ class CoverUriProvider @Inject constructor(
         }
     }
 
-    fun getCoverUri(
+    suspend fun getCoverUri(
         albumId: Long?,
         filePath: String? = null
-    ): Uri? {
+    ): Uri? = withContext(Dispatchers.IO) {
         if (albumId != null && albumId > 0) {
-            return ContentUris.withAppendedId(albumArtUri, albumId)
+            val uri = ContentUris.withAppendedId(albumArtUri, albumId)
+            if (uriExistsCached(uri)) {
+                return@withContext uri
+            }
         }
 
         if (!filePath.isNullOrBlank()) {
-            findFolderCoverCached(filePath)?.let { return it }
+            findFolderCoverCached(filePath)?.let { return@withContext it }
         }
 
-        return null
+        return@withContext null
     }
 
     private fun uriExistsCached(uri: Uri): Boolean = synchronized(uriExistsCache) {

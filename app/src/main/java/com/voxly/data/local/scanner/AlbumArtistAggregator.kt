@@ -183,14 +183,130 @@ class AlbumArtistAggregator @Inject constructor(
         val config = aggregationConfig.first()
         val file = libraryCache.getCachedFile(filePath) ?: return
 
-        if (albumKey != null) {
+        val newAlbumKey = CacheChangeKeys.extractAlbumKey(file)
+        val newArtistKeys = CacheChangeKeys.extractArtistKeysWithSeparators(file, config.separators)
+
+        if (albumKey != null && newAlbumKey != null && albumKey != newAlbumKey) {
+            removeFileFromAlbum(filePath, albumKey)
+        }
+        if (newAlbumKey != null && newAlbumKey != albumKey) {
+            addFileToAlbum(file, newAlbumKey)
+        } else if (albumKey != null) {
             updateAlbumIncremental(file, albumKey)
         }
-        if (artistKey != null) {
-            updateArtistIncremental(file, artistKey, config.separators)
+
+        val oldArtistKeys = artistKey?.let { setOf(it) } ?: emptySet()
+        val keysToRemove = oldArtistKeys - newArtistKeys.toSet()
+        val keysToAdd = newArtistKeys.toSet() - oldArtistKeys
+
+        for (key in keysToRemove) {
+            removeFileFromArtist(filePath, key)
+        }
+        for (key in keysToAdd) {
+            addFileToArtist(file, key, config.separators)
         }
 
         emitUpdatedLists()
+    }
+
+    private fun removeFileFromAlbum(filePath: String, albumKey: String) {
+        val currentMap = _albumsMap.value.toMutableMap()
+        val currentAlbum = currentMap[albumKey] ?: return
+        val newFiles = currentAlbum.files.filter { it.path != filePath }
+
+        if (newFiles.isEmpty()) {
+            currentMap.remove(albumKey)
+        } else {
+            val coverFile = newFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                ?: newFiles.firstOrNull()
+            val albumYear = newFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
+
+            currentMap[albumKey] = currentAlbum.copy(
+                files = newFiles.sortedBy { it.metadata.trackNumber },
+                coverPath = coverFile?.path,
+                year = albumYear
+            )
+        }
+        _albumsMap.value = currentMap
+    }
+
+    private fun addFileToAlbum(file: AudioFile, albumKey: String) {
+        val currentMap = _albumsMap.value.toMutableMap()
+        val existingAlbum = currentMap[albumKey]
+
+        val newFiles = if (existingAlbum != null) {
+            existingAlbum.files.filter { it.path != file.path } + file
+        } else {
+            listOf(file)
+        }
+
+        val albumName = file.metadata.album ?: albumKey.removePrefix("id:").removePrefix("str:")
+        val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
+        val coverFile = newFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+            ?: newFiles.firstOrNull()
+        val albumYear = newFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
+
+        currentMap[albumKey] = AlbumGroup(
+            name = albumName,
+            albumArtist = albumArtist?.takeIf { it.isNotBlank() },
+            files = newFiles.sortedBy { it.metadata.trackNumber },
+            coverPath = coverFile?.path,
+            year = albumYear
+        )
+        _albumsMap.value = currentMap
+    }
+
+    private fun removeFileFromArtist(filePath: String, artistKey: String) {
+        val currentMap = _artistsMap.value.toMutableMap()
+        val currentArtist = currentMap[artistKey] ?: return
+        val newFiles = currentArtist.files.filter { it.path != filePath }
+
+        if (newFiles.isEmpty()) {
+            currentMap.remove(artistKey)
+        } else {
+            val sortedForCover = newFiles.sortedWith(
+                compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    .thenBy { it.metadata.album }
+            )
+            val coverFile = sortedForCover.firstOrNull()
+
+            currentMap[artistKey] = currentArtist.copy(
+                albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
+                files = newFiles.sortedBy { it.metadata.album },
+                coverPath = coverFile?.path
+            )
+        }
+        _artistsMap.value = currentMap
+    }
+
+    private fun addFileToArtist(file: AudioFile, artistKey: String, separators: Set<String>) {
+        val currentMap = _artistsMap.value.toMutableMap()
+        val existingArtist = currentMap[artistKey]
+
+        val newFiles = if (existingArtist != null) {
+            existingArtist.files.filter { it.path != file.path } + file
+        } else {
+            listOf(file)
+        }
+
+        val sortedForCover = newFiles.sortedWith(
+            compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                .thenBy { it.metadata.album }
+        )
+        val coverFile = sortedForCover.firstOrNull()
+
+        val displayName = if (artistKey.startsWith("id:")) {
+            file.metadata.artist ?: artistKey.removePrefix("id:")
+        } else {
+            artistKey
+        }
+        currentMap[artistKey] = ArtistGroup(
+            name = displayName,
+            albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
+            files = newFiles.sortedBy { it.metadata.album },
+            coverPath = coverFile?.path
+        )
+        _artistsMap.value = currentMap
     }
 
     private suspend fun updateAlbumIncremental(file: AudioFile, albumKey: String) {
