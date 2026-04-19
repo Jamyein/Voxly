@@ -279,7 +279,7 @@ class AlbumArtistAggregator @Inject constructor(
         _artistsMap.value = currentMap
     }
 
-    private fun addFileToArtist(file: AudioFile, artistKey: String, separators: Set<String>) {
+    private suspend fun addFileToArtist(file: AudioFile, artistKey: String, separators: Set<String>) {
         val currentMap = _artistsMap.value.toMutableMap()
         val existingArtist = currentMap[artistKey]
 
@@ -295,11 +295,7 @@ class AlbumArtistAggregator @Inject constructor(
         )
         val coverFile = sortedForCover.firstOrNull()
 
-        val displayName = if (artistKey.startsWith("id:")) {
-            file.metadata.artist ?: artistKey.removePrefix("id:")
-        } else {
-            artistKey
-        }
+        val displayName = resolveArtistDisplayName(artistKey, file)
         currentMap[artistKey] = ArtistGroup(
             name = displayName,
             albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
@@ -358,11 +354,7 @@ class AlbumArtistAggregator @Inject constructor(
             )
             val coverFile = sortedForCover.firstOrNull()
 
-            val displayName = if (key.startsWith("id:")) {
-                file.metadata.artist ?: key.removePrefix("id:")
-            } else {
-                key
-            }
+            val displayName = resolveArtistDisplayName(key, file)
             currentMap[key] = ArtistGroup(
                 name = displayName,
                 albums = newArtistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
@@ -598,8 +590,8 @@ class AlbumArtistAggregator @Inject constructor(
                 val artistName = file.metadata.artist ?: continue
 
                 if (separatorEnabled && customSeparators.isNotEmpty()) {
-                    val splitArtists = CacheChangeKeys.extractArtistKeysWithSeparators(file, customSeparators)
-                    for (splitName in splitArtists) {
+                    val splitArtistNames = splitArtist(artistName, customSeparators)
+                    for (splitName in splitArtistNames) {
                         artistFilesMap.getOrPut(splitName) { mutableListOf() }.add(file)
                         artistNameToId[splitName] = artistId
                         artistNameUseRawString.add(splitName)
@@ -878,5 +870,19 @@ class AlbumArtistAggregator @Inject constructor(
         return artist.split(Regex(regex))
             .map { it.trim() }
             .filter { it.isNotBlank() }
+    }
+
+    /**
+     * Resolve artist display name from an artist key.
+     * For "id:" prefixed keys, queries MediaStore to get the actual artist name.
+     * For other keys, returns the key as-is.
+     */
+    private suspend fun resolveArtistDisplayName(artistKey: String, file: AudioFile): String {
+        if (!artistKey.startsWith("id:")) {
+            return artistKey
+        }
+        val artistId = artistKey.removePrefix("id:").toLongOrNull() ?: return artistKey
+        val artistNames = mediaStoreDataSource.queryArtistNames(listOf(artistId))
+        return artistNames[artistId] ?: file.metadata.artist ?: artistKey
     }
 }
