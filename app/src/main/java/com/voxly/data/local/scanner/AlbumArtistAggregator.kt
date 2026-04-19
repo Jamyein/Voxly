@@ -242,8 +242,13 @@ class AlbumArtistAggregator @Inject constructor(
             )
             val coverFile = sortedForCover.firstOrNull()
 
+            val displayName = if (key.startsWith("id:")) {
+                file.metadata.artist ?: key.removePrefix("id:")
+            } else {
+                key
+            }
             currentMap[key] = ArtistGroup(
-                name = key.removePrefix("id:"),
+                name = displayName,
                 albums = newArtistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
                 files = newArtistFiles.sortedBy { it.metadata.album },
                 coverPath = coverFile?.path

@@ -486,11 +486,15 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     private fun setEditedMetadata(updatedMetadata: AudioMetadata, modifiedField: MetadataField? = null) {
         Timber.d("setEditedMetadata: updating editedMetadata, new title=${updatedMetadata.title}", "MetadataEditor")
+        val actuallyChanged = _editedMetadata.value != updatedMetadata
         _editedMetadata.update { updatedMetadata }
-        _hasUnsavedChanges.update { true }
-        if (modifiedField != null) {
-            _modifiedFields.update { it + modifiedField }
+        if (actuallyChanged) {
+            _hasUnsavedChanges.update { true }
+            if (modifiedField != null) {
+                _modifiedFields.update { it + modifiedField }
+            }
         }
+    }
 
         // 同步更新搜索种子，供 Online Search 屏幕使用编辑中的实时值
         searchSeedHolder.updateSeed(

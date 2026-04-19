@@ -42,9 +42,11 @@ class ArtistViewModel @Inject constructor(
                 artist.files.forEach { file ->
                     file.metadata.album?.takeIf { it.isNotBlank() }?.let { albumNames.add(it) }
                 }
+                val coverFile = artist.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
                 ArtistListItemState(
                     name = artist.name,
                     coverPath = artist.coverPath,
+                    coverAlbumId = coverFile?.mediaStoreAlbumId,
                     albumCount = albumNames.size,
                     trackCount = artist.files.size
                 )
