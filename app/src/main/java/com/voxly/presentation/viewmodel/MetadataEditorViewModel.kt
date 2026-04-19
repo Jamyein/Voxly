@@ -485,7 +485,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
 
     private fun setEditedMetadata(updatedMetadata: AudioMetadata, modifiedField: MetadataField? = null) {
-        Timber.d("setEditedMetadata: updating editedMetadata, new title=${updatedMetadata.title}", "MetadataEditor")
+        Timber.d("setEditedMetadata: field=$modifiedField, title=${updatedMetadata.title}, artist=${updatedMetadata.artist}", "MetadataEditor")
         val actuallyChanged = _editedMetadata.value != updatedMetadata
         _editedMetadata.update { updatedMetadata }
         if (actuallyChanged) {

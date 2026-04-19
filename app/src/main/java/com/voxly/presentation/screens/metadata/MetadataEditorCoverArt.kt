@@ -73,6 +73,7 @@ fun AlbumArtSection(
                     ImageRequest.Builder(context)
                         .data(bytes)
                         .size(Size.ORIGINAL)
+                        .memoryCacheKey("album_art_${bytes.contentHashCode()}")
                         .build()
                 }
             }

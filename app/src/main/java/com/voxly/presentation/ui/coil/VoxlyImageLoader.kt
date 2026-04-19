@@ -6,6 +6,7 @@ import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
 import coil3.request.crossfade
+import coil3.util.DebugLogger
 import com.voxly.BuildConfig
 import okio.Path.Companion.toPath
 
@@ -29,7 +30,7 @@ class VoxlyImageLoader private constructor(
             .crossfade(true)
             .apply {
                 if (BuildConfig.DEBUG) {
-                    logger(coil3.util.DebugLogger())
+                    logger(DebugLogger())
                 }
             }
             .build()
