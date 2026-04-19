@@ -54,13 +54,6 @@ fun AlbumArtSection(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
-            .then(
-                if (coverKey != null) {
-                    Modifier
-                } else {
-                    Modifier
-                }
-            )
             .clickable(onClick = onPickAlbumArt),
         shape = MaterialTheme.shapes.extraLarge
     ) {
