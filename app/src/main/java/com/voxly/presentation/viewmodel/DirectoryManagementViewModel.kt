@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.WhitelistDirectory
 import com.voxly.domain.repository.WhitelistRepository
+import com.voxly.domain.usecase.UnifiedScanManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -17,7 +18,7 @@ import javax.inject.Inject
 class DirectoryManagementViewModel @Inject constructor(
     private val whitelistRepository: WhitelistRepository,
     private val settingsDataStore: SettingsDataStore,
-    private val scanViewModel: LibraryScanViewModel
+    private val unifiedScanManager: UnifiedScanManager
 ) : ViewModel() {
 
     val directories: StateFlow<List<WhitelistDirectory>> = 
@@ -39,7 +40,7 @@ class DirectoryManagementViewModel @Inject constructor(
             val path = getPathFromUri(directoryUri)
             if (path.isNotBlank()) {
                 whitelistRepository.addWhitelistDirectory(directoryUri.toString(), path)
-                scanViewModel.syncAndScanDirectoriesIncremental()
+                unifiedScanManager.syncDirectories()
             }
         }
     }
@@ -47,7 +48,7 @@ class DirectoryManagementViewModel @Inject constructor(
     fun removeDirectory(directoryUri: String) {
         viewModelScope.launch {
             whitelistRepository.removeWhitelistDirectory(directoryUri)
-            scanViewModel.syncAndScanDirectoriesIncremental()
+            unifiedScanManager.syncDirectories()
         }
     }
 

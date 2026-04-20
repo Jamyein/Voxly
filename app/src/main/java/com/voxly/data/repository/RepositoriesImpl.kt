@@ -277,8 +277,8 @@ class AudioRepositoryImpl @Inject constructor(
         return primary.copy(
             title = primary.title.takeIf { !it.isNullOrBlank() } ?: fallback.title,
             artist = primary.artist.takeIf { !it.isNullOrBlank() } ?: fallback.artist,
-            album = primary.album.takeIf { !it.isNullOrBlank() } ?: fallback.album,
-            albumArtist = primary.albumArtist.takeIf { !it.isNullOrBlank() } ?: fallback.albumArtist,
+            album = primary.album.takeIf { !it.isNullOrBlank() },
+            albumArtist = primary.albumArtist.takeIf { !it.isNullOrBlank() },
             year = primary.year.takeIf { !it.isNullOrBlank() } ?: fallback.year,
             genre = primary.genre.takeIf { !it.isNullOrBlank() } ?: fallback.genre,
             trackNumber = primary.trackNumber ?: fallback.trackNumber,

@@ -94,3 +94,4 @@ local.properties
 !readme*.md
 
 *.md
+/app/github

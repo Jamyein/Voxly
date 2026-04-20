@@ -242,8 +242,8 @@ class AlbumArtistAggregator @Inject constructor(
             listOf(file)
         }
 
-        val albumName = file.metadata.album ?: albumKey.removePrefix("id:").removePrefix("str:")
-        val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
+        val albumName = file.metadata.album ?: ""
+        val albumArtist = file.metadata.albumArtist
         val coverFile = newFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
             ?: newFiles.firstOrNull()
         val albumYear = newFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
@@ -317,8 +317,8 @@ class AlbumArtistAggregator @Inject constructor(
             listOf(file)
         }
 
-        val albumName = file.metadata.album ?: albumKey.removePrefix("id:").removePrefix("str:")
-        val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
+        val albumName = file.metadata.album ?: ""
+        val albumArtist = file.metadata.albumArtist
         val coverFile = newAlbumFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
             ?: newAlbumFiles.firstOrNull()
         val albumYear = newAlbumFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()

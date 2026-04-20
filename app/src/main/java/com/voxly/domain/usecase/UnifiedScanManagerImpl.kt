@@ -213,6 +213,22 @@ class UnifiedScanManagerImpl @Inject constructor(
         }
     }
 
+    override fun syncDirectories() {
+        scope.launch {
+            syncSelectedDirectoriesFromStorage()
+        }
+    }
+
+    /**
+     * Syncs selected directories from storage and performs incremental scan.
+     */
+    private suspend fun syncSelectedDirectoriesFromStorage() {
+        val dirs = settingsDataStore.selectedDirectoryUris.first()
+        if (dirs.isNotEmpty()) {
+            scan(ScanTarget.Directories(dirs), force = false)
+        }
+    }
+
     /**
      * Performs a global scan of all audio files on the device
      */

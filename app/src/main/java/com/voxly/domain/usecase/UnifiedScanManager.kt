@@ -153,4 +153,10 @@ interface UnifiedScanManager {
      * Resets state to Idle after UI has consumed it
      */
     fun resetState()
+
+    /**
+     * Syncs selected directories and performs incremental scan.
+     * Called when directory settings change.
+     */
+    fun syncDirectories()
 }
