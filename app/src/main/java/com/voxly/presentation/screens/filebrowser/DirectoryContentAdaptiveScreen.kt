@@ -100,12 +100,6 @@ fun DirectoryContentAdaptiveScreen(
     val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
     val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
 
-    LaunchedEffect(directoryUri) {
-        if (directoryUri.isNotEmpty()) {
-            scanViewModel.loadFromDirectory(android.net.Uri.parse(directoryUri))
-        }
-    }
-
     val directoryFiles by scanViewModel.directoryFiles.collectAsStateWithLifecycle()
     val sortedDirectoryFiles by scanViewModel.sortedDirectoryFiles.collectAsStateWithLifecycle()
     val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
@@ -225,7 +219,7 @@ fun DirectoryContentAdaptiveScreen(
                     onSelectAll = { viewModel.selectAll() },
                     onShowSearchSheet = { showSearchSheet = true },
                     onSortOptionChange = { settingsViewModel.setDirectoryFileSortOption(it.name) },
-                    onRefresh = { scanViewModel.refresh() },
+                    onRefresh = { scanViewModel.refreshDirectoryIncremental(directoryUri) },
                     onNavigateBackWithPane = {
                         coroutineScope.launch { navigator.navigateBack() }
                     },

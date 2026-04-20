@@ -48,6 +48,7 @@ class MusicLibraryCache @Inject constructor(
     private val albumThumbnailDao: AlbumThumbnailDao by lazy { database.albumThumbnailDao() }
     private val artistLinkDao: ArtistLinkDao by lazy { database.artistLinkDao() }
     private val enrichmentJobDao: EnrichmentJobDao by lazy { database.enrichmentJobDao() }
+    private val directorySnapshotDao: DirectorySnapshotDao by lazy { database.directorySnapshotDao() }
 
     private val cacheVersion = MutableStateFlow(0L)
     val cacheVersionFlow: StateFlow<Long> = cacheVersion.asStateFlow()
@@ -606,5 +607,27 @@ class MusicLibraryCache @Inject constructor(
                 AudioFilePagingSource(audioFileDao, directoryPath)
             }
         ).flow
+    }
+
+    suspend fun getDirectorySnapshot(directoryUri: String): DirectorySnapshotEntity? {
+        return directorySnapshotDao.getSnapshot(directoryUri)
+    }
+
+    suspend fun saveDirectorySnapshot(directoryUri: String, fileCount: Int) {
+        directorySnapshotDao.upsert(
+            DirectorySnapshotEntity(
+                directoryUri = directoryUri,
+                fileCount = fileCount,
+                lastCheckTime = System.currentTimeMillis()
+            )
+        )
+    }
+
+    suspend fun deleteDirectorySnapshot(directoryUri: String) {
+        directorySnapshotDao.delete(directoryUri)
+    }
+
+    suspend fun getAllDirectorySnapshots(): List<DirectorySnapshotEntity> {
+        return directorySnapshotDao.getAllSnapshots()
     }
 }

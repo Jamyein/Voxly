@@ -7,8 +7,10 @@ import android.net.Uri
 import android.os.Environment
 import android.provider.DocumentsContract
 import android.provider.MediaStore
+import androidx.documentfile.provider.DocumentFile
 import com.voxly.core.util.Constants
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
+import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioFormat
 import com.voxly.domain.model.parseMediaStoreTrackField
@@ -27,7 +29,8 @@ import javax.inject.Singleton
 @Singleton
 class MediaStoreDataSource @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val metadataProcessor: TagLibMetadataProcessor
+    private val metadataProcessor: TagLibMetadataProcessor,
+    private val safWriteAccessService: SafWriteAccessService
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
 
@@ -172,6 +175,98 @@ class MediaStoreDataSource @Inject constructor(
         val audioFiles = mutableListOf<AudioFile>()
         scanDirectoryRecursiveInternal(directory, audioFiles)
         audioFiles
+    }
+
+    /**
+     * Scan directory via SAF DocumentFile API when File.listFiles() returns empty.
+     * Used as fallback for SAF-managed paths where MediaStore hasn't indexed new files yet.
+     */
+    suspend fun scanDirectoryViaSaf(directoryPath: String): List<AudioFile> = withContext(Dispatchers.IO) {
+        val treeUri = safWriteAccessService.findTreeUriForPath(directoryPath)
+            ?: run {
+                Timber.w(TAG, "No TreeUri found for path: $directoryPath")
+                return@withContext emptyList()
+            }
+
+        val documentFile = DocumentFile.fromTreeUri(context, treeUri)
+            ?: run {
+                Timber.w(TAG, "Cannot create DocumentFile from TreeUri: $treeUri")
+                return@withContext emptyList()
+            }
+
+        val result = mutableListOf<AudioFile>()
+        scanDocumentFilesRecursive(documentFile, result)
+        Timber.d(TAG, "SAF scan found ${result.size} audio files in $directoryPath")
+        result
+    }
+
+    /**
+     * Query file paths and modification times via SAF DocumentFile API when File.listFiles() returns empty.
+     */
+    fun queryDirectoryViaSaf(directoryPath: String): List<Pair<String, Long>> {
+        val treeUri = safWriteAccessService.findTreeUriForPath(directoryPath)
+            ?: run {
+                Timber.w(TAG, "No TreeUri found for path: $directoryPath")
+                return emptyList()
+            }
+
+        val documentFile = DocumentFile.fromTreeUri(context, treeUri)
+            ?: run {
+                Timber.w(TAG, "Cannot create DocumentFile from TreeUri: $treeUri")
+                return emptyList()
+            }
+
+        val result = mutableListOf<Pair<String, Long>>()
+        collectDocumentFilesViaSafRecursive(documentFile, result)
+        Timber.d(TAG, "SAF query found ${result.size} audio files in $directoryPath")
+        return result
+    }
+
+    private fun collectDocumentFilesViaSafRecursive(docFile: DocumentFile, output: MutableList<Pair<String, Long>>) {
+        docFile.listFiles().forEach { child ->
+            when {
+                child.isDirectory -> collectDocumentFilesViaSafRecursive(child, output)
+                child.isFile -> {
+                    val name = child.name
+                    if (name != null && name.substringAfterLast('.', "").lowercase() in AUDIO_EXTENSIONS) {
+                        val path = getPathFromDocumentUri(child.uri)
+                        if (path != null) {
+                            output.add(path to child.lastModified())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private suspend fun scanDocumentFilesRecursive(docFile: DocumentFile, output: MutableList<AudioFile>) {
+        docFile.listFiles().forEach { child ->
+            when {
+                child.isDirectory -> scanDocumentFilesRecursive(child, output)
+                child.isFile -> {
+                    val name = child.name
+                    if (name != null && name.substringAfterLast('.', "").lowercase() in AUDIO_EXTENSIONS) {
+                        val path = getPathFromDocumentUri(child.uri) ?: return@forEach
+                        output.add(createAudioFileFromPath(path))
+                    }
+                }
+            }
+        }
+    }
+
+    private fun getPathFromDocumentUri(docUri: Uri): String? {
+        val docId = DocumentsContract.getDocumentId(docUri)
+        if (docId.startsWith("raw:")) {
+            return docId.removePrefix("raw:")
+        }
+        val parts = docId.split(":", limit = 2)
+        val volume = parts.firstOrNull().orEmpty()
+        val relativePath = parts.getOrNull(1)?.trim('/').orEmpty()
+        return when {
+            volume.equals("primary", ignoreCase = true) -> "/storage/emulated/0/$relativePath"
+            volume.equals("home", ignoreCase = true) -> "/storage/emulated/0/Documents/$relativePath"
+            else -> "/storage/$volume/$relativePath"
+        }
     }
 
     private suspend fun scanDirectoryRecursiveInternal(directory: File, output: MutableList<AudioFile>) {

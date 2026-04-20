@@ -157,7 +157,7 @@ class AudioFileScanner @Inject constructor(
         forceRefresh: Boolean = false
     ): List<AudioFile> = scanMutex.withLock {
         val files = when {
-            !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, false)
+            !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, forceRefresh)
             incremental && hasCachedData() -> incrementalScanStrategy.scan()
             else -> {
                 if (!forceRefresh && hasCachedData()) {

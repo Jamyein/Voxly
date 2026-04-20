@@ -215,6 +215,29 @@ class LibraryScanViewModel @Inject constructor(
                 }
             }
         }
+
+        viewModelScope.launch {
+            checkDirectorySnapshotsOnStart()
+        }
+    }
+
+    private suspend fun checkDirectorySnapshotsOnStart() {
+        syncSelectedDirectoriesFromStorage()
+        val dirs = _selectedDirectories.value
+        if (dirs.isEmpty()) return
+
+        val snapshots = musicLibraryCache.getAllDirectorySnapshots()
+        val snapshotMap = snapshots.associateBy { it.directoryUri }
+
+        val needsIncrementalScan = dirs.any { dir ->
+            val snapshot = snapshotMap[dir.uri]
+            val cachedCount = _directoryFiles.value[dir.uri]?.size
+            snapshot == null || cachedCount == null || snapshot.fileCount != cachedCount
+        }
+
+        if (needsIncrementalScan) {
+            scanSelectedDirectories(dirs, isIncremental = true, forceRefresh = false)
+        }
     }
 
     /**
@@ -294,15 +317,40 @@ class LibraryScanViewModel @Inject constructor(
         loadAudioFiles(forceRefresh = forceRefresh, isIncremental = !forceRefresh)
     }
 
+    fun refreshDirectoryIncremental(directoryUri: String) {
+        viewModelScope.launch {
+            val dirs = _selectedDirectories.value.filter { it.uri == directoryUri }
+            if (dirs.isEmpty()) return@launch
+            scanSelectedDirectories(dirs, isIncremental = true, forceRefresh = false)
+        }
+    }
+
+    fun syncAndScanDirectoriesIncremental() {
+        viewModelScope.launch {
+            syncSelectedDirectoriesFromStorage()
+            if (_selectedDirectories.value.isNotEmpty()) {
+                scanSelectedDirectories(_selectedDirectories.value, isIncremental = true, forceRefresh = false)
+            }
+        }
+    }
+
     /**
      * Scans audio files from a specific directory.
+     * Only triggers scan if directory is not already loaded.
+     * If already loaded, uses cached data.
      */
     fun loadFromDirectory(directoryUri: Uri) {
+        val uriString = directoryUri.toString()
+        if (_selectedDirectories.value.any { it.uri == uriString }) {
+            return
+        }
         addDirectory(directoryUri)
     }
 
     /**
      * Adds one directory to the selected directory set and reloads.
+     * If directory is already loaded, triggers incremental scan for new/deleted files.
+     * If directory is new, triggers full scan.
      */
     fun addDirectory(directoryUri: Uri) {
         val filePath = getPathFromUri(directoryUri)
@@ -312,7 +360,27 @@ class LibraryScanViewModel @Inject constructor(
 
         val uriString = directoryUri.toString()
 
-        if (uriString in _directoryFiles.value || uriString in _directoryLoadingState.value) {
+        if (uriString in _directoryLoadingState.value) {
+            return
+        }
+
+        val alreadySelected = _selectedDirectories.value.any { it.uri == uriString }
+        val alreadyLoaded = uriString in _directoryFiles.value
+
+        if (alreadySelected) {
+            if (alreadyLoaded) {
+                viewModelScope.launch {
+                    val dirs = _selectedDirectories.value.filter { it.uri == uriString }
+                    scanSelectedDirectories(dirs, isIncremental = true, forceRefresh = false)
+                }
+            } else {
+                scanJob?.cancel()
+                scanJob = viewModelScope.launch {
+                    _directoryFiles.update { it - uriString }
+                    val dirs = _selectedDirectories.value.filter { it.uri == uriString }
+                    scanSelectedDirectories(dirs, isIncremental = false, forceRefresh = true)
+                }
+            }
             return
         }
 
@@ -399,6 +467,13 @@ class LibraryScanViewModel @Inject constructor(
             }
 
             _directoryFiles.update { filesByDir }
+
+            withContext(Dispatchers.IO) {
+                directories.forEach { dir ->
+                    val fileCount = filesByDir[dir.uri]?.size ?: 0
+                    musicLibraryCache.saveDirectorySnapshot(dir.uri, fileCount)
+                }
+            }
 
             if (_openedDirectoryUri.value != null && _openedDirectoryUri.value !in filesByDir.keys) {
                 _openedDirectoryUri.update { null }

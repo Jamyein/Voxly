@@ -16,7 +16,8 @@ import javax.inject.Inject
 @HiltViewModel
 class DirectoryManagementViewModel @Inject constructor(
     private val whitelistRepository: WhitelistRepository,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val scanViewModel: LibraryScanViewModel
 ) : ViewModel() {
 
     val directories: StateFlow<List<WhitelistDirectory>> = 
@@ -38,6 +39,7 @@ class DirectoryManagementViewModel @Inject constructor(
             val path = getPathFromUri(directoryUri)
             if (path.isNotBlank()) {
                 whitelistRepository.addWhitelistDirectory(directoryUri.toString(), path)
+                scanViewModel.syncAndScanDirectoriesIncremental()
             }
         }
     }
@@ -45,6 +47,7 @@ class DirectoryManagementViewModel @Inject constructor(
     fun removeDirectory(directoryUri: String) {
         viewModelScope.launch {
             whitelistRepository.removeWhitelistDirectory(directoryUri)
+            scanViewModel.syncAndScanDirectoriesIncremental()
         }
     }
 

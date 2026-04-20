@@ -1,8 +1,11 @@
 package com.voxly.data.local.scanner
 
+import android.net.Uri
+import androidx.documentfile.provider.DocumentFile
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
+import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -19,7 +22,8 @@ class DirectoryScanStrategy @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val metadataProcessor: TagLibMetadataProcessor,
     private val fileProcessor: FileProcessor,
-    private val fastScanProcessor: FastScanProcessor
+    private val fastScanProcessor: FastScanProcessor,
+    private val safWriteAccessService: SafWriteAccessService
 ) : ScanStrategy {
     companion object {
         private const val TAG = "DirectoryScanStrategy"
@@ -40,7 +44,9 @@ class DirectoryScanStrategy @Inject constructor(
 
         if (normalizedDirs.isEmpty()) return emptyList()
 
-        return if (incremental) {
+        return if (forceRefresh) {
+            scanDirectoriesFull(normalizedDirs)
+        } else if (incremental) {
             scanDirectoriesIncremental(normalizedDirs)
         } else {
             scanDirectoriesFull(normalizedDirs)
@@ -62,7 +68,13 @@ class DirectoryScanStrategy @Inject constructor(
         val currentFiles = mutableListOf<Pair<String, Long>>()
         directoryPaths.forEach { dir ->
             val dirFile = File(dir)
-            currentFiles.addAll(mediaStoreDataSource.queryDirectoryFilePathsAndModificationTimes(dirFile))
+            val listed = mediaStoreDataSource.queryDirectoryFilePathsAndModificationTimes(dirFile)
+            if (listed.isEmpty()) {
+                val safResult = mediaStoreDataSource.queryDirectoryViaSaf(dir)
+                currentFiles.addAll(safResult)
+            } else {
+                currentFiles.addAll(listed)
+            }
         }
 
         val currentPaths = currentFiles.map { it.first }.toSet()
@@ -88,11 +100,18 @@ class DirectoryScanStrategy @Inject constructor(
         val deletedPaths = cachedInDirs.map { it.path }.filter { it !in currentPaths }
         libraryCache.removeFromCache(deletedPaths)
 
-        if (updatedFiles.isEmpty()) {
+        val newPaths = currentPaths.filter { path -> cachedInDirs.none { it.path == path } }
+        val newFiles = if (newPaths.isNotEmpty()) {
+            fileProcessor.scanFilesInParallel(newPaths.toList())
+        } else {
+            emptyList()
+        }
+
+        if (updatedFiles.isEmpty() && newFiles.isEmpty()) {
             return@withContext retainedFiles
         }
 
-        (retainedFiles + updatedFiles)
+        (retainedFiles + updatedFiles + newFiles)
             .distinctBy { it.path }
             .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
     }
@@ -116,7 +135,17 @@ class DirectoryScanStrategy @Inject constructor(
         if (audioFiles.isEmpty()) {
             val dir = File(directoryPath)
             if (dir.exists() && dir.isDirectory) {
-                mediaStoreDataSource.scanDirectoryRecursive(dir)
+                val listed = mediaStoreDataSource.scanDirectoryRecursive(dir)
+                if (listed.isEmpty()) {
+                    val safFiles = mediaStoreDataSource.scanDirectoryViaSaf(directoryPath)
+                    if (safFiles.isNotEmpty()) {
+                        return@withContext safFiles
+                    }
+                }
+                if (listed.isEmpty()) {
+                    Timber.w(TAG, "Both File.listFiles() and SAF scan returned empty for $directoryPath")
+                }
+                return@withContext listed
             } else {
                 emptyList()
             }
