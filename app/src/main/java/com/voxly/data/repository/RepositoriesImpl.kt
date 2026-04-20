@@ -6,6 +6,7 @@ import android.provider.MediaStore
 import com.voxly.core.util.Constants
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
+import com.voxly.data.local.cover.CoverDiskCache
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.metadata.RecoverableMediaStoreException
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
@@ -42,7 +43,8 @@ class AudioRepositoryImpl @Inject constructor(
     private val metadataProcessor: TagLibMetadataProcessor,
     private val tagWriteManager: TagWriteManager,
     private val libraryCache: MusicLibraryCache,
-    private val coverUriProvider: CoverUriProvider
+    private val coverUriProvider: CoverUriProvider,
+    private val coverDiskCache: CoverDiskCache
 ) : AudioRepository {
     companion object {
         private const val TAG = "AudioRepositoryImpl"
@@ -135,7 +137,9 @@ class AudioRepositoryImpl @Inject constructor(
                     bitrate = finalBitrate,
                     sampleRate = finalSampleRate,
                     channels = finalChannels,
-                    metadata = completeMetadata?.metadata ?: AudioMetadata()
+                    metadata = completeMetadata?.metadata ?: AudioMetadata(),
+                    mediaStoreAlbumId = mediaStoreInfo.mediaStoreAlbumId,
+                    mediaStoreArtistId = mediaStoreInfo.mediaStoreArtistId
                 )
 
                 val mediaStoreFallbackMetadata = readMediaStoreBasicMetadata(filePath)
@@ -160,13 +164,17 @@ class AudioRepositoryImpl @Inject constructor(
     private fun queryMediaStoreAudioInfo(filePath: String): AudioInfo {
         var duration = 0L
         var bitrate = 0
+        var albumId: Long? = null
+        var artistId: Long? = null
         try {
             val (selection, selectionArgs) = buildMediaStoreSelection(filePath)
             val cursor = context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 arrayOf(
                     MediaStore.Audio.Media.DURATION,
-                    MediaStore.Audio.Media.BITRATE
+                    MediaStore.Audio.Media.BITRATE,
+                    MediaStore.Audio.Media.ALBUM_ID,
+                    MediaStore.Audio.Media.ARTIST_ID
                 ),
                 selection,
                 selectionArgs,
@@ -176,19 +184,25 @@ class AudioRepositoryImpl @Inject constructor(
                 if (it.moveToFirst()) {
                     val durationCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                     val bitrateCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.BITRATE)
+                    val albumIdCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM_ID)
+                    val artistIdCol = it.getColumnIndexOrThrow(MediaStore.Audio.Media.ARTIST_ID)
                     duration = it.getLong(durationCol)
                     bitrate = it.getInt(bitrateCol) / Constants.BPS_TO_KBPS
+                    albumId = it.getLong(albumIdCol).takeIf { id -> id > 0 }
+                    artistId = it.getLong(artistIdCol).takeIf { id -> id > 0 }
                 }
             }
         } catch (e: Exception) {
             Timber.w(e, "Failed to query MediaStore audio info for: $filePath")
         }
-        return AudioInfo(duration, bitrate)
+        return AudioInfo(duration, bitrate, albumId, artistId)
     }
 
     private data class AudioInfo(
         val duration: Long,
-        val bitrate: Int
+        val bitrate: Int,
+        val mediaStoreAlbumId: Long? = null,
+        val mediaStoreArtistId: Long? = null
     )
 
     override suspend fun readMetadata(filePath: String): Result<AudioMetadata> =
@@ -299,17 +313,42 @@ class AudioRepositoryImpl @Inject constructor(
     override suspend fun updateMetadata(filePath: String, metadata: AudioMetadata): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
+                // Get old metadata before update for cache invalidation
+                val oldFile = libraryCache.getCachedFile(filePath)
+                val oldAlbumArtist = oldFile?.metadata?.albumArtist ?: oldFile?.metadata?.artist
+                val oldAlbumName = oldFile?.metadata?.album
+
                 // Use TagWriteManager for Android 16 safe write with whitelist support
                 tagWriteManager.writeMetadata(filePath, metadata).fold(
                     onSuccess = {
-                        // Invalidate cover cache after metadata update to force fresh cover check
-                        // This fixes the issue where modifying album/albumArtist didn't update the cover display
+                        // After metadata update, re-query MediaStore to get the CORRECT album ID
+                        // because album/artist changes can result in a different MediaStore album ID
+                        val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(filePath)
                         val updatedFile = getAudioFile(filePath, includeAlbumArt = true).getOrNull()
-                        updatedFile?.mediaStoreAlbumId?.let { albumId ->
-                            CoverUriProvider.invalidateAlbumId(albumId)
+
+                        // If album/artist changed, invalidate old cover disk cache
+                        val newAlbumArtist = metadata.albumArtist ?: metadata.artist
+                        val newAlbumName = metadata.album
+                        if (oldAlbumName != null &&
+                            (oldAlbumName != newAlbumName || oldAlbumArtist != newAlbumArtist)) {
+                            val oldCacheKey = coverDiskCache.generateCacheKey(oldAlbumArtist, oldAlbumName)
+                            coverDiskCache.deleteThumbnail(oldCacheKey)
+                            Timber.d(TAG, "Cleared old cover cache: $oldCacheKey")
                         }
-                        // Sync updated file to local cache
-                        updatedFile?.let { libraryCache.syncFileToCache(it) }
+
+                        // If album ID changed, invalidate BOTH old and new album cover caches
+                        if (updatedFile != null && correctAlbumId != null && updatedFile.mediaStoreAlbumId != correctAlbumId) {
+                            updatedFile.mediaStoreAlbumId?.let { CoverUriProvider.invalidateAlbumId(it) }
+                            CoverUriProvider.invalidateAlbumId(correctAlbumId)
+                            // Update the file with correct album ID before syncing to cache
+                            libraryCache.syncFileToCache(updatedFile.copy(mediaStoreAlbumId = correctAlbumId))
+                        } else {
+                            // Album ID unchanged, just invalidate and sync
+                            updatedFile?.mediaStoreAlbumId?.let { albumId ->
+                                CoverUriProvider.invalidateAlbumId(albumId)
+                            }
+                            updatedFile?.let { libraryCache.syncFileToCache(it) }
+                        }
                         Result.success(Unit)
                     },
                     onFailure = { cause ->

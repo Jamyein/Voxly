@@ -217,6 +217,14 @@ class AudioFileScanner @Inject constructor(
     }
 
     /**
+     * Queries MediaStore for the correct album ID of a file.
+     * This re-queries MediaStore because album ID can change when album/artist metadata changes.
+     */
+    suspend fun queryMediaStoreAlbumId(filePath: String): Long? {
+        return mediaStoreDataSource.queryMediaStoreAlbumId(filePath)
+    }
+
+    /**
      * Loads detailed metadata on-demand.
      */
     suspend fun loadDetailedMetadata(

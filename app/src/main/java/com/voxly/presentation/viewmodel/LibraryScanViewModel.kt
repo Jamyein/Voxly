@@ -15,6 +15,7 @@ import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.CacheChange
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.usecase.ScanState
 import com.voxly.domain.usecase.ScanTarget
@@ -211,6 +212,35 @@ class LibraryScanViewModel @Inject constructor(
                 when (state) {
                     is ScanState.Success -> Timber.d(TAG, "Scan completed")
                     is ScanState.Error -> Timber.tag(TAG).e("Scan error: ${state.message}")
+                    else -> { }
+                }
+            }
+        }
+
+        viewModelScope.launch {
+            musicLibraryCache.changeFlow.collect { change ->
+                when (change) {
+                    is CacheChange.FileUpdated -> {
+                        val updatedFile = musicLibraryCache.getCachedFile(change.filePath)
+                        updatedFile?.let { file ->
+                            _directoryFiles.update { currentMap ->
+                                currentMap.mapValues { (_, files) ->
+                                    if (files.any { it.path == file.path }) {
+                                        files.map { if (it.path == file.path) file else it }
+                                    } else {
+                                        files
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    is CacheChange.FileDeleted -> {
+                        _directoryFiles.update { currentMap ->
+                            currentMap.mapValues { (_, files) ->
+                                files.filter { it.path != change.filePath }
+                            }.filterValues { it.isNotEmpty() }
+                        }
+                    }
                     else -> { }
                 }
             }
@@ -442,7 +472,7 @@ class LibraryScanViewModel @Inject constructor(
         Timber.d(TAG, "Scanning ${directories.size} directories (incremental=$isIncremental, force=$forceRefresh)")
 
         val allDirsLoaded = directories.all { it.uri in _directoryFiles.value }
-        if (allDirsLoaded && !forceRefresh) {
+        if (allDirsLoaded && !forceRefresh && !isIncremental) {
             Timber.d(TAG, "All directories already loaded in _directoryFiles, skipping scan")
             return
         }

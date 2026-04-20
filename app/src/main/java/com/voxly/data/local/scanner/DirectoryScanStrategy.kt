@@ -107,13 +107,14 @@ class DirectoryScanStrategy @Inject constructor(
             emptyList()
         }
 
-        if (updatedFiles.isEmpty() && newFiles.isEmpty()) {
-            return@withContext retainedFiles
+        val allFiles = (retainedFiles + updatedFiles + newFiles)
+            .distinctBy { it.path }
+
+        if (updatedFiles.isNotEmpty() || newFiles.isNotEmpty()) {
+            libraryCache.updateCache(allFiles)
         }
 
-        (retainedFiles + updatedFiles + newFiles)
-            .distinctBy { it.path }
-            .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
+        allFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
     }
 
     private suspend fun scanDirectoryInternal(
