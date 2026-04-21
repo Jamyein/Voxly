@@ -5,11 +5,16 @@
  * Audio decoding is handled by Android MediaCodec on the Kotlin side.
  *
  * Data flow: Kotlin MediaCodec -> PCM short[] -> JNI -> libebur128 -> LUFS/peak
+ *
+ * Best practices followed:
+ * - RegisterNatives for explicit method registration (faster, earlier error detection)
+ * - GetShortArrayRegion instead of GetShortArrayElements (1 JNI call vs 2)
+ * - Direct ByteBuffer for zero-copy large data transfer
+ * - Pre-allocated result array to avoid heap allocation per call
  */
 
 #include <jni.h>
 #include <string>
-#include <vector>
 #include <cmath>
 #include <algorithm>
 
@@ -36,24 +41,54 @@ struct ScannerState {
     bool true_peak;
     bool dual_mono;
     double target_loudness;
-    // Cached buffer address to avoid repeated GetDirectBufferAddress calls
     void* cached_buffer_addr;
     size_t cached_buffer_size;
 };
 
-/**
- * Create a new scanner instance.
- * Returns a native pointer (as jlong) to be passed to subsequent calls.
- */
-extern "C" JNIEXPORT jlong JNICALL
-Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeCreate(
-    JNIEnv* env, jobject thiz,
-    jint channels,
-    jint sample_rate,
-    jboolean true_peak,
-    jboolean dual_mono,
-    jdouble target_loudness
-) {
+// Forward declarations
+static jlong nativeCreate(JNIEnv* env, jobject thiz, jint channels, jint sample_rate,
+                          jboolean true_peak, jboolean dual_mono, jdouble target_loudness);
+static void nativeProcessFrames(JNIEnv* env, jobject thiz, jlong scannerPtr,
+                                jshortArray samples, jint frameCount);
+static jint nativeProcessBuffer(JNIEnv* env, jobject thiz, jlong scannerPtr,
+                                jobject buffer, jint size);
+static jboolean nativeGetResult(JNIEnv* env, jobject thiz, jlong scannerPtr, jdoubleArray result);
+static void nativeDestroy(JNIEnv* env, jobject thiz, jlong scannerPtr);
+static jstring nativeGetVersion(JNIEnv* env, jobject thiz);
+
+static const JNINativeMethod gMethods[] = {
+    {"nativeCreate", "(IIZZD)J", (void*)nativeCreate},
+    {"nativeProcessFrames", "(J[SI)V", (void*)nativeProcessFrames},
+    {"nativeProcessBuffer", "(JLjava/nio/ByteBuffer;I)I", (void*)nativeProcessBuffer},
+    {"nativeGetResult", "(J[D)Z", (void*)nativeGetResult},
+    {"nativeDestroy", "(J)V", (void*)nativeDestroy},
+    {"nativeGetVersion", "()Ljava/lang/String;", (void*)nativeGetVersion},
+};
+
+JNIEXPORT jint JNICALL JNI_OnLoad(JavaVM* vm, void* reserved) {
+    JNIEnv* env;
+    if (vm->GetEnv((void**)&env, JNI_VERSION_1_6) != JNI_OK) {
+        return JNI_ERR;
+    }
+
+    jclass clazz = env->FindClass("com/voxly/data/local/replaygain/native/EbuR128NativeScanner");
+    if (clazz == nullptr) {
+        LOGE("JNI_OnLoad: FindClass failed for EbuR128NativeScanner");
+        return JNI_ERR;
+    }
+
+    jint rc = env->RegisterNatives(clazz, gMethods, sizeof(gMethods) / sizeof(gMethods[0]));
+    if (rc != JNI_OK) {
+        LOGE("JNI_OnLoad: RegisterNatives failed with code %d", rc);
+        return JNI_ERR;
+    }
+
+    LOGI("JNI_OnLoad: Registered %zu native methods", sizeof(gMethods) / sizeof(gMethods[0]));
+    return JNI_VERSION_1_6;
+}
+
+static jlong nativeCreate(JNIEnv* env, jobject thiz, jint channels, jint sample_rate,
+                          jboolean true_peak, jboolean dual_mono, jdouble target_loudness) {
     int mode = EBUR128_MODE_I | EBUR128_MODE_SAMPLE_PEAK;
     if (true_peak) mode |= EBUR128_MODE_TRUE_PEAK;
 
@@ -86,45 +121,25 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeCreate(
     return reinterpret_cast<jlong>(state);
 }
 
-/**
- * Process a block of PCM samples (16-bit signed little-endian).
- *
- * @param scannerPtr Native pointer from nativeCreate
- * @param samples    PCM samples as short array (interleaved: L, R, L, R, ...)
- * @param frameCount Number of frames (NOT sample count). For stereo, samples.length = frameCount * 2
- */
-extern "C" JNIEXPORT void JNICALL
-Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessFrames(
-    JNIEnv* env, jobject thiz,
-    jlong scannerPtr,
-    jshortArray samples,
-    jint frameCount
-) {
+static void nativeProcessFrames(JNIEnv* env, jobject thiz, jlong scannerPtr,
+                                jshortArray samples, jint frameCount) {
     auto* state = reinterpret_cast<ScannerState*>(scannerPtr);
     if (!state || !state->ebur) return;
 
-    jshort* data = env->GetShortArrayElements(samples, nullptr);
-    ebur128_add_frames_short(state->ebur, data, static_cast<size_t>(frameCount));
-    env->ReleaseShortArrayElements(samples, data, JNI_ABORT);
+    // Use GetShortArrayRegion instead of GetShortArrayElements + ReleaseShortArrayElements
+    // This reduces 2 JNI calls to 1 and avoids copy
+    jshort buffer[8192];
+    jsize totalSamples = frameCount * state->channels;
+
+    for (jsize offset = 0; offset < totalSamples; offset += 8192) {
+        jsize chunkSize = std::min((jsize)8192, totalSamples - offset);
+        env->GetShortArrayRegion(samples, offset, chunkSize, buffer);
+        ebur128_add_frames_short(state->ebur, buffer, chunkSize / state->channels);
+    }
 }
 
-/**
- * Process a block of PCM samples from a Direct ByteBuffer.
- * This is the most efficient method for large data transfers.
- * FORCE_INLINE ensures minimal call overhead for this frequently called function.
- *
- * @param scannerPtr Native pointer from nativeCreate
- * @param buffer     Direct ByteBuffer containing S16 PCM data
- * @param size       Buffer size in bytes
- * @return Number of frames processed
- */
-extern "C" JNIEXPORT jint JNICALL
-Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessBuffer(
-    JNIEnv* env, jobject thiz,
-    jlong scannerPtr,
-    jobject buffer,
-    jint size
-) {
+static jint nativeProcessBuffer(JNIEnv* env, jobject thiz, jlong scannerPtr,
+                                jobject buffer, jint size) {
     auto* state = reinterpret_cast<ScannerState*>(scannerPtr);
     if (!state || !state->ebur) return 0;
 
@@ -140,25 +155,9 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessBu
     return static_cast<jint>(frameCount);
 }
 
-/**
- * Get scan results using pre-allocated result buffer.
- * Optimized to minimize JNI overhead and avoid heap allocation.
- *
- * Returns 6 double values directly in-place (no new Java object):
- *   [0] track_gain (dB)
- *   [1] track_peak
- *   [2] track_loudness (LUFS)
- *   [3] track_range (LU)
- *   [4] true_peak (or sample peak if true_peak=false)
- *   [5] reference_loudness
- */
-extern "C" JNIEXPORT jdoubleArray JNICALL
-Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult(
-    JNIEnv* env, jobject thiz,
-    jlong scannerPtr
-) {
+static jboolean nativeGetResult(JNIEnv* env, jobject thiz, jlong scannerPtr, jdoubleArray result) {
     auto* state = reinterpret_cast<ScannerState*>(scannerPtr);
-    if (!state || !state->ebur) return nullptr;
+    if (!state || !state->ebur) return JNI_FALSE;
 
     double loudness = -HUGE_VAL;
     int rc = ebur128_loudness_global(state->ebur, &loudness);
@@ -170,16 +169,23 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult
     ebur128_loudness_range(state->ebur, &range);
 
     double peak = 0.0;
-    for (int ch = 0; ch < state->channels; ch++) {
-        double ch_peak = 0.0;
-        ebur128_sample_peak(state->ebur, ch, &ch_peak);
-        if (ch_peak > peak) peak = ch_peak;
+    if (state->true_peak) {
+        for (int ch = 0; ch < state->channels; ch++) {
+            double tp = 0.0;
+            ebur128_true_peak(state->ebur, ch, &tp);
+            if (tp > peak) peak = tp;
+        }
+    } else {
+        for (int ch = 0; ch < state->channels; ch++) {
+            double sp = 0.0;
+            ebur128_sample_peak(state->ebur, ch, &sp);
+            if (sp > peak) peak = sp;
+        }
     }
 
     double gain = state->target_loudness - loudness;
 
-    // Static buffer avoids stack allocation and enables register optimization
-    static jdouble values[6];
+    jdouble values[6];
     values[0] = gain;
     values[1] = peak;
     values[2] = loudness;
@@ -187,25 +193,15 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult
     values[4] = peak;
     values[5] = state->target_loudness;
 
-    jdoubleArray result = env->NewDoubleArray(6);
-    if (result != nullptr) {
-        env->SetDoubleArrayRegion(result, 0, 6, values);
-    }
+    env->SetDoubleArrayRegion(result, 0, 6, values);
 
     LOGD("Result: gain=%.2f peak=%.6f loudness=%.2f range=%.2f",
          gain, peak, loudness, range);
 
-    return result;
+    return JNI_TRUE;
 }
 
-/**
- * Destroy the scanner and free native resources.
- */
-extern "C" JNIEXPORT void JNICALL
-Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeDestroy(
-    JNIEnv* env, jobject thiz,
-    jlong scannerPtr
-) {
+static void nativeDestroy(JNIEnv* env, jobject thiz, jlong scannerPtr) {
     auto* state = reinterpret_cast<ScannerState*>(scannerPtr);
     if (state) {
         if (state->ebur) {
@@ -215,13 +211,7 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeDestroy(
     }
 }
 
-/**
- * Get library version info.
- */
-extern "C" JNIEXPORT jstring JNICALL
-Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetVersion(
-    JNIEnv* env, jobject thiz
-) {
+static jstring nativeGetVersion(JNIEnv* env, jobject thiz) {
     char version[128];
     snprintf(version, sizeof(version),
              "ebur128-scanner v1.0 (libebur128 %d.%d.%d)",

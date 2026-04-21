@@ -26,21 +26,23 @@ target_include_directories(ebur128-scanner PRIVATE
 # Find system libraries
 find_library(log-lib log)
 
-# Suppress #warning for ebur128.c on aarch64 (manual FTZ is correct for ARM)
 # Optimization flags for best performance
 target_compile_options(ebur128-scanner PRIVATE
     $<$<COMPILE_LANGUAGE:C>:-w>
+    $<$<COMPILE_LANGUAGE:C>:-O3>
+    $<$<COMPILE_LANGUAGE:C>:-march=armv8-a>
+    $<$<COMPILE_LANGUAGE:C>:-mfpu=neon>
     $<$<COMPILE_LANGUAGE:CXX>:-O3>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
 
-# 16 KB page size alignment for Android 15+ compatibility
-# LINKER: prefix used for clarity with CMake 4.x linker flag separation
+# Hide all symbols except JNI_OnLoad (required for explicit registration)
 target_link_options(ebur128-scanner PRIVATE
     LINKER:-z,max-page-size=16384
     LINKER:-z,relro
     LINKER:-z,now
+    LINKER:--version-script=${CMAKE_CURRENT_SOURCE_DIR}/version-script.ld
 )
 
 target_link_libraries(ebur128-scanner
