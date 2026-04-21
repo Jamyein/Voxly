@@ -21,46 +21,26 @@ class CoverUriProvider @Inject constructor(
 
     private val albumArtUri = Uri.parse("content://media/external/audio/albumart")
 
-    companion object {
-        private const val MAX_URI_EXISTS_CACHE = 200
-        private const val MAX_FOLDER_COVER_CACHE = 200
-        private val albumArtUriCompanion = Uri.parse("content://media/external/audio/albumart")
-
-        private val uriExistsCache = LinkedHashMap<Uri, Boolean>(MAX_URI_EXISTS_CACHE, 0.75f, true)
-        private val folderCoverCache = LinkedHashMap<String, Uri?>(MAX_FOLDER_COVER_CACHE, 0.75f, true)
-
-        fun clearCaches() {
-            synchronized(uriExistsCache) {
-                uriExistsCache.clear()
-            }
-            synchronized(folderCoverCache) {
-                folderCoverCache.clear()
-            }
-        }
-
-        fun invalidateAlbumId(albumId: Long) {
-            if (albumId <= 0) return
-            synchronized(uriExistsCache) {
-                val uri = ContentUris.withAppendedId(albumArtUriCompanion, albumId)
-                uriExistsCache.remove(uri)
-                Timber.d("Invalidated album ID cache: $albumId")
-            }
-        }
-    }
-
     suspend fun getCoverUri(
         albumId: Long?,
         filePath: String? = null
     ): Uri? = withContext(Dispatchers.IO) {
         if (albumId != null && albumId > 0) {
             val uri = ContentUris.withAppendedId(albumArtUri, albumId)
-            if (uriExistsCached(uri)) {
+            val exists = uriExistsCached(uri)
+            if (exists) {
                 return@withContext uri
             }
         }
 
         if (!filePath.isNullOrBlank()) {
-            findFolderCoverCached(filePath)?.let { return@withContext it }
+            // Check for folder cover first
+            val folderCover = findFolderCoverCached(filePath)
+            folderCover?.let { return@withContext it }
+            
+            // Fallback: extract embedded cover art from file
+            val embeddedCover = extractEmbeddedCoverArt(filePath)
+            embeddedCover?.let { return@withContext it }
         }
 
         return@withContext null
@@ -115,5 +95,100 @@ class CoverUriProvider @Inject constructor(
         if (albumId <= 0) return null
         val uri = ContentUris.withAppendedId(albumArtUri, albumId)
         return if (uriExistsCached(uri)) uri else null
+    }
+
+    /**
+     * Extracts embedded cover art from audio file using MediaMetadataRetriever.
+     * Creates a temporary file in app's cache directory for Coil to load.
+     * Uses LRU caching to avoid repeated extraction.
+     */
+    private fun extractEmbeddedCoverArt(filePath: String): Uri? {
+        // Check cache first
+        synchronized(embeddedCoverCache) {
+            embeddedCoverCache[filePath]?.let { cachedUri ->
+                if (File(cachedUri.path ?: "").exists()) {
+                    return cachedUri
+                }
+                // Cache hit but file deleted, remove from cache
+                embeddedCoverCache.remove(filePath)
+            }
+        }
+
+        return try {
+            val retriever = android.media.MediaMetadataRetriever()
+            try {
+                retriever.setDataSource(filePath)
+                val artBytes = retriever.embeddedPicture
+                if (artBytes != null && artBytes.isNotEmpty()) {
+                    // Save to cache directory with hash-based filename
+                    val hash = java.security.MessageDigest.getInstance("SHA-256")
+                        .digest(artBytes)
+                        .joinToString("") { "%02x".format(it) }
+                    val cacheFile = File(context.cacheDir, "covers/$hash.jpg")
+                    cacheFile.parentFile?.mkdirs()
+                    cacheFile.writeBytes(artBytes)
+                    
+                    val uri = Uri.fromFile(cacheFile)
+                    synchronized(embeddedCoverCache) {
+                        embeddedCoverCache[filePath] = uri
+                        trimEmbeddedCoverCache()
+                    }
+                    uri
+                } else {
+                    null
+                }
+            } finally {
+                retriever.release()
+            }
+        } catch (e: Exception) {
+            Timber.w("Failed to extract embedded cover art from: $filePath", e)
+            null
+        }
+    }
+
+    companion object {
+        private const val MAX_URI_EXISTS_CACHE = 200
+        private const val MAX_FOLDER_COVER_CACHE = 200
+        private const val MAX_EMBEDDED_COVER_CACHE = 100
+        private val albumArtUriCompanion = Uri.parse("content://media/external/audio/albumart")
+
+        private val uriExistsCache = LinkedHashMap<Uri, Boolean>(MAX_URI_EXISTS_CACHE, 0.75f, true)
+        private val folderCoverCache = LinkedHashMap<String, Uri?>(MAX_FOLDER_COVER_CACHE, 0.75f, true)
+        private val embeddedCoverCache = LinkedHashMap<String, Uri>(MAX_EMBEDDED_COVER_CACHE, 0.75f, true)
+
+        /**
+         * Global cache invalidation version counter.
+         * Incremented whenever cache is invalidated, used by AlbumArtImage to detect cache changes.
+         */
+        private val _cacheInvalidationVersion = kotlinx.coroutines.flow.MutableStateFlow(0)
+        val cacheInvalidationVersion: kotlinx.coroutines.flow.StateFlow<Int> = _cacheInvalidationVersion
+
+        fun clearCaches() {
+            synchronized(uriExistsCache) {
+                uriExistsCache.clear()
+            }
+            synchronized(folderCoverCache) {
+                folderCoverCache.clear()
+            }
+            synchronized(embeddedCoverCache) {
+                embeddedCoverCache.clear()
+            }
+            _cacheInvalidationVersion.value++
+        }
+
+        fun invalidateAlbumId(albumId: Long) {
+            if (albumId <= 0) return
+            synchronized(uriExistsCache) {
+                val uri = ContentUris.withAppendedId(albumArtUriCompanion, albumId)
+                uriExistsCache.remove(uri)
+            }
+            _cacheInvalidationVersion.value++
+        }
+
+        private fun trimEmbeddedCoverCache() {
+            while (embeddedCoverCache.size > MAX_EMBEDDED_COVER_CACHE) {
+                embeddedCoverCache.keys.firstOrNull()?.let { embeddedCoverCache.remove(it) } ?: break
+            }
+        }
     }
 }

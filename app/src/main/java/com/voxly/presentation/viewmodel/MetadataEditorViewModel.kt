@@ -7,8 +7,10 @@ import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import timber.log.Timber
+import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.MusicLibraryCache
+import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.remote.downloadImageBytes
@@ -64,6 +66,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import coil3.SingletonImageLoader
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -100,6 +103,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
     private val unifiedScanManager: UnifiedScanManager,
+    private val audioFileScanner: AudioFileScanner,
     private val musicLibraryCache: MusicLibraryCache,
     private val searchSeedHolder: SearchSeedHolder,
     private val pendingMetadataHolder: PendingMetadataHolder,
@@ -796,10 +800,28 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         )
 
                         // Sync file to cache so FileBrowser gets updated data
-                        unifiedScanManager.syncFile(filePath)
+                        val syncedFile = unifiedScanManager.syncFile(filePath).getOrNull()
                         
                         // Mark file as edited by user to prevent EnrichmentWorker overwrites
                         musicLibraryCache.markFileAsEditedByUser(filePath)
+                        
+                        // Invalidate cover cache so FileBrowser shows updated cover
+                        // Re-query MediaStore for the correct album ID because it may have changed
+                        // after metadata update (e.g., album/artist changed)
+                        val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(filePath)
+                        val oldAlbumId = currentSuccessState?.audioFile?.mediaStoreAlbumId
+                        
+                        // Invalidate both old and new album IDs if they differ
+                        correctAlbumId?.let { albumId ->
+                            CoverUriProvider.invalidateAlbumId(albumId)
+                        }
+                        if (oldAlbumId != null && oldAlbumId != correctAlbumId) {
+                            CoverUriProvider.invalidateAlbumId(oldAlbumId)
+                        }
+                        
+                        // Clear Coil memory and disk cache to force reload of album art images
+                        SingletonImageLoader.get(context).memoryCache?.clear()
+                        SingletonImageLoader.get(context).diskCache?.clear()
                     }
                     is SaveMetadataResult.RecoverableError -> {
                         _saveResult.emit(result.message)

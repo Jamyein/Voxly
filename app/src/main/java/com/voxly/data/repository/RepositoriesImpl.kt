@@ -336,18 +336,29 @@ class AudioRepositoryImpl @Inject constructor(
                             Timber.d(TAG, "Cleared old cover cache: $oldCacheKey")
                         }
 
-                        // If album ID changed, invalidate BOTH old and new album cover caches
-                        if (updatedFile != null && correctAlbumId != null && updatedFile.mediaStoreAlbumId != correctAlbumId) {
-                            updatedFile.mediaStoreAlbumId?.let { CoverUriProvider.invalidateAlbumId(it) }
+                        // Always invalidate the correct album ID from MediaStore
+                        // Use the old album ID from cache for comparison
+                        val oldAlbumId = oldFile?.mediaStoreAlbumId
+                        
+                        if (correctAlbumId != null) {
                             CoverUriProvider.invalidateAlbumId(correctAlbumId)
-                            // Update the file with correct album ID before syncing to cache
-                            libraryCache.syncFileToCache(updatedFile.copy(mediaStoreAlbumId = correctAlbumId))
-                        } else {
-                            // Album ID unchanged, just invalidate and sync
-                            updatedFile?.mediaStoreAlbumId?.let { albumId ->
-                                CoverUriProvider.invalidateAlbumId(albumId)
+                            Timber.d(TAG, "Invalidated correct album ID: $correctAlbumId")
+                        }
+                        
+                        // Also invalidate old album ID if it differs from the new one
+                        if (oldAlbumId != null && oldAlbumId != correctAlbumId) {
+                            CoverUriProvider.invalidateAlbumId(oldAlbumId)
+                            Timber.d(TAG, "Invalidated old album ID: $oldAlbumId")
+                        }
+                        
+                        // Sync to cache with correct album ID
+                        if (updatedFile != null) {
+                            val fileToSync = if (correctAlbumId != null && updatedFile.mediaStoreAlbumId != correctAlbumId) {
+                                updatedFile.copy(mediaStoreAlbumId = correctAlbumId)
+                            } else {
+                                updatedFile
                             }
-                            updatedFile?.let { libraryCache.syncFileToCache(it) }
+                            libraryCache.syncFileToCache(fileToSync)
                         }
                         Result.success(Unit)
                     },
