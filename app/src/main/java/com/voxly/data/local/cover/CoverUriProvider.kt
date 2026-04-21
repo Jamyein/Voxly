@@ -4,6 +4,7 @@ import android.content.ContentResolver
 import android.content.ContentUris
 import android.content.Context
 import android.net.Uri
+import androidx.core.content.FileProvider
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,6 +19,7 @@ class CoverUriProvider @Inject constructor(
     @ApplicationContext private val context: Context,
 ) {
     private val contentResolver: ContentResolver = context.contentResolver
+    private val coverCacheDir = File(context.cacheDir, "covers").apply { mkdirs() }
 
     private val albumArtUri = Uri.parse("content://media/external/audio/albumart")
 
@@ -101,6 +103,7 @@ class CoverUriProvider @Inject constructor(
      * Extracts embedded cover art from audio file using MediaMetadataRetriever.
      * Creates a temporary file in app's cache directory for Coil to load.
      * Uses LRU caching to avoid repeated extraction.
+     * Generates content:// URI via FileProvider for better Android compatibility.
      */
     private fun extractEmbeddedCoverArt(filePath: String): Uri? {
         // Check cache first
@@ -120,15 +123,24 @@ class CoverUriProvider @Inject constructor(
                 retriever.setDataSource(filePath)
                 val artBytes = retriever.embeddedPicture
                 if (artBytes != null && artBytes.isNotEmpty()) {
-                    // Save to cache directory with hash-based filename
+                    // Save to cache directory with hash + timestamp based filename
+                    // Timestamp ensures URI is unique after each save, forcing Coil to reload
                     val hash = java.security.MessageDigest.getInstance("SHA-256")
                         .digest(artBytes)
                         .joinToString("") { "%02x".format(it) }
-                    val cacheFile = File(context.cacheDir, "covers/$hash.jpg")
-                    cacheFile.parentFile?.mkdirs()
+                    val timestamp = System.currentTimeMillis()
+                    val cacheFile = File(coverCacheDir, "${hash}_${timestamp}.jpg")
                     cacheFile.writeBytes(artBytes)
                     
-                    val uri = Uri.fromFile(cacheFile)
+                    // Clean up old versions, keep only the latest one
+                    cleanupOldVersions(hash, keepCount = 1)
+                    
+                    // Use FileProvider to generate content:// URI
+                    val uri = FileProvider.getUriForFile(
+                        context,
+                        "${context.packageName}.fileprovider",
+                        cacheFile
+                    )
                     synchronized(embeddedCoverCache) {
                         embeddedCoverCache[filePath] = uri
                         trimEmbeddedCoverCache()
@@ -143,6 +155,24 @@ class CoverUriProvider @Inject constructor(
         } catch (e: Exception) {
             Timber.w("Failed to extract embedded cover art from: $filePath", e)
             null
+        }
+    }
+    
+    /**
+     * Cleans up old versions of cover art files for a given hash.
+     * Only keeps the specified number of latest versions.
+     */
+    private fun cleanupOldVersions(hash: String, keepCount: Int = 1) {
+        val files = coverCacheDir.listFiles { 
+            it.name.startsWith("${hash}_") && it.name.endsWith(".jpg") 
+        } ?: return
+        
+        if (files.size > keepCount) {
+            files.sortBy { it.name }
+            files.dropLast(keepCount).forEach { file ->
+                file.delete()
+                Timber.d("Cleaned up old cover cache: ${file.name}")
+            }
         }
     }
 
@@ -181,6 +211,17 @@ class CoverUriProvider @Inject constructor(
             synchronized(uriExistsCache) {
                 val uri = ContentUris.withAppendedId(albumArtUriCompanion, albumId)
                 uriExistsCache.remove(uri)
+            }
+            _cacheInvalidationVersion.value++
+        }
+
+        /**
+         * Invalidates embedded cover cache for a specific file path.
+         * Call this after editing metadata to force re-extraction of cover art.
+         */
+        fun invalidateFilePath(filePath: String) {
+            synchronized(embeddedCoverCache) {
+                embeddedCoverCache.remove(filePath)
             }
             _cacheInvalidationVersion.value++
         }

@@ -819,6 +819,9 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             CoverUriProvider.invalidateAlbumId(oldAlbumId)
                         }
                         
+                        // Invalidate embedded cover cache for this file to force re-extraction
+                        CoverUriProvider.invalidateFilePath(filePath)
+                        
                         // Clear Coil memory and disk cache to force reload of album art images
                         SingletonImageLoader.get(context).memoryCache?.clear()
                         SingletonImageLoader.get(context).diskCache?.clear()
