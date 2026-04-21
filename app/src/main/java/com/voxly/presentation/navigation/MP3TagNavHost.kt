@@ -80,9 +80,6 @@ private val containerTransformMetadata = metadata {
     put(NavDisplay.PopTransitionKey) {
         ExpressiveAnimations.ContainerTransformPopEnter togetherWith ExpressiveAnimations.ContainerTransformPopExit
     }
-    put(NavDisplay.PredictivePopTransitionKey) {
-        ExpressiveAnimations.ContainerTransformPopEnter togetherWith ExpressiveAnimations.ContainerTransformPopExit
-    }
 }
 
 private val sharedAxisXMetadata = metadata {
@@ -90,9 +87,6 @@ private val sharedAxisXMetadata = metadata {
         ExpressiveAnimations.SharedAxisXEnter togetherWith ExpressiveAnimations.SharedAxisXExit
     }
     put(NavDisplay.PopTransitionKey) {
-        ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
-    }
-    put(NavDisplay.PredictivePopTransitionKey) {
         ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
     }
 }

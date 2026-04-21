@@ -3,6 +3,7 @@ package com.voxly.presentation.screens.metadata
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -46,6 +47,7 @@ import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -170,6 +172,14 @@ fun MetadataEditorScreen(
             showDiscardDialog = true
         } else {
             onNavigateBack()
+        }
+    }
+
+    PredictiveBackHandler(enabled = true) { progress ->
+        try {
+            progress.collect { }
+            handleNavigateBack()
+        } catch (e: CancellationException) {
         }
     }
 
