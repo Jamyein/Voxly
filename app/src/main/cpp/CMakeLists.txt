@@ -27,8 +27,12 @@ target_include_directories(ebur128-scanner PRIVATE
 find_library(log-lib log)
 
 # Suppress #warning for ebur128.c on aarch64 (manual FTZ is correct for ARM)
+# Optimization flags for best performance
 target_compile_options(ebur128-scanner PRIVATE
     $<$<COMPILE_LANGUAGE:C>:-w>
+    $<$<COMPILE_LANGUAGE:CXX>:-O3>
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
+    $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
 )
 
 # 16 KB page size alignment for Android 15+ compatibility

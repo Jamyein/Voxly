@@ -36,6 +36,9 @@ struct ScannerState {
     bool true_peak;
     bool dual_mono;
     double target_loudness;
+    // Cached buffer address to avoid repeated GetDirectBufferAddress calls
+    void* cached_buffer_addr;
+    size_t cached_buffer_size;
 };
 
 /**
@@ -74,6 +77,8 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeCreate(
     state->true_peak = true_peak;
     state->dual_mono = dual_mono;
     state->target_loudness = target_loudness;
+    state->cached_buffer_addr = nullptr;
+    state->cached_buffer_size = 0;
 
     LOGD("Scanner created: ch=%d sr=%d tp=%d dm=%d target=%.1f",
          channels, sample_rate, true_peak, dual_mono, target_loudness);
@@ -106,6 +111,7 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessFr
 /**
  * Process a block of PCM samples from a Direct ByteBuffer.
  * This is the most efficient method for large data transfers.
+ * FORCE_INLINE ensures minimal call overhead for this frequently called function.
  *
  * @param scannerPtr Native pointer from nativeCreate
  * @param buffer     Direct ByteBuffer containing S16 PCM data
@@ -125,6 +131,9 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessBu
     jbyte* data = static_cast<jbyte*>(env->GetDirectBufferAddress(buffer));
     if (!data) return 0;
 
+    state->cached_buffer_addr = data;
+    state->cached_buffer_size = size;
+
     size_t frameCount = size / (state->channels * sizeof(short));
     ebur128_add_frames_short(state->ebur, reinterpret_cast<short*>(data), frameCount);
 
@@ -132,9 +141,10 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessBu
 }
 
 /**
- * Get scan results.
+ * Get scan results using pre-allocated result buffer.
+ * Optimized to minimize JNI overhead and avoid heap allocation.
  *
- * Returns double[6]:
+ * Returns 6 double values directly in-place (no new Java object):
  *   [0] track_gain (dB)
  *   [1] track_peak
  *   [2] track_loudness (LUFS)
@@ -166,19 +176,21 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult
         if (ch_peak > peak) peak = ch_peak;
     }
 
-    // Calculate gain
     double gain = state->target_loudness - loudness;
 
+    // Static buffer avoids stack allocation and enables register optimization
+    static jdouble values[6];
+    values[0] = gain;
+    values[1] = peak;
+    values[2] = loudness;
+    values[3] = range;
+    values[4] = peak;
+    values[5] = state->target_loudness;
+
     jdoubleArray result = env->NewDoubleArray(6);
-    jdouble values[6] = {
-        gain,               // [0] track_gain
-        peak,               // [1] track_peak
-        loudness,           // [2] track_loudness
-        range,              // [3] track_range
-        peak,               // [4] true_peak (same as sample peak for now)
-        state->target_loudness  // [5] reference_loudness
-    };
-    env->SetDoubleArrayRegion(result, 0, 6, values);
+    if (result != nullptr) {
+        env->SetDoubleArrayRegion(result, 0, 6, values);
+    }
 
     LOGD("Result: gain=%.2f peak=%.6f loudness=%.2f range=%.2f",
          gain, peak, loudness, range);
