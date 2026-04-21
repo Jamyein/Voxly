@@ -46,9 +46,6 @@ internal fun ArtistListItem(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        ),
         onClick = onClick
     ) {
         Row(
