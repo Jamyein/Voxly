@@ -38,6 +38,7 @@ target_compile_options(ebur128-scanner PRIVATE
     $<$<COMPILE_LANGUAGE:CXX>:-fvisibility=hidden>
 )
 
+
 target_link_options(ebur128-scanner PRIVATE
     LINKER:-z,max-page-size=16384
     LINKER:-z,relro
