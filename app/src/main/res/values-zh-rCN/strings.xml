@@ -441,6 +441,15 @@
     <string name="add_blacklist_directory">添加黑名单目录</string>
     <string name="no_whitelist_directories">未添加白名单目录</string>
     <string name="no_blacklist_directories">未添加黑名单目录</string>
+    <string name="rebuild_database">重建数据库</string>
+    <string name="rebuild_database_title">重建数据库</string>
+    <string name="rebuild_database_confirm_message">这将清除所有缓存数据（音频文件、专辑缩略图、艺术家链接）并根据白/黑名单设置进行全量重新扫描。\n\n此操作无法撤销。</string>
+    <string name="rebuild_confirm">重建</string>
+    <string name="rebuild_progress_title">正在重建数据库…</string>
+    <string name="rebuild_progress_count">已扫描：%d 个文件</string>
+    <string name="rebuild_progress_percent">%d%%</string>
+    <string name="rebuild_completed_message">重建完成！已扫描 %1$d 个文件，耗时 %2$.1f 秒</string>
+    <string name="rebuild_error_message">重建失败：%s</string>
 
     <!-- Settings - Network/Proxy -->
     <string name="settings_section_network">网络</string>
