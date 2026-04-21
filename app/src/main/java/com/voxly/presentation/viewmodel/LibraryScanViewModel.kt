@@ -496,7 +496,9 @@ class LibraryScanViewModel @Inject constructor(
                 }
             }
 
-            _directoryFiles.update { filesByDir }
+            _directoryFiles.update { currentMap ->
+                currentMap + filesByDir
+            }
 
             withContext(Dispatchers.IO) {
                 directories.forEach { dir ->
