@@ -15,7 +15,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -77,8 +76,6 @@ fun AlbumArtImage(
     crossfade: Boolean = true,
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
-    val density = LocalDensity.current
-    val targetSizePx = with(density) { size.roundToPx() }
     val context = LocalContext.current
     val coverUriProvider = remember(context) { CoverUriProvider(context) }
 
@@ -99,7 +96,6 @@ fun AlbumArtImage(
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(model)
-                    .size(targetSizePx)
                     .scale(Scale.FILL)
                     .crossfade(crossfade)
                     .build(),
