@@ -1,5 +1,6 @@
 package com.voxly.data.local.replaygain.native
 
+import dalvik.annotation.optimization.CriticalNative
 import dalvik.annotation.optimization.FastNative
 import timber.log.Timber
 import com.voxly.domain.model.ReplayGainInfo
@@ -95,14 +96,14 @@ class EbuR128NativeScanner(
         targetLoudness: Double
     ): Long
 
-    @FastNative
+    @CriticalNative
     private external fun nativeProcessFrames(
         scannerPtr: Long,
         samples: ShortArray,
         frameCount: Int
     )
 
-    @FastNative
+    @CriticalNative
     private external fun nativeProcessBuffer(
         scannerPtr: Long,
         buffer: ByteBuffer,

@@ -27,17 +27,17 @@ target_include_directories(ebur128-scanner PRIVATE
 find_library(log-lib log)
 
 # Optimization flags for best performance
+# Note: NEON is enabled by default for all ARM ABIs in NDK r21+
 target_compile_options(ebur128-scanner PRIVATE
     $<$<COMPILE_LANGUAGE:C>:-w>
     $<$<COMPILE_LANGUAGE:C>:-O3>
-    $<$<COMPILE_LANGUAGE:C>:-march=armv8-a>
-    $<$<COMPILE_LANGUAGE:C>:-mfpu=neon>
+    $<$<COMPILE_LANGUAGE:C>:-fvisibility=hidden>
     $<$<COMPILE_LANGUAGE:CXX>:-O3>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-exceptions>
     $<$<COMPILE_LANGUAGE:CXX>:-fno-rtti>
+    $<$<COMPILE_LANGUAGE:CXX>:-fvisibility=hidden>
 )
 
-# Hide all symbols except JNI_OnLoad (required for explicit registration)
 target_link_options(ebur128-scanner PRIVATE
     LINKER:-z,max-page-size=16384
     LINKER:-z,relro
