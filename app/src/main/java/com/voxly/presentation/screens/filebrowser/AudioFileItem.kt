@@ -47,6 +47,7 @@ internal fun AudioFileItem(
             audioFile = audioFile,
             isSelected = isSelected,
             onClick = onClick,
+            onLongClick = onLongClick,
             modifier = modifier,
             sharedElementKey = computedSharedElementKey
         )

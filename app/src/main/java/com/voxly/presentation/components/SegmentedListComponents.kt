@@ -1058,10 +1058,11 @@ fun AudioFileStandardRowCompact(
     audioFile: AudioFile,
     isSelected: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     sharedElementKey: String? = null
 ) = ListItem(
-    modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick),
+    modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
     colors = ListItemDefaults.colors(
         containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface
     ),
