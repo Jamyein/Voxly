@@ -199,6 +199,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
     // Album art colors extracted from cover image via Palette API
     private val _m3eColors = MutableStateFlow<M3EColors?>(null)
     val m3eColors: StateFlow<M3EColors?> = _m3eColors.asStateFlow()
+    private val _isM3eColorsResolved = MutableStateFlow(false)
+    val isM3eColorsResolved: StateFlow<Boolean> = _isM3eColorsResolved.asStateFlow()
 
     // Debounced text input StateFlows - moved from Composable to ViewModel to avoid recomposition issues
     private val _titleTextFlow = MutableStateFlow<String?>(null)
@@ -312,6 +314,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private fun loadAudioFile() {
         viewModelScope.launch {
             _uiState.update { MetadataEditorUiState.Loading }
+            _isM3eColorsResolved.update { false }
+            _m3eColors.update { null }
 
             try {
                 val audioFileResult = audioRepository.getAudioFile(filePath)
@@ -399,6 +403,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 val colors = ColorExtractor.extractM3EColorsFromBytes(bytes, 200)
                 _m3eColors.update { colors }
             }
+            _isM3eColorsResolved.update { true }
         }
     }
 
@@ -497,8 +502,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
     fun updateAlbumArt(albumArtBytes: ByteArray?) {
         val currentMetadata = _editedMetadata.value ?: return
         val updatedMetadata = currentMetadata.copy(albumArt = albumArtBytes)
-
         setEditedMetadata(updatedMetadata)
+
+        viewModelScope.launch(Dispatchers.Default) {
+            val colors = albumArtBytes?.let { ColorExtractor.extractM3EColorsFromBytes(it, 200) }
+            _m3eColors.update { colors }
+            _isM3eColorsResolved.update { true }
+        }
     }
 
     private fun setEditedMetadata(updatedMetadata: AudioMetadata, modifiedField: MetadataField? = null) {

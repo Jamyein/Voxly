@@ -106,6 +106,7 @@ fun MetadataEditorScreen(
     val saveResult by viewModel.saveResult.collectAsStateWithLifecycle(initialValue = "")
     val modifiedFields = editState.modifiedFields
     val m3eColors by viewModel.m3eColors.collectAsStateWithLifecycle()
+    val isM3eColorsResolved by viewModel.isM3eColorsResolved.collectAsStateWithLifecycle()
 
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showAlbumArtOptions by remember { mutableStateOf(false) }
@@ -332,7 +333,8 @@ fun MetadataEditorScreen(
                     viewModel.updateDebouncedTextField(MetadataField.COMMENT, metadata.comment)
                     viewModel.updateDebouncedTextField(MetadataField.LYRICS, metadata.lyrics)
                 },
-                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
+                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
+                isM3eColorsResolved = isM3eColorsResolved
             )
             }
         }
@@ -433,6 +435,7 @@ private fun MetadataEditorScaffoldContent(
     onSave: () -> Unit,
     onSyncDebouncedFields: () -> Unit,
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
+    isM3eColorsResolved: Boolean,
     m3eColors: com.voxly.presentation.components.lyricsposter.ColorExtractor.M3EColors? = null,
     modifier: Modifier = Modifier
 ) {
@@ -501,7 +504,8 @@ private fun MetadataEditorScaffoldContent(
                     onNavigateToLyricsSelector = onNavigateToLyricsSelector,
                     onSave = onSave,
                     onSyncDebouncedFields = onSyncDebouncedFields,
-                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
+                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
+                    isM3eColorsResolved = isM3eColorsResolved
                 )
             }
             is MetadataEditorUiState.Error -> {
@@ -561,6 +565,7 @@ private fun MetadataEditorSuccessContent(
     onSave: () -> Unit,
     onSyncDebouncedFields: () -> Unit,
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
+    isM3eColorsResolved: Boolean,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -629,6 +634,8 @@ private fun MetadataEditorSuccessContent(
                 .align(Alignment.BottomCenter)
                 .padding(start = 16.dp, end = 16.dp)
         ) {
+            if (!isM3eColorsResolved) return@Box
+
             val toolbarContainerColor = MaterialTheme.colorScheme.primary
             val toolbarContentColor = contentColorFor(toolbarContainerColor)
             val toolbarColors = m3eFloatingToolbarColors(
@@ -662,7 +669,7 @@ private fun MetadataEditorSuccessContent(
                         Icon(
                             Icons.Default.Lyrics,
                             contentDescription = stringResource(R.string.select_lyrics_for_poster),
-                            tint = LocalContentColor.current
+                            tint = toolbarContentColor
                         )
                     }
                 }
@@ -671,7 +678,7 @@ private fun MetadataEditorSuccessContent(
                     Icon(
                         painter = appIconPainter(AppIcon.MusicNote),
                         contentDescription = stringResource(R.string.cd_online_lyrics),
-                        tint = LocalContentColor.current
+                        tint = toolbarContentColor
                     )
                 }
 
@@ -679,7 +686,7 @@ private fun MetadataEditorSuccessContent(
                     Icon(
                         painter = appIconPainter(AppIcon.CloudDownload),
                         contentDescription = stringResource(R.string.cd_online_metadata),
-                        tint = LocalContentColor.current
+                        tint = toolbarContentColor
                     )
                 }
 
@@ -693,7 +700,7 @@ private fun MetadataEditorSuccessContent(
                     Icon(
                         Icons.Default.Save,
                         contentDescription = stringResource(R.string.cd_save),
-                        tint = LocalContentColor.current
+                        tint = toolbarContentColor
                     )
                 }
             }
