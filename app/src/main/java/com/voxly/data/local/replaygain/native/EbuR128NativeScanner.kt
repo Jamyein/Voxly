@@ -96,14 +96,14 @@ class EbuR128NativeScanner(
         targetLoudness: Double
     ): Long
 
-    @CriticalNative
+    @FastNative
     private external fun nativeProcessFrames(
         scannerPtr: Long,
         samples: ShortArray,
         frameCount: Int
     )
 
-    @CriticalNative
+    @FastNative
     private external fun nativeProcessBuffer(
         scannerPtr: Long,
         buffer: ByteBuffer,
