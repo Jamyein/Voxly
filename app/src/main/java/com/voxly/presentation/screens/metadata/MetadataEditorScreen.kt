@@ -10,7 +10,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -61,6 +64,9 @@ import com.voxly.presentation.viewmodel.ConvertibleField
 import com.voxly.presentation.viewmodel.EditHistoryViewModel
 import com.voxly.domain.repository.RecentEdit
 import com.voxly.presentation.viewmodel.ReplayGainScanError
+import com.voxly.presentation.components.lyricsposter.ColorExtractor
+import com.voxly.presentation.components.lyricsposter.DynamicM3ETheme
+import com.voxly.presentation.components.lyricsposter.m3eFloatingToolbarColors
 
 /**
  * Metadata editor screen for viewing and editing audio file metadata.
@@ -259,14 +265,14 @@ fun MetadataEditorScreen(
         },
         floatingActionButton = {}
     ) { innerPadding ->
-        Surface(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding()),
-            color = backgroundColor,
-            tonalElevation = 0.dp
-        ) {
-            MetadataEditorScaffoldContent(
+        DynamicM3ETheme(m3eColors = m3eColors) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding()),
+                tonalElevation = 0.dp
+            ) {
+                MetadataEditorScaffoldContent(
                 uiState = uiState,
                 filePath = filePath,
                 editedMetadata = editedMetadata,
@@ -326,9 +332,9 @@ fun MetadataEditorScreen(
                     viewModel.updateDebouncedTextField(MetadataField.COMMENT, metadata.comment)
                     viewModel.updateDebouncedTextField(MetadataField.LYRICS, metadata.lyrics)
                 },
-                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
-                m3eColors = m3eColors
+                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
             )
+            }
         }
     }
 
@@ -495,8 +501,7 @@ private fun MetadataEditorScaffoldContent(
                     onNavigateToLyricsSelector = onNavigateToLyricsSelector,
                     onSave = onSave,
                     onSyncDebouncedFields = onSyncDebouncedFields,
-                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
-                    m3eColors = m3eColors
+                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
                 )
             }
             is MetadataEditorUiState.Error -> {
@@ -556,7 +561,6 @@ private fun MetadataEditorSuccessContent(
     onSave: () -> Unit,
     onSyncDebouncedFields: () -> Unit,
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
-    m3eColors: com.voxly.presentation.components.lyricsposter.ColorExtractor.M3EColors? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -566,6 +570,9 @@ private fun MetadataEditorSuccessContent(
     }
 
     val scrollState = rememberScrollState()
+    val shouldEnhanceToolbarShadow by remember {
+        derivedStateOf { scrollState.isScrollInProgress || scrollState.value > 0 }
+    }
 
     val mediaStoreFallbackBitmap by produceState<Bitmap?>(
         initialValue = null,
@@ -622,13 +629,22 @@ private fun MetadataEditorSuccessContent(
                 .align(Alignment.BottomCenter)
                 .padding(start = 16.dp, end = 16.dp)
         ) {
+            val toolbarContainerColor = MaterialTheme.colorScheme.primary
+            val toolbarContentColor = contentColorFor(toolbarContainerColor)
+            val toolbarColors = m3eFloatingToolbarColors(
+                containerColor = toolbarContainerColor,
+                contentColor = toolbarContentColor
+            )
+
             HorizontalFloatingToolbar(
                 expanded = true,
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(bottom = 8.dp),
                 scrollBehavior = floatingToolbarScrollBehavior,
-                colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
+                colors = toolbarColors,
+                expandedShadowElevation = if (shouldEnhanceToolbarShadow) 12.dp else 0.dp,
+                collapsedShadowElevation = if (shouldEnhanceToolbarShadow) 6.dp else 0.dp
             ) {
                 val hasLyrics = editedMetadata.lyrics?.isNotBlank() == true
                 if (hasLyrics) {
@@ -645,7 +661,8 @@ private fun MetadataEditorSuccessContent(
                     ) {
                         Icon(
                             Icons.Default.Lyrics,
-                            contentDescription = stringResource(R.string.select_lyrics_for_poster)
+                            contentDescription = stringResource(R.string.select_lyrics_for_poster),
+                            tint = LocalContentColor.current
                         )
                     }
                 }
@@ -653,14 +670,16 @@ private fun MetadataEditorSuccessContent(
                 IconButton(onClick = onNavigateToOnlineLyricsSearch) {
                     Icon(
                         painter = appIconPainter(AppIcon.MusicNote),
-                        contentDescription = stringResource(R.string.cd_online_lyrics)
+                        contentDescription = stringResource(R.string.cd_online_lyrics),
+                        tint = LocalContentColor.current
                     )
                 }
 
                 IconButton(onClick = onNavigateToOnlineMetadata) {
                     Icon(
                         painter = appIconPainter(AppIcon.CloudDownload),
-                        contentDescription = stringResource(R.string.cd_online_metadata)
+                        contentDescription = stringResource(R.string.cd_online_metadata),
+                        tint = LocalContentColor.current
                     )
                 }
 
@@ -673,7 +692,8 @@ private fun MetadataEditorSuccessContent(
                 ) {
                     Icon(
                         Icons.Default.Save,
-                        contentDescription = stringResource(R.string.cd_save)
+                        contentDescription = stringResource(R.string.cd_save),
+                        tint = LocalContentColor.current
                     )
                 }
             }

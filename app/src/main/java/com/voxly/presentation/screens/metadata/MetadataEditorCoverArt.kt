@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens.metadata
 
 import android.graphics.Bitmap
+import android.os.Build
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -8,9 +9,14 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.BlurredEdgeTreatment
+import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
@@ -49,36 +55,79 @@ fun AlbumArtSection(
 ) {
     val coverKey = filePath?.let { createAlbumArtSharedElementKey(it) }
     val context = LocalContext.current
+    val shape = MaterialTheme.shapes.extraLarge
+    val isAndroid12Plus = remember { Build.VERSION.SDK_INT >= Build.VERSION_CODES.S }
+    val displayModel: Any? = albumArt ?: fallbackBitmap
 
-    Card(
+    Box(
         modifier = Modifier
             .fillMaxWidth()
             .aspectRatio(1f)
             .clickable(onClick = onPickAlbumArt),
-        shape = MaterialTheme.shapes.extraLarge
+        contentAlignment = Alignment.Center
     ) {
-        Box(
-            modifier = Modifier.fillMaxSize(),
-            contentAlignment = Alignment.Center
-        ) {
-            val albumArtRequest = remember(albumArt) {
-                albumArt?.let { bytes ->
-                    ImageRequest.Builder(context)
-                        .data(bytes)
-                        .size(Size.ORIGINAL)
-                        .memoryCacheKey("album_art_${bytes.contentHashCode()}")
-                        .build()
-                }
+        val albumArtRequest = remember(displayModel) {
+            displayModel?.let { model ->
+                ImageRequest.Builder(context)
+                    .data(model)
+                    .size(Size.ORIGINAL)
+                    .memoryCacheKey(
+                        when (model) {
+                            is ByteArray -> "album_art_${model.contentHashCode()}"
+                            else -> "album_art_${model.hashCode()}"
+                        }
+                    )
+                    .build()
             }
+        }
 
-            if (albumArt != null && albumArtRequest != null) {
-                AsyncImage(
-                    model = albumArtRequest,
-                    contentDescription = stringResource(R.string.cd_album_art),
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Fit
-                )
-            } else {
+        if (isAndroid12Plus && albumArtRequest != null) {
+            AsyncImage(
+                model = albumArtRequest,
+                contentDescription = null,
+                modifier = Modifier
+                    .matchParentSize()
+                    .graphicsLayer {
+                        scaleX = 0.9f
+                        scaleY = 0.9f
+                        translationY = 20.dp.toPx()
+                        alpha = 0.6f
+                    }
+                    .clip(shape)
+                    .blur(
+                        radius = 28.dp,
+                        edgeTreatment = BlurredEdgeTreatment.Unbounded
+                    ),
+                contentScale = ContentScale.Crop
+            )
+        }
+
+        val topLayerModifier = Modifier
+            .fillMaxSize()
+            .then(
+                if (isAndroid12Plus) {
+                    Modifier
+                } else {
+                    Modifier.shadow(
+                        elevation = 8.dp,
+                        shape = shape
+                    )
+                }
+            )
+            .clip(shape)
+
+        if (albumArtRequest != null) {
+            AsyncImage(
+                model = albumArtRequest,
+                contentDescription = stringResource(R.string.cd_album_art),
+                modifier = topLayerModifier,
+                contentScale = ContentScale.Crop
+            )
+        } else {
+            Box(
+                modifier = topLayerModifier,
+                contentAlignment = Alignment.Center
+            ) {
                 EmptyAlbumArtContent()
             }
         }
