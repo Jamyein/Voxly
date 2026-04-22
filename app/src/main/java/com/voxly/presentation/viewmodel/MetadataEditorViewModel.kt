@@ -35,7 +35,11 @@ import com.voxly.domain.usecase.ApplyOnlineMetadataUseCase
 import com.voxly.domain.usecase.SaveMetadataResult
 import com.voxly.domain.usecase.SaveMetadataUseCase
 import com.voxly.domain.usecase.UnifiedScanManager
+import com.voxly.presentation.components.lyricsposter.ColorExtractor
+import com.voxly.presentation.components.lyricsposter.ColorExtractor.M3EColors
 import com.voxly.presentation.navigation.MetadataEditor
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import com.voxly.presentation.viewmodel.SearchSeedHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -191,6 +195,10 @@ class MetadataEditorViewModel @AssistedInject constructor(
     // Lyrics timestamp format state
     private val _isLyricsTimestampFormatted = MutableStateFlow(false)
     val isLyricsTimestampFormatted: StateFlow<Boolean> = _isLyricsTimestampFormatted.asStateFlow()
+
+    // Album art colors extracted from cover image via Palette API
+    private val _m3eColors = MutableStateFlow<M3EColors?>(null)
+    val m3eColors: StateFlow<M3EColors?> = _m3eColors.asStateFlow()
 
     // Debounced text input StateFlows - moved from Composable to ViewModel to avoid recomposition issues
     private val _titleTextFlow = MutableStateFlow<String?>(null)
@@ -385,6 +393,11 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         }
                     }
                 }
+
+                // Extract M3E color scheme using BitmapFactory with software bitmap config
+                // inPreferredConfig = ARGB_8888 ensures software bitmap for Palette pixel access
+                val colors = ColorExtractor.extractM3EColorsFromBytes(bytes, 200)
+                _m3eColors.update { colors }
             }
         }
     }

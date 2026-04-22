@@ -8,6 +8,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -33,6 +34,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -97,6 +99,7 @@ fun MetadataEditorScreen(
     val hasUnsavedChanges = editState.hasUnsavedChanges
     val saveResult by viewModel.saveResult.collectAsStateWithLifecycle(initialValue = "")
     val modifiedFields = editState.modifiedFields
+    val m3eColors by viewModel.m3eColors.collectAsStateWithLifecycle()
 
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showAlbumArtOptions by remember { mutableStateOf(false) }
@@ -215,17 +218,28 @@ fun MetadataEditorScreen(
         exitDirection = FloatingToolbarExitDirection.Bottom
     )
 
+    val backgroundColor = m3eColors?.let { colors ->
+        if (colors.isValid) {
+            android.util.Log.d("MetadataEditor", "Applying background color: ${colors.background.toString(16)}, alpha=0.30f")
+            Color(colors.background).copy(alpha = 0.30f)
+        } else {
+            android.util.Log.d("MetadataEditor", "M3E colors not valid, using default surface")
+            null
+        }
+    } ?: MaterialTheme.colorScheme.surface
+
     Scaffold(
         modifier = Modifier
             .nestedScroll(scrollBehavior.nestedScrollConnection)
-            .nestedScroll(floatingToolbarScrollBehavior),
+            .nestedScroll(floatingToolbarScrollBehavior)
+            .background(backgroundColor),
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.edit_metadata)) },
                 scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    containerColor = backgroundColor,
+                    scrolledContainerColor = backgroundColor,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 navigationIcon = {
@@ -245,10 +259,12 @@ fun MetadataEditorScreen(
         },
         floatingActionButton = {}
     ) { innerPadding ->
-        Box(
+        Surface(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
+                .padding(top = innerPadding.calculateTopPadding()),
+            color = backgroundColor,
+            tonalElevation = 0.dp
         ) {
             MetadataEditorScaffoldContent(
                 uiState = uiState,
@@ -310,7 +326,8 @@ fun MetadataEditorScreen(
                     viewModel.updateDebouncedTextField(MetadataField.COMMENT, metadata.comment)
                     viewModel.updateDebouncedTextField(MetadataField.LYRICS, metadata.lyrics)
                 },
-                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
+                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
+                m3eColors = m3eColors
             )
         }
     }
@@ -410,6 +427,7 @@ private fun MetadataEditorScaffoldContent(
     onSave: () -> Unit,
     onSyncDebouncedFields: () -> Unit,
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
+    m3eColors: com.voxly.presentation.components.lyricsposter.ColorExtractor.M3EColors? = null,
     modifier: Modifier = Modifier
 ) {
     var showLoadingIndicator by remember { mutableStateOf(false) }
@@ -477,7 +495,8 @@ private fun MetadataEditorScaffoldContent(
                     onNavigateToLyricsSelector = onNavigateToLyricsSelector,
                     onSave = onSave,
                     onSyncDebouncedFields = onSyncDebouncedFields,
-                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
+                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
+                    m3eColors = m3eColors
                 )
             }
             is MetadataEditorUiState.Error -> {
@@ -537,6 +556,7 @@ private fun MetadataEditorSuccessContent(
     onSave: () -> Unit,
     onSyncDebouncedFields: () -> Unit,
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
+    m3eColors: com.voxly.presentation.components.lyricsposter.ColorExtractor.M3EColors? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current

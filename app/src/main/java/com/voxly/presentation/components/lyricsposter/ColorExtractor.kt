@@ -1,6 +1,9 @@
 package com.voxly.presentation.components.lyricsposter
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Log
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.palette.graphics.Palette
@@ -219,6 +222,148 @@ object ColorExtractor {
     private val DEFAULT_COLOR = Color(0xFF1E1E2E) // Dark purple-gray
 
     /**
+     * M3E color scheme extracted from album artwork.
+     * Maps Palette swatches to Material 3 Expressive color slots.
+     */
+    data class M3EColors(
+        val primary: Int = 0,
+        val onPrimary: Int = 0,
+        val surfaceContainer: Int = 0,
+        val onSurface: Int = 0,
+        val secondary: Int = 0,
+        val onSecondary: Int = 0,
+        val background: Int = 0,
+        val onBackground: Int = 0,
+        val isValid: Boolean = false
+    )
+
+    /**
+     * Extracts M3E-compliant color scheme from album artwork.
+     * Maps to Material 3 Expressive color slots for immersive editing experience.
+     *
+     * - Primary: vibrantSwatch for core action points
+     * - SurfaceContainer: lightMutedSwatch for large background areas
+     * - Secondary: dominantSwatch for auxiliary information
+     * - Background: darkMutedSwatch for subtle background tint
+     */
+    fun extractM3EColors(bitmap: Bitmap): M3EColors {
+        Log.d("ColorExtractor", "Starting color extraction from bitmap: ${bitmap.width}x${bitmap.height}")
+        
+        val palette = extractPalette(bitmap)
+        if (palette == null) {
+            Log.w("ColorExtractor", "Palette extraction returned null")
+            return M3EColors()
+        }
+
+        Log.d("ColorExtractor", "Palette extracted successfully. Swatches: " +
+            "vibrant=${palette.vibrantSwatch?.rgb?.toString(16)}, " +
+            "lightVibrant=${palette.lightVibrantSwatch?.rgb?.toString(16)}, " +
+            "darkVibrant=${palette.darkVibrantSwatch?.rgb?.toString(16)}, " +
+            "muted=${palette.mutedSwatch?.rgb?.toString(16)}, " +
+            "lightMuted=${palette.lightMutedSwatch?.rgb?.toString(16)}, " +
+            "darkMuted=${palette.darkMutedSwatch?.rgb?.toString(16)}, " +
+            "dominant=${palette.dominantSwatch?.rgb?.toString(16)}")
+
+        val defaultSurface = 0xFFF5F5F5.toInt()
+        val defaultOnSurface = 0xFF1C1B1F.toInt()
+
+        // Extract raw colors from palette with fallback chain
+        val rawPrimary = palette.vibrantSwatch?.rgb
+            ?: palette.lightVibrantSwatch?.rgb
+            ?: palette.darkVibrantSwatch?.rgb
+            ?: palette.dominantSwatch?.rgb
+            ?: 0
+        val rawBackground = palette.lightMutedSwatch?.rgb
+            ?: palette.mutedSwatch?.rgb
+            ?: palette.darkMutedSwatch?.rgb
+            ?: palette.dominantSwatch?.rgb
+            ?: defaultSurface
+
+        Log.d("ColorExtractor", "Raw colors - primary=${rawPrimary.toString(16)}, background=${rawBackground.toString(16)}")
+
+        // Enhance colors: boost saturation and ensure minimum brightness
+        val enhancedPrimary = enhanceColor(rawPrimary, minSaturation = 0.6f, minBrightness = 0.3f)
+        // Background: use raw muted color directly without lightening
+        val enhancedBackground = rawBackground
+
+        Log.d("ColorExtractor", "Enhanced colors - primary=${enhancedPrimary.toString(16)}, background=${enhancedBackground.toString(16)}")
+
+        // Ensure high contrast text colors (WCAG AA minimum 4.5:1)
+        val onPrimary = ensureContrast(enhancedPrimary, 0xFFFFFFFF.toInt(), 4.5f)
+        val onBackground = ensureContrast(enhancedBackground, 0xFF1C1B1F.toInt(), 4.5f)
+
+        val result = M3EColors(
+            primary = enhancedPrimary,
+            onPrimary = onPrimary,
+            surfaceContainer = enhancedBackground,
+            onSurface = onBackground,
+            secondary = enhancedPrimary,
+            onSecondary = onPrimary,
+            background = enhancedBackground,
+            onBackground = onBackground,
+            isValid = true
+        )
+
+        Log.d("ColorExtractor", "Final M3EColors: $result")
+        return result
+    }
+
+    /**
+     * Lightens a color by mixing it with white.
+     * @param factor 0.0 = original, 1.0 = pure white
+     */
+    private fun lightenColor(colorInt: Int, factor: Float): Int {
+        val color = Color(colorInt)
+        val white = Color(0xFFFFFFFF.toInt())
+        return Color(
+            red = color.red + (white.red - color.red) * factor,
+            green = color.green + (white.green - color.green) * factor,
+            blue = color.blue + (white.blue - color.blue) * factor,
+            alpha = color.alpha
+        ).toArgb()
+    }
+
+    /**
+     * Enhances a color by boosting saturation and ensuring minimum brightness.
+     * Returns a more vibrant and readable color.
+     */
+    private fun enhanceColor(colorInt: Int, minSaturation: Float, minBrightness: Float): Int {
+        val color = Color(colorInt)
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(colorInt, hsv)
+
+        // Boost saturation
+        hsv[1] = (hsv[1] * 1.3f).coerceIn(minSaturation, 1.0f)
+
+        // Ensure minimum brightness
+        hsv[2] = hsv[2].coerceAtLeast(minBrightness)
+
+        return android.graphics.Color.HSVToColor(hsv)
+    }
+
+    /**
+     * Ensures text color has sufficient contrast against background.
+     * Returns white or black based on which provides better contrast.
+     */
+    private fun ensureContrast(backgroundColor: Int, defaultTextColor: Int, minRatio: Float): Int {
+        val bgColor = Color(backgroundColor)
+        val white = Color(0xFFFFFFFF.toInt())
+        val black = Color(0xFF000000.toInt())
+
+        val whiteContrast = calculateContrastRatio(white, bgColor)
+        val blackContrast = calculateContrastRatio(black, bgColor)
+
+        return if (whiteContrast >= minRatio || whiteContrast >= blackContrast) {
+            0xFFFFFFFF.toInt()
+        } else if (blackContrast >= minRatio) {
+            0xFF000000.toInt()
+        } else {
+            // If neither meets minimum, return the better one
+            if (whiteContrast > blackContrast) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()
+        }
+    }
+
+    /**
      * Predefined color options for manual selection.
      */
     val colorOptions = listOf(
@@ -231,6 +376,47 @@ object ColorExtractor {
         Color(0xFF8B5CF6), // Violet
         Color(0xFFEF4444), // Red
     )
+
+    /**
+     * Extracts M3E color scheme from album artwork bytes.
+     * Uses BitmapFactory with ARGB_8888 config to ensure software bitmap for Palette pixel access.
+     * This is the reliable approach that doesn't depend on Coil's suspend execute API.
+     *
+     * @param bytes Raw album art bytes
+     * @param size Target size for sampling (smaller = faster extraction)
+     */
+    fun extractM3EColorsFromBytes(
+        bytes: ByteArray,
+        size: Int = 200
+    ): M3EColors {
+        Log.d("ColorExtractor", "Decoding byte array, size=${bytes.size}")
+        
+        val options = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        Log.d("ColorExtractor", "Image dimensions: ${options.outWidth}x${options.outHeight}")
+
+        var sampleSize = 1
+        while (options.outWidth / sampleSize > size || options.outHeight / sampleSize > size) {
+            sampleSize *= 2
+        }
+        Log.d("ColorExtractor", "Using sampleSize=$sampleSize")
+
+        val decodeOptions = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
+        if (bitmap == null) {
+            Log.e("ColorExtractor", "Failed to decode bitmap from bytes")
+            return M3EColors()
+        }
+        
+        Log.d("ColorExtractor", "Bitmap decoded: ${bitmap.width}x${bitmap.height}, config=${bitmap.config}")
+        return extractM3EColors(bitmap)
+    }
 
     /**
      * Predefined text color options for lyrics.
