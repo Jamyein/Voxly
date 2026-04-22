@@ -37,20 +37,25 @@ class ArtistViewModel @Inject constructor(
 
     val artistListItems: StateFlow<List<ArtistListItemState>> = artists
         .map { artistGroups ->
-            artistGroups.map { artist ->
-                val albumNames = mutableSetOf<String>()
-                artist.files.forEach { file ->
-                    file.metadata.album?.takeIf { it.isNotBlank() }?.let { albumNames.add(it) }
+            artistGroups
+                .groupBy { it.name }
+                .map { (name, groups) ->
+                    val first = groups.first()
+                    val albumNames = groups.flatMap { it.files }
+                        .mapNotNull { it.metadata.album }
+                        .filter { it.isNotBlank() }
+                        .toSet()
+                    val coverFile = groups.flatMap { it.files }
+                        .firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+                    ArtistListItemState(
+                        name = name,
+                        coverPath = first.coverPath,
+                        coverAlbumId = coverFile?.mediaStoreAlbumId,
+                        albumCount = albumNames.size,
+                        trackCount = groups.sumOf { it.files.size }
+                    )
                 }
-                val coverFile = artist.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                ArtistListItemState(
-                    name = artist.name,
-                    coverPath = artist.coverPath,
-                    coverAlbumId = coverFile?.mediaStoreAlbumId,
-                    albumCount = albumNames.size,
-                    trackCount = artist.files.size
-                )
-            }.sortedBy { SortUtil.toSortablePinyin(it.name) }
+                .sortedBy { SortUtil.toSortablePinyin(it.name) }
         }
         .flowOn(Dispatchers.Default)
         .distinctUntilChanged()
