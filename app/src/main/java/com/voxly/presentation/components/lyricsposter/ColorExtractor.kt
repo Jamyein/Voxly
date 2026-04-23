@@ -23,6 +23,13 @@ import kotlin.math.pow
  */
 object ColorExtractor {
 
+    private val lightColorFilter = Palette.Filter { color, _ ->
+        val hsl = FloatArray(3)
+        android.graphics.Color.colorToHSV(color, hsl)
+        // 过滤过浅颜色（容易干扰）
+        hsl[2] > 0.1f && hsl[2] < 0.95f
+    }
+
     /**
      * Extracted colors from album artwork
      * Similar to Rush's ExtractedColors data class
@@ -49,8 +56,8 @@ object ColorExtractor {
     private fun extractPalette(bitmap: Bitmap, hasFaces: Boolean = false): Palette? {
         return try {
             val builder = Palette.from(bitmap)
-            // 人像/专辑封面使用更多颜色以获得更好的肤色和细节
             builder.maximumColorCount(if (hasFaces) 24 else 16)
+            builder.addFilter(lightColorFilter)
             builder.generate()
         } catch (e: Exception) {
             null
