@@ -1,6 +1,11 @@
 {
     global:
-        JNI_OnLoad;
+        Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeCreate;
+        Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessFrames;
+        Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessBuffer;
+        Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult;
+        Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeDestroy;
+        Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetVersion;
     local:
         *;
 };

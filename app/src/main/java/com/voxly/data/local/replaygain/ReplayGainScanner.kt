@@ -20,6 +20,7 @@ import com.voxly.data.local.replaygain.native.EbuR128NativeScanner
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -55,6 +56,8 @@ class ReplayGainScanner @Inject constructor(
         const val MIN_GAIN_DB = -50f
         const val MAX_GAIN_DB = 50f
         const val BATCH_BUFFER_SIZE = 2 * 1024 * 1024 // 2MB batch buffer
+        @Volatile
+        private var nativeScannerAvailable = true
 
         // LRU cache for scan results to avoid repeated scans
         // Key: filePath, Value: ReplayGainInfo
@@ -386,6 +389,10 @@ class ReplayGainScanner @Inject constructor(
         config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): ReplayGainInfo? = withContext(Dispatchers.IO) {
         try {
+            if (!nativeScannerAvailable) {
+                return@withContext null
+            }
+
             // Lower thread priority for CPU-intensive audio processing to reduce overheating
             android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
 
@@ -430,8 +437,17 @@ class ReplayGainScanner @Inject constructor(
                     truePeak = false,
                     dualMono = config.dualMono
                 )
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to create native scanner for $filePath")
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                if (t is LinkageError || t.cause is LinkageError) {
+                    nativeScannerAvailable = false
+                    Timber.e(
+                        t,
+                        "Disabling native ReplayGain scanner due to JNI/linkage failure: ${t.message}"
+                    )
+                } else {
+                    Timber.e(t, "Failed to create native scanner for $filePath")
+                }
                 extractor.release()
                 return@withContext null
             }
@@ -468,8 +484,9 @@ class ReplayGainScanner @Inject constructor(
 
                 result
             }
-        } catch (e: Exception) {
-            Timber.e(e, "analyzeAudioFile exception: ${e.message}")
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Timber.e(t, "analyzeAudioFile exception: ${t.message}")
             null
         }
     }
