@@ -10,8 +10,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
-import androidx.compose.ui.draw.shadow
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Row
@@ -26,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -37,7 +36,6 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.graphics.Color
 import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -64,9 +62,6 @@ import com.voxly.presentation.viewmodel.ConvertibleField
 import com.voxly.presentation.viewmodel.EditHistoryViewModel
 import com.voxly.domain.repository.RecentEdit
 import com.voxly.presentation.viewmodel.ReplayGainScanError
-import com.voxly.presentation.components.lyricsposter.ColorExtractor
-import com.voxly.presentation.components.lyricsposter.DynamicM3ETheme
-import com.voxly.presentation.components.lyricsposter.m3eFloatingToolbarColors
 
 /**
  * Metadata editor screen for viewing and editing audio file metadata.
@@ -93,11 +88,6 @@ fun MetadataEditorScreen(
     pendingOnlineCoverArt: ByteArray? = null,
     onConsumePendingOnlineCoverArt: () -> Unit = {},
 ) {
-    val sharedElementModifier = if (sharedElementKey != null) {
-        Modifier
-    } else {
-        Modifier
-    }
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val editedMetadata by viewModel.editedMetadata.collectAsStateWithLifecycle()
@@ -105,8 +95,6 @@ fun MetadataEditorScreen(
     val hasUnsavedChanges = editState.hasUnsavedChanges
     val saveResult by viewModel.saveResult.collectAsStateWithLifecycle(initialValue = "")
     val modifiedFields = editState.modifiedFields
-    val m3eColors by viewModel.m3eColors.collectAsStateWithLifecycle()
-    val isM3eColorsResolved by viewModel.isM3eColorsResolved.collectAsStateWithLifecycle()
 
     var showDiscardDialog by remember { mutableStateOf(false) }
     var showAlbumArtOptions by remember { mutableStateOf(false) }
@@ -225,48 +213,68 @@ fun MetadataEditorScreen(
         exitDirection = FloatingToolbarExitDirection.Bottom
     )
 
-    val backgroundColor = m3eColors?.let { colors ->
-        if (colors.isValid) {
-            android.util.Log.d("MetadataEditor", "Applying background color: ${colors.background.toString(16)}, alpha=0.30f")
-            Color(colors.background).copy(alpha = 0.30f)
+    val currentSuccessState = uiState as? MetadataEditorUiState.Success
+    val albumArtBytes = editedMetadata?.albumArt ?: currentSuccessState?.editedMetadata?.albumArt
+    val mediaStoreAlbumId = currentSuccessState?.audioFile?.mediaStoreAlbumId
+    val isDarkTheme = isSystemInDarkTheme()
+
+    val dynamicPalette by produceState<MetadataEditorDynamicPalette?>(
+        initialValue = null,
+        key1 = albumArtBytes?.contentHashCode(),
+        key2 = mediaStoreAlbumId,
+        key3 = isDarkTheme
+    ) {
+        val fallbackBitmap = if (albumArtBytes == null && mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
+            withContext(Dispatchers.IO) {
+                loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
+            }
         } else {
-            android.util.Log.d("MetadataEditor", "M3E colors not valid, using default surface")
             null
         }
-    } ?: MaterialTheme.colorScheme.surface
+        value = MetadataEditorDynamicPaletteResolver.resolve(
+            albumArtBytes = albumArtBytes,
+            fallbackBitmap = fallbackBitmap,
+            isDarkTheme = isDarkTheme
+        )
+    }
 
-    Scaffold(
-        modifier = Modifier
-            .nestedScroll(scrollBehavior.nestedScrollConnection)
-            .nestedScroll(floatingToolbarScrollBehavior)
-            .background(backgroundColor),
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.edit_metadata)) },
-                scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = backgroundColor,
-                    scrolledContainerColor = backgroundColor,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                navigationIcon = {
-                    IconButton(onClick = handleNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_back)
-                        )
+    MetadataEditorDynamicTheme(dynamicPalette = dynamicPalette) {
+        val backgroundColor = MaterialTheme.colorScheme.background
+        val onBackgroundColor = MaterialTheme.colorScheme.onBackground
+
+        Scaffold(
+            modifier = Modifier
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .nestedScroll(floatingToolbarScrollBehavior)
+                .background(backgroundColor),
+            topBar = {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.edit_metadata)) },
+                    scrollBehavior = scrollBehavior,
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = backgroundColor,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        titleContentColor = onBackgroundColor,
+                        navigationIconContentColor = onBackgroundColor,
+                        actionIconContentColor = onBackgroundColor
+                    ),
+                    navigationIcon = {
+                        IconButton(onClick = handleNavigateBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.cd_back)
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showMoreOptionsSheet = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
+                        }
                     }
-                },
-                actions = {
-                    IconButton(onClick = { showMoreOptionsSheet = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
-                    }
-                }
-            )
-        },
-        floatingActionButton = {}
-    ) { innerPadding ->
-        DynamicM3ETheme(m3eColors = m3eColors) {
+                )
+            },
+            floatingActionButton = {}
+        ) { innerPadding ->
             Surface(
                 modifier = Modifier
                     .fillMaxSize()
@@ -333,11 +341,10 @@ fun MetadataEditorScreen(
                     viewModel.updateDebouncedTextField(MetadataField.COMMENT, metadata.comment)
                     viewModel.updateDebouncedTextField(MetadataField.LYRICS, metadata.lyrics)
                 },
-                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
-                isM3eColorsResolved = isM3eColorsResolved
+                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
             )
-            }
         }
+    }
     }
 
     MetadataEditorDialogsAndSheets(
@@ -435,8 +442,6 @@ private fun MetadataEditorScaffoldContent(
     onSave: () -> Unit,
     onSyncDebouncedFields: () -> Unit,
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
-    isM3eColorsResolved: Boolean,
-    m3eColors: com.voxly.presentation.components.lyricsposter.ColorExtractor.M3EColors? = null,
     modifier: Modifier = Modifier
 ) {
     var showLoadingIndicator by remember { mutableStateOf(false) }
@@ -504,8 +509,7 @@ private fun MetadataEditorScaffoldContent(
                     onNavigateToLyricsSelector = onNavigateToLyricsSelector,
                     onSave = onSave,
                     onSyncDebouncedFields = onSyncDebouncedFields,
-                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
-                    isM3eColorsResolved = isM3eColorsResolved
+                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
                 )
             }
             is MetadataEditorUiState.Error -> {
@@ -565,7 +569,6 @@ private fun MetadataEditorSuccessContent(
     onSave: () -> Unit,
     onSyncDebouncedFields: () -> Unit,
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
-    isM3eColorsResolved: Boolean,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -634,13 +637,13 @@ private fun MetadataEditorSuccessContent(
                 .align(Alignment.BottomCenter)
                 .padding(start = 16.dp, end = 16.dp)
         ) {
-            if (!isM3eColorsResolved) return@Box
-
-            val toolbarContainerColor = MaterialTheme.colorScheme.primary
-            val toolbarContentColor = contentColorFor(toolbarContainerColor)
-            val toolbarColors = m3eFloatingToolbarColors(
-                containerColor = toolbarContainerColor,
-                contentColor = toolbarContentColor
+            val toolbarContainerColor = MaterialTheme.colorScheme.primaryContainer
+            val toolbarContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            val toolbarColors = FloatingToolbarDefaults.standardFloatingToolbarColors().copy(
+                toolbarContainerColor = toolbarContainerColor,
+                toolbarContentColor = toolbarContentColor,
+                fabContainerColor = MaterialTheme.colorScheme.primary,
+                fabContentColor = MaterialTheme.colorScheme.onPrimary
             )
 
             HorizontalFloatingToolbar(
@@ -695,7 +698,8 @@ private fun MetadataEditorSuccessContent(
                         if (hasUnsavedChanges) {
                             onSave()
                         }
-                    }
+                    },
+                    enabled = hasUnsavedChanges
                 ) {
                     Icon(
                         Icons.Default.Save,

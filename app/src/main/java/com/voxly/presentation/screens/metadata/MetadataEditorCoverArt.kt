@@ -3,6 +3,7 @@ package com.voxly.presentation.screens.metadata
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -12,7 +13,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -88,14 +88,14 @@ fun AlbumArtSection(
                 modifier = Modifier
                     .matchParentSize()
                     .graphicsLayer {
-                        scaleX = 0.9f
-                        scaleY = 0.9f
-                        translationY = 20.dp.toPx()
-                        alpha = 0.6f
+                        scaleX = 0.84f
+                        scaleY = 0.84f
+                        translationY = 34.dp.toPx()
+                        alpha = 0.82f
                     }
                     .clip(shape)
                     .blur(
-                        radius = 28.dp,
+                        radius = 44.dp,
                         edgeTreatment = BlurredEdgeTreatment.Unbounded
                     ),
                 contentScale = ContentScale.Crop
@@ -104,16 +104,6 @@ fun AlbumArtSection(
 
         val topLayerModifier = Modifier
             .fillMaxSize()
-            .then(
-                if (isAndroid12Plus) {
-                    Modifier
-                } else {
-                    Modifier.shadow(
-                        elevation = 8.dp,
-                        shape = shape
-                    )
-                }
-            )
             .clip(shape)
 
         if (albumArtRequest != null) {
@@ -141,13 +131,21 @@ fun AlbumArtSection(
 fun EmptyAlbumArtContent() {
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = Modifier.padding(16.dp)
+        modifier = Modifier
+            .padding(16.dp)
+            .clip(MaterialTheme.shapes.large)
+            .border(
+                width = 1.dp,
+                color = MaterialTheme.colorScheme.outlineVariant,
+                shape = MaterialTheme.shapes.large
+            )
+            .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
         Icon(
             painter = com.voxly.presentation.icons.appIconPainter(com.voxly.presentation.icons.AppIcon.MusicNote),
             contentDescription = stringResource(R.string.cd_album_art),
             modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.outline
+            tint = MaterialTheme.colorScheme.primary
         )
         Spacer(modifier = Modifier.height(8.dp))
         Text(
