@@ -12,6 +12,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.palette.graphics.Palette
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -66,6 +68,15 @@ object ColorExtractor {
             builder.generate()
         } catch (e: Exception) {
             null
+        }
+    }
+
+    /**
+     * Suspended version of extractPalette that runs on a background thread.
+     */
+    private suspend fun extractPaletteSuspend(bitmap: Bitmap, hasFaces: Boolean = false): Palette? {
+        return withContext(Dispatchers.Default) {
+            extractPalette(bitmap, hasFaces)
         }
     }
 
@@ -302,10 +313,12 @@ object ColorExtractor {
      * - Background: lightMutedSwatch → 页面背景
      * - Outline: primary 的半透明版本
      */
-    fun extractM3EColors(bitmap: Bitmap): M3EColors {
+    suspend fun extractM3EColors(bitmap: Bitmap): M3EColors {
         Log.d("ColorExtractor", "Starting M3E color extraction from bitmap: ${bitmap.width}x${bitmap.height}")
 
-        val palette = extractPalette(bitmap) ?: run {
+        val palette = withContext(Dispatchers.Default) {
+            extractPalette(bitmap)
+        } ?: run {
             Log.w("ColorExtractor", "Palette extraction returned null")
             return M3EColors()
         }
@@ -552,12 +565,12 @@ object ColorExtractor {
      * @param bytes Raw album art bytes
      * @param size Target size for sampling (smaller = faster extraction)
      */
-    fun extractM3EColorsFromBytes(
+    suspend fun extractM3EColorsFromBytes(
         bytes: ByteArray,
         size: Int = 200
     ): M3EColors {
         Log.d("ColorExtractor", "Decoding byte array, size=${bytes.size}")
-        
+
         val options = BitmapFactory.Options().apply {
             inJustDecodeBounds = true
         }
@@ -580,9 +593,11 @@ object ColorExtractor {
             Log.e("ColorExtractor", "Failed to decode bitmap from bytes")
             return M3EColors()
         }
-        
+
         Log.d("ColorExtractor", "Bitmap decoded: ${bitmap.width}x${bitmap.height}, config=${bitmap.config}")
-        return extractM3EColors(bitmap)
+        return withContext(Dispatchers.Default) {
+            extractM3EColors(bitmap)
+        }
     }
 
     /**
