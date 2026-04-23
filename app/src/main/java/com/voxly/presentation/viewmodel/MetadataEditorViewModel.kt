@@ -135,6 +135,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
             initialValue = ScanMode.TRACK_ONLY
         )
 
+    val metadataEditorDynamicAlbumColor: StateFlow<Boolean> = settingsDataStore.metadataEditorDynamicAlbumColor
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
+        )
+
     private val _uiState = MutableStateFlow<MetadataEditorUiState>(MetadataEditorUiState.Loading)
     val uiState: StateFlow<MetadataEditorUiState> = _uiState.asStateFlow()
 

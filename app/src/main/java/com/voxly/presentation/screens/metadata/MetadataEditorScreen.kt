@@ -118,6 +118,7 @@ fun MetadataEditorScreen(
 
     val coverFetchMessage by viewModel.coverFetchMessage.collectAsStateWithLifecycle(initialValue = null)
     val isLyricsTimestampFormatted by viewModel.isLyricsTimestampFormatted.collectAsStateWithLifecycle()
+    val metadataEditorDynamicAlbumColor by viewModel.metadataEditorDynamicAlbumColor.collectAsStateWithLifecycle()
 
     LaunchedEffect(coverFetchMessage) {
         coverFetchMessage?.let {
@@ -220,10 +221,15 @@ fun MetadataEditorScreen(
 
     val dynamicPalette by produceState<MetadataEditorDynamicPalette?>(
         initialValue = null,
-        key1 = albumArtBytes?.contentHashCode(),
-        key2 = mediaStoreAlbumId,
-        key3 = isDarkTheme
+        albumArtBytes?.contentHashCode(),
+        mediaStoreAlbumId,
+        isDarkTheme,
+        metadataEditorDynamicAlbumColor
     ) {
+        if (!metadataEditorDynamicAlbumColor) {
+            value = null
+            return@produceState
+        }
         val fallbackBitmap = if (albumArtBytes == null && mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
             withContext(Dispatchers.IO) {
                 loadMediaStoreAlbumArt(context, mediaStoreAlbumId)

@@ -357,6 +357,8 @@
     <string name="settings_dark_theme">Dark Theme</string>
     <string name="settings_dark_theme_subtitle">Use dark color scheme</string>
     <string name="settings_dynamic_color_subtitle">Use colors from your wallpaper (Android 12+)</string>
+    <string name="settings_metadata_editor_dynamic_album_color">Dynamic Album Color</string>
+    <string name="settings_metadata_editor_dynamic_album_color_subtitle">Extract colors from album artwork in metadata editor</string>
     <string name="settings_scan_quality_subtitle">Higher quality = slower scanning</string>
     <string name="settings_scan_mode">Scan Mode</string>
     <string name="settings_scan_mode_subtitle">Compatible with foobar2000: Track Only, Single Album, or Albums</string>

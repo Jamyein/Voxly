@@ -106,6 +106,7 @@ fun getExtraOptionLabel(sourceId: String): String = when (sourceId) {
  */
 data class SettingsUiState(
     val dynamicColors: Boolean = false,
+    val metadataEditorDynamicAlbumColor: Boolean = true,
     val savedLanguageTag: String? = null,
     val themeMode: String = "system",
     val appleCountryCode: String = "us",

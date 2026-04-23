@@ -269,6 +269,8 @@
     <string name="settings_dark_theme">深色主题</string>
     <string name="settings_dark_theme_subtitle">使用深色配色方案</string>
     <string name="settings_dynamic_color_subtitle">使用来自壁纸的颜色（Android 12+）</string>
+    <string name="settings_metadata_editor_dynamic_album_color">动态专辑颜色</string>
+    <string name="settings_metadata_editor_dynamic_album_color_subtitle">在元数据编辑器中从专辑封面提取颜色</string>
     <string name="settings_scan_quality_subtitle">质量越高，扫描越慢</string>
     <string name="settings_scan_mode">扫描模式</string>
     <string name="settings_scan_mode_subtitle">单轨、单专辑、多专辑</string>
