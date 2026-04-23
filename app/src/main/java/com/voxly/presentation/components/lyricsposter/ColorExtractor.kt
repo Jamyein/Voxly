@@ -58,6 +58,11 @@ object ColorExtractor {
             val builder = Palette.from(bitmap)
             builder.maximumColorCount(if (hasFaces) 24 else 16)
             builder.addFilter(lightColorFilter)
+            // 对于大于 200x200 的图片，resize 到 150x150 面积以提升性能
+            val area = bitmap.width * bitmap.height
+            if (area > 40000) { // 200x200
+                builder.resizeBitmapArea(22500) // ~150x150
+            }
             builder.generate()
         } catch (e: Exception) {
             null
