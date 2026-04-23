@@ -43,11 +43,13 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import com.voxly.presentation.components.lyricsposter.ColorExtractor.ExtractedColors
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -155,11 +157,15 @@ fun LyricsPosterScreen(
         mutableStateOf(PosterConfig())
     }
 
-    // Extract colors from album art
-    val extractedColors = remember(selectedTheme, albumArtBitmap) {
+    // Extract colors from album art - using LaunchedEffect for background execution
+    var extractedColors by remember { mutableStateOf<ExtractedColors?>(null) }
+    
+    LaunchedEffect(selectedTheme, albumArtBitmap) {
         if (albumArtBitmap != null && selectedTheme != PosterColorTheme.CUSTOM) {
-            ColorExtractor.extractColors(albumArtBitmap)
-        } else null
+            extractedColors = ColorExtractor.extractColorsSuspend(albumArtBitmap)
+        } else {
+            extractedColors = null
+        }
     }
 
     // Get background color based on selected theme

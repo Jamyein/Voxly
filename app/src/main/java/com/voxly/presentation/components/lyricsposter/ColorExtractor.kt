@@ -125,6 +125,48 @@ object ColorExtractor {
     }
 
     /**
+     * Suspended version of extractColors that runs on a background thread.
+     * Official documentation requires: "Generation should always be completed on a background thread"
+     */
+    suspend fun extractColorsSuspend(bitmap: Bitmap): ExtractedColors {
+        val palette = withContext(Dispatchers.Default) {
+            extractPalette(bitmap)
+        } ?: return ExtractedColors()
+
+        return ExtractedColors(
+            backgroundDominant = Color(
+                palette.vibrantSwatch?.rgb
+                    ?: palette.lightVibrantSwatch?.rgb
+                    ?: palette.darkVibrantSwatch?.rgb
+                    ?: palette.dominantSwatch?.rgb
+                    ?: Color.DarkGray.toArgb()
+            ).copy(alpha = 1f).toArgb(),
+
+            contentDominant = Color(
+                palette.vibrantSwatch?.bodyTextColor
+                    ?: palette.lightVibrantSwatch?.bodyTextColor
+                    ?: palette.darkVibrantSwatch?.bodyTextColor
+                    ?: palette.dominantSwatch?.bodyTextColor
+                    ?: Color.White.toArgb()
+            ).copy(alpha = 1f).toArgb(),
+
+            backgroundMuted = Color(
+                palette.lightMutedSwatch?.rgb
+                    ?: palette.mutedSwatch?.rgb
+                    ?: palette.darkMutedSwatch?.rgb
+                    ?: Color.DarkGray.toArgb()
+            ).copy(alpha = 1f).toArgb(),
+
+            contentMuted = Color(
+                palette.lightMutedSwatch?.bodyTextColor
+                    ?: palette.mutedSwatch?.bodyTextColor
+                    ?: palette.darkMutedSwatch?.bodyTextColor
+                    ?: Color.White.toArgb()
+            ).copy(alpha = 1f).toArgb()
+        )
+    }
+
+    /**
      * Extracts the dominant color from a bitmap.
      */
     fun extractDominantColor(bitmap: Bitmap): Color {
@@ -156,6 +198,28 @@ object ColorExtractor {
         palette.dominantSwatch?.rgb?.let { allColors.add(Color(it)) }
         
         // Filter colors to ensure high contrast and distinct hues
+        return filterDiverseColors(allColors).ifEmpty { listOf(DEFAULT_COLOR) }
+    }
+
+    /**
+     * Suspended version of extractAllColors that runs on a background thread.
+     * Official documentation requires: "Generation should always be completed on a background thread"
+     */
+    suspend fun extractAllColorsSuspend(bitmap: Bitmap): List<Color> {
+        val palette = withContext(Dispatchers.Default) {
+            extractPalette(bitmap)
+        } ?: return listOf(DEFAULT_COLOR)
+        
+        val allColors = mutableListOf<Color>()
+        
+        palette.vibrantSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.lightVibrantSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.darkVibrantSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.mutedSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.lightMutedSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.darkMutedSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.dominantSwatch?.rgb?.let { allColors.add(Color(it)) }
+        
         return filterDiverseColors(allColors).ifEmpty { listOf(DEFAULT_COLOR) }
     }
     
