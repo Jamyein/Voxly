@@ -131,7 +131,7 @@ fun DirectoryContentAdaptiveScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val isSelectionMode = selectedFiles.isNotEmpty()
 
-    LaunchedEffect(isSinglePane, isSelectionMode) {
+    LaunchedEffect(isSinglePane) {
         if (isSinglePane && isSelectionMode) {
             viewModel.clearSelection()
         }
@@ -203,17 +203,23 @@ fun DirectoryContentAdaptiveScreen(
                     scrollBehavior = scrollBehavior,
                     floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
                     onNavigateBack = onNavigateBack,
-                    onNavigateToMetadata = { audioFile ->
-                        if (isSinglePane) {
-                            onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
-                        } else {
-                            coroutineScope.launch {
-                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                    onNavigateToMetadata = remember(viewModel, isSelectionMode, isSinglePane, coroutineScope, navigator, onNavigateToMetadata) {
+                        { audioFile ->
+                            if (isSelectionMode) {
+                                viewModel.toggleFileSelection(audioFile.path)
+                            } else if (isSinglePane) {
+                                onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                            } else {
+                                coroutineScope.launch {
+                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                                }
                             }
                         }
                     },
-                    onFileLongClick = { audioFile ->
-                        viewModel.toggleFileSelection(audioFile.path)
+                    onFileLongClick = remember(viewModel) {
+                        { audioFile ->
+                            viewModel.toggleFileSelection(audioFile.path)
+                        }
                     },
                     onClearSelection = { viewModel.clearSelection() },
                     onSelectAll = { viewModel.selectAll() },
