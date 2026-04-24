@@ -245,7 +245,7 @@ fun FileBrowserAdaptiveScreen(
                 )
             }
         },
-        modifier = modifier
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
     )
 
     if (showSearchSheet) {

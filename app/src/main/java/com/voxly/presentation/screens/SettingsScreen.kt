@@ -769,6 +769,8 @@ fun SettingsScreen(
     var dialogSeparatorTags by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loudnessExpanded by remember { mutableStateOf(false) }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
     val appleCountryOptions = remember {
         listOf(
             AppleCountryOption("us", R.string.settings_apple_country_us),
@@ -797,9 +799,11 @@ fun SettingsScreen(
     val currentSeparators by viewModel.artistSeparatorsSet.collectAsStateWithLifecycle()
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
             MediumTopAppBar(
                 title = { Text(stringResource(R.string.nav_settings)) },
+                scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface

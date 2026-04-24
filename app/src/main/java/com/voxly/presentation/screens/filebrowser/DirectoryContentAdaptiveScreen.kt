@@ -183,7 +183,7 @@ fun DirectoryContentAdaptiveScreen(
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
-        modifier = modifier.nestedScroll(floatingToolbarScrollBehavior),
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection).nestedScroll(floatingToolbarScrollBehavior),
         listPane = {
             AnimatedPane(
                 modifier = Modifier.fillMaxSize()
