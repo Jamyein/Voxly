@@ -30,7 +30,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
@@ -129,7 +129,7 @@ fun DirectoryContentAdaptiveScreen(
         initialFirstVisibleItemIndex = savedScrollPosition.index,
         initialFirstVisibleItemScrollOffset = savedScrollPosition.offset
     )
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val isSelectionMode = selectedFiles.isNotEmpty()
 
     LaunchedEffect(isSinglePane) {
@@ -394,7 +394,7 @@ private fun DirectoryListTopAppBar(
 ) {
     var isSortExpanded by remember { mutableStateOf(false) }
 
-    TopAppBar(
+    MediumTopAppBar(
         title = {
             if (isSelectionMode) {
                 Text("$selectedFilesSize selected")

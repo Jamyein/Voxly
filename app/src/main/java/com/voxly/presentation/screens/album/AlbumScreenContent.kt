@@ -31,7 +31,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -119,12 +119,12 @@ internal fun AlbumScreenContent(
         viewModel.getScrollPosition("album_list_${currentSortOption.name}")
     }
 
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = {
                     Box(
                         modifier = Modifier

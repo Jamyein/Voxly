@@ -798,7 +798,7 @@ fun SettingsScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = { Text(stringResource(R.string.nav_settings)) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
