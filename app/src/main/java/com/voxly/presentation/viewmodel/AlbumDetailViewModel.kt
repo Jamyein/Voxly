@@ -81,12 +81,11 @@ class AlbumDetailViewModel @AssistedInject constructor(
             try {
                 val albums = audioFileScanner.albums.first()
                 val albumGroup = albums.find { album ->
-                    album.name == albumName && album.albumArtist == albumArtist
+                    album.name == albumName && (albumArtist == null || album.albumArtist == albumArtist)
                 }
 
                 if (albumGroup != null) {
                     _albumName.update { albumGroup.name }
-                    _albumArtist.update { albumGroup.albumArtist }
                     _coverPath.update { albumGroup.coverPath }
 
                     val filesWithDiscNumber = withContext(Dispatchers.Default) {
@@ -113,6 +112,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
                         .albumSummaryDao()
                         .getAlbumSummary(albumName, albumArtist)
 
+                    _albumArtist.update { albumGroup.albumArtist ?: albumSummary?.albumArtist }
                     _albumYear.update { albumSummary?.year?.takeIf { it.isNotBlank() } }
                     _albumSampleRate.update { albumSummary?.maxSampleRate ?: 0 }
                     _albumBitrate.update { albumSummary?.maxBitrate ?: 0 }
