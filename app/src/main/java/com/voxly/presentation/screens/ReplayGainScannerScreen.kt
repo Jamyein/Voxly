@@ -49,7 +49,7 @@ fun ReplayGainScannerScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.replay_gain_scanner_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    FilledTonalIconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = null)
                     }
                 },

@@ -265,7 +265,7 @@ fun MetadataEditorScreen(
                         actionIconContentColor = onBackgroundColor
                     ),
                     navigationIcon = {
-                        IconButton(onClick = handleNavigateBack) {
+                        FilledTonalIconButton(onClick = handleNavigateBack) {
                             Icon(
                                 Icons.AutoMirrored.Filled.ArrowBack,
                                 contentDescription = stringResource(R.string.cd_back)

@@ -83,7 +83,7 @@ fun LogViewerScreen(
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 navigationIcon = {
-                    IconButton(
+                    FilledTonalIconButton(
                         onClick = {
                             if (uiState.selectedLogFile != null) {
                                 viewModel.clearSelectedLog()

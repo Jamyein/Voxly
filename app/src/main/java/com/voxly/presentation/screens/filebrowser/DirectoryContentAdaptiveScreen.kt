@@ -24,6 +24,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
@@ -412,7 +413,7 @@ private fun DirectoryListTopAppBar(
             titleContentColor = MaterialTheme.colorScheme.onSurface
         ),
         navigationIcon = {
-            IconButton(onClick = {
+            FilledTonalIconButton(onClick = {
                 if (isSelectionMode) {
                     onClearSelection()
                 } else if (!isSinglePane && canCloseDetailPane) {
