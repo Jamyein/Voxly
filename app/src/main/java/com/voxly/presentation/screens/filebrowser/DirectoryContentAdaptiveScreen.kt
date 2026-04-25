@@ -179,6 +179,9 @@ fun DirectoryContentAdaptiveScreen(
     var showRenameFilesDialog by remember { mutableStateOf(false) }
     var showFixMetadataDialog by remember { mutableStateOf(false) }
     var showOnlineMetadataDialog by remember { mutableStateOf(false) }
+    var showSingleFileRenameDialog by remember { mutableStateOf(false) }
+    var showSingleFileDeleteDialog by remember { mutableStateOf(false) }
+    var currentSingleFile by remember { mutableStateOf<AudioFile?>(null) }
 
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
@@ -237,6 +240,14 @@ fun DirectoryContentAdaptiveScreen(
                     onRenameFiles = { showRenameFilesDialog = true },
                     onFixMetadata = { showFixMetadataDialog = true },
                     onReplayGain = { onNavigateToReplayGain(selectedFiles.toList()) },
+                    onSingleFileRename = { audioFile ->
+                        currentSingleFile = audioFile
+                        showSingleFileRenameDialog = true
+                    },
+                    onSingleFileDelete = { audioFile ->
+                        currentSingleFile = audioFile
+                        showSingleFileDeleteDialog = true
+                    },
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -275,6 +286,11 @@ fun DirectoryContentAdaptiveScreen(
         onShowRenameFilesDialogChange = { showRenameFilesDialog = it },
         showFixMetadataDialog = showFixMetadataDialog,
         onShowFixMetadataDialogChange = { showFixMetadataDialog = it },
+        showSingleFileRenameDialog = showSingleFileRenameDialog,
+        onShowSingleFileRenameDialogChange = { showSingleFileRenameDialog = it },
+        showSingleFileDeleteDialog = showSingleFileDeleteDialog,
+        onShowSingleFileDeleteDialogChange = { showSingleFileDeleteDialog = it },
+        currentSingleFile = currentSingleFile,
         selectedFilesCount = selectedFiles.size,
         showSearchSheet = showSearchSheet,
         onShowSearchSheetChange = { showSearchSheet = it },
@@ -326,6 +342,8 @@ private fun DirectoryListPane(
     onRenameFiles: () -> Unit,
     onFixMetadata: () -> Unit,
     onReplayGain: () -> Unit,
+    onSingleFileRename: (AudioFile) -> Unit,
+    onSingleFileDelete: (AudioFile) -> Unit,
     modifier: Modifier = Modifier
 ) {
     Column(modifier = modifier) {
@@ -367,6 +385,8 @@ private fun DirectoryListPane(
             onRenameFiles = onRenameFiles,
             onFixMetadata = onFixMetadata,
             onReplayGain = onReplayGain,
+            onSingleFileRename = onSingleFileRename,
+            onSingleFileDelete = onSingleFileDelete,
             modifier = Modifier.fillMaxSize()
         )
     }
@@ -495,6 +515,8 @@ private fun DirectoryListBody(
     onRenameFiles: () -> Unit,
     onFixMetadata: () -> Unit,
     onReplayGain: () -> Unit,
+    onSingleFileRename: (AudioFile) -> Unit,
+    onSingleFileDelete: (AudioFile) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val coroutineScope = rememberCoroutineScope()
@@ -528,6 +550,8 @@ private fun DirectoryListBody(
                         listState = listState,
                         onFileClick = onFileClick,
                         onFileLongClick = onFileLongClick,
+                        onSingleFileRename = onSingleFileRename,
+                        onSingleFileDelete = onSingleFileDelete,
                         bottomPadding = if (isSelectionMode) 80.dp else 16.dp,
                         modifier = Modifier.fillMaxSize()
                     )
@@ -582,6 +606,8 @@ private fun DirectoryFileListContent(
     listState: LazyListState,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
+    onSingleFileRename: (AudioFile) -> Unit,
+    onSingleFileDelete: (AudioFile) -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
     modifier: Modifier = Modifier
 ) {
@@ -600,11 +626,11 @@ private fun DirectoryFileListContent(
                 selectedFiles = selectedFiles,
                 onFileClick = onFileClick,
                 onFileLongClick = onFileLongClick,
-                onEditFileMetadata = { },
-                onRenameFile = { },
-                onDeleteFile = { },
-                onFetchOnlineMetadata = { },
-                onFixMetadata = { },
+                onEditFileMetadata = onFileClick,
+                onRenameFile = onSingleFileRename,
+                onDeleteFile = onSingleFileDelete,
+                onFetchOnlineMetadata = onFileClick,
+                onFixMetadata = onFileClick,
                 bottomPadding = bottomPadding
             )
         }
@@ -668,6 +694,11 @@ private fun DirectoryDialogsAndSheets(
     onShowRenameFilesDialogChange: (Boolean) -> Unit,
     showFixMetadataDialog: Boolean,
     onShowFixMetadataDialogChange: (Boolean) -> Unit,
+    showSingleFileRenameDialog: Boolean,
+    onShowSingleFileRenameDialogChange: (Boolean) -> Unit,
+    showSingleFileDeleteDialog: Boolean,
+    onShowSingleFileDeleteDialogChange: (Boolean) -> Unit,
+    currentSingleFile: AudioFile?,
     selectedFilesCount: Int,
     showSearchSheet: Boolean,
     onShowSearchSheetChange: (Boolean) -> Unit,
@@ -752,6 +783,32 @@ private fun DirectoryDialogsAndSheets(
             targetFilesCount = selectedFilesCount,
             onDismiss = { onShowFixMetadataDialogChange(false) },
             onConfirm = { }
+        )
+    }
+
+    if (showSingleFileRenameDialog && currentSingleFile != null) {
+        SingleFileRenameDialog(
+            audioFile = currentSingleFile,
+            onDismiss = { onShowSingleFileRenameDialogChange(false) },
+            onConfirm = { _ -> }
+        )
+    }
+
+    if (showSingleFileDeleteDialog && currentSingleFile != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { onShowSingleFileDeleteDialogChange(false) },
+            title = { Text(stringResource(R.string.dialog_confirm_delete)) },
+            text = { Text(stringResource(R.string.dialog_confirm_delete_single_file_message, currentSingleFile.name)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { onShowSingleFileDeleteDialogChange(false) }) {
+                    Text(stringResource(R.string.dialog_confirm), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { onShowSingleFileDeleteDialogChange(false) }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            }
         )
     }
 

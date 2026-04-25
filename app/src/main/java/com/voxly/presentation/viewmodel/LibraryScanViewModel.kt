@@ -171,7 +171,8 @@ class LibraryScanViewModel @Inject constructor(
         val selectedDirectories: List<SelectedDirectory> = emptyList(),
         val directoryFiles: Map<String, List<AudioFile>> = emptyMap(),
         val isRefreshing: Boolean = false,
-        val hasWhitelistDirectories: Boolean = false
+        val hasWhitelistDirectories: Boolean = false,
+        val isInitialLoad: Boolean = true
     )
 
     val fileBrowserUiState: StateFlow<FileBrowserUiState> = combine(
@@ -179,14 +180,17 @@ class LibraryScanViewModel @Inject constructor(
         selectedDirectories,
         directoryFiles,
         isRefreshing,
-        hasWhitelistDirectories
-    ) { audios, dirs, files, refreshing, hasWhitelist ->
+        hasWhitelistDirectories,
+        _isInitialLoad
+    ) { values: Array<Any> ->
+        @Suppress("UNCHECKED_CAST")
         FileBrowserUiState(
-            allAudios = audios,
-            selectedDirectories = dirs,
-            directoryFiles = files,
-            isRefreshing = refreshing,
-            hasWhitelistDirectories = hasWhitelist
+            allAudios = values[0] as List<AudioFile>,
+            selectedDirectories = values[1] as List<SelectedDirectory>,
+            directoryFiles = values[2] as Map<String, List<AudioFile>>,
+            isRefreshing = values[3] as Boolean,
+            hasWhitelistDirectories = values[4] as Boolean,
+            isInitialLoad = values[5] as Boolean
         )
     }.stateIn(
         scope = viewModelScope,

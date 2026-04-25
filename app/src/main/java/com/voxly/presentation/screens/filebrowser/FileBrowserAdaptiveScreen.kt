@@ -127,6 +127,7 @@ fun FileBrowserAdaptiveScreen(
     val selectedDirectories = scanUiState.selectedDirectories
     val directoryFiles = scanUiState.directoryFiles
     val isRefreshing = scanUiState.isRefreshing
+    val isInitialLoad = scanUiState.isInitialLoad
     val hasWhitelistDirectories = scanUiState.hasWhitelistDirectories
     val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
     val rootTabString by settingsViewModel.fileBrowserRootTab.collectAsStateWithLifecycle(initialValue = RootTab.DIRECTORIES.name)
@@ -182,6 +183,7 @@ fun FileBrowserAdaptiveScreen(
                     selectedDirectories = selectedDirectories,
                     directoryFiles = directoryFiles,
                     isRefreshing = isRefreshing,
+                    isInitialLoad = isInitialLoad,
                     hasAudioPermission = hasAudioPermission,
                     onRequestAudioPermission = { requestAudioPermission.launch(audioPermission) },
                     onRefresh = { scanViewModel.refresh() },
@@ -277,6 +279,7 @@ private fun FileBrowserListPane(
     selectedDirectories: List<com.voxly.presentation.viewmodel.SelectedDirectory>,
     directoryFiles: Map<String, List<AudioFile>>,
     isRefreshing: Boolean,
+    isInitialLoad: Boolean,
     hasAudioPermission: Boolean,
     onRequestAudioPermission: () -> Unit,
     onRefresh: () -> Unit,
@@ -372,6 +375,7 @@ private fun FileBrowserListPane(
                         directoryFiles = directoryFiles,
                         onOpenDirectory = onNavigateToDirectory,
                         isRefreshing = isRefreshing,
+                        isInitialLoad = isInitialLoad,
                         onRefresh = {
                             if (hasAudioPermission) {
                                 onRefresh()
@@ -389,6 +393,7 @@ private fun FileBrowserListPane(
                         onFileClick = onFileClick,
                         onFileLongClick = onFileLongClick,
                         isRefreshing = isRefreshing,
+                        isInitialLoad = isInitialLoad,
                         onRefresh = {
                             if (hasAudioPermission) {
                                 onRefresh()

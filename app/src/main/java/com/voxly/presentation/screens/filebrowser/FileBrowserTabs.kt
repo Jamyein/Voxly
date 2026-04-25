@@ -42,6 +42,7 @@ internal fun AllAudiosTabContent(
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
     isRefreshing: Boolean,
+    isInitialLoad: Boolean = false,
     onRefresh: () -> Unit,
     listState: LazyListState? = null
 ) {
@@ -61,7 +62,9 @@ internal fun AllAudiosTabContent(
                 )
             }
         ) {
-            if (audios.isEmpty()) {
+            if (isInitialLoad) {
+                com.voxly.presentation.components.SkeletonListScreen(modifier = Modifier.fillMaxSize())
+            } else if (audios.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = stringResource(R.string.no_audio_files),

@@ -747,7 +747,7 @@ private fun AnimatedContentTransitionScope<Scene<NavKey>>.computeTransition(
 
     // 尝试获取 entry-level 自定义 transition
     @Suppress("UNCHECKED_CAST")
-    val customTransition = metadataMap?.get(transitionKey.toString()) as? androidx.compose.animation.ContentTransform
+    val customTransition = (metadataMap as? Map<Any, Any?>)?.get(transitionKey) as? androidx.compose.animation.ContentTransform
 
     // 如果有 entry-level 自定义 metadata，优先使用它
     if (customTransition != null) {
