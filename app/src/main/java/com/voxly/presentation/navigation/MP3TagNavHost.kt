@@ -14,9 +14,13 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
+import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
+import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
+import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.compose.dropUnlessResumed
@@ -26,12 +30,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.metadata
+import androidx.navigation3.scene.DialogSceneStrategy
 import androidx.navigation3.scene.Scene
+import androidx.navigation3.scene.SceneStrategy
 import androidx.navigation3.ui.NavDisplay
 import com.voxly.R
 import com.voxly.core.util.LogManager
@@ -94,18 +101,21 @@ private val sharedAxisXMetadata = metadata {
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
-private fun <T : Any> rememberListDetailSceneStrategy(): ListDetailSceneStrategy<T> {
-    val windowSizeClass = currentWindowAdaptiveInfoV2().windowSizeClass
-    return remember(windowSizeClass) {
-        ListDetailSceneStrategy(windowSizeClass)
+private fun <T : Any> rememberListDetailSceneStrategy(): androidx.navigation3.scene.SceneStrategy<T> {
+    val windowAdaptiveInfo = currentWindowAdaptiveInfoV2()
+    val directive = remember(windowAdaptiveInfo) {
+        calculatePaneScaffoldDirective(windowAdaptiveInfo)
+            .copy(horizontalPartitionSpacerSize = 0.dp)
     }
+    return rememberListDetailSceneStrategy<T>(directive = directive)
 }
 
 @OptIn(
     ExperimentalMaterial3Api::class,
     ExperimentalMaterial3ExpressiveApi::class,
+    ExperimentalMaterial3AdaptiveApi::class,
     ExperimentalSharedTransitionApi::class
 )
 @Composable
@@ -225,7 +235,10 @@ fun MP3TagNavHost() {
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+@OptIn(
+    ExperimentalSharedTransitionApi::class,
+    ExperimentalMaterial3AdaptiveApi::class
+)
 @Composable
 private fun MP3TagNavDisplay(
     topLevelBackStack: TopLevelBackStack<NavKey>,
@@ -431,7 +444,7 @@ private fun MP3TagNavDisplay(
             }
 
             entry<ScanDirectorySettings>(
-                metadata = sharedAxisXMetadata
+                metadata = DialogSceneStrategy.dialog()
             ) {
                 SharedTransitionWrapper(sharedTransitionScope) {
                     com.voxly.presentation.screens.ScanDirectorySettingsScreen(
@@ -441,7 +454,7 @@ private fun MP3TagNavDisplay(
             }
 
             entry<LogViewer>(
-                metadata = sharedAxisXMetadata
+                metadata = DialogSceneStrategy.dialog()
             ) {
                 SharedTransitionWrapper(sharedTransitionScope) {
                     LogViewerScreen(
@@ -462,7 +475,8 @@ private fun MP3TagNavDisplay(
         },
         sceneStrategies = listOf(
             rememberListDetailSceneStrategy(),
-            remember { BottomSheetSceneStrategy() }
+            rememberBottomSheetSceneStrategy(),
+            DialogSceneStrategy()
         )
     )
 }

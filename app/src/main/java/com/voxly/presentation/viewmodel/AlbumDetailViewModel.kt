@@ -1,10 +1,12 @@
 package com.voxly.presentation.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
+import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
@@ -31,7 +33,8 @@ class AlbumDetailViewModel @AssistedInject constructor(
     @ApplicationContext private val context: Context,
     private val audioFileScanner: AudioFileScanner,
     private val databaseProvider: MusicCacheDatabaseProvider,
-    private val metadataProcessor: TagLibMetadataProcessor
+    private val metadataProcessor: TagLibMetadataProcessor,
+    private val coverUriProvider: CoverUriProvider
 ) : ViewModel() {
 
     private val _albumName = MutableStateFlow("")
@@ -52,6 +55,9 @@ class AlbumDetailViewModel @AssistedInject constructor(
     private val _coverPath = MutableStateFlow<String?>(null)
     val coverPath: StateFlow<String?> = _coverPath.asStateFlow()
 
+    private val _coverUri = MutableStateFlow<Uri?>(null)
+    val coverUri: StateFlow<Uri?> = _coverUri.asStateFlow()
+
     private val _files = MutableStateFlow<List<AudioFile>>(emptyList())
     val files: StateFlow<List<AudioFile>> = _files.asStateFlow()
 
@@ -62,7 +68,6 @@ class AlbumDetailViewModel @AssistedInject constructor(
     private val tagLibReadCache = mutableMapOf<String, AudioMetadata>()
 
     init {
-        // Load album data from AudioFileScanner albums on init
         loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
     }
 
@@ -71,6 +76,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
      * Year and sample rate are loaded from album_summary_view for fast aggregation.
      * Bitrate is calculated from file metadata.
      * For files with missing discNumber, uses TagLib to read from file tags.
+     * Also pre-resolves cover URI for seamless image loading during navigation.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
         if (_albumName.value == albumName && _albumArtist.value == albumArtist && _files.value.isNotEmpty()) {
@@ -88,6 +94,15 @@ class AlbumDetailViewModel @AssistedInject constructor(
                     _albumName.update { albumGroup.name }
                     _albumArtist.update { albumGroup.albumArtist }
                     _coverPath.update { albumGroup.coverPath }
+
+                    val firstFile = albumGroup.files.firstOrNull()
+                    val resolvedUri = withContext(Dispatchers.IO) {
+                        coverUriProvider.getCoverUri(
+                            albumId = firstFile?.mediaStoreAlbumId,
+                            filePath = albumGroup.coverPath ?: firstFile?.path
+                        )
+                    }
+                    _coverUri.update { resolvedUri }
 
                     val filesWithDiscNumber = withContext(Dispatchers.Default) {
                         albumGroup.files.map { file ->
@@ -108,7 +123,6 @@ class AlbumDetailViewModel @AssistedInject constructor(
 
                     _files.update { filesWithDiscNumber }
 
-                    // Aggregate year, sampleRate and bitrate directly from files
                     val albumYear = albumGroup.files.mapNotNull {
                         it.metadata.year?.trim()?.takeIf { it.isNotBlank() }
                     }.maxOrNull()

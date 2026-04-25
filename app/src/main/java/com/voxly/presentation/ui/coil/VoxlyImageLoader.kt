@@ -27,7 +27,7 @@ class VoxlyImageLoader private constructor(
                     .maxSizeBytes(50L * 1024 * 1024)
                     .build()
             }
-            .crossfade(true)
+            .crossfade(300)
             .apply {
                 if (BuildConfig.DEBUG) {
                     logger(DebugLogger())

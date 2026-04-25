@@ -112,8 +112,8 @@ object ExpressiveMotionTokens {
     val DefaultEffects = SpringSpec(1.0f, 1600f)   // Color/opacity for partial screen
 
     // Slow springs - full screen transitions (primary for page navigation)
-    val SlowSpatial = SpringSpec(0.9f, 300f)       // Full screen transitions (MAIN)
-    val SlowEffects = SpringSpec(1.0f, 800f)       // Color/opacity for full screen
+    val SlowSpatial = SpringSpec(0.85f, 450f)       // Optimized: higher stiffness for snappier transitions
+    val SlowEffects = SpringSpec(1.0f, 1200f)       // Optimized: much higher stiffness for faster fade
 
     // Legacy specs (deprecated, use above)
     @Deprecated("Use SlowSpatial for page transitions")
@@ -289,46 +289,46 @@ object ExpressiveAnimations {
     // Combines slide (for spatial movement), scale, and fade for smooth expand/collapse feel
     val ContainerTransformEnter: EnterTransition =
         slideInHorizontally(
-            initialOffsetX = { it / 3 },
+            initialOffsetX = { it / 5 },
             animationSpec = PageEnterSpringSlide
         ) +
         fadeIn(animationSpec = PageEffectsSpring) +
         scaleIn(
-            initialScale = 0.92f,
+            initialScale = 0.95f,
             animationSpec = PageEnterSpring
         )
 
     val ContainerTransformExit: ExitTransition =
         slideOutHorizontally(
-            targetOffsetX = { -it / 3 },
+            targetOffsetX = { -it / 5 },
             animationSpec = PageExitSpringSlide
         ) +
         fadeOut(animationSpec = PageEffectsSpring) +
         scaleOut(
-            targetScale = 0.92f,
+            targetScale = 0.95f,
             animationSpec = PageExitSpring
         )
 
     // Container Transform Pop (return) - reverse of enter
     val ContainerTransformPopEnter: EnterTransition =
         slideInHorizontally(
-            initialOffsetX = { -it / 3 },
+            initialOffsetX = { -it / 5 },
             animationSpec = PageEnterSpringSlide
         ) +
         scaleIn(
-            initialScale = 0.92f,
+            initialScale = 0.95f,
             animationSpec = PageEnterSpring
         ) +
         fadeIn(animationSpec = PageEffectsSpring)
 
     val ContainerTransformPopExit: ExitTransition =
         slideOutHorizontally(
-            targetOffsetX = { it / 3 },
+            targetOffsetX = { it / 5 },
             animationSpec = PageExitSpringSlide
         ) +
         fadeOut(animationSpec = PageEffectsSpring) +
         scaleOut(
-            targetScale = 0.92f,
+            targetScale = 0.95f,
             animationSpec = PageExitSpring
         )
 

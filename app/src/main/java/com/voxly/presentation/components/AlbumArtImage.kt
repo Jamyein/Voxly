@@ -1,9 +1,17 @@
 package com.voxly.presentation.components
 
 import android.net.Uri
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.keyframes
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -14,6 +22,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -74,16 +85,20 @@ fun AlbumArtImage(
     size: Dp = 64.dp,
     contentScale: ContentScale = ContentScale.Crop,
     crossfade: Boolean = true,
+    preResolvedUri: Uri? = null,
+    shimmerWhileLoading: Boolean = true,
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
     val context = LocalContext.current
     val coverUriProvider = remember(context) { CoverUriProvider(context) }
 
     var model by remember { mutableStateOf<Uri?>(null) }
+    var isLoading by remember { mutableStateOf(true) }
 
-    LaunchedEffect(albumId, filePath, coverUriProvider) {
-        val uri = coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
-        model = uri
+    LaunchedEffect(albumId, filePath, coverUriProvider, preResolvedUri) {
+        isLoading = true
+        model = preResolvedUri ?: coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
+        isLoading = false
     }
 
     var loadFailed by remember { mutableStateOf(false) }
@@ -104,6 +119,8 @@ fun AlbumArtImage(
                 contentScale = contentScale,
                 onError = { loadFailed = true }
             )
+        } else if (isLoading && shimmerWhileLoading) {
+            ShimmerAlbumArtPlaceholder()
         } else {
             placeholder()
         }
@@ -126,4 +143,44 @@ fun DefaultAlbumArtPlaceholder(
             modifier = Modifier.size(size.coerceAtMost(24.dp))
         )
     }
+}
+
+@Composable
+fun ShimmerAlbumArtPlaceholder(
+    modifier: Modifier = Modifier,
+    shape: Shape = MaterialTheme.shapes.small
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
+    val shimmerX by infiniteTransition.animateFloat(
+        initialValue = -200f,
+        targetValue = 400f,
+        animationSpec = infiniteRepeatable(
+            animation = keyframes {
+                durationMillis = 1200
+                -200f at 0 with LinearEasing
+                400f at 1200 with LinearEasing
+            },
+            repeatMode = RepeatMode.Restart
+        ),
+        label = "shimmerX"
+    )
+    val surfaceColor = MaterialTheme.colorScheme.surfaceVariant
+    val highlightColor = MaterialTheme.colorScheme.surfaceContainerHighest
+
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .clip(shape)
+            .background(
+                brush = Brush.linearGradient(
+                    colors = listOf(
+                        surfaceColor,
+                        highlightColor,
+                        surfaceColor
+                    ),
+                    start = Offset(shimmerX, 0f),
+                    end = Offset(shimmerX + 200f, 0f)
+                )
+            )
+    )
 }

@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -303,15 +304,11 @@ fun AlbumDetailScreen(
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Inline metadata
-                        val metadataLine = remember(files, formattedTotalDuration, albumBitrate, albumYear) {
+                        val metadataLine = remember(files, formattedTotalDuration, albumYear) {
                             buildString {
                                 append("${files.size}首")
                                 append(" · ")
                                 append(formattedTotalDuration)
-                                if (albumBitrate > 0) {
-                                    append(" · ")
-                                    append(formatBitrate(albumBitrate))
-                                }
                                 albumYear?.let {
                                     append(" · ")
                                     append(it)
@@ -393,58 +390,49 @@ fun AlbumDetailScreen(
                         )
                     }
 
-                    // Song list - Card wrapped for visual distinction
-                    androidx.compose.material3.Card(
+                    // Song list - grouped with spacing
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        colors = androidx.compose.material3.CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                        )
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            discFiles.forEachIndexed { index, audioFile ->
-                                SegmentedListItem(
-                                    onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
-                                    shapes = ListItemDefaults.segmentedShapes(
-                                        index = index,
-                                        count = discFiles.size
-                                    ),
-                                    colors = ListItemDefaults.segmentedColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                                    ),
-                                    leadingContent = {
-                                        Text(
-                                            text = audioFile.metadata.trackNumber?.toString() ?: "-",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier
-                                                .padding(start = 12.dp)
-                                                .width(28.dp),
-                                            textAlign = TextAlign.Start
-                                        )
-                                    },
-                                    supportingContent = {
-                                        Column {
-                                            Text(
-                                                text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-                                                maxLines = 1
-                                            )
-                                            Text(
-                                                text = "${audioFile.format.uppercase()} • ${audioFile.getFormattedDuration()}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    content = {}
-                                )
-                            }
+                        discFiles.forEachIndexed { index, audioFile ->
+                            SegmentedListItem(
+                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
+                                shapes = ListItemDefaults.segmentedShapes(
+                                    index = index,
+                                    count = discFiles.size
+                                ),
+                                colors = ListItemDefaults.segmentedColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                                ),
+                                leadingContent = {
+                                    Text(
+                                        text = audioFile.metadata.trackNumber?.toString() ?: "-",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .padding(start = 12.dp)
+                                            .width(28.dp),
+                                        textAlign = TextAlign.Start
+                                    )
+                                },
+                                content = {
+                                    Text(
+                                        text = audioFile.metadata.getDisplayTitle(audioFile.name),
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                                        maxLines = 1
+                                    )
+                                },
+                                supportingContent = {
+                                    Text(
+                                        text = "${audioFile.metadata.artist ?: ""} • ${audioFile.getFormattedDuration()}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
 
