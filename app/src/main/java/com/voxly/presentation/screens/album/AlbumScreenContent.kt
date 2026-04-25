@@ -365,22 +365,7 @@ internal fun AlbumYearGroupedContent(
                                     contentDescription = null,
                                     size = 40.dp,
                                     modifier = Modifier.fillMaxSize()
-                                ) {
-                                    Surface(
-                                        modifier = Modifier.fillMaxSize(),
-                                        shape = MaterialTheme.shapes.small,
-                                        color = MaterialTheme.colorScheme.primaryContainer
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Default.Album,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
-                                }
+                                )
                             }
                         },
                         supportingContent = {

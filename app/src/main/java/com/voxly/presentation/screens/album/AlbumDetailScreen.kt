@@ -91,6 +91,7 @@ fun AlbumDetailScreen(
     val albumSampleRate by viewModel.albumSampleRate.collectAsStateWithLifecycle()
     val files by viewModel.files.collectAsStateWithLifecycle()
     val coverPath by viewModel.coverPath.collectAsStateWithLifecycle()
+    val coverUri by viewModel.coverUri.collectAsStateWithLifecycle()
     // Calculate total duration
     val totalDuration = remember(files) {
         files.sumOf { it.duration }
@@ -257,7 +258,8 @@ fun AlbumDetailScreen(
                                 albumId = firstFile?.mediaStoreAlbumId,
                                 contentDescription = stringResource(R.string.album_cover),
                                 size = 220.dp,
-                                modifier = Modifier.fillMaxSize()
+                                modifier = Modifier.fillMaxSize(),
+                                preResolvedUri = coverUri
                             ) {
                                 Surface(
                                     modifier = Modifier.fillMaxSize(),
@@ -401,7 +403,7 @@ fun AlbumDetailScreen(
                     ) {
                         Column(
                             modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(0.dp)
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
                             discFiles.forEachIndexed { index, audioFile ->
                                 SegmentedListItem(
@@ -418,7 +420,10 @@ fun AlbumDetailScreen(
                                             text = audioFile.metadata.trackNumber?.toString() ?: "-",
                                             style = MaterialTheme.typography.titleMedium,
                                             color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(start = 12.dp)
+                                            modifier = Modifier
+                                                .padding(start = 12.dp)
+                                                .width(28.dp),
+                                            textAlign = TextAlign.Start
                                         )
                                     },
                                     supportingContent = {
