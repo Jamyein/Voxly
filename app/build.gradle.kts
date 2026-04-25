@@ -37,8 +37,8 @@ android {
         applicationId = "com.voxly"
         minSdk = 30
         targetSdk = 36
-        versionCode = 46
-        versionName = "1.6.6"
+        versionCode = 48
+        versionName = "1.7.0"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -170,21 +170,21 @@ dependencies {
     implementation("androidx.activity:activity-compose:1.13.0")
 
     // Compose BOM (用于其他 Compose 依赖)
-    implementation(platform("androidx.compose:compose-bom:2026.03.01"))
+    implementation(platform("androidx.compose:compose-bom:2026.04.01"))
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-graphics")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.foundation:foundation")
     // 使用 Kotlin 2.3.10 配合 Compose alpha 版本
-    implementation("androidx.compose.animation:animation:1.11.0-rc01")
-    implementation("androidx.compose.animation:animation-core:1.11.0-rc01")
-    implementation("androidx.compose.animation:animation-graphics:1.11.0-rc01")
+    implementation("androidx.compose.animation:animation:1.11.0")
+    implementation("androidx.compose.animation:animation-core:1.11.0")
+    implementation("androidx.compose.animation:animation-graphics:1.11.0")
     // Material3 Alpha 版本 - 覆盖 BOM 中的稳定版以使用最新特性
-    implementation("androidx.compose.material3:material3:1.5.0-alpha17")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha18")
     // Material Design 3 Expressive - RoundedPolygon 形状支持
     implementation("androidx.graphics:graphics-shapes:1.1.0")
-    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha17")
-    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha17")
+    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha18")
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha18")
     // Material3 Adaptive Layout - for dual-pane and three-pane layouts
     implementation("androidx.compose.material3.adaptive:adaptive-layout:1.2.0")
     implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.2.0")
@@ -192,12 +192,12 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
 
     // Google Fonts - Variable Font支持 (使用Compose BOM中的版本)
-    implementation("androidx.compose.ui:ui-text-google-fonts:1.11.0-rc01")
+    implementation("androidx.compose.ui:ui-text-google-fonts:1.11.0")
     implementation("androidx.appcompat:appcompat:1.7.1")
 
     // Navigation 3 - 使用新的导航架构解决退出页面点击穿透问题
-    implementation("androidx.navigation3:navigation3-runtime:1.1.0")
-    implementation("androidx.navigation3:navigation3-ui:1.1.0")
+    implementation("androidx.navigation3:navigation3-runtime:1.1.1")
+    implementation("androidx.navigation3:navigation3-ui:1.1.1")
     implementation("androidx.lifecycle:lifecycle-viewmodel-navigation3:2.10.0")
     // Navigation3 Scene Strategies (BottomSheet, ListDetail)
     // Using 1.3.0-alpha10 (latest available version with Navigation 3 + Adaptive integration)
@@ -277,7 +277,7 @@ dependencies {
 
     androidTestImplementation("androidx.test.ext:junit:1.3.0")
     androidTestImplementation("androidx.test.espresso:espresso-core:3.7.0")
-    androidTestImplementation(platform("androidx.compose:compose-bom:2026.03.01"))
+    androidTestImplementation(platform("androidx.compose:compose-bom:2026.04.01"))
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
 
     // Keep preview tooling out of runtime APK.

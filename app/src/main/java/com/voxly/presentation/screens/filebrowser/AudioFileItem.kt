@@ -47,6 +47,7 @@ internal fun AudioFileItem(
             audioFile = audioFile,
             isSelected = isSelected,
             onClick = onClick,
+            onLongClick = onLongClick,
             modifier = modifier,
             sharedElementKey = computedSharedElementKey
         )
@@ -115,11 +116,17 @@ internal fun AudioFileList(
         )
     ) {
         items(files, key = { it.path }) { audioFile ->
+            val onFileClickState by rememberUpdatedState(onFileClick)
+            val onFileLongClickState by rememberUpdatedState(onFileLongClick)
+
+            val onClickCallback = remember(audioFile.path) { { onFileClickState(audioFile) } }
+            val onLongClickCallback = remember(audioFile.path) { { onFileLongClickState(audioFile) } }
+
             AudioFileItem(
                 audioFile = audioFile,
                 isSelected = audioFile.path in selectedFiles,
-                onClick = { onFileClick(audioFile) },
-                onLongClick = { onFileLongClick(audioFile) },
+                onClick = onClickCallback,
+                onLongClick = onLongClickCallback,
                 showActions = !isSelectionMode,
                 onEditMetadata = { onEditFileMetadata(audioFile) },
                 onRename = { onRenameFile(audioFile) },

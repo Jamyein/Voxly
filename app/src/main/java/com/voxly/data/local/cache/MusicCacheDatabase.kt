@@ -24,8 +24,9 @@ import javax.inject.Singleton
         ArtistLinkEntity::class,
         RecentEditEntity::class,
         EnrichmentJobEntity::class,
+        DirectorySnapshotEntity::class,
     ],
-    version = 12,
+    version = 13,
     exportSchema = false
 )
 @TypeConverters(RoomTypeConverters::class)
@@ -36,6 +37,7 @@ abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun albumSummaryDao(): AlbumSummaryDao
     abstract fun recentEditDao(): RecentEditDao
     abstract fun enrichmentJobDao(): EnrichmentJobDao
+    abstract fun directorySnapshotDao(): DirectorySnapshotDao
 
     companion object {
         const val DATABASE_NAME = "music_cache.db"

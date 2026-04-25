@@ -3,12 +3,15 @@ package com.voxly.presentation.screens.metadata
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,6 +24,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -46,6 +50,7 @@ import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
@@ -83,11 +88,6 @@ fun MetadataEditorScreen(
     pendingOnlineCoverArt: ByteArray? = null,
     onConsumePendingOnlineCoverArt: () -> Unit = {},
 ) {
-    val sharedElementModifier = if (sharedElementKey != null) {
-        Modifier
-    } else {
-        Modifier
-    }
     val context = LocalContext.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val editedMetadata by viewModel.editedMetadata.collectAsStateWithLifecycle()
@@ -118,6 +118,7 @@ fun MetadataEditorScreen(
 
     val coverFetchMessage by viewModel.coverFetchMessage.collectAsStateWithLifecycle(initialValue = null)
     val isLyricsTimestampFormatted by viewModel.isLyricsTimestampFormatted.collectAsStateWithLifecycle()
+    val metadataEditorDynamicAlbumColor by viewModel.metadataEditorDynamicAlbumColor.collectAsStateWithLifecycle()
 
     LaunchedEffect(coverFetchMessage) {
         coverFetchMessage?.let {
@@ -173,6 +174,10 @@ fun MetadataEditorScreen(
         }
     }
 
+    BackHandler(enabled = hasUnsavedChanges) {
+        showDiscardDialog = true
+    }
+
     val galleryPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
     ) { uri: Uri? ->
@@ -205,42 +210,80 @@ fun MetadataEditorScreen(
         exitDirection = FloatingToolbarExitDirection.Bottom
     )
 
-    Scaffold(
-        modifier = Modifier
-            .nestedScroll(scrollBehavior.nestedScrollConnection)
-            .nestedScroll(floatingToolbarScrollBehavior),
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.edit_metadata)) },
-                scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                navigationIcon = {
-                    IconButton(onClick = handleNavigateBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.cd_back)
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { showMoreOptionsSheet = true }) {
-                        Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
-                    }
-                }
-            )
-        },
-        floatingActionButton = {}
-    ) { innerPadding ->
-        Box(
+    val currentSuccessState = uiState as? MetadataEditorUiState.Success
+    val albumArtBytes = editedMetadata?.albumArt ?: currentSuccessState?.editedMetadata?.albumArt
+    val mediaStoreAlbumId = currentSuccessState?.audioFile?.mediaStoreAlbumId
+    val isDarkTheme = isSystemInDarkTheme()
+
+    val dynamicPalette by produceState<MetadataEditorDynamicPalette?>(
+        initialValue = null,
+        albumArtBytes?.contentHashCode(),
+        mediaStoreAlbumId,
+        isDarkTheme,
+        metadataEditorDynamicAlbumColor
+    ) {
+        if (!metadataEditorDynamicAlbumColor) {
+            value = null
+            return@produceState
+        }
+        val fallbackBitmap = if (albumArtBytes == null && mediaStoreAlbumId != null && mediaStoreAlbumId > 0) {
+            withContext(Dispatchers.IO) {
+                loadMediaStoreAlbumArt(context, mediaStoreAlbumId)
+            }
+        } else {
+            null
+        }
+        value = MetadataEditorDynamicPaletteResolver.resolve(
+            albumArtBytes = albumArtBytes,
+            fallbackBitmap = fallbackBitmap,
+            isDarkTheme = isDarkTheme
+        )
+    }
+
+    MetadataEditorDynamicTheme(dynamicPalette = dynamicPalette) {
+        val backgroundColor = MaterialTheme.colorScheme.background
+        val onBackgroundColor = MaterialTheme.colorScheme.onBackground
+
+        Scaffold(
             modifier = Modifier
-                .fillMaxSize()
-                .padding(top = innerPadding.calculateTopPadding())
-        ) {
-            MetadataEditorScaffoldContent(
+                .nestedScroll(scrollBehavior.nestedScrollConnection)
+                .nestedScroll(floatingToolbarScrollBehavior)
+                .background(backgroundColor),
+            topBar = {
+                TopAppBar(
+                    title = { Text(stringResource(R.string.edit_metadata)) },
+                    scrollBehavior = scrollBehavior,
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = backgroundColor,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+                        titleContentColor = onBackgroundColor,
+                        navigationIconContentColor = onBackgroundColor,
+                        actionIconContentColor = onBackgroundColor
+                    ),
+                    navigationIcon = {
+                        FilledTonalIconButton(onClick = handleNavigateBack) {
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.cd_back)
+                            )
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = { showMoreOptionsSheet = true }) {
+                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
+                        }
+                    }
+                )
+            },
+            floatingActionButton = {}
+        ) { innerPadding ->
+            Surface(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = innerPadding.calculateTopPadding()),
+                tonalElevation = 0.dp
+            ) {
+                MetadataEditorScaffoldContent(
                 uiState = uiState,
                 filePath = filePath,
                 editedMetadata = editedMetadata,
@@ -303,6 +346,7 @@ fun MetadataEditorScreen(
                 floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
             )
         }
+    }
     }
 
     MetadataEditorDialogsAndSheets(
@@ -536,6 +580,9 @@ private fun MetadataEditorSuccessContent(
     }
 
     val scrollState = rememberScrollState()
+    val shouldEnhanceToolbarShadow by remember {
+        derivedStateOf { scrollState.isScrollInProgress || scrollState.value > 0 }
+    }
 
     val mediaStoreFallbackBitmap by produceState<Bitmap?>(
         initialValue = null,
@@ -592,13 +639,24 @@ private fun MetadataEditorSuccessContent(
                 .align(Alignment.BottomCenter)
                 .padding(start = 16.dp, end = 16.dp)
         ) {
+            val toolbarContainerColor = MaterialTheme.colorScheme.primaryContainer
+            val toolbarContentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            val toolbarColors = FloatingToolbarDefaults.standardFloatingToolbarColors().copy(
+                toolbarContainerColor = toolbarContainerColor,
+                toolbarContentColor = toolbarContentColor,
+                fabContainerColor = MaterialTheme.colorScheme.primary,
+                fabContentColor = MaterialTheme.colorScheme.onPrimary
+            )
+
             HorizontalFloatingToolbar(
                 expanded = true,
                 modifier = Modifier
                     .navigationBarsPadding()
                     .padding(bottom = 8.dp),
                 scrollBehavior = floatingToolbarScrollBehavior,
-                colors = FloatingToolbarDefaults.standardFloatingToolbarColors()
+                colors = toolbarColors,
+                expandedShadowElevation = if (shouldEnhanceToolbarShadow) 12.dp else 0.dp,
+                collapsedShadowElevation = if (shouldEnhanceToolbarShadow) 6.dp else 0.dp
             ) {
                 val hasLyrics = editedMetadata.lyrics?.isNotBlank() == true
                 if (hasLyrics) {
@@ -615,7 +673,8 @@ private fun MetadataEditorSuccessContent(
                     ) {
                         Icon(
                             Icons.Default.Lyrics,
-                            contentDescription = stringResource(R.string.select_lyrics_for_poster)
+                            contentDescription = stringResource(R.string.select_lyrics_for_poster),
+                            tint = toolbarContentColor
                         )
                     }
                 }
@@ -623,14 +682,16 @@ private fun MetadataEditorSuccessContent(
                 IconButton(onClick = onNavigateToOnlineLyricsSearch) {
                     Icon(
                         painter = appIconPainter(AppIcon.MusicNote),
-                        contentDescription = stringResource(R.string.cd_online_lyrics)
+                        contentDescription = stringResource(R.string.cd_online_lyrics),
+                        tint = toolbarContentColor
                     )
                 }
 
                 IconButton(onClick = onNavigateToOnlineMetadata) {
                     Icon(
                         painter = appIconPainter(AppIcon.CloudDownload),
-                        contentDescription = stringResource(R.string.cd_online_metadata)
+                        contentDescription = stringResource(R.string.cd_online_metadata),
+                        tint = toolbarContentColor
                     )
                 }
 
@@ -639,11 +700,13 @@ private fun MetadataEditorSuccessContent(
                         if (hasUnsavedChanges) {
                             onSave()
                         }
-                    }
+                    },
+                    enabled = hasUnsavedChanges
                 ) {
                     Icon(
                         Icons.Default.Save,
-                        contentDescription = stringResource(R.string.cd_save)
+                        contentDescription = stringResource(R.string.cd_save),
+                        tint = toolbarContentColor
                     )
                 }
             }

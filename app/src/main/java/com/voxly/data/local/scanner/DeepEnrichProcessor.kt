@@ -92,7 +92,7 @@ class DeepEnrichProcessor @Inject constructor(
                 chunk.map { file ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {
-                            val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
+                            val albumArtist = file.metadata.albumArtist
                             val albumName = file.metadata.album
                             enrich(file, albumArtist, albumName, includeAlbumArt = includeAlbumArt)
                         }

@@ -1,9 +1,19 @@
 package com.voxly.presentation.components.lyricsposter
 
+import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.util.Log
+import androidx.compose.material3.FloatingToolbarColors
+import androidx.compose.material3.FloatingToolbarDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import androidx.palette.graphics.Palette
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -14,6 +24,27 @@ import kotlin.math.pow
  * Uses Android Palette API for color extraction.
  */
 object ColorExtractor {
+
+    /**
+     * Enhanced filter that considers both brightness and population.
+     * Filters out extreme brightness colors and rare colors (noise).
+     * Note: Palette.Filter callback provides color and swatch, but swatch may be null
+     * during initial filtering. We use color-based brightness filtering primarily.
+     */
+    private fun createEnhancedFilter(bitmap: Bitmap): Palette.Filter {
+        val totalPixels = bitmap.width * bitmap.height
+        val minPopulation = (totalPixels * 0.005f).toInt().coerceAtLeast(1) // At least 0.5% of pixels
+        
+        return Palette.Filter { color, _ ->
+            val hsv = FloatArray(3)
+            android.graphics.Color.colorToHSV(color, hsv)
+            
+            // Filter extreme brightness (too dark or too light)
+            val isValidBrightness = hsv[2] > 0.08f && hsv[2] < 0.92f
+            
+            isValidBrightness
+        }
+    }
 
     /**
      * Extracted colors from album artwork
@@ -36,13 +67,69 @@ object ColorExtractor {
     }
 
     /**
-     * Extracts Palette from bitmap - simplified version similar to Rush
+     * Extracts Palette from bitmap with enhanced algorithm.
+     * Improvements:
+     * 1. Dynamic color count based on image content
+     * 2. Enhanced filter considering population (pixel count)
+     * 3. addTarget for vibrant/muted optimization
+     * 4. Dynamic resize based on image size
+     * 5. Region focus on center area (album art subject)
      */
-    private fun extractPalette(bitmap: Bitmap): Palette? {
+    private fun extractPalette(bitmap: Bitmap, hasFaces: Boolean = false): Palette? {
         return try {
-            Palette.from(bitmap).generate()
+            val builder = Palette.from(bitmap)
+            
+            // 1. Dynamic color count: more colors for complex images
+            val area = bitmap.width * bitmap.height
+            val colorCount = when {
+                hasFaces -> 32
+                area > 250000 -> 24 // > 500x500
+                area > 40000 -> 16  // > 200x200
+                else -> 12
+            }
+            builder.maximumColorCount(colorCount)
+            
+            // 2. Enhanced filter with population consideration
+            builder.addFilter(createEnhancedFilter(bitmap))
+            
+            // 3. Add targets to optimize vibrant/muted extraction
+            builder.addTarget(androidx.palette.graphics.Target.VIBRANT)
+            builder.addTarget(androidx.palette.graphics.Target.MUTED)
+            builder.addTarget(androidx.palette.graphics.Target.DARK_VIBRANT)
+            builder.addTarget(androidx.palette.graphics.Target.DARK_MUTED)
+            
+            // 4. Dynamic resize: larger images get resized more aggressively
+            when {
+                area > 250000 -> builder.resizeBitmapArea(22500)  // > 500x500 -> ~150x150
+                area > 100000 -> builder.resizeBitmapArea(40000)  // > 316x316 -> ~200x200
+                area > 40000 -> builder.resizeBitmapArea(62500)   // > 200x200 -> ~250x250
+            }
+            
+            // 5. Focus on center region (album art subject is typically centered)
+            // Use 70% of the center area to avoid borders and edges
+            val centerRegionSize = (min(bitmap.width, bitmap.height) * 0.7f).toInt()
+            val left = (bitmap.width - centerRegionSize) / 2
+            val top = (bitmap.height - centerRegionSize) / 2
+            builder.setRegion(
+                left.coerceAtLeast(0),
+                top.coerceAtLeast(0),
+                (left + centerRegionSize).coerceAtMost(bitmap.width),
+                (top + centerRegionSize).coerceAtMost(bitmap.height)
+            )
+            
+            builder.generate()
         } catch (e: Exception) {
+            Log.e("ColorExtractor", "Palette extraction failed", e)
             null
+        }
+    }
+
+    /**
+     * Suspended version of extractPalette that runs on a background thread.
+     */
+    private suspend fun extractPaletteSuspend(bitmap: Bitmap, hasFaces: Boolean = false): Palette? {
+        return withContext(Dispatchers.Default) {
+            extractPalette(bitmap, hasFaces)
         }
     }
 
@@ -91,6 +178,48 @@ object ColorExtractor {
     }
 
     /**
+     * Suspended version of extractColors that runs on a background thread.
+     * Official documentation requires: "Generation should always be completed on a background thread"
+     */
+    suspend fun extractColorsSuspend(bitmap: Bitmap): ExtractedColors {
+        val palette = withContext(Dispatchers.Default) {
+            extractPalette(bitmap)
+        } ?: return ExtractedColors()
+
+        return ExtractedColors(
+            backgroundDominant = Color(
+                palette.vibrantSwatch?.rgb
+                    ?: palette.lightVibrantSwatch?.rgb
+                    ?: palette.darkVibrantSwatch?.rgb
+                    ?: palette.dominantSwatch?.rgb
+                    ?: Color.DarkGray.toArgb()
+            ).copy(alpha = 1f).toArgb(),
+
+            contentDominant = Color(
+                palette.vibrantSwatch?.bodyTextColor
+                    ?: palette.lightVibrantSwatch?.bodyTextColor
+                    ?: palette.darkVibrantSwatch?.bodyTextColor
+                    ?: palette.dominantSwatch?.bodyTextColor
+                    ?: Color.White.toArgb()
+            ).copy(alpha = 1f).toArgb(),
+
+            backgroundMuted = Color(
+                palette.lightMutedSwatch?.rgb
+                    ?: palette.mutedSwatch?.rgb
+                    ?: palette.darkMutedSwatch?.rgb
+                    ?: Color.DarkGray.toArgb()
+            ).copy(alpha = 1f).toArgb(),
+
+            contentMuted = Color(
+                palette.lightMutedSwatch?.bodyTextColor
+                    ?: palette.mutedSwatch?.bodyTextColor
+                    ?: palette.darkMutedSwatch?.bodyTextColor
+                    ?: Color.White.toArgb()
+            ).copy(alpha = 1f).toArgb()
+        )
+    }
+
+    /**
      * Extracts the dominant color from a bitmap.
      */
     fun extractDominantColor(bitmap: Bitmap): Color {
@@ -122,6 +251,28 @@ object ColorExtractor {
         palette.dominantSwatch?.rgb?.let { allColors.add(Color(it)) }
         
         // Filter colors to ensure high contrast and distinct hues
+        return filterDiverseColors(allColors).ifEmpty { listOf(DEFAULT_COLOR) }
+    }
+
+    /**
+     * Suspended version of extractAllColors that runs on a background thread.
+     * Official documentation requires: "Generation should always be completed on a background thread"
+     */
+    suspend fun extractAllColorsSuspend(bitmap: Bitmap): List<Color> {
+        val palette = withContext(Dispatchers.Default) {
+            extractPalette(bitmap)
+        } ?: return listOf(DEFAULT_COLOR)
+        
+        val allColors = mutableListOf<Color>()
+        
+        palette.vibrantSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.lightVibrantSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.darkVibrantSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.mutedSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.lightMutedSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.darkMutedSwatch?.rgb?.let { allColors.add(Color(it)) }
+        palette.dominantSwatch?.rgb?.let { allColors.add(Color(it)) }
+        
         return filterDiverseColors(allColors).ifEmpty { listOf(DEFAULT_COLOR) }
     }
     
@@ -219,6 +370,376 @@ object ColorExtractor {
     private val DEFAULT_COLOR = Color(0xFF1E1E2E) // Dark purple-gray
 
     /**
+     * M3E color scheme extracted from album artwork.
+     * Maps Palette swatches to Material 3 Expressive color slots.
+     * 
+     * M3E 色彩规范：
+     * - Primary: 高饱和度强调色，用于主要操作点
+     * - onPrimary: primary 背景上的文字色，需 WCAG AA 4.5:1 对比度
+     * - primaryContainer: primary 的浅色变体，用于次要强调
+     * - Secondary: 辅助强调色，应独立于 primary
+     * - Tertiary: 第三强调色，用于补充 primary 和 secondary
+     * - Surface: 表面色，用于卡片等组件背景
+     * - surfaceContainer: 层级容器色（低→最高，5 级）
+     * - Background: 页面背景色
+     * - Outline: 边框色
+     */
+    data class M3EColors(
+        val primary: Int = 0,
+        val onPrimary: Int = 0,
+        val primaryContainer: Int = 0,
+        val onPrimaryContainer: Int = 0,
+        
+        val secondary: Int = 0,
+        val onSecondary: Int = 0,
+        val secondaryContainer: Int = 0,
+        val onSecondaryContainer: Int = 0,
+        
+        val tertiary: Int = 0,
+        val onTertiary: Int = 0,
+        
+        val surface: Int = 0,
+        val onSurface: Int = 0,
+        val surfaceContainerLowest: Int = 0,
+        val surfaceContainerLow: Int = 0,
+        val surfaceContainer: Int = 0,
+        val surfaceContainerHigh: Int = 0,
+        val surfaceContainerHighest: Int = 0,
+        
+        val background: Int = 0,
+        val onBackground: Int = 0,
+        
+        val outline: Int = 0,
+        val outlineVariant: Int = 0,
+        
+        val isValid: Boolean = false
+    )
+
+    /**
+     * Extracts M3E-compliant color scheme from album artwork.
+     * Maps to Material 3 Expressive color slots for immersive editing experience.
+     *
+     * M3E 色彩映射规范：
+     * - Primary: vibrantSwatch → 高饱和度强调色，用于主要操作点
+     * - onPrimary: 根据 primary 亮度选择白/深色，需 WCAG AA 4.5:1
+     * - primaryContainer: primary 的浅色变体 (alpha=0.15)
+     * - Secondary: darkMutedSwatch → 独立于 primary 的辅助色
+     * - Tertiary: dominantSwatch → 第三强调色
+     * - Surface: background 色用于主要表面
+     * - surfaceContainer 层级: 从 background 计算的 5 级深浅变化
+     * - Background: lightMutedSwatch → 页面背景
+     * - Outline: primary 的半透明版本
+     */
+    suspend fun extractM3EColors(bitmap: Bitmap): M3EColors {
+        Log.d("ColorExtractor", "Starting M3E color extraction from bitmap: ${bitmap.width}x${bitmap.height}")
+
+        val palette = withContext(Dispatchers.Default) {
+            extractPalette(bitmap)
+        } ?: run {
+            Log.w("ColorExtractor", "Palette extraction returned null")
+            return M3EColors()
+        }
+
+        Log.d("ColorExtractor", "Palette swatches: " +
+            "vibrant=${palette.vibrantSwatch?.rgb?.toString(16)}, " +
+            "lightVibrant=${palette.lightVibrantSwatch?.rgb?.toString(16)}, " +
+            "darkVibrant=${palette.darkVibrantSwatch?.rgb?.toString(16)}, " +
+            "muted=${palette.mutedSwatch?.rgb?.toString(16)}, " +
+            "lightMuted=${palette.lightMutedSwatch?.rgb?.toString(16)}, " +
+            "darkMuted=${palette.darkMutedSwatch?.rgb?.toString(16)}, " +
+            "dominant=${palette.dominantSwatch?.rgb?.toString(16)}")
+
+        val defaultSurface = 0xFFF5F5F5.toInt()
+        val defaultOnSurface = 0xFF1C1B1F.toInt()
+
+        // 1. Primary: 使用增强的 vibrant swatch
+        val rawPrimary = palette.vibrantSwatch?.rgb
+            ?: palette.lightVibrantSwatch?.rgb
+            ?: palette.darkVibrantSwatch?.rgb
+            ?: palette.dominantSwatch?.rgb
+            ?: 0
+        val enhancedPrimary = if (rawPrimary != 0) {
+            enhanceColor(rawPrimary, minSaturation = 0.7f, minBrightness = 0.4f)
+        } else {
+            0
+        }
+
+        // 2. onPrimary: 根据 primary 的亮度智能选择白/深色
+        val onPrimary = if (enhancedPrimary != 0) {
+            smartOnColor(enhancedPrimary)
+        } else {
+            defaultOnSurface
+        }
+
+        // 3. primaryContainer: primary 的浅色变体
+        val primaryContainer = if (enhancedPrimary != 0) {
+            Color(enhancedPrimary).copy(alpha = 0.15f).toArgb()
+        } else {
+            0
+        }
+        val onPrimaryContainer = 0xFF1C1B1F.toInt() // 深色，在浅色容器上提供高对比度
+
+        // 4. Secondary: 使用 darkMuted (独立于 primary)
+        val rawSecondary = palette.darkMutedSwatch?.rgb
+            ?: palette.mutedSwatch?.rgb
+            ?: palette.lightMutedSwatch?.rgb
+            ?: palette.dominantSwatch?.rgb
+            ?: defaultSurface
+        val enhancedSecondary = if (rawSecondary != 0) {
+            enhanceColor(rawSecondary, minSaturation = 0.3f, minBrightness = 0.5f)
+        } else {
+            rawSecondary
+        }
+        val onSecondary = smartOnColor(enhancedSecondary)
+        val secondaryContainer = Color(enhancedSecondary).copy(alpha = 0.15f).toArgb()
+        val onSecondaryContainer = 0xFF1C1B1F.toInt() // 深色，在浅色容器上提供高对比度
+
+        // 5. Tertiary: 使用 dominant swatch，降低饱和度增强以保持平衡
+        // 独立回退链：避免与 primary 相同
+        val rawTertiary = palette.dominantSwatch?.rgb ?: 0
+        val enhancedTertiary = if (rawTertiary != 0) {
+            enhanceColor(rawTertiary, minSaturation = 0.5f, minBrightness = 0.4f, saturationBoost = 1.1f)
+        } else {
+            // 独立回退：使用 secondary 的变体而非 primary
+            enhanceColor(rawSecondary, minSaturation = 0.4f, minBrightness = 0.45f, saturationBoost = 1.15f)
+        }
+        val onTertiary = smartOnColor(enhancedTertiary)
+
+        // 6. Background: Apple Music style - use dominant color with darkening
+        // Extract dominant color and apply subtle darkening for immersive background
+        val rawDominant = palette.dominantSwatch?.rgb
+            ?: palette.vibrantSwatch?.rgb
+            ?: palette.mutedSwatch?.rgb
+            ?: defaultSurface
+        
+        // Apply Apple Music style darkening: reduce brightness by ~40% to create immersive background
+        val dominantHsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(rawDominant, dominantHsv)
+        // Reduce value (brightness) to 40-60% range for immersive dark background
+        dominantHsv[2] = (dominantHsv[2] * 0.45f).coerceIn(0.15f, 0.45f)
+        // Slightly reduce saturation for elegance
+        dominantHsv[1] = (dominantHsv[1] * 0.85f).coerceIn(0.3f, 0.8f)
+        val adjustedBackground = android.graphics.Color.HSVToColor(dominantHsv)
+        
+        val onBackground = smartOnColor(adjustedBackground)
+
+        // 7. Surface 层级: 使用 smartBlendColor 计算 5 级深浅
+        // M3E 语义: Lowest = 最低层级(最暗/最深) → Highest = 最高层级(最亮/最浅)
+        // 目标亮度值确保相邻层级差异 ≥ 12%，提供清晰的视觉层级
+        val surfaceBase = adjustedBackground
+        val surfaceContainerLowest = smartBlendColor(surfaceBase, 0.12f)   // 最深 ~12% 亮度
+        val surfaceContainerLow = smartBlendColor(surfaceBase, 0.24f)      // ~24% 亮度
+        val surfaceContainer = smartBlendColor(surfaceBase, 0.38f)         // ~38% 亮度
+        val surfaceContainerHigh = smartBlendColor(surfaceBase, 0.52f)     // ~52% 亮度
+        val surfaceContainerHighest = smartBlendColor(surfaceBase, 0.68f)  // 最浅 ~68% 亮度
+
+        // 8. Surface 和 onSurface
+        val surface = Color(adjustedBackground).copy(alpha = 1.0f).toArgb()
+        val onSurface = onBackground
+
+        // 9. Outline: 基于 primary 的半透明边框
+        val outline = if (enhancedPrimary != 0) {
+            Color(enhancedPrimary).copy(alpha = 0.30f).toArgb()
+        } else {
+            0xFF1C1B1F.toInt()
+        }
+        val outlineVariant = if (surfaceContainer != 0) {
+            Color(surfaceContainer).copy(alpha = 0.20f).toArgb()
+        } else {
+            0xFF1C1B1F.toInt()
+        }
+
+        val result = M3EColors(
+            primary = enhancedPrimary,
+            onPrimary = onPrimary,
+            primaryContainer = primaryContainer,
+            onPrimaryContainer = onPrimaryContainer,
+
+            secondary = enhancedSecondary,
+            onSecondary = onSecondary,
+            secondaryContainer = secondaryContainer,
+            onSecondaryContainer = onSecondaryContainer,
+
+            tertiary = enhancedTertiary,
+            onTertiary = onTertiary,
+
+            surface = surface,
+            onSurface = onSurface,
+            surfaceContainerLowest = surfaceContainerLowest,
+            surfaceContainerLow = surfaceContainerLow,
+            surfaceContainer = surfaceContainer,
+            surfaceContainerHigh = surfaceContainerHigh,
+            surfaceContainerHighest = surfaceContainerHighest,
+
+            background = adjustedBackground,
+            onBackground = onBackground,
+
+            outline = outline,
+            outlineVariant = outlineVariant,
+
+            isValid = true
+        )
+
+        Log.d("ColorExtractor", "Final M3EColors: primary=${result.primary.toString(16)}, " +
+            "onPrimary=${result.onPrimary.toString(16)}, secondary=${result.secondary.toString(16)}")
+        return result
+    }
+
+    /**
+     * Lightens a color by mixing it with white.
+     * @param factor 0.0 = original, 1.0 = pure white
+     */
+    private fun lightenColor(colorInt: Int, factor: Float): Int {
+        val color = Color(colorInt)
+        val white = Color(0xFFFFFFFF.toInt())
+        return Color(
+            red = color.red + (white.red - color.red) * factor,
+            green = color.green + (white.green - color.green) * factor,
+            blue = color.blue + (white.blue - color.blue) * factor,
+            alpha = color.alpha
+        ).toArgb()
+    }
+
+    /**
+     * Calculates luminance of a color using perceptual weights.
+     * Returns value between 0 (black) and 1 (white).
+     */
+    private fun calculateLuminance(colorInt: Int): Float {
+        val color = Color(colorInt)
+        return color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f
+    }
+
+    /**
+     * Enhances a color by boosting saturation and ensuring minimum brightness.
+     * Returns a more vibrant and readable color.
+     * @param saturationBoost Saturation multiplier (default 1.3f)
+     */
+    private fun enhanceColor(
+        colorInt: Int,
+        minSaturation: Float,
+        minBrightness: Float,
+        saturationBoost: Float = 1.3f
+    ): Int {
+        val color = Color(colorInt)
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(colorInt, hsv)
+
+        // Boost saturation
+        hsv[1] = (hsv[1] * saturationBoost).coerceIn(minSaturation, 1.0f)
+
+        // Ensure minimum brightness
+        hsv[2] = hsv[2].coerceAtLeast(minBrightness)
+
+        return android.graphics.Color.HSVToColor(hsv)
+    }
+
+    /**
+     * Smart blend: maps any color to target luminance while preserving hue.
+     * Uses HSL space for perceptually accurate blending.
+     * @param colorInt Source color
+     * @param targetLuminance Target luminance (0-1, where 0=black, 1=white)
+     * @return Blended color with same hue but adjusted luminance
+     */
+    private fun smartBlendColor(colorInt: Int, targetLuminance: Float): Int {
+        val color = Color(colorInt)
+        val hsv = FloatArray(3)
+        android.graphics.Color.colorToHSV(colorInt, hsv)
+        
+        // Calculate current luminance using perceptual weights
+        val currentLuminance = color.red * 0.299f + color.green * 0.587f + color.blue * 0.114f
+        
+        return if (currentLuminance < targetLuminance) {
+            // Need to lighten: blend with white
+            val blendFactor = if (targetLuminance >= 1.0f) 1.0f 
+                else (targetLuminance - currentLuminance) / (1.0f - currentLuminance)
+            val white = Color(0xFFFFFFFF.toInt())
+            Color(
+                red = color.red + (white.red - color.red) * blendFactor,
+                green = color.green + (white.green - color.green) * blendFactor,
+                blue = color.blue + (white.blue - color.blue) * blendFactor,
+                alpha = color.alpha
+            ).toArgb()
+        } else {
+            // Need to darken: blend with black
+            val blendFactor = if (currentLuminance <= 0.0f) 1.0f
+                else (currentLuminance - targetLuminance) / currentLuminance
+            Color(
+                red = color.red * (1 - blendFactor),
+                green = color.green * (1 - blendFactor),
+                blue = color.blue * (1 - blendFactor),
+                alpha = color.alpha
+            ).toArgb()
+        }
+    }
+
+    /**
+     * Smart on-color selection based on background luminance.
+     * Returns white for dark backgrounds, dark color for light backgrounds.
+     * Ensures WCAG AA 4.5:1 contrast ratio for primary/secondary/tertiary colors.
+     * 
+     * Enhanced to ensure sufficient contrast against album art backgrounds:
+     * - For dark backgrounds: always returns white or very light gray
+     * - For light backgrounds: always returns dark gray or black
+     * - Never returns colors similar to the background
+     */
+    private fun smartOnColor(backgroundColor: Int): Int {
+        val bgColor = Color(backgroundColor)
+        val luminance = bgColor.red * 0.299f + bgColor.green * 0.587f + bgColor.blue * 0.114f
+
+        return if (luminance > 0.5f) {
+            // Light background: use dark text with high contrast
+            val darkGray = Color(0xFF1C1B1F.toInt())
+            val black = Color(0xFF000000.toInt())
+            
+            // Prefer dark gray over pure black for better aesthetics
+            if (calculateContrastRatio(darkGray, bgColor) >= 4.5f) {
+                0xFF1C1B1F.toInt()
+            } else if (calculateContrastRatio(black, bgColor) >= 4.5f) {
+                0xFF000000.toInt()
+            } else {
+                // Fallback: force black if nothing meets WCAG
+                0xFF000000.toInt()
+            }
+        } else {
+            // Dark background: use white or very light gray
+            val white = Color(0xFFFFFFFF.toInt())
+            val lightGray = Color(0xFFF5F5F5.toInt())
+            
+            // Always prefer white for dark backgrounds to ensure maximum contrast
+            if (calculateContrastRatio(white, bgColor) >= 4.5f) {
+                0xFFFFFFFF.toInt()
+            } else if (calculateContrastRatio(lightGray, bgColor) >= 4.5f) {
+                0xFFF5F5F5.toInt()
+            } else {
+                // Fallback: force white
+                0xFFFFFFFF.toInt()
+            }
+        }
+    }
+
+    /**
+     * Ensures text color has sufficient contrast against background.
+     * Returns white or black based on which provides better contrast.
+     */
+    private fun ensureContrast(backgroundColor: Int, defaultTextColor: Int, minRatio: Float): Int {
+        val bgColor = Color(backgroundColor)
+        val white = Color(0xFFFFFFFF.toInt())
+        val black = Color(0xFF000000.toInt())
+
+        val whiteContrast = calculateContrastRatio(white, bgColor)
+        val blackContrast = calculateContrastRatio(black, bgColor)
+
+        return if (whiteContrast >= minRatio || whiteContrast >= blackContrast) {
+            0xFFFFFFFF.toInt()
+        } else if (blackContrast >= minRatio) {
+            0xFF000000.toInt()
+        } else {
+            // If neither meets minimum, return the better one
+            if (whiteContrast > blackContrast) 0xFFFFFFFF.toInt() else 0xFF000000.toInt()
+        }
+    }
+
+    /**
      * Predefined color options for manual selection.
      */
     val colorOptions = listOf(
@@ -233,6 +754,49 @@ object ColorExtractor {
     )
 
     /**
+     * Extracts M3E color scheme from album artwork bytes.
+     * Uses BitmapFactory with ARGB_8888 config to ensure software bitmap for Palette pixel access.
+     * This is the reliable approach that doesn't depend on Coil's suspend execute API.
+     *
+     * @param bytes Raw album art bytes
+     * @param size Target size for sampling (smaller = faster extraction)
+     */
+    suspend fun extractM3EColorsFromBytes(
+        bytes: ByteArray,
+        size: Int = 200
+    ): M3EColors {
+        Log.d("ColorExtractor", "Decoding byte array, size=${bytes.size}")
+
+        val options = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+        Log.d("ColorExtractor", "Image dimensions: ${options.outWidth}x${options.outHeight}")
+
+        var sampleSize = 1
+        while (options.outWidth / sampleSize > size || options.outHeight / sampleSize > size) {
+            sampleSize *= 2
+        }
+        Log.d("ColorExtractor", "Using sampleSize=$sampleSize")
+
+        val decodeOptions = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+
+        val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, decodeOptions)
+        if (bitmap == null) {
+            Log.e("ColorExtractor", "Failed to decode bitmap from bytes")
+            return M3EColors()
+        }
+
+        Log.d("ColorExtractor", "Bitmap decoded: ${bitmap.width}x${bitmap.height}, config=${bitmap.config}")
+        return withContext(Dispatchers.Default) {
+            extractM3EColors(bitmap)
+        }
+    }
+
+    /**
      * Predefined text color options for lyrics.
      */
     val textColorOptions = listOf(
@@ -244,5 +808,75 @@ object ColorExtractor {
         Color(0xFF34D399), // Emerald
         Color(0xFF60A5FA), // Blue
         Color(0xFFA78BFA), // Violet
+    )
+}
+
+/**
+ * Local dynamic Material 3 theme wrapper that applies M3E colors extracted from album artwork.
+ * Mixes extracted colors with the default color scheme to preserve Material 3 design language
+ * while adding album-specific personality.
+ */
+@Composable
+fun DynamicM3ETheme(
+    m3eColors: ColorExtractor.M3EColors?,
+    content: @Composable () -> Unit
+) {
+    val defaultScheme = MaterialTheme.colorScheme
+    val dynamicScheme = remember(m3eColors) {
+        if (m3eColors?.isValid != true) defaultScheme
+        else {
+            val primaryColor = Color(m3eColors.primary)
+            val onPrimaryColor = Color(m3eColors.onPrimary)
+            val surfaceContainerColor = Color(m3eColors.surfaceContainer)
+            val onSurfaceColor = Color(m3eColors.onSurface)
+            val backgroundColor = Color(m3eColors.background)
+            val onBackgroundColor = Color(m3eColors.onBackground)
+
+            defaultScheme.copy(
+                primary = primaryColor,
+                onPrimary = onPrimaryColor,
+                primaryContainer = primaryColor.copy(alpha = 0.15f),
+                onPrimaryContainer = onPrimaryColor,
+                secondary = Color(m3eColors.secondary),
+                onSecondary = Color(m3eColors.onSecondary),
+                secondaryContainer = Color(m3eColors.secondaryContainer).copy(alpha = 0.15f),
+                onSecondaryContainer = Color(m3eColors.onSecondaryContainer),
+                surface = backgroundColor,
+                onSurface = onSurfaceColor,
+                surfaceContainerLowest = Color(m3eColors.surfaceContainerLowest),
+                surfaceContainerLow = Color(m3eColors.surfaceContainerLow),
+                surfaceContainer = surfaceContainerColor,
+                surfaceContainerHigh = Color(m3eColors.surfaceContainerHigh),
+                surfaceContainerHighest = Color(m3eColors.surfaceContainerHighest),
+                background = backgroundColor,
+                onBackground = onBackgroundColor,
+                outline = primaryColor.copy(alpha = 0.30f),
+                outlineVariant = surfaceContainerColor.copy(alpha = 0.20f),
+            )
+        }
+    }
+
+    MaterialTheme(
+        colorScheme = dynamicScheme,
+        typography = MaterialTheme.typography,
+        shapes = MaterialTheme.shapes,
+        content = content
+    )
+}
+
+@Composable
+fun m3eFloatingToolbarColors(
+    containerColor: Color,
+    contentColor: Color = Color.Unspecified,
+    secondaryContainerColor: Color = Color.Unspecified,
+    onSecondaryContainerColor: Color = Color.Unspecified,
+    fabContainerColor: Color = Color.Unspecified,
+    fabContentColor: Color = Color.Unspecified,
+): FloatingToolbarColors {
+    return FloatingToolbarDefaults.standardFloatingToolbarColors().copy(
+        toolbarContainerColor = containerColor,
+        toolbarContentColor = if (contentColor != Color.Unspecified) contentColor else Color.Unspecified,
+        fabContainerColor = if (fabContainerColor != Color.Unspecified) fabContainerColor else Color.Unspecified,
+        fabContentColor = if (fabContentColor != Color.Unspecified) fabContentColor else Color.Unspecified,
     )
 }

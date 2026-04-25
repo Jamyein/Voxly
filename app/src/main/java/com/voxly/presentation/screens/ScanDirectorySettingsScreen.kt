@@ -7,25 +7,27 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.asPaddingValues
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,6 +37,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -43,8 +49,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
+import com.voxly.domain.usecase.RebuildDatabaseState
 import com.voxly.presentation.viewmodel.DirectoryManagementViewModel
 import com.voxly.domain.model.WhitelistDirectory
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,10 +61,16 @@ fun ScanDirectorySettingsScreen(
     viewModel: DirectoryManagementViewModel = hiltViewModel()
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     val whitelistEnabled by viewModel.whitelistEnabled.collectAsStateWithLifecycle()
     val blacklistEnabled by viewModel.blacklistEnabled.collectAsStateWithLifecycle()
     val directories by viewModel.directories.collectAsStateWithLifecycle()
     val blacklistDirectories by viewModel.blacklistDirectories.collectAsStateWithLifecycle()
+    val rebuildState by viewModel.rebuildState.collectAsStateWithLifecycle()
+
+    var showConfirmDialog by remember { mutableStateOf(false) }
+    var showProgressDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
 
     LaunchedEffect(directories) {
         directories.forEach { directory ->
@@ -66,6 +80,30 @@ fun ScanDirectorySettingsScreen(
                     android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or
                         android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 )
+            }
+        }
+    }
+
+    LaunchedEffect(rebuildState) {
+        when (val state = rebuildState) {
+            is RebuildDatabaseState.InProgress -> {
+                showProgressDialog = true
+            }
+            is RebuildDatabaseState.Completed -> {
+                showProgressDialog = false
+                val durationSeconds = state.durationMs / 1000.0
+                snackbarHostState.showSnackbar(
+                    context.getString(R.string.rebuild_completed_message, state.totalScanned, durationSeconds)
+                )
+            }
+            is RebuildDatabaseState.Error -> {
+                showProgressDialog = false
+                snackbarHostState.showSnackbar(
+                    context.getString(R.string.rebuild_error_message, state.message)
+                )
+            }
+            RebuildDatabaseState.Idle -> {
+                showProgressDialog = false
             }
         }
     }
@@ -100,12 +138,78 @@ fun ScanDirectorySettingsScreen(
         }
     }
 
+    if (showConfirmDialog) {
+        AlertDialog(
+            onDismissRequest = { showConfirmDialog = false },
+            title = { Text(stringResource(R.string.rebuild_database_title)) },
+            text = { Text(stringResource(R.string.rebuild_database_confirm_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showConfirmDialog = false
+                        viewModel.rebuildDatabase()
+                    }
+                ) {
+                    Text(stringResource(R.string.rebuild_confirm))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showConfirmDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
+            }
+        )
+    }
+
+    if (showProgressDialog) {
+        val state = rebuildState
+        if (state is RebuildDatabaseState.InProgress) {
+            AlertDialog(
+                onDismissRequest = { },
+                title = { Text(stringResource(R.string.rebuild_progress_title)) },
+                text = {
+                    Column {
+                        Text(
+                            text = stringResource(
+                                R.string.rebuild_progress_count,
+                                state.scannedCount
+                            )
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        LinearProgressIndicator(
+                            progress = { state.progress },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(
+                                R.string.rebuild_progress_percent,
+                                (state.progress * 100).toInt()
+                            )
+                        )
+                        if (state.currentFile != null) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = state.currentFile,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                },
+                confirmButton = { }
+            )
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.settings_scan_directory_settings)) },
                 navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
+                    FilledTonalIconButton(onClick = onNavigateBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.cd_back)
@@ -114,7 +218,8 @@ fun ScanDirectorySettingsScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors()
             )
-        }
+        },
+        snackbarHost = { SnackbarHost(snackbarHostState) }
     ) { paddingValues ->
         LazyColumn(
             modifier = Modifier
@@ -122,8 +227,7 @@ fun ScanDirectorySettingsScreen(
                 .padding(paddingValues),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-            // Whitelist Section
+        ) {
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -153,7 +257,6 @@ fun ScanDirectorySettingsScreen(
                 }
             }
 
-            // Whitelist directories (only show when enabled)
             if (whitelistEnabled) {
                 item {
                     TextButton(
@@ -188,7 +291,6 @@ fun ScanDirectorySettingsScreen(
                 }
             }
 
-            // Blacklist Section
             item {
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -218,7 +320,6 @@ fun ScanDirectorySettingsScreen(
                 }
             }
 
-            // Blacklist directories (only show when enabled)
             if (blacklistEnabled) {
                 item {
                     TextButton(
@@ -254,7 +355,13 @@ fun ScanDirectorySettingsScreen(
             }
 
             item {
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                TextButton(
+                    onClick = { showConfirmDialog = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.rebuild_database))
+                }
             }
         }
     }

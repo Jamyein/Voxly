@@ -769,6 +769,8 @@ fun SettingsScreen(
     var dialogSeparatorTags by remember { mutableStateOf<Set<String>>(emptySet()) }
     var loudnessExpanded by remember { mutableStateOf(false) }
 
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
+
     val appleCountryOptions = remember {
         listOf(
             AppleCountryOption("us", R.string.settings_apple_country_us),
@@ -797,9 +799,11 @@ fun SettingsScreen(
     val currentSeparators by viewModel.artistSeparatorsSet.collectAsStateWithLifecycle()
 
     Scaffold(
+        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
         topBar = {
-            TopAppBar(
+            MediumTopAppBar(
                 title = { Text(stringResource(R.string.nav_settings)) },
+                scrollBehavior = scrollBehavior,
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
@@ -821,11 +825,13 @@ fun SettingsScreen(
             AppearanceSettingsSection(
                 themeMode = uiState.themeMode,
                 dynamicColors = uiState.dynamicColors,
+                metadataEditorDynamicAlbumColor = uiState.metadataEditorDynamicAlbumColor,
                 savedLanguageTag = effectiveLanguageTag,
                 languageExpanded = languageExpanded,
                 onLanguageExpandedChange = { languageExpanded = it },
                 onSetThemeMode = viewModel::setThemeMode,
                 onSetDynamicColors = viewModel::setDynamicColors,
+                onSetMetadataEditorDynamicAlbumColor = viewModel::setMetadataEditorDynamicAlbumColor,
                 onSetLanguage = { tag ->
                     viewModel.setLanguage(tag)
                     languageExpanded = false
@@ -959,11 +965,13 @@ fun SettingsScreen(
 private fun AppearanceSettingsSection(
     themeMode: String,
     dynamicColors: Boolean,
+    metadataEditorDynamicAlbumColor: Boolean,
     savedLanguageTag: String?,
     languageExpanded: Boolean,
     onLanguageExpandedChange: (Boolean) -> Unit,
     onSetThemeMode: (String) -> Unit,
     onSetDynamicColors: (Boolean) -> Unit,
+    onSetMetadataEditorDynamicAlbumColor: (Boolean) -> Unit,
     onSetLanguage: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -999,6 +1007,15 @@ private fun AppearanceSettingsSection(
             onCheckedChange = onSetDynamicColors,
             index = 1,
             count = 3
+        )
+
+        SegmentedSwitchRow(
+            title = stringResource(R.string.settings_metadata_editor_dynamic_album_color),
+            subtitle = stringResource(R.string.settings_metadata_editor_dynamic_album_color_subtitle),
+            checked = metadataEditorDynamicAlbumColor,
+            onCheckedChange = onSetMetadataEditorDynamicAlbumColor,
+            index = 2,
+            count = 4
         )
 
         SegmentedClickableRow(
@@ -1045,8 +1062,8 @@ private fun AppearanceSettingsSection(
                 }
             },
             onClick = { },
-            index = 2,
-            count = 3,
+            index = 3,
+            count = 4,
             modifier = Modifier.fillMaxWidth()
         )
     }

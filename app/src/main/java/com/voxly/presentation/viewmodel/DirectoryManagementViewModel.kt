@@ -6,6 +6,9 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.WhitelistDirectory
 import com.voxly.domain.repository.WhitelistRepository
+import com.voxly.domain.usecase.RebuildDatabaseManager
+import com.voxly.domain.usecase.RebuildDatabaseState
+import com.voxly.domain.usecase.UnifiedScanManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +19,9 @@ import javax.inject.Inject
 @HiltViewModel
 class DirectoryManagementViewModel @Inject constructor(
     private val whitelistRepository: WhitelistRepository,
-    private val settingsDataStore: SettingsDataStore
+    private val settingsDataStore: SettingsDataStore,
+    private val unifiedScanManager: UnifiedScanManager,
+    private val rebuildDatabaseManager: RebuildDatabaseManager
 ) : ViewModel() {
 
     val directories: StateFlow<List<WhitelistDirectory>> = 
@@ -33,11 +38,20 @@ class DirectoryManagementViewModel @Inject constructor(
     val blacklistEnabled: StateFlow<Boolean> = settingsDataStore.blacklistEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), false)
 
+    val rebuildState: StateFlow<RebuildDatabaseState> = rebuildDatabaseManager.rebuildState
+
+    fun rebuildDatabase() {
+        viewModelScope.launch {
+            rebuildDatabaseManager.rebuild()
+        }
+    }
+
     fun addDirectory(directoryUri: Uri) {
         viewModelScope.launch {
             val path = getPathFromUri(directoryUri)
             if (path.isNotBlank()) {
                 whitelistRepository.addWhitelistDirectory(directoryUri.toString(), path)
+                unifiedScanManager.syncDirectories()
             }
         }
     }
@@ -45,6 +59,7 @@ class DirectoryManagementViewModel @Inject constructor(
     fun removeDirectory(directoryUri: String) {
         viewModelScope.launch {
             whitelistRepository.removeWhitelistDirectory(directoryUri)
+            unifiedScanManager.syncDirectories()
         }
     }
 

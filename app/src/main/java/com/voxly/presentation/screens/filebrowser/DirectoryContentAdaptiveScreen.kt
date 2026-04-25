@@ -24,12 +24,13 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledTonalIconButton
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
@@ -100,12 +101,6 @@ fun DirectoryContentAdaptiveScreen(
     val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
     val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
 
-    LaunchedEffect(directoryUri) {
-        if (directoryUri.isNotEmpty()) {
-            scanViewModel.loadFromDirectory(android.net.Uri.parse(directoryUri))
-        }
-    }
-
     val directoryFiles by scanViewModel.directoryFiles.collectAsStateWithLifecycle()
     val sortedDirectoryFiles by scanViewModel.sortedDirectoryFiles.collectAsStateWithLifecycle()
     val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
@@ -134,10 +129,10 @@ fun DirectoryContentAdaptiveScreen(
         initialFirstVisibleItemIndex = savedScrollPosition.index,
         initialFirstVisibleItemScrollOffset = savedScrollPosition.offset
     )
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val isSelectionMode = selectedFiles.isNotEmpty()
 
-    LaunchedEffect(isSinglePane, isSelectionMode) {
+    LaunchedEffect(isSinglePane) {
         if (isSinglePane && isSelectionMode) {
             viewModel.clearSelection()
         }
@@ -188,7 +183,7 @@ fun DirectoryContentAdaptiveScreen(
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
         value = navigator.scaffoldValue,
-        modifier = modifier.nestedScroll(floatingToolbarScrollBehavior),
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection).nestedScroll(floatingToolbarScrollBehavior),
         listPane = {
             AnimatedPane(
                 modifier = Modifier.fillMaxSize()
@@ -209,23 +204,29 @@ fun DirectoryContentAdaptiveScreen(
                     scrollBehavior = scrollBehavior,
                     floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
                     onNavigateBack = onNavigateBack,
-                    onNavigateToMetadata = { audioFile ->
-                        if (isSinglePane) {
-                            onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
-                        } else {
-                            coroutineScope.launch {
-                                navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                    onNavigateToMetadata = remember(viewModel, isSelectionMode, isSinglePane, coroutineScope, navigator, onNavigateToMetadata) {
+                        { audioFile ->
+                            if (isSelectionMode) {
+                                viewModel.toggleFileSelection(audioFile.path)
+                            } else if (isSinglePane) {
+                                onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                            } else {
+                                coroutineScope.launch {
+                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
+                                }
                             }
                         }
                     },
-                    onFileLongClick = { audioFile ->
-                        viewModel.toggleFileSelection(audioFile.path)
+                    onFileLongClick = remember(viewModel) {
+                        { audioFile ->
+                            viewModel.toggleFileSelection(audioFile.path)
+                        }
                     },
                     onClearSelection = { viewModel.clearSelection() },
                     onSelectAll = { viewModel.selectAll() },
                     onShowSearchSheet = { showSearchSheet = true },
                     onSortOptionChange = { settingsViewModel.setDirectoryFileSortOption(it.name) },
-                    onRefresh = { scanViewModel.refresh() },
+                    onRefresh = { scanViewModel.refreshDirectoryIncremental(directoryUri) },
                     onNavigateBackWithPane = {
                         coroutineScope.launch { navigator.navigateBack() }
                     },
@@ -393,7 +394,7 @@ private fun DirectoryListTopAppBar(
 ) {
     var isSortExpanded by remember { mutableStateOf(false) }
 
-    TopAppBar(
+    MediumTopAppBar(
         title = {
             if (isSelectionMode) {
                 Text("$selectedFilesSize selected")
@@ -412,7 +413,7 @@ private fun DirectoryListTopAppBar(
             titleContentColor = MaterialTheme.colorScheme.onSurface
         ),
         navigationIcon = {
-            IconButton(onClick = {
+            FilledTonalIconButton(onClick = {
                 if (isSelectionMode) {
                     onClearSelection()
                 } else if (!isSinglePane && canCloseDetailPane) {

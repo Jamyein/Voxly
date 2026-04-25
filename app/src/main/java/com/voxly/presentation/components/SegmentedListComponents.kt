@@ -1058,10 +1058,11 @@ fun AudioFileStandardRowCompact(
     audioFile: AudioFile,
     isSelected: Boolean = false,
     onClick: () -> Unit,
+    onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier,
     sharedElementKey: String? = null
 ) = ListItem(
-    modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick),
+    modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
     colors = ListItemDefaults.colors(
         containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface
     ),
@@ -1069,27 +1070,21 @@ fun AudioFileStandardRowCompact(
         Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodySmall.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {
-        Column {
-            // 第一行：艺术家
-            audioFile.metadata.artist?.let { artist ->
-                Text(
-                    text = artist,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
+        val displayText = buildString {
+            audioFile.metadata.artist?.let { append(it) }
+            audioFile.metadata.album?.let {
+                if (isNotEmpty()) append(" - ")
+                append(it)
             }
-            // 第二行：专辑名
-            audioFile.metadata.album?.let { album ->
-                Text(
-                    text = album,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+        }
+        if (displayText.isNotEmpty()) {
+            Text(
+                text = displayText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     },
     leadingContent = {

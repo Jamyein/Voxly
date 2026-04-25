@@ -92,9 +92,6 @@ private val sharedAxisXMetadata = metadata {
     put(NavDisplay.PopTransitionKey) {
         ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
     }
-    put(NavDisplay.PredictivePopTransitionKey) {
-        ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
-    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -174,6 +174,37 @@ class SafWriteAccessService @Inject constructor(
         return mapDocumentIdToPath(treeDocId)
     }
 
+    fun findTreeUriForPath(filePath: String): Uri? {
+        val normalizedPath = PathUtils.normalizeFilePath(filePath)
+        val permissions = context.contentResolver.persistedUriPermissions
+            .filter { it.isReadPermission && it.isWritePermission }
+
+        if (permissions.isEmpty()) return null
+
+        val candidates = permissions.mapNotNull { permission ->
+            val grantType = detectGrantType(permission.uri) ?: return@mapNotNull null
+            val basePath = when (grantType) {
+                SafGrantType.TREE -> mapTreeUriToPath(permission.uri)
+                SafGrantType.DOCUMENT -> mapDocumentUriToPath(permission.uri)
+            } ?: return@mapNotNull null
+
+            val normalizedBasePath = PathUtils.normalizeFilePath(basePath)
+            val matchLength = calculateMatchLength(normalizedPath, normalizedBasePath)
+            if (matchLength < 0) {
+                return@mapNotNull null
+            }
+
+            SafGrantMatch(
+                permission = permission,
+                grantType = grantType,
+                basePath = normalizedBasePath,
+                matchLength = matchLength
+            )
+        }.sortedByDescending { it.matchLength }
+
+        return candidates.firstOrNull()?.permission?.uri
+    }
+
     private fun mapDocumentUriToPath(documentUri: Uri): String? {
         val documentId = runCatching { DocumentsContract.getDocumentId(documentUri) }.getOrNull() ?: return null
         return mapDocumentIdToPath(documentId)

@@ -7,8 +7,10 @@ import android.provider.MediaStore
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import timber.log.Timber
+import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.MusicLibraryCache
+import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.remote.downloadImageBytes
@@ -33,7 +35,11 @@ import com.voxly.domain.usecase.ApplyOnlineMetadataUseCase
 import com.voxly.domain.usecase.SaveMetadataResult
 import com.voxly.domain.usecase.SaveMetadataUseCase
 import com.voxly.domain.usecase.UnifiedScanManager
+import com.voxly.presentation.components.lyricsposter.ColorExtractor
+import com.voxly.presentation.components.lyricsposter.ColorExtractor.M3EColors
 import com.voxly.presentation.navigation.MetadataEditor
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import com.voxly.presentation.viewmodel.SearchSeedHolder
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -64,6 +70,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import coil3.SingletonImageLoader
 import kotlin.math.log10
 import kotlin.math.pow
 import kotlin.math.sqrt
@@ -100,6 +107,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
     private val unifiedScanManager: UnifiedScanManager,
+    private val audioFileScanner: AudioFileScanner,
     private val musicLibraryCache: MusicLibraryCache,
     private val searchSeedHolder: SearchSeedHolder,
     private val pendingMetadataHolder: PendingMetadataHolder,
@@ -125,6 +133,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = ScanMode.TRACK_ONLY
+        )
+
+    val metadataEditorDynamicAlbumColor: StateFlow<Boolean> = settingsDataStore.metadataEditorDynamicAlbumColor
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5000),
+            initialValue = true
         )
 
     private val _uiState = MutableStateFlow<MetadataEditorUiState>(MetadataEditorUiState.Loading)
@@ -187,6 +202,12 @@ class MetadataEditorViewModel @AssistedInject constructor(
     // Lyrics timestamp format state
     private val _isLyricsTimestampFormatted = MutableStateFlow(false)
     val isLyricsTimestampFormatted: StateFlow<Boolean> = _isLyricsTimestampFormatted.asStateFlow()
+
+    // Album art colors extracted from cover image via Palette API
+    private val _m3eColors = MutableStateFlow<M3EColors?>(null)
+    val m3eColors: StateFlow<M3EColors?> = _m3eColors.asStateFlow()
+    private val _isM3eColorsResolved = MutableStateFlow(false)
+    val isM3eColorsResolved: StateFlow<Boolean> = _isM3eColorsResolved.asStateFlow()
 
     // Debounced text input StateFlows - moved from Composable to ViewModel to avoid recomposition issues
     private val _titleTextFlow = MutableStateFlow<String?>(null)
@@ -300,6 +321,8 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private fun loadAudioFile() {
         viewModelScope.launch {
             _uiState.update { MetadataEditorUiState.Loading }
+            _isM3eColorsResolved.update { false }
+            _m3eColors.update { null }
 
             try {
                 val audioFileResult = audioRepository.getAudioFile(filePath)
@@ -381,7 +404,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         }
                     }
                 }
+
+                // Extract M3E color scheme using BitmapFactory with software bitmap config
+                // inPreferredConfig = ARGB_8888 ensures software bitmap for Palette pixel access
+                val colors = ColorExtractor.extractM3EColorsFromBytes(bytes, 200)
+                _m3eColors.update { colors }
             }
+            _isM3eColorsResolved.update { true }
         }
     }
 
@@ -480,8 +509,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
     fun updateAlbumArt(albumArtBytes: ByteArray?) {
         val currentMetadata = _editedMetadata.value ?: return
         val updatedMetadata = currentMetadata.copy(albumArt = albumArtBytes)
-
         setEditedMetadata(updatedMetadata)
+
+        viewModelScope.launch(Dispatchers.Default) {
+            val colors = albumArtBytes?.let { ColorExtractor.extractM3EColorsFromBytes(it, 200) }
+            _m3eColors.update { colors }
+            _isM3eColorsResolved.update { true }
+        }
     }
 
     private fun setEditedMetadata(updatedMetadata: AudioMetadata, modifiedField: MetadataField? = null) {
@@ -796,10 +830,31 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         )
 
                         // Sync file to cache so FileBrowser gets updated data
-                        unifiedScanManager.syncFile(filePath)
+                        val syncedFile = unifiedScanManager.syncFile(filePath).getOrNull()
                         
                         // Mark file as edited by user to prevent EnrichmentWorker overwrites
                         musicLibraryCache.markFileAsEditedByUser(filePath)
+                        
+                        // Invalidate cover cache so FileBrowser shows updated cover
+                        // Re-query MediaStore for the correct album ID because it may have changed
+                        // after metadata update (e.g., album/artist changed)
+                        val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(filePath)
+                        val oldAlbumId = currentSuccessState?.audioFile?.mediaStoreAlbumId
+                        
+                        // Invalidate both old and new album IDs if they differ
+                        correctAlbumId?.let { albumId ->
+                            CoverUriProvider.invalidateAlbumId(albumId)
+                        }
+                        if (oldAlbumId != null && oldAlbumId != correctAlbumId) {
+                            CoverUriProvider.invalidateAlbumId(oldAlbumId)
+                        }
+                        
+                        // Invalidate embedded cover cache for this file to force re-extraction
+                        CoverUriProvider.invalidateFilePath(filePath)
+                        
+                        // Clear Coil memory and disk cache to force reload of album art images
+                        SingletonImageLoader.get(context).memoryCache?.clear()
+                        SingletonImageLoader.get(context).diskCache?.clear()
                     }
                     is SaveMetadataResult.RecoverableError -> {
                         _saveResult.emit(result.message)

@@ -82,6 +82,16 @@ class SettingsViewModel @Inject constructor(
         )
 
     /**
+     * Metadata editor dynamic album color state
+     */
+    val metadataEditorDynamicAlbumColor: StateFlow<Boolean> = settingsDataStore.metadataEditorDynamicAlbumColor
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = true
+        )
+
+    /**
      * Language tag state (null means system default)
      */
     val languageTag: StateFlow<String?> = settingsDataStore.languageTag
@@ -366,6 +376,15 @@ class SettingsViewModel @Inject constructor(
     fun setDynamicColors(enabled: Boolean) {
         viewModelScope.launch {
             settingsDataStore.setDynamicColors(enabled)
+        }
+    }
+
+    /**
+     * Set metadata editor dynamic album color preference
+     */
+    fun setMetadataEditorDynamicAlbumColor(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setMetadataEditorDynamicAlbumColor(enabled)
         }
     }
 
@@ -867,6 +886,7 @@ class SettingsViewModel @Inject constructor(
      */
     val uiState: StateFlow<SettingsUiState> = combine(
         dynamicColors,
+        metadataEditorDynamicAlbumColor,
         languageTag,
         themeMode,
         appleCountryCode,
@@ -887,23 +907,24 @@ class SettingsViewModel @Inject constructor(
     ) { values ->
         SettingsUiState(
             dynamicColors = values[0] as Boolean,
-            savedLanguageTag = values[1] as String?,
-            themeMode = values[2] as String,
-            appleCountryCode = values[3] as String,
-            onlineSearchLimit = values[4] as Int,
-            onlineSearchLimitMusicBrainz = values[5] as Int,
-            onlineSearchLimitITunes = values[6] as Int,
-            onlineSearchLimitNetease = values[7] as Int,
-            onlineSearchLimitQQMusic = values[8] as Int,
-            sourceConfigurations = values[9] as SourceConfigurations,
-            loggingEnabled = values[10] as Boolean,
-            fileLoggingEnabled = values[11] as Boolean,
-            consoleLoggingEnabled = values[12] as Boolean,
-            crashReportingEnabled = values[13] as Boolean,
-            replayGainTargetLoudness = values[14] as Float,
-            scanMode = values[15] as String,
-            minDurationFilterEnabled = values[16] as Boolean,
-            lyricsTimestampFormatEnabled = values[17] as Boolean
+            metadataEditorDynamicAlbumColor = values[1] as Boolean,
+            savedLanguageTag = values[2] as String?,
+            themeMode = values[3] as String,
+            appleCountryCode = values[4] as String,
+            onlineSearchLimit = values[5] as Int,
+            onlineSearchLimitMusicBrainz = values[6] as Int,
+            onlineSearchLimitITunes = values[7] as Int,
+            onlineSearchLimitNetease = values[8] as Int,
+            onlineSearchLimitQQMusic = values[9] as Int,
+            sourceConfigurations = values[10] as SourceConfigurations,
+            loggingEnabled = values[11] as Boolean,
+            fileLoggingEnabled = values[12] as Boolean,
+            consoleLoggingEnabled = values[13] as Boolean,
+            crashReportingEnabled = values[14] as Boolean,
+            replayGainTargetLoudness = values[15] as Float,
+            scanMode = values[16] as String,
+            minDurationFilterEnabled = values[17] as Boolean,
+            lyricsTimestampFormatEnabled = values[18] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), SettingsUiState())
 }

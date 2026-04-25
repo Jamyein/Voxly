@@ -24,7 +24,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import kotlin.random.Random
@@ -33,6 +37,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.TileMode
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.painter.BitmapPainter
@@ -304,33 +309,32 @@ fun LyricsPosterCardWithBlurBackground(
     val isBlurredCoverTheme = config.colorTheme == PosterColorTheme.BLURRED_COVER
     val isGradientTheme = config.colorTheme == PosterColorTheme.GRADIENT
 
-    // 为渐变色主题生成随机渐变色和方向
-    val gradientBrush = remember(albumArt, config.colorTheme) {
+    // 为渐变色主题生成随机渐变色和方向 - 使用 LaunchedEffect 在后台执行
+    var gradientBrush by remember { mutableStateOf<Brush?>(null) }
+    
+    LaunchedEffect(albumArt, config.colorTheme) {
         if (isGradientTheme && albumArt != null) {
-            val allColors = ColorExtractor.extractAllColors(albumArt)
+            val allColors = ColorExtractor.extractAllColorsSuspend(albumArt)
             if (allColors.size >= 2) {
-                // 随机选择2-3个颜色
                 val shuffled = allColors.shuffled()
-                val colorCount = Random.nextInt(2, 4) // 2 or 3 colors
+                val colorCount = Random.nextInt(2, 4)
                 val selectedColors = shuffled.take(colorCount)
                 
-                // 使用径向渐变，从中心向外扩散，增大半径确保多种颜色可见
-                val centerX = Random.nextFloat() * 0.2f + 0.4f // 0.4-0.6，接近中心
-                val centerY = Random.nextFloat() * 0.2f + 0.4f // 0.4-0.6，接近中心
-                // 使用极大的半径，让颜色均匀分布在整个海报区域
-                val radius = 2.5f // 固定的超大半径，确保渐变覆盖整个区域
+                val centerX = Random.nextFloat() * 0.2f + 0.4f
+                val centerY = Random.nextFloat() * 0.2f + 0.4f
+                val radius = 2.5f
                 
-                Brush.radialGradient(
+                gradientBrush = Brush.radialGradient(
                     colors = selectedColors,
                     center = Offset(centerX, centerY),
                     radius = radius,
-                    tileMode = androidx.compose.ui.graphics.TileMode.Clamp
+                    tileMode = TileMode.Clamp
                 )
             } else {
-                null
+                gradientBrush = null
             }
         } else {
-            null
+            gradientBrush = null
         }
     }
 
@@ -368,7 +372,7 @@ fun LyricsPosterCardWithBlurBackground(
                     modifier = Modifier
                         .fillMaxWidth()
                         .matchParentSize()
-                        .background(gradientBrush)
+                        .background(gradientBrush!!)
                         .blur(30.dp)
                 )
 

@@ -4,6 +4,7 @@
 - Load `lesson.md`
 - Prefer executable sources of truth (Gradle config, CI workflows) over prose when they conflict.
 - Update `lesson.md` automatically when encountering errors or issues. Format: `N. [Problem description]. Rule: [Correct approach that prevents this].` This becomes institutional knowledge for the repo.
+- 当用户提出需求、问题、bug时要询问用户以详细弄清楚
 
 ## Project map (high signal)
 - Single Android app module: `app/`.

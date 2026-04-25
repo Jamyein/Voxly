@@ -22,7 +22,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
@@ -144,7 +144,7 @@ fun FileBrowserAdaptiveScreen(
     var showSearchSheet by remember { mutableStateOf(false) }
 
     val listState = rememberLazyListState()
-    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val isSelectionMode = selectedFiles.isNotEmpty()
     val canScrollToTop by remember {
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
@@ -245,7 +245,7 @@ fun FileBrowserAdaptiveScreen(
                 )
             }
         },
-        modifier = modifier
+        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
     )
 
     if (showSearchSheet) {
@@ -299,7 +299,7 @@ private fun FileBrowserListPane(
     val coroutineScope = rememberCoroutineScope()
 
     Column(modifier = modifier) {
-        TopAppBar(
+        MediumTopAppBar(
             title = {
                 Text(
                     text = stringResource(R.string.nav_file_browser),

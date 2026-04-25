@@ -43,6 +43,7 @@ class SettingsDataStore @Inject constructor(
         private const val TAG = "SettingsDataStore"
         val DARK_THEME = booleanPreferencesKey("dark_theme")
         val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
+        val METADATA_EDITOR_DYNAMIC_ALBUM_COLOR = booleanPreferencesKey("metadata_editor_dynamic_album_color")
         val LANGUAGE_TAG = stringPreferencesKey("language_tag")
         val THEME_MODE = stringPreferencesKey("theme_mode")
         val SELECTED_DIRECTORY_URIS = stringPreferencesKey("selected_directory_uris")
@@ -113,6 +114,14 @@ class SettingsDataStore @Inject constructor(
     val dynamicColors: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
             preferences[DYNAMIC_COLORS] ?: true
+        }
+
+    /**
+     * Metadata editor dynamic album color preference flow
+     */
+    val metadataEditorDynamicAlbumColor: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[METADATA_EDITOR_DYNAMIC_ALBUM_COLOR] ?: true
         }
 
     /**
@@ -327,7 +336,7 @@ class SettingsDataStore @Inject constructor(
      */
     val minDurationFilterEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[MIN_DURATION_FILTER_ENABLED] ?: false
+            preferences[MIN_DURATION_FILTER_ENABLED] ?: true
         }
 
     /**
@@ -579,6 +588,16 @@ class SettingsDataStore @Inject constructor(
         Timber.d("$TAG: setDynamicColors: $enabled")
         context.settingsDataStore.edit { preferences ->
             preferences[DYNAMIC_COLORS] = enabled
+        }
+    }
+
+    /**
+     * Save metadata editor dynamic album color preference
+     */
+    suspend fun setMetadataEditorDynamicAlbumColor(enabled: Boolean) {
+        Timber.d("$TAG: setMetadataEditorDynamicAlbumColor: $enabled")
+        context.settingsDataStore.edit { preferences ->
+            preferences[METADATA_EDITOR_DYNAMIC_ALBUM_COLOR] = enabled
         }
     }
 

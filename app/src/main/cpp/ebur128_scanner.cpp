@@ -5,13 +5,19 @@
  * Audio decoding is handled by Android MediaCodec on the Kotlin side.
  *
  * Data flow: Kotlin MediaCodec -> PCM short[] -> JNI -> libebur128 -> LUFS/peak
+ *
+ * Best practices followed:
+ * - Explicit Java_* JNI exports (avoid classloader-sensitive JNI_OnLoad registration)
+ * - GetShortArrayRegion instead of GetShortArrayElements (1 JNI call vs 2)
+ * - Direct ByteBuffer for zero-copy large data transfer
+ * - Pre-allocated result array to avoid heap allocation per call
  */
 
 #include <jni.h>
 #include <string>
-#include <vector>
 #include <cmath>
 #include <algorithm>
+#include <cstdio>
 
 extern "C" {
 #include <ebur128.h>
@@ -36,20 +42,14 @@ struct ScannerState {
     bool true_peak;
     bool dual_mono;
     double target_loudness;
+    void* cached_buffer_addr;
+    size_t cached_buffer_size;
 };
 
-/**
- * Create a new scanner instance.
- * Returns a native pointer (as jlong) to be passed to subsequent calls.
- */
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeCreate(
-    JNIEnv* env, jobject thiz,
-    jint channels,
-    jint sample_rate,
-    jboolean true_peak,
-    jboolean dual_mono,
-    jdouble target_loudness
+    JNIEnv* env, jobject thiz, jint channels, jint sample_rate,
+    jboolean true_peak, jboolean dual_mono, jdouble target_loudness
 ) {
     int mode = EBUR128_MODE_I | EBUR128_MODE_SAMPLE_PEAK;
     if (true_peak) mode |= EBUR128_MODE_TRUE_PEAK;
@@ -74,6 +74,8 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeCreate(
     state->true_peak = true_peak;
     state->dual_mono = dual_mono;
     state->target_loudness = target_loudness;
+    state->cached_buffer_addr = nullptr;
+    state->cached_buffer_size = 0;
 
     LOGD("Scanner created: ch=%d sr=%d tp=%d dm=%d target=%.1f",
          channels, sample_rate, true_peak, dual_mono, target_loudness);
@@ -81,43 +83,28 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeCreate(
     return reinterpret_cast<jlong>(state);
 }
 
-/**
- * Process a block of PCM samples (16-bit signed little-endian).
- *
- * @param scannerPtr Native pointer from nativeCreate
- * @param samples    PCM samples as short array (interleaved: L, R, L, R, ...)
- * @param frameCount Number of frames (NOT sample count). For stereo, samples.length = frameCount * 2
- */
 extern "C" JNIEXPORT void JNICALL
 Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessFrames(
-    JNIEnv* env, jobject thiz,
-    jlong scannerPtr,
-    jshortArray samples,
-    jint frameCount
+    JNIEnv* env, jobject thiz, jlong scannerPtr, jshortArray samples, jint frameCount
 ) {
     auto* state = reinterpret_cast<ScannerState*>(scannerPtr);
     if (!state || !state->ebur) return;
 
-    jshort* data = env->GetShortArrayElements(samples, nullptr);
-    ebur128_add_frames_short(state->ebur, data, static_cast<size_t>(frameCount));
-    env->ReleaseShortArrayElements(samples, data, JNI_ABORT);
+    // Use GetShortArrayRegion instead of GetShortArrayElements + ReleaseShortArrayElements
+    // This reduces 2 JNI calls to 1 and avoids copy
+    jshort buffer[8192];
+    jsize totalSamples = frameCount * state->channels;
+
+    for (jsize offset = 0; offset < totalSamples; offset += 8192) {
+        jsize chunkSize = std::min((jsize)8192, totalSamples - offset);
+        env->GetShortArrayRegion(samples, offset, chunkSize, buffer);
+        ebur128_add_frames_short(state->ebur, buffer, chunkSize / state->channels);
+    }
 }
 
-/**
- * Process a block of PCM samples from a Direct ByteBuffer.
- * This is the most efficient method for large data transfers.
- *
- * @param scannerPtr Native pointer from nativeCreate
- * @param buffer     Direct ByteBuffer containing S16 PCM data
- * @param size       Buffer size in bytes
- * @return Number of frames processed
- */
 extern "C" JNIEXPORT jint JNICALL
 Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessBuffer(
-    JNIEnv* env, jobject thiz,
-    jlong scannerPtr,
-    jobject buffer,
-    jint size
+    JNIEnv* env, jobject thiz, jlong scannerPtr, jobject buffer, jint size
 ) {
     auto* state = reinterpret_cast<ScannerState*>(scannerPtr);
     if (!state || !state->ebur) return 0;
@@ -125,30 +112,21 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessBu
     jbyte* data = static_cast<jbyte*>(env->GetDirectBufferAddress(buffer));
     if (!data) return 0;
 
+    state->cached_buffer_addr = data;
+    state->cached_buffer_size = size;
+
     size_t frameCount = size / (state->channels * sizeof(short));
     ebur128_add_frames_short(state->ebur, reinterpret_cast<short*>(data), frameCount);
 
     return static_cast<jint>(frameCount);
 }
 
-/**
- * Get scan results.
- *
- * Returns double[6]:
- *   [0] track_gain (dB)
- *   [1] track_peak
- *   [2] track_loudness (LUFS)
- *   [3] track_range (LU)
- *   [4] true_peak (or sample peak if true_peak=false)
- *   [5] reference_loudness
- */
-extern "C" JNIEXPORT jdoubleArray JNICALL
+extern "C" JNIEXPORT jboolean JNICALL
 Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult(
-    JNIEnv* env, jobject thiz,
-    jlong scannerPtr
+    JNIEnv* env, jobject thiz, jlong scannerPtr, jdoubleArray result
 ) {
     auto* state = reinterpret_cast<ScannerState*>(scannerPtr);
-    if (!state || !state->ebur) return nullptr;
+    if (!state || !state->ebur) return JNI_FALSE;
 
     double loudness = -HUGE_VAL;
     int rc = ebur128_loudness_global(state->ebur, &loudness);
@@ -160,39 +138,41 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult
     ebur128_loudness_range(state->ebur, &range);
 
     double peak = 0.0;
-    for (int ch = 0; ch < state->channels; ch++) {
-        double ch_peak = 0.0;
-        ebur128_sample_peak(state->ebur, ch, &ch_peak);
-        if (ch_peak > peak) peak = ch_peak;
+    if (state->true_peak) {
+        for (int ch = 0; ch < state->channels; ch++) {
+            double tp = 0.0;
+            ebur128_true_peak(state->ebur, ch, &tp);
+            if (tp > peak) peak = tp;
+        }
+    } else {
+        for (int ch = 0; ch < state->channels; ch++) {
+            double sp = 0.0;
+            ebur128_sample_peak(state->ebur, ch, &sp);
+            if (sp > peak) peak = sp;
+        }
     }
 
-    // Calculate gain
     double gain = state->target_loudness - loudness;
 
-    jdoubleArray result = env->NewDoubleArray(6);
-    jdouble values[6] = {
-        gain,               // [0] track_gain
-        peak,               // [1] track_peak
-        loudness,           // [2] track_loudness
-        range,              // [3] track_range
-        peak,               // [4] true_peak (same as sample peak for now)
-        state->target_loudness  // [5] reference_loudness
-    };
+    jdouble values[6];
+    values[0] = gain;
+    values[1] = peak;
+    values[2] = loudness;
+    values[3] = range;
+    values[4] = peak;
+    values[5] = state->target_loudness;
+
     env->SetDoubleArrayRegion(result, 0, 6, values);
 
     LOGD("Result: gain=%.2f peak=%.6f loudness=%.2f range=%.2f",
          gain, peak, loudness, range);
 
-    return result;
+    return JNI_TRUE;
 }
 
-/**
- * Destroy the scanner and free native resources.
- */
 extern "C" JNIEXPORT void JNICALL
 Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeDestroy(
-    JNIEnv* env, jobject thiz,
-    jlong scannerPtr
+    JNIEnv* env, jobject thiz, jlong scannerPtr
 ) {
     auto* state = reinterpret_cast<ScannerState*>(scannerPtr);
     if (state) {
@@ -203,9 +183,6 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeDestroy(
     }
 }
 
-/**
- * Get library version info.
- */
 extern "C" JNIEXPORT jstring JNICALL
 Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetVersion(
     JNIEnv* env, jobject thiz

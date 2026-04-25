@@ -60,3 +60,9 @@
 -keepclassmembers class com.voxly.domain.model.AudioMetadata {
     public java.lang.String year;
 }
+
+# ========================================
+# JNI rules (ReplayGain native scanner)
+# Keep class name stable for JNI_OnLoad FindClass/RegisterNatives.
+# ========================================
+-keep class com.voxly.data.local.replaygain.native.EbuR128NativeScanner { *; }

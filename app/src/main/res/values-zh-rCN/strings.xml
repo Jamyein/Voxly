@@ -12,6 +12,9 @@
     <string name="no_audio_files">未找到音频文件</string>
     <string name="file_count">%d 个文件</string>
     <string name="track_count">%d 首</string>
+    <string name="tab_artists">艺术家</string>
+    <string name="no_artists_found">未找到艺术家</string>
+    <string name="album_count">%d 张专辑</string>
     <string name="loading">加载中…</string>
 
     <!-- Metadata -->
@@ -266,6 +269,8 @@
     <string name="settings_dark_theme">深色主题</string>
     <string name="settings_dark_theme_subtitle">使用深色配色方案</string>
     <string name="settings_dynamic_color_subtitle">使用来自壁纸的颜色（Android 12+）</string>
+    <string name="settings_metadata_editor_dynamic_album_color">动态专辑颜色</string>
+    <string name="settings_metadata_editor_dynamic_album_color_subtitle">在元数据编辑器中从专辑封面提取颜色</string>
     <string name="settings_scan_quality_subtitle">质量越高，扫描越慢</string>
     <string name="settings_scan_mode">扫描模式</string>
     <string name="settings_scan_mode_subtitle">单轨、单专辑、多专辑</string>
@@ -441,6 +446,15 @@
     <string name="add_blacklist_directory">添加黑名单目录</string>
     <string name="no_whitelist_directories">未添加白名单目录</string>
     <string name="no_blacklist_directories">未添加黑名单目录</string>
+    <string name="rebuild_database">重建数据库</string>
+    <string name="rebuild_database_title">重建数据库</string>
+    <string name="rebuild_database_confirm_message">这将清除所有缓存数据（音频文件、专辑缩略图、艺术家链接）并根据白/黑名单设置进行全量重新扫描。\n\n此操作无法撤销。</string>
+    <string name="rebuild_confirm">重建</string>
+    <string name="rebuild_progress_title">正在重建数据库…</string>
+    <string name="rebuild_progress_count">已扫描：%d 个文件</string>
+    <string name="rebuild_progress_percent">%d%%</string>
+    <string name="rebuild_completed_message">重建完成！已扫描 %1$d 个文件，耗时 %2$.1f 秒</string>
+    <string name="rebuild_error_message">重建失败：%s</string>
 
     <!-- Settings - Network/Proxy -->
     <string name="settings_section_network">网络</string>

@@ -11,12 +11,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
@@ -29,7 +27,6 @@ import com.voxly.R
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import kotlinx.coroutines.launch
 
 @Composable
 fun NetworkCoverImage(
@@ -79,18 +76,14 @@ fun AlbumArtImage(
     crossfade: Boolean = true,
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
-    val density = LocalDensity.current
-    val targetSizePx = with(density) { size.roundToPx() }
     val context = LocalContext.current
     val coverUriProvider = remember(context) { CoverUriProvider(context) }
 
     var model by remember { mutableStateOf<Uri?>(null) }
-    val scope = rememberCoroutineScope()
 
     LaunchedEffect(albumId, filePath, coverUriProvider) {
-        scope.launch {
-            model = coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
-        }
+        val uri = coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
+        model = uri
     }
 
     var loadFailed by remember { mutableStateOf(false) }
@@ -103,7 +96,6 @@ fun AlbumArtImage(
             AsyncImage(
                 model = ImageRequest.Builder(LocalContext.current)
                     .data(model)
-                    .size(targetSizePx)
                     .scale(Scale.FILL)
                     .crossfade(crossfade)
                     .build(),

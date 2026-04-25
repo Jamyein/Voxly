@@ -37,6 +37,8 @@ import com.voxly.domain.usecase.BatchEditMetadataUseCase
 import com.voxly.domain.usecase.BatchEngine
 import com.voxly.domain.usecase.BatchReplayGainUseCase
 import com.voxly.domain.usecase.MemoryPressureMonitor
+import com.voxly.domain.usecase.RebuildDatabaseManager
+import com.voxly.domain.usecase.RebuildDatabaseManagerImpl
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.domain.usecase.UnifiedScanManagerImpl
 import com.voxly.presentation.viewmodel.CoverRepositorySearchStrategy
@@ -49,6 +51,7 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -350,6 +353,11 @@ object AppModule {
     ): UnifiedScanManager {
         return UnifiedScanManagerImpl(audioFileScanner, musicLibraryCache, settingsDataStore, scope)
     }
+
+    @Provides
+    @Singleton
+    @Named("io")
+    fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 }
 
 @Module
@@ -409,4 +417,10 @@ abstract class RepositoryModule {
     abstract fun bindOnlineCoverSearchStrategy(
         coverRepositorySearchStrategy: CoverRepositorySearchStrategy
     ): OnlineCoverSearchStrategy
+
+    @Binds
+    @Singleton
+    abstract fun bindRebuildDatabaseManager(
+        rebuildDatabaseManagerImpl: RebuildDatabaseManagerImpl
+    ): RebuildDatabaseManager
 }

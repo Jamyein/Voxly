@@ -357,6 +357,8 @@
     <string name="settings_dark_theme">Dark Theme</string>
     <string name="settings_dark_theme_subtitle">Use dark color scheme</string>
     <string name="settings_dynamic_color_subtitle">Use colors from your wallpaper (Android 12+)</string>
+    <string name="settings_metadata_editor_dynamic_album_color">Dynamic Album Color</string>
+    <string name="settings_metadata_editor_dynamic_album_color_subtitle">Extract colors from album artwork in metadata editor</string>
     <string name="settings_scan_quality_subtitle">Higher quality = slower scanning</string>
     <string name="settings_scan_mode">Scan Mode</string>
     <string name="settings_scan_mode_subtitle">Compatible with foobar2000: Track Only, Single Album, or Albums</string>
@@ -527,6 +529,15 @@
     <string name="add_blacklist_directory">Add Blacklist Directory</string>
     <string name="no_whitelist_directories">No whitelist directories added</string>
     <string name="no_blacklist_directories">No blacklist directories added</string>
+    <string name="rebuild_database">Rebuild Database</string>
+    <string name="rebuild_database_title">Rebuild Database</string>
+    <string name="rebuild_database_confirm_message">This will clear all cached data (audio files, album thumbnails, artist links) and perform a full rescan based on whitelist/blacklist settings.\n\nThis action cannot be undone.</string>
+    <string name="rebuild_confirm">Rebuild</string>
+    <string name="rebuild_progress_title">Rebuilding Database…</string>
+    <string name="rebuild_progress_count">Scanned: %d files</string>
+    <string name="rebuild_progress_percent">%d%%</string>
+    <string name="rebuild_completed_message">Rebuild complete! Scanned %1$d files in %2$.1f seconds</string>
+    <string name="rebuild_error_message">Rebuild failed: %s</string>
 
     <!-- Lyrics Poster -->
     <string name="share_lyrics_poster">Share Lyrics Poster</string>

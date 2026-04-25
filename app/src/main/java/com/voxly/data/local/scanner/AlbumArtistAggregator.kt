@@ -84,6 +84,11 @@ class AlbumArtistAggregator @Inject constructor(
     private val _albumsMap = MutableStateFlow<Map<String, AlbumGroup>>(emptyMap())
     private val _artistsMap = MutableStateFlow<Map<String, ArtistGroup>>(emptyMap())
 
+    // Reverse index: filePath -> albumKey for O(1) lookup when metadata changes
+    private val _fileAlbumMap = mutableMapOf<String, String>()
+    // Reverse index: filePath -> artistKey for O(1) lookup when metadata changes
+    private val _fileArtistMap = mutableMapOf<String, String>()
+
     private val baseFilterConfig = combine(
         settingsDataStore.whitelistEnabled,
         settingsDataStore.blacklistEnabled,
@@ -188,27 +193,68 @@ class AlbumArtistAggregator @Inject constructor(
         val newAlbumKey = CacheChangeKeys.extractAlbumKey(file)
         val newArtistKeys = CacheChangeKeys.extractArtistKeysWithSeparators(file, config.separators)
 
-        if (albumKey != null && newAlbumKey != null && albumKey != newAlbumKey) {
-            removeFileFromAlbum(filePath, albumKey)
-        }
-        if (newAlbumKey != null && newAlbumKey != albumKey) {
-            addFileToAlbum(file, newAlbumKey)
-        } else if (albumKey != null) {
-            updateAlbumIncremental(file, albumKey)
+        // Use reverse index to find old album/artist keys for O(1) lookup
+        val oldAlbumKey = _fileAlbumMap[filePath]
+        val oldArtistKey = _fileArtistMap[filePath]
+
+        // Remove from old album if key changed
+        if (oldAlbumKey != null && oldAlbumKey != newAlbumKey) {
+            removeFileFromAlbum(filePath, oldAlbumKey)
         }
 
-        val oldArtistKeys = artistKey?.let { setOf(it) } ?: emptySet()
-        val keysToRemove = oldArtistKeys - newArtistKeys.toSet()
-        val keysToAdd = newArtistKeys.toSet() - oldArtistKeys
-
-        for (key in keysToRemove) {
-            removeFileFromArtist(filePath, key)
+        // Add/update in new album
+        if (newAlbumKey != null) {
+            if (newAlbumKey != oldAlbumKey) {
+                addFileToAlbum(file, newAlbumKey)
+            } else {
+                updateAlbumIncremental(file, newAlbumKey)
+            }
         }
-        for (key in keysToAdd) {
-            addFileToArtist(file, key, config.separators)
+
+        // Remove from old artist if key changed
+        if (oldArtistKey != null && !newArtistKeys.contains(oldArtistKey)) {
+            removeFileFromArtist(filePath, oldArtistKey)
+        }
+
+        // Add/update in new artists
+        for (key in newArtistKeys) {
+            if (key != oldArtistKey) {
+                addFileToArtist(file, key, config.separators)
+            } else {
+                updateArtistIncremental(file, key, config.separators)
+            }
         }
 
         emitUpdatedLists()
+    }
+
+    private fun addFileToAlbum(file: AudioFile, albumKey: String) {
+        val currentMap = _albumsMap.value.toMutableMap()
+        val existingAlbum = currentMap[albumKey]
+
+        val newFiles = if (existingAlbum != null) {
+            existingAlbum.files.filter { it.path != file.path } + file
+        } else {
+            listOf(file)
+        }
+
+        val albumName = file.metadata.album ?: ""
+        val albumArtist = file.metadata.albumArtist
+        val coverFile = newFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
+            ?: newFiles.firstOrNull()
+        val albumYear = newFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
+
+        currentMap[albumKey] = AlbumGroup(
+            name = albumName,
+            albumArtist = albumArtist?.takeIf { it.isNotBlank() },
+            files = newFiles.sortedBy { it.metadata.trackNumber },
+            coverPath = coverFile?.path,
+            year = albumYear
+        )
+        _albumsMap.value = currentMap
+        
+        // Update reverse index
+        _fileAlbumMap[file.path] = albumKey
     }
 
     private fun removeFileFromAlbum(filePath: String, albumKey: String) {
@@ -230,32 +276,9 @@ class AlbumArtistAggregator @Inject constructor(
             )
         }
         _albumsMap.value = currentMap
-    }
-
-    private fun addFileToAlbum(file: AudioFile, albumKey: String) {
-        val currentMap = _albumsMap.value.toMutableMap()
-        val existingAlbum = currentMap[albumKey]
-
-        val newFiles = if (existingAlbum != null) {
-            existingAlbum.files.filter { it.path != file.path } + file
-        } else {
-            listOf(file)
-        }
-
-        val albumName = file.metadata.album ?: albumKey.removePrefix("id:").removePrefix("str:")
-        val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
-        val coverFile = newFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-            ?: newFiles.firstOrNull()
-        val albumYear = newFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
-
-        currentMap[albumKey] = AlbumGroup(
-            name = albumName,
-            albumArtist = albumArtist?.takeIf { it.isNotBlank() },
-            files = newFiles.sortedBy { it.metadata.trackNumber },
-            coverPath = coverFile?.path,
-            year = albumYear
-        )
-        _albumsMap.value = currentMap
+        
+        // Update reverse index
+        _fileAlbumMap.remove(filePath)
     }
 
     private fun removeFileFromArtist(filePath: String, artistKey: String) {
@@ -279,6 +302,9 @@ class AlbumArtistAggregator @Inject constructor(
             )
         }
         _artistsMap.value = currentMap
+        
+        // Update reverse index
+        _fileArtistMap.remove(filePath)
     }
 
     private suspend fun addFileToArtist(file: AudioFile, artistKey: String, separators: Set<String>) {
@@ -305,6 +331,9 @@ class AlbumArtistAggregator @Inject constructor(
             coverPath = coverFile?.path
         )
         _artistsMap.value = currentMap
+        
+        // Update reverse index
+        _fileArtistMap[file.path] = artistKey
     }
 
     private suspend fun updateAlbumIncremental(file: AudioFile, albumKey: String) {
@@ -317,8 +346,8 @@ class AlbumArtistAggregator @Inject constructor(
             listOf(file)
         }
 
-        val albumName = file.metadata.album ?: albumKey.removePrefix("id:").removePrefix("str:")
-        val albumArtist = file.metadata.albumArtist ?: file.metadata.artist
+        val albumName = file.metadata.album ?: ""
+        val albumArtist = file.metadata.albumArtist
         val coverFile = newAlbumFiles.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
             ?: newAlbumFiles.firstOrNull()
         val albumYear = newAlbumFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
@@ -332,6 +361,9 @@ class AlbumArtistAggregator @Inject constructor(
         )
 
         _albumsMap.value = currentMap
+        
+        // Update reverse index
+        _fileAlbumMap[file.path] = albumKey
     }
 
     private suspend fun updateArtistIncremental(
@@ -363,6 +395,9 @@ class AlbumArtistAggregator @Inject constructor(
                 files = newArtistFiles.sortedBy { it.metadata.album },
                 coverPath = coverFile?.path
             )
+            
+            // Update reverse index
+            _fileArtistMap[file.path] = key
         }
 
         _artistsMap.value = currentMap
@@ -395,6 +430,8 @@ class AlbumArtistAggregator @Inject constructor(
             }
 
             _albumsMap.value = currentMap
+            // Update reverse index
+            _fileAlbumMap.remove(filePath)
         }
 
         if (artistKey != null) {
@@ -423,6 +460,8 @@ class AlbumArtistAggregator @Inject constructor(
             }
 
             _artistsMap.value = currentMap
+            // Update reverse index
+            _fileArtistMap.remove(filePath)
         }
 
         emitUpdatedLists()
@@ -552,6 +591,15 @@ class AlbumArtistAggregator @Inject constructor(
         }.toMap()
 
         _albumsMap.value = albumsMap
+        
+        // Rebuild reverse index for albums
+        _fileAlbumMap.clear()
+        albumsMap.forEach { (key, album) ->
+            album.files.forEach { file ->
+                _fileAlbumMap[file.path] = key
+            }
+        }
+        
         emitUpdatedLists()
     }
 
@@ -628,6 +676,14 @@ class AlbumArtistAggregator @Inject constructor(
         }.toMap()
 
         _artistsMap.value = artistsMap
+        
+        // Rebuild reverse index for artists
+        _fileArtistMap.clear()
+        artistsMap.forEach { (key, artist) ->
+            artist.files.forEach { file ->
+                _fileArtistMap[file.path] = key
+            }
+        }
     }
 
     /**

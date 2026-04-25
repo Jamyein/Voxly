@@ -7,16 +7,14 @@ import androidx.room.Query
 interface AlbumSummaryDao {
     @Query("""
         SELECT 
-            album AS albumTitle,
-            albumArtist AS albumArtist,
+            :albumTitle AS albumTitle,
+            :albumArtist AS albumArtist,
             COUNT(*) AS songCount,
             MAX(NULLIF(year, '')) AS year,
             MAX(sampleRate) AS maxSampleRate,
             MAX(bitrate) AS maxBitrate
         FROM cached_audio_files
         WHERE album = :albumTitle AND (albumArtist = :albumArtist OR :albumArtist IS NULL)
-        GROUP BY albumArtist, album
-        LIMIT 1
     """)
     suspend fun getAlbumSummary(albumTitle: String, albumArtist: String?): AlbumSummary?
 

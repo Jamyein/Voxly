@@ -157,7 +157,7 @@ class AudioFileScanner @Inject constructor(
         forceRefresh: Boolean = false
     ): List<AudioFile> = scanMutex.withLock {
         val files = when {
-            !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, false)
+            !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, forceRefresh)
             incremental && hasCachedData() -> incrementalScanStrategy.scan()
             else -> {
                 if (!forceRefresh && hasCachedData()) {
@@ -214,6 +214,14 @@ class AudioFileScanner @Inject constructor(
      */
     fun getAlbumArtUri(albumId: Long): android.net.Uri {
         return mediaStoreDataSource.getAlbumArtUri(albumId)
+    }
+
+    /**
+     * Queries MediaStore for the correct album ID of a file.
+     * This re-queries MediaStore because album ID can change when album/artist metadata changes.
+     */
+    suspend fun queryMediaStoreAlbumId(filePath: String): Long? {
+        return mediaStoreDataSource.queryMediaStoreAlbumId(filePath)
     }
 
     /**
