@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -31,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
+import androidx.compose.material3.carousel.HorizontalUncontainedCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -41,6 +44,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
@@ -244,60 +248,89 @@ fun ArtistDetailScreen(
 
                         item {
                             val carouselState = rememberCarouselState { albumsSorted.size }
-                            val autoScrollEnabled = albumsSorted.size > 1
+                            val albumCount = albumsSorted.size
 
-                            LaunchedEffect(carouselState) {
-                                snapshotFlow { carouselState.currentItem }
-                                    .collect { currentIndex ->
-                                        viewModel.preloadAdjacentAlbumCovers(currentIndex)
-                                        if (autoScrollEnabled) {
-                                            delay(4000)
-                                            if (carouselState.currentItem == currentIndex) {
-                                                val nextIndex = (currentIndex + 1) % albumsSorted.size
-                                                try {
-                                                    carouselState.animateScrollToItem(nextIndex)
-                                                } catch (_: Exception) {
-                                                    // 动画可能被用户交互中断，静默处理
-                                                }
-                                            }
-                                        }
-                                    }
+                            // 预加载相邻专辑封面
+                            LaunchedEffect(carouselState.currentItem) {
+                                viewModel.preloadAdjacentAlbumCovers(carouselState.currentItem)
                             }
 
-                            HorizontalMultiBrowseCarousel(
-                                state = carouselState,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(216.dp)
-                                    .padding(vertical = 8.dp),
-                                preferredItemWidth = 140.dp,
-                                itemSpacing = 16.dp,
-                                contentPadding = PaddingValues(horizontal = 20.dp)
-                            ) { page ->
-                                val albumInfo = albumsSorted[page]
-                                val albumArtPath = albumCovers[albumInfo.name]
-                                val albumId = albumInfo.files.firstOrNull {
-                                    it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
-                                }?.mediaStoreAlbumId
+                            // Auto-scroll: 4秒间隔
+                            if (albumCount > 1) {
+                                LaunchedEffect(carouselState.currentItem) {
+                                    delay(4000)
+                                    val nextIndex = (carouselState.currentItem + 1) % albumCount
+                                    try {
+                                        carouselState.animateScrollToItem(nextIndex)
+                                    } catch (_: Exception) {
+                                        // 用户交互中断，静默处理
+                                    }
+                                }
+                            }
 
-                                // 当前项缩放效果
-                                val isCurrentItem = carouselState.currentItem == page
-                                val scale by animateFloatAsState(
-                                    targetValue = if (isCurrentItem) 1.0f else 0.92f,
-                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
-                                    label = "carousel_scale"
-                                )
+                            // 当只有1-2项时，使用 UncontainedCarousel 避免裁剪，实现1:1显示
+                            if (albumCount <= 2) {
+                                HorizontalUncontainedCarousel(
+                                    state = carouselState,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .wrapContentHeight()
+                                        .padding(vertical = 16.dp),
+                                    itemWidth = 186.dp,
+                                    itemSpacing = 8.dp,
+                                    contentPadding = PaddingValues(horizontal = 16.dp)
+                                ) { page ->
+                                    val albumInfo = albumsSorted[page]
+                                    val albumArtPath = albumCovers[albumInfo.name]
+                                    val albumId = albumInfo.files.firstOrNull {
+                                        it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+                                    }?.mediaStoreAlbumId
 
-                                AlbumCard(
-                                    albumName = albumInfo.name,
-                                    albumArtist = artistName,
-                                    trackCount = albumInfo.files.size,
-                                    albumYear = albumInfo.year,
-                                    albumArtPath = albumArtPath,
-                                    albumId = albumId,
-                                    onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
-                                    modifier = Modifier.padding(horizontal = 4.dp)
-                                )
+                                    AlbumCard(
+                                        albumName = albumInfo.name,
+                                        albumArtist = artistName,
+                                        trackCount = albumInfo.files.size,
+                                        albumYear = albumInfo.year,
+                                        albumArtPath = albumArtPath,
+                                        albumId = albumId,
+                                        onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
+                                        modifier = Modifier
+                                            .width(186.dp)
+                                            .height(186.dp)
+                                            .clip(MaterialTheme.shapes.extraLarge)
+                                    )
+                                }
+                            } else {
+                                HorizontalMultiBrowseCarousel(
+                                    state = carouselState,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .wrapContentHeight()
+                                        .padding(vertical = 16.dp),
+                                    preferredItemWidth = 186.dp,
+                                    itemSpacing = 8.dp,
+                                    contentPadding = PaddingValues(horizontal = 16.dp)
+                                ) { page ->
+                                    val albumInfo = albumsSorted[page]
+                                    val albumArtPath = albumCovers[albumInfo.name]
+                                    val albumId = albumInfo.files.firstOrNull {
+                                        it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+                                    }?.mediaStoreAlbumId
+
+                                    AlbumCard(
+                                        albumName = albumInfo.name,
+                                        albumArtist = artistName,
+                                        trackCount = albumInfo.files.size,
+                                        albumYear = albumInfo.year,
+                                        albumArtPath = albumArtPath,
+                                        albumId = albumId,
+                                        onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
+                                        modifier = Modifier
+                                            .width(140.dp)
+                                            .height(200.dp)
+                                            .clip(MaterialTheme.shapes.extraLarge)
+                                    )
+                                }
                             }
                         }
                     }
