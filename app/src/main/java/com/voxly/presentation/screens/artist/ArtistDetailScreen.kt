@@ -1,83 +1,70 @@
 package com.voxly.presentation.screens.artist
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.FilledTonalIconButton
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.MediumTopAppBar
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.carousel.HorizontalMultiBrowseCarousel
 import androidx.compose.material3.carousel.rememberCarouselState
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import kotlinx.coroutines.delay
 import com.voxly.R
-import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
-import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.createArtistAvatarSharedElementKey
-import com.voxly.presentation.screens.filebrowser.AudioFileItem
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 
 /**
- * Album information for carousel display with year.
+ * 艺术家详情页：杂志质感大字报风格
+ *
+ * 采用 M3E 规范：
+ * - 超大艺术家名字主导排版（杂志封面级）
+ * - 小头像 + 横向统计标签（杂志副标题风格）
+ * - 固定返回按钮（不随滚动隐藏）
+ * - 竖版叠加专辑卡片
+ * - stickyHeader 分区标题（大写标签风格）
+ * - 歌曲直接平铺，透明背景
+ * - spring() 动画
  */
-private data class AlbumInfo(
-    val name: String,
-    val files: List<com.voxly.domain.model.AudioFile>,
-    val year: Int?
-)
-
-/**
- * Extracts 4-digit year from a string (e.g., "2023" or "2023-01-01").
- */
-private fun extractYear(rawYear: String?): Int? {
-    val normalized = rawYear?.trim().orEmpty()
-    if (normalized.isEmpty()) return null
-    return Regex("""\d{4}""").find(normalized)?.value?.toIntOrNull()
-}
-
-/**
- * Artist detail screen showing artist info and song list.
- */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 fun ArtistDetailScreen(
     artistName: String,
@@ -86,7 +73,7 @@ fun ArtistDetailScreen(
     onNavigateToAlbumDetail: (String, String?) -> Unit,
     viewModel: ArtistDetailViewModel
 ) {
-    // Load artist from cache
+    // 加载艺术家数据
     LaunchedEffect(artistName) {
         viewModel.loadArtist(artistName)
     }
@@ -99,23 +86,20 @@ fun ArtistDetailScreen(
     val albumYears by viewModel.albumYears.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
 
-    // Pull-to-refresh callback
     val onRefresh: () -> Unit = {
         viewModel.refresh(forceRefresh = false)
     }
 
-    // Separate singles (songs without album) and albums
+    // 分离单曲和专辑歌曲
     val singles = remember(files) {
         files.filter { it.metadata.album.isNullOrBlank() }
     }
 
-    // Group albums and sort by year (newest first)
-    // Use albumYears from ViewModel which includes fallback to TagLib for missing years
+    // 专辑按年份排序（最新的在前）
     val albumsSorted = remember(files, albumYears) {
         files.filter { !it.metadata.album.isNullOrBlank() }
             .groupBy { it.metadata.album!! }
             .map { (albumName, albumFiles) ->
-                // Get year from ViewModel's albumYears (includes TagLib fallback)
                 val yearStr = albumYears[albumName]
                 val year = yearStr?.let { extractYear(it) }
                 AlbumInfo(
@@ -127,239 +111,237 @@ fun ArtistDetailScreen(
             .sortedByDescending { it.year ?: 0 }
     }
 
-    // All songs sorted by title
-    val allSongsSorted = remember(files) {
-        files.sortedBy { it.metadata.title?.lowercase() ?: "" }
+    val songCount = files.size
+    val albumCount = albumsSorted.size
+
+    val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
+    val listState = rememberLazyListState()
+
+    // 滚动过 Hero 区域后显示标题
+    val showTitle by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex > 0 ||
+            (listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset > 200)
+        }
     }
 
-    // Use the same AlbumArtImage component as ArtistListItem for consistency
-    // This ensures the avatar displays the same way as in the artist list
-    val avatarKey = createArtistAvatarSharedElementKey(artistName)
-    
-    val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-
-    Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
-        topBar = {
-            MediumTopAppBar(
-                title = { },
-                scrollBehavior = scrollBehavior,
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onSurface
-                ),
-                navigationIcon = {
-                    FilledTonalIconButton(onClick = onNavigateBack) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(R.string.back)
-                        )
-                    }
-                }
-            )
-        }
-    ) { innerPadding ->
-        PullToRefreshBox(
-            isRefreshing = isRefreshing,
-            onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize()
-        ) {
-            LazyColumn(
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    top = 12.dp + innerPadding.calculateTopPadding(),
-                    bottom = 12.dp + innerPadding.calculateBottomPadding(),
-                    start = 12.dp,
-                    end = 12.dp
-                ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                // Header: Circle Avatar + Artist Name with shared element transition
-                item {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        // Circle Avatar (150dp) with shared element transition
-                        // Using AlbumArtImage like ArtistListItem for consistent display
-                        // Pass both coverPath and coverAlbumId for fallback support
-                        Box(
-                            modifier = Modifier
-                                .size(150.dp)
-                                .clip(CircleShape),
-                            contentAlignment = Alignment.Center
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+            containerColor = MaterialTheme.colorScheme.background,
+            topBar = {
+                TopAppBar(
+                    title = {
+                        AnimatedVisibility(
+                            visible = showTitle,
+                            enter = fadeIn(
+                                animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                            )
                         ) {
-                            if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
-                                AlbumArtImage(
-                                    filePath = coverPath,
-                                    albumId = coverAlbumId,
-                                    contentDescription = stringResource(R.string.artist_cover),
-                                    size = 150.dp,
-                                    modifier = Modifier.fillMaxSize()
-                                )
-                            } else {
-                                DefaultAlbumArtPlaceholder(size = 150.dp)
+                            Text(
+                                text = artistNameState,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    },
+                    scrollBehavior = scrollBehavior,
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        scrolledContainerColor = MaterialTheme.colorScheme.surface,
+                        titleContentColor = MaterialTheme.colorScheme.onSurface
+                    ),
+                    navigationIcon = {
+                        FilledTonalIconButton(
+                            onClick = onNavigateBack,
+                            modifier = Modifier.padding(start = 12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(R.string.back)
+                            )
+                        }
+                    }
+                )
+            }
+        ) { innerPadding ->
+            PullToRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = onRefresh,
+                modifier = Modifier.fillMaxSize()
+            ) {
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        top = innerPadding.calculateTopPadding() + 24.dp,
+                        bottom = 12.dp + innerPadding.calculateBottomPadding(),
+                        start = 0.dp,
+                        end = 0.dp
+                    ),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    // Hero 区域：杂志大字报风格
+                    item {
+                        val enterAnimation = fadeIn(
+                            animationSpec = spring(stiffness = Spring.StiffnessMedium)
+                        ) + slideInVertically(
+                            animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                            initialOffsetY = { it / 4 }
+                        )
+
+                        AnimatedVisibility(
+                            visible = true,
+                            enter = enterAnimation
+                        ) {
+                            HeroSection(
+                                artistName = artistNameState,
+                                coverPath = coverPath,
+                                coverAlbumId = coverAlbumId,
+                                songCount = songCount,
+                                albumCount = albumCount,
+                                modifier = Modifier.padding(bottom = 24.dp)
+                            )
+                        }
+                    }
+
+                    // 单曲区域
+                    if (singles.isNotEmpty()) {
+                        stickyHeader {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.background)
+                            ) {
+                                SectionHeader(title = stringResource(R.string.singles))
                             }
                         }
 
-                        Spacer(modifier = Modifier.height(16.dp))
-
-                        // Artist Name (headlineMedium centered)
-                        Text(
-                            text = artistNameState,
-                            style = MaterialTheme.typography.headlineMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-
-                // Singles Section (Songs without album)
-                if (singles.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = stringResource(R.string.singles),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
+                        items(singles, key = { "single_${it.path}" }) { audioFile ->
+                            SongListItem(
+                                audioFile = audioFile,
+                                onClick = {
+                                    onNavigateToMetadata(
+                                        audioFile.path,
+                                        createAlbumArtSharedElementKey(audioFile.path)
+                                    )
+                                }
+                            )
+                        }
                     }
 
-                    items(singles, key = { "single_${it.path}" }) { audioFile ->
-                        AudioFileItem(
-                            audioFile = audioFile,
-                            isSelected = false,
-                            onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
-                            onLongClick = {},
-                            showActions = false,
-                            onEditMetadata = {},
-                            onRename = {},
-                            onDelete = {},
-                            onFetchOnlineMetadata = {},
-                            onFixMetadata = {},
-                            compactMode = true
-                        )
-                    }
-                }
+                    // 专辑区域：竖版轮播
+                    if (albumsSorted.isNotEmpty()) {
+                        stickyHeader {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.background)
+                            ) {
+                                SectionHeader(title = stringResource(R.string.albums))
+                            }
+                        }
 
-                // Albums Section
-                if (albumsSorted.isNotEmpty()) {
-                    item {
-                        Text(
-                            text = stringResource(R.string.albums),
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
-                    }
+                        item {
+                            val carouselState = rememberCarouselState { albumsSorted.size }
+                            val autoScrollEnabled = albumsSorted.size > 1
 
-                    // Album cards in carousel
-                    item {
-                        val carouselState = rememberCarouselState { albumsSorted.size }
-
-                        // 自动轮播 + 预加载：基于当前索引变化的混合策略
-                        // 性能优化：仅使用 snapshotFlow 监听，避免额外的 DisposableEffect
-                        val autoScrollEnabled = albumsSorted.size > 1
-                        
-                        LaunchedEffect(carouselState) {
-                            snapshotFlow { carouselState.currentItem }
-                                .collect { currentIndex ->
-                                    // 预加载相邻封面
-                                    viewModel.preloadAdjacentAlbumCovers(currentIndex)
-                                    
-                                    if (autoScrollEnabled) {
-                                        // 等待 4 秒无交互后再滚动到下一项
-                                        delay(4000)
-                                        
-                                        // 再次检查是否仍然在同一位置（无新交互）
-                                        if (carouselState.currentItem == currentIndex) {
-                                            // 计算下一项（循环）
-                                            val nextIndex = (currentIndex + 1) % albumsSorted.size
-                                            
-                                            // 执行平滑滚动
-                                            try {
-                                                carouselState.animateScrollToItem(nextIndex)
-                                            } catch (_: Exception) {
-                                                // 动画可能被中断（用户交互），静默处理
+                            LaunchedEffect(carouselState) {
+                                snapshotFlow { carouselState.currentItem }
+                                    .collect { currentIndex ->
+                                        viewModel.preloadAdjacentAlbumCovers(currentIndex)
+                                        if (autoScrollEnabled) {
+                                            delay(4000)
+                                            if (carouselState.currentItem == currentIndex) {
+                                                val nextIndex = (currentIndex + 1) % albumsSorted.size
+                                                try {
+                                                    carouselState.animateScrollToItem(nextIndex)
+                                                } catch (_: Exception) {
+                                                    // 动画可能被用户交互中断，静默处理
+                                                }
                                             }
                                         }
                                     }
-                                }
-                        }
+                            }
 
-                        HorizontalMultiBrowseCarousel(
-                            state = carouselState,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(221.dp),
-                            preferredItemWidth = 160.dp,
-                            itemSpacing = 12.dp,
-                            contentPadding = PaddingValues(horizontal = 16.dp)
-                        ) { page ->
-                            val albumInfo = albumsSorted[page]
-                            val albumArtPath = albumCovers[albumInfo.name]
-                            // Get mediaStoreAlbumId from the first file in the album that has one
-                            val albumId = albumInfo.files.firstOrNull { 
-                                it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 
-                            }?.mediaStoreAlbumId
+                            HorizontalMultiBrowseCarousel(
+                                state = carouselState,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(216.dp)
+                                    .padding(vertical = 8.dp),
+                                preferredItemWidth = 140.dp,
+                                itemSpacing = 16.dp,
+                                contentPadding = PaddingValues(horizontal = 20.dp)
+                            ) { page ->
+                                val albumInfo = albumsSorted[page]
+                                val albumArtPath = albumCovers[albumInfo.name]
+                                val albumId = albumInfo.files.firstOrNull {
+                                    it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
+                                }?.mediaStoreAlbumId
 
-                            AlbumCard(
-                                albumName = albumInfo.name,
-                                albumArtist = artistName,
-                                trackCount = albumInfo.files.size,
-                                albumYear = albumInfo.year,
-                                albumArtPath = albumArtPath,
-                                albumId = albumId,
-                                onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
-                                modifier = Modifier.maskClip(MaterialTheme.shapes.extraLarge)
-                            )
+                                // 当前项缩放效果
+                                val isCurrentItem = carouselState.currentItem == page
+                                val scale by animateFloatAsState(
+                                    targetValue = if (isCurrentItem) 1.0f else 0.92f,
+                                    animationSpec = spring(stiffness = Spring.StiffnessMedium),
+                                    label = "carousel_scale"
+                                )
+
+                                AlbumCard(
+                                    albumName = albumInfo.name,
+                                    albumArtist = artistName,
+                                    trackCount = albumInfo.files.size,
+                                    albumYear = albumInfo.year,
+                                    albumArtPath = albumArtPath,
+                                    albumId = albumId,
+                                    onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
+                                    modifier = Modifier.padding(horizontal = 4.dp)
+                                )
+                            }
                         }
                     }
 
-                    // All Songs Section (flat list, sorted by album + track number)
-                    if (allSongsSorted.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = stringResource(R.string.all_songs),
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
+                    // Songs 区域：直接平铺所有歌曲
+                    if (files.isNotEmpty()) {
+                        stickyHeader {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(MaterialTheme.colorScheme.background)
+                            ) {
+                                SectionHeader(title = "Songs")
+                            }
                         }
 
-                        items(allSongsSorted, key = { "song_${it.path}" }) { audioFile ->
-                            AudioFileItem(
+                        items(files, key = { "song_${it.path}" }) { audioFile ->
+                            SongListItem(
                                 audioFile = audioFile,
-                                isSelected = false,
-                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
-                                onLongClick = {},
-                                showActions = false,
-                                onEditMetadata = {},
-                                onRename = {},
-                                onDelete = {},
-                                onFetchOnlineMetadata = {},
-                                onFixMetadata = {},
-                                compactMode = true
+                                onClick = {
+                                    onNavigateToMetadata(
+                                        audioFile.path,
+                                        createAlbumArtSharedElementKey(audioFile.path)
+                                    )
+                                }
                             )
                         }
                     }
-                }
 
-                // If no files
-                if (files.isEmpty()) {
-                    item {
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(32.dp),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Text(
-                                text = stringResource(R.string.no_tracks_for_artist),
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                    // 空状态
+                    if (files.isEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.no_tracks_for_artist),
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
                     }
                 }
@@ -369,101 +351,19 @@ fun ArtistDetailScreen(
 }
 
 /**
- * 轮播封面专用图片组件。
- * 简化为 AlbumArtImage 的包装，使用统一的图片加载逻辑和缓存策略。
+ * 专辑信息数据类
  */
-@Composable
-fun CarouselAlbumArtImage(
-    filePath: String?,
-    albumId: Long? = null,
-    contentDescription: String?,
-    modifier: Modifier = Modifier,
-    placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = 160.dp) }
-) {
-    AlbumArtImage(
-        filePath = filePath,
-        albumId = albumId,
-        contentDescription = contentDescription,
-        modifier = modifier,
-        size = 160.dp,
-        contentScale = ContentScale.Crop,
-        crossfade = false,
-        placeholder = placeholder
-    )
-}
+private data class AlbumInfo(
+    val name: String,
+    val files: List<com.voxly.domain.model.AudioFile>,
+    val year: Int?
+)
 
 /**
- * Album card for carousel with responsive sizing and spring animation.
- * Supports Container Transform transition to album detail screen.
+ * 从字符串提取 4 位年份
  */
-@OptIn(ExperimentalSharedTransitionApi::class)
-@Composable
-fun AlbumCard(
-    albumName: String,
-    albumArtist: String?,
-    trackCount: Int,
-    albumYear: Int?,
-    albumArtPath: String?,
-    albumId: Long? = null,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        onClick = onClick,
-        modifier = modifier
-            .width(160.dp)
-            .height(205.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceVariant
-        )
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.SpaceBetween
-        ) {
-            // Album art with Container Transform shared element transition
-            val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clip(MaterialTheme.shapes.medium),
-                contentAlignment = Alignment.Center
-            ) {
-                CarouselAlbumArtImage(
-                    filePath = albumArtPath,
-                    albumId = albumId,
-                    contentDescription = albumName,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-
-            // Album year and name
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                color = MaterialTheme.colorScheme.surfaceVariant
-            ) {
-                Column(
-                    modifier = Modifier.padding(12.dp),
-                    horizontalAlignment = Alignment.Start
-                ) {
-                    // Year above album name
-                    if (albumYear != null) {
-                        Text(
-                            text = albumYear.toString(),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    // Album name
-                    Text(
-                        text = albumName,
-                        style = MaterialTheme.typography.labelMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-            }
-        }
-    }
+private fun extractYear(rawYear: String?): Int? {
+    val normalized = rawYear?.trim().orEmpty()
+    if (normalized.isEmpty()) return null
+    return Regex("""\d{4}""").find(normalized)?.value?.toIntOrNull()
 }
