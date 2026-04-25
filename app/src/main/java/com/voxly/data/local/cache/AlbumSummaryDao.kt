@@ -7,8 +7,8 @@ import androidx.room.Query
 interface AlbumSummaryDao {
     @Query("""
         SELECT 
-            MAX(NULLIF(album, '')) AS albumTitle,
-            MAX(NULLIF(albumArtist, '')) AS albumArtist,
+            :albumTitle AS albumTitle,
+            :albumArtist AS albumArtist,
             COUNT(*) AS songCount,
             MAX(NULLIF(year, '')) AS year,
             MAX(sampleRate) AS maxSampleRate,

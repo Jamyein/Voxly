@@ -86,6 +86,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
 
                 if (albumGroup != null) {
                     _albumName.update { albumGroup.name }
+                    _albumArtist.update { albumGroup.albumArtist }
                     _coverPath.update { albumGroup.coverPath }
 
                     val filesWithDiscNumber = withContext(Dispatchers.Default) {
@@ -107,15 +108,16 @@ class AlbumDetailViewModel @AssistedInject constructor(
 
                     _files.update { filesWithDiscNumber }
 
-                    // Query year and sampleRate from album_summary_view
-                    val albumSummary = databaseProvider.getDatabase()
-                        .albumSummaryDao()
-                        .getAlbumSummary(albumName, albumArtist)
+                    // Aggregate year, sampleRate and bitrate directly from files
+                    val albumYear = albumGroup.files.mapNotNull {
+                        it.metadata.year?.trim()?.takeIf { it.isNotBlank() }
+                    }.maxOrNull()
+                    val maxSampleRate = albumGroup.files.maxOfOrNull { it.sampleRate } ?: 0
+                    val maxBitrate = albumGroup.files.maxOfOrNull { it.bitrate } ?: 0
 
-                    _albumArtist.update { albumGroup.albumArtist ?: albumSummary?.albumArtist }
-                    _albumYear.update { albumSummary?.year?.takeIf { it.isNotBlank() } }
-                    _albumSampleRate.update { albumSummary?.maxSampleRate ?: 0 }
-                    _albumBitrate.update { albumSummary?.maxBitrate ?: 0 }
+                    _albumYear.update { albumYear }
+                    _albumSampleRate.update { maxSampleRate }
+                    _albumBitrate.update { maxBitrate }
                 } else {
                     _albumName.update { albumName }
                     _albumArtist.update { albumArtist }
