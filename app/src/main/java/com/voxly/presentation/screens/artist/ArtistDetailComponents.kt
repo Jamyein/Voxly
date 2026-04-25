@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens.artist
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -162,7 +163,7 @@ fun SongListItem(
     modifier: Modifier = Modifier
 ) {
     ListItem(
-        modifier = modifier,
+        modifier = modifier.clickable(onClick = onClick),
         colors = ListItemDefaults.colors(
             containerColor = androidx.compose.ui.graphics.Color.Transparent
         ),
