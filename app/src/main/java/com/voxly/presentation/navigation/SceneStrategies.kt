@@ -4,7 +4,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.scene.OverlayScene
 import androidx.navigation3.scene.Scene
@@ -27,11 +31,18 @@ internal class BottomSheetScene<T : Any>(
     override val entries: List<NavEntry<T>> = listOf(entry)
 
     override val content: @Composable () -> Unit = {
-        val sheetState = rememberModalBottomSheetState()
+        val sheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = false  // 允许中间状态
+        )
         ModalBottomSheet(
             onDismissRequest = onBack,
             sheetState = sheetState,
             properties = modalBottomSheetProperties,
+            dragHandle = {  // 添加拖拽手柄
+                androidx.compose.material3.BottomSheetDefaults.DragHandle(
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
         ) {
             entry.Content()
         }

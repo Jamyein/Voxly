@@ -36,7 +36,6 @@ import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.runtime.NavKey
 import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.metadata
-import androidx.navigation3.scene.DialogSceneStrategy
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.scene.SceneStrategy
 import androidx.navigation3.ui.NavDisplay
@@ -443,8 +442,9 @@ private fun MP3TagNavDisplay(
                 }
             }
 
+            @OptIn(ExperimentalMaterial3Api::class)
             entry<ScanDirectorySettings>(
-                metadata = DialogSceneStrategy.dialog()
+                metadata = BottomSheetSceneStrategy.bottomSheet()
             ) {
                 SharedTransitionWrapper(sharedTransitionScope) {
                     com.voxly.presentation.screens.ScanDirectorySettingsScreen(
@@ -453,8 +453,9 @@ private fun MP3TagNavDisplay(
                 }
             }
 
+            @OptIn(ExperimentalMaterial3Api::class)
             entry<LogViewer>(
-                metadata = DialogSceneStrategy.dialog()
+                metadata = BottomSheetSceneStrategy.bottomSheet()
             ) {
                 SharedTransitionWrapper(sharedTransitionScope) {
                     LogViewerScreen(
@@ -475,8 +476,7 @@ private fun MP3TagNavDisplay(
         },
         sceneStrategies = listOf(
             rememberListDetailSceneStrategy(),
-            rememberBottomSheetSceneStrategy(),
-            DialogSceneStrategy()
+            BottomSheetSceneStrategy()
         )
     )
 }
