@@ -93,6 +93,18 @@ private val containerTransformMetadata = metadata {
     }
 }
 
+private val containerTransformSharedElementMetadata = metadata {
+    put(NavDisplay.TransitionKey) {
+        ExpressiveAnimations.ContainerTransformSharedElementEnter togetherWith ExpressiveAnimations.ContainerTransformSharedElementExit
+    }
+    put(NavDisplay.PopTransitionKey) {
+        ExpressiveAnimations.ContainerTransformSharedElementPopEnter togetherWith ExpressiveAnimations.ContainerTransformSharedElementPopExit
+    }
+    put(NavDisplay.PredictivePopTransitionKey) {
+        ExpressiveAnimations.ContainerTransformPredictiveBackEnter togetherWith ExpressiveAnimations.ContainerTransformPredictiveBackExit
+    }
+}
+
 private val sharedAxisXMetadata = metadata {
     put(NavDisplay.TransitionKey) {
         ExpressiveAnimations.SharedAxisXEnter togetherWith ExpressiveAnimations.SharedAxisXExit
@@ -434,7 +446,7 @@ private fun MP3TagNavDisplay(
 
             entry<AlbumDetail>(
                 clazzContentKey = { key -> "AlbumDetail_${key.albumName}_${key.albumArtist}" },
-                metadata = containerTransformMetadata
+                metadata = containerTransformSharedElementMetadata
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {
@@ -449,7 +461,7 @@ private fun MP3TagNavDisplay(
 
             entry<ArtistDetail>(
                 clazzContentKey = { key -> "ArtistDetail_${key.artistName}" },
-                metadata = containerTransformMetadata
+                metadata = containerTransformSharedElementMetadata
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {

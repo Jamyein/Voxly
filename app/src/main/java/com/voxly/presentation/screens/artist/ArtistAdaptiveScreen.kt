@@ -171,7 +171,9 @@ fun ArtistAdaptiveScreen(
                                     selectedFileForEditing = filePath
                                 }
                             },
-                            viewModel = detailViewModel
+                            viewModel = detailViewModel,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
                         )
                     }
                     currentDestination is ArtistDetail -> {

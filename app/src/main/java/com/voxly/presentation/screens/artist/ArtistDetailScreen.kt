@@ -82,11 +82,6 @@ fun ArtistDetailScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    // 加载艺术家数据
-    LaunchedEffect(artistName) {
-        viewModel.loadArtist(artistName)
-    }
-
     val artistNameState by viewModel.artistName.collectAsStateWithLifecycle()
     val files by viewModel.files.collectAsStateWithLifecycle()
     val coverPath by viewModel.coverPath.collectAsStateWithLifecycle()

@@ -46,7 +46,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.produceState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
@@ -99,11 +98,6 @@ fun AlbumDetailScreen(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    // Load album from cache
-    LaunchedEffect(albumName, albumArtist) {
-        viewModel.loadAlbum(albumName, albumArtist)
-    }
-
     val albumNameState by viewModel.albumName.collectAsStateWithLifecycle()
     val albumArtistState by viewModel.albumArtist.collectAsStateWithLifecycle()
     val albumYear by viewModel.albumYear.collectAsStateWithLifecycle()
@@ -280,9 +274,7 @@ fun AlbumDetailScreen(
                         Box(
                             modifier = Modifier
                                 .size(240.dp)
-                                .aspectRatio(1f)
-                                .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
-                                .clip(MaterialTheme.shapes.extraLarge),
+                                .aspectRatio(1f),
                             contentAlignment = Alignment.Center
                         ) {
                             val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
@@ -294,9 +286,14 @@ fun AlbumDetailScreen(
                                             animatedVisibilityScope = animatedVisibilityScope,
                                             boundsTransform = albumCoverBoundsTransform
                                         )
+                                        .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
+                                        .clip(MaterialTheme.shapes.extraLarge)
                                 }
                             } else {
                                 Modifier
+                                    .matchParentSize()
+                                    .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
+                                    .clip(MaterialTheme.shapes.extraLarge)
                             }
                             Box(modifier = innerModifier) {
                                 AlbumArtImage(
@@ -304,7 +301,7 @@ fun AlbumDetailScreen(
                                     albumId = (firstFile?.mediaStoreAlbumId).takeIf { it != null && it > 0 }
                                         ?: initialCoverAlbumId,
                                     contentDescription = stringResource(R.string.album_cover),
-                                    size = 220.dp,
+                                    size = 240.dp,
                                     modifier = Modifier.fillMaxSize(),
                                     preResolvedUri = quickCoverUri,
                                     clipShape = MaterialTheme.shapes.extraLarge

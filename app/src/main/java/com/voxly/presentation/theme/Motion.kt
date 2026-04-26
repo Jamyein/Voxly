@@ -336,6 +336,35 @@ object ExpressiveAnimations {
             animationSpec = PageExitSpring
         )
 
+    // Container Transform for Shared Element pages - no slide to avoid conflict with shared element bounds animation
+    val ContainerTransformSharedElementEnter: EnterTransition =
+        fadeIn(animationSpec = PageEffectsSpring) +
+        scaleIn(
+            initialScale = 0.95f,
+            animationSpec = PageEnterSpring
+        )
+
+    val ContainerTransformSharedElementExit: ExitTransition =
+        fadeOut(animationSpec = PageEffectsSpring) +
+        scaleOut(
+            targetScale = 0.95f,
+            animationSpec = PageExitSpring
+        )
+
+    val ContainerTransformSharedElementPopEnter: EnterTransition =
+        scaleIn(
+            initialScale = 0.95f,
+            animationSpec = PageEnterSpring
+        ) +
+        fadeIn(animationSpec = PageEffectsSpring)
+
+    val ContainerTransformSharedElementPopExit: ExitTransition =
+        fadeOut(animationSpec = PageEffectsSpring) +
+        scaleOut(
+            targetScale = 0.95f,
+            animationSpec = PageExitSpring
+        )
+
     // Predictive Back - optimized for gesture-driven animation
     // Uses CubicBezierEasing(0.1f, 0.1f, 0f, 1f) per M3 spec for natural deceleration
     private val PredictiveBackTween = tween<Float>(

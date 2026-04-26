@@ -167,8 +167,8 @@ fun AlbumAdaptiveScreen(
                                 initialCoverPath = currentAlbum.coverPath ?: currentAlbum.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }?.path ?: currentAlbum.files.firstOrNull()?.path,
                                 initialCoverAlbumId = currentAlbum.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }?.mediaStoreAlbumId ?: currentAlbum.files.firstOrNull()?.mediaStoreAlbumId,
                                 viewModel = detailViewModel,
-                                sharedTransitionScope = sharedTransitionScope!!,
-                                animatedVisibilityScope = animatedVisibilityScope!!
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
                             )
                         }
                     } else {

@@ -107,10 +107,8 @@ private fun AlbumArtWithSharedElement(
     val sharedTransitionScope = com.voxly.presentation.components.LocalSharedTransitionScope.current
     val animatedVisibilityScope = androidx.navigation3.ui.LocalNavAnimatedContentScope.current
 
-    Box(
-            modifier = Modifier
-                .size(size)
-                .clip(MaterialTheme.shapes.small),
+        Box(
+            modifier = Modifier.size(size),
             contentAlignment = Alignment.Center
         ) {
             val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
@@ -122,9 +120,12 @@ private fun AlbumArtWithSharedElement(
                             animatedVisibilityScope = animatedVisibilityScope,
                             boundsTransform = albumCoverBoundsTransform
                         )
+                        .clip(MaterialTheme.shapes.small)
                 }
             } else {
                 Modifier
+                    .matchParentSize()
+                    .clip(MaterialTheme.shapes.small)
             }
             Box(modifier = innerModifier) {
                 AlbumArtImage(
