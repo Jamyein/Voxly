@@ -1,6 +1,10 @@
 package com.voxly.presentation.screens.filebrowser
 
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.ArcMode
+import androidx.compose.animation.core.ExperimentalAnimationSpecApi
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -26,8 +30,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+
 import com.voxly.presentation.theme.MaterialShapes
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.toShape
@@ -40,6 +43,9 @@ import com.voxly.presentation.screens.album.getAlbumDisplayYearString
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
+import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.LocalSharedTransitionScope
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 
@@ -69,7 +75,6 @@ internal fun AlbumListItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
-    val coverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -129,13 +134,16 @@ internal fun AlbumListItem(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class)
+val albumCoverBoundsTransform = BoundsTransform { _, _ ->
+    spring(dampingRatio = 0.8f, stiffness = 300f)
+}
+
+@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalAnimationSpecApi::class)
 @Composable
 internal fun AlbumGridItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
-    val coverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
     val coverFile = remember(album) {
         album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
             ?: album.files.firstOrNull()
@@ -155,15 +163,34 @@ internal fun AlbumGridItem(
             }
         }
     }
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
+    val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        Box(
-            modifier = Modifier
+        val boxModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(MaterialTheme.shapes.medium)
+                    .sharedElement(
+                        rememberSharedContentState(key = albumCoverKey),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        boundsTransform = albumCoverBoundsTransform
+                    )
+                    .clickable(onClick = onClick)
+            }
+        } else {
+            Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(MaterialTheme.shapes.medium)
-                .clickable(onClick = onClick),
+                .clickable(onClick = onClick)
+        }
+        Box(
+            modifier = boxModifier,
             contentAlignment = Alignment.Center
         ) {
             if (coverFile != null) {
@@ -208,7 +235,6 @@ internal fun ArtistListItem(
     artist: ArtistGroup,
     onClick: () -> Unit
 ) {
-    val avatarKey = createArtistAvatarSharedElementKey(artist.name)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,

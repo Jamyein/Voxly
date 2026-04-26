@@ -25,13 +25,16 @@ import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.ArtistListItemState
 import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.MaterialShapes
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.toShape
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
+import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+import com.voxly.presentation.components.LocalSharedTransitionScope
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -39,9 +42,10 @@ internal fun ArtistListItem(
     artist: ArtistListItemState,
     onClick: () -> Unit
 ) {
-    val avatarKey = remember(artist.name) {
-        createArtistAvatarSharedElementKey(artist.name)
-    }
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
+    val avatarKey = createArtistAvatarSharedElementKey(artist.name)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -49,42 +53,56 @@ internal fun ArtistListItem(
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-            Box(
-                modifier = Modifier
+        val boxModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier
                     .size(48.dp)
-                    .clip(MaterialShapes.Sunny.toShape()),
-                contentAlignment = Alignment.Center
-            ) {
-                if (!artist.coverPath.isNullOrBlank()) {
-                    AlbumArtImage(
-                        filePath = artist.coverPath,
-                        albumId = artist.coverAlbumId,
-                        contentDescription = null,
-                        size = 48.dp,
-                        modifier = Modifier.fillMaxSize()
+                    .clip(MaterialShapes.Sunny.toShape())
+                    .sharedElement(
+                        rememberSharedContentState(key = avatarKey),
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
-                } else {
-                    DefaultAlbumArtPlaceholder(size = 48.dp)
-                }
             }
-            Spacer(modifier = Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = artist.name,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+        } else {
+            Modifier
+                .size(48.dp)
+                .clip(MaterialShapes.Sunny.toShape())
+        }
+
+        Box(
+            modifier = boxModifier,
+            contentAlignment = Alignment.Center
+        ) {
+            if (!artist.coverPath.isNullOrBlank()) {
+                AlbumArtImage(
+                    filePath = artist.coverPath,
+                    albumId = artist.coverAlbumId,
+                    contentDescription = null,
+                    size = 48.dp,
+                    modifier = Modifier.fillMaxSize()
                 )
-                Text(
-                    text = stringResource(R.string.album_count, artist.albumCount),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            } else {
+                DefaultAlbumArtPlaceholder(size = 48.dp)
             }
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
             Text(
-                text = stringResource(R.string.track_count, artist.trackCount),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.outline
+                text = artist.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = stringResource(R.string.album_count, artist.albumCount),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
+        Text(
+            text = stringResource(R.string.track_count, artist.trackCount),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.outline
+        )
     }
+}

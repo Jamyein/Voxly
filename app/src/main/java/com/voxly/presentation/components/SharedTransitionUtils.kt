@@ -62,7 +62,8 @@ fun createAlbumArtSharedElementKey(filePath: String): String = "album-art-$fileP
  * @return Unique key string for the album cover shared element
  */
 fun createAlbumCoverSharedElementKey(albumName: String, albumArtist: String?): String {
-    return "album-cover-$albumName-${albumArtist ?: "unknown"}"
+    val normalizedArtist = albumArtist?.takeIf { it.isNotBlank() }
+    return "album-cover-$albumName-${normalizedArtist ?: "unknown"}"
 }
 
 /**

@@ -92,7 +92,8 @@ internal fun AllAudiosTabContent(
                             onDelete = {},
                             onFetchOnlineMetadata = {},
                             onFixMetadata = {},
-                            compactMode = true
+                            compactMode = true,
+                            sharedElementKey = createAlbumArtSharedElementKey(audioFile.path)
                         )
                     }
                 }

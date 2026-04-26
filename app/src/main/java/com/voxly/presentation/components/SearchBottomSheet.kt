@@ -43,7 +43,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.createAlbumArtSharedElementKey
+
 
 /**
  * Reusable search bottom sheet component for searching audio files.
@@ -188,7 +188,6 @@ fun SearchResultItem(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val albumArtKey = createAlbumArtSharedElementKey(audioFile.path)
     Surface(
         onClick = onClick,
         color = MaterialTheme.colorScheme.surfaceContainerLow,

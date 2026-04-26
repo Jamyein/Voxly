@@ -1,5 +1,8 @@
 package com.voxly.presentation.screens.artist
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -68,14 +71,16 @@ import com.voxly.presentation.viewmodel.ArtistDetailViewModel
  * - 歌曲直接平铺，透明背景
  * - spring() 动画
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistDetailScreen(
     artistName: String,
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToAlbumDetail: (String, String?) -> Unit,
-    viewModel: ArtistDetailViewModel
+    viewModel: ArtistDetailViewModel,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     // 加载艺术家数据
     LaunchedEffect(artistName) {
@@ -204,6 +209,8 @@ fun ArtistDetailScreen(
                                 coverAlbumId = coverAlbumId,
                                 songCount = songCount,
                                 albumCount = albumCount,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope,
                                 modifier = Modifier.padding(bottom = 24.dp)
                             )
                         }

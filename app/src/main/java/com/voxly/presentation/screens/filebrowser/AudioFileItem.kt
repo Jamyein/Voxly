@@ -20,8 +20,9 @@ import com.voxly.presentation.components.LazyListCoverPreloader
 import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
-import com.voxly.core.util.getFirstLetter
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.core.util.getFirstLetter
+
 
 @Composable
 internal fun AudioFileItem(
@@ -36,20 +37,17 @@ internal fun AudioFileItem(
     onFetchOnlineMetadata: () -> Unit,
     onFixMetadata: () -> Unit,
     compactMode: Boolean = false,
-    modifier: Modifier = Modifier,
-    sharedElementKey: String? = null
+    sharedElementKey: String? = null,
+    modifier: Modifier = Modifier
 ) {
-    val computedSharedElementKey = remember(audioFile.path) {
-        sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
-    }
     if (compactMode) {
         AudioFileStandardRowCompact(
             audioFile = audioFile,
             isSelected = isSelected,
             onClick = onClick,
             onLongClick = onLongClick,
-            modifier = modifier,
-            sharedElementKey = computedSharedElementKey
+            sharedElementKey = sharedElementKey,
+            modifier = modifier
         )
     } else if (showActions) {
         AudioFileStandardRowWithMenu(
@@ -57,6 +55,7 @@ internal fun AudioFileItem(
             isSelected = isSelected,
             onClick = onClick,
             onLongClick = onLongClick,
+            sharedElementKey = sharedElementKey,
             onAction = { action ->
                 when (action) {
                     is AudioFileAction.EditMetadata -> onEditMetadata()
@@ -74,7 +73,7 @@ internal fun AudioFileItem(
             isSelected = isSelected,
             onClick = onClick,
             onLongClick = onLongClick,
-            sharedElementKey = computedSharedElementKey,
+            sharedElementKey = sharedElementKey,
             modifier = modifier
         )
     }
@@ -132,7 +131,8 @@ internal fun AudioFileList(
                 onRename = { onRenameFile(audioFile) },
                 onDelete = { onDeleteFile(audioFile) },
                 onFetchOnlineMetadata = { onFetchOnlineMetadata(audioFile) },
-                onFixMetadata = { onFixMetadata(audioFile) }
+                onFixMetadata = { onFixMetadata(audioFile) },
+                sharedElementKey = createAlbumArtSharedElementKey(audioFile.path)
             )
         }
     }

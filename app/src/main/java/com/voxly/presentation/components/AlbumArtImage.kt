@@ -11,7 +11,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
-import androidx.compose.ui.graphics.Shape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -25,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -92,28 +92,38 @@ fun AlbumArtImage(
     val context = LocalContext.current
     val coverUriProvider = remember(context) { CoverUriProvider(context) }
 
-    var model by remember { mutableStateOf<Uri?>(null) }
-    var isLoading by remember { mutableStateOf(true) }
+    var model by remember(albumId, filePath, preResolvedUri) { mutableStateOf<Uri?>(preResolvedUri) }
+    var isLoading by remember(albumId, filePath, preResolvedUri) { mutableStateOf(preResolvedUri == null) }
+    var loadFailed by remember(albumId, filePath, preResolvedUri) { mutableStateOf(false) }
 
     LaunchedEffect(albumId, filePath, coverUriProvider, preResolvedUri) {
-        isLoading = true
-        model = preResolvedUri ?: coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
-        isLoading = false
+        if (preResolvedUri == null) {
+            isLoading = true
+            loadFailed = false
+            model = coverUriProvider.getCoverUri(albumId = albumId, filePath = filePath)
+            isLoading = false
+        }
     }
-
-    var loadFailed by remember { mutableStateOf(false) }
 
     Box(
         modifier = modifier,
         contentAlignment = Alignment.Center
     ) {
         if (model != null && !loadFailed) {
+            val imageRequestBuilder = ImageRequest.Builder(LocalContext.current)
+                .data(model)
+                .scale(Scale.FILL)
+                .crossfade(crossfade)
+
+            model?.let { uri ->
+                val cacheKey = uri.toString()
+                imageRequestBuilder
+                    .memoryCacheKey(cacheKey)
+                    .placeholderMemoryCacheKey(cacheKey)
+            }
+
             AsyncImage(
-                model = ImageRequest.Builder(LocalContext.current)
-                    .data(model)
-                    .scale(Scale.FILL)
-                    .crossfade(crossfade)
-                    .build(),
+                model = imageRequestBuilder.build(),
                 contentDescription = contentDescription,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = contentScale,

@@ -1,6 +1,9 @@
 package com.voxly.presentation.screens.artist
 
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -35,14 +38,16 @@ import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistAdaptiveScreen(
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: ((String, String?) -> Unit)? = null,
     onNavigateToArtistDetail: ((ArtistGroup) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    viewModel: ArtistViewModel = hiltViewModel()
+    viewModel: ArtistViewModel = hiltViewModel(),
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
 
@@ -107,7 +112,9 @@ fun ArtistAdaptiveScreen(
             ArtistScreenContent(
                 viewModel = viewModel,
                 onArtistClick = onArtistClick,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         },
         detailPane = {
@@ -193,7 +200,9 @@ fun ArtistAdaptiveScreen(
                                     albumArtist = albumArtist ?: ""
                                 )
                             },
-                            viewModel = detailViewModel
+                            viewModel = detailViewModel,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
                         )
                     }
                     else -> {

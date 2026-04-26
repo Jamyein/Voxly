@@ -28,6 +28,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -85,6 +86,9 @@ object ExpressiveMotionTokens {
     val EmphasizedDecelerateInterpolator = CubicBezierEasing(0.05f, 0.7f, 0.1f, 1f)
     val EmphasizedAccelerateInterpolator = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
     val LinearInterpolator = CubicBezierEasing(0f, 0f, 1f, 1f)
+
+    // Predictive back gesture interpolator - M3 spec
+    val PredictiveBackInterpolator = CubicBezierEasing(0.1f, 0.1f, 0f, 1f)
 
     // Legacy easing for backward compatibility
     val ExpressiveEasing = CubicBezierEasing(0.3f, 0.0f, 0.0f, 1.0f)
@@ -330,6 +334,40 @@ object ExpressiveAnimations {
         scaleOut(
             targetScale = 0.95f,
             animationSpec = PageExitSpring
+        )
+
+    // Predictive Back - optimized for gesture-driven animation
+    // Uses CubicBezierEasing(0.1f, 0.1f, 0f, 1f) per M3 spec for natural deceleration
+    private val PredictiveBackTween = tween<Float>(
+        durationMillis = 400,
+        easing = ExpressiveMotionTokens.PredictiveBackInterpolator
+    )
+
+    private val PredictiveBackTweenSlide = tween<IntOffset>(
+        durationMillis = 400,
+        easing = ExpressiveMotionTokens.PredictiveBackInterpolator
+    )
+
+    val ContainerTransformPredictiveBackEnter: EnterTransition =
+        slideInHorizontally(
+            initialOffsetX = { -it / 5 },
+            animationSpec = PredictiveBackTweenSlide
+        ) +
+        scaleIn(
+            initialScale = 0.95f,
+            animationSpec = PredictiveBackTween
+        ) +
+        fadeIn(animationSpec = PredictiveBackTween)
+
+    val ContainerTransformPredictiveBackExit: ExitTransition =
+        slideOutHorizontally(
+            targetOffsetX = { it / 5 },
+            animationSpec = PredictiveBackTweenSlide
+        ) +
+        fadeOut(animationSpec = PredictiveBackTween) +
+        scaleOut(
+            targetScale = 0.95f,
+            animationSpec = PredictiveBackTween
         )
 
     // Shared Axis X - for lateral navigation (settings, log viewer)

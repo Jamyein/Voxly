@@ -17,12 +17,23 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.animation.BoundsTransform
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.core.ExperimentalAnimationSpecApi
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import com.voxly.presentation.components.LocalSharedTransitionScope
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
@@ -68,17 +79,25 @@ import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.screens.album.formatBitrate
 import com.voxly.presentation.screens.album.formatSampleRate
 
+private val albumCoverBoundsTransform = BoundsTransform { _, _ ->
+    spring(dampingRatio = 0.8f, stiffness = 300f)
+}
+
 /**
  * Album detail screen showing album info and track list.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumDetailScreen(
     albumName: String,
     albumArtist: String?,
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit,
-    viewModel: AlbumDetailViewModel
+    viewModel: AlbumDetailViewModel,
+    initialCoverPath: String? = null,
+    initialCoverAlbumId: Long? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     // Load album from cache
     LaunchedEffect(albumName, albumArtist) {
@@ -246,35 +265,62 @@ fun AlbumDetailScreen(
                         
                         // Cover image - 1:1 square with large rounded corners
                         val firstFile = files.firstOrNull()
-                        Box(
-                            modifier = Modifier
-                                .size(240.dp)
-                                .aspectRatio(1f)
-                                .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
-                                .clip(MaterialTheme.shapes.extraLarge),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            AlbumArtImage(
-                                filePath = coverPath ?: firstFile?.path,
-                                albumId = firstFile?.mediaStoreAlbumId,
-                                contentDescription = stringResource(R.string.album_cover),
-                                size = 220.dp,
-                                modifier = Modifier.fillMaxSize(),
-                                preResolvedUri = coverUri
-                            ) {
-                                Surface(
-                                    modifier = Modifier.fillMaxSize(),
-                                    color = MaterialTheme.colorScheme.surfaceVariant
+                        val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
+                        // Pre-resolve MediaStore URI from navigation key for immediate display.
+                        // This ensures AlbumArtImage has a non-null model on the first frame,
+                        // enabling Coil to find the list page's cached bitmap via memoryCacheKey.
+                        val quickCoverUri = remember(initialCoverAlbumId, initialCoverPath, coverUri) {
+                            coverUri ?: if (initialCoverAlbumId != null && initialCoverAlbumId > 0) {
+                                android.content.ContentUris.withAppendedId(
+                                    android.net.Uri.parse("content://media/external/audio/albumart"),
+                                    initialCoverAlbumId
+                                )
+                            } else null
+                        }
+                        if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                            with(sharedTransitionScope) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(240.dp)
+                                        .aspectRatio(1f)
+                                        .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
+                                        .clip(MaterialTheme.shapes.extraLarge)
+                                        .sharedElement(
+                                            sharedTransitionScope.rememberSharedContentState(key = albumCoverKey),
+                                            animatedVisibilityScope = animatedVisibilityScope,
+                                            boundsTransform = albumCoverBoundsTransform
+                                        ),
+                                        contentAlignment = Alignment.Center
                                 ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Album,
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .padding(48.dp)
-                                            .fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    AlbumArtImage(
+                                        filePath = coverPath ?: firstFile?.path ?: initialCoverPath,
+                                        albumId = (firstFile?.mediaStoreAlbumId).takeIf { it != null && it > 0 }
+                                            ?: initialCoverAlbumId,
+                                        contentDescription = stringResource(R.string.album_cover),
+                                        size = 220.dp,
+                                        modifier = Modifier.fillMaxSize(),
+                                        preResolvedUri = quickCoverUri
                                     )
                                 }
+                            }
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .size(240.dp)
+                                    .aspectRatio(1f)
+                                    .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
+                                    .clip(MaterialTheme.shapes.extraLarge),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                AlbumArtImage(
+                                    filePath = coverPath ?: firstFile?.path ?: initialCoverPath,
+                                    albumId = (firstFile?.mediaStoreAlbumId).takeIf { it != null && it > 0 }
+                                        ?: initialCoverAlbumId,
+                                    contentDescription = stringResource(R.string.album_cover),
+                                    size = 220.dp,
+                                    modifier = Modifier.fillMaxSize(),
+                                    preResolvedUri = quickCoverUri
+                                )
                             }
                         }
 

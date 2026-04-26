@@ -1,5 +1,10 @@
 package com.voxly.presentation.screens.artist
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -29,6 +34,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+import com.voxly.presentation.components.LocalSharedTransitionScope
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
+
 import com.voxly.presentation.theme.ExpressiveTypography
 
 /**
@@ -38,6 +48,7 @@ import com.voxly.presentation.theme.ExpressiveTypography
  * - 小头像（64dp）+ 横向统计标签
  * - 大量留白，排版驱动
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun HeroSection(
     artistName: String,
@@ -45,6 +56,8 @@ fun HeroSection(
     coverAlbumId: Long?,
     songCount: Int,
     albumCount: Int,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     modifier: Modifier = Modifier
 ) {
     Column(
@@ -73,21 +86,47 @@ fun HeroSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // 精致小头像
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .shadow(4.dp, shape = CircleShape)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
-                    AlbumArtImage(
-                        filePath = coverPath,
-                        albumId = coverAlbumId,
-                        contentDescription = artistName,
-                        size = 64.dp,
-                        modifier = Modifier.fillMaxSize()
-                    )
+            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Box(
+                        modifier = Modifier
+                            .size(64.dp)
+                            .shadow(4.dp, shape = CircleShape)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .sharedElement(
+                                rememberSharedContentState(key = createArtistAvatarSharedElementKey(artistName)),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                    ) {
+                        if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
+                            AlbumArtImage(
+                                filePath = coverPath,
+                                albumId = coverAlbumId,
+                                contentDescription = artistName,
+                                size = 64.dp,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .shadow(4.dp, shape = CircleShape)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
+                        AlbumArtImage(
+                            filePath = coverPath,
+                            albumId = coverAlbumId,
+                            contentDescription = artistName,
+                            size = 64.dp,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                    }
                 }
             }
 
@@ -156,22 +195,40 @@ fun SectionHeader(
  *
  * 使用 M3E ListItem，高度 64dp
  */
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 fun SongListItem(
     audioFile: AudioFile,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
+    val coverKey = createAlbumArtSharedElementKey(audioFile.path)
+
     ListItem(
         modifier = modifier.clickable(onClick = onClick),
         colors = ListItemDefaults.colors(
             containerColor = androidx.compose.ui.graphics.Color.Transparent
         ),
         leadingContent = {
-            Box(
-                modifier = Modifier
+            val boxModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .size(48.dp)
+                        .clip(MaterialTheme.shapes.medium)
+                        .sharedElement(
+                            rememberSharedContentState(key = coverKey),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                }
+            } else {
+                Modifier
                     .size(48.dp)
                     .clip(MaterialTheme.shapes.medium)
+            }
+            Box(
+                modifier = boxModifier
             ) {
                 AlbumArtImage(
                     filePath = audioFile.path,

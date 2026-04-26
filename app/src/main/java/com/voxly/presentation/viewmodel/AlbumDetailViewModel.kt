@@ -83,6 +83,12 @@ class AlbumDetailViewModel @AssistedInject constructor(
             return
         }
 
+        // Reset cover-related state immediately to prevent showing previous album's cover
+        // during transition when ViewModel might be reused across different albums
+        _coverUri.value = null
+        _coverPath.value = null
+        _files.value = emptyList()
+
         viewModelScope.launch {
             try {
                 val albums = audioFileScanner.albums.first()

@@ -21,6 +21,7 @@ import androidx.compose.ui.unit.dp
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 
+
 /**
  * 竖版叠加专辑卡片（符合 M3 Carousel 文档规范）
  *
@@ -38,7 +39,7 @@ fun AlbumCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-        Box(
+    Box(
             modifier = modifier
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.BottomStart

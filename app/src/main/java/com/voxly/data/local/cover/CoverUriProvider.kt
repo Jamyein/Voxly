@@ -123,17 +123,21 @@ class CoverUriProvider @Inject constructor(
                 retriever.setDataSource(filePath)
                 val artBytes = retriever.embeddedPicture
                 if (artBytes != null && artBytes.isNotEmpty()) {
-                    // Save to cache directory with hash + timestamp based filename
-                    // Timestamp ensures URI is unique after each save, forcing Coil to reload
+                    // Save to cache directory with hash-based filename (stable)
+                    // Stable filename ensures consistent URI across sessions and
+                    // different scenes, enabling Coil memory cache sharing.
+                    // When cover is edited, invalidateFilePath() clears the cache
+                    // and the file will be overwritten on next extraction.
                     val hash = java.security.MessageDigest.getInstance("SHA-256")
                         .digest(artBytes)
                         .joinToString("") { "%02x".format(it) }
-                    val timestamp = System.currentTimeMillis()
-                    val cacheFile = File(coverCacheDir, "${hash}_${timestamp}.jpg")
-                    cacheFile.writeBytes(artBytes)
-                    
-                    // Clean up old versions, keep only the latest one
-                    cleanupOldVersions(hash, keepCount = 1)
+                    val cacheFile = File(coverCacheDir, "${hash}.jpg")
+                    // Only write if file doesn't exist to avoid race conditions
+                    // with Coil potentially reading the file. Same hash means
+                    // identical content, so reuse is safe.
+                    if (!cacheFile.exists()) {
+                        cacheFile.writeBytes(artBytes)
+                    }
                     
                     // Use FileProvider to generate content:// URI
                     val uri = FileProvider.getUriForFile(
@@ -158,24 +162,6 @@ class CoverUriProvider @Inject constructor(
         }
     }
     
-    /**
-     * Cleans up old versions of cover art files for a given hash.
-     * Only keeps the specified number of latest versions.
-     */
-    private fun cleanupOldVersions(hash: String, keepCount: Int = 1) {
-        val files = coverCacheDir.listFiles { 
-            it.name.startsWith("${hash}_") && it.name.endsWith(".jpg") 
-        } ?: return
-        
-        if (files.size > keepCount) {
-            files.sortBy { it.name }
-            files.dropLast(keepCount).forEach { file ->
-                file.delete()
-                Timber.d("Cleaned up old cover cache: ${file.name}")
-            }
-        }
-    }
-
     companion object {
         private const val MAX_URI_EXISTS_CACHE = 200
         private const val MAX_FOLDER_COVER_CACHE = 200

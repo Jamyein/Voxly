@@ -2,6 +2,7 @@ package com.voxly.presentation.navigation
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedContentTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
@@ -38,6 +39,7 @@ import androidx.navigation3.runtime.entryProvider
 import androidx.navigation3.runtime.metadata
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.scene.SceneStrategy
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.navigation3.ui.NavDisplay
 import com.voxly.R
 import com.voxly.core.util.LogManager
@@ -87,7 +89,7 @@ private val containerTransformMetadata = metadata {
         ExpressiveAnimations.ContainerTransformPopEnter togetherWith ExpressiveAnimations.ContainerTransformPopExit
     }
     put(NavDisplay.PredictivePopTransitionKey) {
-        ExpressiveAnimations.ContainerTransformPopEnter togetherWith ExpressiveAnimations.ContainerTransformPopExit
+        ExpressiveAnimations.ContainerTransformPredictiveBackEnter togetherWith ExpressiveAnimations.ContainerTransformPredictiveBackExit
     }
 }
 
@@ -279,8 +281,11 @@ private fun MP3TagNavDisplay(
             }
 
             entry<Albums> {
+                val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {
                     AlbumAdaptiveScreen(
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
                         onNavigateBack = {},
                         onNavigateToMetadata = { filePath, coverTag ->
                             topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
@@ -293,8 +298,11 @@ private fun MP3TagNavDisplay(
             }
 
             entry<Artists> {
+                val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {
                     ArtistAdaptiveScreen(
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope,
                         onNavigateBack = {},
                         onNavigateToMetadata = { filePath, coverTag ->
                             topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
@@ -428,8 +436,14 @@ private fun MP3TagNavDisplay(
                 clazzContentKey = { key -> "AlbumDetail_${key.albumName}_${key.albumArtist}" },
                 metadata = containerTransformMetadata
             ) { key ->
+                val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {
-                    AlbumDetailEntry(key, topLevelBackStack)
+                    AlbumDetailEntry(
+                        key = key,
+                        topLevelBackStack = topLevelBackStack,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
                 }
             }
 
@@ -437,8 +451,14 @@ private fun MP3TagNavDisplay(
                 clazzContentKey = { key -> "ArtistDetail_${key.artistName}" },
                 metadata = containerTransformMetadata
             ) { key ->
+                val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {
-                    ArtistDetailEntry(key, topLevelBackStack)
+                    ArtistDetailEntry(
+                        key = key,
+                        topLevelBackStack = topLevelBackStack,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
                 }
             }
 
@@ -686,8 +706,14 @@ private fun LyricsPosterEntry(key: LyricsPoster, topLevelBackStack: TopLevelBack
 }
 
 @Composable
-private fun AlbumDetailEntry(key: AlbumDetail, topLevelBackStack: TopLevelBackStack<NavKey>) {
+private fun AlbumDetailEntry(
+    key: AlbumDetail,
+    topLevelBackStack: TopLevelBackStack<NavKey>,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope
+) {
     val viewModel = hiltViewModel<AlbumDetailViewModel, AlbumDetailViewModel.Factory>(
+        key = "${key.albumName}_${key.albumArtist}",
         creationCallback = { factory -> factory.create(key) }
     )
     AlbumDetailScreen(
@@ -697,13 +723,21 @@ private fun AlbumDetailEntry(key: AlbumDetail, topLevelBackStack: TopLevelBackSt
         onNavigateToMetadata = { filePath, coverTag ->
             topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
         },
-        viewModel = viewModel
+        viewModel = viewModel,
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope
     )
 }
 
 @Composable
-private fun ArtistDetailEntry(key: ArtistDetail, topLevelBackStack: TopLevelBackStack<NavKey>) {
+private fun ArtistDetailEntry(
+    key: ArtistDetail,
+    topLevelBackStack: TopLevelBackStack<NavKey>,
+    sharedTransitionScope: SharedTransitionScope,
+    animatedVisibilityScope: AnimatedVisibilityScope
+) {
     val viewModel = hiltViewModel<ArtistDetailViewModel, ArtistDetailViewModel.Factory>(
+        key = key.artistName,
         creationCallback = { factory -> factory.create(key) }
     )
     ArtistDetailScreen(
@@ -715,7 +749,9 @@ private fun ArtistDetailEntry(key: ArtistDetail, topLevelBackStack: TopLevelBack
         onNavigateToAlbumDetail = { albumName, albumArtist ->
             topLevelBackStack.add(AlbumDetail(albumName, albumArtist ?: ""))
         },
-        viewModel = viewModel
+        viewModel = viewModel,
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope
     )
 }
 

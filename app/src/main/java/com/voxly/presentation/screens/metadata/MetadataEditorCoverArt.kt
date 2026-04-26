@@ -3,6 +3,9 @@ package com.voxly.presentation.screens.metadata
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,6 +26,8 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
 import com.voxly.R
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import com.voxly.presentation.components.LocalSharedTransitionScope
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 /**
@@ -53,7 +58,7 @@ fun AlbumArtSection(
     onRemoveAlbumArt: () -> Unit,
     filePath: String? = null
 ) {
-    val coverKey = filePath?.let { createAlbumArtSharedElementKey(it) }
+    val coverKey = coverTag ?: filePath?.let { createAlbumArtSharedElementKey(it) }
     val context = LocalContext.current
     val shape = MaterialTheme.shapes.extraLarge
     val isAndroid12Plus = remember { Build.VERSION.SDK_INT >= Build.VERSION_CODES.S }
@@ -66,17 +71,16 @@ fun AlbumArtSection(
             .clickable(onClick = onPickAlbumArt),
         contentAlignment = Alignment.Center
     ) {
-        val albumArtRequest = remember(displayModel) {
+        val albumArtRequest = remember(displayModel, coverKey) {
             displayModel?.let { model ->
                 ImageRequest.Builder(context)
                     .data(model)
                     .size(Size.ORIGINAL)
-                    .memoryCacheKey(
-                        when (model) {
-                            is ByteArray -> "album_art_${model.contentHashCode()}"
-                            else -> "album_art_${model.hashCode()}"
-                        }
-                    )
+                    .memoryCacheKey(coverKey ?: when (model) {
+                        is ByteArray -> "album_art_${model.contentHashCode()}"
+                        else -> "album_art_${model.hashCode()}"
+                    })
+                    .placeholderMemoryCacheKey(coverKey)
                     .build()
             }
         }
@@ -102,9 +106,25 @@ fun AlbumArtSection(
             )
         }
 
-        val topLayerModifier = Modifier
+        val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedContentScope = LocalNavAnimatedContentScope.current
+    
+    val topLayerModifier = if (coverKey != null &&
+                              sharedTransitionScope != null && animatedContentScope != null) {
+        with(sharedTransitionScope) {
+            Modifier
+                .fillMaxSize()
+                .clip(shape)
+                .sharedElement(
+                    sharedTransitionScope.rememberSharedContentState(key = coverKey),
+                    animatedVisibilityScope = animatedContentScope
+                )
+        }
+    } else {
+        Modifier
             .fillMaxSize()
             .clip(shape)
+    }
 
         if (albumArtRequest != null) {
             AsyncImage(
