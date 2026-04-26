@@ -132,7 +132,7 @@ fun AlbumArtSection(
                     AsyncImage(
                         model = albumArtRequest,
                         contentDescription = stringResource(R.string.cd_album_art),
-                        modifier = Modifier.fillMaxSize(),
+                        modifier = Modifier.fillMaxSize().clip(shape),
                         contentScale = ContentScale.Crop
                     )
                 } else {
