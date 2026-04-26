@@ -3,6 +3,7 @@ package com.voxly.presentation.screens.artist
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -71,20 +72,27 @@ fun ArtistAdaptiveScreen(
         }
     }
 
+    val detailPaneState = remember { SeekableTransitionState(initialState = false) }
+
     PredictiveBackHandler(enabled = canCloseDetailPane || selectedAlbumNavKey != null) { progress ->
         try {
-            progress.collect { }
+            progress.collect { backEvent ->
+                detailPaneState.seekTo(fraction = backEvent.progress)
+            }
             when {
                 selectedAlbumNavKey != null -> {
+                    detailPaneState.animateTo(targetState = true)
                     selectedAlbumNavKey = null
                 }
                 canCloseDetailPane -> {
+                    detailPaneState.animateTo(targetState = true)
                     coroutineScope.launch {
                         navigator.navigateBack()
                     }
                 }
             }
         } catch (e: CancellationException) {
+            detailPaneState.snapTo(targetState = false)
         }
     }
 
@@ -157,24 +165,22 @@ fun ArtistAdaptiveScreen(
                             key = navKey.albumName + navKey.albumArtist,
                             creationCallback = { factory -> factory.create(navKey) }
                         )
-                        AlbumDetailScreen(
-                            albumName = navKey.albumName,
-                            albumArtist = navKey.albumArtist.takeIf { it.isNotEmpty() },
-                            onNavigateBack = {
-                                selectedAlbumNavKey = null
-                            },
-                            onNavigateToMetadata = { filePath, coverTag ->
-                                if (isSinglePane && onNavigateToMetadata != null) {
-                                    onNavigateToMetadata(filePath, coverTag)
-                                } else {
-                                    fileSwitchCounter++
-                                    selectedFileForEditing = filePath
-                                }
-                            },
-                            viewModel = detailViewModel,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
+                            AlbumDetailScreen(
+                                albumName = navKey.albumName,
+                                albumArtist = navKey.albumArtist.takeIf { it.isNotEmpty() },
+                                onNavigateBack = {
+                                    selectedAlbumNavKey = null
+                                },
+                                onNavigateToMetadata = { filePath, coverTag ->
+                                    if (isSinglePane && onNavigateToMetadata != null) {
+                                        onNavigateToMetadata(filePath, coverTag)
+                                    } else {
+                                        fileSwitchCounter++
+                                        selectedFileForEditing = filePath
+                                    }
+                                },
+                                viewModel = detailViewModel
+                            )
                     }
                     currentDestination is ArtistDetail -> {
                         val detailViewModel = hiltViewModel<ArtistDetailViewModel, ArtistDetailViewModel.Factory>(

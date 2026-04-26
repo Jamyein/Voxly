@@ -1,6 +1,7 @@
 package com.voxly.presentation.screens.filebrowser
 
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -152,19 +153,27 @@ fun DirectoryContentAdaptiveScreen(
         }
     }
 
+    val detailPaneState = remember { SeekableTransitionState(initialState = false) }
+
     PredictiveBackHandler(enabled = isSelectionMode || canCloseDetailPane) { progress ->
         try {
-            progress.collect { }
+            progress.collect { backEvent ->
+                detailPaneState.seekTo(fraction = backEvent.progress)
+            }
             when {
-                isSelectionMode -> viewModel.clearSelection()
+                isSelectionMode -> {
+                    detailPaneState.animateTo(targetState = true)
+                    viewModel.clearSelection()
+                }
                 canCloseDetailPane -> {
+                    detailPaneState.animateTo(targetState = true)
                     coroutineScope.launch {
                         navigator.navigateBack()
                     }
                 }
             }
         } catch (e: CancellationException) {
-            // Gesture cancelled - no action
+            detailPaneState.snapTo(targetState = false)
         }
     }
 

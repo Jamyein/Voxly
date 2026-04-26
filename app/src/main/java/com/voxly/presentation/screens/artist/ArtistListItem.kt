@@ -59,17 +59,13 @@ internal fun ArtistListItem(
                 .clip(MaterialShapes.Sunny.toShape()),
             contentAlignment = Alignment.Center
         ) {
-            val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
-                    Modifier
-                        .matchParentSize()
-                        .sharedElement(
-                            rememberSharedContentState(key = avatarKey),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                }
-            } else {
+            val innerModifier = with(sharedTransitionScope!!) {
                 Modifier
+                    .matchParentSize()
+                    .sharedElement(
+                        rememberSharedContentState(key = avatarKey),
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
             }
             Box(modifier = innerModifier) {
                 if (!artist.coverPath.isNullOrBlank()) {

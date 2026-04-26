@@ -65,6 +65,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import timber.log.Timber
 import android.graphics.BitmapFactory
 import androidx.palette.graphics.Palette
 import kotlinx.coroutines.Dispatchers
@@ -72,15 +73,12 @@ import kotlinx.coroutines.withContext
 import com.voxly.R
 import com.voxly.core.util.Constants
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.screens.album.formatBitrate
 import com.voxly.presentation.screens.album.formatSampleRate
-
-private val albumCoverBoundsTransform = BoundsTransform { _, _ ->
-    spring(dampingRatio = 0.8f, stiffness = 300f)
-}
 
 /**
  * Album detail screen showing album info and track list.
@@ -260,6 +258,7 @@ fun AlbumDetailScreen(
                         // Cover image - 1:1 square with large rounded corners
                         val firstFile = files.firstOrNull()
                         val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
+                        Timber.d("AlbumDetailScreen: scope=${sharedTransitionScope != null}, animScope=${animatedVisibilityScope != null}, key=$albumCoverKey, albumName=$albumName")
                         // Pre-resolve MediaStore URI from navigation key for immediate display.
                         // This ensures AlbumArtImage has a non-null model on the first frame,
                         // enabling Coil to find the list page's cached bitmap via memoryCacheKey.
@@ -277,21 +276,16 @@ fun AlbumDetailScreen(
                                 .aspectRatio(1f),
                             contentAlignment = Alignment.Center
                         ) {
-                            val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                                with(sharedTransitionScope) {
-                                    Modifier
-                                        .matchParentSize()
-                                        .sharedElement(
-                                            sharedTransitionScope.rememberSharedContentState(key = albumCoverKey),
-                                            animatedVisibilityScope = animatedVisibilityScope,
-                                            boundsTransform = albumCoverBoundsTransform
-                                        )
-                                        .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
-                                        .clip(MaterialTheme.shapes.extraLarge)
-                                }
-                            } else {
+                            val sharedTransitionScope = LocalSharedTransitionScope.current
+                            val animatedVisibilityScope = LocalNavAnimatedContentScope.current
+                            val innerModifier = with(sharedTransitionScope!!) {
                                 Modifier
                                     .matchParentSize()
+                                    .sharedElement(
+                                        rememberSharedContentState(key = albumCoverKey),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        boundsTransform = StandardBoundsTransform
+                                    )
                                     .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
                                     .clip(MaterialTheme.shapes.extraLarge)
                             }

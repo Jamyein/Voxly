@@ -43,11 +43,14 @@ import com.voxly.presentation.screens.album.getAlbumDisplayYearString
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
+import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.LocalSharedTransitionScope
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import timber.log.Timber
 
 @Composable
 internal fun BatchMenuItem(
@@ -134,10 +137,6 @@ internal fun AlbumListItem(
     }
 }
 
-val albumCoverBoundsTransform = BoundsTransform { _, _ ->
-    spring(dampingRatio = 0.8f, stiffness = 300f)
-}
-
 @OptIn(ExperimentalSharedTransitionApi::class, ExperimentalAnimationSpecApi::class)
 @Composable
 internal fun AlbumGridItem(
@@ -166,6 +165,7 @@ internal fun AlbumGridItem(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
+    Timber.d("AlbumGridItem: key=$albumCoverKey, album=${album.name}")
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -177,18 +177,14 @@ internal fun AlbumGridItem(
                 .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
-                    Modifier
-                        .matchParentSize()
-                        .sharedElement(
-                            rememberSharedContentState(key = albumCoverKey),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = albumCoverBoundsTransform
-                        )
-                }
-            } else {
+            val innerModifier = with(sharedTransitionScope!!) {
                 Modifier
+                    .matchParentSize()
+                    .sharedElement(
+                        rememberSharedContentState(key = albumCoverKey),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        boundsTransform = StandardBoundsTransform
+                    )
             }
             Box(modifier = innerModifier) {
                 if (coverFile != null) {
@@ -235,6 +231,9 @@ internal fun ArtistListItem(
     artist: ArtistGroup,
     onClick: () -> Unit
 ) {
+    val sharedTransitionScope = LocalSharedTransitionScope.current
+    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
+    val artistAvatarKey = createArtistAvatarSharedElementKey(artist.name)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -255,16 +254,26 @@ internal fun ArtistListItem(
                     .clip(MaterialShapes.Sunny.toShape()),
                 contentAlignment = Alignment.Center
             ) {
-                if (!artist.coverPath.isNullOrBlank()) {
-                    AlbumArtImage(
-                        filePath = artist.coverPath,
-                        contentDescription = null,
-                        size = 48.dp,
-                        modifier = Modifier
-                            .fillMaxSize()
-                    )
-                } else {
-                    DefaultAlbumArtPlaceholder(size = 48.dp)
+                val innerModifier = with(sharedTransitionScope!!) {
+                    Modifier
+                        .matchParentSize()
+                        .sharedElement(
+                            rememberSharedContentState(key = artistAvatarKey),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                }
+                Box(modifier = innerModifier) {
+                    if (!artist.coverPath.isNullOrBlank()) {
+                        AlbumArtImage(
+                            filePath = artist.coverPath,
+                            contentDescription = null,
+                            size = 48.dp,
+                            modifier = Modifier
+                                .fillMaxSize()
+                        )
+                    } else {
+                        DefaultAlbumArtPlaceholder(size = 48.dp)
+                    }
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))

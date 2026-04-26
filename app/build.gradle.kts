@@ -36,6 +36,7 @@ android {
     defaultConfig {
         applicationId = "com.voxly"
         minSdk = 30
+        //noinspection OldTargetApi
         targetSdk = 36
         versionCode = 48
         versionName = "1.7.0"

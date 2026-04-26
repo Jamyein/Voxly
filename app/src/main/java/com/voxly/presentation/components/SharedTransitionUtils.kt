@@ -1,7 +1,9 @@
 package com.voxly.presentation.components
 
+import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.spring
 import androidx.compose.runtime.ProvidableCompositionLocal
 import androidx.compose.runtime.compositionLocalOf
 
@@ -12,6 +14,15 @@ import androidx.compose.runtime.compositionLocalOf
 @OptIn(ExperimentalSharedTransitionApi::class)
 val LocalSharedTransitionScope: ProvidableCompositionLocal<SharedTransitionScope?> =
     compositionLocalOf { null }
+
+/**
+ * Standard BoundsTransform for shared elements in the app.
+ * Uses an expressive spring animation for natural motion.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+val StandardBoundsTransform = BoundsTransform { _, _ ->
+    spring(dampingRatio = 0.8f, stiffness = 380f)
+}
 
 /**
  * Helper function to create unique keys for audio file shared elements.

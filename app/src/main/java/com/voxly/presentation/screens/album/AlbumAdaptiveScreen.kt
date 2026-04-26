@@ -1,9 +1,10 @@
 package com.voxly.presentation.screens.album
 
 import androidx.activity.compose.PredictiveBackHandler
-import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -66,27 +67,33 @@ fun AlbumAdaptiveScreen(
         }
     }
 
+    val detailPaneState = remember { SeekableTransitionState(initialState = false) }
+
     PredictiveBackHandler(enabled = canCloseDetailPane) { progress ->
         try {
-            progress.collect { }
+            progress.collect { backEvent ->
+                detailPaneState.seekTo(fraction = backEvent.progress)
+            }
             if (canCloseDetailPane) {
+                detailPaneState.animateTo(targetState = true)
                 coroutineScope.launch {
                     navigator.navigateBack()
                 }
             }
         } catch (e: CancellationException) {
+            detailPaneState.snapTo(targetState = false)
         }
     }
 
     val onAlbumClick: (AlbumGroup) -> Unit = remember(isSinglePane, onNavigateToAlbumDetail, coroutineScope) {
         { album ->
-            selectedAlbum = album
             coroutineScope.launch {
                 selectedFileForEditing = null
                 fileSwitchCounter++
                 if (isSinglePane && onNavigateToAlbumDetail != null) {
                     onNavigateToAlbumDetail(album)
                 } else {
+                    selectedAlbum = album
                     navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, album)
                 }
             }
@@ -166,9 +173,7 @@ fun AlbumAdaptiveScreen(
                                 },
                                 initialCoverPath = currentAlbum.coverPath ?: currentAlbum.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }?.path ?: currentAlbum.files.firstOrNull()?.path,
                                 initialCoverAlbumId = currentAlbum.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }?.mediaStoreAlbumId ?: currentAlbum.files.firstOrNull()?.mediaStoreAlbumId,
-                                viewModel = detailViewModel,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope
+                                viewModel = detailViewModel
                             )
                         }
                     } else {

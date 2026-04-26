@@ -64,15 +64,12 @@ import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
 import com.voxly.presentation.viewmodel.ScrollPosition
-
-private val albumCoverBoundsTransform = BoundsTransform { _, _ ->
-    spring(dampingRatio = 0.8f, stiffness = 300f)
-}
 
 /**
  * Extracts the best cover file path for an album.
@@ -111,20 +108,14 @@ private fun AlbumArtWithSharedElement(
             modifier = Modifier.size(size),
             contentAlignment = Alignment.Center
         ) {
-            val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
-                    Modifier
-                        .matchParentSize()
-                        .sharedElement(
-                            sharedTransitionScope.rememberSharedContentState(key = sharedElementKey),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            boundsTransform = albumCoverBoundsTransform
-                        )
-                        .clip(MaterialTheme.shapes.small)
-                }
-            } else {
+            val innerModifier = with(sharedTransitionScope!!) {
                 Modifier
                     .matchParentSize()
+                    .sharedElement(
+                        rememberSharedContentState(key = sharedElementKey),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        boundsTransform = StandardBoundsTransform
+                    )
                     .clip(MaterialTheme.shapes.small)
             }
             Box(modifier = innerModifier) {
@@ -153,9 +144,6 @@ internal fun AlbumScreenContent(
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    // Capture scope parameters for use in nested lambdas
-    val transitionScope = sharedTransitionScope
-    val animVisibilityScope = animatedVisibilityScope
     
     val albums by viewModel.sortedAlbums.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()

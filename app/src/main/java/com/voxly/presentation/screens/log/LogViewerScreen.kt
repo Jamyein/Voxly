@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.widget.Toast
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
@@ -71,12 +72,17 @@ fun LogViewerScreen(
 
     val fabVisible = uiState.selectedLogFile == null && uiState.logFiles.isNotEmpty()
 
+    val selectedLogState = remember { SeekableTransitionState(initialState = false) }
+
     PredictiveBackHandler(enabled = uiState.selectedLogFile != null) { progress ->
         try {
-            progress.collect { }
+            progress.collect { backEvent ->
+                selectedLogState.seekTo(fraction = backEvent.progress)
+            }
+            selectedLogState.animateTo(targetState = true)
             viewModel.clearSelectedLog()
         } catch (e: CancellationException) {
-            // Gesture cancelled - no action
+            selectedLogState.snapTo(targetState = false)
         }
     }
 

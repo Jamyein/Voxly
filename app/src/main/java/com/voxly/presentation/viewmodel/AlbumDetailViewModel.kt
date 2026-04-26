@@ -68,6 +68,9 @@ class AlbumDetailViewModel @AssistedInject constructor(
     private val tagLibReadCache = mutableMapOf<String, AudioMetadata>()
 
     init {
+        // Pre-populate from navKey so UI shows correct name/artist from first frame
+        _albumName.update { navKey.albumName }
+        _albumArtist.update { navKey.albumArtist.takeIf { it.isNotEmpty() } }
         loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
     }
 

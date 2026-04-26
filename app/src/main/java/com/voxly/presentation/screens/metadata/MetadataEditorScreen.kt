@@ -3,11 +3,12 @@ package com.voxly.presentation.screens.metadata
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -174,8 +175,18 @@ fun MetadataEditorScreen(
         }
     }
 
-    BackHandler(enabled = hasUnsavedChanges) {
-        showDiscardDialog = true
+    val discardDialogState = remember { SeekableTransitionState(initialState = false) }
+
+    PredictiveBackHandler(enabled = hasUnsavedChanges) { progress ->
+        try {
+            progress.collect { backEvent ->
+                discardDialogState.seekTo(fraction = backEvent.progress)
+            }
+            discardDialogState.animateTo(targetState = true)
+            showDiscardDialog = true
+        } catch (e: CancellationException) {
+            discardDialogState.snapTo(targetState = false)
+        }
     }
 
     val galleryPickerLauncher = rememberLauncherForActivityResult(

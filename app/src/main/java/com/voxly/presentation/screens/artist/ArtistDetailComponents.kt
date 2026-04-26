@@ -93,17 +93,13 @@ fun HeroSection(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
             ) {
-                val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
-                        Modifier
-                            .matchParentSize()
-                            .sharedElement(
-                                rememberSharedContentState(key = createArtistAvatarSharedElementKey(artistName)),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                    }
-                } else {
+                val innerModifier = with(sharedTransitionScope!!) {
                     Modifier
+                        .matchParentSize()
+                        .sharedElement(
+                            rememberSharedContentState(key = createArtistAvatarSharedElementKey(artistName)),
+                            animatedVisibilityScope = animatedVisibilityScope!!
+                        )
                 }
                 Box(modifier = innerModifier) {
                     if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
@@ -206,17 +202,13 @@ fun SongListItem(
                     .size(48.dp)
                     .clip(MaterialTheme.shapes.medium)
             ) {
-                val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                    with(sharedTransitionScope) {
-                        Modifier
-                            .matchParentSize()
-                            .sharedElement(
-                                rememberSharedContentState(key = coverKey),
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                    }
-                } else {
+                val innerModifier = with(sharedTransitionScope!!) {
                     Modifier
+                        .matchParentSize()
+                        .sharedElement(
+                            rememberSharedContentState(key = coverKey),
+                            animatedVisibilityScope = animatedVisibilityScope!!
+                        )
                 }
                 Box(modifier = innerModifier) {
                     AlbumArtImage(

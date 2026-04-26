@@ -72,6 +72,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private val preloadMutex = kotlinx.coroutines.sync.Mutex()
 
     init {
+        // Pre-populate from navKey so UI shows correct artist name from first frame
+        _artistName.update { navKey.artistName }
         loadArtist(navKey.artistName)
     }
 

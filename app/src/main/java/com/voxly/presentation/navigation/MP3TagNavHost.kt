@@ -63,6 +63,8 @@ import com.voxly.presentation.screens.metadata.OnlineCoverSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineLyricsSearchScreen
 import com.voxly.presentation.screens.metadata.OnlineMetadataScreen
 import com.voxly.presentation.theme.ExpressiveAnimations
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
 import com.voxly.presentation.viewmodel.LibraryBatchViewModel
@@ -93,18 +95,6 @@ private val containerTransformMetadata = metadata {
     }
 }
 
-private val containerTransformSharedElementMetadata = metadata {
-    put(NavDisplay.TransitionKey) {
-        ExpressiveAnimations.ContainerTransformSharedElementEnter togetherWith ExpressiveAnimations.ContainerTransformSharedElementExit
-    }
-    put(NavDisplay.PopTransitionKey) {
-        ExpressiveAnimations.ContainerTransformSharedElementPopEnter togetherWith ExpressiveAnimations.ContainerTransformSharedElementPopExit
-    }
-    put(NavDisplay.PredictivePopTransitionKey) {
-        ExpressiveAnimations.ContainerTransformPredictiveBackEnter togetherWith ExpressiveAnimations.ContainerTransformPredictiveBackExit
-    }
-}
-
 private val sharedAxisXMetadata = metadata {
     put(NavDisplay.TransitionKey) {
         ExpressiveAnimations.SharedAxisXEnter togetherWith ExpressiveAnimations.SharedAxisXExit
@@ -112,7 +102,12 @@ private val sharedAxisXMetadata = metadata {
     put(NavDisplay.PopTransitionKey) {
         ExpressiveAnimations.SharedAxisXPopEnter togetherWith ExpressiveAnimations.SharedAxisXPopExit
     }
+    put(NavDisplay.PredictivePopTransitionKey) {
+        ExpressiveAnimations.ContainerTransformPredictiveBackEnter togetherWith
+        ExpressiveAnimations.ContainerTransformPredictiveBackExit
+    }
 }
+
 
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 @Composable
@@ -292,7 +287,7 @@ private fun MP3TagNavDisplay(
                 }
             }
 
-            entry<Albums> {
+            entry<Albums>(metadata = containerTransformMetadata) {
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {
                     AlbumAdaptiveScreen(
@@ -309,7 +304,7 @@ private fun MP3TagNavDisplay(
                 }
             }
 
-            entry<Artists> {
+            entry<Artists>(metadata = containerTransformMetadata) {
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {
                     ArtistAdaptiveScreen(
@@ -446,7 +441,7 @@ private fun MP3TagNavDisplay(
 
             entry<AlbumDetail>(
                 clazzContentKey = { key -> "AlbumDetail_${key.albumName}_${key.albumArtist}" },
-                metadata = containerTransformSharedElementMetadata
+                metadata = containerTransformMetadata
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {
@@ -461,7 +456,7 @@ private fun MP3TagNavDisplay(
 
             entry<ArtistDetail>(
                 clazzContentKey = { key -> "ArtistDetail_${key.artistName}" },
-                metadata = containerTransformSharedElementMetadata
+                metadata = containerTransformMetadata
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {
@@ -721,9 +716,10 @@ private fun LyricsPosterEntry(key: LyricsPoster, topLevelBackStack: TopLevelBack
 private fun AlbumDetailEntry(
     key: AlbumDetail,
     topLevelBackStack: TopLevelBackStack<NavKey>,
-    sharedTransitionScope: SharedTransitionScope,
-    animatedVisibilityScope: AnimatedVisibilityScope
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
+    Timber.d("AlbumDetailEntry: scope=${sharedTransitionScope != null}, animScope=${animatedVisibilityScope != null}")
     val viewModel = hiltViewModel<AlbumDetailViewModel, AlbumDetailViewModel.Factory>(
         key = "${key.albumName}_${key.albumArtist}",
         creationCallback = { factory -> factory.create(key) }
