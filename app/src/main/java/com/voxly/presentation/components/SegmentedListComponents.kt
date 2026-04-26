@@ -871,18 +871,23 @@ fun AudioFileStandardRow(
         Box(
             modifier = Modifier
                 .size(AlbumArtSizeLarge)
-                .clip(cookieShape)
-                .then(sharedModifier),
+                .clip(cookieShape),
             contentAlignment = Alignment.Center
         ) {
-            AlbumArtImage(
-                filePath = audioFile.path,
-                albumId = audioFile.mediaStoreAlbumId,
-                contentDescription = null,
-                size = AlbumArtSizeLarge,
-                modifier = Modifier.fillMaxSize()
+            Box(
+                modifier = Modifier
+                    .matchParentSize()
+                    .then(sharedModifier)
             ) {
-                Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
+                AlbumArtImage(
+                    filePath = audioFile.path,
+                    albumId = audioFile.mediaStoreAlbumId,
+                    contentDescription = null,
+                    size = AlbumArtSizeLarge,
+                    modifier = Modifier.fillMaxSize()
+                ) {
+                    Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
+                }
             }
         }
     },
@@ -1057,31 +1062,38 @@ fun AudioFileStandardRowWithMenu(
             Box(
                 modifier = Modifier
                     .size(AlbumArtSizeLarge)
-                    .clip(cookieShape)
-                    .then(sharedModifier),
+                    .clip(cookieShape),
                 contentAlignment = Alignment.Center
             ) {
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .then(sharedModifier)
+                ) {
                 AlbumArtImage(
                     filePath = audioFile.path,
                     albumId = audioFile.mediaStoreAlbumId,
                     contentDescription = null,
                     size = AlbumArtSizeLarge,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    clipShape = cookieShape
                 ) {
                     Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
                 }
             }
-        },
-        trailingContent = {
-            if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(IconPadding))
-            else AudioFileActionsMenu(onAction)
         }
-    )
+    },
+    trailingContent = {
+        if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(IconPadding))
+        else if (onAction != null) AudioFileActionsMenu(onAction)
+    }
+)
 }
 
 /**
- * Standard audio file list item (compact mode).
- * Uses Surface with smaller layout.
+ * Standard audio file list item with actions menu (full mode).
+ * Uses M3E Standard ListItem with three-dot menu.
+ * Uses sealed class [AudioFileAction] for type-safe action handling.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -1134,26 +1146,32 @@ fun AudioFileStandardRowCompact(
         } else {
             Modifier
         }
-        Box(
-            modifier = Modifier
-                .size(AlbumArtSizeLarge)
-                .clip(cookieShape)
-                .then(sharedModifier),
-            contentAlignment = Alignment.Center
-        ) {
-            AlbumArtImage(
-                filePath = audioFile.path,
-                albumId = audioFile.mediaStoreAlbumId,
-                contentDescription = null,
-                size = AlbumArtSizeSmall,
+            Box(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .size(AlbumArtSizeLarge)
+                    .clip(cookieShape),
+                contentAlignment = Alignment.Center
             ) {
-                Surface(modifier = Modifier.fillMaxSize(), shape = cookieShape, color = MaterialTheme.colorScheme.surfaceVariant) {
-                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(IconSizeSmall)) }
+                Box(
+                    modifier = Modifier
+                        .matchParentSize()
+                        .then(sharedModifier)
+                ) {
+                    AlbumArtImage(
+                        filePath = audioFile.path,
+                        albumId = audioFile.mediaStoreAlbumId,
+                        contentDescription = null,
+                        size = AlbumArtSizeSmall,
+                        modifier = Modifier
+                            .fillMaxSize(),
+                        clipShape = cookieShape
+                    ) {
+                        Surface(modifier = Modifier.fillMaxSize(), shape = cookieShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(IconSizeSmall)) }
+                        }
+                    }
                 }
             }
-        }
     },
     trailingContent = {
         Row(verticalAlignment = Alignment.CenterVertically) {

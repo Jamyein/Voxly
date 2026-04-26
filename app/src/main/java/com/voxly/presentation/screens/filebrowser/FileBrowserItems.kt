@@ -169,40 +169,40 @@ internal fun AlbumGridItem(
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
-        val boxModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-            with(sharedTransitionScope) {
-                Modifier
-                    .fillMaxWidth()
-                    .aspectRatio(1f)
-                    .clip(MaterialTheme.shapes.medium)
-                    .sharedElement(
-                        rememberSharedContentState(key = albumCoverKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = albumCoverBoundsTransform
-                    )
-                    .clickable(onClick = onClick)
-            }
-        } else {
-            Modifier
+        Box(
+            modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
                 .clip(MaterialTheme.shapes.medium)
-                .clickable(onClick = onClick)
-        }
-        Box(
-            modifier = boxModifier,
+                .clickable(onClick = onClick),
             contentAlignment = Alignment.Center
         ) {
-            if (coverFile != null) {
-                AlbumArtImage(
-                    filePath = coverFile.path,
-                    albumId = coverFile.mediaStoreAlbumId,
-                    contentDescription = null,
-                    size = 200.dp,
-                    modifier = Modifier.fillMaxSize()
-                )
+            val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .matchParentSize()
+                        .sharedElement(
+                            rememberSharedContentState(key = albumCoverKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = albumCoverBoundsTransform
+                        )
+                }
             } else {
-                DefaultAlbumArtPlaceholder(size = 200.dp)
+                Modifier
+            }
+            Box(modifier = innerModifier) {
+                if (coverFile != null) {
+                    AlbumArtImage(
+                        filePath = coverFile.path,
+                        albumId = coverFile.mediaStoreAlbumId,
+                        contentDescription = null,
+                        size = 200.dp,
+                        modifier = Modifier.fillMaxSize(),
+                        clipShape = MaterialTheme.shapes.medium
+                    )
+                } else {
+                    DefaultAlbumArtPlaceholder(size = 200.dp)
+                }
             }
         }
         Column(

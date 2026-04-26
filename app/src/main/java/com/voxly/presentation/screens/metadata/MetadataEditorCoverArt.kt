@@ -109,12 +109,11 @@ fun AlbumArtSection(
         val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedContentScope = LocalNavAnimatedContentScope.current
     
-    val topLayerModifier = if (coverKey != null &&
-                              sharedTransitionScope != null && animatedContentScope != null) {
+    val hasSharedElement = coverKey != null && sharedTransitionScope != null && animatedContentScope != null
+    val innerSharedModifier = if (hasSharedElement) {
         with(sharedTransitionScope) {
             Modifier
-                .fillMaxSize()
-                .clip(shape)
+                .matchParentSize()
                 .sharedElement(
                     sharedTransitionScope.rememberSharedContentState(key = coverKey),
                     animatedVisibilityScope = animatedContentScope
@@ -122,23 +121,28 @@ fun AlbumArtSection(
         }
     } else {
         Modifier
-            .fillMaxSize()
-            .clip(shape)
+            .matchParentSize()
     }
 
-        if (albumArtRequest != null) {
-            AsyncImage(
-                model = albumArtRequest,
-                contentDescription = stringResource(R.string.cd_album_art),
-                modifier = topLayerModifier,
-                contentScale = ContentScale.Crop
-            )
-        } else {
-            Box(
-                modifier = topLayerModifier,
-                contentAlignment = Alignment.Center
-            ) {
-                EmptyAlbumArtContent()
+        Box(
+            modifier = Modifier.fillMaxSize().clip(shape)
+        ) {
+            Box(modifier = innerSharedModifier) {
+                if (albumArtRequest != null) {
+                    AsyncImage(
+                        model = albumArtRequest,
+                        contentDescription = stringResource(R.string.cd_album_art),
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        EmptyAlbumArtContent()
+                    }
+                }
             }
         }
     }

@@ -277,41 +277,28 @@ fun AlbumDetailScreen(
                                 )
                             } else null
                         }
-                        if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                            with(sharedTransitionScope) {
-                                Box(
-                                    modifier = Modifier
-                                        .size(240.dp)
-                                        .aspectRatio(1f)
-                                        .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
-                                        .clip(MaterialTheme.shapes.extraLarge)
+                        Box(
+                            modifier = Modifier
+                                .size(240.dp)
+                                .aspectRatio(1f)
+                                .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
+                                .clip(MaterialTheme.shapes.extraLarge),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                                with(sharedTransitionScope) {
+                                    Modifier
+                                        .matchParentSize()
                                         .sharedElement(
                                             sharedTransitionScope.rememberSharedContentState(key = albumCoverKey),
                                             animatedVisibilityScope = animatedVisibilityScope,
                                             boundsTransform = albumCoverBoundsTransform
-                                        ),
-                                        contentAlignment = Alignment.Center
-                                ) {
-                                    AlbumArtImage(
-                                        filePath = coverPath ?: firstFile?.path ?: initialCoverPath,
-                                        albumId = (firstFile?.mediaStoreAlbumId).takeIf { it != null && it > 0 }
-                                            ?: initialCoverAlbumId,
-                                        contentDescription = stringResource(R.string.album_cover),
-                                        size = 220.dp,
-                                        modifier = Modifier.fillMaxSize(),
-                                        preResolvedUri = quickCoverUri
-                                    )
+                                        )
                                 }
+                            } else {
+                                Modifier
                             }
-                        } else {
-                            Box(
-                                modifier = Modifier
-                                    .size(240.dp)
-                                    .aspectRatio(1f)
-                                    .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
-                                    .clip(MaterialTheme.shapes.extraLarge),
-                                contentAlignment = Alignment.Center
-                            ) {
+                            Box(modifier = innerModifier) {
                                 AlbumArtImage(
                                     filePath = coverPath ?: firstFile?.path ?: initialCoverPath,
                                     albumId = (firstFile?.mediaStoreAlbumId).takeIf { it != null && it > 0 }
@@ -319,7 +306,8 @@ fun AlbumDetailScreen(
                                     contentDescription = stringResource(R.string.album_cover),
                                     size = 220.dp,
                                     modifier = Modifier.fillMaxSize(),
-                                    preResolvedUri = quickCoverUri
+                                    preResolvedUri = quickCoverUri,
+                                    clipShape = MaterialTheme.shapes.extraLarge
                                 )
                             }
                         }

@@ -87,6 +87,7 @@ fun AlbumArtImage(
     crossfade: Boolean = true,
     preResolvedUri: Uri? = null,
     shimmerWhileLoading: Boolean = true,
+    clipShape: Shape? = null,
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
     val context = LocalContext.current
@@ -122,13 +123,18 @@ fun AlbumArtImage(
                     .placeholderMemoryCacheKey(cacheKey)
             }
 
-            AsyncImage(
-                model = imageRequestBuilder.build(),
-                contentDescription = contentDescription,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = contentScale,
-                onError = { loadFailed = true }
-            )
+            val asyncModifier = if (clipShape != null) {
+                    Modifier.fillMaxSize().clip(clipShape)
+                } else {
+                    Modifier.fillMaxSize()
+                }
+                AsyncImage(
+                    model = imageRequestBuilder.build(),
+                    contentDescription = contentDescription,
+                    modifier = asyncModifier,
+                    contentScale = contentScale,
+                    onError = { loadFailed = true }
+                )
         } else if (isLoading && shimmerWhileLoading) {
             ShimmerAlbumArtPlaceholder()
         } else {
@@ -167,8 +173,8 @@ fun ShimmerAlbumArtPlaceholder(
         animationSpec = infiniteRepeatable(
             animation = keyframes {
                 durationMillis = 1200
-                -200f at 0 with LinearEasing
-                400f at 1200 with LinearEasing
+                -200f at 0 using LinearEasing
+                400f at 1200 using LinearEasing
             },
             repeatMode = RepeatMode.Restart
         ),

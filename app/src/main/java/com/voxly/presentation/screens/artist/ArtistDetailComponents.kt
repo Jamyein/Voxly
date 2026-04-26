@@ -86,45 +86,34 @@ fun HeroSection(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // 精致小头像
-            if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .shadow(4.dp, shape = CircleShape)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+            Box(
+                modifier = Modifier
+                    .size(64.dp)
+                    .shadow(4.dp, shape = CircleShape)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier
+                            .matchParentSize()
                             .sharedElement(
                                 rememberSharedContentState(key = createArtistAvatarSharedElementKey(artistName)),
                                 animatedVisibilityScope = animatedVisibilityScope
                             )
-                    ) {
-                        if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
-                            AlbumArtImage(
-                                filePath = coverPath,
-                                albumId = coverAlbumId,
-                                contentDescription = artistName,
-                                size = 64.dp,
-                                modifier = Modifier.fillMaxSize()
-                            )
-                        }
                     }
+                } else {
+                    Modifier
                 }
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(64.dp)
-                        .shadow(4.dp, shape = CircleShape)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
+                Box(modifier = innerModifier) {
                     if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
                         AlbumArtImage(
                             filePath = coverPath,
                             albumId = coverAlbumId,
                             contentDescription = artistName,
                             size = 64.dp,
-                            modifier = Modifier.fillMaxSize()
+                            modifier = Modifier.fillMaxSize(),
+                            clipShape = CircleShape
                         )
                     }
                 }
@@ -212,31 +201,33 @@ fun SongListItem(
             containerColor = androidx.compose.ui.graphics.Color.Transparent
         ),
         leadingContent = {
-            val boxModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-                with(sharedTransitionScope) {
-                    Modifier
-                        .size(48.dp)
-                        .clip(MaterialTheme.shapes.medium)
-                        .sharedElement(
-                            rememberSharedContentState(key = coverKey),
-                            animatedVisibilityScope = animatedVisibilityScope
-                        )
-                }
-            } else {
-                Modifier
+            Box(
+                modifier = Modifier
                     .size(48.dp)
                     .clip(MaterialTheme.shapes.medium)
-            }
-            Box(
-                modifier = boxModifier
             ) {
-                AlbumArtImage(
-                    filePath = audioFile.path,
-                    albumId = audioFile.mediaStoreAlbumId,
-                    contentDescription = audioFile.metadata.title,
-                    size = 48.dp,
-                    modifier = Modifier.fillMaxSize()
-                )
+                val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                    with(sharedTransitionScope) {
+                        Modifier
+                            .matchParentSize()
+                            .sharedElement(
+                                rememberSharedContentState(key = coverKey),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                    }
+                } else {
+                    Modifier
+                }
+                Box(modifier = innerModifier) {
+                    AlbumArtImage(
+                        filePath = audioFile.path,
+                        albumId = audioFile.mediaStoreAlbumId,
+                        contentDescription = audioFile.metadata.title,
+                        size = 48.dp,
+                        modifier = Modifier.fillMaxSize(),
+                        clipShape = MaterialTheme.shapes.medium
+                    )
+                }
             }
         },
         headlineContent = {

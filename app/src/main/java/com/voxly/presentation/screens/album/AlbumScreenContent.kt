@@ -107,44 +107,36 @@ private fun AlbumArtWithSharedElement(
     val sharedTransitionScope = com.voxly.presentation.components.LocalSharedTransitionScope.current
     val animatedVisibilityScope = androidx.navigation3.ui.LocalNavAnimatedContentScope.current
 
-    if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-        with(sharedTransitionScope) {
-            Box(
-                modifier = Modifier
-                    .size(size)
-                    .clip(MaterialTheme.shapes.small)
-                    .sharedElement(
-                        sharedTransitionScope.rememberSharedContentState(key = sharedElementKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = albumCoverBoundsTransform
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                AlbumArtImage(
-                    filePath = filePath,
-                    albumId = albumId,
-                    contentDescription = null,
-                    size = size,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
-        }
-    } else {
-        Box(
+    Box(
             modifier = Modifier
                 .size(size)
                 .clip(MaterialTheme.shapes.small),
             contentAlignment = Alignment.Center
         ) {
-            AlbumArtImage(
-                filePath = filePath,
-                albumId = albumId,
-                contentDescription = null,
-                size = size,
-                modifier = Modifier.fillMaxSize()
-            )
+            val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .matchParentSize()
+                        .sharedElement(
+                            sharedTransitionScope.rememberSharedContentState(key = sharedElementKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = albumCoverBoundsTransform
+                        )
+                }
+            } else {
+                Modifier
+            }
+            Box(modifier = innerModifier) {
+                AlbumArtImage(
+                    filePath = filePath,
+                    albumId = albumId,
+                    contentDescription = null,
+                    size = size,
+                    modifier = Modifier.fillMaxSize(),
+                    clipShape = MaterialTheme.shapes.small
+                )
+            }
         }
-    }
 }
 
 /**

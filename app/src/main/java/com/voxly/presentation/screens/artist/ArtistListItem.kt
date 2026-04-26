@@ -53,36 +53,37 @@ internal fun ArtistListItem(
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        val boxModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
-            with(sharedTransitionScope) {
-                Modifier
-                    .size(48.dp)
-                    .clip(MaterialShapes.Sunny.toShape())
-                    .sharedElement(
-                        rememberSharedContentState(key = avatarKey),
-                        animatedVisibilityScope = animatedVisibilityScope
-                    )
-            }
-        } else {
-            Modifier
-                .size(48.dp)
-                .clip(MaterialShapes.Sunny.toShape())
-        }
-
         Box(
-            modifier = boxModifier,
+            modifier = Modifier
+                .size(48.dp)
+                .clip(MaterialShapes.Sunny.toShape()),
             contentAlignment = Alignment.Center
         ) {
-            if (!artist.coverPath.isNullOrBlank()) {
-                AlbumArtImage(
-                    filePath = artist.coverPath,
-                    albumId = artist.coverAlbumId,
-                    contentDescription = null,
-                    size = 48.dp,
-                    modifier = Modifier.fillMaxSize()
-                )
+            val innerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .matchParentSize()
+                        .sharedElement(
+                            rememberSharedContentState(key = avatarKey),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                }
             } else {
-                DefaultAlbumArtPlaceholder(size = 48.dp)
+                Modifier
+            }
+            Box(modifier = innerModifier) {
+                if (!artist.coverPath.isNullOrBlank()) {
+                    AlbumArtImage(
+                        filePath = artist.coverPath,
+                        albumId = artist.coverAlbumId,
+                        contentDescription = null,
+                        size = 48.dp,
+                        modifier = Modifier.fillMaxSize(),
+                        clipShape = MaterialShapes.Sunny.toShape()
+                    )
+                } else {
+                    DefaultAlbumArtPlaceholder(size = 48.dp)
+                }
             }
         }
         Spacer(modifier = Modifier.width(12.dp))
