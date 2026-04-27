@@ -5,6 +5,9 @@ import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -35,8 +38,11 @@ import androidx.compose.ui.unit.sp
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+import com.voxly.presentation.components.createArtistContainerSharedElementKey
 import com.voxly.presentation.components.LocalSharedTransitionScope
+import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.components.createSongContainerSharedElementKey
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 
 import com.voxly.presentation.theme.ExpressiveTypography
@@ -87,19 +93,28 @@ fun HeroSection(
         ) {
             // 精致小头像
             Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .shadow(4.dp, shape = CircleShape)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                modifier = with(sharedTransitionScope!!) {
+                    Modifier
+                        .size(64.dp)
+                        .sharedBounds(
+                            rememberSharedContentState(key = createArtistContainerSharedElementKey(artistName)),
+                            animatedVisibilityScope = animatedVisibilityScope!!,
+                            enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                            exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                            boundsTransform = StandardBoundsTransform
+                        )
+                }
             ) {
-                val innerModifier = with(sharedTransitionScope!!) {
+                val innerModifier = with(sharedTransitionScope) {
                     Modifier
                         .matchParentSize()
                         .sharedElement(
                             rememberSharedContentState(key = createArtistAvatarSharedElementKey(artistName)),
                             animatedVisibilityScope = animatedVisibilityScope!!
                         )
+                        .shadow(4.dp, shape = CircleShape)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
                 }
                 Box(modifier = innerModifier) {
                     if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
@@ -190,6 +205,7 @@ fun SongListItem(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     val coverKey = createAlbumArtSharedElementKey(audioFile.path)
+    val containerKey = createSongContainerSharedElementKey(audioFile.path)
 
     ListItem(
         modifier = modifier.clickable(onClick = onClick),
@@ -198,13 +214,22 @@ fun SongListItem(
         ),
         leadingContent = {
             Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(MaterialTheme.shapes.medium)
+                modifier = with(sharedTransitionScope!!) {
+                    Modifier
+                        .size(48.dp)
+                        .sharedBounds(
+                            rememberSharedContentState(key = containerKey),
+                            animatedVisibilityScope = animatedVisibilityScope!!,
+                            enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                            exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                            boundsTransform = StandardBoundsTransform
+                        )
+                }
             ) {
                 val innerModifier = with(sharedTransitionScope!!) {
                     Modifier
                         .matchParentSize()
+                        .clip(MaterialTheme.shapes.medium)
                         .sharedElement(
                             rememberSharedContentState(key = coverKey),
                             animatedVisibilityScope = animatedVisibilityScope!!

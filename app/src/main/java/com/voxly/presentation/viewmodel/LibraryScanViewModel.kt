@@ -28,6 +28,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -202,16 +203,15 @@ class LibraryScanViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            unifiedScanManager.startWatchingSettings()
-        }
-
-        viewModelScope.launch {
             libraryDataHolder.collectRefreshTriggers { forceRefresh ->
                 loadAudioFiles(forceRefresh = forceRefresh, isIncremental = !forceRefresh)
             }
         }
 
         viewModelScope.launch {
+            delay(300L)
+            unifiedScanManager.startWatchingSettings()
+            checkDirectorySnapshotsOnStart()
             unifiedScanManager.scanState.collect { state ->
                 when (state) {
                     is ScanState.Success -> Timber.d(TAG, "Scan completed")
@@ -222,6 +222,7 @@ class LibraryScanViewModel @Inject constructor(
         }
 
         viewModelScope.launch {
+            delay(300L)
             musicLibraryCache.changeFlow.collect { change ->
                 when (change) {
                     is CacheChange.FileUpdated -> {
@@ -248,10 +249,6 @@ class LibraryScanViewModel @Inject constructor(
                     else -> { }
                 }
             }
-        }
-
-        viewModelScope.launch {
-            checkDirectorySnapshotsOnStart()
         }
     }
 

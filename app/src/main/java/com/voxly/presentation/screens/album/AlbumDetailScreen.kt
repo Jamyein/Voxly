@@ -32,6 +32,8 @@ import androidx.compose.animation.core.ExperimentalAnimationSpecApi
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.voxly.presentation.components.LocalSharedTransitionScope
 import androidx.compose.material3.Icon
@@ -46,7 +48,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.produceState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.derivedStateOf
@@ -66,16 +67,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import timber.log.Timber
-import android.graphics.BitmapFactory
-import androidx.palette.graphics.Palette
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 import com.voxly.R
 import com.voxly.core.util.Constants
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumContainerSharedElementKey
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.screens.album.formatBitrate
 import com.voxly.presentation.screens.album.formatSampleRate
@@ -126,55 +124,7 @@ fun AlbumDetailScreen(
         )
     }
 
-    // Extract dominant color from album cover for immersive background
-    val context = androidx.compose.ui.platform.LocalContext.current
-    
-    val dominantColor by produceState<Color?>(
-        initialValue = null,
-        key1 = coverPath,
-        key2 = files.firstOrNull()?.mediaStoreAlbumId
-    ) {
-        val firstFile = files.firstOrNull()
-        val albumId = firstFile?.mediaStoreAlbumId
-        val filePath = coverPath ?: firstFile?.path
-        
-        // Try MediaStore album art URI first (fastest)
-        val mediaStoreUri = firstFile?.getAlbumArtUri()
-        
-        // Fallback: folder cover or embedded cover via file path
-        val fallbackUri = if (filePath != null) {
-            val folder = java.io.File(filePath).parentFile
-            val coverNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
-            coverNames.firstNotNullOfOrNull { name ->
-                java.io.File(folder, name).takeIf { it.exists() }?.let { android.net.Uri.fromFile(it) }
-            }
-        } else null
-        
-        val uriToLoad = mediaStoreUri ?: fallbackUri
-        
-        if (uriToLoad != null) {
-            withContext(Dispatchers.Default) {
-                try {
-                    val bitmap = context.contentResolver.openInputStream(uriToLoad)?.use { stream ->
-                        val options = android.graphics.BitmapFactory.Options().apply {
-                            inSampleSize = 4
-                        }
-                        BitmapFactory.decodeStream(stream, null, options)
-                    }
-                    if (bitmap != null) {
-                        val palette = Palette.from(bitmap).generate()
-                        val color = palette.dominantSwatch?.rgb?.let { Color(it) }
-                            ?: palette.vibrantSwatch?.rgb?.let { Color(it) }
-                            ?: palette.mutedSwatch?.rgb?.let { Color(it) }
-                        value = color
-                        bitmap.recycle()
-                    }
-                } catch (e: Throwable) {
-                    // Silently fail, keep null
-                }
-            }
-        }
-    }
+    val dominantColor by viewModel.dominantColor.collectAsStateWithLifecycle()
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val listState = rememberLazyListState()
@@ -258,6 +208,7 @@ fun AlbumDetailScreen(
                         // Cover image - 1:1 square with large rounded corners
                         val firstFile = files.firstOrNull()
                         val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
+                        val containerKey = createAlbumContainerSharedElementKey(albumName, albumArtist)
                         Timber.d("AlbumDetailScreen: scope=${sharedTransitionScope != null}, animScope=${animatedVisibilityScope != null}, key=$albumCoverKey, albumName=$albumName")
                         // Pre-resolve MediaStore URI from navigation key for immediate display.
                         // This ensures AlbumArtImage has a non-null model on the first frame,
@@ -271,24 +222,40 @@ fun AlbumDetailScreen(
                             } else null
                         }
                         Box(
-                            modifier = Modifier
+                            modifier = sharedTransitionScope?.let { scope ->
+                                with(scope) {
+                                    Modifier
+                                        .size(240.dp)
+                                        .aspectRatio(1f)
+                                        .sharedBounds(
+                                            rememberSharedContentState(key = containerKey),
+                                            animatedVisibilityScope = animatedVisibilityScope!!,
+                                            enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                                            exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                                            boundsTransform = StandardBoundsTransform
+                                        )
+                                }
+                            } ?: Modifier
                                 .size(240.dp)
                                 .aspectRatio(1f),
                             contentAlignment = Alignment.Center
                         ) {
-                            val sharedTransitionScope = LocalSharedTransitionScope.current
-                            val animatedVisibilityScope = LocalNavAnimatedContentScope.current
-                            val innerModifier = with(sharedTransitionScope!!) {
-                                Modifier
-                                    .matchParentSize()
-                                    .sharedElement(
-                                        rememberSharedContentState(key = albumCoverKey),
-                                        animatedVisibilityScope = animatedVisibilityScope,
-                                        boundsTransform = StandardBoundsTransform
-                                    )
-                                    .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
-                                    .clip(MaterialTheme.shapes.extraLarge)
-                            }
+                            val innerModifier = sharedTransitionScope?.let { scope ->
+                                with(scope) {
+                                    Modifier
+                                        .matchParentSize()
+                                        .sharedElement(
+                                            rememberSharedContentState(key = albumCoverKey),
+                                            animatedVisibilityScope = animatedVisibilityScope!!,
+                                            boundsTransform = StandardBoundsTransform
+                                        )
+                                        .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
+                                        .clip(MaterialTheme.shapes.extraLarge)
+                                }
+                            } ?: Modifier
+                                .matchParentSize()
+                                .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
+                                .clip(MaterialTheme.shapes.extraLarge)
                             Box(modifier = innerModifier) {
                                 AlbumArtImage(
                                     filePath = coverPath ?: firstFile?.path ?: initialCoverPath,

@@ -44,7 +44,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,7 +53,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import kotlinx.coroutines.delay
 import com.voxly.R
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.viewmodel.ArtistDetailViewModel
@@ -89,6 +87,7 @@ fun ArtistDetailScreen(
     val albumCovers by viewModel.albumCovers.collectAsStateWithLifecycle()
     val albumYears by viewModel.albumYears.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
+    val autoScrollTarget by viewModel.autoScrollTarget.collectAsStateWithLifecycle()
 
     val onRefresh: () -> Unit = {
         viewModel.refresh(forceRefresh = false)
@@ -255,17 +254,15 @@ fun ArtistDetailScreen(
                             // 预加载相邻专辑封面
                             LaunchedEffect(carouselState.currentItem) {
                                 viewModel.preloadAdjacentAlbumCovers(carouselState.currentItem)
+                                viewModel.scheduleAutoScroll(carouselState.currentItem, albumCount)
                             }
 
-                            // Auto-scroll: 4秒间隔
-                            if (albumCount > 1) {
-                                LaunchedEffect(carouselState.currentItem) {
-                                    delay(4000)
-                                    val nextIndex = (carouselState.currentItem + 1) % albumCount
+                            // React to ViewModel-managed auto-scroll target
+                            LaunchedEffect(autoScrollTarget) {
+                                autoScrollTarget?.let { targetIndex ->
                                     try {
-                                        carouselState.animateScrollToItem(nextIndex)
+                                        carouselState.animateScrollToItem(targetIndex)
                                     } catch (_: Exception) {
-                                        // 用户交互中断，静默处理
                                     }
                                 }
                             }

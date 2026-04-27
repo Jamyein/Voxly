@@ -85,10 +85,10 @@ import timber.log.Timber
  */
 private val containerTransformMetadata = metadata {
     put(NavDisplay.TransitionKey) {
-        ExpressiveAnimations.ContainerTransformEnter togetherWith ExpressiveAnimations.ContainerTransformExit
+        ExpressiveAnimations.ContainerTransformSharedElementEnter togetherWith ExpressiveAnimations.ContainerTransformSharedElementExit
     }
     put(NavDisplay.PopTransitionKey) {
-        ExpressiveAnimations.ContainerTransformPopEnter togetherWith ExpressiveAnimations.ContainerTransformPopExit
+        ExpressiveAnimations.ContainerTransformSharedElementPopEnter togetherWith ExpressiveAnimations.ContainerTransformSharedElementPopExit
     }
     put(NavDisplay.PredictivePopTransitionKey) {
         ExpressiveAnimations.ContainerTransformPredictiveBackEnter togetherWith ExpressiveAnimations.ContainerTransformPredictiveBackExit
@@ -724,13 +724,15 @@ private fun AlbumDetailEntry(
         key = "${key.albumName}_${key.albumArtist}",
         creationCallback = { factory -> factory.create(key) }
     )
+    val albumOnNavigateBack = remember(topLevelBackStack) { { topLevelBackStack.removeLast(); Unit } }
+    val albumOnNavigateToMetadata = remember(topLevelBackStack) { { filePath: String, coverTag: String? ->
+        topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
+    } }
     AlbumDetailScreen(
         albumName = key.albumName,
         albumArtist = key.albumArtist.takeIf { it.isNotEmpty() },
-        onNavigateBack = { topLevelBackStack.removeLast() },
-        onNavigateToMetadata = { filePath, coverTag ->
-            topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
-        },
+        onNavigateBack = albumOnNavigateBack,
+        onNavigateToMetadata = albumOnNavigateToMetadata,
         viewModel = viewModel,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope
@@ -748,15 +750,18 @@ private fun ArtistDetailEntry(
         key = key.artistName,
         creationCallback = { factory -> factory.create(key) }
     )
+    val artistOnNavigateBack = remember(topLevelBackStack) { { topLevelBackStack.removeLast(); Unit } }
+    val artistOnNavigateToMetadata = remember(topLevelBackStack) { { filePath: String, coverTag: String? ->
+        topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
+    } }
+    val artistOnNavigateToAlbumDetail = remember(topLevelBackStack) { { albumName: String, albumArtist: String? ->
+        topLevelBackStack.add(AlbumDetail(albumName, albumArtist ?: ""))
+    } }
     ArtistDetailScreen(
         artistName = key.artistName,
-        onNavigateBack = { topLevelBackStack.removeLast() },
-        onNavigateToMetadata = { filePath, coverTag ->
-            topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
-        },
-        onNavigateToAlbumDetail = { albumName, albumArtist ->
-            topLevelBackStack.add(AlbumDetail(albumName, albumArtist ?: ""))
-        },
+        onNavigateBack = artistOnNavigateBack,
+        onNavigateToMetadata = artistOnNavigateToMetadata,
+        onNavigateToAlbumDetail = artistOnNavigateToAlbumDetail,
         viewModel = viewModel,
         sharedTransitionScope = sharedTransitionScope,
         animatedVisibilityScope = animatedVisibilityScope

@@ -25,6 +25,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.delay
 import timber.log.Timber
 
 /**
@@ -69,7 +70,11 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private var preloadJob: Job? = null
     private var refreshJob: Job? = null
     private var albumYearJob: Job? = null
+    private var autoScrollJob: Job? = null
     private val preloadMutex = kotlinx.coroutines.sync.Mutex()
+
+    private val _autoScrollTarget = MutableStateFlow<Int?>(null)
+    val autoScrollTarget: StateFlow<Int?> = _autoScrollTarget.asStateFlow()
 
     init {
         // Pre-populate from navKey so UI shows correct artist name from first frame
@@ -82,11 +87,12 @@ class ArtistDetailViewModel @AssistedInject constructor(
      * Gets data directly from AudioFileScanner.artists (single source of truth).
      */
     fun loadArtist(artistName: String) {
+        if (_artistName.value == artistName && _files.value.isNotEmpty()) {
+            return
+        }
+
         viewModelScope.launch {
             try {
-                if (_artistName.value == artistName && _files.value.isNotEmpty()) {
-                    return@launch
-                }
 
                 val scannerArtist = audioFileScanner.artists.first()
                     .find { it.name.equals(artistName, ignoreCase = true) }
@@ -237,6 +243,19 @@ class ArtistDetailViewModel @AssistedInject constructor(
             String.format("%d:%02d:%02d", hours, minutes, seconds)
         } else {
             String.format("%d:%02d", minutes, seconds)
+        }
+    }
+
+    /**
+     * Schedule auto-scroll carousel to next album after 4s delay.
+     * Cancels any pending auto-scroll before scheduling a new one.
+     */
+    fun scheduleAutoScroll(currentItem: Int, albumCount: Int) {
+        autoScrollJob?.cancel()
+        autoScrollJob = viewModelScope.launch {
+            if (albumCount <= 1) return@launch
+            delay(4000)
+            _autoScrollTarget.update { (currentItem + 1) % albumCount }
         }
     }
 

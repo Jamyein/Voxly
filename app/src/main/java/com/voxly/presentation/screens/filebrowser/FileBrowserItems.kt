@@ -5,6 +5,10 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.core.ArcMode
 import androidx.compose.animation.core.ExperimentalAnimationSpecApi
 import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -45,7 +49,9 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumContainerSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+import com.voxly.presentation.components.createArtistContainerSharedElementKey
 import com.voxly.presentation.components.LocalSharedTransitionScope
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.voxly.presentation.icons.AppIcon
@@ -165,19 +171,28 @@ internal fun AlbumGridItem(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
+    val containerKey = createAlbumContainerSharedElementKey(album.name, album.albumArtist)
     Timber.d("AlbumGridItem: key=$albumCoverKey, album=${album.name}")
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(MaterialTheme.shapes.medium)
-                .clickable(onClick = onClick),
+            modifier = with(sharedTransitionScope!!) {
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .sharedBounds(
+                        rememberSharedContentState(key = containerKey),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                        exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                        boundsTransform = StandardBoundsTransform
+                    )
+                    .clickable(onClick = onClick)
+            },
             contentAlignment = Alignment.Center
         ) {
-            val innerModifier = with(sharedTransitionScope!!) {
+            val innerModifier = with(sharedTransitionScope) {
                 Modifier
                     .matchParentSize()
                     .sharedElement(
@@ -185,6 +200,7 @@ internal fun AlbumGridItem(
                         animatedVisibilityScope = animatedVisibilityScope,
                         boundsTransform = StandardBoundsTransform
                     )
+                    .clip(MaterialTheme.shapes.medium)
             }
             Box(modifier = innerModifier) {
                 if (coverFile != null) {
@@ -234,6 +250,7 @@ internal fun ArtistListItem(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     val artistAvatarKey = createArtistAvatarSharedElementKey(artist.name)
+    val containerKey = createArtistContainerSharedElementKey(artist.name)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -249,18 +266,27 @@ internal fun ArtistListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(MaterialShapes.Sunny.toShape()),
+                modifier = with(sharedTransitionScope!!) {
+                    Modifier
+                        .size(48.dp)
+                        .sharedBounds(
+                            rememberSharedContentState(key = containerKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                            exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                            boundsTransform = StandardBoundsTransform
+                        )
+                },
                 contentAlignment = Alignment.Center
             ) {
-                val innerModifier = with(sharedTransitionScope!!) {
+                val innerModifier = with(sharedTransitionScope) {
                     Modifier
                         .matchParentSize()
                         .sharedElement(
                             rememberSharedContentState(key = artistAvatarKey),
                             animatedVisibilityScope = animatedVisibilityScope
                         )
+                        .clip(MaterialShapes.Sunny.toShape())
                 }
                 Box(modifier = innerModifier) {
                     if (!artist.coverPath.isNullOrBlank()) {

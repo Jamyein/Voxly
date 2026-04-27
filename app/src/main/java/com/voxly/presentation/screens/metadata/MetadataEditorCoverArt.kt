@@ -29,6 +29,8 @@ import com.voxly.R
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.voxly.presentation.components.LocalSharedTransitionScope
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.components.createSongContainerSharedElementKey
+import com.voxly.presentation.components.StandardBoundsTransform
 
 /**
  * Album art section for metadata editor.
@@ -110,6 +112,7 @@ fun AlbumArtSection(
     val animatedContentScope = LocalNavAnimatedContentScope.current
     
     val hasSharedElement = coverKey != null && sharedTransitionScope != null && animatedContentScope != null
+    val containerKey = filePath?.let { createSongContainerSharedElementKey(it) }
     val innerSharedModifier = if (hasSharedElement) {
         with(sharedTransitionScope) {
             Modifier
@@ -123,9 +126,23 @@ fun AlbumArtSection(
         Modifier
             .matchParentSize()
     }
+    val shouldUseBounds = hasSharedElement && containerKey != null
 
         Box(
-            modifier = Modifier.fillMaxSize().clip(shape)
+            modifier = if (shouldUseBounds) {
+                with(sharedTransitionScope!!) {
+                    Modifier
+                        .fillMaxSize()
+                        .sharedBounds(
+                            rememberSharedContentState(key = containerKey),
+                            animatedVisibilityScope = animatedContentScope,
+                            boundsTransform = StandardBoundsTransform
+                        )
+                        .clip(shape)
+                }
+            } else {
+                Modifier.fillMaxSize().clip(shape)
+            }
         ) {
             Box(modifier = innerSharedModifier) {
                 if (albumArtRequest != null) {

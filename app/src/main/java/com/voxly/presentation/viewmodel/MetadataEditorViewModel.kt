@@ -70,6 +70,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toPersistentMap
+import kotlinx.collections.immutable.toPersistentSet
 import coil3.SingletonImageLoader
 import kotlin.math.log10
 import kotlin.math.pow
@@ -230,7 +233,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     ) { hasUnsavedChanges, modifiedFields ->
         EditState(
             hasUnsavedChanges = hasUnsavedChanges,
-            modifiedFields = modifiedFields,
+            modifiedFields = modifiedFields.toPersistentSet(),
             saveResult = null
         )
     }.stateIn(
@@ -1037,7 +1040,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     onSuccess = { recordings ->
                         recordings.forEach { recording ->
                             val newResults = _coverSearchState.value.results + recording
-                            _coverSearchState.update { it.copy(results = newResults) }
+                            _coverSearchState.update { it.copy(results = newResults.toImmutableList()) }
                             _onlineCoverResults.update { newResults }
                         }
                         _coverSearchState.update { it.copy(isSearching = false) }
@@ -1045,7 +1048,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     onFailure = { error ->
                         val message = error.message ?: "Cover search failed"
                         _coverSearchState.update { state ->
-                            state.copy(errorSources = state.errorSources + ("System" to message))
+                            state.copy(errorSources = (state.errorSources + ("System" to message)).toPersistentMap())
                         }
                         _onlineCoverError.update { message }
                         _coverSearchState.update { it.copy(isSearching = false) }
@@ -1054,7 +1057,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
             } catch (e: Exception) {
                 val message = e.message ?: "Cover search failed"
                 _coverSearchState.update { state ->
-                    state.copy(errorSources = state.errorSources + ("System" to message))
+                    state.copy(errorSources = (state.errorSources + ("System" to message)).toPersistentMap())
                 }
                 _onlineCoverError.update { message }
                 _coverSearchState.update { it.copy(isSearching = false) }
@@ -1163,20 +1166,20 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     when (result) {
                         is LyricsSearchResult.Result -> {
                             val newResults = _lyricsSearchState.value.results + result.lyrics
-                            _lyricsSearchState.update { it.copy(results = newResults) }
+                            _lyricsSearchState.update { it.copy(results = newResults.toImmutableList()) }
                             _onlineLyricsResults.update { newResults }
                         }
 
                         is LyricsSearchResult.SourceCompleted -> {
                             _lyricsSearchState.update { state ->
-                                state.copy(completedSources = state.completedSources + result.source)
+                                state.copy(completedSources = (state.completedSources + result.source).toPersistentSet())
                             }
                         }
 
                         is LyricsSearchResult.Error -> {
                             _lyricsSearchState.update { state ->
                                 state.copy(
-                                    errorSources = state.errorSources + (result.source to result.message)
+                                    errorSources = (state.errorSources + (result.source to result.message)).toPersistentMap()
                                 )
                             }
                             _onlineLyricsError.update { result.message }
@@ -1187,7 +1190,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                 val message = e.message ?: "Lyrics search failed"
                 _onlineLyricsError.update { message }
                 _lyricsSearchState.update { state ->
-                    state.copy(errorSources = state.errorSources + ("System" to message))
+                    state.copy(errorSources = (state.errorSources + ("System" to message)).toPersistentMap())
                 }
             } finally {
                 _lyricsSearchState.update { it.copy(isSearching = false) }

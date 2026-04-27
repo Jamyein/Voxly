@@ -3,6 +3,11 @@ package com.voxly.presentation.components
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -857,6 +862,7 @@ fun AudioFileStandardRow(
     },
     leadingContent = {
         val albumArtKey = sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
+        val containerKey = createSongContainerSharedElementKey(audioFile.path)
         val cookieShape = MaterialShapes.Cookie9Sided.toShape()
         val sharedModifier = if (sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null) {
             with(sharedTransitionScope) {
@@ -868,10 +874,26 @@ fun AudioFileStandardRow(
         } else {
             Modifier
         }
-        Box(
-            modifier = Modifier
+        val outerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier
+                    .size(AlbumArtSizeLarge)
+                    .sharedBounds(
+                        rememberSharedContentState(key = containerKey),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                        exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                        boundsTransform = StandardBoundsTransform
+                    )
+                    .clip(cookieShape)
+            }
+        } else {
+            Modifier
                 .size(AlbumArtSizeLarge)
-                .clip(cookieShape),
+                .clip(cookieShape)
+        }
+        Box(
+            modifier = outerModifier,
             contentAlignment = Alignment.Center
         ) {
             Box(
@@ -1048,6 +1070,7 @@ fun AudioFileStandardRowWithMenu(
         },
         leadingContent = {
             val albumArtKey = sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
+            val containerKey = createSongContainerSharedElementKey(audioFile.path)
             val cookieShape = MaterialShapes.Cookie9Sided.toShape()
             val sharedModifier = if (sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null) {
                 with(sharedTransitionScope) {
@@ -1059,10 +1082,24 @@ fun AudioFileStandardRowWithMenu(
             } else {
                 Modifier
             }
-            Box(
-                modifier = Modifier
+            val outerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .size(AlbumArtSizeLarge)
+                        .sharedBounds(
+                            rememberSharedContentState(key = containerKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = StandardBoundsTransform
+                        )
+                        .clip(cookieShape)
+                }
+            } else {
+                Modifier
                     .size(AlbumArtSizeLarge)
-                    .clip(cookieShape),
+                    .clip(cookieShape)
+            }
+            Box(
+                modifier = outerModifier,
                 contentAlignment = Alignment.Center
             ) {
                 Box(
@@ -1088,6 +1125,7 @@ fun AudioFileStandardRowWithMenu(
         else if (onAction != null) AudioFileActionsMenu(onAction)
     }
 )
+
 }
 
 /**
@@ -1135,6 +1173,7 @@ fun AudioFileStandardRowCompact(
     },
     leadingContent = {
         val albumArtKey = sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
+        val containerKey = createSongContainerSharedElementKey(audioFile.path)
         val cookieShape = MaterialShapes.Cookie9Sided.toShape()
         val sharedModifier = if (sharedElementKey != null && sharedTransitionScope != null && animatedVisibilityScope != null) {
             with(sharedTransitionScope) {
@@ -1146,10 +1185,24 @@ fun AudioFileStandardRowCompact(
         } else {
             Modifier
         }
-            Box(
-                modifier = Modifier
+            val outerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .size(AlbumArtSizeLarge)
+                        .sharedBounds(
+                            rememberSharedContentState(key = containerKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = StandardBoundsTransform
+                        )
+                        .clip(cookieShape)
+                }
+            } else {
+                Modifier
                     .size(AlbumArtSizeLarge)
-                    .clip(cookieShape),
+                    .clip(cookieShape)
+            }
+            Box(
+                modifier = outerModifier,
                 contentAlignment = Alignment.Center
             ) {
                 Box(
