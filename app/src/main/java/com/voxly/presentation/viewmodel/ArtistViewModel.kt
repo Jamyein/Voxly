@@ -31,7 +31,7 @@ class ArtistViewModel @Inject constructor(
     val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.WhileSubscribed(),
             initialValue = emptyList()
         )
 
@@ -61,7 +61,7 @@ class ArtistViewModel @Inject constructor(
         .distinctUntilChanged()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.WhileSubscribed(),
             initialValue = emptyList()
         )
 

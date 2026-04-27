@@ -68,7 +68,9 @@ class CoverDiskCache @Inject constructor(
                     scaled.recycle()
                 }
             }
-            file.absolutePath
+            val path = file.absolutePath
+            evictIfNeeded()
+            path
         }
     }
 

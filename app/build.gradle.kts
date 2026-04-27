@@ -101,7 +101,12 @@ android {
         compilerOptions {
             freeCompilerArgs.addAll(
                 "-Xannotation-default-target=param-property",
-                "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi"
+                "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi",
+                // Compose compiler metrics (uncomment to generate stability reports)
+                // "-P",
+                // "plugin:androidx.compose.compiler.plugins.kotlin:metricsDestination=${layout.buildDirectory.asFile.get().resolve("compose-metrics").absolutePath}",
+                // "-P",
+                // "plugin:androidx.compose.compiler.plugins.kotlin:reportsDestination=${layout.buildDirectory.asFile.get().resolve("compose-metrics").absolutePath}"
             )
         }
     }
@@ -217,6 +222,9 @@ dependencies {
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+
+    // Immutable Collections for Compose stability
+    implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.4.0")
 
     // Audio Processing - Kyant0/taglib from Maven Central (supports Android SAF)
     // Replaces KTagLib which had JitPack reliability issues

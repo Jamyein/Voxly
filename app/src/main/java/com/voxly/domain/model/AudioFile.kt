@@ -3,6 +3,7 @@ package com.voxly.domain.model
 import android.net.Uri
 import androidx.compose.runtime.Immutable
 import com.voxly.core.util.Constants
+import kotlinx.collections.immutable.ImmutableList
 import java.io.Serializable
 
 /**
@@ -256,7 +257,7 @@ data class ReplayGainInfo(
 data class AlbumGroup(
     val name: String,
     val albumArtist: String?,
-    val files: List<AudioFile>,
+    val files: ImmutableList<AudioFile>,
     val coverPath: String? = null,
     val year: Int? = null
 )
@@ -267,8 +268,8 @@ data class AlbumGroup(
 @Immutable
 data class ArtistGroup(
     val name: String,
-    val albums: List<String>,
-    val files: List<AudioFile>,
+    val albums: ImmutableList<String>,
+    val files: ImmutableList<AudioFile>,
     val coverPath: String? = null
 )
 

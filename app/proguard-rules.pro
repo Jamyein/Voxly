@@ -8,14 +8,13 @@
 -dontwarn org.jaudiotagger.**
 
 # ========================================
-# Keep Kyant0/taglib classes (io.github.kyant0:taglib)
+# Kyant0/taglib classes (io.github.kyant0:taglib)
 # Kyant0/taglib 是 TagLib 的 Kotlin 封装，内部使用 Kotlin Metadata
 # 必须 keep，否则 R8 会 strip 掉 metadata 导致 propertyMap 字段读取异常
 # 特别是 DATE/YEAR 字段在 release 构建中会返回 null
 # ========================================
 -keep class com.kyant.taglib.** { *; }
 -dontwarn com.kyant.taglib.**
--dontwarn org.jaudiotagger.**
 
 # ========================================
 # Kotlinx Serialization rules
@@ -57,9 +56,6 @@
 # Kotlin Data Classes - 防止 R8 优化导致 nullable 字段访问异常
 # ========================================
 -keep class com.voxly.domain.model.** { *; }
--keepclassmembers class com.voxly.domain.model.AudioMetadata {
-    public java.lang.String year;
-}
 
 # ========================================
 # JNI rules (ReplayGain native scanner)

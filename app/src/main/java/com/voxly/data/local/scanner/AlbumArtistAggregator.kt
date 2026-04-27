@@ -24,6 +24,7 @@ import timber.log.Timber
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
+import kotlinx.collections.immutable.toImmutableList
 import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
@@ -247,7 +248,7 @@ class AlbumArtistAggregator @Inject constructor(
         currentMap[albumKey] = AlbumGroup(
             name = albumName,
             albumArtist = albumArtist?.takeIf { it.isNotBlank() },
-            files = newFiles.sortedBy { it.metadata.trackNumber },
+            files = newFiles.sortedBy { it.metadata.trackNumber }.toImmutableList(),
             coverPath = coverFile?.path,
             year = albumYear
         )
@@ -270,7 +271,7 @@ class AlbumArtistAggregator @Inject constructor(
             val albumYear = newFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
 
             currentMap[albumKey] = currentAlbum.copy(
-                files = newFiles.sortedBy { it.metadata.trackNumber },
+                files = newFiles.sortedBy { it.metadata.trackNumber }.toImmutableList(),
                 coverPath = coverFile?.path,
                 year = albumYear
             )
@@ -296,8 +297,8 @@ class AlbumArtistAggregator @Inject constructor(
             val coverFile = sortedForCover.firstOrNull()
 
             currentMap[artistKey] = currentArtist.copy(
-                albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
-                files = newFiles.sortedBy { it.metadata.album },
+                albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
+                files = newFiles.sortedBy { it.metadata.album }.toImmutableList(),
                 coverPath = coverFile?.path
             )
         }
@@ -326,8 +327,8 @@ class AlbumArtistAggregator @Inject constructor(
         val displayName = resolveArtistDisplayName(artistKey, file)
         currentMap[artistKey] = ArtistGroup(
             name = displayName,
-            albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
-            files = newFiles.sortedBy { it.metadata.album },
+            albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
+            files = newFiles.sortedBy { it.metadata.album }.toImmutableList(),
             coverPath = coverFile?.path
         )
         _artistsMap.value = currentMap
@@ -355,7 +356,7 @@ class AlbumArtistAggregator @Inject constructor(
         currentMap[albumKey] = AlbumGroup(
             name = albumName,
             albumArtist = albumArtist?.takeIf { it.isNotBlank() },
-            files = newAlbumFiles.sortedBy { it.metadata.trackNumber },
+            files = newAlbumFiles.sortedBy { it.metadata.trackNumber }.toImmutableList(),
             coverPath = coverFile?.path,
             year = albumYear
         )
@@ -391,8 +392,8 @@ class AlbumArtistAggregator @Inject constructor(
             val displayName = resolveArtistDisplayName(key, file)
             currentMap[key] = ArtistGroup(
                 name = displayName,
-                albums = newArtistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
-                files = newArtistFiles.sortedBy { it.metadata.album },
+                albums = newArtistFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
+                files = newArtistFiles.sortedBy { it.metadata.album }.toImmutableList(),
                 coverPath = coverFile?.path
             )
             
@@ -423,7 +424,7 @@ class AlbumArtistAggregator @Inject constructor(
                 val albumYear = newFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
 
                 currentMap[albumKey] = currentAlbum.copy(
-                    files = newFiles.sortedBy { it.metadata.trackNumber },
+                    files = newFiles.sortedBy { it.metadata.trackNumber }.toImmutableList(),
                     coverPath = coverFile?.path,
                     year = albumYear
                 )
@@ -451,10 +452,10 @@ class AlbumArtistAggregator @Inject constructor(
                     )
                     val coverFile = sortedForCover.firstOrNull()
 
-                    currentMap[key] = currentArtist.copy(
-                        albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
-                        files = newFiles.sortedBy { it.metadata.album },
-                        coverPath = coverFile?.path
+                currentMap[key] = currentArtist.copy(
+                    albums = newFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
+                    files = newFiles.sortedBy { it.metadata.album }.toImmutableList(),
+                    coverPath = coverFile?.path
                     )
                 }
             }
@@ -584,7 +585,7 @@ class AlbumArtistAggregator @Inject constructor(
             key!! to AlbumGroup(
                 name = albumName,
                 albumArtist = albumArtist?.takeIf { it.isNotBlank() },
-                files = albumFiles.sortedBy { it.metadata.trackNumber },
+                files = albumFiles.sortedBy { it.metadata.trackNumber }.toImmutableList(),
                 coverPath = coverFile?.path,
                 year = albumYear
             )
@@ -669,8 +670,8 @@ class AlbumArtistAggregator @Inject constructor(
 
             artistName to ArtistGroup(
                 name = displayName,
-                albums = artistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
-                files = artistFiles.sortedBy { it.metadata.album },
+                albums = artistFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
+                files = artistFiles.sortedBy { it.metadata.album }.toImmutableList(),
                 coverPath = coverFile?.path
             )
         }.toMap()
@@ -737,7 +738,7 @@ class AlbumArtistAggregator @Inject constructor(
             AlbumGroup(
                 name = albumName,
                 albumArtist = albumArtist?.takeIf { it.isNotBlank() },
-                files = albumFiles.sortedBy { it.metadata.trackNumber },
+                files = albumFiles.sortedBy { it.metadata.trackNumber }.toImmutableList(),
                 coverPath = coverFile?.path,
                 year = albumYear
             )
@@ -852,8 +853,8 @@ class AlbumArtistAggregator @Inject constructor(
             val coverFile = sortedForCover.firstOrNull()
             ArtistGroup(
                 name = displayName,
-                albums = artistFiles.mapNotNull { it.metadata.album }.distinct().sorted(),
-                files = artistFiles.sortedBy { it.metadata.album },
+                albums = artistFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
+                files = artistFiles.sortedBy { it.metadata.album }.toImmutableList(),
                 coverPath = coverFile?.path
             )
         }.sortedBy { SortUtil.toSortablePinyin(it.name) }
