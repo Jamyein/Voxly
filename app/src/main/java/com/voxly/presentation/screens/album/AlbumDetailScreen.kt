@@ -24,18 +24,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.core.ExperimentalAnimationSpecApi
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.voxly.presentation.components.LocalSharedTransitionScope
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
@@ -73,7 +64,6 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.createAlbumContainerSharedElementKey
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.screens.album.formatBitrate
 import com.voxly.presentation.screens.album.formatSampleRate
@@ -90,9 +80,7 @@ fun AlbumDetailScreen(
     onNavigateToMetadata: (String, String?) -> Unit,
     viewModel: AlbumDetailViewModel,
     initialCoverPath: String? = null,
-    initialCoverAlbumId: Long? = null,
-    sharedTransitionScope: SharedTransitionScope? = null,
-    animatedVisibilityScope: AnimatedVisibilityScope? = null
+    initialCoverAlbumId: Long? = null
 ) {
     val albumNameState by viewModel.albumName.collectAsStateWithLifecycle()
     val albumArtistState by viewModel.albumArtist.collectAsStateWithLifecycle()
@@ -208,8 +196,9 @@ fun AlbumDetailScreen(
                         // Cover image - 1:1 square with large rounded corners
                         val firstFile = files.firstOrNull()
                         val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
-                        val containerKey = createAlbumContainerSharedElementKey(albumName, albumArtist)
-                        Timber.d("AlbumDetailScreen: scope=${sharedTransitionScope != null}, animScope=${animatedVisibilityScope != null}, key=$albumCoverKey, albumName=$albumName")
+                        val sharedScope = LocalSharedTransitionScope.current
+                        val animScope = LocalNavAnimatedContentScope.current
+                        Timber.d("AlbumDetailScreen: hasScope=${sharedScope != null}, hasAnimScope=${animScope != null}, key=$albumCoverKey, albumName=$albumName")
                         // Pre-resolve MediaStore URI from navigation key for immediate display.
                         // This ensures AlbumArtImage has a non-null model on the first frame,
                         // enabling Coil to find the list page's cached bitmap via memoryCacheKey.
@@ -222,52 +211,33 @@ fun AlbumDetailScreen(
                             } else null
                         }
                         Box(
-                            modifier = sharedTransitionScope?.let { scope ->
+                            modifier = (sharedScope?.let { scope ->
                                 with(scope) {
                                     Modifier
                                         .size(240.dp)
                                         .aspectRatio(1f)
-                                        .sharedBounds(
-                                            rememberSharedContentState(key = containerKey),
-                                            animatedVisibilityScope = animatedVisibilityScope!!,
-                                            enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                                            exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                                            boundsTransform = StandardBoundsTransform
-                                        )
-                                }
-                            } ?: Modifier
-                                .size(240.dp)
-                                .aspectRatio(1f),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            val innerModifier = sharedTransitionScope?.let { scope ->
-                                with(scope) {
-                                    Modifier
-                                        .matchParentSize()
                                         .sharedElement(
                                             rememberSharedContentState(key = albumCoverKey),
-                                            animatedVisibilityScope = animatedVisibilityScope!!,
+                                            animatedVisibilityScope = animScope!!,
                                             boundsTransform = StandardBoundsTransform
                                         )
-                                        .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
-                                        .clip(MaterialTheme.shapes.extraLarge)
                                 }
-                            } ?: Modifier
-                                .matchParentSize()
+                            } ?: Modifier)
+                                .size(240.dp)
+                                .aspectRatio(1f)
                                 .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
                                 .clip(MaterialTheme.shapes.extraLarge)
-                            Box(modifier = innerModifier) {
-                                AlbumArtImage(
-                                    filePath = coverPath ?: firstFile?.path ?: initialCoverPath,
-                                    albumId = (firstFile?.mediaStoreAlbumId).takeIf { it != null && it > 0 }
-                                        ?: initialCoverAlbumId,
-                                    contentDescription = stringResource(R.string.album_cover),
-                                    size = 240.dp,
-                                    modifier = Modifier.fillMaxSize(),
-                                    preResolvedUri = quickCoverUri,
-                                    clipShape = MaterialTheme.shapes.extraLarge
-                                )
-                            }
+                        ) {
+                            AlbumArtImage(
+                                filePath = coverPath ?: firstFile?.path ?: initialCoverPath,
+                                albumId = (firstFile?.mediaStoreAlbumId).takeIf { it != null && it > 0 }
+                                    ?: initialCoverAlbumId,
+                                contentDescription = stringResource(R.string.album_cover),
+                                size = 240.dp,
+                                modifier = Modifier.fillMaxSize(),
+                                preResolvedUri = quickCoverUri,
+                                clipShape = MaterialTheme.shapes.extraLarge
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))

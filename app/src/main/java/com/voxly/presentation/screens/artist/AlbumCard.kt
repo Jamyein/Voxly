@@ -14,7 +14,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -23,10 +22,10 @@ import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 
 
 /**
- * 竖版叠加专辑卡片（符合 M3 Carousel 文档规范）
+ * 专辑卡片
  *
- * 使用 maskClip 实现圆角，ContentScale.Crop 填充
- * 底部 scrim 渐变 + 文字叠加
+ * 使用 ContentScale.Crop 填充 + 底部 scrim 渐变 + 文字叠加
+ * 圆角裁剪由 Carousel 的 maskClip 在外部处理
  */
 @Composable
 fun AlbumCard(
@@ -40,10 +39,10 @@ fun AlbumCard(
     modifier: Modifier = Modifier
 ) {
     Box(
-            modifier = modifier
-                .clickable(onClick = onClick),
-            contentAlignment = Alignment.BottomStart
-        ) {
+        modifier = modifier
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.BottomStart
+    ) {
         // 封面图填满
         if (!albumArtPath.isNullOrBlank() || albumId != null) {
             AlbumArtImage(
@@ -67,8 +66,8 @@ fun AlbumCard(
                 .background(
                     Brush.verticalGradient(
                         colors = listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.6f)
+                            MaterialTheme.colorScheme.scrim.copy(alpha = 0f),
+                            MaterialTheme.colorScheme.scrim.copy(alpha = 0.6f)
                         )
                     )
                 )
@@ -84,13 +83,13 @@ fun AlbumCard(
                 Text(
                     text = albumYear.toString(),
                     style = MaterialTheme.typography.labelSmall,
-                    color = Color.White.copy(alpha = 0.8f)
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                 )
             }
             Text(
                 text = albumName,
                 style = MaterialTheme.typography.labelMedium,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
             )

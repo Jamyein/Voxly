@@ -399,6 +399,20 @@ object ExpressiveAnimations {
             animationSpec = PredictiveBackTween
         )
 
+    val ContainerTransformSharedElementPredictiveBackEnter: EnterTransition =
+        fadeIn(animationSpec = PredictiveBackTween) +
+        scaleIn(
+            initialScale = 0.95f,
+            animationSpec = PredictiveBackTween
+        )
+
+    val ContainerTransformSharedElementPredictiveBackExit: ExitTransition =
+        fadeOut(animationSpec = PredictiveBackTween) +
+        scaleOut(
+            targetScale = 0.95f,
+            animationSpec = PredictiveBackTween
+        )
+
     // Shared Axis X - for lateral navigation (settings, log viewer)
     val SharedAxisXEnter: EnterTransition = slideInHorizontally(
         initialOffsetX = { it },

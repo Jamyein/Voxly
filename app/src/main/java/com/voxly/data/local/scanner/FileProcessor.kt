@@ -89,7 +89,6 @@ class FileProcessor @Inject constructor(
     ): List<AudioFile> = coroutineScope {
         val semaphore = Semaphore(maxConcurrency)
         filePaths
-            .sortedBy { File(it).length() }
             .map { path ->
                 async(Dispatchers.IO) {
                     semaphore.withPermit {

@@ -316,16 +316,6 @@ class ReplayGainScanner @Inject constructor(
                 }
 
                 processedFiles++
-                emit(
-                    ScanProgress(
-                        currentFile = processedFiles,
-                        totalFiles = totalFiles,
-                        percentage = processedFiles.toFloat() / totalFiles,
-                        currentFilePath = filePath,
-                        status = ScanStatus.SCANNING
-                    )
-                )
-
             }
 
             if (trackGains.isNotEmpty()) {

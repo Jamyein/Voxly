@@ -1,11 +1,9 @@
 package com.voxly.presentation.screens.artist
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
@@ -14,13 +12,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -46,7 +42,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.res.stringResource
@@ -76,9 +71,7 @@ fun ArtistDetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToAlbumDetail: (String, String?) -> Unit,
-    viewModel: ArtistDetailViewModel,
-    sharedTransitionScope: SharedTransitionScope? = null,
-    animatedVisibilityScope: AnimatedVisibilityScope? = null
+    viewModel: ArtistDetailViewModel
 ) {
     val artistNameState by viewModel.artistName.collectAsStateWithLifecycle()
     val files by viewModel.files.collectAsStateWithLifecycle()
@@ -203,8 +196,6 @@ fun ArtistDetailScreen(
                                 coverAlbumId = coverAlbumId,
                                 songCount = songCount,
                                 albumCount = albumCount,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope,
                                 modifier = Modifier.padding(bottom = 24.dp)
                             )
                         }
@@ -267,13 +258,14 @@ fun ArtistDetailScreen(
                                 }
                             }
 
-                            // 当只有1-2项时，使用 UncontainedCarousel 避免裁剪，实现1:1显示
+                            // 使用统一的专辑卡片尺寸（符合 M3 官方规范：186.dp 宽度）
                             if (albumCount <= 2) {
+                                // 当只有1-2项时，使用 UncontainedCarousel 避免裁剪
                                 HorizontalUncontainedCarousel(
                                     state = carouselState,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .wrapContentHeight()
+                                        .height(221.dp)
                                         .padding(vertical = 16.dp),
                                     itemWidth = 186.dp,
                                     itemSpacing = 8.dp,
@@ -295,16 +287,17 @@ fun ArtistDetailScreen(
                                         onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
                                         modifier = Modifier
                                             .width(186.dp)
-                                            .height(186.dp)
-                                            .clip(MaterialTheme.shapes.extraLarge)
+                                            .height(205.dp)
+                                            .maskClip(MaterialTheme.shapes.extraLarge)
                                     )
                                 }
                             } else {
+                                // 多专辑时使用 MultiBrowseCarousel（官方推荐尺寸）
                                 HorizontalMultiBrowseCarousel(
                                     state = carouselState,
                                     modifier = Modifier
                                         .fillMaxWidth()
-                                        .wrapContentHeight()
+                                        .height(221.dp)
                                         .padding(vertical = 16.dp),
                                     preferredItemWidth = 186.dp,
                                     itemSpacing = 8.dp,
@@ -325,9 +318,9 @@ fun ArtistDetailScreen(
                                         albumId = albumId,
                                         onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
                                         modifier = Modifier
-                                            .width(140.dp)
-                                            .height(200.dp)
-                                            .clip(MaterialTheme.shapes.extraLarge)
+                                            .width(186.dp)
+                                            .height(205.dp)
+                                            .maskClip(MaterialTheme.shapes.extraLarge)
                                     )
                                 }
                             }

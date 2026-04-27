@@ -50,7 +50,6 @@ class FastScanProcessor @Inject constructor(
         coroutineScope {
             val semaphore = Semaphore(maxConcurrency)
             audioFiles
-                .sortedBy { it.size }
                 .map { audioFile ->
                     async(Dispatchers.IO) {
                         semaphore.withPermit {

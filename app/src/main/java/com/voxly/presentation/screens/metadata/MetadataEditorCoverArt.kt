@@ -3,9 +3,6 @@ package com.voxly.presentation.screens.metadata
 import android.graphics.Bitmap
 import android.os.Build
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -29,8 +26,6 @@ import com.voxly.R
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.voxly.presentation.components.LocalSharedTransitionScope
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
-import com.voxly.presentation.components.createSongContainerSharedElementKey
-import com.voxly.presentation.components.StandardBoundsTransform
 
 /**
  * Album art section for metadata editor.
@@ -112,53 +107,36 @@ fun AlbumArtSection(
     val animatedContentScope = LocalNavAnimatedContentScope.current
     
     val hasSharedElement = coverKey != null && sharedTransitionScope != null && animatedContentScope != null
-    val containerKey = filePath?.let { createSongContainerSharedElementKey(it) }
-    val innerSharedModifier = if (hasSharedElement) {
+    val sharedModifier = if (hasSharedElement) {
         with(sharedTransitionScope) {
-            Modifier
-                .matchParentSize()
-                .sharedElement(
-                    sharedTransitionScope.rememberSharedContentState(key = coverKey),
-                    animatedVisibilityScope = animatedContentScope
-                )
+            Modifier.sharedElement(
+                sharedTransitionScope.rememberSharedContentState(key = coverKey),
+                animatedVisibilityScope = animatedContentScope
+            )
         }
     } else {
         Modifier
-            .matchParentSize()
     }
-    val shouldUseBounds = hasSharedElement && containerKey != null
 
         Box(
-            modifier = if (shouldUseBounds) {
-                with(sharedTransitionScope!!) {
-                    Modifier
-                        .fillMaxSize()
-                        .sharedBounds(
-                            rememberSharedContentState(key = containerKey),
-                            animatedVisibilityScope = animatedContentScope,
-                            boundsTransform = StandardBoundsTransform
-                        )
-                        .clip(shape)
-                }
-            } else {
-                Modifier.fillMaxSize().clip(shape)
-            }
+            modifier = Modifier
+                .fillMaxSize()
+                .then(sharedModifier)
+                .clip(shape)
         ) {
-            Box(modifier = innerSharedModifier) {
-                if (albumArtRequest != null) {
-                    AsyncImage(
-                        model = albumArtRequest,
-                        contentDescription = stringResource(R.string.cd_album_art),
-                        modifier = Modifier.fillMaxSize().clip(shape),
-                        contentScale = ContentScale.Crop
-                    )
-                } else {
-                    Box(
-                        modifier = Modifier.fillMaxSize(),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        EmptyAlbumArtContent()
-                    }
+            if (albumArtRequest != null) {
+                AsyncImage(
+                    model = albumArtRequest,
+                    contentDescription = stringResource(R.string.cd_album_art),
+                    modifier = Modifier.fillMaxSize().clip(shape),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    EmptyAlbumArtContent()
                 }
             }
         }

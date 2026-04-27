@@ -1,14 +1,6 @@
 package com.voxly.presentation.screens.filebrowser
 
-import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.ArcMode
-import androidx.compose.animation.core.ExperimentalAnimationSpecApi
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -49,9 +41,7 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.createAlbumContainerSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
-import com.voxly.presentation.components.createArtistContainerSharedElementKey
 import com.voxly.presentation.components.LocalSharedTransitionScope
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.voxly.presentation.icons.AppIcon
@@ -143,7 +133,7 @@ internal fun AlbumListItem(
     }
 }
 
-@OptIn(ExperimentalSharedTransitionApi::class, ExperimentalAnimationSpecApi::class)
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun AlbumGridItem(
     album: AlbumGroup,
@@ -171,8 +161,7 @@ internal fun AlbumGridItem(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
-    val containerKey = createAlbumContainerSharedElementKey(album.name, album.albumArtist)
-    Timber.d("AlbumGridItem: key=$albumCoverKey, album=${album.name}")
+    Timber.d("AlbumGridItem: album=${album.name}, key=$albumCoverKey, hasScope=${sharedTransitionScope != null}, hasAnimScope=${animatedVisibilityScope != null}")
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
@@ -181,40 +170,27 @@ internal fun AlbumGridItem(
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .sharedBounds(
-                        rememberSharedContentState(key = containerKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                        exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
+                    .sharedElement(
+                        rememberSharedContentState(key = albumCoverKey),
+                        animatedVisibilityScope = animatedVisibilityScope!!,
                         boundsTransform = StandardBoundsTransform
                     )
                     .clickable(onClick = onClick)
+                    .clip(MaterialTheme.shapes.medium)
             },
             contentAlignment = Alignment.Center
         ) {
-            val innerModifier = with(sharedTransitionScope) {
-                Modifier
-                    .matchParentSize()
-                    .sharedElement(
-                        rememberSharedContentState(key = albumCoverKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = StandardBoundsTransform
-                    )
-                    .clip(MaterialTheme.shapes.medium)
-            }
-            Box(modifier = innerModifier) {
-                if (coverFile != null) {
-                    AlbumArtImage(
-                        filePath = coverFile.path,
-                        albumId = coverFile.mediaStoreAlbumId,
-                        contentDescription = null,
-                        size = 200.dp,
-                        modifier = Modifier.fillMaxSize(),
-                        clipShape = MaterialTheme.shapes.medium
-                    )
-                } else {
-                    DefaultAlbumArtPlaceholder(size = 200.dp)
-                }
+            if (coverFile != null) {
+                AlbumArtImage(
+                    filePath = coverFile.path,
+                    albumId = coverFile.mediaStoreAlbumId,
+                    contentDescription = null,
+                    size = 200.dp,
+                    modifier = Modifier.fillMaxSize(),
+                    clipShape = MaterialTheme.shapes.medium
+                )
+            } else {
+                DefaultAlbumArtPlaceholder(size = 200.dp)
             }
         }
         Column(
@@ -250,7 +226,7 @@ internal fun ArtistListItem(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     val artistAvatarKey = createArtistAvatarSharedElementKey(artist.name)
-    val containerKey = createArtistContainerSharedElementKey(artist.name)
+    Timber.d("FileBrowserArtistListItem: artist=${artist.name}, avatarKey=$artistAvatarKey, hasScope=${sharedTransitionScope != null}, hasAnimScope=${animatedVisibilityScope != null}")
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -269,37 +245,23 @@ internal fun ArtistListItem(
                 modifier = with(sharedTransitionScope!!) {
                     Modifier
                         .size(48.dp)
-                        .sharedBounds(
-                            rememberSharedContentState(key = containerKey),
-                            animatedVisibilityScope = animatedVisibilityScope,
-                            enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                            exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                            boundsTransform = StandardBoundsTransform
-                        )
-                },
-                contentAlignment = Alignment.Center
-            ) {
-                val innerModifier = with(sharedTransitionScope) {
-                    Modifier
-                        .matchParentSize()
                         .sharedElement(
                             rememberSharedContentState(key = artistAvatarKey),
                             animatedVisibilityScope = animatedVisibilityScope
                         )
                         .clip(MaterialShapes.Sunny.toShape())
-                }
-                Box(modifier = innerModifier) {
-                    if (!artist.coverPath.isNullOrBlank()) {
-                        AlbumArtImage(
-                            filePath = artist.coverPath,
-                            contentDescription = null,
-                            size = 48.dp,
-                            modifier = Modifier
-                                .fillMaxSize()
-                        )
-                    } else {
-                        DefaultAlbumArtPlaceholder(size = 48.dp)
-                    }
+                },
+                contentAlignment = Alignment.Center
+            ) {
+                if (!artist.coverPath.isNullOrBlank()) {
+                    AlbumArtImage(
+                        filePath = artist.coverPath,
+                        contentDescription = null,
+                        size = 48.dp,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    DefaultAlbumArtPlaceholder(size = 48.dp)
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))

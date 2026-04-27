@@ -1,14 +1,8 @@
 package com.voxly.presentation.screens.album
 
-import androidx.compose.animation.BoundsTransform
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,7 +64,6 @@ import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.createAlbumContainerSharedElementKey
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
@@ -104,47 +97,33 @@ private fun AlbumArtWithSharedElement(
     filePath: String?,
     albumId: Long?,
     sharedElementKey: String,
-    size: androidx.compose.ui.unit.Dp,
-    containerKey: String
+    size: androidx.compose.ui.unit.Dp
 ) {
     val sharedTransitionScope = com.voxly.presentation.components.LocalSharedTransitionScope.current
     val animatedVisibilityScope = androidx.navigation3.ui.LocalNavAnimatedContentScope.current
+    val shape = MaterialTheme.shapes.small
 
-        Box(
-            modifier = with(sharedTransitionScope!!) {
-                Modifier
-                    .size(size)
-                    .sharedBounds(
-                        rememberSharedContentState(key = containerKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                        exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                        boundsTransform = StandardBoundsTransform
-                    )
-            },
-            contentAlignment = Alignment.Center
-        ) {
-            val innerModifier = with(sharedTransitionScope) {
-                Modifier
-                    .matchParentSize()
-                    .sharedElement(
-                        rememberSharedContentState(key = sharedElementKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = StandardBoundsTransform
-                    )
-                    .clip(MaterialTheme.shapes.small)
-            }
-            Box(modifier = innerModifier) {
-                AlbumArtImage(
-                    filePath = filePath,
-                    albumId = albumId,
-                    contentDescription = null,
-                    size = size,
-                    modifier = Modifier.fillMaxSize(),
-                    clipShape = MaterialTheme.shapes.small
+    Box(
+        modifier = with(sharedTransitionScope!!) {
+            Modifier
+                .size(size)
+                .sharedElement(
+                    rememberSharedContentState(key = sharedElementKey),
+                    animatedVisibilityScope = animatedVisibilityScope,
+                    boundsTransform = StandardBoundsTransform
                 )
-            }
+                .clip(shape)
         }
+    ) {
+        AlbumArtImage(
+            filePath = filePath,
+            albumId = albumId,
+            contentDescription = null,
+            size = size,
+            modifier = Modifier.fillMaxSize(),
+            clipShape = shape
+        )
+    }
 }
 
 /**
@@ -420,13 +399,11 @@ internal fun AlbumYearGroupedContent(
                         leadingContent = {
                             val coverFile = album.coverFile()
                             val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
-                            val containerKey = createAlbumContainerSharedElementKey(album.name, album.albumArtist)
                             AlbumArtWithSharedElement(
                                 filePath = coverFile?.path,
                                 albumId = coverFile?.mediaStoreAlbumId,
                                 sharedElementKey = albumCoverKey,
-                                size = 40.dp,
-                                containerKey = containerKey
+                                size = 40.dp
                             )
                         },
                         supportingContent = {

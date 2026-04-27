@@ -1,13 +1,6 @@
 package com.voxly.presentation.screens.artist
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.AnimatedVisibilityScope
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
-import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -38,13 +31,11 @@ import androidx.compose.ui.unit.sp
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
-import com.voxly.presentation.components.createArtistContainerSharedElementKey
 import com.voxly.presentation.components.LocalSharedTransitionScope
-import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
-import com.voxly.presentation.components.createSongContainerSharedElementKey
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 
+import timber.log.Timber
 import com.voxly.presentation.theme.ExpressiveTypography
 
 /**
@@ -62,10 +53,11 @@ fun HeroSection(
     coverAlbumId: Long?,
     songCount: Int,
     albumCount: Int,
-    sharedTransitionScope: SharedTransitionScope? = null,
-    animatedVisibilityScope: AnimatedVisibilityScope? = null,
     modifier: Modifier = Modifier
 ) {
+    val sharedScope = LocalSharedTransitionScope.current
+    val animScope = LocalNavAnimatedContentScope.current
+    Timber.d("HeroSection: artist=$artistName, hasScope=${sharedScope != null}, hasAnimScope=${animScope != null}")
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -93,40 +85,27 @@ fun HeroSection(
         ) {
             // 精致小头像
             Box(
-                modifier = with(sharedTransitionScope!!) {
+                modifier = with(sharedScope!!) {
                     Modifier
                         .size(64.dp)
-                        .sharedBounds(
-                            rememberSharedContentState(key = createArtistContainerSharedElementKey(artistName)),
-                            animatedVisibilityScope = animatedVisibilityScope!!,
-                            enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                            exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                            boundsTransform = StandardBoundsTransform
-                        )
-                }
-            ) {
-                val innerModifier = with(sharedTransitionScope) {
-                    Modifier
-                        .matchParentSize()
                         .sharedElement(
                             rememberSharedContentState(key = createArtistAvatarSharedElementKey(artistName)),
-                            animatedVisibilityScope = animatedVisibilityScope!!
+                            animatedVisibilityScope = animScope!!
                         )
                         .shadow(4.dp, shape = CircleShape)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
                 }
-                Box(modifier = innerModifier) {
-                    if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
-                        AlbumArtImage(
-                            filePath = coverPath,
-                            albumId = coverAlbumId,
-                            contentDescription = artistName,
-                            size = 64.dp,
-                            modifier = Modifier.fillMaxSize(),
-                            clipShape = CircleShape
-                        )
-                    }
+            ) {
+                if (!coverPath.isNullOrBlank() || coverAlbumId != null) {
+                    AlbumArtImage(
+                        filePath = coverPath,
+                        albumId = coverAlbumId,
+                        contentDescription = artistName,
+                        size = 64.dp,
+                        modifier = Modifier.fillMaxSize(),
+                        clipShape = CircleShape
+                    )
                 }
             }
 
@@ -205,7 +184,6 @@ fun SongListItem(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     val coverKey = createAlbumArtSharedElementKey(audioFile.path)
-    val containerKey = createSongContainerSharedElementKey(audioFile.path)
 
     ListItem(
         modifier = modifier.clickable(onClick = onClick),
@@ -217,34 +195,21 @@ fun SongListItem(
                 modifier = with(sharedTransitionScope!!) {
                     Modifier
                         .size(48.dp)
-                        .sharedBounds(
-                            rememberSharedContentState(key = containerKey),
-                            animatedVisibilityScope = animatedVisibilityScope!!,
-                            enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                            exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                            boundsTransform = StandardBoundsTransform
-                        )
-                }
-            ) {
-                val innerModifier = with(sharedTransitionScope!!) {
-                    Modifier
-                        .matchParentSize()
                         .clip(MaterialTheme.shapes.medium)
                         .sharedElement(
                             rememberSharedContentState(key = coverKey),
                             animatedVisibilityScope = animatedVisibilityScope!!
                         )
                 }
-                Box(modifier = innerModifier) {
-                    AlbumArtImage(
-                        filePath = audioFile.path,
-                        albumId = audioFile.mediaStoreAlbumId,
-                        contentDescription = audioFile.metadata.title,
-                        size = 48.dp,
-                        modifier = Modifier.fillMaxSize(),
-                        clipShape = MaterialTheme.shapes.medium
-                    )
-                }
+            ) {
+                AlbumArtImage(
+                    filePath = audioFile.path,
+                    albumId = audioFile.mediaStoreAlbumId,
+                    contentDescription = audioFile.metadata.title,
+                    size = 48.dp,
+                    modifier = Modifier.fillMaxSize(),
+                    clipShape = MaterialTheme.shapes.medium
+                )
             }
         },
         headlineContent = {

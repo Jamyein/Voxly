@@ -208,9 +208,7 @@ fun ArtistAdaptiveScreen(
                                     albumArtist = albumArtist ?: ""
                                 )
                             },
-                            viewModel = detailViewModel,
-                            sharedTransitionScope = sharedTransitionScope,
-                            animatedVisibilityScope = animatedVisibilityScope
+                            viewModel = detailViewModel
                         )
                     }
                     else -> {

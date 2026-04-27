@@ -136,7 +136,7 @@ fun AlbumArtImage(
                     onError = { loadFailed = true }
                 )
         } else if (isLoading && shimmerWhileLoading) {
-            ShimmerAlbumArtPlaceholder()
+            ShimmerAlbumArtPlaceholder(isAnimating = isLoading && !loadFailed)
         } else {
             placeholder()
         }
@@ -164,8 +164,19 @@ fun DefaultAlbumArtPlaceholder(
 @Composable
 fun ShimmerAlbumArtPlaceholder(
     modifier: Modifier = Modifier,
-    shape: Shape = MaterialTheme.shapes.small
+    shape: Shape = MaterialTheme.shapes.small,
+    isAnimating: Boolean = true
 ) {
+    if (!isAnimating) {
+        Box(
+            modifier = modifier
+                .fillMaxSize()
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+        )
+        return
+    }
+
     val infiniteTransition = rememberInfiniteTransition(label = "shimmer")
     val shimmerX by infiniteTransition.animateFloat(
         initialValue = -200f,

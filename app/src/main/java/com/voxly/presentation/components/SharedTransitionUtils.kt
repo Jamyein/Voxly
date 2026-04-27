@@ -86,11 +86,4 @@ fun createAlbumCoverSharedElementKey(albumName: String, albumArtist: String?): S
  */
 fun createArtistAvatarSharedElementKey(artistName: String): String = "artist-avatar-$artistName"
 
-fun createAlbumContainerSharedElementKey(albumName: String, albumArtist: String?): String {
-    val normalizedArtist = albumArtist?.takeIf { it.isNotBlank() }
-    return "album-container-$albumName-${normalizedArtist ?: "unknown"}"
-}
 
-fun createArtistContainerSharedElementKey(artistName: String): String = "artist-container-$artistName"
-
-fun createSongContainerSharedElementKey(filePath: String): String = "song-container-$filePath"

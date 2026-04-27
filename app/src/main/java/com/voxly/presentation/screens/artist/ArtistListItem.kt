@@ -1,11 +1,6 @@
 package com.voxly.presentation.screens.artist
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -38,9 +33,7 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.toShape
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
-import com.voxly.presentation.components.createArtistContainerSharedElementKey
 import com.voxly.presentation.components.LocalSharedTransitionScope
-import com.voxly.presentation.components.StandardBoundsTransform
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
@@ -52,7 +45,6 @@ internal fun ArtistListItem(
     val sharedTransitionScope = LocalSharedTransitionScope.current
     val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     val avatarKey = createArtistAvatarSharedElementKey(artist.name)
-    val containerKey = createArtistContainerSharedElementKey(artist.name)
 
     Row(
         modifier = Modifier
@@ -65,38 +57,25 @@ internal fun ArtistListItem(
             modifier = with(sharedTransitionScope!!) {
                 Modifier
                     .size(48.dp)
-                    .sharedBounds(
-                        rememberSharedContentState(key = containerKey),
-                        animatedVisibilityScope = animatedVisibilityScope,
-                        enter = fadeIn(spring(stiffness = 380f)) + scaleIn(initialScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                        exit = fadeOut(spring(stiffness = 380f)) + scaleOut(targetScale = 0.95f, animationSpec = spring(stiffness = 380f)),
-                        boundsTransform = StandardBoundsTransform
-                    )
-            },
-            contentAlignment = Alignment.Center
-        ) {
-            val innerModifier = with(sharedTransitionScope) {
-                Modifier
-                    .matchParentSize()
                     .sharedElement(
                         rememberSharedContentState(key = avatarKey),
                         animatedVisibilityScope = animatedVisibilityScope
                     )
                     .clip(MaterialShapes.Sunny.toShape())
-            }
-            Box(modifier = innerModifier) {
-                if (!artist.coverPath.isNullOrBlank()) {
-                    AlbumArtImage(
-                        filePath = artist.coverPath,
-                        albumId = artist.coverAlbumId,
-                        contentDescription = null,
-                        size = 48.dp,
-                        modifier = Modifier.fillMaxSize(),
-                        clipShape = MaterialShapes.Sunny.toShape()
-                    )
-                } else {
-                    DefaultAlbumArtPlaceholder(size = 48.dp)
-                }
+            },
+            contentAlignment = Alignment.Center
+        ) {
+            if (!artist.coverPath.isNullOrBlank()) {
+                AlbumArtImage(
+                    filePath = artist.coverPath,
+                    albumId = artist.coverAlbumId,
+                    contentDescription = null,
+                    size = 48.dp,
+                    modifier = Modifier.fillMaxSize(),
+                    clipShape = MaterialShapes.Sunny.toShape()
+                )
+            } else {
+                DefaultAlbumArtPlaceholder(size = 48.dp)
             }
         }
         Spacer(modifier = Modifier.width(12.dp))
