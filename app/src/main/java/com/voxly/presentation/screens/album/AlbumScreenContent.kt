@@ -62,8 +62,8 @@ import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import androidx.compose.animation.core.spring
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
@@ -110,7 +110,7 @@ private fun AlbumArtWithSharedElement(
                 .sharedElement(
                     rememberSharedContentState(key = sharedElementKey),
                     animatedVisibilityScope = animatedVisibilityScope,
-                    boundsTransform = StandardBoundsTransform
+                        boundsTransform = { _, _ -> spring() }
                 )
                 .clip(shape)
         }

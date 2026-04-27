@@ -61,9 +61,9 @@ import timber.log.Timber
 import com.voxly.R
 import com.voxly.core.util.Constants
 import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.components.StandardBoundsTransform
-import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import androidx.compose.animation.core.spring
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.screens.album.formatBitrate
 import com.voxly.presentation.screens.album.formatSampleRate
@@ -219,7 +219,7 @@ fun AlbumDetailScreen(
                                         .sharedElement(
                                             rememberSharedContentState(key = albumCoverKey),
                                             animatedVisibilityScope = animScope!!,
-                                            boundsTransform = StandardBoundsTransform
+                                            boundsTransform = { _, _ -> spring() }
                                         )
                                 }
                             } ?: Modifier)

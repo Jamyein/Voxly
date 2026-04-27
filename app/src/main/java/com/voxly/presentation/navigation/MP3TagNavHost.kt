@@ -14,12 +14,17 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldState
+import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldValue
+import androidx.compose.material3.adaptive.navigationsuite.rememberNavigationSuiteScaffoldState
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
 import androidx.compose.runtime.Composable
@@ -27,6 +32,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -145,8 +151,16 @@ fun MP3TagNavHost() {
     var pendingCoverArt by remember { mutableStateOf<ByteArray?>(null) }
 
     val topLevelRoute = topLevelBackStack.topLevelKey
-    val showNavigationBar = isMainScreenKey(topLevelBackStack.backStack.lastOrNull())
-    val adaptiveInfo = currentWindowAdaptiveInfoV2()
+        val showNavigationBar = isMainScreenKey(topLevelBackStack.backStack.lastOrNull())
+        val navigationSuiteState = rememberNavigationSuiteScaffoldState(
+            initialValue = if (showNavigationBar) NavigationSuiteScaffoldValue.Visible
+            else NavigationSuiteScaffoldValue.Hidden
+        )
+        LaunchedEffect(showNavigationBar) {
+            if (showNavigationBar) navigationSuiteState.show()
+            else navigationSuiteState.hide()
+        }
+        val adaptiveInfo = currentWindowAdaptiveInfoV2()
 
     SharedTransitionLayout {
         val sharedTransitionScope = this@SharedTransitionLayout
@@ -188,61 +202,62 @@ fun MP3TagNavHost() {
 
         NavigationSuiteScaffold(
             layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo),
+            state = navigationSuiteState,
             navigationSuiteItems = {
-                if (showNavigationBar) {
-                    item(
-                        icon = {
-                            Icon(
-                                imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
-                                contentDescription = "Files"
-                            )
-                        },
-                        label = { Text("Files") },
-                        selected = isFileSelected,
-                        onClick = onFileBrowserClick
-                    )
+                    if (showNavigationBar) {
+                        item(
+                            icon = {
+                                Icon(
+                                    imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
+                                    contentDescription = "Files"
+                                )
+                            },
+                            label = { Text("Files") },
+                            selected = isFileSelected,
+                            onClick = onFileBrowserClick
+                        )
 
-                    item(
-                        icon = {
-                            Icon(
-                                imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
-                                contentDescription = "Albums"
-                            )
-                        },
-                        label = { Text("Albums") },
-                        selected = isAlbumsSelected,
-                        onClick = onAlbumsClick
-                    )
+                        item(
+                            icon = {
+                                Icon(
+                                    imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
+                                    contentDescription = "Albums"
+                                )
+                            },
+                            label = { Text("Albums") },
+                            selected = isAlbumsSelected,
+                            onClick = onAlbumsClick
+                        )
 
-                    item(
-                        icon = {
-                            Icon(
-                                imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
-                                contentDescription = "Artists"
-                            )
-                        },
-                        label = { Text("Artists") },
-                        selected = isArtistsSelected,
-                        onClick = onArtistsClick
-                    )
+                        item(
+                            icon = {
+                                Icon(
+                                    imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
+                                    contentDescription = "Artists"
+                                )
+                            },
+                            label = { Text("Artists") },
+                            selected = isArtistsSelected,
+                            onClick = onArtistsClick
+                        )
 
-                    item(
-                        icon = {
-                            Icon(
-                                imageVector = if (isSettingsSelected) AppIcon.Settings.vector else AppIcon.SettingsOutlined.vector,
-                                contentDescription = "Settings"
-                            )
-                        },
-                        label = { Text("Settings") },
-                        selected = isSettingsSelected,
-                        onClick = onSettingsClick
-                    )
-                }
-            },
-            containerColor = MaterialTheme.colorScheme.background
-        ) {
-            navDisplayContent()
-        }
+                        item(
+                            icon = {
+                                Icon(
+                                    imageVector = if (isSettingsSelected) AppIcon.Settings.vector else AppIcon.SettingsOutlined.vector,
+                                    contentDescription = "Settings"
+                                )
+                            },
+                            label = { Text("Settings") },
+                            selected = isSettingsSelected,
+                            onClick = onSettingsClick
+                        )
+                    }
+                },
+                containerColor = MaterialTheme.colorScheme.background
+            ) {
+                navDisplayContent()
+            }
     }
 }
 
@@ -293,21 +308,16 @@ private fun MP3TagNavDisplay(
             entry<Albums> {
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 SharedTransitionWrapper(sharedTransitionScope) {
-                    val albumViewModel: AlbumViewModel = hiltViewModel()
-                    val albums by albumViewModel.sortedAlbums.collectAsState()
-                    val sortOption by albumViewModel.sortOption.collectAsState(initial = AlbumSortOption.NAME_ASC.name)
-                    val savedScrollPosition = remember { albumViewModel.getScrollPosition("albums") }
-                    val parsedSortOption = remember(sortOption) { try { AlbumSortOption.valueOf(sortOption) } catch (_: Exception) { null } }
-                    AlbumTabContent(
-                        albums = albums,
-                        onAlbumClick = { albumGroup ->
+                    AlbumAdaptiveScreen(
+                        onNavigateToAlbumDetail = { albumGroup ->
                             topLevelBackStack.add(AlbumDetail(albumGroup.name, albumGroup.albumArtist ?: ""))
                         },
-                        sortOption = parsedSortOption,
-                        savedScrollPosition = savedScrollPosition,
-                        onSaveScrollPosition = { index, offset ->
-                            albumViewModel.saveScrollPosition("albums", index, offset)
-                        }
+                        onNavigateToMetadata = { filePath, coverTag ->
+                            topLevelBackStack.add(MetadataEditor(filePath, coverTag ?: ""))
+                        },
+                        onNavigateBack = {},
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
                 }
             }

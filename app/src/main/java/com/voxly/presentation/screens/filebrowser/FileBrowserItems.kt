@@ -39,10 +39,10 @@ import com.voxly.presentation.screens.album.getAlbumDisplayYearString
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
-import com.voxly.presentation.components.StandardBoundsTransform
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.components.LocalSharedTransitionScope
+import androidx.compose.animation.core.spring
 import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
@@ -173,7 +173,7 @@ internal fun AlbumGridItem(
                     .sharedElement(
                         rememberSharedContentState(key = albumCoverKey),
                         animatedVisibilityScope = animatedVisibilityScope!!,
-                        boundsTransform = StandardBoundsTransform
+                        boundsTransform = { _, _ -> spring() }
                     )
                     .clickable(onClick = onClick)
                     .clip(MaterialTheme.shapes.medium)
