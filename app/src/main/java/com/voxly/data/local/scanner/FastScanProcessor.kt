@@ -46,7 +46,7 @@ class FastScanProcessor @Inject constructor(
      *
      * Processes files in parallel with configurable concurrency to speed up scanning.
      */
-    suspend fun enrichAll(audioFiles: List<AudioFile>, maxConcurrency: Int = 4): List<AudioFile> =
+    suspend fun enrichAll(audioFiles: List<AudioFile>, maxConcurrency: Int = 16): List<AudioFile> =
         coroutineScope {
             val semaphore = Semaphore(maxConcurrency)
             audioFiles
