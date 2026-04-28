@@ -123,21 +123,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
     // Get filePath from NavKey instead of SavedStateHandle
     private val filePath: String = navKey.filePath
 
-    // Scan mode setting - continuously synced with DataStore
-    val scanMode: StateFlow<ScanMode> = settingsDataStore.scanMode
-        .map { mode ->
-            when (mode) {
-                ScanModeConstants.SINGLE_ALBUM -> ScanMode.SINGLE_ALBUM
-                ScanModeConstants.ALBUMS -> ScanMode.ALBUMS
-                else -> ScanMode.TRACK_ONLY
-            }
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
-            initialValue = ScanMode.TRACK_ONLY
-        )
-
     val metadataEditorDynamicAlbumColor: StateFlow<Boolean> = settingsDataStore.metadataEditorDynamicAlbumColor
         .stateIn(
             scope = viewModelScope,
@@ -586,7 +571,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
             val scanQuality = com.voxly.domain.repository.ScanQuality.ACCURATE
 
             try {
-                val currentScanMode = scanMode.value
+                val currentScanMode = settingsDataStore.scanMode.first().let { mode ->
+                    when (mode) {
+                        ScanModeConstants.SINGLE_ALBUM -> ScanMode.SINGLE_ALBUM
+                        ScanModeConstants.ALBUMS -> ScanMode.ALBUMS
+                        else -> ScanMode.TRACK_ONLY
+                    }
+                }
                 val filesToScan: List<String>
 
                 // Determine which files to scan based on scan mode (foobar2000 compatible)
