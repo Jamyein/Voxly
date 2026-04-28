@@ -48,7 +48,7 @@ struct ScannerState {
 
 extern "C" JNIEXPORT jlong JNICALL
 Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeCreate(
-    JNIEnv* env, jobject thiz, jint channels, jint sample_rate,
+    jint channels, jint sample_rate,
     jboolean true_peak, jboolean dual_mono, jdouble target_loudness
 ) {
     int mode = EBUR128_MODE_I | EBUR128_MODE_SAMPLE_PEAK;
@@ -172,7 +172,7 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult
 
 extern "C" JNIEXPORT void JNICALL
 Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeDestroy(
-    JNIEnv* env, jobject thiz, jlong scannerPtr
+    jlong scannerPtr
 ) {
     auto* state = reinterpret_cast<ScannerState*>(scannerPtr);
     if (state) {
