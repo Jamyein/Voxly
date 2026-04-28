@@ -28,6 +28,7 @@ object LightweightMetadataParser {
      * in which case the caller should fall back to TagLib.
      */
     fun parse(file: File, readLimit: Int = DEFAULT_READ_LIMIT): Result? {
+        Timber.tag("Voxly").i("LightweightMetadataParser parse: file=${file.name} extension=${file.extension}")
         return try {
             when (file.extension.lowercase()) {
                 "mp3" -> ID3v2Parser.parse(file, readLimit)

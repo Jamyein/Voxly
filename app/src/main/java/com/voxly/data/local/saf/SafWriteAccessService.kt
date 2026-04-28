@@ -52,6 +52,10 @@ class SafWriteAccessService @Inject constructor(
             // Tree-level grants can affect path-to-docId cache correctness.
             safPermissionCache.invalidate()
         }
+    }.also {
+        if (it.isSuccess) {
+            Timber.tag("Voxly").i("SafWriteAccessService persistPermission: grantType=$grantType success=true")
+        }
     }
 
     fun findValidWritePermission(filePath: String): android.content.UriPermission? {
@@ -92,6 +96,7 @@ class SafWriteAccessService @Inject constructor(
     }
 
     fun resolveWritableDocumentUri(filePath: String): Uri? {
+        Timber.tag("Voxly").i("SafWriteAccessService resolveWritableDocumentUri: path=$filePath found=true")
         val permission = findValidWritePermission(filePath) ?: return null
         return resolveDocumentUri(filePath, permission)
     }

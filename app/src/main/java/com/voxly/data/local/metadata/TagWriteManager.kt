@@ -52,6 +52,7 @@ class TagWriteManager @Inject constructor(
             val result = tagLibMetadataProcessor.updateMetadata(filePath, metadata)
             
             if (result.isSuccess) {
+                Timber.tag("Voxly").i("TagWriteManager writeMetadata success: path=$filePath")
                 // Refresh system MediaStore for other apps visibility
                 refreshSystemMedia(filePath)
             }

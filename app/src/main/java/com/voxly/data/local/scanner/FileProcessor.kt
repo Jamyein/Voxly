@@ -100,6 +100,8 @@ class FileProcessor @Inject constructor(
                         }
                     }
                 }
-            }.awaitAll().filterNotNull()
+            }.awaitAll().filterNotNull().also { result ->
+                Timber.tag("Voxly").i("FileProcessor scanFilesInParallel: processed=${result.size} total=${filePaths.size}")
+            }
     }
 }

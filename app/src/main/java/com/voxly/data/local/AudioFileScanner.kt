@@ -190,6 +190,7 @@ class AudioFileScanner @Inject constructor(
             scheduleMetadataBackfill()
         }
 
+        Timber.tag("Voxly").i("AudioFileScanner scan completed: fileCount=${files.size} incremental=$incremental")
         files
     }
 

@@ -79,6 +79,7 @@ class MediaStoreDataSource @Inject constructor(
         minDurationEnabled: Boolean,
         minDurationMs: Long
     ): List<AudioFile> = withContext(Dispatchers.IO) {
+        Timber.tag("Voxly").i("MediaStore queryFromDirectory: relativePath=$relativePath")
         val audioFiles = mutableListOf<AudioFile>()
 
         val selection = buildString {
@@ -110,6 +111,7 @@ class MediaStoreDataSource @Inject constructor(
         minDurationEnabled: Boolean,
         minDurationMs: Long
     ): List<AudioFile> = withContext(Dispatchers.IO) {
+        Timber.tag("Voxly").i("MediaStore queryAll: minDurationEnabled=$minDurationEnabled minDurationMs=$minDurationMs")
         val audioFiles = mutableListOf<AudioFile>()
         val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
 
