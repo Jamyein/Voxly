@@ -273,6 +273,9 @@ dependencies {
     // Palette for color extraction from album art
     implementation("androidx.palette:palette-ktx:1.0.0")
 
+    // Baseline Profile - AOT optimization for startup performance
+    implementation("androidx.profileinstaller:profileinstaller:1.3.0")
+
     // Coil 3 - Image loading library
     implementation("io.coil-kt.coil3:coil:3.4.0")
     implementation("io.coil-kt.coil3:coil-compose:3.4.0")

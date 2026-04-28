@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -92,6 +93,7 @@ fun AlbumArtImage(
     placeholder: @Composable () -> Unit = { DefaultAlbumArtPlaceholder(size = size) }
 ) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val coverUriProvider = remember(context) { CoverUriProvider(context) }
 
     var model by remember(albumId, filePath, preResolvedUri) { mutableStateOf<Uri?>(preResolvedUri) }
@@ -112,8 +114,10 @@ fun AlbumArtImage(
         contentAlignment = Alignment.Center
     ) {
         if (model != null && !loadFailed) {
+            val px = with(density) { size.roundToPx() }
             val imageRequestBuilder = ImageRequest.Builder(LocalContext.current)
                 .data(model)
+                .size(px)
                 .scale(Scale.FILL)
                 .crossfade(crossfade)
 
