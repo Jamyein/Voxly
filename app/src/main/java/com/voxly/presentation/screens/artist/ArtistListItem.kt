@@ -31,6 +31,8 @@ import com.voxly.domain.model.ArtistListItemState
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+import com.voxly.presentation.components.createArtistNameSharedElementKey
+import androidx.compose.animation.core.spring
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.MaterialShapes
@@ -44,6 +46,7 @@ internal fun ArtistListItem(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val avatarKey = createArtistAvatarSharedElementKey(artist.name)
+    val artistNameKey = createArtistNameSharedElementKey(artist.name)
     val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
 
     Row(
@@ -90,7 +93,16 @@ internal fun ArtistListItem(
                 text = artist.name,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = if (canUseSharedTransition) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            rememberSharedContentState(key = artistNameKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> spring() }
+                        )
+                    }
+                } else Modifier
             )
             Text(
                 text = stringResource(R.string.album_count, artist.albumCount),

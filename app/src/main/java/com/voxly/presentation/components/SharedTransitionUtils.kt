@@ -62,4 +62,39 @@ fun createAlbumCoverSharedElementKey(albumName: String, albumArtist: String?): S
  */
 fun createArtistAvatarSharedElementKey(artistName: String): String = "artist-avatar-$artistName"
 
+/**
+ * Helper function to create unique keys for artist name shared elements.
+ * Used for Container Transform text transitions from ArtistScreen to ArtistDetailScreen.
+ *
+ * @param artistName The artist name
+ * @return Unique key string for the artist name shared element
+ */
+fun createArtistNameSharedElementKey(artistName: String): String = "artist-name-$artistName"
+
+/**
+ * Helper function to create unique keys for album title shared elements.
+ * Used for Container Transform text transitions from AlbumScreen to AlbumDetailScreen.
+ *
+ * @param albumName The album name
+ * @param albumArtist The album artist (optional, for disambiguation)
+ * @return Unique key string for the album title shared element
+ */
+fun createAlbumTitleSharedElementKey(albumName: String, albumArtist: String?): String {
+    val normalizedArtist = albumArtist?.takeIf { it.isNotBlank() }
+    return "album-title-$albumName-${normalizedArtist ?: "unknown"}"
+}
+
+/**
+ * Helper function to create unique keys for album artist text shared elements.
+ * Used for Container Transform text transitions from AlbumScreen to AlbumDetailScreen.
+ *
+ * @param albumName The album name
+ * @param albumArtist The album artist (optional, for disambiguation)
+ * @return Unique key string for the album artist text shared element
+ */
+fun createAlbumArtistTextSharedElementKey(albumName: String, albumArtist: String?): String {
+    val normalizedArtist = albumArtist?.takeIf { it.isNotBlank() }
+    return "album-artist-text-$albumName-${normalizedArtist ?: "unknown"}"
+}
+
 

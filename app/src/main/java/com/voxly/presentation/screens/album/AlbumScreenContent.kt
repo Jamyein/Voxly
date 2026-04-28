@@ -63,6 +63,8 @@ import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumTitleSharedElementKey
+import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
 import androidx.compose.animation.core.spring
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
@@ -426,21 +428,53 @@ internal fun AlbumYearGroupedContent(
                             )
                         },
                         supportingContent = {
+                            val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+                            val albumTitleKey = createAlbumTitleSharedElementKey(album.name, album.albumArtist)
+                            val albumArtistKey = album.albumArtist?.let { createAlbumArtistTextSharedElementKey(album.name, album.albumArtist) }
+                            val yearStr = getAlbumDisplayYearString(album)
                             Column {
                                 Text(
                                     text = album.name,
                                     style = MaterialTheme.typography.bodyMedium,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = if (canUseSharedTransition) {
+                                        with(sharedTransitionScope) {
+                                            Modifier.sharedElement(
+                                                rememberSharedContentState(key = albumTitleKey),
+                                                animatedVisibilityScope = animatedVisibilityScope,
+                                                boundsTransform = { _, _ -> spring() }
+                                            )
+                                        }
+                                    } else Modifier
                                 )
-                                val yearStr = getAlbumDisplayYearString(album)
-                                Text(
-                                    text = if (yearStr != null) "${album.albumArtist ?: ""} · $yearStr" else (album.albumArtist ?: ""),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                if (album.albumArtist != null) {
+                                    Text(
+                                        text = album.albumArtist,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = if (canUseSharedTransition && albumArtistKey != null) {
+                                            with(sharedTransitionScope) {
+                                                Modifier.sharedElement(
+                                                    rememberSharedContentState(key = albumArtistKey),
+                                                    animatedVisibilityScope = animatedVisibilityScope,
+                                                    boundsTransform = { _, _ -> spring() }
+                                                )
+                                            }
+                                        } else Modifier
+                                    )
+                                }
+                                if (yearStr != null) {
+                                    Text(
+                                        text = yearStr,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         },
                         trailingContent = {

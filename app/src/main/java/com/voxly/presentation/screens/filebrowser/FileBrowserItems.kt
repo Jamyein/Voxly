@@ -40,6 +40,8 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumTitleSharedElementKey
+import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
@@ -146,20 +148,9 @@ internal fun AlbumGridItem(
     }
     val albumYear = remember(album) { getAlbumDisplayYearString(album) }
     val trackCountText = stringResource(R.string.track_count, album.files.size)
-    val infoText = remember(album, albumYear, trackCountText) {
-        buildString {
-            append(trackCountText)
-            album.albumArtist?.let {
-                append(" ")
-                append(it)
-            }
-            if (albumYear != null) {
-                append(" ")
-                append(albumYear)
-            }
-        }
-    }
     val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
+    val albumTitleKey = createAlbumTitleSharedElementKey(album.name, album.albumArtist)
+    val albumArtistKey = album.albumArtist?.let { createAlbumArtistTextSharedElementKey(album.name, album.albumArtist) }
     val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -210,13 +201,40 @@ internal fun AlbumGridItem(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = if (canUseSharedTransition) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            rememberSharedContentState(key = albumTitleKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> spring() }
+                        )
+                    }
+                } else Modifier
             )
+            if (album.albumArtist != null) {
+                Text(
+                    text = album.albumArtist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = if (canUseSharedTransition && albumArtistKey != null) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedElement(
+                                rememberSharedContentState(key = albumArtistKey),
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                boundsTransform = { _, _ -> spring() }
+                            )
+                        }
+                    } else Modifier
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = infoText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = trackCountText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )

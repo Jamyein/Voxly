@@ -62,6 +62,8 @@ import com.voxly.R
 import com.voxly.core.util.Constants
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumTitleSharedElementKey
+import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import androidx.compose.animation.core.spring
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
@@ -246,12 +248,23 @@ fun AlbumDetailScreen(
                         Spacer(modifier = Modifier.height(24.dp))
 
                         // Album name
+                        val albumTitleKey = createAlbumTitleSharedElementKey(albumName, albumArtist)
+                        val albumArtistKey = albumArtist?.let { createAlbumArtistTextSharedElementKey(albumName, albumArtist) }
                         Text(
                             text = albumNameState,
                             style = MaterialTheme.typography.headlineSmall,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = if (canUseSharedTransition) {
+                                with(sharedTransitionScope) {
+                                    Modifier.sharedElement(
+                                        rememberSharedContentState(key = albumTitleKey),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        boundsTransform = { _, _ -> spring() }
+                                    )
+                                }
+                            } else Modifier
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -263,7 +276,16 @@ fun AlbumDetailScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = if (canUseSharedTransition && albumArtistKey != null) {
+                                with(sharedTransitionScope) {
+                                    Modifier.sharedElement(
+                                        rememberSharedContentState(key = albumArtistKey),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        boundsTransform = { _, _ -> spring() }
+                                    )
+                                }
+                            } else Modifier
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))

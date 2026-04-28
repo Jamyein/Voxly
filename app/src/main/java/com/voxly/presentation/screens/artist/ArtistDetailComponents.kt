@@ -36,6 +36,7 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+import com.voxly.presentation.components.createArtistNameSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 
 import timber.log.Timber
@@ -61,6 +62,7 @@ fun HeroSection(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+    val artistNameKey = createArtistNameSharedElementKey(artistName)
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -75,7 +77,16 @@ fun HeroSection(
             ),
             color = MaterialTheme.colorScheme.onSurface,
             maxLines = 2,
-            overflow = TextOverflow.Ellipsis
+            overflow = TextOverflow.Ellipsis,
+            modifier = if (canUseSharedTransition) {
+                with(sharedTransitionScope) {
+                    Modifier.sharedElement(
+                        rememberSharedContentState(key = artistNameKey),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                        boundsTransform = { _, _ -> spring() }
+                    )
+                }
+            } else Modifier
         )
 
         Spacer(modifier = Modifier.height(16.dp))
