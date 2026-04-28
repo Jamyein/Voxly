@@ -175,7 +175,9 @@ class AudioFileScanner @Inject constructor(
         // Skip updateCache when serving from cache to avoid triggering Flow emissions
         val servedFromCache = !incremental && !forceRefresh && hasCachedData()
         if (!servedFromCache) {
-            libraryCache.updateCache(files)
+            files.chunked(500).forEach { chunk ->
+                libraryCache.updateCache(chunk)
+            }
         }
 
         // Bump cache version when serving from cache to trigger AlbumArtistAggregator's flatMapLatest
