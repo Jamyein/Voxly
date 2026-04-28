@@ -60,7 +60,7 @@ internal fun ArtistScreenContent(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val listState = rememberLazyListState()
 
-    LaunchedEffect(artists, isRefreshing) {
+    LaunchedEffect(Unit) {
         if (artists.isEmpty() && !isRefreshing) {
             viewModel.refresh()
         }
@@ -115,7 +115,9 @@ internal fun ArtistScreenContent(
                     artists = artists,
                     artistListItems = artistListItems,
                     onArtistClick = onArtistClick,
-                    listState = listState
+                    listState = listState,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         }
@@ -127,7 +129,9 @@ internal fun ArtistTabContent(
     artists: List<ArtistGroup>,
     artistListItems: List<ArtistListItemState>,
     onArtistClick: (ArtistGroup) -> Unit,
-    listState: LazyListState? = null
+    listState: LazyListState? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
     
@@ -164,7 +168,9 @@ internal fun ArtistTabContent(
                     }
                     ArtistListItem(
                         artist = listItem,
-                        onClick = onItemClick
+                        onClick = onItemClick,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
                 }
             }
