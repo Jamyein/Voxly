@@ -1,6 +1,9 @@
 package com.voxly.presentation.screens.artist
 
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -30,10 +33,10 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.components.createArtistAvatarSharedElementKey
-import com.voxly.presentation.components.LocalSharedTransitionScope
+import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
-import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import com.voxly.presentation.components.createArtistAvatarSharedElementKey
+import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 
 import timber.log.Timber
 import com.voxly.presentation.theme.ExpressiveTypography
@@ -53,17 +56,16 @@ fun HeroSection(
     coverAlbumId: Long?,
     songCount: Int,
     albumCount: Int,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val sharedScope = LocalSharedTransitionScope.current
-    val animScope = LocalNavAnimatedContentScope.current
-    Timber.d("HeroSection: artist=$artistName, hasScope=${sharedScope != null}, hasAnimScope=${animScope != null}")
+    val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp)
     ) {
-        // 超大艺术家名字 — 杂志封面级排版
         Text(
             text = artistName,
             style = ExpressiveTypography.EmphasizedDisplay.copy(
@@ -76,22 +78,28 @@ fun HeroSection(
             overflow = TextOverflow.Ellipsis
         )
 
-        Spacer(modifier = Modifier.height(24.dp))
+        Spacer(modifier = Modifier.height(16.dp))
 
-        // 头像 + 统计信息横排（杂志副标题风格）
         Row(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // 精致小头像
             Box(
-                modifier = with(sharedScope!!) {
+                modifier = if (canUseSharedTransition) {
+                    with(sharedTransitionScope) {
+                        Modifier
+                            .size(64.dp)
+                            .sharedElement(
+                                rememberSharedContentState(key = createArtistAvatarSharedElementKey(artistName)),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                            .shadow(4.dp, shape = CircleShape)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                    }
+                } else {
                     Modifier
                         .size(64.dp)
-                        .sharedElement(
-                            rememberSharedContentState(key = createArtistAvatarSharedElementKey(artistName)),
-                            animatedVisibilityScope = animScope!!
-                        )
                         .shadow(4.dp, shape = CircleShape)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.surfaceVariant)
@@ -109,7 +117,6 @@ fun HeroSection(
                 }
             }
 
-            // 统计信息 — 杂志风格数字标签
             Row(
                 horizontalArrangement = Arrangement.spacedBy(24.dp)
             ) {
@@ -179,11 +186,12 @@ fun SectionHeader(
 fun SongListItem(
     audioFile: AudioFile,
     onClick: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     val coverKey = createAlbumArtSharedElementKey(audioFile.path)
+    val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
 
     ListItem(
         modifier = modifier.clickable(onClick = onClick),
@@ -192,14 +200,20 @@ fun SongListItem(
         ),
         leadingContent = {
             Box(
-                modifier = with(sharedTransitionScope!!) {
+                modifier = if (canUseSharedTransition) {
+                    with(sharedTransitionScope) {
+                        Modifier
+                            .size(48.dp)
+                            .sharedElement(
+                                rememberSharedContentState(key = coverKey),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                            .clip(MaterialTheme.shapes.medium)
+                    }
+                } else {
                     Modifier
                         .size(48.dp)
                         .clip(MaterialTheme.shapes.medium)
-                        .sharedElement(
-                            rememberSharedContentState(key = coverKey),
-                            animatedVisibilityScope = animatedVisibilityScope!!
-                        )
                 }
             ) {
                 AlbumArtImage(

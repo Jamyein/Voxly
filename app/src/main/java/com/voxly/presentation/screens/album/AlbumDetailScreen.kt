@@ -24,9 +24,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
-import com.voxly.presentation.components.LocalSharedTransitionScope
-import androidx.navigation3.ui.LocalNavAnimatedContentScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
@@ -80,7 +80,9 @@ fun AlbumDetailScreen(
     onNavigateToMetadata: (String, String?) -> Unit,
     viewModel: AlbumDetailViewModel,
     initialCoverPath: String? = null,
-    initialCoverAlbumId: Long? = null
+    initialCoverAlbumId: Long? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val albumNameState by viewModel.albumName.collectAsStateWithLifecycle()
     val albumArtistState by viewModel.albumArtist.collectAsStateWithLifecycle()
@@ -196,9 +198,8 @@ fun AlbumDetailScreen(
                         // Cover image - 1:1 square with large rounded corners
                         val firstFile = files.firstOrNull()
                         val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
-                        val sharedScope = LocalSharedTransitionScope.current
-                        val animScope = LocalNavAnimatedContentScope.current
-                        Timber.d("AlbumDetailScreen: hasScope=${sharedScope != null}, hasAnimScope=${animScope != null}, key=$albumCoverKey, albumName=$albumName")
+                        val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+                        Timber.d("AlbumDetailScreen: canUseSharedTransition=$canUseSharedTransition, key=$albumCoverKey, albumName=$albumName")
                         // Pre-resolve MediaStore URI from navigation key for immediate display.
                         // This ensures AlbumArtImage has a non-null model on the first frame,
                         // enabling Coil to find the list page's cached bitmap via memoryCacheKey.
@@ -211,18 +212,20 @@ fun AlbumDetailScreen(
                             } else null
                         }
                         Box(
-                            modifier = (sharedScope?.let { scope ->
-                                with(scope) {
+                            modifier = if (canUseSharedTransition) {
+                                with(sharedTransitionScope) {
                                     Modifier
                                         .size(240.dp)
                                         .aspectRatio(1f)
                                         .sharedElement(
                                             rememberSharedContentState(key = albumCoverKey),
-                                            animatedVisibilityScope = animScope!!,
+                                            animatedVisibilityScope = animatedVisibilityScope,
                                             boundsTransform = { _, _ -> spring() }
                                         )
                                 }
-                            } ?: Modifier)
+                            } else {
+                                Modifier
+                            }
                                 .size(240.dp)
                                 .aspectRatio(1f)
                                 .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)

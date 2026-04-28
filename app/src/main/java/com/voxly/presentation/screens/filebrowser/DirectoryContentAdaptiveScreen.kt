@@ -1,6 +1,9 @@
 package com.voxly.presentation.screens.filebrowser
 
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -94,7 +97,9 @@ fun DirectoryContentAdaptiveScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     scanViewModel: LibraryScanViewModel = hiltViewModel(),
     settingsViewModel: LibrarySettingsViewModel = hiltViewModel(),
-    batchViewModel: LibraryBatchViewModel = hiltViewModel()
+    batchViewModel: LibraryBatchViewModel = hiltViewModel(),
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
@@ -257,7 +262,9 @@ fun DirectoryContentAdaptiveScreen(
                         currentSingleFile = audioFile
                         showSingleFileDeleteDialog = true
                     },
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         },
@@ -274,7 +281,9 @@ fun DirectoryContentAdaptiveScreen(
                     onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
                     onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
                     onNavigateToLyricsSelector = onNavigateToLyricsSelector,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         }
@@ -353,7 +362,9 @@ private fun DirectoryListPane(
     onReplayGain: () -> Unit,
     onSingleFileRename: (AudioFile) -> Unit,
     onSingleFileDelete: (AudioFile) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     Column(modifier = modifier) {
         DirectoryListTopAppBar(
@@ -396,7 +407,9 @@ private fun DirectoryListPane(
             onReplayGain = onReplayGain,
             onSingleFileRename = onSingleFileRename,
             onSingleFileDelete = onSingleFileDelete,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize(),
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
     }
 }
@@ -526,7 +539,9 @@ private fun DirectoryListBody(
     onReplayGain: () -> Unit,
     onSingleFileRename: (AudioFile) -> Unit,
     onSingleFileDelete: (AudioFile) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
 
@@ -562,7 +577,9 @@ private fun DirectoryListBody(
                         onSingleFileRename = onSingleFileRename,
                         onSingleFileDelete = onSingleFileDelete,
                         bottomPadding = if (isSelectionMode) 80.dp else 16.dp,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
                 }
             }
@@ -618,7 +635,9 @@ private fun DirectoryFileListContent(
     onSingleFileRename: (AudioFile) -> Unit,
     onSingleFileDelete: (AudioFile) -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     Box(modifier = modifier) {
         if (files.isEmpty() && isDirectoryLoading) {
@@ -640,7 +659,9 @@ private fun DirectoryFileListContent(
                 onDeleteFile = onSingleFileDelete,
                 onFetchOnlineMetadata = onFileClick,
                 onFixMetadata = onFileClick,
-                bottomPadding = bottomPadding
+                bottomPadding = bottomPadding,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         }
     }
@@ -656,7 +677,9 @@ private fun DirectoryDetailPane(
     onNavigateToOnlineLyricsSearch: () -> Unit,
     onNavigateToOnlineCoverSearch: () -> Unit,
     onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     if (currentFile != null) {
         val navKey = MetadataEditor(
@@ -679,7 +702,9 @@ private fun DirectoryDetailPane(
             onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
             onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
             onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
-            onNavigateToLyricsSelector = onNavigateToLyricsSelector
+            onNavigateToLyricsSelector = onNavigateToLyricsSelector,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
     } else {
         EmptyDetailPane()

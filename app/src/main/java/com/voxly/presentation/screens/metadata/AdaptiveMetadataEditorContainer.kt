@@ -1,5 +1,8 @@
 package com.voxly.presentation.screens.metadata
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import com.voxly.domain.model.AudioMetadata
@@ -24,7 +27,9 @@ fun AdaptiveMetadataEditorContainer(
     onNavigateToOnlineMetadata: () -> Unit,
     onNavigateToOnlineLyricsSearch: () -> Unit,
     onNavigateToOnlineCoverSearch: () -> Unit,
-    onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit
+    onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     MetadataEditorScreen(
         filePath = filePath,
@@ -37,6 +42,8 @@ fun AdaptiveMetadataEditorContainer(
         onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
         onNavigateToLyricsSelector = onNavigateToLyricsSelector,
         pendingOnlineLyrics = pendingOnlineLyrics,
-        onConsumePendingOnlineLyrics = onConsumePendingOnlineLyrics
+        onConsumePendingOnlineLyrics = onConsumePendingOnlineLyrics,
+        sharedTransitionScope = sharedTransitionScope,
+        animatedVisibilityScope = animatedVisibilityScope
     )
 }

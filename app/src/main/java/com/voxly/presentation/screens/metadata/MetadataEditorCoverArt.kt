@@ -2,7 +2,9 @@ package com.voxly.presentation.screens.metadata
 
 import android.graphics.Bitmap
 import android.os.Build
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -23,8 +25,6 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
 import com.voxly.R
-import androidx.navigation3.ui.LocalNavAnimatedContentScope
-import com.voxly.presentation.components.LocalSharedTransitionScope
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 /**
@@ -53,7 +53,9 @@ fun AlbumArtSection(
     onZoomAlbumArt: () -> Unit,
     onRotateAlbumArt: () -> Unit,
     onRemoveAlbumArt: () -> Unit,
-    filePath: String? = null
+    filePath: String? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedContentScope: AnimatedVisibilityScope? = null
 ) {
     val coverKey = coverTag ?: filePath?.let { createAlbumArtSharedElementKey(it) }
     val context = LocalContext.current
@@ -103,20 +105,17 @@ fun AlbumArtSection(
             )
         }
 
-        val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedContentScope = LocalNavAnimatedContentScope.current
-    
-    val hasSharedElement = coverKey != null && sharedTransitionScope != null && animatedContentScope != null
-    val sharedModifier = if (hasSharedElement) {
-        with(sharedTransitionScope) {
-            Modifier.sharedElement(
-                sharedTransitionScope.rememberSharedContentState(key = coverKey),
-                animatedVisibilityScope = animatedContentScope
-            )
+        val hasSharedElement = coverKey != null && sharedTransitionScope != null && animatedContentScope != null
+        val sharedModifier = if (hasSharedElement) {
+            with(sharedTransitionScope) {
+                Modifier.sharedElement(
+                    sharedTransitionScope.rememberSharedContentState(key = coverKey),
+                    animatedVisibilityScope = animatedContentScope
+                )
+            }
+        } else {
+            Modifier
         }
-    } else {
-        Modifier
-    }
 
         Box(
             modifier = Modifier

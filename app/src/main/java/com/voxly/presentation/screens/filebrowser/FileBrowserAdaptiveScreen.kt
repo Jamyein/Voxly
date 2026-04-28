@@ -6,6 +6,9 @@ import android.widget.Toast
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -88,7 +91,9 @@ fun FileBrowserAdaptiveScreen(
     modifier: Modifier = Modifier,
     viewModel: LibraryViewModel = hiltViewModel(),
     scanViewModel: LibraryScanViewModel = hiltViewModel(),
-    settingsViewModel: LibrarySettingsViewModel = hiltViewModel()
+    settingsViewModel: LibrarySettingsViewModel = hiltViewModel(),
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -232,7 +237,9 @@ fun FileBrowserAdaptiveScreen(
                     onShowSearchSheet = { showSearchSheet = true },
                     canScrollToTop = canScrollToTop,
                     scrollBehavior = scrollBehavior,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         },
@@ -252,7 +259,9 @@ fun FileBrowserAdaptiveScreen(
                     onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
                     onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
                     onNavigateToLyricsSelector = onNavigateToLyricsSelector,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         },
@@ -305,7 +314,9 @@ private fun FileBrowserListPane(
     onShowSearchSheet: () -> Unit,
     canScrollToTop: Boolean,
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     var isSortExpanded by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -410,7 +421,9 @@ private fun FileBrowserListPane(
                                 onRequestAudioPermission()
                             }
                         },
-                        listState = listState
+                        listState = listState,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
                 }
 
@@ -459,7 +472,9 @@ private fun FileBrowserDetailPane(
     onNavigateToOnlineLyricsSearch: () -> Unit,
     onNavigateToOnlineCoverSearch: () -> Unit,
     onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     if (currentFile != null) {
         key(currentFile.path, fileSwitchCounter) {
@@ -483,10 +498,13 @@ private fun FileBrowserDetailPane(
                 onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
                 onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
                 onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
-                onNavigateToLyricsSelector = onNavigateToLyricsSelector
+                onNavigateToLyricsSelector = onNavigateToLyricsSelector,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         }
     } else {
         EmptyDetailPane()
     }
 }
+

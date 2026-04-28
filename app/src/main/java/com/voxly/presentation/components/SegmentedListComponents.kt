@@ -1,5 +1,6 @@
 package com.voxly.presentation.components
 
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateFloatAsState
@@ -830,10 +831,10 @@ fun AudioFileStandardRow(
     onLongClick: () -> Unit = {},
     onAction: ((com.voxly.presentation.components.AudioFileAction) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    sharedElementKey: String? = null
+    sharedElementKey: String? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     val rowModifier = modifier
         .fillMaxWidth()
         .combinedClickable(onClick = onClick, onLongClick = onLongClick)
@@ -1020,10 +1021,10 @@ fun AudioFileStandardRowWithMenu(
     onLongClick: () -> Unit = {},
     onAction: (AudioFileAction) -> Unit,
     modifier: Modifier = Modifier,
-    sharedElementKey: String? = null
+    sharedElementKey: String? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     ListItem(
         modifier = modifier
             .fillMaxWidth()
@@ -1098,10 +1099,10 @@ fun AudioFileStandardRowCompact(
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier,
-    sharedElementKey: String? = null
+    sharedElementKey: String? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val sharedTransitionScope = LocalSharedTransitionScope.current
-    val animatedVisibilityScope = LocalNavAnimatedContentScope.current
     ListItem(
         modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
     colors = ListItemDefaults.colors(

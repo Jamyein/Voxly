@@ -97,21 +97,28 @@ private fun AlbumArtWithSharedElement(
     filePath: String?,
     albumId: Long?,
     sharedElementKey: String,
-    size: androidx.compose.ui.unit.Dp
+    size: androidx.compose.ui.unit.Dp,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val sharedTransitionScope = com.voxly.presentation.components.LocalSharedTransitionScope.current
-    val animatedVisibilityScope = androidx.navigation3.ui.LocalNavAnimatedContentScope.current
     val shape = MaterialTheme.shapes.small
+    val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
 
     Box(
-        modifier = with(sharedTransitionScope!!) {
+        modifier = if (canUseSharedTransition) {
+            with(sharedTransitionScope) {
+                Modifier
+                    .size(size)
+                    .sharedElement(
+                        rememberSharedContentState(key = sharedElementKey),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> spring() }
+                    )
+                    .clip(shape)
+            }
+        } else {
             Modifier
                 .size(size)
-                .sharedElement(
-                    rememberSharedContentState(key = sharedElementKey),
-                    animatedVisibilityScope = animatedVisibilityScope,
-                        boundsTransform = { _, _ -> spring() }
-                )
                 .clip(shape)
         }
     ) {
@@ -227,7 +234,9 @@ internal fun AlbumScreenContent(
                     savedScrollPosition = savedScrollPosition,
                     onSaveScrollPosition = { index, offset ->
                         viewModel.saveScrollPosition("album_list_${currentSortOption.name}", index, offset)
-                    }
+                    },
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         }
@@ -242,7 +251,9 @@ internal fun AlbumTabContent(
     scrollToTopTrigger: Int = 0,
     sortOption: AlbumSortOption? = null,
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
-    onSaveScrollPosition: ((Int, Int) -> Unit)? = null
+    onSaveScrollPosition: ((Int, Int) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
 
@@ -282,7 +293,9 @@ internal fun AlbumTabContent(
                     isDescending = true,
                     scrollToTopTrigger = scrollToTopTrigger,
                     savedScrollPosition = savedScrollPosition,
-                    onSaveScrollPosition = onSaveScrollPosition
+                    onSaveScrollPosition = onSaveScrollPosition,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             } else {
                 LazyVerticalGrid(
@@ -301,7 +314,9 @@ internal fun AlbumTabContent(
                         val onItemClick = remember(album) { { onAlbumClick(album) } }
                         AlbumGridItem(
                             album = album,
-                            onClick = onItemClick
+                            onClick = onItemClick,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
                         )
                     }
                 }
@@ -331,7 +346,9 @@ internal fun AlbumYearGroupedContent(
     isDescending: Boolean = false,
     scrollToTopTrigger: Int = 0,
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
-    onSaveScrollPosition: ((Int, Int) -> Unit)? = null
+    onSaveScrollPosition: ((Int, Int) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     // Restore scroll position
     val listState = rememberLazyListState(
@@ -403,7 +420,9 @@ internal fun AlbumYearGroupedContent(
                                 filePath = coverFile?.path,
                                 albumId = coverFile?.mediaStoreAlbumId,
                                 sharedElementKey = albumCoverKey,
-                                size = 40.dp
+                                size = 40.dp,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
                             )
                         },
                         supportingContent = {

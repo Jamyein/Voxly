@@ -2,6 +2,7 @@ package com.voxly.presentation.screens.artist
 
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -71,7 +72,9 @@ fun ArtistDetailScreen(
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit,
     onNavigateToAlbumDetail: (String, String?) -> Unit,
-    viewModel: ArtistDetailViewModel
+    viewModel: ArtistDetailViewModel,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val artistNameState by viewModel.artistName.collectAsStateWithLifecycle()
     val files by viewModel.files.collectAsStateWithLifecycle()
@@ -196,7 +199,9 @@ fun ArtistDetailScreen(
                                 coverAlbumId = coverAlbumId,
                                 songCount = songCount,
                                 albumCount = albumCount,
-                                modifier = Modifier.padding(bottom = 24.dp)
+                                modifier = Modifier.padding(bottom = 24.dp),
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
                             )
                         }
                     }
@@ -221,7 +226,9 @@ fun ArtistDetailScreen(
                                         audioFile.path,
                                         createAlbumArtSharedElementKey(audioFile.path)
                                     )
-                                }
+                                },
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
                             )
                         }
                     }
@@ -347,7 +354,9 @@ fun ArtistDetailScreen(
                                         audioFile.path,
                                         createAlbumArtSharedElementKey(audioFile.path)
                                     )
-                                }
+                                },
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
                             )
                         }
                     }

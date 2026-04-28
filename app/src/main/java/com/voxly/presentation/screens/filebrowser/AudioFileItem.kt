@@ -1,5 +1,8 @@
 package com.voxly.presentation.screens.filebrowser
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -24,6 +27,7 @@ import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.core.util.getFirstLetter
 
 
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun AudioFileItem(
     audioFile: AudioFile,
@@ -38,7 +42,9 @@ internal fun AudioFileItem(
     onFixMetadata: () -> Unit,
     compactMode: Boolean = false,
     sharedElementKey: String? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     if (compactMode) {
         AudioFileStandardRowCompact(
@@ -47,7 +53,9 @@ internal fun AudioFileItem(
             onClick = onClick,
             onLongClick = onLongClick,
             sharedElementKey = sharedElementKey,
-            modifier = modifier
+            modifier = modifier,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
     } else if (showActions) {
         AudioFileStandardRowWithMenu(
@@ -65,7 +73,9 @@ internal fun AudioFileItem(
                     is AudioFileAction.FixMetadata -> onFixMetadata()
                 }
             },
-            modifier = modifier
+            modifier = modifier,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
     } else {
         AudioFileStandardRow(
@@ -74,7 +84,9 @@ internal fun AudioFileItem(
             onClick = onClick,
             onLongClick = onLongClick,
             sharedElementKey = sharedElementKey,
-            modifier = modifier
+            modifier = modifier,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
     }
 }
@@ -100,7 +112,9 @@ internal fun AudioFileList(
     onDeleteFile: (AudioFile) -> Unit,
     onFetchOnlineMetadata: (AudioFile) -> Unit,
     onFixMetadata: (AudioFile) -> Unit,
-    bottomPadding: Dp = 0.dp
+    bottomPadding: Dp = 0.dp,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val isSelectionMode = selectedFiles.isNotEmpty()
 
@@ -132,7 +146,9 @@ internal fun AudioFileList(
                 onDelete = { onDeleteFile(audioFile) },
                 onFetchOnlineMetadata = { onFetchOnlineMetadata(audioFile) },
                 onFixMetadata = { onFixMetadata(audioFile) },
-                sharedElementKey = createAlbumArtSharedElementKey(audioFile.path)
+                sharedElementKey = createAlbumArtSharedElementKey(audioFile.path),
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         }
     }
@@ -152,7 +168,9 @@ internal fun AudioFileListWithIndexer(
     onDeleteFile: (AudioFile) -> Unit,
     onFetchOnlineMetadata: (AudioFile) -> Unit,
     onFixMetadata: (AudioFile) -> Unit,
-    bottomPadding: Dp = 0.dp
+    bottomPadding: Dp = 0.dp,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         AudioFileList(
@@ -167,7 +185,9 @@ internal fun AudioFileListWithIndexer(
             onDeleteFile = onDeleteFile,
             onFetchOnlineMetadata = onFetchOnlineMetadata,
             onFixMetadata = onFixMetadata,
-            bottomPadding = bottomPadding
+            bottomPadding = bottomPadding,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
 
         LazyListCoverPreloader(

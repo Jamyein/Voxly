@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -44,7 +47,9 @@ internal fun AllAudiosTabContent(
     isRefreshing: Boolean,
     isInitialLoad: Boolean = false,
     onRefresh: () -> Unit,
-    listState: LazyListState? = null
+    listState: LazyListState? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
@@ -93,7 +98,9 @@ internal fun AllAudiosTabContent(
                             onFetchOnlineMetadata = {},
                             onFixMetadata = {},
                             compactMode = true,
-                            sharedElementKey = createAlbumArtSharedElementKey(audioFile.path)
+                            sharedElementKey = createAlbumArtSharedElementKey(audioFile.path),
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
                         )
                     }
                 }

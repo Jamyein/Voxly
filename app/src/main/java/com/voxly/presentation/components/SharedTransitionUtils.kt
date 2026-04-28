@@ -1,18 +1,5 @@
 package com.voxly.presentation.components
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.runtime.ProvidableCompositionLocal
-import androidx.compose.runtime.compositionLocalOf
-
-/**
- * CompositionLocal for providing SharedTransitionScope throughout the navigation hierarchy.
- * Used by Navigation3 (NavDisplay) to enable smooth scene-level transitions.
- */
-@OptIn(ExperimentalSharedTransitionApi::class)
-val LocalSharedTransitionScope: ProvidableCompositionLocal<SharedTransitionScope?> =
-    compositionLocalOf { null }
-
 /**
  * Helper function to create unique keys for audio file shared elements.
  *
