@@ -313,7 +313,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         artist: String?
     ): Flow<OnlineSourceResult> = callbackFlow {
         val settings = getOnlineSourceSettings()
-        Timber.d("searchByTrackFlow: title='$title', artist='$artist'")
+        Timber.i("searchByTrackFlow: title='$title', artist='$artist'")
 
         val useITunes = settings.enableITunes && (preferredSource == DataSource.ITUNES || preferredSource == DataSource.BOTH)
         val useQQMusic = settings.enableQQMusic && (preferredSource == DataSource.QQ_MUSIC || preferredSource == DataSource.BOTH)
@@ -371,7 +371,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             return@supervisorScope Result.failure(Exception("No cover sources enabled"))
         }
 
-        Timber.d(TAG, "searchByTrackForCover: starting search for title='$title', artist='$artist'")
+        Timber.i(TAG, "searchByTrackForCover: starting search for title='$title', artist='$artist'")
         val results = mutableListOf<OnlineRecording>()
 
         val musicBrainzDeferred: kotlinx.coroutines.Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableMusicBrainz) {
@@ -430,7 +430,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             limit = settings.searchLimit
         )
         
-        Timber.d(TAG, "searchByTrackForCover: final results count=${sorted.size}")
+        Timber.i(TAG, "searchByTrackForCover: final results count=${sorted.size}")
         Result.success(sorted)
     }
 
@@ -529,10 +529,10 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
                 }
 
                 if (settings.enableITunes) {
-                    Timber.d("AggregatedRepository: Trying iTunes for releaseId=$releaseId")
+                    Timber.i("AggregatedRepository: Trying iTunes for releaseId=$releaseId")
                     val iTunesResult = iTunesStrategy.getReleaseDetails(releaseId)
                     if (iTunesResult.isSuccess) {
-                        Timber.d("AggregatedRepository: iTunes succeeded for releaseId=$releaseId")
+                        Timber.i("AggregatedRepository: iTunes succeeded for releaseId=$releaseId")
                         return iTunesResult
                     } else {
                         Timber.w("AggregatedRepository: iTunes failed for releaseId=$releaseId, trying MusicBrainz")

@@ -81,6 +81,7 @@ object AppModule {
     @Provides
     @Singleton
     fun provideWorkManagerConfiguration(): Configuration {
+        Timber.tag("Voxly").i("Initializing WorkManager configuration")
         return Configuration.Builder()
             .setMinimumLoggingLevel(android.util.Log.INFO)
             .build()
@@ -90,6 +91,7 @@ object AppModule {
     @Singleton
     @Named("ApplicationScope")
     fun provideApplicationCoroutineScope(): CoroutineScope {
+        Timber.tag("Voxly").i("Creating application coroutine scope")
         return CoroutineScope(SupervisorJob() + Dispatchers.IO)
     }
 
@@ -165,10 +167,13 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideJson(): Json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-        encodeDefaults = true
+    fun provideJson(): Json {
+        Timber.tag("Voxly").i("Creating Json serializer")
+        return Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+            encodeDefaults = true
+        }
     }
 
     @Provides
@@ -339,6 +344,7 @@ object AppModule {
     fun provideMusicCacheDatabaseProvider(
         @ApplicationContext context: Context
     ): MusicCacheDatabaseProvider {
+        Timber.tag("Voxly").i("Initializing MusicCacheDatabaseProvider")
         return MusicCacheDatabaseProvider(context)
     }
 
@@ -351,6 +357,7 @@ object AppModule {
         @ApplicationContext context: Context,
         @Named("ApplicationScope") scope: CoroutineScope
     ): UnifiedScanManager {
+        Timber.tag("Voxly").i("Creating UnifiedScanManager")
         return UnifiedScanManagerImpl(audioFileScanner, musicLibraryCache, settingsDataStore, scope)
     }
 

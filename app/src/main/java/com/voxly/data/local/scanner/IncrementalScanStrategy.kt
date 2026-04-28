@@ -26,6 +26,8 @@ class IncrementalScanStrategy @Inject constructor(
     }
 
     override suspend fun scan(): List<AudioFile> = withContext(Dispatchers.IO) {
+        Timber.tag("Voxly").i("IncrementalScanStrategy scan started")
+
         val currentFiles = mediaStoreDataSource.queryFilePathsAndModificationTimes()
 
         val pathsNeedingRescan = libraryCache.getFilesNeedingRescan(currentFiles)

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -41,12 +42,14 @@ class DirectoryManagementViewModel @Inject constructor(
     val rebuildState: StateFlow<RebuildDatabaseState> = rebuildDatabaseManager.rebuildState
 
     fun rebuildDatabase() {
+        Timber.tag("Voxly").i("DirectoryManagementViewModel: rebuildDatabase started")
         viewModelScope.launch {
             rebuildDatabaseManager.rebuild()
         }
     }
 
     fun addDirectory(directoryUri: Uri) {
+        Timber.tag("Voxly").i("DirectoryManagementViewModel: addDirectory started")
         viewModelScope.launch {
             val path = getPathFromUri(directoryUri)
             if (path.isNotBlank()) {

@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -39,6 +40,7 @@ class LibrarySettingsViewModel @Inject constructor(
      * Save file browser sort option to persistent storage
      */
     fun setFileBrowserSortOption(option: String) {
+        Timber.tag("Voxly").i("LibrarySettingsViewModel: setFileBrowserSortOption")
         viewModelScope.launch {
             uiStateDataStore.setFileBrowserSortOption(option)
         }
@@ -48,8 +50,19 @@ class LibrarySettingsViewModel @Inject constructor(
      * Save directory file sort option to persistent storage
      */
     fun setDirectoryFileSortOption(option: String) {
+        Timber.tag("Voxly").i("LibrarySettingsViewModel: setDirectoryFileSortOption")
         viewModelScope.launch {
             uiStateDataStore.setDirectoryFileSortOption(option)
+        }
+    }
+
+    /**
+     * Save file browser root tab to persistent storage
+     */
+    fun setFileBrowserRootTab(tab: String) {
+        Timber.tag("Voxly").i("LibrarySettingsViewModel: setFileBrowserRootTab")
+        viewModelScope.launch {
+            settingsDataStore.setFileBrowserRootTab(tab)
         }
     }
 
@@ -59,18 +72,9 @@ class LibrarySettingsViewModel @Inject constructor(
     val fileBrowserRootTab: StateFlow<String> = settingsDataStore.fileBrowserRootTab
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.Eagerly,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
             initialValue = "DIRECTORIES"
         )
-
-    /**
-     * Save file browser root tab to persistent storage
-     */
-    fun setFileBrowserRootTab(tab: String) {
-        viewModelScope.launch {
-            settingsDataStore.setFileBrowserRootTab(tab)
-        }
-    }
 
     val artistSeparatorEnabled: StateFlow<Boolean> = settingsDataStore.artistSeparatorEnabled
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)

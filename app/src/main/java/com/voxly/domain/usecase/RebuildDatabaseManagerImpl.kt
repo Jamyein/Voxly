@@ -40,6 +40,8 @@ class RebuildDatabaseManagerImpl @Inject constructor(
     }
 
     override suspend fun rebuild() {
+        Timber.tag("Voxly").i("RebuildDatabaseManager: rebuild started")
+
         val startTime = System.currentTimeMillis()
 
         try {

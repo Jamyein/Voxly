@@ -23,6 +23,8 @@ class ApplyOnlineMetadataUseCase @Inject constructor() {
         currentMetadata: AudioMetadata,
         onlineMetadata: AudioMetadata
     ): ApplyMetadataResult {
+        Timber.tag("Voxly").i("ApplyOnlineMetadataUseCase applying online metadata")
+
         Timber.d(TAG, "Applying online metadata: current title=${currentMetadata.title}, new title=${onlineMetadata.title}")
 
         val modifiedFields = mutableSetOf<String>()

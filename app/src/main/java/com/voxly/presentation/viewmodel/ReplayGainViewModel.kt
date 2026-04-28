@@ -23,6 +23,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * ViewModel for ReplayGain scanning screen.
@@ -60,6 +61,7 @@ class ReplayGainViewModel @AssistedInject constructor(
      */
     fun startScan(filePaths: List<String>, scanQuality: ScanQuality = ScanQuality.NORMAL) {
         viewModelScope.launch {
+            Timber.tag("Voxly").i("ReplayGain: operation started")
             _isScanning.update { true }
             _scanComplete.update { false }
 

@@ -324,7 +324,7 @@ class LyricsRepositoryImpl @Inject constructor(
         trackName: String,
         artistName: String?
     ): Result<List<OnlineLyricsResult>> {
-        Timber.d("NetEase lyrics search starting: trackName=$trackName, artistName=$artistName")
+        Timber.i("NetEase lyrics search starting: trackName=$trackName, artistName=$artistName")
 
         // Use wangyRepository (Simple API)
         val searchResult = wangyRepository.searchSongs(
@@ -336,7 +336,7 @@ class LyricsRepositoryImpl @Inject constructor(
         return if (searchResult.isSuccess) {
             val response = searchResult.getOrNull()
             val songs = response?.result?.songs ?: emptyList()
-            Timber.d("NetEase lyrics search success: found ${songs.size} songs for '$trackName'")
+            Timber.i("NetEase lyrics search success: found ${songs.size} songs for '$trackName'")
 
             val results = songs.map { song ->
                 val detailResult = wangyRepository.getSongDetail(song.id)
@@ -379,7 +379,7 @@ class LyricsRepositoryImpl @Inject constructor(
         artistName: String?
     ): Result<List<OnlineLyricsResult>> {
         val keywords = if (artistName.isNullOrBlank()) trackName else "$artistName $trackName"
-        Timber.d("QQ Music lyrics search starting: keywords='$keywords'")
+        Timber.i("QQ Music lyrics search starting: keywords='$keywords'")
         
         val searchResult = tengxRepository.searchSongs(
             keywords = keywords,
@@ -392,7 +392,7 @@ class LyricsRepositoryImpl @Inject constructor(
             Timber.d("QQ Music search response: code=${response?.code}, data=${response?.data != null}, song=${response?.data?.song != null}")
 
             val songs = response?.data?.song?.list.orEmpty()
-            Timber.d("QQ Music lyrics search found ${songs.size} songs for '$keywords'")
+            Timber.i("QQ Music lyrics search found ${songs.size} songs for '$keywords'")
             
             if (songs.isEmpty()) {
                 Timber.w("QQ Music lyrics search returned empty results for '$keywords'")
@@ -515,7 +515,7 @@ class LyricsRepositoryImpl @Inject constructor(
                 // Cache the result if successful
                 finalResult.getOrNull()?.let { lyrics ->
                     lyricsCache[cacheKey] = lyrics
-                    Timber.d("Lyrics cached: $cacheKey")
+                    Timber.i("Lyrics cached: $cacheKey")
                 }
 
                 finalResult

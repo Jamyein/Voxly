@@ -301,12 +301,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
         }
     }
 
-    /**
+/**
      * Loads the audio file and its metadata.
      * Uses getAudioFile() to get complete audio info (bitrate, sampleRate, channels, duration)
      * from TagLib + MediaStore. Cover art is loaded asynchronously via loadCoverArtAsync().
      */
     private fun loadAudioFile() {
+        Timber.tag("Voxly").i("MetadataEditorViewModel: action=load filePath=$filePath")
         viewModelScope.launch {
             _uiState.update { MetadataEditorUiState.Loading }
             _isM3eColorsResolved.update { false }
@@ -753,6 +754,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
      * Saves the edited metadata and ReplayGain to the file.
      */
     fun saveMetadata() {
+        Timber.tag("Voxly").i("MetadataEditorViewModel: action=save filePath=$filePath")
         val metadataToSave = _editedMetadata.value ?: return
         val replayGainToSave = _pendingReplayGainInfo.value
 

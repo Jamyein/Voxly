@@ -8,6 +8,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import timber.log.Timber
 import javax.inject.Inject
 
 @HiltViewModel
@@ -21,6 +22,7 @@ class EditHistoryViewModel @Inject constructor(
 
     val recentEdits: StateFlow<List<RecentEdit>> = recentEditsRepository
         .getRecentEdits(DEFAULT_LIMIT)
+        .also { Timber.tag("Voxly").i("EditHistoryViewModel: loadHistory") }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),

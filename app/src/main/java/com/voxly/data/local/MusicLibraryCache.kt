@@ -80,7 +80,7 @@ class MusicLibraryCache @Inject constructor(
                 hasCache()
                 getCachedAudioFilesOnce()
                 wasWarmedUp = true
-                Timber.d(TAG, "warmUp completed successfully, hotCache size: ${hotAudioFiles?.size ?: 0}")
+                Timber.i(TAG, "warmUp completed successfully, hotCache size: ${hotAudioFiles?.size ?: 0}")
             } catch (e: Exception) {
                 Timber.e(TAG, "warmUp failed", e)
                 wasWarmedUp = false
@@ -214,7 +214,7 @@ class MusicLibraryCache @Inject constructor(
      * Preserves lastEditedByUserAt if already set.
      */
     suspend fun syncFileToCache(audioFile: AudioFile) = withContext(Dispatchers.IO) {
-        Timber.d("syncFileToCache: path=${audioFile.path}, album=${audioFile.metadata.album}, albumArtist=${audioFile.metadata.albumArtist}, albumId=${audioFile.mediaStoreAlbumId}")
+        Timber.i("syncFileToCache: path=${audioFile.path}, album=${audioFile.metadata.album}, albumArtist=${audioFile.metadata.albumArtist}, albumId=${audioFile.mediaStoreAlbumId}")
         val file = File(audioFile.path)
         val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
             gson.toJson(audioFile.metadata.customFields)
@@ -254,7 +254,7 @@ class MusicLibraryCache @Inject constructor(
         audioFileDao.updateLastEditedByUserAt(filePath, System.currentTimeMillis())
         invalidateHotCache()
         bumpCacheVersion()
-        Timber.d("markFileAsEditedByUser: path=$filePath")
+        Timber.i("markFileAsEditedByUser: path=$filePath")
     }
 
     /**
@@ -423,7 +423,7 @@ class MusicLibraryCache @Inject constructor(
         )
         
         albumThumbnailDao.insert(entity)
-        Timber.d(TAG, "Cached thumbnail for album $albumId (key: $coverKey)")
+        Timber.i(TAG, "Cached thumbnail for album $albumId (key: $coverKey)")
     }
     
     /**
@@ -562,7 +562,7 @@ class MusicLibraryCache @Inject constructor(
             )
         }
         enrichmentJobDao.upsertPendingJobs(jobs)
-        Timber.d("Enqueued ${jobs.size} enrichment jobs")
+        Timber.i("Enqueued ${jobs.size} enrichment jobs")
     }
 
     suspend fun getPendingEnrichmentJobs(limit: Int): List<EnrichmentJobEntity> = withContext(Dispatchers.IO) {
@@ -579,12 +579,12 @@ class MusicLibraryCache @Inject constructor(
 
     suspend fun clearCompletedEnrichmentJobs() = withContext(Dispatchers.IO) {
         enrichmentJobDao.deleteByStatus(EnrichmentJobEntity.STATUS_COMPLETED)
-        Timber.d("Cleared completed enrichment jobs")
+        Timber.i("Cleared completed enrichment jobs")
     }
 
     suspend fun clearFailedEnrichmentJobs() = withContext(Dispatchers.IO) {
         enrichmentJobDao.deleteByStatus(EnrichmentJobEntity.STATUS_FAILED)
-        Timber.d("Cleared failed enrichment jobs")
+        Timber.i("Cleared failed enrichment jobs")
     }
 
     // ==================== Paging Support ====================

@@ -87,6 +87,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
      * Gets data directly from AudioFileScanner.artists (single source of truth).
      */
     fun loadArtist(artistName: String) {
+        Timber.tag("Voxly").i("ArtistDetailViewModel loadArtist: artistId=$artistName")
         if (_artistName.value == artistName && _files.value.isNotEmpty()) {
             return
         }

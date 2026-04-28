@@ -345,6 +345,7 @@ class LibraryScanViewModel @Inject constructor(
      * - forceRefresh=false: Incremental scan, detects new/modified files
      */
     fun refresh(forceRefresh: Boolean = false) {
+        Timber.tag("Voxly").i("LibraryScanViewModel scan triggered: incremental=${!forceRefresh}")
         loadAudioFiles(forceRefresh = forceRefresh, isIncremental = !forceRefresh)
     }
 

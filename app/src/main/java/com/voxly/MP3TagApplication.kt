@@ -44,6 +44,7 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
     override fun onCreate() {
         super.onCreate()
 
+        Timber.tag("Voxly").i("Application created")
         Thread.setDefaultUncaughtExceptionHandler(CrashHandler())
         if (BuildConfig.DEBUG) {
             Timber.plant(Timber.DebugTree())

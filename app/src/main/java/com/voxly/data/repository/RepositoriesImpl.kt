@@ -54,6 +54,7 @@ class AudioRepositoryImpl @Inject constructor(
         directoryPath: String?,
         forceRefresh: Boolean
     ): Flow<List<AudioFile>> = flow {
+        Timber.tag("Voxly").i("RepositoriesImpl: operation=scanAudioFiles")
         // Use unified scan API with optimized coroutine handling
         val files = audioFileScanner.scan(
             directoryPaths = directoryPath?.let { listOf(it) } ?: emptyList(),

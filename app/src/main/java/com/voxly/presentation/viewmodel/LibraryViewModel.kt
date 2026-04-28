@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import java.util.LinkedHashMap
+import timber.log.Timber
 import javax.inject.Inject
 
 /**
@@ -115,6 +116,7 @@ class LibraryViewModel @Inject constructor() : ViewModel() {
      * Updates the UI state directly (used by screens to coordinate list state).
      */
     fun setUiState(state: FileBrowserUiState) {
+        Timber.tag("Voxly").i("LibraryViewModel loading library...")
         _uiState.value = state
     }
 

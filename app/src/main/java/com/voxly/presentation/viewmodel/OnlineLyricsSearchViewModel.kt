@@ -72,6 +72,7 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
      */
     fun search(path: String) {
         val targetPath = path.ifBlank { filePath }
+        Timber.tag("Voxly").i("Search started: path=$targetPath")
 
         viewModelScope.launch {
             _isLoading.update { true }

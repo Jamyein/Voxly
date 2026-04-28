@@ -189,6 +189,7 @@ class OnlineMetadataViewModel @AssistedInject constructor(
         query: OnlineSearchQuery,
         searcher: Flow<OnlineSourceResult>
     ) {
+        Timber.tag("Voxly").i("OnlineMetadata search started: title=${query.title}, artist=${query.artist}, album=${query.album}")
         activeSearchJob?.cancel()
         activeLyricsJob?.cancel()
         val searchId = nextSearchId()

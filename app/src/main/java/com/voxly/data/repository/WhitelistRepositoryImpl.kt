@@ -87,8 +87,10 @@ class WhitelistRepositoryImpl @Inject constructor(
     override fun getBlacklistDirectories(): Flow<List<WhitelistDirectory>> = 
         _blacklistDirectories.asStateFlow()
 
-    override fun getValidWhitelistPaths(): Flow<List<String>> =
-        _whitelistDirectories.map { dirs -> dirs.filter { it.isValid }.map { it.path } }
+    override fun getValidWhitelistPaths(): Flow<List<String>> {
+        Timber.tag("Voxly").i("WhitelistRepository: operation=getValidWhitelistPaths")
+        return _whitelistDirectories.map { dirs -> dirs.filter { it.isValid }.map { it.path } }
+    }
 
     override fun getValidBlacklistPaths(): Flow<List<String>> =
         _blacklistDirectories.map { dirs -> dirs.filter { it.isValid }.map { it.path } }
@@ -101,6 +103,7 @@ class WhitelistRepositoryImpl @Inject constructor(
         _blacklistDirectories.value.filter { it.isValid }.map { it.path }
 
     override suspend fun addWhitelistDirectory(uri: String, path: String) {
+        Timber.tag("Voxly").i("WhitelistRepository: operation=addWhitelistDirectory")
         Timber.d("$TAG: addWhitelistDirectory: $path")
         val current = _whitelistDirectories.value.toMutableList()
         if (current.none { it.uri == uri }) {

@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * ViewModel for LyricsPosterScreen.
@@ -42,6 +43,7 @@ class LyricsPosterViewModel @AssistedInject constructor(
 
     private fun loadAudioFile() {
         viewModelScope.launch {
+            Timber.tag("Voxly").i("LyricsPoster: generation started")
             _isLoading.update { true }
 
             try {

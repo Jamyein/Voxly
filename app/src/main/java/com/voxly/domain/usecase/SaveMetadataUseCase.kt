@@ -34,13 +34,13 @@ class SaveMetadataUseCase @Inject constructor(
         originalMetadata: AudioMetadata,
         editedMetadata: AudioMetadata
     ): Flow<SaveMetadataResult> = kotlinx.coroutines.flow.flow {
-        Timber.d(TAG, "Saving metadata: $filePath")
+        Timber.tag("Voxly").i("SaveMetadataUseCase saving: filePath=$filePath")
 
         val result = audioRepository.updateMetadata(filePath, editedMetadata)
 
         result.fold(
             onSuccess = {
-                Timber.d(TAG, "Metadata saved successfully")
+                Timber.tag("Voxly").i("SaveMetadataUseCase saved successfully")
                 recentEditsRepository.addRecentEdit(filePath, originalMetadata, editedMetadata)
                 emit(SaveMetadataResult.Success)
             },

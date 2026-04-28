@@ -99,6 +99,7 @@ class OnlineCoverSearchViewModel @AssistedInject constructor(
      */
     fun search(path: String) {
         val targetPath = path.ifBlank { filePath }
+        Timber.tag("Voxly").i("CoverSearch started: path=$targetPath")
         Timber.d(TAG, "search() called, path=$targetPath")
 
         viewModelScope.launch {

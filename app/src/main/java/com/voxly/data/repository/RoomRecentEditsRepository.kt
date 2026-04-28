@@ -33,6 +33,7 @@ class RoomRecentEditsRepository @Inject constructor(
     }
 
     override fun getRecentEdits(limit: Int): Flow<List<RecentEdit>> {
+        Timber.tag("Voxly").i("RoomRecentEditsRepository: operation=getRecentEdits")
         val safeLimit = if (limit <= 0) MAX_ENTRIES else limit
         Timber.d("$TAG: Fetching recent edits, limit=$safeLimit")
         return databaseProvider.getDatabase().recentEditDao()
@@ -48,6 +49,7 @@ class RoomRecentEditsRepository @Inject constructor(
         originalMetadata: AudioMetadata,
         newMetadata: AudioMetadata
     ) {
+        Timber.tag("Voxly").i("RoomRecentEditsRepository: operation=addRecentEdit")
         Timber.d("$TAG: Recording edit for: $filePath")
         val database = databaseProvider.getDatabase()
         val entity = RecentEditEntity(
