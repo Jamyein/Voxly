@@ -8,6 +8,7 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.keyframes
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.foundation.background
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.size
@@ -131,7 +132,7 @@ fun AlbumArtImage(
                 AsyncImage(
                     model = imageRequestBuilder.build(),
                     contentDescription = contentDescription,
-                    modifier = asyncModifier,
+                    modifier = asyncModifier.focusable(false),
                     contentScale = contentScale,
                     onError = { loadFailed = true }
                 )

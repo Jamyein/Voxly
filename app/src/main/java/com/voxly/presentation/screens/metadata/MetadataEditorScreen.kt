@@ -94,6 +94,7 @@ fun MetadataEditorScreen(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val editedMetadata by viewModel.editedMetadata.collectAsStateWithLifecycle()
     val editState by viewModel.editState.collectAsStateWithLifecycle()
@@ -172,10 +173,17 @@ fun MetadataEditorScreen(
     }
 
     val handleNavigateBack = {
+        focusManager.clearFocus()
         if (hasUnsavedChanges) {
             showDiscardDialog = true
         } else {
             onNavigateBack()
+        }
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            focusManager.clearFocus()
         }
     }
 
