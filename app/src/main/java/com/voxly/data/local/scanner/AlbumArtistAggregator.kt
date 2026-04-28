@@ -685,6 +685,7 @@ class AlbumArtistAggregator @Inject constructor(
                 _fileArtistMap[file.path] = key
             }
         }
+        emitUpdatedLists()
     }
 
     /**
