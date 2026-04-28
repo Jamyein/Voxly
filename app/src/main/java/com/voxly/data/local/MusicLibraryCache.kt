@@ -322,6 +322,7 @@ class MusicLibraryCache @Inject constructor(
         artistLinkDao.deleteAll()
         invalidateHotCache()
         bumpCacheVersion()
+        wasWarmedUp = false
         Timber.i("DB: Cache cleared")
     }
     

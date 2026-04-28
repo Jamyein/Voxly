@@ -192,6 +192,7 @@ class MusicBrainzRepository @Inject constructor(
                     }
                 } ?: emptyList()
 
+                Timber.tag("Voxly").i("MusicBrainz searchByTrack completed: query='$title' resultCount=${recordings.size}")
                 Result.success(recordings)
             } else {
                 Result.failure(Exception("Search failed: ${response.errorBody()?.string()}"))

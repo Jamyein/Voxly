@@ -3,11 +3,14 @@ package com.voxly.presentation.screens.metadata
 import android.graphics.Bitmap
 import android.net.Uri
 import android.widget.Toast
-import androidx.activity.compose.BackHandler
+import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -87,8 +90,11 @@ fun MetadataEditorScreen(
     onConsumePendingOnlineLyrics: () -> Unit = {},
     pendingOnlineCoverArt: ByteArray? = null,
     onConsumePendingOnlineCoverArt: () -> Unit = {},
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val context = LocalContext.current
+    val focusManager = LocalFocusManager.current
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val editedMetadata by viewModel.editedMetadata.collectAsStateWithLifecycle()
     val editState by viewModel.editState.collectAsStateWithLifecycle()
@@ -167,6 +173,7 @@ fun MetadataEditorScreen(
     }
 
     val handleNavigateBack = {
+        focusManager.clearFocus()
         if (hasUnsavedChanges) {
             showDiscardDialog = true
         } else {
@@ -174,8 +181,24 @@ fun MetadataEditorScreen(
         }
     }
 
-    BackHandler(enabled = hasUnsavedChanges) {
-        showDiscardDialog = true
+    DisposableEffect(Unit) {
+        onDispose {
+            focusManager.clearFocus()
+        }
+    }
+
+    val discardDialogState = remember { SeekableTransitionState(initialState = false) }
+
+    PredictiveBackHandler(enabled = hasUnsavedChanges) { progress ->
+        try {
+            progress.collect { backEvent ->
+                discardDialogState.seekTo(fraction = backEvent.progress)
+            }
+            discardDialogState.animateTo(targetState = true)
+            showDiscardDialog = true
+        } catch (e: CancellationException) {
+            discardDialogState.snapTo(targetState = false)
+        }
     }
 
     val galleryPickerLauncher = rememberLauncherForActivityResult(
@@ -343,7 +366,9 @@ fun MetadataEditorScreen(
                     viewModel.updateDebouncedTextField(MetadataField.COMMENT, metadata.comment)
                     viewModel.updateDebouncedTextField(MetadataField.LYRICS, metadata.lyrics)
                 },
-                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
+                floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         }
     }
@@ -444,7 +469,9 @@ private fun MetadataEditorScaffoldContent(
     onSave: () -> Unit,
     onSyncDebouncedFields: () -> Unit,
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     var showLoadingIndicator by remember { mutableStateOf(false) }
 
@@ -511,7 +538,9 @@ private fun MetadataEditorScaffoldContent(
                     onNavigateToLyricsSelector = onNavigateToLyricsSelector,
                     onSave = onSave,
                     onSyncDebouncedFields = onSyncDebouncedFields,
-                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior
+                    floatingToolbarScrollBehavior = floatingToolbarScrollBehavior,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
             is MetadataEditorUiState.Error -> {
@@ -571,7 +600,9 @@ private fun MetadataEditorSuccessContent(
     onSave: () -> Unit,
     onSyncDebouncedFields: () -> Unit,
     floatingToolbarScrollBehavior: androidx.compose.material3.FloatingToolbarScrollBehavior,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val context = LocalContext.current
 
@@ -631,7 +662,9 @@ private fun MetadataEditorSuccessContent(
                     onScanReplayGain = onScanReplayGain,
                     onClearReplayGain = onClearReplayGain
                 )
-            }
+            },
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
 
         Box(
@@ -930,7 +963,9 @@ private fun MetadataFormContent(
     replayGainSection: (@Composable () -> Unit)? = null,
     bottomPadding: androidx.compose.ui.unit.Dp = 0.dp,
     scrollState: androidx.compose.foundation.ScrollState = rememberScrollState(),
-    nestedScrollModifier: Modifier = Modifier
+    nestedScrollModifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val focusManager = LocalFocusManager.current
     LaunchedEffect(Unit) {
@@ -953,7 +988,9 @@ private fun MetadataFormContent(
             onZoomAlbumArt = onZoomAlbumArt,
             onRotateAlbumArt = onRotateAlbumArt,
             onRemoveAlbumArt = onRemoveAlbumArt,
-            filePath = audioFile.path
+            filePath = audioFile.path,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedContentScope = animatedVisibilityScope
         )
 
         Spacer(modifier = Modifier.height(16.dp))

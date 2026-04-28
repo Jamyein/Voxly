@@ -1,5 +1,8 @@
 package com.voxly.presentation.screens.album
 
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -60,6 +63,9 @@ import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumTitleSharedElementKey
+import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
+import androidx.compose.animation.core.spring
 import com.voxly.presentation.screens.filebrowser.AlbumGridItem
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.AlbumViewModel
@@ -84,16 +90,65 @@ private fun AlbumGroup.coverFile(): com.voxly.domain.model.AudioFile? {
 }
 
 /**
+ * Album art image with shared element support.
+ * Uses composition locals to access shared transition scope.
+ */
+@OptIn(ExperimentalSharedTransitionApi::class)
+@Composable
+private fun AlbumArtWithSharedElement(
+    filePath: String?,
+    albumId: Long?,
+    sharedElementKey: String,
+    size: androidx.compose.ui.unit.Dp,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
+) {
+    val shape = MaterialTheme.shapes.small
+    val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+
+    Box(
+        modifier = if (canUseSharedTransition) {
+            with(sharedTransitionScope) {
+                Modifier
+                    .size(size)
+                    .sharedElement(
+                        rememberSharedContentState(key = sharedElementKey),
+                        animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> spring() }
+                    )
+                    .clip(shape)
+            }
+        } else {
+            Modifier
+                .size(size)
+                .clip(shape)
+        }
+    ) {
+        AlbumArtImage(
+            filePath = filePath,
+            albumId = albumId,
+            contentDescription = null,
+            size = size,
+            modifier = Modifier.fillMaxSize(),
+            clipShape = shape
+        )
+    }
+}
+
+/**
  * Album screen content (list/grid) without navigation.
  * Used as the list pane in dual-pane layout.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun AlbumScreenContent(
     viewModel: AlbumViewModel,
     onAlbumClick: (AlbumGroup) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
+    
     val albums by viewModel.sortedAlbums.collectAsStateWithLifecycle()
     val isRefreshing by viewModel.isRefreshing.collectAsStateWithLifecycle()
     val sortOption by viewModel.sortOption.collectAsStateWithLifecycle(initialValue = AlbumSortOption.NAME_ASC.name)
@@ -181,7 +236,9 @@ internal fun AlbumScreenContent(
                     savedScrollPosition = savedScrollPosition,
                     onSaveScrollPosition = { index, offset ->
                         viewModel.saveScrollPosition("album_list_${currentSortOption.name}", index, offset)
-                    }
+                    },
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         }
@@ -196,7 +253,9 @@ internal fun AlbumTabContent(
     scrollToTopTrigger: Int = 0,
     sortOption: AlbumSortOption? = null,
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
-    onSaveScrollPosition: ((Int, Int) -> Unit)? = null
+    onSaveScrollPosition: ((Int, Int) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val isYearSort = sortOption == AlbumSortOption.YEAR_DESC
 
@@ -236,7 +295,9 @@ internal fun AlbumTabContent(
                     isDescending = true,
                     scrollToTopTrigger = scrollToTopTrigger,
                     savedScrollPosition = savedScrollPosition,
-                    onSaveScrollPosition = onSaveScrollPosition
+                    onSaveScrollPosition = onSaveScrollPosition,
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             } else {
                 LazyVerticalGrid(
@@ -255,7 +316,9 @@ internal fun AlbumTabContent(
                         val onItemClick = remember(album) { { onAlbumClick(album) } }
                         AlbumGridItem(
                             album = album,
-                            onClick = onItemClick
+                            onClick = onItemClick,
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
                         )
                     }
                 }
@@ -285,7 +348,9 @@ internal fun AlbumYearGroupedContent(
     isDescending: Boolean = false,
     scrollToTopTrigger: Int = 0,
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
-    onSaveScrollPosition: ((Int, Int) -> Unit)? = null
+    onSaveScrollPosition: ((Int, Int) -> Unit)? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     // Restore scroll position
     val listState = rememberLazyListState(
@@ -351,54 +416,65 @@ internal fun AlbumYearGroupedContent(
                             containerColor = MaterialTheme.colorScheme.surfaceContainerLow
                         ),
                         leadingContent = {
-                            val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
                             val coverFile = album.coverFile()
-                            Box(
-                                modifier = Modifier
-                                    .size(40.dp)
-                                    .clip(MaterialTheme.shapes.small),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                AlbumArtImage(
-                                    filePath = coverFile?.path,
-                                    albumId = coverFile?.mediaStoreAlbumId,
-                                    contentDescription = null,
-                                    size = 40.dp,
-                                    modifier = Modifier.fillMaxSize()
-                                ) {
-                                    Surface(
-                                        modifier = Modifier.fillMaxSize(),
-                                        shape = MaterialTheme.shapes.small,
-                                        color = MaterialTheme.colorScheme.primaryContainer
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Icon(
-                                                imageVector = Icons.Default.Album,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                                modifier = Modifier.size(20.dp)
-                                            )
-                                        }
-                                    }
-                                }
-                            }
+                            val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
+                            AlbumArtWithSharedElement(
+                                filePath = coverFile?.path,
+                                albumId = coverFile?.mediaStoreAlbumId,
+                                sharedElementKey = albumCoverKey,
+                                size = 40.dp,
+                                sharedTransitionScope = sharedTransitionScope,
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
                         },
                         supportingContent = {
+                            val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+                            val albumTitleKey = createAlbumTitleSharedElementKey(album.name, album.albumArtist)
+                            val albumArtistKey = album.albumArtist?.let { createAlbumArtistTextSharedElementKey(album.name, album.albumArtist) }
+                            val yearStr = getAlbumDisplayYearString(album)
                             Column {
                                 Text(
                                     text = album.name,
                                     style = MaterialTheme.typography.bodyMedium,
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = if (canUseSharedTransition) {
+                                        with(sharedTransitionScope) {
+                                            Modifier.sharedElement(
+                                                rememberSharedContentState(key = albumTitleKey),
+                                                animatedVisibilityScope = animatedVisibilityScope,
+                                                boundsTransform = { _, _ -> spring() }
+                                            )
+                                        }
+                                    } else Modifier
                                 )
-                                val yearStr = getAlbumDisplayYearString(album)
-                                Text(
-                                    text = if (yearStr != null) "${album.albumArtist ?: ""} · $yearStr" else (album.albumArtist ?: ""),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
+                                if (album.albumArtist != null) {
+                                    Text(
+                                        text = album.albumArtist,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = if (canUseSharedTransition && albumArtistKey != null) {
+                                            with(sharedTransitionScope) {
+                                                Modifier.sharedElement(
+                                                    rememberSharedContentState(key = albumArtistKey),
+                                                    animatedVisibilityScope = animatedVisibilityScope,
+                                                    boundsTransform = { _, _ -> spring() }
+                                                )
+                                            }
+                                        } else Modifier
+                                    )
+                                }
+                                if (yearStr != null) {
+                                    Text(
+                                        text = yearStr,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.outline,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
                             }
                         },
                         trailingContent = {

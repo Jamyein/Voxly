@@ -92,6 +92,7 @@ fun DirectoryOverviewContent(
     directoryFiles: Map<String, List<AudioFile>>,
     onOpenDirectory: (String, String) -> Unit,
     isRefreshing: Boolean,
+    isInitialLoad: Boolean = false,
     onRefresh: () -> Unit,
     listState: LazyListState? = null,
     bottomPadding: Dp = 0.dp
@@ -111,32 +112,39 @@ fun DirectoryOverviewContent(
             )
         }
     ) {
-        Column(modifier = Modifier.fillMaxSize()) {
-            Text(
-                text = stringResource(R.string.selected_directories_count, directories.size),
-                style = MaterialTheme.typography.labelLarge,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-            )
-
-            LazyColumn(
-                state = lazyListState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 12.dp,
-                    end = 12.dp,
-                    top = 8.dp,
-                    bottom = 8.dp + bottomPadding
-                ),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                items(directories, key = { it.uri }) { directory ->
-                    val dirName = directory.path.substringAfterLast("/").substringAfterLast(":")
-                    val files = directoryFiles[directory.uri].orEmpty()
-                    DirectoryItem(
-                        directory = directory,
-                        fileCount = files.size,
-                        onClick = { onOpenDirectory(directory.uri, dirName) }
+        when {
+            isInitialLoad -> {
+                com.voxly.presentation.components.SkeletonListScreen(modifier = Modifier.fillMaxSize())
+            }
+            else -> {
+                Column(modifier = Modifier.fillMaxSize()) {
+                    Text(
+                        text = stringResource(R.string.selected_directories_count, directories.size),
+                        style = MaterialTheme.typography.labelLarge,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
+
+                    LazyColumn(
+                        state = lazyListState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 12.dp,
+                            end = 12.dp,
+                            top = 8.dp,
+                            bottom = 8.dp + bottomPadding
+                        ),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(directories, key = { it.uri }) { directory ->
+                            val dirName = directory.path.substringAfterLast("/").substringAfterLast(":")
+                            val files = directoryFiles[directory.uri].orEmpty()
+                            DirectoryItem(
+                                directory = directory,
+                                fileCount = files.size,
+                                onClick = { onOpenDirectory(directory.uri, dirName) }
+                            )
+                        }
+                    }
                 }
             }
         }

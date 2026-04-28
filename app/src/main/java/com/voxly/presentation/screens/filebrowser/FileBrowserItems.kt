@@ -1,6 +1,9 @@
 package com.voxly.presentation.screens.filebrowser
 
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,33 +18,36 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
-import com.voxly.presentation.components.createAlbumCoverSharedElementKey
-import com.voxly.presentation.components.createArtistAvatarSharedElementKey
-import com.voxly.presentation.theme.MaterialShapes
-import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
-import androidx.compose.material3.toShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AlbumGroup
-import com.voxly.presentation.screens.album.getAlbumDisplayYearString
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
+import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumTitleSharedElementKey
+import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
+import com.voxly.presentation.components.createArtistAvatarSharedElementKey
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
+import com.voxly.presentation.screens.album.getAlbumDisplayYearString
+import com.voxly.presentation.theme.MaterialShapes
+import timber.log.Timber
 
 @Composable
 internal fun BatchMenuItem(
@@ -69,7 +75,6 @@ internal fun AlbumListItem(
     album: AlbumGroup,
     onClick: () -> Unit
 ) {
-    val coverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -133,37 +138,53 @@ internal fun AlbumListItem(
 @Composable
 internal fun AlbumGridItem(
     album: AlbumGroup,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val coverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
     val coverFile = remember(album) {
         album.files.firstOrNull { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
             ?: album.files.firstOrNull()
     }
     val albumYear = remember(album) { getAlbumDisplayYearString(album) }
     val trackCountText = stringResource(R.string.track_count, album.files.size)
-    val infoText = remember(album, albumYear, trackCountText) {
+    val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
+    val albumTitleKey = createAlbumTitleSharedElementKey(album.name, album.albumArtist)
+    val albumArtistKey = album.albumArtist?.let { createAlbumArtistTextSharedElementKey(album.name, album.albumArtist) }
+    val infoRestText = remember(album, albumYear, trackCountText) {
         buildString {
             append(trackCountText)
-            album.albumArtist?.let {
-                append(" ")
-                append(it)
-            }
             if (albumYear != null) {
-                append(" ")
+                append(" · ")
                 append(albumYear)
             }
         }
     }
+    val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
     Column(
         modifier = Modifier.fillMaxWidth()
     ) {
         Box(
-            modifier = Modifier
-                .fillMaxWidth()
-                .aspectRatio(1f)
-                .clip(MaterialTheme.shapes.medium)
-                .clickable(onClick = onClick),
+            modifier = if (canUseSharedTransition) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .sharedElement(
+                            rememberSharedContentState(key = albumCoverKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> spring() }
+                        )
+                        .clickable(onClick = onClick)
+                        .clip(MaterialTheme.shapes.medium)
+                }
+            } else {
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clickable(onClick = onClick)
+                    .clip(MaterialTheme.shapes.medium)
+            },
             contentAlignment = Alignment.Center
         ) {
             if (coverFile != null) {
@@ -172,7 +193,8 @@ internal fun AlbumGridItem(
                     albumId = coverFile.mediaStoreAlbumId,
                     contentDescription = null,
                     size = 200.dp,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    clipShape = MaterialTheme.shapes.medium
                 )
             } else {
                 DefaultAlbumArtPlaceholder(size = 200.dp)
@@ -188,13 +210,40 @@ internal fun AlbumGridItem(
                 style = MaterialTheme.typography.bodyMedium,
                 fontWeight = FontWeight.Bold,
                 maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                modifier = if (canUseSharedTransition) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            rememberSharedContentState(key = albumTitleKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> spring() }
+                        )
+                    }
+                } else Modifier
             )
+            if (album.albumArtist != null) {
+                Text(
+                    text = album.albumArtist,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = if (canUseSharedTransition && albumArtistKey != null) {
+                        with(sharedTransitionScope) {
+                            Modifier.sharedElement(
+                                rememberSharedContentState(key = albumArtistKey),
+                                animatedVisibilityScope = animatedVisibilityScope,
+                                boundsTransform = { _, _ -> spring() }
+                            )
+                        }
+                    } else Modifier
+                )
+            }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = infoText,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                text = infoRestText,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.outline,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -206,9 +255,12 @@ internal fun AlbumGridItem(
 @Composable
 internal fun ArtistListItem(
     artist: ArtistGroup,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val avatarKey = createArtistAvatarSharedElementKey(artist.name)
+    val artistAvatarKey = createArtistAvatarSharedElementKey(artist.name)
+    val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = MaterialTheme.shapes.medium,
@@ -224,9 +276,21 @@ internal fun ArtistListItem(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Box(
-                modifier = Modifier
-                    .size(48.dp)
-                    .clip(MaterialShapes.Sunny.toShape()),
+                modifier = if (canUseSharedTransition) {
+                    with(sharedTransitionScope) {
+                        Modifier
+                            .size(48.dp)
+                            .sharedElement(
+                                rememberSharedContentState(key = artistAvatarKey),
+                                animatedVisibilityScope = animatedVisibilityScope
+                            )
+                            .clip(MaterialShapes.Sunny.toShape())
+                    }
+                } else {
+                    Modifier
+                        .size(48.dp)
+                        .clip(MaterialShapes.Sunny.toShape())
+                },
                 contentAlignment = Alignment.Center
             ) {
                 if (!artist.coverPath.isNullOrBlank()) {
@@ -234,8 +298,7 @@ internal fun ArtistListItem(
                         filePath = artist.coverPath,
                         contentDescription = null,
                         size = 48.dp,
-                        modifier = Modifier
-                            .fillMaxSize()
+                        modifier = Modifier.fillMaxSize()
                     )
                 } else {
                     DefaultAlbumArtPlaceholder(size = 48.dp)

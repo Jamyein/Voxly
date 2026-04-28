@@ -1,6 +1,10 @@
 package com.voxly.presentation.screens.filebrowser
 
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
@@ -93,7 +97,9 @@ fun DirectoryContentAdaptiveScreen(
     viewModel: LibraryViewModel = hiltViewModel(),
     scanViewModel: LibraryScanViewModel = hiltViewModel(),
     settingsViewModel: LibrarySettingsViewModel = hiltViewModel(),
-    batchViewModel: LibraryBatchViewModel = hiltViewModel()
+    batchViewModel: LibraryBatchViewModel = hiltViewModel(),
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
     val navigator = rememberListDetailPaneScaffoldNavigator<AudioFile>()
@@ -152,19 +158,27 @@ fun DirectoryContentAdaptiveScreen(
         }
     }
 
+    val detailPaneState = remember { SeekableTransitionState(initialState = false) }
+
     PredictiveBackHandler(enabled = isSelectionMode || canCloseDetailPane) { progress ->
         try {
-            progress.collect { }
+            progress.collect { backEvent ->
+                detailPaneState.seekTo(fraction = backEvent.progress)
+            }
             when {
-                isSelectionMode -> viewModel.clearSelection()
+                isSelectionMode -> {
+                    detailPaneState.animateTo(targetState = true)
+                    viewModel.clearSelection()
+                }
                 canCloseDetailPane -> {
+                    detailPaneState.animateTo(targetState = true)
                     coroutineScope.launch {
                         navigator.navigateBack()
                     }
                 }
             }
         } catch (e: CancellationException) {
-            // Gesture cancelled - no action
+            detailPaneState.snapTo(targetState = false)
         }
     }
 
@@ -179,6 +193,9 @@ fun DirectoryContentAdaptiveScreen(
     var showRenameFilesDialog by remember { mutableStateOf(false) }
     var showFixMetadataDialog by remember { mutableStateOf(false) }
     var showOnlineMetadataDialog by remember { mutableStateOf(false) }
+    var showSingleFileRenameDialog by remember { mutableStateOf(false) }
+    var showSingleFileDeleteDialog by remember { mutableStateOf(false) }
+    var currentSingleFile by remember { mutableStateOf<AudioFile?>(null) }
 
     ListDetailPaneScaffold(
         directive = navigator.scaffoldDirective,
@@ -237,7 +254,17 @@ fun DirectoryContentAdaptiveScreen(
                     onRenameFiles = { showRenameFilesDialog = true },
                     onFixMetadata = { showFixMetadataDialog = true },
                     onReplayGain = { onNavigateToReplayGain(selectedFiles.toList()) },
-                    modifier = Modifier.fillMaxSize()
+                    onSingleFileRename = { audioFile ->
+                        currentSingleFile = audioFile
+                        showSingleFileRenameDialog = true
+                    },
+                    onSingleFileDelete = { audioFile ->
+                        currentSingleFile = audioFile
+                        showSingleFileDeleteDialog = true
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         },
@@ -254,7 +281,9 @@ fun DirectoryContentAdaptiveScreen(
                     onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
                     onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
                     onNavigateToLyricsSelector = onNavigateToLyricsSelector,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         }
@@ -275,6 +304,11 @@ fun DirectoryContentAdaptiveScreen(
         onShowRenameFilesDialogChange = { showRenameFilesDialog = it },
         showFixMetadataDialog = showFixMetadataDialog,
         onShowFixMetadataDialogChange = { showFixMetadataDialog = it },
+        showSingleFileRenameDialog = showSingleFileRenameDialog,
+        onShowSingleFileRenameDialogChange = { showSingleFileRenameDialog = it },
+        showSingleFileDeleteDialog = showSingleFileDeleteDialog,
+        onShowSingleFileDeleteDialogChange = { showSingleFileDeleteDialog = it },
+        currentSingleFile = currentSingleFile,
         selectedFilesCount = selectedFiles.size,
         showSearchSheet = showSearchSheet,
         onShowSearchSheetChange = { showSearchSheet = it },
@@ -326,7 +360,11 @@ private fun DirectoryListPane(
     onRenameFiles: () -> Unit,
     onFixMetadata: () -> Unit,
     onReplayGain: () -> Unit,
-    modifier: Modifier = Modifier
+    onSingleFileRename: (AudioFile) -> Unit,
+    onSingleFileDelete: (AudioFile) -> Unit,
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     Column(modifier = modifier) {
         DirectoryListTopAppBar(
@@ -367,7 +405,11 @@ private fun DirectoryListPane(
             onRenameFiles = onRenameFiles,
             onFixMetadata = onFixMetadata,
             onReplayGain = onReplayGain,
-            modifier = Modifier.fillMaxSize()
+            onSingleFileRename = onSingleFileRename,
+            onSingleFileDelete = onSingleFileDelete,
+            modifier = Modifier.fillMaxSize(),
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
     }
 }
@@ -495,7 +537,11 @@ private fun DirectoryListBody(
     onRenameFiles: () -> Unit,
     onFixMetadata: () -> Unit,
     onReplayGain: () -> Unit,
-    modifier: Modifier = Modifier
+    onSingleFileRename: (AudioFile) -> Unit,
+    onSingleFileDelete: (AudioFile) -> Unit,
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
 
@@ -528,8 +574,12 @@ private fun DirectoryListBody(
                         listState = listState,
                         onFileClick = onFileClick,
                         onFileLongClick = onFileLongClick,
+                        onSingleFileRename = onSingleFileRename,
+                        onSingleFileDelete = onSingleFileDelete,
                         bottomPadding = if (isSelectionMode) 80.dp else 16.dp,
-                        modifier = Modifier.fillMaxSize()
+                        modifier = Modifier.fillMaxSize(),
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
                 }
             }
@@ -582,8 +632,12 @@ private fun DirectoryFileListContent(
     listState: LazyListState,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
+    onSingleFileRename: (AudioFile) -> Unit,
+    onSingleFileDelete: (AudioFile) -> Unit,
     bottomPadding: androidx.compose.ui.unit.Dp,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     Box(modifier = modifier) {
         if (files.isEmpty() && isDirectoryLoading) {
@@ -600,12 +654,14 @@ private fun DirectoryFileListContent(
                 selectedFiles = selectedFiles,
                 onFileClick = onFileClick,
                 onFileLongClick = onFileLongClick,
-                onEditFileMetadata = { },
-                onRenameFile = { },
-                onDeleteFile = { },
-                onFetchOnlineMetadata = { },
-                onFixMetadata = { },
-                bottomPadding = bottomPadding
+                onEditFileMetadata = onFileClick,
+                onRenameFile = onSingleFileRename,
+                onDeleteFile = onSingleFileDelete,
+                onFetchOnlineMetadata = onFileClick,
+                onFixMetadata = onFileClick,
+                bottomPadding = bottomPadding,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         }
     }
@@ -621,7 +677,9 @@ private fun DirectoryDetailPane(
     onNavigateToOnlineLyricsSearch: () -> Unit,
     onNavigateToOnlineCoverSearch: () -> Unit,
     onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     if (currentFile != null) {
         val navKey = MetadataEditor(
@@ -644,7 +702,9 @@ private fun DirectoryDetailPane(
             onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
             onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
             onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
-            onNavigateToLyricsSelector = onNavigateToLyricsSelector
+            onNavigateToLyricsSelector = onNavigateToLyricsSelector,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
     } else {
         EmptyDetailPane()
@@ -668,6 +728,11 @@ private fun DirectoryDialogsAndSheets(
     onShowRenameFilesDialogChange: (Boolean) -> Unit,
     showFixMetadataDialog: Boolean,
     onShowFixMetadataDialogChange: (Boolean) -> Unit,
+    showSingleFileRenameDialog: Boolean,
+    onShowSingleFileRenameDialogChange: (Boolean) -> Unit,
+    showSingleFileDeleteDialog: Boolean,
+    onShowSingleFileDeleteDialogChange: (Boolean) -> Unit,
+    currentSingleFile: AudioFile?,
     selectedFilesCount: Int,
     showSearchSheet: Boolean,
     onShowSearchSheetChange: (Boolean) -> Unit,
@@ -752,6 +817,32 @@ private fun DirectoryDialogsAndSheets(
             targetFilesCount = selectedFilesCount,
             onDismiss = { onShowFixMetadataDialogChange(false) },
             onConfirm = { }
+        )
+    }
+
+    if (showSingleFileRenameDialog && currentSingleFile != null) {
+        SingleFileRenameDialog(
+            audioFile = currentSingleFile,
+            onDismiss = { onShowSingleFileRenameDialogChange(false) },
+            onConfirm = { _ -> }
+        )
+    }
+
+    if (showSingleFileDeleteDialog && currentSingleFile != null) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { onShowSingleFileDeleteDialogChange(false) },
+            title = { Text(stringResource(R.string.dialog_confirm_delete)) },
+            text = { Text(stringResource(R.string.dialog_confirm_delete_single_file_message, currentSingleFile.name)) },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = { onShowSingleFileDeleteDialogChange(false) }) {
+                    Text(stringResource(R.string.dialog_confirm), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+                }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { onShowSingleFileDeleteDialogChange(false) }) {
+                    Text(stringResource(R.string.dialog_cancel))
+                }
+            }
         )
     }
 

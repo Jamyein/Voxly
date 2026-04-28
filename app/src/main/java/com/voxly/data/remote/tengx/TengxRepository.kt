@@ -135,6 +135,7 @@ class TengxRepositoryImpl(
 
                         if (!parsed.data?.song?.list.isNullOrEmpty()) {
                             Timber.d(TAG, "QQ Music found $songCount songs for '$keywords'")
+                            Timber.tag("Voxly").i("TengxRepository searchSongs completed: keywords='$keywords' resultCount=${parsed.data.song.list.size}")
                             return Result.success(parsed)
                         } else {
                             Timber.w(TAG, "QQ Music parsed but song list is empty")

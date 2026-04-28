@@ -1,10 +1,14 @@
 package com.voxly.presentation.viewmodel
 
 import android.content.Context
+import android.graphics.BitmapFactory
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.palette.graphics.Palette
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
+import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
@@ -24,6 +28,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import androidx.compose.ui.graphics.Color
 
 @HiltViewModel(assistedFactory = AlbumDetailViewModel.Factory::class)
 class AlbumDetailViewModel @AssistedInject constructor(
@@ -31,7 +36,8 @@ class AlbumDetailViewModel @AssistedInject constructor(
     @ApplicationContext private val context: Context,
     private val audioFileScanner: AudioFileScanner,
     private val databaseProvider: MusicCacheDatabaseProvider,
-    private val metadataProcessor: TagLibMetadataProcessor
+    private val metadataProcessor: TagLibMetadataProcessor,
+    private val coverUriProvider: CoverUriProvider
 ) : ViewModel() {
 
     private val _albumName = MutableStateFlow("")
@@ -52,17 +58,25 @@ class AlbumDetailViewModel @AssistedInject constructor(
     private val _coverPath = MutableStateFlow<String?>(null)
     val coverPath: StateFlow<String?> = _coverPath.asStateFlow()
 
+    private val _coverUri = MutableStateFlow<Uri?>(null)
+    val coverUri: StateFlow<Uri?> = _coverUri.asStateFlow()
+
     private val _files = MutableStateFlow<List<AudioFile>>(emptyList())
     val files: StateFlow<List<AudioFile>> = _files.asStateFlow()
 
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
 
+    private val _dominantColor = MutableStateFlow<Color?>(null)
+    val dominantColor: StateFlow<Color?> = _dominantColor.asStateFlow()
+
     private var refreshJob: Job? = null
     private val tagLibReadCache = mutableMapOf<String, AudioMetadata>()
 
     init {
-        // Load album data from AudioFileScanner albums on init
+        // Pre-populate from navKey so UI shows correct name/artist from first frame
+        _albumName.update { navKey.albumName }
+        _albumArtist.update { navKey.albumArtist.takeIf { it.isNotEmpty() } }
         loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
     }
 
@@ -71,11 +85,18 @@ class AlbumDetailViewModel @AssistedInject constructor(
      * Year and sample rate are loaded from album_summary_view for fast aggregation.
      * Bitrate is calculated from file metadata.
      * For files with missing discNumber, uses TagLib to read from file tags.
+     * Also pre-resolves cover URI for seamless image loading during navigation.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
         if (_albumName.value == albumName && _albumArtist.value == albumArtist && _files.value.isNotEmpty()) {
             return
         }
+
+        // Reset cover-related state immediately to prevent showing previous album's cover
+        // during transition when ViewModel might be reused across different albums
+        _coverUri.value = null
+        _coverPath.value = null
+        _files.value = emptyList()
 
         viewModelScope.launch {
             try {
@@ -88,6 +109,15 @@ class AlbumDetailViewModel @AssistedInject constructor(
                     _albumName.update { albumGroup.name }
                     _albumArtist.update { albumGroup.albumArtist }
                     _coverPath.update { albumGroup.coverPath }
+
+                    val firstFile = albumGroup.files.firstOrNull()
+                    val resolvedUri = withContext(Dispatchers.IO) {
+                        coverUriProvider.getCoverUri(
+                            albumId = firstFile?.mediaStoreAlbumId,
+                            filePath = albumGroup.coverPath ?: firstFile?.path
+                        )
+                    }
+                    _coverUri.update { resolvedUri }
 
                     val filesWithDiscNumber = withContext(Dispatchers.Default) {
                         albumGroup.files.map { file ->
@@ -108,7 +138,6 @@ class AlbumDetailViewModel @AssistedInject constructor(
 
                     _files.update { filesWithDiscNumber }
 
-                    // Aggregate year, sampleRate and bitrate directly from files
                     val albumYear = albumGroup.files.mapNotNull {
                         it.metadata.year?.trim()?.takeIf { it.isNotBlank() }
                     }.maxOrNull()
@@ -118,6 +147,10 @@ class AlbumDetailViewModel @AssistedInject constructor(
                     _albumYear.update { albumYear }
                     _albumSampleRate.update { maxSampleRate }
                     _albumBitrate.update { maxBitrate }
+
+                    withContext(Dispatchers.Default) {
+                        extractDominantColor(albumGroup)
+                    }
                 } else {
                     _albumName.update { albumName }
                     _albumArtist.update { albumArtist }
@@ -141,6 +174,34 @@ class AlbumDetailViewModel @AssistedInject constructor(
             } finally {
                 _isRefreshing.update { false }
             }
+        }
+    }
+
+    private suspend fun extractDominantColor(albumGroup: com.voxly.domain.model.AlbumGroup) {
+        val firstFile = albumGroup.files.firstOrNull() ?: return
+        val mediaStoreUri = firstFile.getAlbumArtUri()
+        val filePath = albumGroup.coverPath ?: firstFile.path
+        val folder = java.io.File(filePath).parentFile
+        val coverNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
+        val fallbackUri = coverNames.firstNotNullOfOrNull { name ->
+            java.io.File(folder, name).takeIf { it.exists() }?.let { android.net.Uri.fromFile(it) }
+        }
+        val uriToLoad = mediaStoreUri ?: fallbackUri ?: return
+
+        try {
+            val bitmap = context.contentResolver.openInputStream(uriToLoad)?.use { stream ->
+                val options = BitmapFactory.Options().apply { inSampleSize = 4 }
+                BitmapFactory.decodeStream(stream, null, options)
+            }
+            if (bitmap != null) {
+                val palette = Palette.from(bitmap).generate()
+                val color = palette.dominantSwatch?.rgb?.let { Color(it) }
+                    ?: palette.vibrantSwatch?.rgb?.let { Color(it) }
+                    ?: palette.mutedSwatch?.rgb?.let { Color(it) }
+                _dominantColor.update { color }
+                bitmap.recycle()
+            }
+        } catch (_: Throwable) {
         }
     }
 

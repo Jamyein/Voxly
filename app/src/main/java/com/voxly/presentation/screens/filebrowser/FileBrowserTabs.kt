@@ -4,6 +4,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
@@ -42,8 +45,11 @@ internal fun AllAudiosTabContent(
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
     isRefreshing: Boolean,
+    isInitialLoad: Boolean = false,
     onRefresh: () -> Unit,
-    listState: LazyListState? = null
+    listState: LazyListState? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val lazyListState = listState ?: rememberLazyListState()
     val pullToRefreshState = rememberPullToRefreshState()
@@ -61,7 +67,9 @@ internal fun AllAudiosTabContent(
                 )
             }
         ) {
-            if (audios.isEmpty()) {
+            if (isInitialLoad) {
+                com.voxly.presentation.components.SkeletonListScreen(modifier = Modifier.fillMaxSize())
+            } else if (audios.isEmpty()) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                     Text(
                         text = stringResource(R.string.no_audio_files),
@@ -89,7 +97,10 @@ internal fun AllAudiosTabContent(
                             onDelete = {},
                             onFetchOnlineMetadata = {},
                             onFixMetadata = {},
-                            compactMode = true
+                            compactMode = true,
+                            sharedElementKey = createAlbumArtSharedElementKey(audioFile.path),
+                            sharedTransitionScope = sharedTransitionScope,
+                            animatedVisibilityScope = animatedVisibilityScope
                         )
                     }
                 }

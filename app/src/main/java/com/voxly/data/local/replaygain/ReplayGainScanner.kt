@@ -24,6 +24,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.sample
@@ -242,7 +243,7 @@ class ReplayGainScanner @Inject constructor(
         Timber.i(
             "ReplayGain album grouping finished. elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}"
         )
-    }.sample(100)
+    }
 
     /**
      * Scans audio files grouped by album and calculates both track and album gain.
@@ -283,49 +284,41 @@ class ReplayGainScanner @Inject constructor(
 
             val trackGains = mutableListOf<Pair<String, ReplayGainInfo>>()
 
-            for ((_, filePath) in albumFiles.withIndex()) {
-                emit(
-                    ScanProgress(
-                        currentFile = processedFiles + 1,
-                        totalFiles = totalFiles,
-                        percentage = processedFiles.toFloat() / totalFiles,
-                        currentFilePath = filePath,
-                        status = ScanStatus.SCANNING
-                    )
-                )
+            coroutineScope {
+                val deferred = albumFiles.map { filePath ->
+                    async(Dispatchers.IO) {
+                        val result = analyzeAudioFile(filePath, scanQuality, targetLoudness, config)
+                        filePath to result
+                    }
+                }
 
-                try {
-                    val fileStartedAt = SystemClock.elapsedRealtime()
-                    val replayGainInfo = analyzeAudioFile(filePath, scanQuality, targetLoudness, config)
+                for (deferredResult in deferred) {
+                    kotlin.coroutines.coroutineContext.ensureActive()
+
+                    val (filePath, replayGainInfo) = deferredResult.await()
+                    processedFiles++
 
                     if (replayGainInfo != null) {
                         trackGains.add(filePath to replayGainInfo)
                         Timber.v(
-                            "Track gain calculated file=${File(filePath).name} gain=${replayGainInfo.trackGain} elapsedMs=${SystemClock.elapsedRealtime() - fileStartedAt}"
+                            "Track gain calculated file=${File(filePath).name} gain=${replayGainInfo.trackGain}"
                         )
                     } else {
                         Timber.w(
                             "Track gain analysis failed file=${File(filePath).name}"
                         )
                     }
-                } catch (e: Exception) {
-                    Timber.e(
-                        e,
-                        "Track scan failed file=${File(filePath).name} reason=${e.message}"
+
+                    emit(
+                        ScanProgress(
+                            currentFile = processedFiles,
+                            totalFiles = totalFiles,
+                            percentage = processedFiles.toFloat() / totalFiles,
+                            currentFilePath = filePath,
+                            status = ScanStatus.SCANNING
+                        )
                     )
                 }
-
-                processedFiles++
-                emit(
-                    ScanProgress(
-                        currentFile = processedFiles,
-                        totalFiles = totalFiles,
-                        percentage = processedFiles.toFloat() / totalFiles,
-                        currentFilePath = filePath,
-                        status = ScanStatus.SCANNING
-                    )
-                )
-
             }
 
             if (trackGains.isNotEmpty()) {
@@ -349,18 +342,21 @@ class ReplayGainScanner @Inject constructor(
                             referenceLoudness = trackInfo.referenceLoudness
                         )
                         val saved = saveReplayGainToFile(filePath, combinedInfo)
-                        if (saved) {
-                            emit(
-                                ScanProgress(
-                                    currentFile = totalFiles,
-                                    totalFiles = totalFiles,
-                                    percentage = 1f,
-                                    currentFilePath = filePath,
-                                    status = ScanStatus.COMPLETED,
-                                    replayGainInfo = combinedInfo
-                                )
+                        if (!saved) {
+                            Timber.w(
+                                "Album gain save failed but analysis complete file=$filePath"
                             )
                         }
+                        emit(
+                            ScanProgress(
+                                currentFile = processedFiles,
+                                totalFiles = totalFiles,
+                                percentage = processedFiles.toFloat() / totalFiles,
+                                currentFilePath = filePath,
+                                status = ScanStatus.COMPLETED,
+                                replayGainInfo = combinedInfo
+                            )
+                        )
                     } catch (e: Exception) {
                         Timber.e(
                             e,
@@ -376,7 +372,7 @@ class ReplayGainScanner @Inject constructor(
         Timber.i(
             "ReplayGain album scan finished. albums=$totalAlbums files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}"
         )
-    }.sample(100)
+    }
 
     /**
      * Analyzes a single audio file using native libebur128 (via JNI).
@@ -497,24 +493,33 @@ class ReplayGainScanner @Inject constructor(
      * Uses hardware-accelerated decoder when available.
      * Optimized with pooled 2MB batch buffer to reduce allocations.
      */
-    private fun decodeAndFeedScanner(
+    private suspend fun decodeAndFeedScanner(
         extractor: MediaExtractor,
         format: MediaFormat,
         channelCount: Int,
         nativeScanner: EbuR128NativeScanner
     ) {
         val mime = format.getString(MediaFormat.KEY_MIME) ?: return
-        val codec = findBestDecoder(mime)?.let { name ->
-            try {
-                MediaCodec.createByCodecName(name).also {
-                    Timber.i("Using decoder: $name (hw=${isHardwareAccelerated(name)})")
-                }
-            } catch (e: Exception) {
-                Timber.w("Failed to create codec $name, falling back: ${e.message}")
-                null
+        val codec = try {
+            MediaCodec.createDecoderByType(mime).also {
+                Timber.i("Using decoder: ${it.name} (hw=${isHardwareAccelerated(it.name)})")
             }
-        } ?: MediaCodec.createDecoderByType(mime).also {
-            Timber.i("Using default decoder for $mime")
+        } catch (e: Exception) {
+            Timber.w("System decoder failed for $mime: ${e.message}")
+            findBestDecoder(mime)?.let { name ->
+                try {
+                    MediaCodec.createByCodecName(name).also {
+                        Timber.i("Using fallback decoder: $name (hw=${isHardwareAccelerated(name)})")
+                    }
+                } catch (e2: Exception) {
+                    Timber.w("Fallback decoder $name failed: ${e2.message}")
+                    null
+                }
+            }
+        }
+        if (codec == null) {
+            Timber.w("No decoder found for $mime")
+            return
         }
 
         try {
@@ -530,6 +535,7 @@ class ReplayGainScanner @Inject constructor(
             var batchPos = 0
 
             while (!outputDone) {
+                kotlin.coroutines.coroutineContext.ensureActive()
                 if (!inputDone) {
                     val inputIndex = codec.dequeueInputBuffer(DECODE_TIMEOUT_US)
                     if (inputIndex >= 0) {

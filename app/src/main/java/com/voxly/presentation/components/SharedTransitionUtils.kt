@@ -1,18 +1,5 @@
 package com.voxly.presentation.components
 
-import androidx.compose.animation.ExperimentalSharedTransitionApi
-import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.runtime.ProvidableCompositionLocal
-import androidx.compose.runtime.compositionLocalOf
-
-/**
- * CompositionLocal for providing SharedTransitionScope throughout the navigation hierarchy.
- * Used by Navigation3 (NavDisplay) to enable smooth scene-level transitions.
- */
-@OptIn(ExperimentalSharedTransitionApi::class)
-val LocalSharedTransitionScope: ProvidableCompositionLocal<SharedTransitionScope?> =
-    compositionLocalOf { null }
-
 /**
  * Helper function to create unique keys for audio file shared elements.
  *
@@ -62,7 +49,8 @@ fun createAlbumArtSharedElementKey(filePath: String): String = "album-art-$fileP
  * @return Unique key string for the album cover shared element
  */
 fun createAlbumCoverSharedElementKey(albumName: String, albumArtist: String?): String {
-    return "album-cover-$albumName-${albumArtist ?: "unknown"}"
+    val normalizedArtist = albumArtist?.takeIf { it.isNotBlank() }
+    return "album-cover-$albumName-${normalizedArtist ?: "unknown"}"
 }
 
 /**
@@ -73,3 +61,40 @@ fun createAlbumCoverSharedElementKey(albumName: String, albumArtist: String?): S
  * @return Unique key string for the artist avatar shared element
  */
 fun createArtistAvatarSharedElementKey(artistName: String): String = "artist-avatar-$artistName"
+
+/**
+ * Helper function to create unique keys for artist name shared elements.
+ * Used for Container Transform text transitions from ArtistScreen to ArtistDetailScreen.
+ *
+ * @param artistName The artist name
+ * @return Unique key string for the artist name shared element
+ */
+fun createArtistNameSharedElementKey(artistName: String): String = "artist-name-$artistName"
+
+/**
+ * Helper function to create unique keys for album title shared elements.
+ * Used for Container Transform text transitions from AlbumScreen to AlbumDetailScreen.
+ *
+ * @param albumName The album name
+ * @param albumArtist The album artist (optional, for disambiguation)
+ * @return Unique key string for the album title shared element
+ */
+fun createAlbumTitleSharedElementKey(albumName: String, albumArtist: String?): String {
+    val normalizedArtist = albumArtist?.takeIf { it.isNotBlank() }
+    return "album-title-$albumName-${normalizedArtist ?: "unknown"}"
+}
+
+/**
+ * Helper function to create unique keys for album artist text shared elements.
+ * Used for Container Transform text transitions from AlbumScreen to AlbumDetailScreen.
+ *
+ * @param albumName The album name
+ * @param albumArtist The album artist (optional, for disambiguation)
+ * @return Unique key string for the album artist text shared element
+ */
+fun createAlbumArtistTextSharedElementKey(albumName: String, albumArtist: String?): String {
+    val normalizedArtist = albumArtist?.takeIf { it.isNotBlank() }
+    return "album-artist-text-$albumName-${normalizedArtist ?: "unknown"}"
+}
+
+

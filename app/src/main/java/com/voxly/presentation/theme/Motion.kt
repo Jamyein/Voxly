@@ -28,6 +28,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
@@ -86,6 +87,9 @@ object ExpressiveMotionTokens {
     val EmphasizedAccelerateInterpolator = CubicBezierEasing(0.3f, 0f, 0.8f, 0.15f)
     val LinearInterpolator = CubicBezierEasing(0f, 0f, 1f, 1f)
 
+    // Predictive back gesture interpolator - M3 spec
+    val PredictiveBackInterpolator = CubicBezierEasing(0.1f, 0.1f, 0f, 1f)
+
     // Legacy easing for backward compatibility
     val ExpressiveEasing = CubicBezierEasing(0.3f, 0.0f, 0.0f, 1.0f)
     val StandardEasing = CubicBezierEasing(0.4f, 0.0f, 0.2f, 1.0f)
@@ -112,8 +116,8 @@ object ExpressiveMotionTokens {
     val DefaultEffects = SpringSpec(1.0f, 1600f)   // Color/opacity for partial screen
 
     // Slow springs - full screen transitions (primary for page navigation)
-    val SlowSpatial = SpringSpec(0.9f, 300f)       // Full screen transitions (MAIN)
-    val SlowEffects = SpringSpec(1.0f, 800f)       // Color/opacity for full screen
+    val SlowSpatial = SpringSpec(0.85f, 450f)       // Optimized: higher stiffness for snappier transitions
+    val SlowEffects = SpringSpec(1.0f, 1200f)       // Optimized: much higher stiffness for faster fade
 
     // Legacy specs (deprecated, use above)
     @Deprecated("Use SlowSpatial for page transitions")
@@ -289,47 +293,124 @@ object ExpressiveAnimations {
     // Combines slide (for spatial movement), scale, and fade for smooth expand/collapse feel
     val ContainerTransformEnter: EnterTransition =
         slideInHorizontally(
-            initialOffsetX = { it / 3 },
+            initialOffsetX = { it / 5 },
             animationSpec = PageEnterSpringSlide
         ) +
         fadeIn(animationSpec = PageEffectsSpring) +
         scaleIn(
-            initialScale = 0.92f,
+            initialScale = 0.95f,
             animationSpec = PageEnterSpring
         )
 
     val ContainerTransformExit: ExitTransition =
         slideOutHorizontally(
-            targetOffsetX = { -it / 3 },
+            targetOffsetX = { -it / 5 },
             animationSpec = PageExitSpringSlide
         ) +
         fadeOut(animationSpec = PageEffectsSpring) +
         scaleOut(
-            targetScale = 0.92f,
+            targetScale = 0.95f,
             animationSpec = PageExitSpring
         )
 
     // Container Transform Pop (return) - reverse of enter
     val ContainerTransformPopEnter: EnterTransition =
         slideInHorizontally(
-            initialOffsetX = { -it / 3 },
+            initialOffsetX = { -it / 5 },
             animationSpec = PageEnterSpringSlide
         ) +
         scaleIn(
-            initialScale = 0.92f,
+            initialScale = 0.95f,
             animationSpec = PageEnterSpring
         ) +
         fadeIn(animationSpec = PageEffectsSpring)
 
     val ContainerTransformPopExit: ExitTransition =
         slideOutHorizontally(
-            targetOffsetX = { it / 3 },
+            targetOffsetX = { it / 5 },
             animationSpec = PageExitSpringSlide
         ) +
         fadeOut(animationSpec = PageEffectsSpring) +
         scaleOut(
-            targetScale = 0.92f,
+            targetScale = 0.95f,
             animationSpec = PageExitSpring
+        )
+
+    // Container Transform for Shared Element pages - no slide to avoid conflict with shared element bounds animation
+    val ContainerTransformSharedElementEnter: EnterTransition =
+        fadeIn(animationSpec = PageEffectsSpring) +
+        scaleIn(
+            initialScale = 0.95f,
+            animationSpec = PageEnterSpring
+        )
+
+    val ContainerTransformSharedElementExit: ExitTransition =
+        fadeOut(animationSpec = PageEffectsSpring) +
+        scaleOut(
+            targetScale = 0.95f,
+            animationSpec = PageExitSpring
+        )
+
+    val ContainerTransformSharedElementPopEnter: EnterTransition =
+        scaleIn(
+            initialScale = 0.95f,
+            animationSpec = PageEnterSpring
+        ) +
+        fadeIn(animationSpec = PageEffectsSpring)
+
+    val ContainerTransformSharedElementPopExit: ExitTransition =
+        fadeOut(animationSpec = PageEffectsSpring) +
+        scaleOut(
+            targetScale = 0.95f,
+            animationSpec = PageExitSpring
+        )
+
+    // Predictive Back - optimized for gesture-driven animation
+    // Uses CubicBezierEasing(0.1f, 0.1f, 0f, 1f) per M3 spec for natural deceleration
+    private val PredictiveBackTween = tween<Float>(
+        durationMillis = 400,
+        easing = ExpressiveMotionTokens.PredictiveBackInterpolator
+    )
+
+    private val PredictiveBackTweenSlide = tween<IntOffset>(
+        durationMillis = 400,
+        easing = ExpressiveMotionTokens.PredictiveBackInterpolator
+    )
+
+    val ContainerTransformPredictiveBackEnter: EnterTransition =
+        slideInHorizontally(
+            initialOffsetX = { -it / 5 },
+            animationSpec = PredictiveBackTweenSlide
+        ) +
+        scaleIn(
+            initialScale = 0.95f,
+            animationSpec = PredictiveBackTween
+        ) +
+        fadeIn(animationSpec = PredictiveBackTween)
+
+    val ContainerTransformPredictiveBackExit: ExitTransition =
+        slideOutHorizontally(
+            targetOffsetX = { it / 5 },
+            animationSpec = PredictiveBackTweenSlide
+        ) +
+        fadeOut(animationSpec = PredictiveBackTween) +
+        scaleOut(
+            targetScale = 0.95f,
+            animationSpec = PredictiveBackTween
+        )
+
+    val ContainerTransformSharedElementPredictiveBackEnter: EnterTransition =
+        fadeIn(animationSpec = PredictiveBackTween) +
+        scaleIn(
+            initialScale = 0.95f,
+            animationSpec = PredictiveBackTween
+        )
+
+    val ContainerTransformSharedElementPredictiveBackExit: ExitTransition =
+        fadeOut(animationSpec = PredictiveBackTween) +
+        scaleOut(
+            targetScale = 0.95f,
+            animationSpec = PredictiveBackTween
         )
 
     // Shared Axis X - for lateral navigation (settings, log viewer)

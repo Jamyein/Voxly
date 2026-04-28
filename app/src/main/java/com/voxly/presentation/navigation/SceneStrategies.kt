@@ -1,23 +1,19 @@
 package com.voxly.presentation.navigation
 
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.ui.Modifier
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
-import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.navigation3.runtime.NavEntry
 import androidx.navigation3.scene.OverlayScene
 import androidx.navigation3.scene.Scene
 import androidx.navigation3.scene.SceneStrategy
 import androidx.navigation3.scene.SceneStrategyScope
-import androidx.window.core.layout.WindowSizeClass
-import androidx.window.core.layout.WindowSizeClass.Companion.WIDTH_DP_MEDIUM_LOWER_BOUND
 
 /**
  * Bottom Sheet Scene - displays content in a ModalBottomSheet
@@ -35,11 +31,18 @@ internal class BottomSheetScene<T : Any>(
     override val entries: List<NavEntry<T>> = listOf(entry)
 
     override val content: @Composable () -> Unit = {
-        val sheetState = rememberModalBottomSheetState()
+        val sheetState = rememberModalBottomSheetState(
+            skipPartiallyExpanded = false  // 允许中间状态
+        )
         ModalBottomSheet(
             onDismissRequest = onBack,
             sheetState = sheetState,
             properties = modalBottomSheetProperties,
+            dragHandle = {  // 添加拖拽手柄
+                androidx.compose.material3.BottomSheetDefaults.DragHandle(
+                    modifier = Modifier.padding(top = 8.dp)
+                )
+            }
         ) {
             entry.Content()
         }
@@ -48,6 +51,9 @@ internal class BottomSheetScene<T : Any>(
 
 /**
  * Bottom Sheet Scene Strategy - displays entries with bottomSheet metadata in a ModalBottomSheet
+ *
+ * Note: This is a custom implementation as official BottomSheetSceneStrategy is not available
+ * in Navigation 3 1.1.1.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 class BottomSheetSceneStrategy<T : Any> : SceneStrategy<T> {
@@ -78,63 +84,6 @@ class BottomSheetSceneStrategy<T : Any> : SceneStrategy<T> {
     }
 }
 
-/**
- * List Detail Scene - displays list and detail side by side (for tablets/large screens)
- */
-class ListDetailScene<T : Any>(
-    override val key: Any,
-    override val previousEntries: List<NavEntry<T>>,
-    val listEntry: NavEntry<T>,
-    val detailEntry: NavEntry<T>,
-) : Scene<T> {
-    override val entries: List<NavEntry<T>> = listOf(listEntry, detailEntry)
-
-    override val content: @Composable () -> Unit = {
-        Row(
-            modifier = Modifier.fillMaxSize()
-        ) {
-            Column(
-                modifier = Modifier.weight(0.4f)
-            ) {
-                listEntry.Content()
-            }
-            Column(
-                modifier = Modifier.weight(0.6f)
-            ) {
-                detailEntry.Content()
-            }
-        }
-    }
-
-    companion object {
-        const val LIST_KEY = "ListDetailScene-List"
-        const val DETAIL_KEY = "ListDetailScene-Detail"
-
-        fun listPane() = mapOf(LIST_KEY to true)
-        fun detailPane() = mapOf(DETAIL_KEY to true)
-    }
-}
-
-/**
- * List Detail Scene Strategy - returns ListDetailScene for wide screens
- */
-class ListDetailSceneStrategy<T : Any>(val windowSizeClass: WindowSizeClass) : SceneStrategy<T> {
-
-    override fun SceneStrategyScope<T>.calculateScene(entries: List<NavEntry<T>>): Scene<T>? {
-        if (!windowSizeClass.isWidthAtLeastBreakpoint(WIDTH_DP_MEDIUM_LOWER_BOUND)) {
-            return null
-        }
-
-        val detailEntry = entries.lastOrNull()?.takeIf { it.metadata.containsKey(ListDetailScene.DETAIL_KEY) } ?: return null
-        val listEntry = entries.findLast { it.metadata.containsKey(ListDetailScene.LIST_KEY) } ?: return null
-
-        val sceneKey = listEntry.contentKey
-
-        return ListDetailScene(
-            key = sceneKey,
-            previousEntries = entries.dropLast(1),
-            listEntry = listEntry,
-            detailEntry = detailEntry
-        )
-    }
-}
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun <T : Any> rememberBottomSheetSceneStrategy(): SceneStrategy<T> = BottomSheetSceneStrategy<T>()

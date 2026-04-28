@@ -36,7 +36,11 @@ class FileProcessor @Inject constructor(
 
         val lightweightResult = LightweightMetadataParser.parse(file)
         val fullMetadata = when {
-            lightweightResult != null -> mergeMetadata(lightweightResult.metadata, mediaStoreMetadata)
+            lightweightResult != null -> {
+                val merged = mergeMetadata(lightweightResult.metadata, mediaStoreMetadata)
+                Timber.d("FileProcessor: path=${filePath}, lightweightAlbumArtist=${lightweightResult.metadata.albumArtist}, mediaStoreAlbumArtist=${mediaStoreMetadata.albumArtist}, mergedAlbumArtist=${merged.albumArtist}")
+                merged
+            }
             else -> metadataProcessor.readAllMetadata(filePath, includeAlbumArt = false)?.metadata
                 ?: mediaStoreMetadata
         }
@@ -68,7 +72,7 @@ class FileProcessor @Inject constructor(
             title = primary.title.takeIf { !it.isNullOrBlank() } ?: fallback.title,
             artist = primary.artist.takeIf { !it.isNullOrBlank() } ?: fallback.artist,
             album = primary.album.takeIf { !it.isNullOrBlank() } ?: fallback.album,
-            albumArtist = primary.albumArtist.takeIf { !it.isNullOrBlank() } ?: fallback.albumArtist,
+            albumArtist = primary.albumArtist?.takeIf { it.isNotBlank() } ?: fallback.albumArtist?.takeIf { it.isNotBlank() },
             year = primary.year.takeIf { !it.isNullOrBlank() } ?: fallback.year,
             genre = primary.genre.takeIf { !it.isNullOrBlank() } ?: fallback.genre,
             trackNumber = primary.trackNumber ?: fallback.trackNumber,
@@ -85,7 +89,6 @@ class FileProcessor @Inject constructor(
     ): List<AudioFile> = coroutineScope {
         val semaphore = Semaphore(maxConcurrency)
         filePaths
-            .sortedBy { File(it).length() }
             .map { path ->
                 async(Dispatchers.IO) {
                     semaphore.withPermit {
@@ -97,6 +100,8 @@ class FileProcessor @Inject constructor(
                         }
                     }
                 }
-            }.awaitAll().filterNotNull()
+            }.awaitAll().filterNotNull().also { result ->
+                Timber.tag("Voxly").i("FileProcessor scanFilesInParallel: processed=${result.size} total=${filePaths.size}")
+            }
     }
 }

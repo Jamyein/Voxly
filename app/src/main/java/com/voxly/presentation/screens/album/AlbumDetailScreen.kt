@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -16,12 +17,16 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
@@ -34,8 +39,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarDefaults
 
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.produceState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.derivedStateOf
@@ -54,15 +57,15 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import android.graphics.BitmapFactory
-import androidx.palette.graphics.Palette
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import timber.log.Timber
 import com.voxly.R
 import com.voxly.core.util.Constants
 import com.voxly.presentation.components.AlbumArtImage
-import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
+import com.voxly.presentation.components.createAlbumTitleSharedElementKey
+import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import androidx.compose.animation.core.spring
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.screens.album.formatBitrate
 import com.voxly.presentation.screens.album.formatSampleRate
@@ -70,20 +73,19 @@ import com.voxly.presentation.screens.album.formatSampleRate
 /**
  * Album detail screen showing album info and track list.
  */
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun AlbumDetailScreen(
     albumName: String,
     albumArtist: String?,
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: (String, String?) -> Unit,
-    viewModel: AlbumDetailViewModel
+    viewModel: AlbumDetailViewModel,
+    initialCoverPath: String? = null,
+    initialCoverAlbumId: Long? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    // Load album from cache
-    LaunchedEffect(albumName, albumArtist) {
-        viewModel.loadAlbum(albumName, albumArtist)
-    }
-
     val albumNameState by viewModel.albumName.collectAsStateWithLifecycle()
     val albumArtistState by viewModel.albumArtist.collectAsStateWithLifecycle()
     val albumYear by viewModel.albumYear.collectAsStateWithLifecycle()
@@ -91,6 +93,7 @@ fun AlbumDetailScreen(
     val albumSampleRate by viewModel.albumSampleRate.collectAsStateWithLifecycle()
     val files by viewModel.files.collectAsStateWithLifecycle()
     val coverPath by viewModel.coverPath.collectAsStateWithLifecycle()
+    val coverUri by viewModel.coverUri.collectAsStateWithLifecycle()
     // Calculate total duration
     val totalDuration = remember(files) {
         files.sumOf { it.duration }
@@ -113,55 +116,7 @@ fun AlbumDetailScreen(
         )
     }
 
-    // Extract dominant color from album cover for immersive background
-    val context = androidx.compose.ui.platform.LocalContext.current
-    
-    val dominantColor by produceState<Color?>(
-        initialValue = null,
-        key1 = coverPath,
-        key2 = files.firstOrNull()?.mediaStoreAlbumId
-    ) {
-        val firstFile = files.firstOrNull()
-        val albumId = firstFile?.mediaStoreAlbumId
-        val filePath = coverPath ?: firstFile?.path
-        
-        // Try MediaStore album art URI first (fastest)
-        val mediaStoreUri = firstFile?.getAlbumArtUri()
-        
-        // Fallback: folder cover or embedded cover via file path
-        val fallbackUri = if (filePath != null) {
-            val folder = java.io.File(filePath).parentFile
-            val coverNames = listOf("cover.jpg", "folder.jpg", "cover.png", "folder.png", "album.jpg", "album.png")
-            coverNames.firstNotNullOfOrNull { name ->
-                java.io.File(folder, name).takeIf { it.exists() }?.let { android.net.Uri.fromFile(it) }
-            }
-        } else null
-        
-        val uriToLoad = mediaStoreUri ?: fallbackUri
-        
-        if (uriToLoad != null) {
-            withContext(Dispatchers.Default) {
-                try {
-                    val bitmap = context.contentResolver.openInputStream(uriToLoad)?.use { stream ->
-                        val options = android.graphics.BitmapFactory.Options().apply {
-                            inSampleSize = 4
-                        }
-                        BitmapFactory.decodeStream(stream, null, options)
-                    }
-                    if (bitmap != null) {
-                        val palette = Palette.from(bitmap).generate()
-                        val color = palette.dominantSwatch?.rgb?.let { Color(it) }
-                            ?: palette.vibrantSwatch?.rgb?.let { Color(it) }
-                            ?: palette.mutedSwatch?.rgb?.let { Color(it) }
-                        value = color
-                        bitmap.recycle()
-                    }
-                } catch (e: Throwable) {
-                    // Silently fail, keep null
-                }
-            }
-        }
-    }
+    val dominantColor by viewModel.dominantColor.collectAsStateWithLifecycle()
 
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
     val listState = rememberLazyListState()
@@ -244,46 +199,72 @@ fun AlbumDetailScreen(
                         
                         // Cover image - 1:1 square with large rounded corners
                         val firstFile = files.firstOrNull()
+                        val albumCoverKey = createAlbumCoverSharedElementKey(albumName, albumArtist)
+                        val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+                        Timber.d("AlbumDetailScreen: canUseSharedTransition=$canUseSharedTransition, key=$albumCoverKey, albumName=$albumName")
+                        // Pre-resolve MediaStore URI from navigation key for immediate display.
+                        // This ensures AlbumArtImage has a non-null model on the first frame,
+                        // enabling Coil to find the list page's cached bitmap via memoryCacheKey.
+                        val quickCoverUri = remember(initialCoverAlbumId, initialCoverPath, coverUri) {
+                            coverUri ?: if (initialCoverAlbumId != null && initialCoverAlbumId > 0) {
+                                android.content.ContentUris.withAppendedId(
+                                    android.net.Uri.parse("content://media/external/audio/albumart"),
+                                    initialCoverAlbumId
+                                )
+                            } else null
+                        }
                         Box(
-                            modifier = Modifier
+                            modifier = if (canUseSharedTransition) {
+                                with(sharedTransitionScope) {
+                                    Modifier
+                                        .size(240.dp)
+                                        .aspectRatio(1f)
+                                        .sharedElement(
+                                            rememberSharedContentState(key = albumCoverKey),
+                                            animatedVisibilityScope = animatedVisibilityScope,
+                                            boundsTransform = { _, _ -> spring() }
+                                        )
+                                }
+                            } else {
+                                Modifier
+                            }
                                 .size(240.dp)
                                 .aspectRatio(1f)
                                 .shadow(16.dp, shape = MaterialTheme.shapes.extraLarge)
-                                .clip(MaterialTheme.shapes.extraLarge),
-                            contentAlignment = Alignment.Center
+                                .clip(MaterialTheme.shapes.extraLarge)
                         ) {
                             AlbumArtImage(
-                                filePath = coverPath ?: firstFile?.path,
-                                albumId = firstFile?.mediaStoreAlbumId,
+                                filePath = coverPath ?: firstFile?.path ?: initialCoverPath,
+                                albumId = (firstFile?.mediaStoreAlbumId).takeIf { it != null && it > 0 }
+                                    ?: initialCoverAlbumId,
                                 contentDescription = stringResource(R.string.album_cover),
-                                size = 220.dp,
-                                modifier = Modifier.fillMaxSize()
-                            ) {
-                                Surface(
-                                    modifier = Modifier.fillMaxSize(),
-                                    color = MaterialTheme.colorScheme.surfaceVariant
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Album,
-                                        contentDescription = null,
-                                        modifier = Modifier
-                                            .padding(48.dp)
-                                            .fillMaxSize(),
-                                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
+                                size = 240.dp,
+                                modifier = Modifier.fillMaxSize(),
+                                preResolvedUri = quickCoverUri,
+                                clipShape = MaterialTheme.shapes.extraLarge
+                            )
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))
 
                         // Album name
+                        val albumTitleKey = createAlbumTitleSharedElementKey(albumName, albumArtist)
+                        val albumArtistKey = albumArtist?.let { createAlbumArtistTextSharedElementKey(albumName, albumArtist) }
                         Text(
                             text = albumNameState,
                             style = MaterialTheme.typography.headlineSmall,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = if (canUseSharedTransition) {
+                                with(sharedTransitionScope) {
+                                    Modifier.sharedElement(
+                                        rememberSharedContentState(key = albumTitleKey),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        boundsTransform = { _, _ -> spring() }
+                                    )
+                                }
+                            } else Modifier
                         )
 
                         Spacer(modifier = Modifier.height(4.dp))
@@ -295,21 +276,26 @@ fun AlbumDetailScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            textAlign = TextAlign.Center
+                            textAlign = TextAlign.Center,
+                            modifier = if (canUseSharedTransition && albumArtistKey != null) {
+                                with(sharedTransitionScope) {
+                                    Modifier.sharedElement(
+                                        rememberSharedContentState(key = albumArtistKey),
+                                        animatedVisibilityScope = animatedVisibilityScope,
+                                        boundsTransform = { _, _ -> spring() }
+                                    )
+                                }
+                            } else Modifier
                         )
 
                         Spacer(modifier = Modifier.height(8.dp))
 
                         // Inline metadata
-                        val metadataLine = remember(files, formattedTotalDuration, albumBitrate, albumYear) {
+                        val metadataLine = remember(files, formattedTotalDuration, albumYear) {
                             buildString {
                                 append("${files.size}首")
                                 append(" · ")
                                 append(formattedTotalDuration)
-                                if (albumBitrate > 0) {
-                                    append(" · ")
-                                    append(formatBitrate(albumBitrate))
-                                }
                                 albumYear?.let {
                                     append(" · ")
                                     append(it)
@@ -391,55 +377,49 @@ fun AlbumDetailScreen(
                         )
                     }
 
-                    // Song list - Card wrapped for visual distinction
-                    androidx.compose.material3.Card(
+                    // Song list - grouped with spacing
+                    Column(
                         modifier = Modifier.fillMaxWidth(),
-                        shape = MaterialTheme.shapes.large,
-                        colors = androidx.compose.material3.CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                        )
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(0.dp)
-                        ) {
-                            discFiles.forEachIndexed { index, audioFile ->
-                                SegmentedListItem(
-                                    onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
-                                    shapes = ListItemDefaults.segmentedShapes(
-                                        index = index,
-                                        count = discFiles.size
-                                    ),
-                                    colors = ListItemDefaults.segmentedColors(
-                                        containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                                    ),
-                                    leadingContent = {
-                                        Text(
-                                            text = audioFile.metadata.trackNumber?.toString() ?: "-",
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.padding(start = 12.dp)
-                                        )
-                                    },
-                                    supportingContent = {
-                                        Column {
-                                            Text(
-                                                text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                                                style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-                                                maxLines = 1
-                                            )
-                                            Text(
-                                                text = "${audioFile.format.uppercase()} • ${audioFile.getFormattedDuration()}",
-                                                style = MaterialTheme.typography.labelSmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                                maxLines = 1
-                                            )
-                                        }
-                                    },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    content = {}
-                                )
-                            }
+                        discFiles.forEachIndexed { index, audioFile ->
+                            SegmentedListItem(
+                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
+                                shapes = ListItemDefaults.segmentedShapes(
+                                    index = index,
+                                    count = discFiles.size
+                                ),
+                                colors = ListItemDefaults.segmentedColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                                ),
+                                leadingContent = {
+                                    Text(
+                                        text = audioFile.metadata.trackNumber?.toString() ?: "-",
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier
+                                            .padding(start = 12.dp)
+                                            .width(28.dp),
+                                        textAlign = TextAlign.Start
+                                    )
+                                },
+                                content = {
+                                    Text(
+                                        text = audioFile.metadata.getDisplayTitle(audioFile.name),
+                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                                        maxLines = 1
+                                    )
+                                },
+                                supportingContent = {
+                                    Text(
+                                        text = "${audioFile.metadata.artist ?: ""} • ${audioFile.getFormattedDuration()}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1
+                                    )
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            )
                         }
                     }
 

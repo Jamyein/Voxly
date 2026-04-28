@@ -36,6 +36,18 @@ class EbuR128NativeScanner(
         init {
             System.loadLibrary("ebur128-scanner")
         }
+
+        @CriticalNative
+        private external fun nativeCreate(
+            channels: Int,
+            sampleRate: Int,
+            truePeak: Boolean,
+            dualMono: Boolean,
+            targetLoudness: Double
+        ): Long
+
+        @CriticalNative
+        private external fun nativeDestroy(scannerPtr: Long)
     }
 
     private var nativePtr: Long = 0
@@ -88,15 +100,6 @@ class EbuR128NativeScanner(
     }
 
     @FastNative
-    private external fun nativeCreate(
-        channels: Int,
-        sampleRate: Int,
-        truePeak: Boolean,
-        dualMono: Boolean,
-        targetLoudness: Double
-    ): Long
-
-    @FastNative
     private external fun nativeProcessFrames(
         scannerPtr: Long,
         samples: ShortArray,
@@ -112,9 +115,6 @@ class EbuR128NativeScanner(
 
     @FastNative
     private external fun nativeGetResult(scannerPtr: Long, result: DoubleArray): Boolean
-
-    @FastNative
-    private external fun nativeDestroy(scannerPtr: Long)
 
     @FastNative
     private external fun nativeGetVersion(): String

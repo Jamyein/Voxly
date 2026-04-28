@@ -102,6 +102,7 @@ class DeepEnrichProcessor @Inject constructor(
             results.addAll(chunkResults)
         }
 
+        Timber.tag("Voxly").i("DeepEnrichProcessor enrichBatch: input=${files.size} output=${results.size}")
         return results
     }
 

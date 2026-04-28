@@ -6,6 +6,9 @@ import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.domain.repository.OnlineRecording
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.PersistentMap
+import kotlinx.collections.immutable.PersistentSet
 
 /**
  * Sealed class representing metadata editor UI states.
@@ -75,17 +78,17 @@ enum class ConvertibleField(val displayName: String) {
 
 @Immutable
 data class LyricsSearchState(
-    val results: List<OnlineLyricsResult> = emptyList(),
-    val completedSources: Set<String> = emptySet(),
-    val errorSources: Map<String, String> = emptyMap(),
+    val results: ImmutableList<OnlineLyricsResult> = kotlinx.collections.immutable.persistentListOf(),
+    val completedSources: PersistentSet<String> = kotlinx.collections.immutable.persistentSetOf(),
+    val errorSources: PersistentMap<String, String> = kotlinx.collections.immutable.persistentMapOf(),
     val isSearching: Boolean = false
 )
 
 @Immutable
 data class CoverSearchState(
-    val results: List<OnlineRecording> = emptyList(),
-    val completedSources: Set<String> = emptySet(),
-    val errorSources: Map<String, String> = emptyMap(),
+    val results: ImmutableList<OnlineRecording> = kotlinx.collections.immutable.persistentListOf(),
+    val completedSources: PersistentSet<String> = kotlinx.collections.immutable.persistentSetOf(),
+    val errorSources: PersistentMap<String, String> = kotlinx.collections.immutable.persistentMapOf(),
     val isSearching: Boolean = false
 )
 
@@ -96,6 +99,6 @@ data class CoverSearchState(
 @Immutable
 data class EditState(
     val hasUnsavedChanges: Boolean = false,
-    val modifiedFields: Set<MetadataField> = emptySet(),
+    val modifiedFields: PersistentSet<MetadataField> = kotlinx.collections.immutable.persistentSetOf(),
     val saveResult: SaveResult? = null
 )

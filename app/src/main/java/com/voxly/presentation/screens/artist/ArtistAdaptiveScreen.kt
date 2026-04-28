@@ -1,6 +1,10 @@
 package com.voxly.presentation.screens.artist
 
 import androidx.activity.compose.PredictiveBackHandler
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.core.SeekableTransitionState
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
@@ -35,14 +39,16 @@ import com.voxly.presentation.viewmodel.MetadataEditorViewModel
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3AdaptiveApi::class, ExperimentalMaterial3Api::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun ArtistAdaptiveScreen(
     onNavigateBack: () -> Unit,
     onNavigateToMetadata: ((String, String?) -> Unit)? = null,
     onNavigateToArtistDetail: ((ArtistGroup) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    viewModel: ArtistViewModel = hiltViewModel()
+    viewModel: ArtistViewModel = hiltViewModel(),
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
 
@@ -66,20 +72,27 @@ fun ArtistAdaptiveScreen(
         }
     }
 
+    val detailPaneState = remember { SeekableTransitionState(initialState = false) }
+
     PredictiveBackHandler(enabled = canCloseDetailPane || selectedAlbumNavKey != null) { progress ->
         try {
-            progress.collect { }
+            progress.collect { backEvent ->
+                detailPaneState.seekTo(fraction = backEvent.progress)
+            }
             when {
                 selectedAlbumNavKey != null -> {
+                    detailPaneState.animateTo(targetState = true)
                     selectedAlbumNavKey = null
                 }
                 canCloseDetailPane -> {
+                    detailPaneState.animateTo(targetState = true)
                     coroutineScope.launch {
                         navigator.navigateBack()
                     }
                 }
             }
         } catch (e: CancellationException) {
+            detailPaneState.snapTo(targetState = false)
         }
     }
 
@@ -107,7 +120,9 @@ fun ArtistAdaptiveScreen(
             ArtistScreenContent(
                 viewModel = viewModel,
                 onArtistClick = onArtistClick,
-                modifier = Modifier.fillMaxSize()
+                modifier = Modifier.fillMaxSize(),
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         },
         detailPane = {
@@ -150,22 +165,22 @@ fun ArtistAdaptiveScreen(
                             key = navKey.albumName + navKey.albumArtist,
                             creationCallback = { factory -> factory.create(navKey) }
                         )
-                        AlbumDetailScreen(
-                            albumName = navKey.albumName,
-                            albumArtist = navKey.albumArtist.takeIf { it.isNotEmpty() },
-                            onNavigateBack = {
-                                selectedAlbumNavKey = null
-                            },
-                            onNavigateToMetadata = { filePath, coverTag ->
-                                if (isSinglePane && onNavigateToMetadata != null) {
-                                    onNavigateToMetadata(filePath, coverTag)
-                                } else {
-                                    fileSwitchCounter++
-                                    selectedFileForEditing = filePath
-                                }
-                            },
-                            viewModel = detailViewModel
-                        )
+                            AlbumDetailScreen(
+                                albumName = navKey.albumName,
+                                albumArtist = navKey.albumArtist.takeIf { it.isNotEmpty() },
+                                onNavigateBack = {
+                                    selectedAlbumNavKey = null
+                                },
+                                onNavigateToMetadata = { filePath, coverTag ->
+                                    if (isSinglePane && onNavigateToMetadata != null) {
+                                        onNavigateToMetadata(filePath, coverTag)
+                                    } else {
+                                        fileSwitchCounter++
+                                        selectedFileForEditing = filePath
+                                    }
+                                },
+                                viewModel = detailViewModel
+                            )
                     }
                     currentDestination is ArtistDetail -> {
                         val detailViewModel = hiltViewModel<ArtistDetailViewModel, ArtistDetailViewModel.Factory>(

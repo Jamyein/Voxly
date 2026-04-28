@@ -16,7 +16,6 @@ import com.voxly.presentation.ui.coil.VoxlyImageLoader
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
@@ -45,7 +44,15 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
     override fun onCreate() {
         super.onCreate()
 
-        initLogging()
+        Thread.setDefaultUncaughtExceptionHandler(CrashHandler())
+        if (BuildConfig.DEBUG) {
+            Timber.plant(Timber.DebugTree())
+        }
+
+        applicationScope.launch(Dispatchers.IO) {
+            initLogging()
+        }
+
         warmUpCache()
         VoxlyImageLoader.getInstance(this)
     }
@@ -78,24 +85,30 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
         return VoxlyImageLoader.getInstance(context).imageLoader
     }
 
-    private fun initLogging() {
+    private suspend fun initLogging() {
         LogManager.init(this)
-        applyLoggingSettings()
+        loadLoggingSettings()
 
         fileLoggingTree = FileLoggingTree()
         Timber.plant(fileLoggingTree)
-
-        if (BuildConfig.DEBUG) {
-            Timber.plant(Timber.DebugTree())
-        }
 
         if (LogManager.isLoggingEnabled) {
             fileLoggingTree.cleanupExcessLogs()
         }
 
-        Thread.setDefaultUncaughtExceptionHandler(CrashHandler())
-
         Timber.i("Application started - Version ${BuildConfig.VERSION_NAME}")
+    }
+
+    private suspend fun loadLoggingSettings() {
+        try {
+            val settings = SettingsDataStore(this@MP3TagApplication)
+            LogManager.isLoggingEnabled = settings.loggingEnabled.first()
+            LogManager.isFileLoggingEnabled = settings.fileLoggingEnabled.first()
+            LogManager.isConsoleLoggingEnabled = settings.consoleLoggingEnabled.first()
+            LogManager.isCrashReportingEnabled = settings.crashReportingEnabled.first()
+        } catch (e: Exception) {
+            Timber.w(e, "Failed to load logging settings, using defaults")
+        }
     }
 
     private fun warmUpCache() {
@@ -104,20 +117,6 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
                 musicLibraryCache.warmUp()
             } catch (e: Exception) {
                 Timber.w(e, "Failed to warm up music library cache")
-            }
-        }
-    }
-
-    private fun applyLoggingSettings() {
-        applicationScope.launch(Dispatchers.IO) {
-            try {
-                val settings = SettingsDataStore(this@MP3TagApplication)
-                LogManager.isLoggingEnabled = settings.loggingEnabled.first()
-                LogManager.isFileLoggingEnabled = settings.fileLoggingEnabled.first()
-                LogManager.isConsoleLoggingEnabled = settings.consoleLoggingEnabled.first()
-                LogManager.isCrashReportingEnabled = settings.crashReportingEnabled.first()
-            } catch (e: Exception) {
-                Timber.w(e, "Failed to load logging settings, using defaults")
             }
         }
     }

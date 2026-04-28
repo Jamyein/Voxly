@@ -56,6 +56,7 @@ class DirectoryScanStrategy @Inject constructor(
     private suspend fun scanDirectoriesFull(
         directoryPaths: List<String>
     ): List<AudioFile> = withContext(Dispatchers.IO) {
+        Timber.tag("Voxly").i("DirectoryScanStrategy scanDirectoriesFull: dirs=${directoryPaths.size}")
         directoryPaths.flatMap { dir ->
             scanDirectoryInternal(dir)
         }.distinctBy { it.path }
@@ -65,6 +66,7 @@ class DirectoryScanStrategy @Inject constructor(
     private suspend fun scanDirectoriesIncremental(
         directoryPaths: List<String>
     ): List<AudioFile> = withContext(Dispatchers.IO) {
+        Timber.tag("Voxly").i("DirectoryScanStrategy scanDirectoriesIncremental: dirs=${directoryPaths.size}")
         val currentFiles = mutableListOf<Pair<String, Long>>()
         directoryPaths.forEach { dir ->
             val dirFile = File(dir)

@@ -1,5 +1,8 @@
 package com.voxly.presentation.screens.filebrowser
 
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -20,9 +23,11 @@ import com.voxly.presentation.components.LazyListCoverPreloader
 import com.voxly.presentation.components.AudioFileStandardRowCompact
 import com.voxly.presentation.components.AudioFileAction
 import com.voxly.presentation.components.AudioFileStandardRowWithMenu
-import com.voxly.core.util.getFirstLetter
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.core.util.getFirstLetter
 
+
+@OptIn(ExperimentalSharedTransitionApi::class)
 @Composable
 internal fun AudioFileItem(
     audioFile: AudioFile,
@@ -36,20 +41,21 @@ internal fun AudioFileItem(
     onFetchOnlineMetadata: () -> Unit,
     onFixMetadata: () -> Unit,
     compactMode: Boolean = false,
+    sharedElementKey: String? = null,
     modifier: Modifier = Modifier,
-    sharedElementKey: String? = null
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val computedSharedElementKey = remember(audioFile.path) {
-        sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
-    }
     if (compactMode) {
         AudioFileStandardRowCompact(
             audioFile = audioFile,
             isSelected = isSelected,
             onClick = onClick,
             onLongClick = onLongClick,
+            sharedElementKey = sharedElementKey,
             modifier = modifier,
-            sharedElementKey = computedSharedElementKey
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
     } else if (showActions) {
         AudioFileStandardRowWithMenu(
@@ -57,6 +63,7 @@ internal fun AudioFileItem(
             isSelected = isSelected,
             onClick = onClick,
             onLongClick = onLongClick,
+            sharedElementKey = sharedElementKey,
             onAction = { action ->
                 when (action) {
                     is AudioFileAction.EditMetadata -> onEditMetadata()
@@ -66,7 +73,9 @@ internal fun AudioFileItem(
                     is AudioFileAction.FixMetadata -> onFixMetadata()
                 }
             },
-            modifier = modifier
+            modifier = modifier,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
     } else {
         AudioFileStandardRow(
@@ -74,8 +83,10 @@ internal fun AudioFileItem(
             isSelected = isSelected,
             onClick = onClick,
             onLongClick = onLongClick,
-            sharedElementKey = computedSharedElementKey,
-            modifier = modifier
+            sharedElementKey = sharedElementKey,
+            modifier = modifier,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
     }
 }
@@ -101,7 +112,9 @@ internal fun AudioFileList(
     onDeleteFile: (AudioFile) -> Unit,
     onFetchOnlineMetadata: (AudioFile) -> Unit,
     onFixMetadata: (AudioFile) -> Unit,
-    bottomPadding: Dp = 0.dp
+    bottomPadding: Dp = 0.dp,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val isSelectionMode = selectedFiles.isNotEmpty()
 
@@ -132,7 +145,10 @@ internal fun AudioFileList(
                 onRename = { onRenameFile(audioFile) },
                 onDelete = { onDeleteFile(audioFile) },
                 onFetchOnlineMetadata = { onFetchOnlineMetadata(audioFile) },
-                onFixMetadata = { onFixMetadata(audioFile) }
+                onFixMetadata = { onFixMetadata(audioFile) },
+                sharedElementKey = createAlbumArtSharedElementKey(audioFile.path),
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         }
     }
@@ -152,7 +168,9 @@ internal fun AudioFileListWithIndexer(
     onDeleteFile: (AudioFile) -> Unit,
     onFetchOnlineMetadata: (AudioFile) -> Unit,
     onFixMetadata: (AudioFile) -> Unit,
-    bottomPadding: Dp = 0.dp
+    bottomPadding: Dp = 0.dp,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         AudioFileList(
@@ -167,7 +185,9 @@ internal fun AudioFileListWithIndexer(
             onDeleteFile = onDeleteFile,
             onFetchOnlineMetadata = onFetchOnlineMetadata,
             onFixMetadata = onFixMetadata,
-            bottomPadding = bottomPadding
+            bottomPadding = bottomPadding,
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
         )
 
         LazyListCoverPreloader(

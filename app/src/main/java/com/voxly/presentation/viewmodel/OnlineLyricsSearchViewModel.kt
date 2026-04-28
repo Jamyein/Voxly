@@ -22,6 +22,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.collections.immutable.toImmutableList
+import kotlinx.collections.immutable.toPersistentMap
+import kotlinx.collections.immutable.toPersistentSet
 import timber.log.Timber
 import java.io.File
 
@@ -142,7 +145,7 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
                     when (result) {
                         is LyricsSourceResult.Result -> {
                             val newResults = _searchState.value.results + result.lyrics
-                            _searchState.update { it.copy(results = newResults) }
+                            _searchState.update { it.copy(results = newResults.toImmutableList()) }
                             _lyricsResults.update { newResults }
                             // Prefetch lyrics content in background (fire-and-forget)
                             prefetchLyricsContent(result.lyrics)
@@ -150,14 +153,14 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
 
                         is LyricsSourceResult.SourceCompleted -> {
                             _searchState.update { state ->
-                                state.copy(completedSources = state.completedSources + result.source)
+                                state.copy(completedSources = (state.completedSources + result.source).toPersistentSet())
                             }
                         }
 
                         is LyricsSourceResult.Error -> {
                             _searchState.update { state ->
                                 state.copy(
-                                    errorSources = state.errorSources + (result.source to result.message)
+                                    errorSources = (state.errorSources + (result.source to result.message)).toPersistentMap()
                                 )
                             }
                             _errorMessage.emit(result.message)
@@ -168,7 +171,7 @@ class OnlineLyricsSearchViewModel @AssistedInject constructor(
                 val message = e.message ?: "Lyrics search failed"
                 _errorMessage.emit(message)
                 _searchState.update { state ->
-                    state.copy(errorSources = state.errorSources + ("System" to message))
+                    state.copy(errorSources = (state.errorSources + ("System" to message)).toPersistentMap())
                 }
             } finally {
                 _searchState.update { it.copy(isSearching = false) }

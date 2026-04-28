@@ -6,6 +6,10 @@ import android.widget.Toast
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedVisibilityScope
+import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
+import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -87,7 +91,9 @@ fun FileBrowserAdaptiveScreen(
     modifier: Modifier = Modifier,
     viewModel: LibraryViewModel = hiltViewModel(),
     scanViewModel: LibraryScanViewModel = hiltViewModel(),
-    settingsViewModel: LibrarySettingsViewModel = hiltViewModel()
+    settingsViewModel: LibrarySettingsViewModel = hiltViewModel(),
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -127,6 +133,7 @@ fun FileBrowserAdaptiveScreen(
     val selectedDirectories = scanUiState.selectedDirectories
     val directoryFiles = scanUiState.directoryFiles
     val isRefreshing = scanUiState.isRefreshing
+    val isInitialLoad = scanUiState.isInitialLoad
     val hasWhitelistDirectories = scanUiState.hasWhitelistDirectories
     val selectedFiles by viewModel.selectedFiles.collectAsStateWithLifecycle()
     val rootTabString by settingsViewModel.fileBrowserRootTab.collectAsStateWithLifecycle(initialValue = RootTab.DIRECTORIES.name)
@@ -154,19 +161,27 @@ fun FileBrowserAdaptiveScreen(
     val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
     val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
 
+    val detailPaneState = remember { SeekableTransitionState(initialState = false) }
+
     PredictiveBackHandler(enabled = isSelectionMode || canCloseDetailPane) { progress ->
         try {
-            progress.collect { }
+            progress.collect { backEvent ->
+                detailPaneState.seekTo(fraction = backEvent.progress)
+            }
             when {
-                isSelectionMode -> viewModel.clearSelection()
+                isSelectionMode -> {
+                    detailPaneState.animateTo(targetState = true)
+                    viewModel.clearSelection()
+                }
                 canCloseDetailPane -> {
+                    detailPaneState.animateTo(targetState = true)
                     coroutineScope.launch {
                         navigator.navigateBack()
                     }
                 }
             }
         } catch (e: CancellationException) {
-            // Gesture cancelled - no action
+            detailPaneState.snapTo(targetState = false)
         }
     }
 
@@ -182,6 +197,7 @@ fun FileBrowserAdaptiveScreen(
                     selectedDirectories = selectedDirectories,
                     directoryFiles = directoryFiles,
                     isRefreshing = isRefreshing,
+                    isInitialLoad = isInitialLoad,
                     hasAudioPermission = hasAudioPermission,
                     onRequestAudioPermission = { requestAudioPermission.launch(audioPermission) },
                     onRefresh = { scanViewModel.refresh() },
@@ -221,7 +237,9 @@ fun FileBrowserAdaptiveScreen(
                     onShowSearchSheet = { showSearchSheet = true },
                     canScrollToTop = canScrollToTop,
                     scrollBehavior = scrollBehavior,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         },
@@ -241,7 +259,9 @@ fun FileBrowserAdaptiveScreen(
                     onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
                     onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
                     onNavigateToLyricsSelector = onNavigateToLyricsSelector,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
                 )
             }
         },
@@ -277,6 +297,7 @@ private fun FileBrowserListPane(
     selectedDirectories: List<com.voxly.presentation.viewmodel.SelectedDirectory>,
     directoryFiles: Map<String, List<AudioFile>>,
     isRefreshing: Boolean,
+    isInitialLoad: Boolean,
     hasAudioPermission: Boolean,
     onRequestAudioPermission: () -> Unit,
     onRefresh: () -> Unit,
@@ -293,7 +314,9 @@ private fun FileBrowserListPane(
     onShowSearchSheet: () -> Unit,
     canScrollToTop: Boolean,
     scrollBehavior: androidx.compose.material3.TopAppBarScrollBehavior,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     var isSortExpanded by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
@@ -372,6 +395,7 @@ private fun FileBrowserListPane(
                         directoryFiles = directoryFiles,
                         onOpenDirectory = onNavigateToDirectory,
                         isRefreshing = isRefreshing,
+                        isInitialLoad = isInitialLoad,
                         onRefresh = {
                             if (hasAudioPermission) {
                                 onRefresh()
@@ -389,6 +413,7 @@ private fun FileBrowserListPane(
                         onFileClick = onFileClick,
                         onFileLongClick = onFileLongClick,
                         isRefreshing = isRefreshing,
+                        isInitialLoad = isInitialLoad,
                         onRefresh = {
                             if (hasAudioPermission) {
                                 onRefresh()
@@ -396,7 +421,9 @@ private fun FileBrowserListPane(
                                 onRequestAudioPermission()
                             }
                         },
-                        listState = listState
+                        listState = listState,
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
                 }
 
@@ -445,7 +472,9 @@ private fun FileBrowserDetailPane(
     onNavigateToOnlineLyricsSearch: () -> Unit,
     onNavigateToOnlineCoverSearch: () -> Unit,
     onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     if (currentFile != null) {
         key(currentFile.path, fileSwitchCounter) {
@@ -469,10 +498,13 @@ private fun FileBrowserDetailPane(
                 onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
                 onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
                 onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
-                onNavigateToLyricsSelector = onNavigateToLyricsSelector
+                onNavigateToLyricsSelector = onNavigateToLyricsSelector,
+                sharedTransitionScope = sharedTransitionScope,
+                animatedVisibilityScope = animatedVisibilityScope
             )
         }
     } else {
         EmptyDetailPane()
     }
 }
+

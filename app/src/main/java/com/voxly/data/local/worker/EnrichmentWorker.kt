@@ -48,12 +48,14 @@ class EnrichmentWorker @AssistedInject constructor(
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        Timber.tag("Voxly").i("EnrichmentWorker doWork started")
         try {
             var processed = 0
             var hasMore = true
 
             while (hasMore) {
                 val jobs = musicLibraryCache.getPendingEnrichmentJobs(BATCH_SIZE)
+                Timber.tag("Voxly").i("EnrichmentWorker batch: jobs=${jobs.size} processed=$processed")
                 if (jobs.isEmpty()) {
                     hasMore = false
                     break
@@ -79,7 +81,7 @@ class EnrichmentWorker @AssistedInject constructor(
                 processed += jobs.size
             }
 
-            Timber.d(TAG, "EnrichmentWorker completed. Processed $processed jobs.")
+            Timber.tag("Voxly").i("EnrichmentWorker completed. Processed $processed jobs.")
             Result.success()
         } catch (e: Exception) {
             Timber.w(TAG, "EnrichmentWorker failed", e)

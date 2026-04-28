@@ -1,7 +1,10 @@
 package com.voxly.presentation.components
 
+import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
+import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.navigation3.ui.LocalNavAnimatedContentScope
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -828,7 +831,9 @@ fun AudioFileStandardRow(
     onLongClick: () -> Unit = {},
     onAction: ((com.voxly.presentation.components.AudioFileAction) -> Unit)? = null,
     modifier: Modifier = Modifier,
-    sharedElementKey: String? = null
+    sharedElementKey: String? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val rowModifier = modifier
         .fillMaxWidth()
@@ -854,10 +859,23 @@ fun AudioFileStandardRow(
     leadingContent = {
         val albumArtKey = sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
         val cookieShape = MaterialShapes.Cookie9Sided.toShape()
-        Box(
-            modifier = Modifier
+        val outerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+            with(sharedTransitionScope) {
+                Modifier
+                    .size(AlbumArtSizeLarge)
+                    .sharedElement(
+                        rememberSharedContentState(key = albumArtKey),
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
+                    .clip(cookieShape)
+            }
+        } else {
+            Modifier
                 .size(AlbumArtSizeLarge)
-                .clip(cookieShape),
+                .clip(cookieShape)
+        }
+        Box(
+            modifier = outerModifier,
             contentAlignment = Alignment.Center
         ) {
             AlbumArtImage(
@@ -994,7 +1012,7 @@ private fun AudioFileActionsMenu(
  * Uses M3E Standard ListItem with three-dot menu.
  * Uses sealed class [AudioFileAction] for type-safe action handling.
  */
-@OptIn(ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
 fun AudioFileStandardRowWithMenu(
     audioFile: AudioFile,
@@ -1002,55 +1020,76 @@ fun AudioFileStandardRowWithMenu(
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     onAction: (AudioFileAction) -> Unit,
-    modifier: Modifier = Modifier
-) = ListItem(
-    modifier = modifier
-        .fillMaxWidth()
-        .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-    colors = ListItemDefaults.colors(
-        containerColor = MaterialTheme.colorScheme.surface
-    ),
-    headlineContent = {
-        Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
-    },
-    supportingContent = {
-        Column {
-            Text(
-                audioFile.getDisplayArtistAlbum(),
-                style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
-            )
-            Text("${audioFile.format} • ${audioFile.getFormattedDuration()} • ${audioFile.getFormattedSize()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
-        }
-    },
-    leadingContent = {
-        val albumArtKey = createAlbumArtSharedElementKey(audioFile.path)
-        val cookieShape = MaterialShapes.Cookie9Sided.toShape()
-        Box(
-            modifier = Modifier
-                .size(AlbumArtSizeLarge)
-                .clip(cookieShape),
-            contentAlignment = Alignment.Center
-        ) {
-            AlbumArtImage(
-                filePath = audioFile.path,
-                albumId = audioFile.mediaStoreAlbumId,
-                contentDescription = null,
-                size = AlbumArtSizeLarge,
-                modifier = Modifier.fillMaxSize()
-            ) {
-                Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
+    modifier: Modifier = Modifier,
+    sharedElementKey: String? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
+) {
+    ListItem(
+        modifier = modifier
+            .fillMaxWidth()
+            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        colors = ListItemDefaults.colors(
+            containerColor = MaterialTheme.colorScheme.surface
+        ),
+        headlineContent = {
+            Text(audioFile.metadata.getDisplayTitle(audioFile.name), style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        },
+        supportingContent = {
+            Column {
+                Text(
+                    audioFile.getDisplayArtistAlbum(),
+                    style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1, overflow = TextOverflow.Ellipsis
+                )
+                Text("${audioFile.format} • ${audioFile.getFormattedDuration()} • ${audioFile.getFormattedSize()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.outline)
             }
-        }
-    },
+        },
+        leadingContent = {
+            val albumArtKey = sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
+            val cookieShape = MaterialShapes.Cookie9Sided.toShape()
+            val outerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .size(AlbumArtSizeLarge)
+                        .sharedElement(
+                            rememberSharedContentState(key = albumArtKey),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                        .clip(cookieShape)
+                }
+            } else {
+                Modifier
+                    .size(AlbumArtSizeLarge)
+                    .clip(cookieShape)
+            }
+            Box(
+                modifier = outerModifier,
+                contentAlignment = Alignment.Center
+            ) {
+                AlbumArtImage(
+                    filePath = audioFile.path,
+                    albumId = audioFile.mediaStoreAlbumId,
+                    contentDescription = null,
+                    size = AlbumArtSizeLarge,
+                    modifier = Modifier.fillMaxSize(),
+                    clipShape = cookieShape
+                ) {
+                    Icon(appIconPainter(AppIcon.MusicNote), null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(IconSizeLarge))
+                }
+            }
+        },
     trailingContent = {
         if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(IconPadding))
-        else AudioFileActionsMenu(onAction)
+        else if (onAction != null) AudioFileActionsMenu(onAction)
     }
 )
 
+}
+
 /**
- * Standard audio file list item (compact mode).
- * Uses Surface with smaller layout.
+ * Standard audio file list item with actions menu (full mode).
+ * Uses M3E Standard ListItem with three-dot menu.
+ * Uses sealed class [AudioFileAction] for type-safe action handling.
  */
 @OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
 @Composable
@@ -1060,9 +1099,12 @@ fun AudioFileStandardRowCompact(
     onClick: () -> Unit,
     onLongClick: () -> Unit = {},
     modifier: Modifier = Modifier,
-    sharedElementKey: String? = null
-) = ListItem(
-    modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
+    sharedElementKey: String? = null,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
+) {
+    ListItem(
+        modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = onLongClick),
     colors = ListItemDefaults.colors(
         containerColor = if (isSelected) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surface
     ),
@@ -1090,25 +1132,38 @@ fun AudioFileStandardRowCompact(
     leadingContent = {
         val albumArtKey = sharedElementKey ?: createAlbumArtSharedElementKey(audioFile.path)
         val cookieShape = MaterialShapes.Cookie9Sided.toShape()
-        Box(
-            modifier = Modifier
-                .size(AlbumArtSizeLarge)
-                .clip(cookieShape),
-            contentAlignment = Alignment.Center
-        ) {
-            AlbumArtImage(
-                filePath = audioFile.path,
-                albumId = audioFile.mediaStoreAlbumId,
-                contentDescription = null,
-                size = AlbumArtSizeSmall,
-                modifier = Modifier
-                    .fillMaxSize()
-            ) {
-                Surface(modifier = Modifier.fillMaxSize(), shape = cookieShape, color = MaterialTheme.colorScheme.surfaceVariant) {
-                    Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(IconSizeSmall)) }
+            val outerModifier = if (sharedTransitionScope != null && animatedVisibilityScope != null) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .size(AlbumArtSizeLarge)
+                        .sharedElement(
+                            rememberSharedContentState(key = albumArtKey),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                        .clip(cookieShape)
                 }
+            } else {
+                Modifier
+                    .size(AlbumArtSizeLarge)
+                    .clip(cookieShape)
             }
-        }
+            Box(
+                modifier = outerModifier,
+                contentAlignment = Alignment.Center
+            ) {
+                    AlbumArtImage(
+                        filePath = audioFile.path,
+                        albumId = audioFile.mediaStoreAlbumId,
+                        contentDescription = null,
+                        size = AlbumArtSizeSmall,
+                        modifier = Modifier.fillMaxSize(),
+                        clipShape = cookieShape
+                    ) {
+                        Surface(modifier = Modifier.fillMaxSize(), shape = cookieShape, color = MaterialTheme.colorScheme.surfaceVariant) {
+                            Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.MusicNote, null, tint = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.size(IconSizeSmall)) }
+                        }
+                    }
+            }
     },
     trailingContent = {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -1117,3 +1172,4 @@ fun AudioFileStandardRowCompact(
         }
     }
 )
+}

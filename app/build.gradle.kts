@@ -36,6 +36,7 @@ android {
     defaultConfig {
         applicationId = "com.voxly"
         minSdk = 30
+        //noinspection OldTargetApi
         targetSdk = 36
         versionCode = 48
         versionName = "1.7.0"
@@ -100,7 +101,12 @@ android {
         compilerOptions {
             freeCompilerArgs.addAll(
                 "-Xannotation-default-target=param-property",
-                "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi"
+                "-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi",
+                // Compose compiler metrics (uncomment to generate stability reports)
+                // "-P",
+                // "plugin:androidx.compose.compiler.plugins.kotlin:metricsDestination=${layout.buildDirectory.asFile.get().resolve("compose-metrics").absolutePath}",
+                // "-P",
+                // "plugin:androidx.compose.compiler.plugins.kotlin:reportsDestination=${layout.buildDirectory.asFile.get().resolve("compose-metrics").absolutePath}"
             )
         }
     }
@@ -217,6 +223,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
 
+    // Immutable Collections for Compose stability
+    implementation("org.jetbrains.kotlinx:kotlinx-collections-immutable:0.4.0")
+
     // Audio Processing - Kyant0/taglib from Maven Central (supports Android SAF)
     // Replaces KTagLib which had JitPack reliability issues
     implementation("io.github.kyant0:taglib:1.0.6")
@@ -263,6 +272,9 @@ dependencies {
 
     // Palette for color extraction from album art
     implementation("androidx.palette:palette-ktx:1.0.0")
+
+    // Baseline Profile - AOT optimization for startup performance
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
 
     // Coil 3 - Image loading library
     implementation("io.coil-kt.coil3:coil:3.4.0")

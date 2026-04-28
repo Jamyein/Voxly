@@ -1,6 +1,7 @@
 # AGENTS.md
 
 ## Read first
+- plan模式下允许编写markdown文件和html文件
 - Load `lesson.md`
 - Prefer executable sources of truth (Gradle config, CI workflows) over prose when they conflict.
 - Update `lesson.md` automatically when encountering errors or issues. Format: `N. [Problem description]. Rule: [Correct approach that prevents this].` This becomes institutional knowledge for the repo.
