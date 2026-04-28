@@ -151,6 +151,15 @@ internal fun AlbumGridItem(
     val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
     val albumTitleKey = createAlbumTitleSharedElementKey(album.name, album.albumArtist)
     val albumArtistKey = album.albumArtist?.let { createAlbumArtistTextSharedElementKey(album.name, album.albumArtist) }
+    val infoRestText = remember(album, albumYear, trackCountText) {
+        buildString {
+            append(trackCountText)
+            if (albumYear != null) {
+                append(" · ")
+                append(albumYear)
+            }
+        }
+    }
     val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -232,7 +241,7 @@ internal fun AlbumGridItem(
             }
             Spacer(modifier = Modifier.height(4.dp))
             Text(
-                text = trackCountText,
+                text = infoRestText,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.outline,
                 maxLines = 1,
