@@ -2,7 +2,7 @@
 
 This is a **living knowledge base**, not a static config. Every entry has one purpose: prevent an agent from making a preventable mistake. Entries are added from hard-earned debugging sessions and removed when the codebase evolves past them.
 
-## 知识沉淀 (Knowledge Distillation)
+## Knowledge Distillation
 
 **How entries get in**: An agent hits an error, finds the real root cause (not the surface symptom), and writes a rule general enough to prevent future occurrences. Entries in `lesson.md` and AGENTS.md come from this same process.
 
@@ -18,11 +18,19 @@ When any error occurs (build break, crash, test failure, wrong behavior):
 4. **Do NOT skip** — even if the fix was trivial. The lesson is for the class of error, not the specific instance.
 5. **Existing entries are reference** — if the same root cause already has a lesson, you can skip (but verify it's truly the same).
 
-## Read first
-- **Prefer Gradle config / CI workflows** over README/docs when they conflict (the README incorrectly says `jaudiotagger` — the real dep is `io.github.kyant0:taglib`).
-- **Ask the user** when requirements, bugs, or plans are unclear — never assume intent.
-- **验证版本是关键**: AGP 9.2.0 / Kotlin 2.3.21 / Compose BOM 2026.04.01 / Material3 1.5.0-alpha18. 使用错误版本会导致不可编译。
-- **Lint 不影响构建**: `abortOnError=false`, `warningsAsErrors=false`. 无需修复 lint 警告，专注于编译错误即可。
+**Enforcement**: A `.githooks/pre-commit` hook warns when source files change without updating `lesson.md`. Run `git config core.hooksPath .githooks` on fresh clones to enable it. If `build_verify.bat` detects a compile failure, it also prints a reminder.
+
+## Read first (mandatory session checklist)
+**Before any code changes, do this in order:**
+1. **Read `lesson.md`** — must load it into context with the Read tool before any code changes. Skipping this will re-introduce known errors.
+2. **Review AGENTS.md versions table** — verify Compose BOM / Kotlin / AGP versions match `build.gradle.kts`
+3. **Lint is non-blocking**: `abortOnError=false`. Ignore lint warnings; focus on compile errors only.
+
+**During the session, on every error:**
+- Append root cause + rule to `lesson.md` immediately (before fixing). See protocol above.
+
+**At session end / before commit:**
+- Check: did any error occur that isn't in `lesson.md`? If so, add it now.
 
 ## Project map
 - **Single app module**: `app/` (root `foundation/`, `domain/` dirs are stale build artifacts — ignore)

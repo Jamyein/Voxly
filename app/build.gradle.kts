@@ -1,4 +1,5 @@
 import com.android.build.api.variant.ApplicationAndroidComponentsExtension
+import com.android.build.api.variant.FilterConfiguration
 import org.gradle.api.GradleException
 import java.util.Properties
 
@@ -126,7 +127,7 @@ android {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a")
+            include("armeabi-v7a", "arm64-v8a", "x86_64")
             isUniversalApk = false
         }
     }
@@ -164,6 +165,17 @@ extensions.configure<ApplicationAndroidComponentsExtension>("androidComponents")
                 "CI debug build with signing enabled but signing not configured. " +
                     "Building without signing."
             )
+        }
+    }
+    onVariants(selector().all()) { variant ->
+        val versionName = project.extensions.getByType(com.android.build.api.dsl.ApplicationExtension::class.java)
+            .defaultConfig
+            .versionName ?: ""
+        variant.outputs.forEach { output ->
+            val abi = output.filters.find { it.filterType == FilterConfiguration.FilterType.ABI }?.identifier
+            if (abi != null) {
+                output.outputFileName = "Voxly-${versionName}-${abi}.apk"
+            }
         }
     }
 }
