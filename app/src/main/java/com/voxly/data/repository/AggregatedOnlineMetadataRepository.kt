@@ -371,7 +371,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             return@supervisorScope Result.failure(Exception("No cover sources enabled"))
         }
 
-        Timber.i(TAG, "searchByTrackForCover: starting search for title='$title', artist='$artist'")
+        Timber.tag("Voxly").i("AggregatedMetadata: searchByTrackForCover: starting search for title='$title', artist='$artist'")
         val results = mutableListOf<OnlineRecording>()
 
         val musicBrainzDeferred: kotlinx.coroutines.Deferred<Result<List<OnlineRecording>>>? = if (settings.coverEnableMusicBrainz) {
@@ -430,7 +430,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
             limit = settings.searchLimit
         )
         
-        Timber.i(TAG, "searchByTrackForCover: final results count=${sorted.size}")
+        Timber.tag("Voxly").i("AggregatedMetadata: searchByTrackForCover: final results count=${sorted.size}")
         Result.success(sorted)
     }
 

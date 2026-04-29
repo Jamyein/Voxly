@@ -30,8 +30,10 @@ import androidx.compose.ui.unit.dp
  * @property trackAlphaDragging Alpha value for the scrollbar track when dragging
  * @property thumbElevation Elevation for thumb shadow
  * @property bubbleElevation Elevation for bubble shadow
+ * @property bubbleHorizontalOffset Horizontal offset of bubble from scrollbar
  * @property thumbStiffness Spring stiffness for thumb width animation (FastSpatial: 1400)
  * @property visualFeedbackStiffness Spring stiffness for visual feedback (FastEffects: 3800)
+ * @property thumbOffsetStiffness Spring stiffness for thumb position animation
  * @property velocityThreshold Minimum velocity to trigger inertia scroll on drag end
  */
 data class ScrollbarConfig(
@@ -44,12 +46,14 @@ data class ScrollbarConfig(
     val bubbleSize: Dp = 56.dp,
     val bubbleCornerRadius: Dp = 28.dp,
     val hideDelayMillis: Long = 2000L,
-    val trackAlpha: Float = 1f,
-    val trackAlphaDragging: Float = 1f,
+    val trackAlpha: Float = 0.3f,
+    val trackAlphaDragging: Float = 0.3f,
     val thumbElevation: Dp = 2.dp,
     val bubbleElevation: Dp = 6.dp,
+    val bubbleHorizontalOffset: Dp = 8.dp,
     val thumbStiffness: Float = 1400f,
     val visualFeedbackStiffness: Float = 3800f,
+    val thumbOffsetStiffness: Float = 2000f,
     val velocityThreshold: Float = 500f
 ) {
     companion object {

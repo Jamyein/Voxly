@@ -169,9 +169,13 @@ internal fun AlbumScreenContent(
         }
     }
 
-    // Get saved scroll position
     val savedScrollPosition = remember(currentSortOption) {
         viewModel.getScrollPosition("album_list_${currentSortOption.name}")
+    }
+
+    var previousSortOptionName by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(sortOption) {
+        previousSortOptionName = sortOption
     }
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
@@ -235,7 +239,8 @@ internal fun AlbumScreenContent(
                     sortOption = currentSortOption,
                     savedScrollPosition = savedScrollPosition,
                     onSaveScrollPosition = { index, offset ->
-                        viewModel.saveScrollPosition("album_list_${currentSortOption.name}", index, offset)
+                        val sortKey = previousSortOptionName ?: currentSortOption.name
+                        viewModel.saveScrollPosition("album_list_$sortKey", index, offset)
                     },
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
