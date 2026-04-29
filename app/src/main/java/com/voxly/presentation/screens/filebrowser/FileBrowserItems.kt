@@ -118,7 +118,7 @@ internal fun AlbumListItem(
                     overflow = TextOverflow.Ellipsis
                 )
                 Text(
-                    text = album.albumArtist ?: "",
+                    text = album.albumArtist ?: stringResource(R.string.unknown_album_artist),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -221,24 +221,22 @@ internal fun AlbumGridItem(
                     }
                 } else Modifier
             )
-            if (album.albumArtist != null) {
-                Text(
-                    text = album.albumArtist,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = if (canUseSharedTransition && albumArtistKey != null) {
-                        with(sharedTransitionScope) {
-                            Modifier.sharedElement(
-                                rememberSharedContentState(key = albumArtistKey),
-                                animatedVisibilityScope = animatedVisibilityScope,
-                                boundsTransform = { _, _ -> spring() }
-                            )
-                        }
-                    } else Modifier
-                )
-            }
+            Text(
+                text = album.albumArtist ?: stringResource(R.string.unknown_album_artist),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = if (canUseSharedTransition && albumArtistKey != null) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            rememberSharedContentState(key = albumArtistKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> spring() }
+                        )
+                    }
+                } else Modifier
+            )
             Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = infoRestText,

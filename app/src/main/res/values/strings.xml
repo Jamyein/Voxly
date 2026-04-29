@@ -208,7 +208,7 @@
     <string name="selected">Selected</string>
     <string name="unknown_artist"></string>
     <string name="unknown_album"></string>
-    <string name="unknown_album_artist"></string>
+    <string name="unknown_album_artist">Unknown Album Artist</string>
     <string name="album_cover">Album Cover</string>
     <string name="artist_cover">Artist</string>
     <string name="no_tracks_for_artist">No tracks found for this artist</string>
