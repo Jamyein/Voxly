@@ -76,7 +76,7 @@ When any error occurs (build break, crash, test failure, wrong behavior):
 - CI signing: env vars `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD`, `SIGNING_KEY_ALIAS` (default: voxly)
 - CI keystore: `SIGNING_KEYSTORE_BASE64` secret → decoded to `app/voxly-release.keystore`
 - CI workflows: CommitBuild (JDK 21, push to main/dev + PRs to main), NightlyBuild (manual), ReleaseBuild (manual, JDK 25)
-- **ABI split**: only `arm64-v8a`, no universal APK. CI finds APK by `*arm64*.apk` pattern.
+- **ABI split**: `build.gradle.kts` includes `armeabi-v7a`, `arm64-v8a`, `x86_64` (no universal APK). CI defaults to `arm64-v8a` only via `-Pandroid.injected.build.abi=arm64-v8a`. CI finds APK by `*arm64*.apk` pattern.
 
 ## Native ReplayGain (NDK)
 - NDK/CMake is enabled: `libebur128` (pure C, ~50KB .so)
