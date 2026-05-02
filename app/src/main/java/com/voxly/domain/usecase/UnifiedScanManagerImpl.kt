@@ -62,6 +62,8 @@ class UnifiedScanManagerImpl @Inject constructor(
         target: ScanTarget,
         force: Boolean
     ): ScanResult {
+        Timber.tag("Voxly").i("UnifiedScanManager scan: target=$target force=$force")
+
         // Cancel any existing scan
         cancel()
 

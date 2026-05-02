@@ -1,50 +1,113 @@
 # AGENTS.md
 
-## Read first
-- plan模式下允许编写markdown文件和html文件
-- Load `lesson.md`
-- Prefer executable sources of truth (Gradle config, CI workflows) over prose when they conflict.
-- Update `lesson.md` automatically when encountering errors or issues. Format: `N. [Problem description]. Rule: [Correct approach that prevents this].` This becomes institutional knowledge for the repo.
-- 当用户提出需求、问题、bug时要询问用户以详细弄清楚
+This is a **living knowledge base**, not a static config. Every entry has one purpose: prevent an agent from making a preventable mistake. Entries are added from hard-earned debugging sessions and removed when the codebase evolves past them.
 
-## Project map (high signal)
-- Single Android app module: `app/`.
-- Main code: `app/src/main/java/com/voxly/`.
-- Layer dirs: `core/`, `data/` (local/remote), `domain/`, `presentation/`, `di/`.
-- Navigation uses Navigation3 (`androidx.navigation3`).
+## Knowledge Distillation
 
-## Commands (verified)
-- Build: `./gradlew build`
-- Debug APK: `./gradlew compileGithubDebugKotlin`
+**How entries get in**: An agent hits an error, finds the real root cause (not the surface symptom), and writes a rule general enough to prevent future occurrences. Entries in `lesson.md` and AGENTS.md come from this same process.
 
-## Signing and CI
-- Release/dist builds require signing; build fails if unsigned.
-- Local signing: set `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD`, optional `RELEASE_KEY_ALIAS` in `local.properties`.
-- CI signing: `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD`, optional `SIGNING_KEY_ALIAS`.
-- CI builds use `./gradlew assembleGithubRelease` and expect `app/voxly-release.keystore`.
+**How entries leave**: When a dependency version changes, code is refactored, or a framework fix makes a workaround obsolete — the stale entry must be removed or updated. Outdated instructions are worse than none.
 
-## Native ReplayGain
-- NDK/CMake build is enabled (`ndkVersion=26.1.10909125`, CMake 3.22.1). Keep this in mind when touching `app/src/main/cpp`.
+**What stays out**: Generic software advice ("write clean code"), obvious language conventions, long tutorials. If an agent wouldn't likely miss it, don't write it.
 
-## M3 Expressive UI rules (must follow)
-- No hardcoded colors/shapes/typography; use `MaterialTheme` tokens.
-- Use `spring()` animations and 4dp spacing grid.
-- `ExpressiveScaffold` must disable default insets: `WindowInsets(0, 0, 0, 0)`.
-- `ExpressiveTopAppBar` uses status bar insets only (top + horizontal).
+### lesson.md update protocol (mandatory)
+When any error occurs (build break, crash, test failure, wrong behavior):
+1. **Diagnose root cause** — dig past the surface symptom. Ask: "What coding pattern or knowledge gap caused this?"
+2. **Extract a general rule** — express the fix as a reusable principle, not a one-off patch. The rule should prevent ANY future occurrence of the same class of error.
+3. **Append to lesson.md** using format: `N. [Root cause / what went wrong]. Rule: [Preventive principle].`
+4. **Do NOT skip** — even if the fix was trivial. The lesson is for the class of error, not the specific instance.
+5. **Existing entries are reference** — if the same root cause already has a lesson, you can skip (but verify it's truly the same).
 
-## Anti-patterns
-- Do not produce unsigned release/dist APKs.
-- Do not use MediaStore for sampleRate/channels; read directly from file.
-- Do not toggle UI state rapidly; debounce input.
+**Enforcement**: A `.githooks/pre-commit` hook warns when source files change without updating `lesson.md`. Run `git config core.hooksPath .githooks` on fresh clones to enable it. If `build_verify.bat` detects a compile failure, it also prints a reminder.
 
-## Workflow constraints (repo-specific)
+## Read first (mandatory session checklist)
+**Before any code changes, do this in order:**
+1. **Read `lesson.md`** — must load it into context with the Read tool before any code changes. Skipping this will re-introduce known errors.
+2. **Review AGENTS.md versions table** — verify Compose BOM / Kotlin / AGP versions match `build.gradle.kts`
+3. **Lint is non-blocking**: `abortOnError=false`. Ignore lint warnings; focus on compile errors only.
+
+**During the session, on every error:**
+- Append root cause + rule to `lesson.md` immediately (before fixing). See protocol above.
+
+**At session end / before commit:**
+- Check: did any error occur that isn't in `lesson.md`? If so, add it now.
+
+## Project map
+- **Single app module**: `app/` (root `foundation/`, `domain/` dirs are stale build artifacts — ignore)
+- **Package**: `com.voxly`, entrypoint `MP3TagApplication.kt`
+- **Source tree**: `app/src/main/java/com/voxly/`
+  - `core/util/` — utilities (CrashHandler, LogManager, etc.)
+  - `data/` — `local/` (Room, DataStore, SAF), `remote/` (Retrofit APIs), `lyrics/`, `repository/`
+  - `domain/` — `model/`, `repository/`, `usecase/`, `util/`
+  - `presentation/` — `navigation/`, `screens/`, `theme/`, `ui/`, `components/`, `viewmodel/`
+  - `di/` — Hilt modules
+
+## Key versions (verified from build.gradle.kts)
+| Component | Version |
+|-----------|---------|
+| AGP | 9.2.0 |
+| Kotlin | 2.3.21 |
+| Compose BOM | 2026.04.01 |
+| Material3 | 1.5.0-alpha18 (overrides BOM) |
+| Compose Animation | 1.11.0 (overrides BOM) |
+| Navigation3 | 1.1.1 |
+| Hilt | 2.59.2 |
+| Room | 2.8.4 (KSP, not kapt) |
+| Coil | 3.4.0 |
+| Retrofit | 3.0.0 |
+| taglib (Kyant0) | 1.0.6 |
+| NDK | 29.0.14206865 |
+| CMake | 4.1.2 |
+| minSdk / targetSdk / compileSdk | 30 / 36 / 37 |
+| Java | 21 (toolchain + compileOptions) |
+
+## Commands
+- Full build: `./gradlew build`
+- Fast Kotlin compile check: `./gradlew compileGithubDebugKotlin` (or `build_verify.bat` on Windows)
+- Debug build: `./gradlew assembleGithubDebug`
+- Release build: `./gradlew assembleGithubRelease` (requires signing)
+- Shrink/mapping diagnostics: `./gradlew :app:minifyGithubReleaseWithR8`
+- Unit tests: `./gradlew testGithubDebugUnitTest`
+- **lint is non-blocking** (`abortOnError=false`, `warningsAsErrors=false`)
+
+## Signing & CI
+- Release/dist builds fail at configuration time if unsigned (GradleException in build.gradle.kts:152-161)
+- Local signing: set `RELEASE_STORE_PASSWORD`, `RELEASE_KEY_PASSWORD`, optional `RELEASE_KEY_ALIAS` in `local.properties`
+- CI signing: env vars `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD`, `SIGNING_KEY_ALIAS` (default: voxly)
+- CI keystore: `SIGNING_KEYSTORE_BASE64` secret → decoded to `app/voxly-release.keystore`
+- CI workflows: CommitBuild (JDK 21, push to main/dev + PRs to main), NightlyBuild (manual), ReleaseBuild (manual, JDK 25)
+- **ABI split**: `build.gradle.kts` includes `armeabi-v7a`, `arm64-v8a`, `x86_64` (no universal APK). CI defaults to `arm64-v8a` only via `-Pandroid.injected.build.abi=arm64-v8a`. CI finds APK by `*arm64*.apk` pattern.
+
+## Native ReplayGain (NDK)
+- NDK/CMake is enabled: `libebur128` (pure C, ~50KB .so)
+- **Dual-engine**: Native (default) + Kotlin fallback. `UnsatisfiedLinkError` is `Error` not `Exception` — wrap with `Throwable` handling.
+- `@CriticalNative` for primitive-only JNI methods (minSdk=30 OK).
+- CMake flags: `-fno-exceptions`, `-fno-rtti`, linker version script, 16KB page size.
+- `ENABLE_LINKER_WARNINGS_AS_ERROR` CMake option enabled via `gradle.properties`.
+
+## Testing
+- Unit tests in `app/src/test/`: JUnit 4, MockK, Turbine (`app.cash.turbine`), `kotlinx-coroutines-test`
+- Instrumentation tests in `app/src/androidTest/`: Compose UI test + Espresso
+- **Not** in root `tests/` dir
+
+## Framework pitfalls
+- **Navigation3**: Routes are `@Serializable` data classes/objects implementing `NavKey`. `NavDisplay` + `TopLevelBackStack`. Shared element transitions use `SharedTransitionLayout`.
+- **Hilt + WorkManager**: Default `WorkManagerInitializer` is disabled in manifest; `HiltWorkerFactory` is used.
+- **Opt-in required**: `@OptIn(ExperimentalMaterial3ExpressiveApi::class)` on all MD3 Expressive composables. Compiler arg: `-opt-in=androidx.compose.material3.ExperimentalMaterial3ExpressiveApi`.
+- **Coil3**: `SingletonImageLoader.Factory` on Application. All `ImageRequest.Builder` must call `.size(px)` — never rely on View layout for size inference.
+- **Single flavor** "github" (default). No other build flavors.
+- **No version catalog** — deps declared inline in app/build.gradle.kts.
+- **KSP** replaces kapt for all annotation processing (Hilt, Room).
+- **`OverlayClip`** is an interface in `SharedTransitionScope`, not constructible from user code. Apply `.clip(shape)` directly on render targets.
+- **`ExpressiveScaffold`** must disable default insets: `WindowInsets(0, 0, 0, 0)`.
+- **`ExpressiveTopAppBar`** uses status bar insets only (top + horizontal).
+- Theme uses `MotionScheme.expressive()`, dynamic colors (Android 12+), MD3 Expressive color schemes.
+
+## Workflow rules
 - Keep project lightweight and the root directory tidy.
-- Ensure the app's real-world performance is optimal.
-- Ensure the app's resource usage is optimal.
-- Prioritize the best possible user experience.
-- New dependencies require user approval and note performance impact.
+- New dependencies require user approval with performance impact noted.
 - For refactors/new features, start with single-file changes; only add new files/dirs if necessary.
-- Place test-only files under `tests/`.
 - For tasks with more than 3 steps, ask clarifying questions during planning phase.
 - Large tasks: split into subtasks and run subagents in parallel.
 - Use skills, MCP tools, and official docs for library/tool questions.
+- Baseline Profile exists at `app/src/main/baseline-prof/baseline-prof.txt` — keep it updated when adding hot paths.

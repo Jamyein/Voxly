@@ -71,6 +71,7 @@ class ArtistViewModel @Inject constructor(
     private var refreshJob: Job? = null
 
     fun refresh(forceRefresh: Boolean = false) {
+        Timber.tag("Voxly").i("ArtistViewModel loadArtists")
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
             try {

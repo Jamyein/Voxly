@@ -42,6 +42,8 @@ class BatchEngine<T>(
         val minEmitIntervalMs = 200L
         val startTime = System.currentTimeMillis()
 
+        Timber.tag("Voxly").i("BatchEngine execute: itemCount=$totalFiles")
+
         Timber.i("Batch started: $totalFiles items, maxConcurrency=$maxConcurrency")
 
         try {
@@ -132,6 +134,7 @@ class BatchEngine<T>(
                 )
             )
             val elapsed = System.currentTimeMillis() - startTime
+            Timber.tag("Voxly").i("BatchEngine completed: processed=$totalFiles success=$successCount failed=$failureCount")
             Timber.i("Batch finished: $successCount success, $failureCount failed, ${failedItems.size} errors, elapsed=${elapsed}ms")
             mutex.withLock {
                 lastFailedItems = failedItems.toList()

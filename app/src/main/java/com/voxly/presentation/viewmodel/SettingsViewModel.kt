@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import timber.log.Timber
 
 /** Timeout for StateFlow sharing in milliseconds */
 private const val STATE_FLOW_TIMEOUT_MS = 5000L
@@ -319,6 +320,7 @@ class SettingsViewModel @Inject constructor(
      */
     fun updateSourceConfig(type: DataSourceType, source: DataSourceConfig) {
         viewModelScope.launch {
+            Timber.tag("Voxly").i("SettingsViewModel: settings saved")
             settingsDataStore.updateSourceConfig(type, source)
         }
     }

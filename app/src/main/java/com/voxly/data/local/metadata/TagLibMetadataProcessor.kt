@@ -449,7 +449,7 @@ class TagLibMetadataProcessor @Inject constructor(
                     bitrate = audioProperties.bitrate,
                     sampleRate = audioProperties.sampleRate,
                     channels = audioProperties.channels,
-                    durationMs = audioProperties.length.toLong() * Constants.MS_PER_SECOND
+                    durationMs = audioProperties.length.toLong()
                 )
             } else {
                 Timber.tag(TAG).w("TagLib returned invalid audio properties in readAllFromFile, setting audioInfo to null")
@@ -1396,7 +1396,7 @@ class TagLibMetadataProcessor @Inject constructor(
                                 bitrate = audioProperties.bitrate,
                                 sampleRate = audioProperties.sampleRate,
                                 channels = audioProperties.channels,
-                                durationMs = audioProperties.length.toLong() * Constants.MS_PER_SECOND
+                                durationMs = audioProperties.length.toLong()
                             )
                         }
                     }
@@ -1440,7 +1440,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 bitrate = audioProperties.bitrate,
                 sampleRate = audioProperties.sampleRate,
                 channels = audioProperties.channels,
-                durationMs = audioProperties.length.toLong() * Constants.MS_PER_SECOND
+                durationMs = audioProperties.length.toLong()
             )
         } catch (e: Exception) {
             Timber.tag(TAG).w( "Failed to read audio info: $filePath", e)

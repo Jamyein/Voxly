@@ -128,6 +128,7 @@
     <string name="replay_gain">ReplayGain</string>
     <string name="selected" tools:ignore="PrivateResource">已选</string>
     <string name="unknown_artist">未知艺术家</string>
+    <string name="unknown_album_artist">未知专辑艺术家</string>
 
     <!-- Batch Operations -->
     <string name="batch_operations_title">批量操作</string>

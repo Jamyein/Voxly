@@ -88,6 +88,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
      * Also pre-resolves cover URI for seamless image loading during navigation.
      */
     fun loadAlbum(albumName: String, albumArtist: String?) {
+        Timber.tag("Voxly").i("AlbumDetailViewModel loadAlbum: albumId=$albumName")
         if (_albumName.value == albumName && _albumArtist.value == albumArtist && _files.value.isNotEmpty()) {
             return
         }

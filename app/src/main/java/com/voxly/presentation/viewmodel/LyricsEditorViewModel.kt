@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 import java.net.URLDecoder
 import javax.inject.Inject
 
@@ -62,6 +63,7 @@ class LyricsEditorViewModel @Inject constructor(
      * Loads lyrics from the audio file.
      */
     private fun loadLyrics() {
+        Timber.tag("Voxly").i("LyricsEditor operation: action=load, filePath=$filePath")
         viewModelScope.launch {
             _uiState.update { LyricsEditorUiState.Loading }
 
@@ -102,6 +104,7 @@ class LyricsEditorViewModel @Inject constructor(
      * Saves the edited lyrics to the file.
      */
     fun saveLyrics() {
+        Timber.tag("Voxly").i("LyricsEditor operation: action=save, filePath=$filePath")
         viewModelScope.launch {
             _uiState.update { LyricsEditorUiState.Saving }
 

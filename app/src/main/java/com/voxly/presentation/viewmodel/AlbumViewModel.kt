@@ -90,6 +90,7 @@ class AlbumViewModel @Inject constructor(
     }
 
     fun refresh(forceRefresh: Boolean = false) {
+        Timber.tag("Voxly").i("AlbumViewModel loadAlbums")
         // Cancel previous refresh if still running
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {

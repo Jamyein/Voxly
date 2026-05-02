@@ -271,7 +271,7 @@ fun AlbumDetailScreen(
 
                         // Artist
                         Text(
-                            text = albumArtistState ?: "",
+                            text = albumArtistState ?: stringResource(R.string.unknown_album_artist),
                             style = MaterialTheme.typography.titleMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,

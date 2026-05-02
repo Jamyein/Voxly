@@ -201,10 +201,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          
-          # Find APK (github flavor + release build type)
-          APK_PATH="$(find app/build -type f -name "*arm64*.apk" | head -n 1)"
-          if [ -z "${APK_PATH}" ]; then
+
+          # Find all APKs (github flavor + release build type + all ABI splits)
+          APK_FILES=( $(find app/build -type f -name "*.apk" | grep -E "githubRelease|releaseGithub" | sort) )
+          if [ ${#APK_FILES[@]} -eq 0 ]; then
             echo "No APK found"
             exit 1
           fi
@@ -214,9 +214,20 @@ jobs:
 
           OUT_DIR="app/build/outputs/release-assets"
           mkdir -p "${OUT_DIR}"
-          OUT_NAME="Voxly-${VERSION_NAME}-${SHORT_SHA}.apk"
-          cp "${APK_PATH}" "${OUT_DIR}/${OUT_NAME}"
-          echo "RELEASE_APK=${OUT_DIR}/${OUT_NAME}" >> "$GITHUB_ENV"
+
+          # Copy all APKs to output directory with architecture in filename
+          RELEASE_APKS=""
+          for APK_PATH in "${APK_FILES[@]}"; do
+            APK_NAME=$(basename "${APK_PATH}")
+            cp "${APK_PATH}" "${OUT_DIR}/${APK_NAME}"
+            if [ -n "${RELEASE_APKS}" ]; then
+              RELEASE_APKS="${RELEASE_APKS},${OUT_DIR}/${APK_NAME}"
+            else
+              RELEASE_APKS="${OUT_DIR}/${APK_NAME}"
+            fi
+          done
+          echo "RELEASE_APKS=${RELEASE_APKS}" >> "$GITHUB_ENV"
+          echo "Found ${#APK_FILES[@]} APK(s)"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -224,4 +235,4 @@ jobs:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: Voxly v${{ steps.version.outputs.VERSION }}
           body: ${{ env.RELEASE_BODY }}
-          files: ${{ env.RELEASE_APK }}
+          files: ${{ env.RELEASE_APKS }}

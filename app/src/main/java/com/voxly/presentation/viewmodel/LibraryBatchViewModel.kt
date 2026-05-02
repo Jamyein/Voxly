@@ -62,6 +62,7 @@ class LibraryBatchViewModel @Inject constructor(
         operation: suspend (String) -> Result<Unit>,
         itemName: (String) -> String = { it }
     ): Job {
+        Timber.tag("Voxly").i("LibraryBatchViewModel batch started: itemCount=${items.size}")
         batchJob?.cancel()
         return viewModelScope.launch {
             _isBatchProcessing.update { true }

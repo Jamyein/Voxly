@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import timber.log.Timber
 
 /**
  * ViewModel for LyricsSelectorScreen.
@@ -49,6 +50,7 @@ class LyricsSelectorViewModel @AssistedInject constructor(
 
     private fun loadData() {
         viewModelScope.launch {
+            Timber.tag("Voxly").i("LyricsSelector: search started")
             _isLoading.update { true }
 
             // Load lyrics

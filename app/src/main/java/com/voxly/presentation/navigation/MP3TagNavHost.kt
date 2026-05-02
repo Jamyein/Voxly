@@ -382,7 +382,8 @@ private fun MP3TagNavDisplay(
             }
 
             entry<MetadataEditor>(
-                clazzContentKey = { key -> "MetadataEditor_${key.filePath}" }
+                clazzContentKey = { key -> "MetadataEditor_${key.filePath}" },
+                metadata = containerTransformMetadata
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 MetadataEditorEntry(
@@ -440,7 +441,8 @@ private fun MP3TagNavDisplay(
             }
 
             entry<AlbumDetail>(
-                clazzContentKey = { key -> "AlbumDetail_${key.albumName}_${key.albumArtist}" }
+                clazzContentKey = { key -> "AlbumDetail_${key.albumName}_${key.albumArtist}" },
+                metadata = containerTransformMetadata
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 AlbumDetailEntry(
@@ -452,7 +454,8 @@ private fun MP3TagNavDisplay(
             }
 
             entry<ArtistDetail>(
-                clazzContentKey = { key -> "ArtistDetail_${key.artistName}" }
+                clazzContentKey = { key -> "ArtistDetail_${key.artistName}" },
+                metadata = containerTransformMetadata
             ) { key ->
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 ArtistDetailEntry(

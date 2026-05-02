@@ -163,7 +163,7 @@ class AudioFileScanner @Inject constructor(
                 if (!forceRefresh && hasCachedData()) {
                     val cachedCount = getCachedFileCount()
                     if (cachedCount > 0) {
-                        Timber.d(TAG, "Using cache: $cachedCount files")
+                        Timber.tag("Voxly").i("Using cache: $cachedCount files")
                         return@withLock libraryCache.getCachedAudioFilesOnce()
                     }
                 }
@@ -202,7 +202,7 @@ class AudioFileScanner @Inject constructor(
     suspend fun loadAudioFiles(isIncremental: Boolean = false): List<AudioFile> = scanMutex.withLock {
         val hasCached = hasCachedData() && getCachedFileCount() > 0
         if (hasCached) {
-            Timber.d(TAG, "loadAudioFiles: returning cached data directly, no scan")
+            Timber.tag("Voxly").i("loadAudioFiles: returning cached data directly, no scan")
             return@withLock libraryCache.getCachedAudioFilesOnce()
         }
         scan(

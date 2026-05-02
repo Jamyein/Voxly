@@ -301,12 +301,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
         }
     }
 
-    /**
+/**
      * Loads the audio file and its metadata.
      * Uses getAudioFile() to get complete audio info (bitrate, sampleRate, channels, duration)
      * from TagLib + MediaStore. Cover art is loaded asynchronously via loadCoverArtAsync().
      */
     private fun loadAudioFile() {
+        Timber.tag("Voxly").i("MetadataEditorViewModel: action=load filePath=$filePath")
         viewModelScope.launch {
             _uiState.update { MetadataEditorUiState.Loading }
             _isM3eColorsResolved.update { false }
@@ -593,7 +594,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                     filesToScan = albumFiles.ifEmpty { listOf(filePath) }
                 }
 
-                Timber.i("ReplayGain scan started. mode=${currentScanMode.name} files=${filesToScan.size}", "MetadataEditor")
+                Timber.tag("Voxly").i("MetadataEditor: ReplayGain scan started. mode=${currentScanMode.name} files=${filesToScan.size}")
 
                 // Get target loudness and clip mode from settings
                 val targetLoudness = settingsDataStore.replayGainTargetLoudness.first()
@@ -638,7 +639,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             if (info != null) {
                                 _pendingReplayGainInfo.update { info }
                                 _hasUnsavedChanges.update { true }
-                                Timber.i("ReplayGain scan completed (from progress). mode=${currentScanMode.name}", "MetadataEditor")
+                                Timber.tag("Voxly").i("MetadataEditor: ReplayGain scan completed (from progress). mode=${currentScanMode.name}")
                             } else {
                                 // Fallback: read from file if not in progress
                                 val replayGainReadResult = replayGainRepository.readReplayGain(filePath)
@@ -646,7 +647,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                     _pendingReplayGainInfo.update { readInfo }
                                     _hasUnsavedChanges.update { true }
                                 }
-                                Timber.i("ReplayGain scan completed (from file). mode=${currentScanMode.name}", "MetadataEditor")
+                                Timber.tag("Voxly").i("MetadataEditor: ReplayGain scan completed (from file). mode=${currentScanMode.name}")
                             }
                             _isScanningReplayGain.update { false }
                         }
@@ -672,13 +673,13 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             }
                             _replayGainScanError.emit(error.toString())
                             _isScanningReplayGain.update { false }
-                            Timber.e("ReplayGain scan failed.", null, "MetadataEditor")
+                            Timber.tag("Voxly").e("MetadataEditor: ReplayGain scan failed.")
                         }
                         else -> { /* scanning in progress */ }
                     }
                 }
             } catch (e: Exception) {
-                Timber.e("ReplayGain scan exception: ${e.message}", e, "MetadataEditor")
+                Timber.tag("Voxly").e(e, "MetadataEditor: ReplayGain scan exception: ${e.message}")
                 _isScanningReplayGain.update { false }
             }
         }
@@ -753,6 +754,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
      * Saves the edited metadata and ReplayGain to the file.
      */
     fun saveMetadata() {
+        Timber.tag("Voxly").i("MetadataEditorViewModel: action=save filePath=$filePath")
         val metadataToSave = _editedMetadata.value ?: return
         val replayGainToSave = _pendingReplayGainInfo.value
 

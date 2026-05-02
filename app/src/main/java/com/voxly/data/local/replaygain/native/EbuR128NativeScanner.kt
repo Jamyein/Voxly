@@ -1,6 +1,5 @@
 package com.voxly.data.local.replaygain.native
 
-import dalvik.annotation.optimization.CriticalNative
 import dalvik.annotation.optimization.FastNative
 import timber.log.Timber
 import com.voxly.domain.model.ReplayGainInfo
@@ -31,23 +30,9 @@ class EbuR128NativeScanner(
 ) : AutoCloseable {
 
     companion object {
-        private const val TAG = "EbuR128NativeScanner"
-
         init {
             System.loadLibrary("ebur128-scanner")
         }
-
-        @CriticalNative
-        private external fun nativeCreate(
-            channels: Int,
-            sampleRate: Int,
-            truePeak: Boolean,
-            dualMono: Boolean,
-            targetLoudness: Double
-        ): Long
-
-        @CriticalNative
-        private external fun nativeDestroy(scannerPtr: Long)
     }
 
     private var nativePtr: Long = 0
@@ -60,6 +45,18 @@ class EbuR128NativeScanner(
             throw IllegalStateException("Failed to create native ebur128 scanner")
         }
     }
+
+    @FastNative
+    private external fun nativeCreate(
+        channels: Int,
+        sampleRate: Int,
+        truePeak: Boolean,
+        dualMono: Boolean,
+        targetLoudness: Double
+    ): Long
+
+    @FastNative
+    private external fun nativeDestroy(scannerPtr: Long)
 
     fun processFrames(samples: ShortArray, frameCount: Int) {
         if (nativePtr == 0L) return

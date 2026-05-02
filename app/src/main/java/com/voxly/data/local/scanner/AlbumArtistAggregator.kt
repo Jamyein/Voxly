@@ -570,11 +570,10 @@ class AlbumArtistAggregator @Inject constructor(
                 albumName = albumFiles.firstOrNull()?.metadata?.album
                     ?: key.removePrefix("id:")
                 albumArtist = albumFiles.firstOrNull()?.metadata?.albumArtist
-                    ?: albumFiles.firstOrNull()?.metadata?.artist
             } else {
                 val parts = key?.removePrefix("str:")?.split("|") ?: listOf()
                 albumName = parts.firstOrNull() ?: ""
-                albumArtist = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+                albumArtist = albumFiles.firstOrNull()?.metadata?.albumArtist?.takeIf { it.isNotBlank() }
             }
 
             val coverFile = albumFiles.firstOrNull {
@@ -724,12 +723,11 @@ class AlbumArtistAggregator @Inject constructor(
                 albumName = albumFiles.firstOrNull()?.metadata?.album
                     ?: key.removePrefix("id:")
                 albumArtist = albumFiles.firstOrNull()?.metadata?.albumArtist
-                    ?: albumFiles.firstOrNull()?.metadata?.artist
             } else {
                 // String fallback group
                 val parts = key?.removePrefix("str:")?.split("|") ?: listOf()
                 albumName = parts.firstOrNull() ?: ""
-                albumArtist = parts.getOrNull(1)?.takeIf { it.isNotBlank() }
+                albumArtist = albumFiles.firstOrNull()?.metadata?.albumArtist?.takeIf { it.isNotBlank() }
             }
 
             val coverFile = albumFiles.firstOrNull {

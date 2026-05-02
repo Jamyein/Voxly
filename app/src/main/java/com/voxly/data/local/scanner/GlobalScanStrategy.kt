@@ -29,6 +29,8 @@ class GlobalScanStrategy @Inject constructor(
     }
 
     override suspend fun scan(): List<AudioFile> = withContext(Dispatchers.IO) {
+        Timber.tag("Voxly").i("GlobalScanStrategy scan started")
+
         val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
         val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
 

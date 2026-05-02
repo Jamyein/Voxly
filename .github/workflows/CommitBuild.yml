@@ -35,7 +35,7 @@ jobs:
 
       - name: Build with Gradle
         run: |
-          ./gradlew assembleGithubRelease
+          ./gradlew assembleGithubRelease -Pandroid.injected.build.abi=arm64-v8a
         env:
           CI: true
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || vars.SIGNING_STORE_PASSWORD }}
@@ -51,8 +51,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Find APK
-          APK_PATH="$(find app/build -type f -name "*.apk" | head -n 1)"
+          # Find APK (arm64-v8a only)
+          APK_PATH="$(find app/build -type f -name "*arm64*.apk" | head -n 1)"
           if [ -z "${APK_PATH}" ]; then
             echo "No APK found"
             exit 1
