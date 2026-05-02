@@ -71,7 +71,7 @@ fun LyricsSelectorScreen(
     onNavigateBack: () -> Unit,
     onDismiss: () -> Unit,
     onNavigateToLyricsPoster: (lyricsText: String, selectedIndices: List<Int>) -> Unit,
-    viewModel: LyricsSelectorViewModel = hiltViewModel()
+    viewModel: LyricsSelectorViewModel
 ) {
     val lyricsText by viewModel.lyricsText.collectAsStateWithLifecycle()
     val albumArtBytes by viewModel.albumArtBytes.collectAsStateWithLifecycle()

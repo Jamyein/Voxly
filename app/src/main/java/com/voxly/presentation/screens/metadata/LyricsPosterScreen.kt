@@ -100,7 +100,7 @@ fun LyricsPosterScreen(
     lyricsText: String,
     selectedLyricsIndices: List<Int>,
     onNavigateBack: () -> Unit,
-    viewModel: LyricsPosterViewModel = hiltViewModel()
+    viewModel: LyricsPosterViewModel
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
