@@ -41,63 +41,106 @@ class SettingsDataStore @Inject constructor(
 ) {
     companion object {
         private const val TAG = "SettingsDataStore"
-        val DARK_THEME = booleanPreferencesKey("dark_theme")
-        val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
-        val METADATA_EDITOR_DYNAMIC_ALBUM_COLOR = booleanPreferencesKey("metadata_editor_dynamic_album_color")
-        val LANGUAGE_TAG = stringPreferencesKey("language_tag")
-        val THEME_MODE = stringPreferencesKey("theme_mode")
-        val SELECTED_DIRECTORY_URIS = stringPreferencesKey("selected_directory_uris")
-        val APPLE_COUNTRY_CODE = stringPreferencesKey("apple_country_code")
-        val ONLINE_SEARCH_LIMIT = intPreferencesKey("online_search_limit")
-        val ONLINE_SEARCH_LIMIT_MUSICBRAINZ = intPreferencesKey("online_search_limit_musicbrainz")
-        val ONLINE_SEARCH_LIMIT_ITUNES = intPreferencesKey("online_search_limit_itunes")
-        val ONLINE_SEARCH_LIMIT_NETEASE = intPreferencesKey("online_search_limit_netease")
-        val ONLINE_SEARCH_LIMIT_QQ_MUSIC = intPreferencesKey("online_search_limit_qq_music")
-        val SOURCE_ENABLED_MUSICBRAINZ = booleanPreferencesKey("source_enabled_musicbrainz")
-        val SOURCE_ENABLED_ITUNES = booleanPreferencesKey("source_enabled_itunes")
-        val SOURCE_ENABLED_NETEASE = booleanPreferencesKey("source_enabled_netease")
-        val SOURCE_ENABLED_QQ_MUSIC = booleanPreferencesKey("source_enabled_qq_music")
-        val METADATA_SOURCE_ENABLED_MUSICBRAINZ = booleanPreferencesKey("metadata_source_enabled_musicbrainz")
-        val METADATA_SOURCE_ENABLED_ITUNES = booleanPreferencesKey("metadata_source_enabled_itunes")
-        val METADATA_SOURCE_ENABLED_NETEASE = booleanPreferencesKey("metadata_source_enabled_netease")
-        val METADATA_SOURCE_ENABLED_QQ_MUSIC = booleanPreferencesKey("metadata_source_enabled_qq_music")
-        val LYRICS_SOURCE_ENABLED_MUSICBRAINZ = booleanPreferencesKey("lyrics_source_enabled_musicbrainz")
-        val LYRICS_SOURCE_ENABLED_ITUNES = booleanPreferencesKey("lyrics_source_enabled_itunes")
-        val LYRICS_SOURCE_ENABLED_NETEASE = booleanPreferencesKey("lyrics_source_enabled_netease")
-        val LYRICS_SOURCE_ENABLED_QQ_MUSIC = booleanPreferencesKey("lyrics_source_enabled_qq_music")
-        val COVER_SOURCE_ENABLED_MUSICBRAINZ = booleanPreferencesKey("cover_source_enabled_musicbrainz")
-        val COVER_SOURCE_ENABLED_ITUNES = booleanPreferencesKey("cover_source_enabled_itunes")
-        val COVER_SOURCE_ENABLED_NETEASE = booleanPreferencesKey("cover_source_enabled_netease")
-        val COVER_SOURCE_ENABLED_QQ_MUSIC = booleanPreferencesKey("cover_source_enabled_qq_music")
-        val PRIORITY_METADATA_SOURCES = stringPreferencesKey("priority_metadata_sources")
-        val PRIORITY_LYRICS_SOURCES = stringPreferencesKey("priority_lyrics_sources")
-        val PRIORITY_COVER_SOURCES = stringPreferencesKey("priority_cover_sources")
-        val LOGGING_ENABLED = booleanPreferencesKey("logging_enabled")
-        val FILE_LOGGING_ENABLED = booleanPreferencesKey("file_logging_enabled")
-        val CONSOLE_LOGGING_ENABLED = booleanPreferencesKey("console_logging_enabled")
-        val CRASH_REPORTING_ENABLED = booleanPreferencesKey("crash_reporting_enabled")
-        val REPLAY_GAIN_TARGET_LOUDNESS = floatPreferencesKey("replay_gain_target_loudness")
-        val SCAN_MODE = stringPreferencesKey("scan_mode")
-        val REPLAY_GAIN_CLIP_MODE = stringPreferencesKey("replay_gain_clip_mode")
-        val MIN_DURATION_FILTER_ENABLED = booleanPreferencesKey("min_duration_filter_enabled")
-        val MIN_DURATION_FILTER_THRESHOLD_MS = intPreferencesKey("min_duration_filter_threshold_ms")
-        val SOURCE_CONFIGURATIONS = stringPreferencesKey("source_configurations")
-        val SOURCE_CONFIGURATIONS_MIGRATED = booleanPreferencesKey("source_configurations_migrated")
-        val WHITELIST_ENABLED = booleanPreferencesKey("whitelist_enabled")
-        val BLACKLIST_ENABLED = booleanPreferencesKey("blacklist_enabled")
-        val BLACKLIST_DIRECTORY_URIS = stringPreferencesKey("blacklist_directory_uris")
-        // Proxy settings
-        val PROXY_ENABLED = booleanPreferencesKey("proxy_enabled")
-        val PROXY_TYPE = stringPreferencesKey("proxy_type")
-        val PROXY_HOST = stringPreferencesKey("proxy_host")
-        val PROXY_PORT = intPreferencesKey("proxy_port")
-        // Artist separator settings
-        val ARTIST_SEPARATOR_ENABLED = booleanPreferencesKey("artist_separator_enabled")
-        val ARTIST_SEPARATORS = stringPreferencesKey("artist_separators")
-        // Lyrics timestamp format settings
-        val LYRICS_TIMESTAMP_FORMAT_ENABLED = booleanPreferencesKey("lyrics_timestamp_format_enabled")
-        // File browser root tab setting
-        val FILE_BROWSER_ROOT_TAB = stringPreferencesKey("file_browser_root_tab")
+
+        object Theme {
+            val DARK = booleanPreferencesKey("dark_theme")
+            val DYNAMIC_COLORS = booleanPreferencesKey("dynamic_colors")
+            val METADATA_EDITOR_DYNAMIC_ALBUM_COLOR = booleanPreferencesKey("metadata_editor_dynamic_album_color")
+            val MODE = stringPreferencesKey("theme_mode")
+            val LANGUAGE_TAG = stringPreferencesKey("language_tag")
+            val SELECTED_DIRECTORY_URIS = stringPreferencesKey("selected_directory_uris")
+            val APPLE_COUNTRY_CODE = stringPreferencesKey("apple_country_code")
+            val FILE_BROWSER_ROOT_TAB = stringPreferencesKey("file_browser_root_tab")
+        }
+
+        object OnlineSearch {
+            val LIMIT = intPreferencesKey("online_search_limit")
+            val LIMIT_MUSICBRAINZ = intPreferencesKey("online_search_limit_musicbrainz")
+            val LIMIT_ITUNES = intPreferencesKey("online_search_limit_itunes")
+            val LIMIT_NETEASE = intPreferencesKey("online_search_limit_netease")
+            val LIMIT_QQ_MUSIC = intPreferencesKey("online_search_limit_qq_music")
+        }
+
+        object Source {
+            val ENABLED_MUSICBRAINZ = booleanPreferencesKey("source_enabled_musicbrainz")
+            val ENABLED_ITUNES = booleanPreferencesKey("source_enabled_itunes")
+            val ENABLED_NETEASE = booleanPreferencesKey("source_enabled_netease")
+            val ENABLED_QQ_MUSIC = booleanPreferencesKey("source_enabled_qq_music")
+        }
+
+        object MetadataSource {
+            val ENABLED_MUSICBRAINZ = booleanPreferencesKey("metadata_source_enabled_musicbrainz")
+            val ENABLED_ITUNES = booleanPreferencesKey("metadata_source_enabled_itunes")
+            val ENABLED_NETEASE = booleanPreferencesKey("metadata_source_enabled_netease")
+            val ENABLED_QQ_MUSIC = booleanPreferencesKey("metadata_source_enabled_qq_music")
+        }
+
+        object LyricsSource {
+            val ENABLED_MUSICBRAINZ = booleanPreferencesKey("lyrics_source_enabled_musicbrainz")
+            val ENABLED_ITUNES = booleanPreferencesKey("lyrics_source_enabled_itunes")
+            val ENABLED_NETEASE = booleanPreferencesKey("lyrics_source_enabled_netease")
+            val ENABLED_QQ_MUSIC = booleanPreferencesKey("lyrics_source_enabled_qq_music")
+        }
+
+        object CoverSource {
+            val ENABLED_MUSICBRAINZ = booleanPreferencesKey("cover_source_enabled_musicbrainz")
+            val ENABLED_ITUNES = booleanPreferencesKey("cover_source_enabled_itunes")
+            val ENABLED_NETEASE = booleanPreferencesKey("cover_source_enabled_netease")
+            val ENABLED_QQ_MUSIC = booleanPreferencesKey("cover_source_enabled_qq_music")
+        }
+
+        object SourcePriority {
+            val METADATA = stringPreferencesKey("priority_metadata_sources")
+            val LYRICS = stringPreferencesKey("priority_lyrics_sources")
+            val COVER = stringPreferencesKey("priority_cover_sources")
+        }
+
+        object Logging {
+            val ENABLED = booleanPreferencesKey("logging_enabled")
+            val FILE_ENABLED = booleanPreferencesKey("file_logging_enabled")
+            val CONSOLE_ENABLED = booleanPreferencesKey("console_logging_enabled")
+            val CRASH_REPORTING = booleanPreferencesKey("crash_reporting_enabled")
+        }
+
+        object ReplayGain {
+            val TARGET_LOUDNESS = floatPreferencesKey("replay_gain_target_loudness")
+            val SCAN_MODE = stringPreferencesKey("scan_mode")
+            val CLIP_MODE = stringPreferencesKey("replay_gain_clip_mode")
+        }
+
+        object Filter {
+            val MIN_DURATION_ENABLED = booleanPreferencesKey("min_duration_filter_enabled")
+            val MIN_DURATION_THRESHOLD_MS = intPreferencesKey("min_duration_filter_threshold_ms")
+        }
+
+        object SourceConfig {
+            val CONFIGURATIONS = stringPreferencesKey("source_configurations")
+            val MIGRATED = booleanPreferencesKey("source_configurations_migrated")
+        }
+
+        object Whitelist {
+            val ENABLED = booleanPreferencesKey("whitelist_enabled")
+            val DIRECTORY_URIS = stringPreferencesKey("blacklist_directory_uris")
+        }
+
+        object Blacklist {
+            val ENABLED = booleanPreferencesKey("blacklist_enabled")
+        }
+
+        object Proxy {
+            val ENABLED = booleanPreferencesKey("proxy_enabled")
+            val TYPE = stringPreferencesKey("proxy_type")
+            // NOTE: PROXY_HOST and PROXY_PORT are stored in EncryptedSharedPreferences, not DataStore
+        }
+
+        object Artist {
+            val SEPARATOR_ENABLED = booleanPreferencesKey("artist_separator_enabled")
+            val SEPARATORS = stringPreferencesKey("artist_separators")
+        }
+
+        object Lyrics {
+            val TIMESTAMP_FORMAT_ENABLED = booleanPreferencesKey("lyrics_timestamp_format_enabled")
+        }
     }
 
     /**
@@ -105,7 +148,7 @@ class SettingsDataStore @Inject constructor(
      */
     val darkTheme: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[DARK_THEME] ?: false
+            preferences[Theme.DARK] ?: false
         }
 
     /**
@@ -113,7 +156,7 @@ class SettingsDataStore @Inject constructor(
      */
     val dynamicColors: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[DYNAMIC_COLORS] ?: true
+            preferences[Theme.DYNAMIC_COLORS] ?: true
         }
 
     /**
@@ -121,7 +164,7 @@ class SettingsDataStore @Inject constructor(
      */
     val metadataEditorDynamicAlbumColor: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[METADATA_EDITOR_DYNAMIC_ALBUM_COLOR] ?: true
+            preferences[Theme.METADATA_EDITOR_DYNAMIC_ALBUM_COLOR] ?: true
         }
 
     /**
@@ -129,7 +172,7 @@ class SettingsDataStore @Inject constructor(
      */
     val themeMode: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[THEME_MODE] ?: "system"
+            preferences[Theme.MODE] ?: "system"
         }
 
     /**
@@ -137,7 +180,7 @@ class SettingsDataStore @Inject constructor(
      */
     val languageTag: Flow<String?> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LANGUAGE_TAG]
+            preferences[Theme.LANGUAGE_TAG]
         }
 
     /**
@@ -145,7 +188,7 @@ class SettingsDataStore @Inject constructor(
      */
     val selectedDirectoryUris: Flow<List<String>> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[SELECTED_DIRECTORY_URIS]
+            preferences[Theme.SELECTED_DIRECTORY_URIS]
                 ?.split('\n')
                 ?.map { it.trim() }
                 ?.filter { it.isNotEmpty() }
@@ -157,7 +200,7 @@ class SettingsDataStore @Inject constructor(
      */
     val appleCountryCode: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[APPLE_COUNTRY_CODE] ?: "us"
+            preferences[Theme.APPLE_COUNTRY_CODE] ?: "us"
         }
 
     /**
@@ -165,7 +208,7 @@ class SettingsDataStore @Inject constructor(
      */
     val onlineSearchLimit: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT] ?: 25)
+            normalizeOnlineSearchLimit(preferences[OnlineSearch.LIMIT] ?: 25)
         }
 
     /**
@@ -173,137 +216,137 @@ class SettingsDataStore @Inject constructor(
      */
     val onlineSearchLimitMusicBrainz: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT_MUSICBRAINZ] ?: 0)
+            normalizeOnlineSearchLimit(preferences[OnlineSearch.LIMIT_MUSICBRAINZ] ?: 0)
         }
 
     val onlineSearchLimitITunes: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT_ITUNES] ?: 0)
+            normalizeOnlineSearchLimit(preferences[OnlineSearch.LIMIT_ITUNES] ?: 0)
         }
 
     val onlineSearchLimitNetease: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT_NETEASE] ?: 0)
+            normalizeOnlineSearchLimit(preferences[OnlineSearch.LIMIT_NETEASE] ?: 0)
         }
 
     val onlineSearchLimitQQMusic: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            normalizeOnlineSearchLimit(preferences[ONLINE_SEARCH_LIMIT_QQ_MUSIC] ?: 0)
+            normalizeOnlineSearchLimit(preferences[OnlineSearch.LIMIT_QQ_MUSIC] ?: 0)
         }
 
     val sourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[SOURCE_ENABLED_MUSICBRAINZ] ?: true
+            preferences[Source.ENABLED_MUSICBRAINZ] ?: true
         }
 
     val sourceEnabledITunes: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[SOURCE_ENABLED_ITUNES] ?: true
+            preferences[Source.ENABLED_ITUNES] ?: true
         }
 
     val sourceEnabledNetease: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[SOURCE_ENABLED_NETEASE] ?: true
+            preferences[Source.ENABLED_NETEASE] ?: true
         }
 
     val sourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[SOURCE_ENABLED_QQ_MUSIC] ?: true
+            preferences[Source.ENABLED_QQ_MUSIC] ?: true
         }
 
     val metadataSourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_MUSICBRAINZ] ?: true
+            preferences[MetadataSource.ENABLED_MUSICBRAINZ] ?: true
         }
 
     val metadataSourceEnabledITunes: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_ITUNES] ?: true
+            preferences[MetadataSource.ENABLED_ITUNES] ?: true
         }
 
     val metadataSourceEnabledNetease: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_NETEASE] ?: true
+            preferences[MetadataSource.ENABLED_NETEASE] ?: true
         }
 
     val metadataSourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_QQ_MUSIC] ?: true
+            preferences[MetadataSource.ENABLED_QQ_MUSIC] ?: true
         }
 
     val lyricsSourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_MUSICBRAINZ] ?: true
+            preferences[LyricsSource.ENABLED_MUSICBRAINZ] ?: true
         }
 
     val lyricsSourceEnabledITunes: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_ITUNES] ?: true
+            preferences[LyricsSource.ENABLED_ITUNES] ?: true
         }
 
     val lyricsSourceEnabledNetease: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_NETEASE] ?: true
+            preferences[LyricsSource.ENABLED_NETEASE] ?: true
         }
 
     val lyricsSourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_QQ_MUSIC] ?: true
+            preferences[LyricsSource.ENABLED_QQ_MUSIC] ?: true
         }
 
     val coverSourceEnabledMusicBrainz: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[COVER_SOURCE_ENABLED_MUSICBRAINZ] ?: true
+            preferences[CoverSource.ENABLED_MUSICBRAINZ] ?: true
         }
 
     val coverSourceEnabledITunes: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[COVER_SOURCE_ENABLED_ITUNES] ?: true
+            preferences[CoverSource.ENABLED_ITUNES] ?: true
         }
 
     val coverSourceEnabledNetease: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[COVER_SOURCE_ENABLED_NETEASE] ?: true
+            preferences[CoverSource.ENABLED_NETEASE] ?: true
         }
 
     val coverSourceEnabledQQMusic: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[COVER_SOURCE_ENABLED_QQ_MUSIC] ?: true
+            preferences[CoverSource.ENABLED_QQ_MUSIC] ?: true
         }
 
     val metadataSourcePriority: Flow<List<String>> = context.settingsDataStore.data
         .map { preferences ->
-            parsePriority(preferences[PRIORITY_METADATA_SOURCES], defaultSourcePriority())
+            parsePriority(preferences[SourcePriority.METADATA], defaultSourcePriority())
         }
 
     val lyricsSourcePriority: Flow<List<String>> = context.settingsDataStore.data
         .map { preferences ->
-            parsePriority(preferences[PRIORITY_LYRICS_SOURCES], defaultSourcePriority())
+            parsePriority(preferences[SourcePriority.LYRICS], lyricsDefaultSourcePriority())
         }
 
     val coverSourcePriority: Flow<List<String>> = context.settingsDataStore.data
         .map { preferences ->
-            parsePriority(preferences[PRIORITY_COVER_SOURCES], defaultSourcePriority())
+            parsePriority(preferences[SourcePriority.COVER], defaultSourcePriority())
         }
 
     val loggingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LOGGING_ENABLED] ?: true
+            preferences[Logging.ENABLED] ?: true
         }
 
     val fileLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[FILE_LOGGING_ENABLED] ?: true
+            preferences[Logging.FILE_ENABLED] ?: true
         }
 
     val consoleLoggingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[CONSOLE_LOGGING_ENABLED] ?: true
+            preferences[Logging.CONSOLE_ENABLED] ?: true
         }
 
     val crashReportingEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[CRASH_REPORTING_ENABLED] ?: true
+            preferences[Logging.CRASH_REPORTING] ?: true
         }
 
     /**
@@ -312,7 +355,7 @@ class SettingsDataStore @Inject constructor(
      */
     val replayGainTargetLoudness: Flow<Float> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[REPLAY_GAIN_TARGET_LOUDNESS] ?: -18f
+            preferences[ReplayGain.TARGET_LOUDNESS] ?: -18f
         }
 
     /**
@@ -320,7 +363,7 @@ class SettingsDataStore @Inject constructor(
      */
     val scanMode: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[SCAN_MODE] ?: "TRACK_ONLY"
+            preferences[ReplayGain.SCAN_MODE] ?: "TRACK_ONLY"
         }
 
     /**
@@ -328,7 +371,7 @@ class SettingsDataStore @Inject constructor(
      */
     val replayGainClipMode: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[REPLAY_GAIN_CLIP_MODE] ?: "p"
+            preferences[ReplayGain.CLIP_MODE] ?: "p"
         }
 
     /**
@@ -336,7 +379,7 @@ class SettingsDataStore @Inject constructor(
      */
     val minDurationFilterEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[MIN_DURATION_FILTER_ENABLED] ?: true
+            preferences[Filter.MIN_DURATION_ENABLED] ?: true
         }
 
     /**
@@ -344,7 +387,7 @@ class SettingsDataStore @Inject constructor(
      */
     val minDurationFilterThresholdMs: Flow<Int> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[MIN_DURATION_FILTER_THRESHOLD_MS] ?: Constants.MIN_DURATION_FILTER_THRESHOLD_MS.toInt()
+            preferences[Filter.MIN_DURATION_THRESHOLD_MS] ?: Constants.MIN_DURATION_FILTER_THRESHOLD_MS.toInt()
         }
 
     /**
@@ -352,7 +395,7 @@ class SettingsDataStore @Inject constructor(
      */
     val whitelistEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[WHITELIST_ENABLED] ?: false
+            preferences[Whitelist.ENABLED] ?: false
         }
 
     /**
@@ -360,7 +403,7 @@ class SettingsDataStore @Inject constructor(
      */
     val blacklistEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[BLACKLIST_ENABLED] ?: false
+            preferences[Blacklist.ENABLED] ?: false
         }
 
     /**
@@ -368,7 +411,7 @@ class SettingsDataStore @Inject constructor(
      */
     val blacklistDirectoryUris: Flow<List<String>> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[BLACKLIST_DIRECTORY_URIS]
+            preferences[Whitelist.DIRECTORY_URIS]
                 ?.split('\n')
                 ?.map { it.trim() }
                 ?.filter { it.isNotEmpty() }
@@ -391,7 +434,7 @@ class SettingsDataStore @Inject constructor(
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     val sourceConfigurations: Flow<SourceConfigurations> = context.settingsDataStore.data
         .map { preferences ->
-            val jsonString = preferences[SOURCE_CONFIGURATIONS]
+            val jsonString = preferences[SourceConfig.CONFIGURATIONS]
             if (!jsonString.isNullOrBlank()) {
                 try {
                     return@map json.decodeFromString<SourceConfigurations>(jsonString)
@@ -410,19 +453,19 @@ class SettingsDataStore @Inject constructor(
      * Migrate from old format to new unified format
      */
     private fun migrateToNewFormat(preferences: Preferences): SourceConfigurations {
-        val metadataPriority = parsePriority(preferences[PRIORITY_METADATA_SOURCES], defaultSourcePriority())
-        val lyricsPriority = parsePriority(preferences[PRIORITY_LYRICS_SOURCES], lyricsDefaultSourcePriority())
-        val coverPriority = parsePriority(preferences[PRIORITY_COVER_SOURCES], defaultSourcePriority())
+        val metadataPriority = parsePriority(preferences[SourcePriority.METADATA], defaultSourcePriority())
+        val lyricsPriority = parsePriority(preferences[SourcePriority.LYRICS], lyricsDefaultSourcePriority())
+        val coverPriority = parsePriority(preferences[SourcePriority.COVER], defaultSourcePriority())
 
-        val appleCountryCode = preferences[APPLE_COUNTRY_CODE] ?: "us"
+        val appleCountryCode = preferences[Theme.APPLE_COUNTRY_CODE] ?: "us"
 
         // Build metadata sources
         val metadataSources = metadataPriority.mapIndexed { index, sourceId ->
             val enabled = when (sourceId) {
-                "musicbrainz" -> preferences[METADATA_SOURCE_ENABLED_MUSICBRAINZ] ?: true
-                "itunes" -> preferences[METADATA_SOURCE_ENABLED_ITUNES] ?: true
-                "netease" -> preferences[METADATA_SOURCE_ENABLED_NETEASE] ?: true
-                "qq_music" -> preferences[METADATA_SOURCE_ENABLED_QQ_MUSIC] ?: true
+                "musicbrainz" -> preferences[MetadataSource.ENABLED_MUSICBRAINZ] ?: true
+                "itunes" -> preferences[MetadataSource.ENABLED_ITUNES] ?: true
+                "netease" -> preferences[MetadataSource.ENABLED_NETEASE] ?: true
+                "qq_music" -> preferences[MetadataSource.ENABLED_QQ_MUSIC] ?: true
                 else -> true
             }
             val extraOptions = if (sourceId == "itunes") {
@@ -436,10 +479,10 @@ class SettingsDataStore @Inject constructor(
         // Build lyrics sources
         val lyricsSources = lyricsPriority.mapIndexed { index, sourceId ->
             val enabled = when (sourceId) {
-                "musicbrainz" -> preferences[LYRICS_SOURCE_ENABLED_MUSICBRAINZ] ?: true
-                "itunes" -> preferences[LYRICS_SOURCE_ENABLED_ITUNES] ?: true
-                "netease" -> preferences[LYRICS_SOURCE_ENABLED_NETEASE] ?: true
-                "qq_music" -> preferences[LYRICS_SOURCE_ENABLED_QQ_MUSIC] ?: true
+                "musicbrainz" -> preferences[LyricsSource.ENABLED_MUSICBRAINZ] ?: true
+                "itunes" -> preferences[LyricsSource.ENABLED_ITUNES] ?: true
+                "netease" -> preferences[LyricsSource.ENABLED_NETEASE] ?: true
+                "qq_music" -> preferences[LyricsSource.ENABLED_QQ_MUSIC] ?: true
                 else -> true
             }
             DataSourceConfig(sourceId = sourceId, enabled = enabled, order = index)
@@ -448,10 +491,10 @@ class SettingsDataStore @Inject constructor(
         // Build cover sources
         val coverSources = coverPriority.mapIndexed { index, sourceId ->
             val enabled = when (sourceId) {
-                "musicbrainz" -> preferences[COVER_SOURCE_ENABLED_MUSICBRAINZ] ?: true
-                "itunes" -> preferences[COVER_SOURCE_ENABLED_ITUNES] ?: true
-                "netease" -> preferences[COVER_SOURCE_ENABLED_NETEASE] ?: true
-                "qq_music" -> preferences[COVER_SOURCE_ENABLED_QQ_MUSIC] ?: true
+                "musicbrainz" -> preferences[CoverSource.ENABLED_MUSICBRAINZ] ?: true
+                "itunes" -> preferences[CoverSource.ENABLED_ITUNES] ?: true
+                "netease" -> preferences[CoverSource.ENABLED_NETEASE] ?: true
+                "qq_music" -> preferences[CoverSource.ENABLED_QQ_MUSIC] ?: true
                 else -> true
             }
             val extraOptions = if (sourceId == "itunes") {
@@ -475,7 +518,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setSourceConfigurations(config: SourceConfigurations) {
         Timber.d("$TAG: setSourceConfigurations: metadata=${config.metadata.sources.map { "${it.sourceId}=${it.enabled}" }}, lyrics=${config.lyrics.sources.map { "${it.sourceId}=${it.enabled}" }}, cover=${config.cover.sources.map { "${it.sourceId}=${it.enabled}" }}")
         context.settingsDataStore.edit { preferences ->
-            preferences[SOURCE_CONFIGURATIONS] = json.encodeToString(config)
+            preferences[SourceConfig.CONFIGURATIONS] = json.encodeToString(config)
         }
     }
 
@@ -487,7 +530,7 @@ class SettingsDataStore @Inject constructor(
         context.settingsDataStore.edit { preferences ->
             // First try to read from existing JSON, only migrate if no JSON exists
             val current = try {
-                val jsonString = preferences[SOURCE_CONFIGURATIONS]
+                val jsonString = preferences[SourceConfig.CONFIGURATIONS]
                 if (!jsonString.isNullOrBlank()) {
                     json.decodeFromString<SourceConfigurations>(jsonString)
                 } else {
@@ -499,33 +542,33 @@ class SettingsDataStore @Inject constructor(
             val typeConfig = current.getConfig(type)
             val updated = typeConfig.updateSource(source)
             val newConfig = current.updateConfig(updated)
-            preferences[SOURCE_CONFIGURATIONS] = json.encodeToString(newConfig)
+            preferences[SourceConfig.CONFIGURATIONS] = json.encodeToString(newConfig)
 
             // Sync to legacy preference keys for backward compatibility
             // This ensures AggregatedOnlineMetadataRepository reads the correct enabled state
             when (type) {
                 DataSourceType.METADATA -> {
                     when (source.sourceId) {
-                        "musicbrainz" -> preferences[METADATA_SOURCE_ENABLED_MUSICBRAINZ] = source.enabled
-                        "itunes" -> preferences[METADATA_SOURCE_ENABLED_ITUNES] = source.enabled
-                        "netease" -> preferences[METADATA_SOURCE_ENABLED_NETEASE] = source.enabled
-                        "qq_music" -> preferences[METADATA_SOURCE_ENABLED_QQ_MUSIC] = source.enabled
+                        "musicbrainz" -> preferences[MetadataSource.ENABLED_MUSICBRAINZ] = source.enabled
+                        "itunes" -> preferences[MetadataSource.ENABLED_ITUNES] = source.enabled
+                        "netease" -> preferences[MetadataSource.ENABLED_NETEASE] = source.enabled
+                        "qq_music" -> preferences[MetadataSource.ENABLED_QQ_MUSIC] = source.enabled
                     }
                 }
                 DataSourceType.LYRICS -> {
                     when (source.sourceId) {
-                        "musicbrainz" -> preferences[LYRICS_SOURCE_ENABLED_MUSICBRAINZ] = source.enabled
-                        "itunes" -> preferences[LYRICS_SOURCE_ENABLED_ITUNES] = source.enabled
-                        "netease" -> preferences[LYRICS_SOURCE_ENABLED_NETEASE] = source.enabled
-                        "qq_music" -> preferences[LYRICS_SOURCE_ENABLED_QQ_MUSIC] = source.enabled
+                        "musicbrainz" -> preferences[LyricsSource.ENABLED_MUSICBRAINZ] = source.enabled
+                        "itunes" -> preferences[LyricsSource.ENABLED_ITUNES] = source.enabled
+                        "netease" -> preferences[LyricsSource.ENABLED_NETEASE] = source.enabled
+                        "qq_music" -> preferences[LyricsSource.ENABLED_QQ_MUSIC] = source.enabled
                     }
                 }
                 DataSourceType.COVER -> {
                     when (source.sourceId) {
-                        "musicbrainz" -> preferences[COVER_SOURCE_ENABLED_MUSICBRAINZ] = source.enabled
-                        "itunes" -> preferences[COVER_SOURCE_ENABLED_ITUNES] = source.enabled
-                        "netease" -> preferences[COVER_SOURCE_ENABLED_NETEASE] = source.enabled
-                        "qq_music" -> preferences[COVER_SOURCE_ENABLED_QQ_MUSIC] = source.enabled
+                        "musicbrainz" -> preferences[CoverSource.ENABLED_MUSICBRAINZ] = source.enabled
+                        "itunes" -> preferences[CoverSource.ENABLED_ITUNES] = source.enabled
+                        "netease" -> preferences[CoverSource.ENABLED_NETEASE] = source.enabled
+                        "qq_music" -> preferences[CoverSource.ENABLED_QQ_MUSIC] = source.enabled
                     }
                 }
             }
@@ -540,7 +583,7 @@ class SettingsDataStore @Inject constructor(
         context.settingsDataStore.edit { preferences ->
             // First try to read from existing JSON, only migrate if no JSON exists
             val current = try {
-                val jsonString = preferences[SOURCE_CONFIGURATIONS]
+                val jsonString = preferences[SourceConfig.CONFIGURATIONS]
                 if (!jsonString.isNullOrBlank()) {
                     json.decodeFromString<SourceConfigurations>(jsonString)
                 } else {
@@ -552,20 +595,20 @@ class SettingsDataStore @Inject constructor(
             val typeConfig = current.getConfig(type)
             val reordered = typeConfig.reorderSources(orderedSourceIds)
             val newConfig = current.updateConfig(reordered)
-            preferences[SOURCE_CONFIGURATIONS] = json.encodeToString(newConfig)
-            
+            preferences[SourceConfig.CONFIGURATIONS] = json.encodeToString(newConfig)
+
             // Also update legacy priority strings for backward compatibility
-            // This ensures OnlineMetadataViewModel and AggregatedOnlineMetadataRepository 
+            // This ensures OnlineMetadataViewModel and AggregatedOnlineMetadataRepository
             // read the correct priority when using metadataSourcePriority/lyricsSourcePriority/coverSourcePriority
             when (type) {
                 DataSourceType.METADATA -> {
-                    preferences[PRIORITY_METADATA_SOURCES] = orderedSourceIds.joinToString(",")
+                    preferences[SourcePriority.METADATA] = orderedSourceIds.joinToString(",")
                 }
                 DataSourceType.LYRICS -> {
-                    preferences[PRIORITY_LYRICS_SOURCES] = orderedSourceIds.joinToString(",")
+                    preferences[SourcePriority.LYRICS] = orderedSourceIds.joinToString(",")
                 }
                 DataSourceType.COVER -> {
-                    preferences[PRIORITY_COVER_SOURCES] = orderedSourceIds.joinToString(",")
+                    preferences[SourcePriority.COVER] = orderedSourceIds.joinToString(",")
                 }
             }
         }
@@ -577,7 +620,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setDarkTheme(enabled: Boolean) {
         Timber.d("$TAG: setDarkTheme: $enabled")
         context.settingsDataStore.edit { preferences ->
-            preferences[DARK_THEME] = enabled
+            preferences[Theme.DARK] = enabled
         }
     }
 
@@ -587,7 +630,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setDynamicColors(enabled: Boolean) {
         Timber.d("$TAG: setDynamicColors: $enabled")
         context.settingsDataStore.edit { preferences ->
-            preferences[DYNAMIC_COLORS] = enabled
+            preferences[Theme.DYNAMIC_COLORS] = enabled
         }
     }
 
@@ -597,7 +640,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setMetadataEditorDynamicAlbumColor(enabled: Boolean) {
         Timber.d("$TAG: setMetadataEditorDynamicAlbumColor: $enabled")
         context.settingsDataStore.edit { preferences ->
-            preferences[METADATA_EDITOR_DYNAMIC_ALBUM_COLOR] = enabled
+            preferences[Theme.METADATA_EDITOR_DYNAMIC_ALBUM_COLOR] = enabled
         }
     }
 
@@ -607,7 +650,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setThemeMode(mode: String) {
         Timber.d("$TAG: setThemeMode: $mode")
         context.settingsDataStore.edit { preferences ->
-            preferences[THEME_MODE] = mode
+            preferences[Theme.MODE] = mode
         }
     }
 
@@ -617,9 +660,9 @@ class SettingsDataStore @Inject constructor(
     suspend fun setLanguageTag(tag: String?) {
         context.settingsDataStore.edit { preferences ->
             if (tag == null) {
-                preferences.remove(LANGUAGE_TAG)
+                preferences.remove(Theme.LANGUAGE_TAG)
             } else {
-                preferences[LANGUAGE_TAG] = tag
+                preferences[Theme.LANGUAGE_TAG] = tag
             }
         }
     }
@@ -630,46 +673,46 @@ class SettingsDataStore @Inject constructor(
     suspend fun setSelectedDirectoryUris(uris: List<String>) {
         context.settingsDataStore.edit { preferences ->
             if (uris.isEmpty()) {
-                preferences.remove(SELECTED_DIRECTORY_URIS)
+                preferences.remove(Theme.SELECTED_DIRECTORY_URIS)
             } else {
-                preferences[SELECTED_DIRECTORY_URIS] = uris.joinToString("\n")
+                preferences[Theme.SELECTED_DIRECTORY_URIS] = uris.joinToString("\n")
             }
         }
     }
 
     suspend fun setAppleCountryCode(code: String) {
         context.settingsDataStore.edit { preferences ->
-            preferences[APPLE_COUNTRY_CODE] = code.lowercase().ifBlank { "us" }
+            preferences[Theme.APPLE_COUNTRY_CODE] = code.lowercase().ifBlank { "us" }
         }
     }
 
     suspend fun setOnlineSearchLimit(limit: Int) {
         context.settingsDataStore.edit { preferences ->
-            preferences[ONLINE_SEARCH_LIMIT] = normalizeOnlineSearchLimit(limit)
+            preferences[OnlineSearch.LIMIT] = normalizeOnlineSearchLimit(limit)
         }
     }
 
     suspend fun setOnlineSearchLimitMusicBrainz(limit: Int) {
         context.settingsDataStore.edit { preferences ->
-            preferences[ONLINE_SEARCH_LIMIT_MUSICBRAINZ] = normalizeOnlineSearchLimit(limit)
+            preferences[OnlineSearch.LIMIT_MUSICBRAINZ] = normalizeOnlineSearchLimit(limit)
         }
     }
 
     suspend fun setOnlineSearchLimitITunes(limit: Int) {
         context.settingsDataStore.edit { preferences ->
-            preferences[ONLINE_SEARCH_LIMIT_ITUNES] = normalizeOnlineSearchLimit(limit)
+            preferences[OnlineSearch.LIMIT_ITUNES] = normalizeOnlineSearchLimit(limit)
         }
     }
 
     suspend fun setOnlineSearchLimitNetease(limit: Int) {
         context.settingsDataStore.edit { preferences ->
-            preferences[ONLINE_SEARCH_LIMIT_NETEASE] = normalizeOnlineSearchLimit(limit)
+            preferences[OnlineSearch.LIMIT_NETEASE] = normalizeOnlineSearchLimit(limit)
         }
     }
 
     suspend fun setOnlineSearchLimitQQMusic(limit: Int) {
         context.settingsDataStore.edit { preferences ->
-            preferences[ONLINE_SEARCH_LIMIT_QQ_MUSIC] = normalizeOnlineSearchLimit(limit)
+            preferences[OnlineSearch.LIMIT_QQ_MUSIC] = normalizeOnlineSearchLimit(limit)
         }
     }
 
@@ -679,139 +722,139 @@ class SettingsDataStore @Inject constructor(
 
     suspend fun setSourceEnabledMusicBrainz(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[SOURCE_ENABLED_MUSICBRAINZ] = enabled
+            preferences[Source.ENABLED_MUSICBRAINZ] = enabled
         }
     }
 
     suspend fun setSourceEnabledITunes(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[SOURCE_ENABLED_ITUNES] = enabled
+            preferences[Source.ENABLED_ITUNES] = enabled
         }
     }
 
     suspend fun setSourceEnabledNetease(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[SOURCE_ENABLED_NETEASE] = enabled
+            preferences[Source.ENABLED_NETEASE] = enabled
         }
     }
 
     suspend fun setSourceEnabledQQMusic(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[SOURCE_ENABLED_QQ_MUSIC] = enabled
+            preferences[Source.ENABLED_QQ_MUSIC] = enabled
         }
     }
 
     suspend fun setMetadataSourceEnabledMusicBrainz(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_MUSICBRAINZ] = enabled
+            preferences[MetadataSource.ENABLED_MUSICBRAINZ] = enabled
         }
     }
 
     suspend fun setMetadataSourceEnabledITunes(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_ITUNES] = enabled
+            preferences[MetadataSource.ENABLED_ITUNES] = enabled
         }
     }
 
     suspend fun setMetadataSourceEnabledNetease(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_NETEASE] = enabled
+            preferences[MetadataSource.ENABLED_NETEASE] = enabled
         }
     }
 
     suspend fun setMetadataSourceEnabledQQMusic(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[METADATA_SOURCE_ENABLED_QQ_MUSIC] = enabled
+            preferences[MetadataSource.ENABLED_QQ_MUSIC] = enabled
         }
     }
 
     suspend fun setLyricsSourceEnabledMusicBrainz(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_MUSICBRAINZ] = enabled
+            preferences[LyricsSource.ENABLED_MUSICBRAINZ] = enabled
         }
     }
 
     suspend fun setLyricsSourceEnabledITunes(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_ITUNES] = enabled
+            preferences[LyricsSource.ENABLED_ITUNES] = enabled
         }
     }
 
     suspend fun setLyricsSourceEnabledNetease(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_NETEASE] = enabled
+            preferences[LyricsSource.ENABLED_NETEASE] = enabled
         }
     }
 
     suspend fun setLyricsSourceEnabledQQMusic(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[LYRICS_SOURCE_ENABLED_QQ_MUSIC] = enabled
+            preferences[LyricsSource.ENABLED_QQ_MUSIC] = enabled
         }
     }
 
     suspend fun setCoverSourceEnabledMusicBrainz(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[COVER_SOURCE_ENABLED_MUSICBRAINZ] = enabled
+            preferences[CoverSource.ENABLED_MUSICBRAINZ] = enabled
         }
     }
 
     suspend fun setCoverSourceEnabledITunes(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[COVER_SOURCE_ENABLED_ITUNES] = enabled
+            preferences[CoverSource.ENABLED_ITUNES] = enabled
         }
     }
 
     suspend fun setCoverSourceEnabledNetease(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[COVER_SOURCE_ENABLED_NETEASE] = enabled
+            preferences[CoverSource.ENABLED_NETEASE] = enabled
         }
     }
 
     suspend fun setCoverSourceEnabledQQMusic(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[COVER_SOURCE_ENABLED_QQ_MUSIC] = enabled
+            preferences[CoverSource.ENABLED_QQ_MUSIC] = enabled
         }
     }
 
     suspend fun setMetadataSourcePriority(priority: List<String>) {
         context.settingsDataStore.edit { preferences ->
-            preferences[PRIORITY_METADATA_SOURCES] = normalizePriority(priority).joinToString(",")
+            preferences[SourcePriority.METADATA] = normalizePriority(priority).joinToString(",")
         }
     }
 
     suspend fun setLyricsSourcePriority(priority: List<String>) {
         context.settingsDataStore.edit { preferences ->
-            preferences[PRIORITY_LYRICS_SOURCES] = normalizePriority(priority).joinToString(",")
+            preferences[SourcePriority.LYRICS] = normalizePriority(priority).joinToString(",")
         }
     }
 
     suspend fun setCoverSourcePriority(priority: List<String>) {
         context.settingsDataStore.edit { preferences ->
-            preferences[PRIORITY_COVER_SOURCES] = normalizePriority(priority).joinToString(",")
+            preferences[SourcePriority.COVER] = normalizePriority(priority).joinToString(",")
         }
     }
 
     suspend fun setLoggingEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[LOGGING_ENABLED] = enabled
+            preferences[Logging.ENABLED] = enabled
         }
     }
 
     suspend fun setFileLoggingEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[FILE_LOGGING_ENABLED] = enabled
+            preferences[Logging.FILE_ENABLED] = enabled
         }
     }
 
     suspend fun setConsoleLoggingEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[CONSOLE_LOGGING_ENABLED] = enabled
+            preferences[Logging.CONSOLE_ENABLED] = enabled
         }
     }
 
     suspend fun setCrashReportingEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[CRASH_REPORTING_ENABLED] = enabled
+            preferences[Logging.CRASH_REPORTING] = enabled
         }
     }
 
@@ -821,7 +864,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setReplayGainTargetLoudness(loudness: Float) {
         Timber.d("$TAG: setReplayGainTargetLoudness: $loudness LUFS")
         context.settingsDataStore.edit { preferences ->
-            preferences[REPLAY_GAIN_TARGET_LOUDNESS] = loudness.coerceIn(-24f, -14f)
+            preferences[ReplayGain.TARGET_LOUDNESS] = loudness.coerceIn(-24f, -14f)
         }
     }
 
@@ -831,7 +874,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setScanMode(mode: String) {
         Timber.d("$TAG: setScanMode: $mode")
         context.settingsDataStore.edit { preferences ->
-            preferences[SCAN_MODE] = mode
+            preferences[ReplayGain.SCAN_MODE] = mode
         }
     }
 
@@ -841,7 +884,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setReplayGainClipMode(mode: String) {
         Timber.d("$TAG: setReplayGainClipMode: $mode")
         context.settingsDataStore.edit { preferences ->
-            preferences[REPLAY_GAIN_CLIP_MODE] = mode
+            preferences[ReplayGain.CLIP_MODE] = mode
         }
     }
 
@@ -852,7 +895,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setMinDurationFilterEnabled(enabled: Boolean) {
         Timber.d("$TAG: setMinDurationFilterEnabled: $enabled")
         context.settingsDataStore.edit { preferences ->
-            preferences[MIN_DURATION_FILTER_ENABLED] = enabled
+            preferences[Filter.MIN_DURATION_ENABLED] = enabled
         }
     }
 
@@ -862,7 +905,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setMinDurationFilterThresholdMs(thresholdMs: Int) {
         Timber.d("$TAG: setMinDurationFilterThresholdMs: $thresholdMs")
         context.settingsDataStore.edit { preferences ->
-            preferences[MIN_DURATION_FILTER_THRESHOLD_MS] = thresholdMs.coerceAtLeast(0)
+            preferences[Filter.MIN_DURATION_THRESHOLD_MS] = thresholdMs.coerceAtLeast(0)
         }
     }
 
@@ -873,7 +916,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setWhitelistEnabled(enabled: Boolean) {
         Timber.d("$TAG: setWhitelistEnabled: $enabled")
         context.settingsDataStore.edit { preferences ->
-            preferences[WHITELIST_ENABLED] = enabled
+            preferences[Whitelist.ENABLED] = enabled
         }
     }
 
@@ -883,7 +926,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setBlacklistEnabled(enabled: Boolean) {
         Timber.d("$TAG: setBlacklistEnabled: $enabled")
         context.settingsDataStore.edit { preferences ->
-            preferences[BLACKLIST_ENABLED] = enabled
+            preferences[Blacklist.ENABLED] = enabled
         }
     }
 
@@ -893,9 +936,9 @@ class SettingsDataStore @Inject constructor(
     suspend fun setBlacklistDirectoryUris(uris: List<String>) {
         context.settingsDataStore.edit { preferences ->
             if (uris.isEmpty()) {
-                preferences.remove(BLACKLIST_DIRECTORY_URIS)
+                preferences.remove(Whitelist.DIRECTORY_URIS)
             } else {
-                preferences[BLACKLIST_DIRECTORY_URIS] = uris.joinToString("\n")
+                preferences[Whitelist.DIRECTORY_URIS] = uris.joinToString("\n")
             }
         }
     }
@@ -950,7 +993,7 @@ class SettingsDataStore @Inject constructor(
      */
     val proxyEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[PROXY_ENABLED] ?: false
+            preferences[Proxy.ENABLED] ?: false
         }
 
     /**
@@ -958,7 +1001,7 @@ class SettingsDataStore @Inject constructor(
      */
     val proxyType: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[PROXY_TYPE] ?: "HTTP"
+            preferences[Proxy.TYPE] ?: "HTTP"
         }
 
     /**
@@ -991,7 +1034,7 @@ class SettingsDataStore @Inject constructor(
      */
     val lyricsTimestampFormatEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[LYRICS_TIMESTAMP_FORMAT_ENABLED] ?: true
+            preferences[Lyrics.TIMESTAMP_FORMAT_ENABLED] ?: true
         }
 
     /**
@@ -999,7 +1042,7 @@ class SettingsDataStore @Inject constructor(
      */
     val artistSeparatorEnabled: Flow<Boolean> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[ARTIST_SEPARATOR_ENABLED] ?: true
+            preferences[Artist.SEPARATOR_ENABLED] ?: true
         }
 
     /**
@@ -1007,7 +1050,7 @@ class SettingsDataStore @Inject constructor(
      */
     val artistSeparators: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[ARTIST_SEPARATORS] ?: """["&","/","\\"]"""
+            preferences[Artist.SEPARATORS] ?: """["&","/","\\"]"""
         }
 
     /**
@@ -1016,7 +1059,7 @@ class SettingsDataStore @Inject constructor(
      */
     val artistSeparatorsSet: Flow<Set<String>> = context.settingsDataStore.data
         .map { preferences ->
-            val raw = preferences[ARTIST_SEPARATORS] ?: """["&","/","\\"]"""
+            val raw = preferences[Artist.SEPARATORS] ?: """["&","/","\\"]"""
             migrateArtistSeparators(raw)
         }
 
@@ -1051,7 +1094,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setProxyEnabled(enabled: Boolean) {
         Timber.d("$TAG: setProxyEnabled: $enabled")
         context.settingsDataStore.edit { preferences ->
-            preferences[PROXY_ENABLED] = enabled
+            preferences[Proxy.ENABLED] = enabled
         }
     }
 
@@ -1061,7 +1104,7 @@ class SettingsDataStore @Inject constructor(
     suspend fun setProxyType(type: String) {
         Timber.d("$TAG: setProxyType: $type")
         context.settingsDataStore.edit { preferences ->
-            preferences[PROXY_TYPE] = type
+            preferences[Proxy.TYPE] = type
         }
     }
 
@@ -1094,7 +1137,7 @@ class SettingsDataStore @Inject constructor(
      */
     suspend fun setArtistSeparatorEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[ARTIST_SEPARATOR_ENABLED] = enabled
+            preferences[Artist.SEPARATOR_ENABLED] = enabled
         }
     }
 
@@ -1103,7 +1146,7 @@ class SettingsDataStore @Inject constructor(
      */
     suspend fun setLyricsTimestampFormatEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
-            preferences[LYRICS_TIMESTAMP_FORMAT_ENABLED] = enabled
+            preferences[Lyrics.TIMESTAMP_FORMAT_ENABLED] = enabled
         }
     }
 
@@ -1112,7 +1155,7 @@ class SettingsDataStore @Inject constructor(
      */
     suspend fun setArtistSeparators(separators: String) {
         context.settingsDataStore.edit { preferences ->
-            preferences[ARTIST_SEPARATORS] = separators.ifBlank { """["&","/","\\"]""" }
+            preferences[Artist.SEPARATORS] = separators.ifBlank { """["&","/","\\"]""" }
         }
     }
 
@@ -1121,7 +1164,7 @@ class SettingsDataStore @Inject constructor(
      */
     suspend fun setArtistSeparators(separators: Set<String>) {
         context.settingsDataStore.edit { preferences ->
-            preferences[ARTIST_SEPARATORS] = json.encodeToString(separators)
+            preferences[Artist.SEPARATORS] = json.encodeToString(separators)
         }
     }
 
@@ -1152,7 +1195,7 @@ class SettingsDataStore @Inject constructor(
      */
     val fileBrowserRootTab: Flow<String> = context.settingsDataStore.data
         .map { preferences ->
-            preferences[FILE_BROWSER_ROOT_TAB] ?: "DIRECTORIES"
+            preferences[Theme.FILE_BROWSER_ROOT_TAB] ?: "DIRECTORIES"
         }
 
     /**
@@ -1160,7 +1203,7 @@ class SettingsDataStore @Inject constructor(
      */
     suspend fun setFileBrowserRootTab(tab: String) {
         context.settingsDataStore.edit { preferences ->
-            preferences[FILE_BROWSER_ROOT_TAB] = tab
+            preferences[Theme.FILE_BROWSER_ROOT_TAB] = tab
         }
     }
 }

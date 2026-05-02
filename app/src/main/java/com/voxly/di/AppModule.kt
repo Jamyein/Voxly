@@ -42,6 +42,7 @@ import com.voxly.domain.usecase.RebuildDatabaseManagerImpl
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.domain.usecase.UnifiedScanManagerImpl
 import com.voxly.presentation.viewmodel.CoverRepositorySearchStrategy
+import com.voxly.presentation.viewmodel.CoverSearchStrategy
 import com.voxly.presentation.viewmodel.LyricsRepositorySearchStrategy
 import com.voxly.presentation.viewmodel.OnlineCoverSearchStrategy
 import com.voxly.presentation.viewmodel.OnlineLyricsSearchStrategy
@@ -87,6 +88,21 @@ object AppModule {
             .build()
     }
 
+    /**
+     * Provides an application-scoped CoroutineScope for background tasks.
+     *
+     * LIFECYCLE NOTES:
+     * - This scope has no parent Job, so it cannot be cancelled externally.
+     * - Tasks launched here must be self-contained and respect app termination.
+     * - For long-running work, prefer WorkManager with proper lifecycle awareness.
+     *
+     * USAGE:
+     * - Use for fire-and-forget tasks that complete before app exit.
+     * - Do NOT launch infinite loops or tasks requiring graceful shutdown.
+     * - If you need cancellable scopes, inject Application and use its lifecycle.
+     *
+     * Currently used by: [UnifiedScanManager] for background library scanning.
+     */
     @Provides
     @Singleton
     @Named("ApplicationScope")
@@ -421,9 +437,9 @@ abstract class RepositoryModule {
 
     @Binds
     @Singleton
-    abstract fun bindOnlineCoverSearchStrategy(
+    abstract fun bindCoverSearchStrategy(
         coverRepositorySearchStrategy: CoverRepositorySearchStrategy
-    ): OnlineCoverSearchStrategy
+    ): CoverSearchStrategy
 
     @Binds
     @Singleton
