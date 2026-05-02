@@ -9,6 +9,7 @@ import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
 import com.voxly.domain.repository.ScanMode
+import com.voxly.domain.repository.ScanStatus
 import com.voxly.presentation.navigation.ReplayGainScanner
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.assisted.Assisted
@@ -111,10 +112,10 @@ class ReplayGainViewModel @AssistedInject constructor(
                 scanFlow.collect { progress ->
                         _scanProgress.update { progress }
 
-                        if (progress.status.name == "COMPLETED") {
+                        if (progress.status == ScanStatus.COMPLETED) {
                             _scanComplete.update { true }
                             _isScanning.update { false }
-                        } else if (progress.status.name == "FAILED") {
+                        } else if (progress.status == ScanStatus.FAILED) {
                             _error.emit("Scan failed for: ${progress.currentFilePath}")
                             _isScanning.update { false }
                         }
