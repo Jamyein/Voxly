@@ -111,12 +111,12 @@ fun QuoteMark(
     isOpening: Boolean = true,
     modifier: Modifier = Modifier
 ) {
-    val text = if (isOpening) "\"" else "\""
+    val text = if (isOpening) "❝" else "❞"
     Text(
         text = text,
-        fontSize = (size.value * 1.5).sp,
+        fontSize = (size.value * 1.2).sp,
         fontWeight = FontWeight.Light,
-        color = color.copy(alpha = 0.2f),
+        color = color.copy(alpha = 0.35f),
         lineHeight = size.value.sp,
         modifier = modifier
     )

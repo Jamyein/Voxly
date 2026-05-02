@@ -5,7 +5,14 @@ package com.voxly.presentation.components.lyricsposter
 import android.graphics.Bitmap
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,12 +31,11 @@ import androidx.compose.ui.unit.sp
 /**
  * 全屏沉浸式歌词海报模板
  * 
- * 特点：
- * - 全屏模糊封面背景
- * - 上下双渐变暗角遮罩
- * - 歌词垂直居中（绝对主角）
- * - 标题艺术家合并为小字
- * - 引号装饰 + 圆点收束
+ * 设计：电影感叙事
+ * - 全屏模糊封面 + 径向光晕 + 暗角遮罩
+ * - 歌词绝对主角居中显示（26px Bold）
+ * - 引号装饰 + 电影字幕式底部信息
+ * - 修复歌词截断问题
  */
 @Composable
 fun LyricsPosterCardImmersive(
@@ -40,32 +46,54 @@ fun LyricsPosterCardImmersive(
     config: PosterConfig,
     modifier: Modifier = Modifier
 ) {
-    Box(modifier = modifier.fillMaxWidth()) {
+    Box(modifier = modifier.fillMaxSize()) {
         // 背景层：模糊封面
         if (albumArt != null) {
             Image(
                 bitmap = albumArt.asImageBitmap(),
                 contentDescription = null,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .matchParentSize()
+                    .fillMaxSize()
                     .blur(50.dp),
                 contentScale = ContentScale.Crop
             )
         } else {
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .matchParentSize()
-                    .background(Color.DarkGray)
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color(0xFF1A3A4A),
+                                Color(0xFF0D1B2A),
+                                Color(0xFF1B1B2F)
+                            )
+                        )
+                    )
             )
         }
 
-        // 增强渐变：上下双暗角
+        // 径向光晕层
         Box(
-            modifier = Modifier.matchParentSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    brush = Brush.radialGradient(
+                        colors = listOf(
+                            Color(0xFF667EEA).copy(alpha = 0.4f),
+                            Color(0xFF764BA2).copy(alpha = 0.3f),
+                            Color.Transparent
+                        ),
+                        radius = 800f
+                    )
+                )
+        )
+
+        // 暗角遮罩层
+        Box(
+            modifier = Modifier.fillMaxSize()
         ) {
-            // 顶部渐变（确保左上角标题可读）
+            // 顶部渐变
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -73,18 +101,18 @@ fun LyricsPosterCardImmersive(
                     .background(
                         brush = Brush.verticalGradient(
                             colors = listOf(
-                                Color.Black.copy(alpha = 0.5f),
+                                Color.Black.copy(alpha = 0.4f),
                                 Color.Transparent
                             )
                         )
                     )
             )
             
-            // 底部渐变（确保歌词可读）
+            // 底部渐变
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(200.dp)
+                    .height(250.dp)
                     .align(Alignment.BottomCenter)
                     .background(
                         brush = Brush.verticalGradient(
@@ -97,101 +125,88 @@ fun LyricsPosterCardImmersive(
             )
         }
 
-        // 内容层 - 填满整个空间
+        // 内容层
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 40.dp, vertical = 40.dp)
+                .padding(40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // 顶部：合并标题和艺术家为一行（小字，不抢夺焦点）
-            Text(
-                text = "$title · $artist",
-                fontSize = (18f * config.fontSizeScale).sp,
-                fontWeight = FontWeight.Medium,
-                color = Color.White.copy(alpha = 0.6f),
-                maxLines = 1,
-                lineHeight = (24f * config.fontSizeScale).sp
-            )
-
-            // 歌词区域：垂直居中，占据主要空间
+            // 歌词区域：垂直居中，绝对主角
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f)
-                    .padding(vertical = 32.dp),
+                    .weight(1f),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
             ) {
-                val textAlign = when (config.lyricsAlignment) {
-                    LyricsAlignment.START -> TextAlign.Start
-                    LyricsAlignment.CENTER -> TextAlign.Center
-                }
-
-                val horizontalAlignment = when (config.lyricsAlignment) {
-                    LyricsAlignment.START -> Alignment.Start
-                    LyricsAlignment.CENTER -> Alignment.CenterHorizontally
-                }
-
                 // 开场引号
-                QuoteMark(
-                    color = Color.White,
-                    size = 32.dp,
-                    isOpening = true,
-                    modifier = Modifier.padding(bottom = 16.dp)
+                Text(
+                    text = "❝",
+                    fontSize = 80.sp,
+                    fontWeight = FontWeight.Light,
+                    color = Color.White.copy(alpha = 0.12f),
+                    modifier = Modifier.padding(bottom = 20.dp)
                 )
                 
                 // 歌词
                 Column(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalAlignment = horizontalAlignment,
-                    verticalArrangement = Arrangement.spacedBy(
-                        (16f * config.fontSizeScale * (config.lineSpacingMultiplier - 1)).dp
-                    )
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
                 ) {
-                    lyrics.forEach { line ->
+                    lyrics.take(3).forEach { line ->
                         Text(
                             text = line,
-                            fontSize = (28f * config.fontSizeScale).sp,
+                            fontSize = (26f * config.fontSizeScale).sp,
                             fontWeight = FontWeight.Bold,
                             color = Color.White,
-                            textAlign = textAlign,
+                            textAlign = TextAlign.Center,
                             modifier = Modifier.fillMaxWidth(),
-                            lineHeight = (40f * config.fontSizeScale * config.lineSpacingMultiplier).sp
+                            lineHeight = (36f * config.fontSizeScale * config.lineSpacingMultiplier).sp
                         )
                     }
                 }
                 
                 // 结束引号
-                QuoteMark(
-                    color = Color.White,
-                    size = 32.dp,
-                    isOpening = false,
-                    modifier = Modifier.padding(top = 16.dp)
+                Text(
+                    text = "❞",
+                    fontSize = 80.sp,
+                    fontWeight = FontWeight.Light,
+                    color = Color.White.copy(alpha = 0.12f),
+                    modifier = Modifier.padding(top = 20.dp, bottom = 40.dp)
                 )
             }
 
-            // 底部：装饰圆点 + 水印
-            if (config.showWatermark) {
+            // 底部：电影字幕式信息
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                // 装饰线
                 Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = Alignment.BottomCenter
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        AccentDotCluster(
-                            color = Color.White,
-                            dotSize = 4.dp,
-                            spacing = 6.dp
-                        )
-                        Text(
-                            text = "Voxly",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = Color.White.copy(alpha = 0.4f)
-                        )
-                    }
+                    modifier = Modifier
+                        .width(60.dp)
+                        .height(2.dp)
+                        .background(Color.White.copy(alpha = 0.25f))
+                )
+                
+                // 歌曲信息
+                Text(
+                    text = "$title · $artist",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = Color.White.copy(alpha = 0.5f)
+                )
+                
+                // 水印
+                if (config.showWatermark) {
+                    Text(
+                        text = "VOXLY · LYRICS POSTER",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.Medium,
+                        color = Color.White.copy(alpha = 0.3f),
+                        letterSpacing = 1.sp
+                    )
                 }
             }
         }

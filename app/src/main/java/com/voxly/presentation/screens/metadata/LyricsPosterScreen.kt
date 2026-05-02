@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -334,10 +335,12 @@ fun LyricsPosterScreen(
                         .fillMaxWidth()
                         .clip(MaterialTheme.shapes.extraLarge)
                 ) {
-                    PosterCaptureBox(
-                        capture = posterCapture,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                PosterCaptureBox(
+                    capture = posterCapture,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(3f / 4f)
+                ) {
                         LyricsPosterCardWithBlurBackground(
                             title = title,
                             artist = artist,
