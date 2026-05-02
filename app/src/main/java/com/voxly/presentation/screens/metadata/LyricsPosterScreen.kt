@@ -71,6 +71,7 @@ import com.voxly.presentation.components.lyricsposter.PosterColorTheme
 import com.voxly.presentation.components.lyricsposter.PosterConfig
 import com.voxly.presentation.components.lyricsposter.PosterFontWeight
 import com.voxly.presentation.components.lyricsposter.PosterShape
+import com.voxly.presentation.components.lyricsposter.PosterStyle
 import com.voxly.presentation.components.lyricsposter.WatermarkPosition
 import com.voxly.presentation.components.lyricsposter.rememberPosterCapture
 import com.voxly.presentation.viewmodel.LyricsPosterViewModel
@@ -156,6 +157,14 @@ fun LyricsPosterScreen(
     // Poster configuration
     var posterConfig by remember {
         mutableStateOf(PosterConfig())
+    }
+    
+    // Template style selection
+    var selectedStyle by remember { mutableStateOf(PosterStyle.CARD) }
+    
+    // Sync style to posterConfig when changed
+    LaunchedEffect(selectedStyle) {
+        posterConfig = posterConfig.copy(style = selectedStyle)
     }
 
     // Extract colors from album art - using LaunchedEffect for background execution
@@ -339,6 +348,16 @@ fun LyricsPosterScreen(
                         )
                     }
                 }
+            }
+
+            // Style selector
+            item {
+                StyleSelector(
+                    selectedStyle = selectedStyle,
+                    onStyleSelected = { style ->
+                        selectedStyle = style
+                    }
+                )
             }
 
             // Shape selector
@@ -773,6 +792,76 @@ private fun LayoutOptionsSection(
             }
         }
     }
+}
+
+@Composable
+private fun StyleSelector(
+    selectedStyle: PosterStyle,
+    onStyleSelected: (PosterStyle) -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceContainerLow,
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp)
+        ) {
+            Text(
+                text = "海报风格",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+
+            Row(
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                StyleChip(
+                    style = PosterStyle.CARD,
+                    label = "卡片",
+                    isSelected = selectedStyle == PosterStyle.CARD,
+                    onClick = { onStyleSelected(PosterStyle.CARD) }
+                )
+                StyleChip(
+                    style = PosterStyle.IMMERSIVE,
+                    label = "沉浸式",
+                    isSelected = selectedStyle == PosterStyle.IMMERSIVE,
+                    onClick = { onStyleSelected(PosterStyle.IMMERSIVE) }
+                )
+                StyleChip(
+                    style = PosterStyle.TYPOGRAPHY,
+                    label = "极简",
+                    isSelected = selectedStyle == PosterStyle.TYPOGRAPHY,
+                    onClick = { onStyleSelected(PosterStyle.TYPOGRAPHY) }
+                )
+                StyleChip(
+                    style = PosterStyle.COLLAGE,
+                    label = "拼贴",
+                    isSelected = selectedStyle == PosterStyle.COLLAGE,
+                    onClick = { onStyleSelected(PosterStyle.COLLAGE) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun StyleChip(
+    style: PosterStyle,
+    label: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    FilterChip(
+        selected = isSelected,
+        onClick = onClick,
+        label = { Text(label) },
+        colors = FilterChipDefaults.filterChipColors(
+            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    )
 }
 
 @Composable
