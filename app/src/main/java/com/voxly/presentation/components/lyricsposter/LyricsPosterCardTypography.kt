@@ -10,7 +10,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.MaterialShapes
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.toShape
 import androidx.compose.runtime.Composable
@@ -32,10 +31,11 @@ import com.voxly.presentation.theme.ExpressiveShapes
  * 
  * 特点：
  * - 纯色背景（无模糊）
- * - 超大标题字号
- * - 小尺寸封面（可选）
- * - 装饰分隔线
- * - 角落装饰圆点
+ * - 超大标题字号（绝对主角）
+ * - 封面作为右上角点缀
+ * - 粗装饰线分隔
+ * - 引号装饰 + 圆点组合
+ * - 不对称布局
  */
 @Composable
 fun LyricsPosterCardTypography(
@@ -49,7 +49,7 @@ fun LyricsPosterCardTypography(
     // 背景色：纯色，不使用模糊
     val backgroundColor = when {
         config.colorTheme == PosterColorTheme.CUSTOM -> config.customBackgroundColor ?: Color(0xFF1E1E2E)
-        else -> Color(0xFF1E1E2E) // 默认暗色，实际颜色由外层传入
+        else -> Color(0xFF1E1E2E)
     }
 
     val contentColor = if (config.enableAutoTextColor) {
@@ -58,12 +58,12 @@ fun LyricsPosterCardTypography(
         config.customContentColor ?: Color.White
     }
 
-    // 提取主色用于装饰圆点
+    // 提取主色用于装饰
     val accentColor = if (albumArt != null) {
         val extracted = ColorExtractor.extractColors(albumArt)
-        Color(extracted.backgroundDominant).copy(alpha = 0.4f)
+        Color(extracted.backgroundDominant)
     } else {
-        contentColor.copy(alpha = 0.3f)
+        contentColor
     }
 
     Box(
@@ -74,51 +74,59 @@ fun LyricsPosterCardTypography(
         Column(
             modifier = Modifier.fillMaxWidth()
         ) {
-            // 封面（可选，小尺寸）
-            if (albumArt != null) {
-                AlbumArtWithShape(
-                    bitmap = albumArt.asImageBitmap(),
-                    shape = config.coverShape,
-                    modifier = Modifier.size(64.dp)
-                )
-                Spacer(modifier = Modifier.height(40.dp))
-            } else {
-                Spacer(modifier = Modifier.height(24.dp))
+            // 顶部行：标题（左）+ 封面（右）
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                // 左侧：标题区域
+                Column(
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(
+                        text = title,
+                        fontSize = (44f * config.fontSizeScale).sp,
+                        fontWeight = FontWeight.Bold,
+                        color = contentColor,
+                        maxLines = 3,
+                        lineHeight = (52f * config.fontSizeScale).sp
+                    )
+                    
+                    Spacer(modifier = Modifier.height(8.dp))
+                    
+                    Text(
+                        text = artist,
+                        fontSize = (16f * config.fontSizeScale).sp,
+                        fontWeight = FontWeight.Medium,
+                        color = contentColor.copy(alpha = 0.7f),
+                        maxLines = 1
+                    )
+                }
+                
+                // 右侧：封面（小尺寸，右上角点缀）
+                if (albumArt != null) {
+                    Spacer(modifier = Modifier.width(24.dp))
+                    AlbumArtWithShape(
+                        bitmap = albumArt.asImageBitmap(),
+                        shape = config.coverShape,
+                        modifier = Modifier.size(56.dp)
+                    )
+                }
             }
 
-            // 标题（超大字号）
-            Text(
-                text = title,
-                fontSize = (40f * config.fontSizeScale).sp,
-                fontWeight = if (config.fontWeight == PosterFontWeight.BOLD) 
-                    FontWeight.Bold else FontWeight.Medium,
-                color = contentColor,
-                maxLines = 3,
-                lineHeight = (48f * config.fontSizeScale).sp
+            Spacer(modifier = Modifier.height(40.dp))
+
+            // 装饰线（粗线，40%宽度，左对齐）
+            AccentLine(
+                color = contentColor.copy(alpha = 0.25f),
+                strokeWidth = 2.dp,
+                modifier = Modifier.fillMaxWidth(0.4f)
             )
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(40.dp))
 
-            // 艺术家
-            Text(
-                text = artist,
-                fontSize = (18f * config.fontSizeScale).sp,
-                fontWeight = FontWeight.Normal,
-                color = contentColor.copy(alpha = 0.6f),
-                maxLines = 1
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // 装饰线
-            HorizontalDividerLine(
-                color = contentColor.copy(alpha = 0.3f),
-                modifier = Modifier.fillMaxWidth(0.6f)
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            // 歌词
+            // 歌词区域
             val textAlign = when (config.lyricsAlignment) {
                 LyricsAlignment.START -> TextAlign.Start
                 LyricsAlignment.CENTER -> TextAlign.Center
@@ -129,52 +137,68 @@ fun LyricsPosterCardTypography(
                 LyricsAlignment.CENTER -> Alignment.CenterHorizontally
             }
 
+            // 开场引号
+            QuoteMark(
+                color = contentColor,
+                size = 28.dp,
+                isOpening = true,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+
             Column(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalAlignment = horizontalAlignment,
                 verticalArrangement = Arrangement.spacedBy(
-                    (20f * config.fontSizeScale * (config.lineSpacingMultiplier - 1)).dp
+                    (16f * config.fontSizeScale * (config.lineSpacingMultiplier - 1)).dp
                 )
             ) {
                 lyrics.forEach { line ->
                     Text(
                         text = line,
-                        fontSize = (24f * config.fontSizeScale).sp,
-                        fontWeight = if (config.fontWeight == PosterFontWeight.BOLD) 
-                            FontWeight.Bold else FontWeight.Normal,
+                        fontSize = (22f * config.fontSizeScale).sp,
+                        fontWeight = if (config.fontWeight == PosterFontWeight.BOLD)
+                            FontWeight.Bold else FontWeight.SemiBold,
                         color = contentColor,
                         textAlign = textAlign,
                         modifier = Modifier.fillMaxWidth(),
-                        lineHeight = (34f * config.fontSizeScale * config.lineSpacingMultiplier).sp
+                        lineHeight = (32f * config.fontSizeScale * config.lineSpacingMultiplier).sp
                     )
                 }
             }
 
-            // 底部留白 + 装饰圆点
-            Spacer(modifier = Modifier.height(48.dp))
+            // 结束引号
+            QuoteMark(
+                color = contentColor,
+                size = 28.dp,
+                isOpening = false,
+                modifier = Modifier.padding(top = 12.dp)
+            )
+
+            // 底部留白 + 右下角装饰
+            Spacer(modifier = Modifier.weight(1f))
 
             Box(
                 modifier = Modifier.fillMaxWidth(),
                 contentAlignment = Alignment.BottomEnd
             ) {
-                CornerDot(color = accentColor, size = 8.dp)
-            }
-
-            // 水印
-            if (config.showWatermark) {
-                Spacer(modifier = Modifier.height(16.dp))
-                Box(
-                    modifier = Modifier.fillMaxWidth(),
-                    contentAlignment = when (config.watermarkPosition) {
-                        WatermarkPosition.START -> Alignment.CenterStart
-                        WatermarkPosition.END -> Alignment.CenterEnd
-                    }
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Voxly",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = contentColor.copy(alpha = 0.4f)
+                    AccentDotCluster(
+                        color = accentColor,
+                        dotSize = 4.dp,
+                        spacing = 6.dp
                     )
+                    
+                    if (config.showWatermark) {
+                        Text(
+                            text = "Voxly",
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.Medium,
+                            color = contentColor.copy(alpha = 0.4f)
+                        )
+                    }
                 }
             }
         }

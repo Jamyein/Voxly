@@ -140,7 +140,7 @@ private fun HeaderRow(
         AlbumArtWithShape(
             bitmap = albumArt?.asImageBitmap(),
             shape = config.coverShape,
-            modifier = Modifier.size(96.dp)
+            modifier = Modifier.size(120.dp)
         )
 
         Spacer(modifier = Modifier.width(24.dp))
@@ -153,12 +153,11 @@ private fun HeaderRow(
             // 标题
             Text(
                 text = title,
-                fontSize = (28f * config.fontSizeScale).sp,
-                fontWeight = if (config.fontWeight == PosterFontWeight.BOLD) 
-                    FontWeight.Bold else FontWeight.Normal,
+                fontSize = (32f * config.fontSizeScale).sp,
+                fontWeight = FontWeight.Bold,
                 color = contentColor,
                 maxLines = 2,
-                lineHeight = (36f * config.fontSizeScale).sp
+                lineHeight = (40f * config.fontSizeScale).sp
             )
 
             Spacer(modifier = Modifier.height(8.dp))
@@ -166,8 +165,8 @@ private fun HeaderRow(
             // 艺术家
             Text(
                 text = artist,
-                fontSize = (20f * config.fontSizeScale).sp,
-                fontWeight = FontWeight.Normal,
+                fontSize = (16f * config.fontSizeScale).sp,
+                fontWeight = FontWeight.Medium,
                 color = contentColor.copy(alpha = 0.7f),
                 maxLines = 1
             )
@@ -245,19 +244,19 @@ private fun LyricsSection(
         modifier = Modifier.fillMaxWidth(),
         horizontalAlignment = horizontalAlignment,
         verticalArrangement = Arrangement.spacedBy(
-            (24f * config.fontSizeScale * (config.lineSpacingMultiplier - 1)).dp
+            (16f * config.fontSizeScale * (config.lineSpacingMultiplier - 1)).dp
         )
     ) {
         lyrics.forEach { line ->
             Text(
                 text = line,
-                fontSize = (24f * config.fontSizeScale).sp,
-                fontWeight = if (config.fontWeight == PosterFontWeight.BOLD) 
-                    FontWeight.Bold else FontWeight.Normal,
+                fontSize = (22f * config.fontSizeScale).sp,
+                fontWeight = if (config.fontWeight == PosterFontWeight.BOLD)
+                    FontWeight.Bold else FontWeight.SemiBold,
                 color = contentColor,
                 textAlign = textAlign,
                 modifier = Modifier.fillMaxWidth(),
-                lineHeight = (34f * config.fontSizeScale * config.lineSpacingMultiplier).sp
+                lineHeight = (32f * config.fontSizeScale * config.lineSpacingMultiplier).sp
             )
         }
     }
@@ -280,11 +279,24 @@ private fun Watermark(
         modifier = Modifier.fillMaxWidth(),
         contentAlignment = alignment
     ) {
-        Text(
-            text = "Voxly",
-            style = MaterialTheme.typography.bodyLarge,
-            color = contentColor.copy(alpha = 0.5f)
-        )
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            // 左侧装饰线
+            Box(
+                modifier = Modifier
+                    .width(24.dp)
+                    .height(1.dp)
+                    .background(contentColor.copy(alpha = 0.3f))
+            )
+            Text(
+                text = "Voxly · Lyrics Poster",
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium,
+                color = contentColor.copy(alpha = 0.5f)
+            )
+        }
     }
 }
 
