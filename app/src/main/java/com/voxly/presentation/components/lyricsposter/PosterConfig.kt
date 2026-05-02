@@ -12,10 +12,13 @@ import androidx.compose.ui.unit.dp
 import com.voxly.presentation.theme.ExpressiveShapes
 
 /**
- * 歌词海报风格 - 仅保留单一卡片风格
+ * 歌词海报风格
  */
 enum class PosterStyle {
-    CARD    // 卡片风格 - 固定宽度，动态高度
+    CARD,           // 卡片风格（默认，向后兼容）
+    IMMERSIVE,      // 全屏沉浸式
+    TYPOGRAPHY,     // 极简文字主导
+    COLLAGE         // 网格拼贴
 }
 
 /**
