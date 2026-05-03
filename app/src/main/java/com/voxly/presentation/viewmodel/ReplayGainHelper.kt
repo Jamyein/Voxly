@@ -14,6 +14,7 @@ import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanMode
 import com.voxly.domain.repository.ScanQuality
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -58,7 +59,7 @@ sealed class ReplayGainScanError {
 class ReplayGainHelper @Inject constructor(
     private val replayGainRepository: ReplayGainRepository,
     private val settingsDataStore: SettingsDataStore,
-    private val context: Context
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
 
     private val _pendingReplayGainInfo = MutableStateFlow<ReplayGainInfo?>(null)
