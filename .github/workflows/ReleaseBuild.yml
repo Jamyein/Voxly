@@ -203,7 +203,7 @@ jobs:
           set -euo pipefail
 
           # Find all APKs (github flavor + release build type + all ABI splits)
-          APK_FILES=( $(find app/build -type f -name "*.apk" | grep -E "githubRelease|releaseGithub" | sort) )
+          APK_FILES=( $(find app/build -type f -name "Voxly-*.apk" | sort) )
           if [ ${#APK_FILES[@]} -eq 0 ]; then
             echo "No APK found"
             exit 1
