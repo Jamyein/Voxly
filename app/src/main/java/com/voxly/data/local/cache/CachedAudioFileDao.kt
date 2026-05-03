@@ -388,13 +388,15 @@ interface CachedAudioFileDao {
             }
         }
 
+        val args = mutableListOf<Any>()
         val conditions = mutableListOf<String>()
 
         // Whitelist: file must start with one of the whitelist prefixes
         if (!whitelist.isNullOrEmpty()) {
             val whitelistConditions = whitelist.map { path ->
                 val normalizedPath = Normalizer.normalize(path.trimEnd('/'), Normalizer.Form.NFC)
-                "path LIKE '$normalizedPath/%'"
+                args.add("$normalizedPath/%")
+                "path LIKE ?"
             }
             conditions.add("(${whitelistConditions.joinToString(" OR ")})")
         }
@@ -403,7 +405,8 @@ interface CachedAudioFileDao {
         if (!blacklist.isNullOrEmpty()) {
             val blacklistConditions = blacklist.map { path ->
                 val normalizedPath = Normalizer.normalize(path.trimEnd('/'), Normalizer.Form.NFC)
-                "path LIKE '$normalizedPath/%'"
+                args.add("$normalizedPath/%")
+                "path LIKE ?"
             }
             conditions.add("NOT (${blacklistConditions.joinToString(" OR ")})")
         }
@@ -441,9 +444,13 @@ interface CachedAudioFileDao {
             }
             // Case 4: No special clauses
             else -> "$baseSql WHERE $whereClause"
-        } + if (limit != null) " LIMIT $limit" else ""
+        } + if (limit != null) " LIMIT ?" else ""
 
-        return SimpleSQLiteQuery(finalSql)
+        if (limit != null) {
+            args.add(limit)
+        }
+
+        return SimpleSQLiteQuery(finalSql, args.toTypedArray())
     }
 }
 

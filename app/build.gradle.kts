@@ -257,7 +257,7 @@ dependencies {
     implementation("com.google.crypto.tink:tink-android:1.21.0")
 
     // Gson for JSON serialization (Retrofit)
-    implementation("com.google.code.gson:gson:2.13.2")
+    implementation("com.google.code.gson:gson:2.14.0")
 
     // Kotlinx Serialization for type-safe serialization
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.11.0")

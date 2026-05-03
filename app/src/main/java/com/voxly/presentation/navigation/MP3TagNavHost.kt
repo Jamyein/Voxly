@@ -612,6 +612,7 @@ private fun OnlineLyricsSearchEntry(
     onPendingLyricsSet: (String) -> Unit
 ) {
     val viewModel = hiltViewModel<OnlineLyricsSearchViewModel, OnlineLyricsSearchViewModel.Factory>(
+        key = key.filePath,
         creationCallback = { factory -> factory.create(key) }
     )
     OnlineLyricsSearchScreen(
@@ -648,6 +649,7 @@ private fun OnlineCoverSearchEntry(
 @Composable
 private fun LyricsSelectorEntry(key: LyricsSelector, topLevelBackStack: TopLevelBackStack<NavKey>) {
     val viewModel = hiltViewModel<LyricsSelectorViewModel, LyricsSelectorViewModel.Factory>(
+        key = key.filePath,
         creationCallback = { factory -> factory.create(key) }
     )
     LyricsSelectorScreen(
@@ -667,13 +669,15 @@ private fun LyricsSelectorEntry(key: LyricsSelector, topLevelBackStack: TopLevel
                     selectedLyricsIndices = selectedIndices
                 )
             )
-        }
+        },
+        viewModel = viewModel
     )
 }
 
 @Composable
 private fun LyricsPosterEntry(key: LyricsPoster, topLevelBackStack: TopLevelBackStack<NavKey>) {
     val viewModel = hiltViewModel<LyricsPosterViewModel, LyricsPosterViewModel.Factory>(
+        key = key.filePath,
         creationCallback = { factory -> factory.create(key) }
     )
     LyricsPosterScreen(
@@ -683,7 +687,8 @@ private fun LyricsPosterEntry(key: LyricsPoster, topLevelBackStack: TopLevelBack
         album = key.album,
         lyricsText = key.lyricsText,
         selectedLyricsIndices = key.selectedLyricsIndices,
-        onNavigateBack = { topLevelBackStack.removeLast() }
+        onNavigateBack = { topLevelBackStack.removeLast() },
+        viewModel = viewModel
     )
 }
 

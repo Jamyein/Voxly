@@ -18,6 +18,14 @@ interface OnlineCoverSearchStrategy {
     suspend fun getCoverArt(releaseId: String): Result<ByteArray?>
 }
 
+/**
+ * Interface for cover search strategy.
+ * This is the type bound in Hilt for CoverSearchHelper.
+ */
+interface CoverSearchStrategy {
+    suspend fun searchByTrack(title: String, artist: String?): Result<List<OnlineRecording>>
+}
+
 interface OnlineLyricsSearchStrategy {
     suspend fun search(
         track: String,
@@ -36,7 +44,7 @@ sealed class LyricsSearchResult {
 
 class CoverRepositorySearchStrategy @Inject constructor(
     private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository
-) : OnlineCoverSearchStrategy {
+) : OnlineCoverSearchStrategy, CoverSearchStrategy {
 
     override suspend fun searchByTrack(
         title: String,

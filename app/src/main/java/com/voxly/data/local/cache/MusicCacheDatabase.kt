@@ -29,6 +29,13 @@ import javax.inject.Singleton
     version = 13,
     exportSchema = false
 )
+/**
+ * Cache database uses destructive migration (fallbackToDestructiveMigration) and exportSchema = false
+ * because:
+ * 1. Data is expendable - can be re-scanned from MediaStore
+ * 2. No external schema validation needed
+ * 3. Simplifies migration management for cache data
+ */
 @TypeConverters(RoomTypeConverters::class)
 abstract class MusicCacheDatabase : RoomDatabase() {
     abstract fun audioFileDao(): CachedAudioFileDao

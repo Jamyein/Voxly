@@ -13,24 +13,17 @@ import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.data.local.saf.SafWriteAccessService
-import com.voxly.data.remote.downloadImageBytes
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.Lyrics
-import com.voxly.domain.model.ClipMode
-import com.voxly.domain.model.ReplayGainConfig
 import com.voxly.domain.model.ReplayGainInfo
-import com.voxly.domain.model.ScanModeConstants
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LyricsRepository
-import com.voxly.domain.repository.LyricsSourceResult
 import com.voxly.domain.repository.OnlineLyricsResult
 import com.voxly.domain.repository.OnlineRecording
-import com.voxly.domain.repository.OnlineSource
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.RecentEditsRepository
-import com.voxly.domain.repository.ScanMode
 import com.voxly.domain.usecase.ApplyOnlineMetadataUseCase
 import com.voxly.domain.usecase.SaveMetadataResult
 import com.voxly.domain.usecase.SaveMetadataUseCase
@@ -74,27 +67,17 @@ import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toPersistentMap
 import kotlinx.collections.immutable.toPersistentSet
 import coil3.SingletonImageLoader
-import kotlin.math.log10
-import kotlin.math.pow
-import kotlin.math.sqrt
 import java.io.File
-import java.net.URLDecoder
 import javax.inject.Inject
-
-/**
- * Error types for ReplayGain scan failures.
- */
-sealed class ReplayGainScanError {
-    data class DecodeFailed(val reason: String, val filePath: String) : ReplayGainScanError()
-    data class NoAudioTrack(val filePath: String) : ReplayGainScanError()
-    data class PermissionDenied(val filePath: String) : ReplayGainScanError()
-    data class AllFallbacksFailed(val filePath: String) : ReplayGainScanError()
-    data class Unknown(val message: String) : ReplayGainScanError()
-}
 
 /**
  * ViewModel for the metadata editor screen.
  * Handles loading, editing, and saving audio file metadata.
+ * 
+ * Delegated responsibilities:
+ * - LyricsSearchHelper: Online lyrics search and results
+ * - CoverSearchHelper: Online cover search and results  
+ * - ReplayGainHelper: ReplayGain scanning and info management
  */
 @HiltViewModel(assistedFactory = MetadataEditorViewModel.Factory::class)
 class MetadataEditorViewModel @AssistedInject constructor(
@@ -105,7 +88,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val lyricsRepository: LyricsRepository,
     private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository,
     private val onlineLyricsSearchStrategy: OnlineLyricsSearchStrategy,
-    private val onlineCoverSearchStrategy: OnlineCoverSearchStrategy,
+    private val coverSearchStrategy: CoverSearchStrategy,
     private val settingsDataStore: SettingsDataStore,
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
@@ -115,7 +98,11 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val searchSeedHolder: SearchSeedHolder,
     private val pendingMetadataHolder: PendingMetadataHolder,
     private val saveMetadataUseCase: SaveMetadataUseCase,
-    private val applyOnlineMetadataUseCase: ApplyOnlineMetadataUseCase
+    private val applyOnlineMetadataUseCase: ApplyOnlineMetadataUseCase,
+    // Delegated helpers for separation of concerns
+    val lyricsSearchHelper: LyricsSearchHelper,
+    val coverSearchHelper: CoverSearchHelper,
+    val replayGainHelper: ReplayGainHelper
 ) : ViewModel() {
 
     private val TAG = "MetadataEditorVM"
@@ -126,7 +113,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     val metadataEditorDynamicAlbumColor: StateFlow<Boolean> = settingsDataStore.metadataEditorDynamicAlbumColor
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.WhileSubscribed(15000),
             initialValue = true
         )
 
@@ -145,47 +132,25 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val _saveResult = MutableSharedFlow<String>()
     val saveResult: SharedFlow<String> = _saveResult.asSharedFlow()
 
-    private val _onlineLyricsResults = MutableStateFlow<List<OnlineLyricsResult>>(emptyList())
-    val onlineLyricsResults: StateFlow<List<OnlineLyricsResult>> = _onlineLyricsResults.asStateFlow()
+    // Re-expose lyrics search state from helper
+    val onlineLyricsResults: StateFlow<List<OnlineLyricsResult>> = lyricsSearchHelper.onlineLyricsResults
+    val isOnlineLyricsLoading: StateFlow<Boolean> = lyricsSearchHelper.isOnlineLyricsLoading
+    val onlineLyricsError: StateFlow<String?> = lyricsSearchHelper.onlineLyricsError
+    val lyricsSearchState: StateFlow<LyricsSearchState> = lyricsSearchHelper.lyricsSearchState
 
-    private val _isOnlineLyricsLoading = MutableStateFlow(false)
-    val isOnlineLyricsLoading: StateFlow<Boolean> = _isOnlineLyricsLoading.asStateFlow()
+    // Re-expose cover search state from helper
+    val coverFetchMessage: SharedFlow<String> = coverSearchHelper.coverFetchMessage
+    val onlineCoverResults: StateFlow<List<OnlineRecording>> = coverSearchHelper.onlineCoverResults
+    val isOnlineCoverLoading: StateFlow<Boolean> = coverSearchHelper.isOnlineCoverLoading
+    val onlineCoverError: StateFlow<String?> = coverSearchHelper.onlineCoverError
+    val coverSearchState: StateFlow<CoverSearchState> = coverSearchHelper.coverSearchState
 
-    private val _onlineLyricsError = MutableStateFlow<String?>(null)
-    val onlineLyricsError: StateFlow<String?> = _onlineLyricsError.asStateFlow()
+    // Re-expose ReplayGain state from helper
+    val pendingReplayGainInfo: StateFlow<ReplayGainInfo?> = replayGainHelper.pendingReplayGainInfo
+    val isScanningReplayGain: StateFlow<Boolean> = replayGainHelper.isScanningReplayGain
+    val replayGainScanError: SharedFlow<String> = replayGainHelper.replayGainScanError
 
-    private val _lyricsSearchState = MutableStateFlow(LyricsSearchState())
-    val lyricsSearchState: StateFlow<LyricsSearchState> = _lyricsSearchState.asStateFlow()
-
-    private val _coverFetchMessage = MutableSharedFlow<String>()
-    val coverFetchMessage: SharedFlow<String> = _coverFetchMessage.asSharedFlow()
-
-    private val _onlineCoverResults = MutableStateFlow<List<OnlineRecording>>(emptyList())
-    val onlineCoverResults: StateFlow<List<OnlineRecording>> = _onlineCoverResults.asStateFlow()
-
-    private val _isOnlineCoverLoading = MutableStateFlow(false)
-    val isOnlineCoverLoading: StateFlow<Boolean> = _isOnlineCoverLoading.asStateFlow()
-
-    private val _onlineCoverError = MutableStateFlow<String?>(null)
-    val onlineCoverError: StateFlow<String?> = _onlineCoverError.asStateFlow()
-
-    private val _coverSearchState = MutableStateFlow(CoverSearchState())
-    val coverSearchState: StateFlow<CoverSearchState> = _coverSearchState.asStateFlow()
-
-    // ReplayGain state
-    private val _pendingReplayGainInfo = MutableStateFlow<ReplayGainInfo?>(null)
-    val pendingReplayGainInfo: StateFlow<ReplayGainInfo?> = _pendingReplayGainInfo.asStateFlow()
-
-    private val _isScanningReplayGain = MutableStateFlow(false)
     private var _originalMetadata: AudioMetadata? = null
-    val isScanningReplayGain: StateFlow<Boolean> = _isScanningReplayGain.asStateFlow()
-
-    private val _replayGainScanError = MutableSharedFlow<String>()
-    val replayGainScanError: SharedFlow<String> = _replayGainScanError.asSharedFlow()
-
-    // Search job tracking - cancel previous search when new one starts
-    private var _lyricsSearchJob: kotlinx.coroutines.Job? = null
-    private var _coverSearchJob: kotlinx.coroutines.Job? = null
 
     // Lyrics timestamp format state
     private val _isLyricsTimestampFormatted = MutableStateFlow(false)
@@ -341,12 +306,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         loadCoverArtAsync(filePath)
 
                         // Load ReplayGain asynchronously — don't block UI
-                        viewModelScope.launch {
-                            val replayGainResult = replayGainRepository.readReplayGain(filePath)
-                            replayGainResult.getOrNull()?.let { replayGainInfo ->
-                                _pendingReplayGainInfo.update { replayGainInfo }
-                            }
-                        }
+                        replayGainHelper.readReplayGain(filePath)
                         
                         // 检查并应用待处理的在线元数据
                         tryApplyPendingOnlineMetadata()
@@ -539,7 +499,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
      * @param replayGainInfo The new ReplayGain info to save
      */
     fun updateReplayGainInfo(replayGainInfo: ReplayGainInfo) {
-        _pendingReplayGainInfo.update { replayGainInfo }
+        replayGainHelper.updateReplayGainInfo(replayGainInfo)
         _hasUnsavedChanges.update { true }
     }
 
@@ -547,7 +507,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
      * Clears the pending ReplayGain info.
      */
     fun clearReplayGainInfo() {
-        _pendingReplayGainInfo.update { null }
+        replayGainHelper.clearReplayGainInfo()
         _hasUnsavedChanges.update { true }
     }
 
@@ -555,7 +515,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
      * Clears the ReplayGain scan error.
      */
     fun clearReplayGainScanError() {
-
+        replayGainHelper.clearReplayGainScanError()
     }
 
     /**
@@ -564,127 +524,18 @@ class MetadataEditorViewModel @AssistedInject constructor(
      * will be automatically downsampled for optimal performance.
      */
     fun scanReplayGain() {
-        viewModelScope.launch {
-            _isScanningReplayGain.update { true }
-             // Clear previous error
-
-            // Using ACCURATE mode for best results - dynamic sampling handles high-res files
-            val scanQuality = com.voxly.domain.repository.ScanQuality.ACCURATE
-
-            try {
-                val currentScanMode = settingsDataStore.scanMode.first().let { mode ->
-                    when (mode) {
-                        ScanModeConstants.SINGLE_ALBUM -> ScanMode.SINGLE_ALBUM
-                        ScanModeConstants.ALBUMS -> ScanMode.ALBUMS
-                        else -> ScanMode.TRACK_ONLY
-                    }
-                }
-                val filesToScan: List<String>
-
-                // Determine which files to scan based on scan mode (foobar2000 compatible)
-                if (currentScanMode == ScanMode.TRACK_ONLY) {
-                    // Track Only: scan single file only, no album gain
-                    filesToScan = listOf(filePath)
-                } else {
-                    // Single Album or Albums mode: find same album files from MediaStore
-                    // - SINGLE_ALBUM: treat all files as one album
-                    // - ALBUMS: will group by album tags (in batch mode), same as SINGLE_ALBUM for single file
-                    val albumFiles = findAlbumFiles()
-                    // Always scan all found album files (even if only one - foobar2000 behavior)
-                    filesToScan = albumFiles.ifEmpty { listOf(filePath) }
-                }
-
-                Timber.tag("Voxly").i("MetadataEditor: ReplayGain scan started. mode=${currentScanMode.name} files=${filesToScan.size}")
-
-                // Get target loudness and clip mode from settings
-                val targetLoudness = settingsDataStore.replayGainTargetLoudness.first()
-                val clipModeStr = settingsDataStore.replayGainClipMode.first()
-                val clipMode = ClipMode.fromString(clipModeStr)
-                val scanConfig = ReplayGainConfig(
-                    clipMode = clipMode,
-                    truePeak = false,
-                    dualMono = false,
-                    albumAsAes77 = false,
-                    skipExisting = false,
-                    maxPeakLevel = 0.0
-                )
-
-                val scanFlow = when (currentScanMode) {
-                    ScanMode.TRACK_ONLY -> replayGainRepository.scanReplayGain(
-                        filesToScan,
-                        scanQuality,
-                        targetLoudness,
-                        scanConfig
-                    )
-                    ScanMode.SINGLE_ALBUM -> replayGainRepository.scanReplayGainByAlbum(
-                        mapOf("single_album" to filesToScan),
-                        scanQuality,
-                        targetLoudness,
-                        scanConfig
-                    )
-                    ScanMode.ALBUMS -> replayGainRepository.scanReplayGainWithAlbumGrouping(
-                        filesToScan,
-                        scanQuality,
-                        targetLoudness,
-                        scanConfig
-                    )
-                }
-
-                scanFlow.collect { progress ->
-                    when (progress.status) {
-                        com.voxly.domain.repository.ScanStatus.COMPLETED -> {
-
-                            // Use ReplayGainInfo directly from progress if available
-                            val info = progress.replayGainInfo
-                            if (info != null) {
-                                _pendingReplayGainInfo.update { info }
-                                _hasUnsavedChanges.update { true }
-                                Timber.tag("Voxly").i("MetadataEditor: ReplayGain scan completed (from progress). mode=${currentScanMode.name}")
-                            } else {
-                                // Fallback: read from file if not in progress
-                                val replayGainReadResult = replayGainRepository.readReplayGain(filePath)
-                                replayGainReadResult.getOrNull()?.let { readInfo ->
-                                    _pendingReplayGainInfo.update { readInfo }
-                                    _hasUnsavedChanges.update { true }
-                                }
-                                Timber.tag("Voxly").i("MetadataEditor: ReplayGain scan completed (from file). mode=${currentScanMode.name}")
-                            }
-                            _isScanningReplayGain.update { false }
-                        }
-                        com.voxly.domain.repository.ScanStatus.FAILED -> {
-                            // Determine error type based on reason
-                            val error: ReplayGainScanError = when {
-                                progress.currentFilePath.contains("Permission") ||
-                                progress.currentFilePath.contains("EACCES") ->
-                                    ReplayGainScanError.PermissionDenied(progress.currentFilePath)
-                                progress.currentFilePath.contains("audio track") ||
-                                progress.currentFilePath.contains("no audio") ||
-                                progress.currentFilePath.contains("NO_AUDIO_TRACK") ->
-                                    ReplayGainScanError.NoAudioTrack(progress.currentFilePath)
-                                progress.currentFilePath.contains("ALL_FALLBACKS_EXHAUSTED") ->
-                                    ReplayGainScanError.AllFallbacksFailed(progress.currentFilePath)
-                                progress.currentFilePath.contains("decode") ||
-                                progress.currentFilePath.contains("codec") ||
-                                progress.currentFilePath.contains("DECODER_INIT_FAILED") ||
-                                progress.currentFilePath.contains("fallback") ->
-                                    ReplayGainScanError.DecodeFailed("解码失败", progress.currentFilePath)
-                                else ->
-                                    ReplayGainScanError.Unknown(progress.currentFilePath)
-                            }
-                            _replayGainScanError.emit(error.toString())
-                            _isScanningReplayGain.update { false }
-                            Timber.tag("Voxly").e("MetadataEditor: ReplayGain scan failed.")
-                        }
-                        else -> { /* scanning in progress */ }
-                    }
-                }
-            } catch (e: Exception) {
-                Timber.tag("Voxly").e(e, "MetadataEditor: ReplayGain scan exception: ${e.message}")
-                _isScanningReplayGain.update { false }
-            }
-        }
+        replayGainHelper.scanReplayGain(filePath)
     }
     
+    /**
+     * Saves ReplayGain info to the file.
+     * @param replayGainInfo ReplayGain info to save
+     * @return true if save was successful
+     */
+    private suspend fun saveReplayGainToFile(replayGainInfo: ReplayGainInfo): Boolean {
+        return replayGainHelper.saveReplayGain(filePath, replayGainInfo)
+    }
+
     /**
      * Finds files in the same album using MediaStore.
      */
@@ -756,7 +607,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     fun saveMetadata() {
         Timber.tag("Voxly").i("MetadataEditorViewModel: action=save filePath=$filePath")
         val metadataToSave = _editedMetadata.value ?: return
-        val replayGainToSave = _pendingReplayGainInfo.value
+        val replayGainToSave = replayGainHelper.pendingReplayGainInfo.value
 
         viewModelScope.launch {
             val startedAt = SystemClock.elapsedRealtime()
@@ -777,16 +628,12 @@ class MetadataEditorViewModel @AssistedInject constructor(
                         // If we have pending ReplayGain info, save it too
                         var replayGainSuccess = true
                         if (replayGainToSave != null) {
-                            val replayGainResult = replayGainRepository.saveReplayGain(
-                                filePath,
-                                replayGainToSave
-                            )
-                            replayGainSuccess = replayGainResult.isSuccess
+                            replayGainSuccess = saveReplayGainToFile(replayGainToSave)
                             if (replayGainSuccess) {
-                                _pendingReplayGainInfo.update { null }
+                                replayGainHelper.clearReplayGainInfo()
                             } else {
                                 Timber.w(
-                                    "Save replaygain failed file=$filePath reason=${replayGainResult.exceptionOrNull()?.message ?: "unknown"}",
+                                    "Save replaygain failed file=$filePath",
                                     "MetadataEditor"
                                 )
                             }
@@ -1018,126 +865,24 @@ class MetadataEditorViewModel @AssistedInject constructor(
         val metadata = _editedMetadata.value ?: return
         val title = metadata.title.orEmpty()
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
-
-        _coverSearchJob?.cancel()
-
-        _coverSearchJob = viewModelScope.launch {
-            _coverSearchState.update { CoverSearchState(isSearching = true) }
-            _isOnlineCoverLoading.update { true }
-            _onlineCoverError.update { null }
-
-            _onlineCoverResults.update { emptyList() }
-            try {
-                val coverSearchResult = onlineCoverSearchStrategy.searchByTrack(title, artist)
-                coverSearchResult.fold(
-                    onSuccess = { recordings ->
-                        recordings.forEach { recording ->
-                            val newResults = _coverSearchState.value.results + recording
-                            _coverSearchState.update { it.copy(results = newResults.toImmutableList()) }
-                            _onlineCoverResults.update { newResults }
-                        }
-                        _coverSearchState.update { it.copy(isSearching = false) }
-                    },
-                    onFailure = { error ->
-                        val message = error.message ?: "Cover search failed"
-                        _coverSearchState.update { state ->
-                            state.copy(errorSources = (state.errorSources + ("System" to message)).toPersistentMap())
-                        }
-                        _onlineCoverError.update { message }
-                        _coverSearchState.update { it.copy(isSearching = false) }
-                    }
-                )
-            } catch (e: Exception) {
-                val message = e.message ?: "Cover search failed"
-                _coverSearchState.update { state ->
-                    state.copy(errorSources = (state.errorSources + ("System" to message)).toPersistentMap())
-                }
-                _onlineCoverError.update { message }
-                _coverSearchState.update { it.copy(isSearching = false) }
-            } finally {
-                _isOnlineCoverLoading.update { false }
-            }
-        }
+        coverSearchHelper.searchOnlineCoverCandidates(title, artist)
     }
 
     fun applyOnlineCover(recording: OnlineRecording) {
-        // If coverArtUrl already exists in the recording, use it directly
-        val existingCoverUrl = recording.coverArtUrl
-        if (!existingCoverUrl.isNullOrBlank()) {
-            viewModelScope.launch {
-                try {
-                    val bytes = downloadImageBytes(
-                        url = existingCoverUrl,
-                        userAgent = "Mozilla/5.0"
-                    )
-                    if (bytes.isNotEmpty()) {
-                        updateAlbumArt(bytes)
-                        _coverFetchMessage.emit("Cover fetched successfully")
-                    } else {
-                        _coverFetchMessage.emit("Cover URL is invalid")
-                    }
-                } catch (e: Exception) {
-                    _coverFetchMessage.emit("Failed to load cover: ${e.message}")
-                }
-            }
-            return
-        }
-
-        val releaseId = recording.releaseId
-        
-        Timber.d("applyOnlineCover: releaseId=$releaseId, source=${recording.source}", TAG)
-        
-        // If no releaseId, show a message and return
-        if (releaseId.isNullOrBlank()) {
-            viewModelScope.launch { _coverFetchMessage.emit("无法获取封面：该结果没有关联的专辑信息") }
-            return
-        }
-
         viewModelScope.launch {
-            
-
-            val oldPreferred = aggregatedOnlineMetadataRepository.preferredSource
-            try {
-                val targetSource = when (recording.source) {
-                    OnlineSource.MUSICBRAINZ -> AggregatedOnlineMetadataRepository.DataSource.MUSICBRAINZ
-                    OnlineSource.ITUNES -> AggregatedOnlineMetadataRepository.DataSource.ITUNES
-                    OnlineSource.NETEASE -> AggregatedOnlineMetadataRepository.DataSource.NETEASE
-                    OnlineSource.QQ_MUSIC -> AggregatedOnlineMetadataRepository.DataSource.QQ_MUSIC
-                    else -> AggregatedOnlineMetadataRepository.DataSource.BOTH
-                }
-                Timber.d("applyOnlineCover: setting preferredSource=$targetSource", TAG)
-                aggregatedOnlineMetadataRepository.preferredSource = targetSource
-
-                val coverResult = aggregatedOnlineMetadataRepository.getCoverArt(releaseId)
-                Timber.d("applyOnlineCover: coverResult isSuccess=${coverResult.isSuccess}, isFailure=${coverResult.isFailure}", TAG)
-                coverResult.fold(
-                    onSuccess = { cover ->
-                        if (cover != null) {
-                            updateAlbumArt(cover)
-                            _coverFetchMessage.emit("Cover fetched successfully")
-                        } else {
-                            _coverFetchMessage.emit("No online cover found")
-                        }
-                    },
-                    onFailure = {
-                        Timber.e("applyOnlineCover failed: ${it.message}", it, TAG)
-                        _coverFetchMessage.emit(it.message ?: "Cover fetch failed")
-                    }
-                )
-            } finally {
-                aggregatedOnlineMetadataRepository.preferredSource = oldPreferred
+            val bytes = coverSearchHelper.applyOnlineCover(recording)
+            if (bytes != null) {
+                updateAlbumArt(bytes)
             }
         }
     }
 
     fun clearCoverFetchMessage() {
-        
+        coverSearchHelper.clearCoverFetchMessage()
     }
 
     fun clearOnlineCoverResults() {
-        _onlineCoverResults.update { emptyList() }
-        _onlineCoverError.update { null }
-        _coverSearchState.update { CoverSearchState() }
+        coverSearchHelper.clearOnlineCoverResults()
     }
 
     fun searchOnlineLyrics() {
@@ -1145,78 +890,20 @@ class MetadataEditorViewModel @AssistedInject constructor(
         val track = metadata.title.orEmpty()
         val artist = metadata.artist?.takeIf { it.isNotBlank() }
         val album = metadata.album?.takeIf { it.isNotBlank() }
-
-        _lyricsSearchJob?.cancel()
-
-        _lyricsSearchJob = viewModelScope.launch {
-            _lyricsSearchState.update { LyricsSearchState(isSearching = true) }
-            _isOnlineLyricsLoading.update { true }
-            _onlineLyricsError.update { null }
-
-            _onlineLyricsResults.update { emptyList() }
-            try {
-                onlineLyricsSearchStrategy.search(track, artist, album).collect { result ->
-                    when (result) {
-                        is LyricsSearchResult.Result -> {
-                            val newResults = _lyricsSearchState.value.results + result.lyrics
-                            _lyricsSearchState.update { it.copy(results = newResults.toImmutableList()) }
-                            _onlineLyricsResults.update { newResults }
-                        }
-
-                        is LyricsSearchResult.SourceCompleted -> {
-                            _lyricsSearchState.update { state ->
-                                state.copy(completedSources = (state.completedSources + result.source).toPersistentSet())
-                            }
-                        }
-
-                        is LyricsSearchResult.Error -> {
-                            _lyricsSearchState.update { state ->
-                                state.copy(
-                                    errorSources = (state.errorSources + (result.source to result.message)).toPersistentMap()
-                                )
-                            }
-                            _onlineLyricsError.update { result.message }
-                        }
-                    }
-                }
-            } catch (e: Exception) {
-                val message = e.message ?: "Lyrics search failed"
-                _onlineLyricsError.update { message }
-                _lyricsSearchState.update { state ->
-                    state.copy(errorSources = (state.errorSources + ("System" to message)).toPersistentMap())
-                }
-            } finally {
-                _lyricsSearchState.update { it.copy(isSearching = false) }
-                _isOnlineLyricsLoading.update { false }
-            }
-        }
+        lyricsSearchHelper.searchOnlineLyrics(track, artist, album)
     }
 
     fun applyOnlineLyrics(result: OnlineLyricsResult) {
         viewModelScope.launch {
-            _isOnlineLyricsLoading.update { true }
-            try {
-                val lyrics = withContext(Dispatchers.IO) {
-                    lyricsRepository.getOnlineLyrics(result).getOrNull()
-                }
-                if (lyrics != null) {
-                    val text = if (lyrics.isSynced) lyrics.toLrcFormat() else lyrics.text
-                    updateMetadataField(MetadataField.LYRICS, text)
-                } else {
-                    _onlineLyricsError.update { "Failed to load lyrics content" }
-                }
-            } catch (e: Exception) {
-                _onlineLyricsError.update { "Failed to load lyrics: ${e.message}" }
-            } finally {
-                _isOnlineLyricsLoading.update { false }
+            val text = lyricsSearchHelper.getLyricsContent(result)
+            if (text != null) {
+                updateMetadataField(MetadataField.LYRICS, text)
             }
         }
     }
 
     fun clearOnlineLyricsResults() {
-        _onlineLyricsResults.update { emptyList() }
-        _onlineLyricsError.update { null }
-        _lyricsSearchState.update { LyricsSearchState() }
+        lyricsSearchHelper.clearOnlineLyricsResults()
     }
 
     fun applyOnlineMetadata(metadata: AudioMetadata) {

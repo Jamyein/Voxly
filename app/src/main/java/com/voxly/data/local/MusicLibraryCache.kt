@@ -29,6 +29,7 @@ import androidx.paging.Pager
 import androidx.paging.PagingConfig
 import androidx.paging.PagingData
 import androidx.paging.PagingSource
+import androidx.room.withTransaction
 
 @Singleton
 class MusicLibraryCache @Inject constructor(
@@ -212,25 +213,31 @@ class MusicLibraryCache @Inject constructor(
     /**
      * Syncs a single file to cache (e.g., after metadata edit).
      * Preserves lastEditedByUserAt if already set.
+     * DB operations are wrapped in a transaction for atomicity.
      */
     suspend fun syncFileToCache(audioFile: AudioFile) = withContext(Dispatchers.IO) {
         Timber.i("syncFileToCache: path=${audioFile.path}, album=${audioFile.metadata.album}, albumArtist=${audioFile.metadata.albumArtist}, albumId=${audioFile.mediaStoreAlbumId}")
-        val file = File(audioFile.path)
-        val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
-            gson.toJson(audioFile.metadata.customFields)
-        } else null
 
-        val existingEntity = audioFileDao.getAudioFileByPath(audioFile.path)
-        val lastEditedByUserAt = existingEntity?.lastEditedByUserAt
+        // Transaction ensures atomic read-modify-write on the entity
+        database.withTransaction {
+            val file = File(audioFile.path)
+            val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
+                gson.toJson(audioFile.metadata.customFields)
+            } else null
 
-        val entity = CachedAudioFileEntity.fromAudioFile(
-            audioFile = audioFile,
-            fileLastModified = file.lastModified(),
-            customFieldsJson = customFieldsJson,
-            lastEditedByUserAt = lastEditedByUserAt
-        )
+            val existingEntity = audioFileDao.getAudioFileByPath(audioFile.path)
+            val lastEditedByUserAt = existingEntity?.lastEditedByUserAt
 
-        audioFileDao.insert(entity)
+            val entity = CachedAudioFileEntity.fromAudioFile(
+                audioFile = audioFile,
+                fileLastModified = file.lastModified(),
+                customFieldsJson = customFieldsJson,
+                lastEditedByUserAt = lastEditedByUserAt
+            )
+
+            audioFileDao.insert(entity)
+        }
+        // Non-DB operations outside transaction - cache invalidation and state updates
         Timber.d("syncFileToCache: inserted to DB, invalidating hotCache")
         invalidateHotCache()
 
