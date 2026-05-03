@@ -3,8 +3,6 @@ package com.voxly.presentation.viewmodel
 import android.content.Context
 import android.os.Environment
 import android.provider.MediaStore
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.ClipMode
 import com.voxly.domain.model.ReplayGainConfig
@@ -13,10 +11,11 @@ import com.voxly.domain.model.ScanModeConstants
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanMode
 import com.voxly.domain.repository.ScanQuality
-import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -42,25 +41,25 @@ sealed class ReplayGainScanError {
 }
 
 /**
- * Helper ViewModel for ReplayGain scanning functionality in MetadataEditor.
+ * Helper for ReplayGain scanning functionality in MetadataEditor.
  * Handles ReplayGain scan initiation, progress tracking, and result management.
- * 
+ *
  * Usage:
  * ```kotlin
  * // In MetadataEditorViewModel
  * private val replayGainHelper = ReplayGainHelper(replayGainRepository, settingsDataStore, context)
- * 
+ *
  * // Expose state from helper
  * val pendingReplayGainInfo = replayGainHelper.pendingReplayGainInfo
  * val isScanningReplayGain = replayGainHelper.isScanningReplayGain
  * ```
  */
-@HiltViewModel
 class ReplayGainHelper @Inject constructor(
     private val replayGainRepository: ReplayGainRepository,
     private val settingsDataStore: SettingsDataStore,
     @ApplicationContext private val context: Context
-) : ViewModel() {
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _pendingReplayGainInfo = MutableStateFlow<ReplayGainInfo?>(null)
     val pendingReplayGainInfo: StateFlow<ReplayGainInfo?> = _pendingReplayGainInfo.asStateFlow()
@@ -82,7 +81,7 @@ class ReplayGainHelper @Inject constructor(
      */
     fun scanReplayGain(filePath: String) {
         scanJob?.cancel()
-        scanJob = viewModelScope.launch {
+        scanJob = scope.launch {
             _isScanningReplayGain.update { true }
 
             // Using ACCURATE mode for best results - dynamic sampling handles high-res files

@@ -1,13 +1,13 @@
 package com.voxly.presentation.viewmodel
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.voxly.data.remote.downloadImageBytes
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
-import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -21,14 +21,14 @@ import kotlinx.collections.immutable.toPersistentMap
 import javax.inject.Inject
 
 /**
- * Helper ViewModel for cover art search functionality in MetadataEditor.
+ * Helper for cover art search functionality in MetadataEditor.
  * Handles online cover search, results management, and cover application.
  */
-@HiltViewModel
 class CoverSearchHelper @Inject constructor(
     private val aggregatedOnlineMetadataRepository: AggregatedOnlineMetadataRepository,
     private val coverSearchStrategy: CoverSearchStrategy
-) : ViewModel() {
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _coverFetchMessage = MutableSharedFlow<String>()
     val coverFetchMessage: SharedFlow<String> = _coverFetchMessage.asSharedFlow()
@@ -55,7 +55,7 @@ class CoverSearchHelper @Inject constructor(
     fun searchOnlineCoverCandidates(title: String, artist: String?) {
         _coverSearchJob?.cancel()
 
-        _coverSearchJob = viewModelScope.launch {
+        _coverSearchJob = scope.launch {
             _coverSearchState.update { CoverSearchState(isSearching = true) }
             _isOnlineCoverLoading.update { true }
             _onlineCoverError.update { null }

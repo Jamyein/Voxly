@@ -1,12 +1,12 @@
 package com.voxly.presentation.viewmodel
 
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.viewModelScope
 import com.voxly.domain.model.Lyrics
 import com.voxly.domain.repository.LyricsRepository
 import com.voxly.domain.repository.OnlineLyricsResult
-import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,25 +19,25 @@ import kotlinx.collections.immutable.toPersistentSet
 import javax.inject.Inject
 
 /**
- * Helper ViewModel for lyrics search functionality in MetadataEditor.
+ * Helper for lyrics search functionality in MetadataEditor.
  * Handles online lyrics search, results management, and lyrics application.
- * 
+ *
  * Usage:
  * ```kotlin
  * // In MetadataEditorViewModel
  * private val lyricsSearchHelper = LyricsSearchHelper(lyricsRepository, onlineLyricsSearchStrategy)
- * 
+ *
  * // Expose state from helper
  * val onlineLyricsResults = lyricsSearchHelper.onlineLyricsResults
  * val isOnlineLyricsLoading = lyricsSearchHelper.isOnlineLyricsLoading
  * val lyricsSearchState = lyricsSearchHelper.lyricsSearchState
  * ```
  */
-@HiltViewModel
 class LyricsSearchHelper @Inject constructor(
     private val lyricsRepository: LyricsRepository,
     private val onlineLyricsSearchStrategy: OnlineLyricsSearchStrategy
-) : ViewModel() {
+) {
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
     private val _onlineLyricsResults = MutableStateFlow<List<OnlineLyricsResult>>(emptyList())
     val onlineLyricsResults: StateFlow<List<OnlineLyricsResult>> = _onlineLyricsResults.asStateFlow()
@@ -62,7 +62,7 @@ class LyricsSearchHelper @Inject constructor(
     fun searchOnlineLyrics(track: String, artist: String?, album: String?) {
         _lyricsSearchJob?.cancel()
 
-        _lyricsSearchJob = viewModelScope.launch {
+        _lyricsSearchJob = scope.launch {
             _lyricsSearchState.update { LyricsSearchState(isSearching = true) }
             _isOnlineLyricsLoading.update { true }
             _onlineLyricsError.update { null }
