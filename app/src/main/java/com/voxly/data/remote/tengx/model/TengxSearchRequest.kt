@@ -1,5 +1,7 @@
 package com.voxly.data.remote.tengx.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * TengX Music search request body for POST request.
  * Structure matches the music.search.SearchCgiService API.
@@ -10,34 +12,35 @@ package com.voxly.data.remote.tengx.model
  *
  * Uses zzcSign signature for authentication.
  */
+@Serializable
 data class TengxSearchRequest(
-    /** Common request parameters */
-    val comm: TengxCommParams,
     /** Search request parameters */
-    val req: TengxSearchReqParams
+    val req: TengxSearchReqParams,
+    /** Common request parameters */
+    val comm: TengxCommParams
 )
 
 /**
  * Common request parameters for TengX Music API.
+ *
+ * Matches any-listen QQ Music mobile client configuration.
  */
+@Serializable
 data class TengxCommParams(
     /** Client type: 11 for mobile */
     val ct: String = "11",
-    /** Client version: TengX Music Android version */
+    /** Client version */
     val cv: String = "14090508",
-    /** Auth salt */
-    val authq: String = "",
-    /** Login Uin (0 for guest) */
-    val loginUin: Int = 0,
-    /** Device info */
-    val deviceInfo: String = "",
-    /** Platform */
-    val platform: String = ""
+    /** API version (required, same as cv) */
+    val v: String = "14090508",
+    /** User ID (0 for guest) */
+    val uin: String = "0"
 )
 
 /**
  * Search request parameters.
  */
+@Serializable
 data class TengxSearchReqParams(
     /** Module name */
     val module: String = "music.search.SearchCgiService",
@@ -50,13 +53,14 @@ data class TengxSearchReqParams(
 /**
  * Search parameter details.
  */
+@Serializable
 data class TengxSearchParam(
     /** Search type: 0=song, 2=album, 3=singer */
     val search_type: Int = 0,
     /** Search query/keyword */
     val query: String = "",
-    /** Page number (0-indexed) */
+    /** Page number (0-indexed, matching QQ Music API convention) */
     val page_num: Int = 0,
-    /** Number of results per page */
-    val num_per_page: Int = 20
+    /** Number of results per page (QQ Music uses num_perpage without underscore) */
+    val num_perpage: Int = 20
 )

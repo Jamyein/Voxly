@@ -2,8 +2,8 @@ package com.voxly.data.remote.tengx
 
 import com.voxly.data.remote.tengx.model.TengxAlbumDetail
 import com.voxly.data.remote.tengx.model.TengxLyricsResponse
-import com.voxly.data.remote.tengx.model.TengxSearchRequest
 import com.voxly.data.remote.tengx.model.TengxSongDetail
+import okhttp3.RequestBody
 import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.Body
@@ -47,17 +47,46 @@ interface TengxApi {
      */
     @POST("cgi-bin/musics.fcg")
     @Headers(
-        "User-Agent: QQMusic 14090508(android 12)",
-        "Referer: https://y.qq.com/",
-        "Origin: https://y.qq.com",
-        "X-Requested-With: XMLHttpRequest",
-        "Accept: */*",
-        "Accept-Language: zh-CN,zh;q=0.9,en;q=0.8",
-        "Content-Type: application/json"
+        "User-Agent: QQMusic 14090508(android 12)"
     )
     suspend fun search(
         @Query("sign") sign: String,
-        @Body body: com.voxly.data.remote.tengx.model.TengxSearchRequest
+        @Body body: RequestBody
+    ): Response<ResponseBody>
+
+    /**
+     * Fallback search API using GET request (legacy web API).
+     * Used when POST API returns errors.
+     */
+    @GET
+    @Headers(
+        "User-Agent: QQMusic 14090508(android 12)"
+    )
+    suspend fun searchLegacy(
+        @Url url: String = "https://c.y.qq.com/soso/fcgi-bin/client_search_cp",
+        @Query("ct") ct: Int = 24,
+        @Query("qqmusic_ver") qqmusic_ver: Int = 1298,
+        @Query("new_json") new_json: Int = 1,
+        @Query("remoteplace") remoteplace: String = "txt.yqq.song",
+        @Query("searchid") searchid: String = "",
+        @Query("t") t: Int = 0,
+        @Query("aggr") aggr: Int = 1,
+        @Query("cr") cr: String = "1",
+        @Query("catZhida") catZhida: Int = 1,
+        @Query("lossless") lossless: Int = 0,
+        @Query("flag_qc") flag_qc: Int = 0,
+        @Query("p") pageNum: Int = 1,
+        @Query("n") pageSize: Int = 20,
+        @Query("w") keywords: String,
+        @Query("g_tk") g_tk: Int = 5381,
+        @Query("loginUin") loginUin: String = "0",
+        @Query("hostUin") hostUin: Int = 0,
+        @Query("format") format: String = "json",
+        @Query("inCharset") inCharset: String = "utf8",
+        @Query("outCharset") outCharset: String = "utf-8",
+        @Query("notice") notice: Int = 0,
+        @Query("platform") platform: String = "yqq",
+        @Query("needNewCode") needNewCode: Int = 0
     ): Response<ResponseBody>
 
     /**

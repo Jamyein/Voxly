@@ -1,12 +1,15 @@
 package com.voxly.data.remote.tengx
 
 import android.util.Base64
-import com.google.gson.Gson
 import com.google.gson.JsonArray
+import okhttp3.MediaType.Companion.toMediaTypeOrNull
+import okhttp3.RequestBody.Companion.toRequestBody
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.voxly.data.remote.tengx.crypto.QQMusicCrypto
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import com.voxly.data.remote.tengx.model.TengxAlbum
 import com.voxly.data.remote.tengx.model.TengxAlbumDetail
 import com.voxly.data.remote.tengx.model.TengxCommParams
@@ -121,27 +124,30 @@ class TengxRepositoryImpl(
             Timber.d(TAG, "=== Starting QQ Music search ===")
             Timber.d(TAG, "QQ Music search: keywords='$keywords' page=$normalizedPage limit=$normalizedSize")
 
-            // Build POST request body
+            // Build POST request body (comm first, matching any-listen format)
             val searchRequest = TengxSearchRequest(
                 comm = TengxCommParams(),
                 req = TengxSearchReqParams(
                     param = TengxSearchParam(
                         search_type = type,
                         query = keywords,
-                        page_num = normalizedPage - 1, // API uses 0-indexed
-                        num_per_page = normalizedSize
+                        page_num = normalizedPage - 1, // 0-indexed for QQ Music API
+                        num_perpage = normalizedSize
                     )
                 )
             )
 
-            // Serialize to JSON and compute signature
-            val gson = Gson()
-            val requestJson = gson.toJson(searchRequest)
+            // Serialize to JSON using kotlinx.serialization (must match Retrofit converter)
+            val requestJson = Json.encodeToString(searchRequest)
             val sign = QQMusicCrypto.zzcSign(requestJson)
 
+            Timber.d(TAG, "QQ Music request JSON: $requestJson")
             Timber.d(TAG, "QQ Music sign: $sign")
+            Timber.d(TAG, "QQ Music request length: ${requestJson.length} bytes")
 
-            val response = api.search(sign = sign, body = searchRequest)
+            val requestBody = requestJson.toByteArray(Charsets.UTF_8)
+                .toRequestBody("application/json; charset=utf-8".toMediaTypeOrNull())
+            val response = api.search(sign = sign, body = requestBody)
 
             if (response.isSuccessful) {
                 val body = response.body()
@@ -153,27 +159,42 @@ class TengxRepositoryImpl(
 
                     val jsonObject = JsonParser.parseString(responseString).asJsonObject
                     val parsed = parseSearchResponse(jsonObject)
-                    if (parsed != null) {
+                    if (parsed != null && parsed.code == 0 && !parsed.data?.song?.list.isNullOrEmpty()) {
                         val songCount = parsed.data?.song?.list?.size ?: 0
-                        Timber.d(TAG, "QQ Music parsed songs: $songCount")
-
-                        if (!parsed.data?.song?.list.isNullOrEmpty()) {
-                            Timber.d(TAG, "QQ Music found $songCount songs for '$keywords'")
-                            Timber.tag("Voxly").i("TengxRepository searchSongs completed: keywords='$keywords' resultCount=${parsed.data.song.list.size}")
-                            return Result.success(parsed)
-                        } else {
-                            Timber.w(TAG, "QQ Music parsed but song list is empty")
-                        }
-                    } else {
-                        Timber.w(TAG, "QQ Music parseSearchResponse returned null")
+                        Timber.d(TAG, "QQ Music found $songCount songs for '$keywords'")
+                        Timber.tag("Voxly").i("TengxRepository searchSongs completed: keywords='$keywords' resultCount=${parsed.data.song.list.size}")
+                        return Result.success(parsed)
                     }
-                    // Return parsed response even if empty
-                    parsed?.let { return Result.success(it) }
+                    
+                    // POST failed or returned empty, try legacy GET API
+                    Timber.w(TAG, "QQ Music POST search failed or empty, trying legacy GET API")
                 }
-                Result.failure(Exception("QQ Music search returned empty body"))
             } else {
-                Timber.w(TAG, "QQ Music search failed: http=${response.code()}")
-                Result.failure(Exception("QQ Music search failed: ${response.code()}"))
+                Timber.w(TAG, "QQ Music POST search failed: http=${response.code()}, trying legacy GET API")
+            }
+            
+            // Fallback to legacy GET API
+            val legacyResponse = api.searchLegacy(
+                keywords = keywords,
+                pageNum = normalizedPage,
+                pageSize = normalizedSize
+            )
+            
+            if (legacyResponse.isSuccessful) {
+                val legacyBody = legacyResponse.body()
+                if (legacyBody != null) {
+                    val legacyResponseString = legacyBody.string()
+                    Timber.d(TAG, "QQ Music legacy raw response: $legacyResponseString")
+                    
+                    val legacyJsonObject = JsonParser.parseString(legacyResponseString).asJsonObject
+                    val legacyParsed = parseSearchResponse(legacyJsonObject)
+                    if (legacyParsed != null) {
+                        return Result.success(legacyParsed)
+                    }
+                }
+                Result.failure(Exception("QQ Music legacy search returned empty body"))
+            } else {
+                Result.failure(Exception("QQ Music legacy search failed: ${legacyResponse.code()}"))
             }
         } catch (e: Exception) {
             Timber.e(e, "QQ Music search exception: ${e.message}")
