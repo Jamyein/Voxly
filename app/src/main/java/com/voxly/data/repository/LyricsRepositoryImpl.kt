@@ -65,6 +65,11 @@ class LyricsRepositoryImpl @Inject constructor(
 
     var preferredSource: LyricsSource = LyricsSource.ALL
 
+    companion object {
+        /** Timestamp tolerance in milliseconds for matching original and translated lyric lines. */
+        private const val TRANSLATION_TIMESTAMP_TOLERANCE_MS = 50L
+    }
+
     override suspend fun readLyrics(filePath: String): Result<Lyrics?> =
         withContext(Dispatchers.IO) {
             try {
@@ -527,11 +532,11 @@ class LyricsRepositoryImpl @Inject constructor(
     /**
      * Gets lyrics from NetEase by song ID.
      * Uses Simple API (WangyRepository).
+     * Automatically merges original and translated lyrics if available.
      */
     suspend fun getNetEaseLyrics(songId: Long): Result<Lyrics> =
         withContext(Dispatchers.IO) {
             try {
-                // Use wangyRepository (Simple API)
                 val response = wangyRepository.getLyrics(songId)
 
                 if (response.isSuccess) {
@@ -540,10 +545,11 @@ class LyricsRepositoryImpl @Inject constructor(
                     val tLrc = lyricsResponse?.tlyric?.lyric
 
                     if (!lrc.isNullOrBlank()) {
-                        val lyrics = if (lrc.contains("[")) {
-                            Lyrics.parseLrc(lrc)
+                        val mergedLrc = mergeTranslatedLyrics(lrc, tLrc)
+                        val lyrics = if (mergedLrc.contains("[")) {
+                            Lyrics.parseLrc(mergedLrc)
                         } else {
-                            Lyrics.createUnsynced(lrc)
+                            Lyrics.createUnsynced(mergedLrc)
                         }
                         Result.success(lyrics)
                     } else {
@@ -560,6 +566,7 @@ class LyricsRepositoryImpl @Inject constructor(
 
     /**
      * Gets lyrics from QQ Music by song mid.
+     * Automatically merges original and translated lyrics if available.
      */
     suspend fun getQQMusicLyrics(songMid: String): Result<Lyrics> =
         withContext(Dispatchers.IO) {
@@ -572,10 +579,11 @@ class LyricsRepositoryImpl @Inject constructor(
                     val tLrc = lyricsData?.translatedLyrics
 
                     if (lrc.isNotBlank()) {
-                        val lyrics = if (lrc.contains("[")) {
-                            Lyrics.parseLrc(lrc)
+                        val mergedLrc = mergeTranslatedLyrics(lrc, tLrc)
+                        val lyrics = if (mergedLrc.contains("[")) {
+                            Lyrics.parseLrc(mergedLrc)
                         } else {
-                            Lyrics.createUnsynced(lrc)
+                            Lyrics.createUnsynced(mergedLrc)
                         }
                         Result.success(lyrics)
                     } else {
@@ -588,6 +596,59 @@ class LyricsRepositoryImpl @Inject constructor(
                 Result.failure(LyricsException("Network error", e))
             }
         }
+
+    /**
+     * Merges original LRC lyrics with translated LRC lyrics into dual-line format.
+     * Each original line is followed by its translation line with the same timestamp.
+     *
+     * @param originalLrc Original lyrics in LRC format
+     * @param translatedLrc Translated lyrics in LRC format (may be null or blank)
+     * @return Merged lyrics string in LRC format, or original if translation is unavailable
+     */
+    private fun mergeTranslatedLyrics(originalLrc: String, translatedLrc: String?): String {
+        if (translatedLrc.isNullOrBlank()) return originalLrc
+        if (!originalLrc.contains("[")) return originalLrc
+
+        val original = Lyrics.parseLrc(originalLrc)
+        if (!original.isSynced || original.syncedLines.isEmpty()) return originalLrc
+
+        val translated = if (translatedLrc.contains("[")) {
+            Lyrics.parseLrc(translatedLrc)
+        } else {
+            Lyrics.createUnsynced(translatedLrc)
+        }
+
+        if (!translated.isSynced || translated.syncedLines.isEmpty()) return originalLrc
+
+        val transMap = translated.syncedLines.associateBy { it.timestampMs }
+        val transTimestamps = translated.syncedLines.map { it.timestampMs }
+
+        return buildString {
+            original.syncedLines.forEach { line ->
+                appendLine("${line.formattedTimestamp}${line.text}")
+                val matchingTrans = transMap[line.timestampMs]
+                    ?: findClosestTimestamp(line.timestampMs, transTimestamps, TRANSLATION_TIMESTAMP_TOLERANCE_MS)
+                        ?.let { transMap[it] }
+                matchingTrans?.let { trans ->
+                    if (trans.text.isNotBlank() && trans.text != line.text) {
+                        appendLine("${trans.formattedTimestamp}${trans.text}")
+                    }
+                }
+            }
+        }.trim()
+    }
+
+    /**
+     * Finds the closest timestamp within the given tolerance.
+     */
+    private fun findClosestTimestamp(
+        target: Long,
+        timestamps: List<Long>,
+        toleranceMs: Long
+    ): Long? {
+        return timestamps.minByOrNull { kotlin.math.abs(it - target) }
+            ?.takeIf { kotlin.math.abs(it - target) <= toleranceMs }
+    }
 
     private suspend fun resolveQQSongMid(songId: Long): String? {
         return tengxRepository.getSongDetail(listOf(songId))
