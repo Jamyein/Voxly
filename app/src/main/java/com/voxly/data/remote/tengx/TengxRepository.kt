@@ -1,14 +1,20 @@
 package com.voxly.data.remote.tengx
 
 import android.util.Base64
+import com.google.gson.Gson
 import com.google.gson.JsonArray
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.voxly.data.remote.tengx.crypto.QQMusicCrypto
 import com.voxly.data.remote.tengx.model.TengxAlbum
 import com.voxly.data.remote.tengx.model.TengxAlbumDetail
+import com.voxly.data.remote.tengx.model.TengxCommParams
 import com.voxly.data.remote.tengx.model.TengxLyricsResponse
 import com.voxly.data.remote.tengx.model.TengxSearchData
+import com.voxly.data.remote.tengx.model.TengxSearchParam
+import com.voxly.data.remote.tengx.model.TengxSearchRequest
+import com.voxly.data.remote.tengx.model.TengxSearchReqParams
 import com.voxly.data.remote.tengx.model.TengxSearchResponse
 import com.voxly.data.remote.tengx.model.TengxSinger
 import com.voxly.data.remote.tengx.model.TengxSong
@@ -22,10 +28,12 @@ private const val TAG = "TengxRepository"
  * Repository for TengX Music API operations.
  * Handles API communication for QQ Music service.
  *
- * Uses simplified web API (no complex JSON body required).
+ * Search API based on any-listen-extension-online-metadata:
+ * https://github.com/any-listen/any-listen-extension-online-metadata
+ * Reference: src/qq_music/index.ts
  *
  * Features:
- * - Song search with pagination
+ * - Song search with pagination (POST with zzcSign)
  * - Lyrics retrieval with Base64 decoding
  * - Song and album details
  */
@@ -113,11 +121,27 @@ class TengxRepositoryImpl(
             Timber.d(TAG, "=== Starting QQ Music search ===")
             Timber.d(TAG, "QQ Music search: keywords='$keywords' page=$normalizedPage limit=$normalizedSize")
 
-            val response = api.search(
-                keywords = keywords,
-                pageNum = normalizedPage,
-                pageSize = normalizedSize
+            // Build POST request body
+            val searchRequest = TengxSearchRequest(
+                comm = TengxCommParams(),
+                req = TengxSearchReqParams(
+                    param = TengxSearchParam(
+                        search_type = type,
+                        query = keywords,
+                        page_num = normalizedPage - 1, // API uses 0-indexed
+                        num_per_page = normalizedSize
+                    )
+                )
             )
+
+            // Serialize to JSON and compute signature
+            val gson = Gson()
+            val requestJson = gson.toJson(searchRequest)
+            val sign = QQMusicCrypto.zzcSign(requestJson)
+
+            Timber.d(TAG, "QQ Music sign: $sign")
+
+            val response = api.search(sign = sign, body = searchRequest)
 
             if (response.isSuccessful) {
                 val body = response.body()
@@ -229,7 +253,7 @@ class TengxRepositoryImpl(
     }
 
     /**
-     * Decodes Base64 encoded string.
+     * Decodes Base64 encoded string using UTF-8.
      *
      * @param encoded Base64 encoded string
      * @return Decoded string
@@ -240,7 +264,7 @@ class TengxRepositoryImpl(
                 ""
             } else {
                 val decodedBytes = Base64.decode(encoded, Base64.DEFAULT)
-                String(decodedBytes, Charsets.UTF_16LE)
+                String(decodedBytes, Charsets.UTF_8)
             }
         } catch (e: Exception) {
             ""
@@ -248,8 +272,10 @@ class TengxRepositoryImpl(
     }
 
     /**
-     * Parses GET search response from QQ Music.
-     * Response format: data.song.list (direct structure)
+     * Parses POST search response from QQ Music mobile API.
+     *
+     * New response format: body -> req -> data -> body -> item_song (or songlist)
+     * Also supports legacy format: data -> song -> list
      */
     private fun parseSearchResponse(root: JsonObject): TengxSearchResponse? {
         val code = root.optInt("code") ?: 0
@@ -258,12 +284,29 @@ class TengxRepositoryImpl(
             return null
         }
 
-        // GET response format: data -> song -> list (direct structure)
-        val data = root.optObject("data") ?: root
-        val songNode = data.optObject("song") ?: return null
-        val songList = songNode.optArray("list") ?: JsonArray()
+        // Try new POST response format first: body.req.data.body.item_song
+        val songList = run {
+            val body = root.optObject("body")
+            val req = body?.optObject("req")
+            val data = req?.optObject("data")
+            val innerBody = data?.optObject("body")
 
-        val songs = songList.mapNotNull { it.asJsonObjectOrNull() }.mapNotNull { item ->
+            // Try item_song first, then songlist
+            innerBody?.optArray("item_song")
+                ?: innerBody?.optArray("songlist")
+                ?: JsonArray()
+        }
+
+        // If new format didn't find songs, try legacy GET format: data.song.list
+        val finalSongList = if (songList.size() == 0) {
+            val data = root.optObject("data") ?: root
+            val songNode = data.optObject("song")
+            songNode?.optArray("list") ?: JsonArray()
+        } else {
+            songList
+        }
+
+        val songs = finalSongList.mapNotNull { it.asJsonObjectOrNull() }.mapNotNull { item ->
             val id = item.optLong("id") ?: item.optLong("songid") ?: return@mapNotNull null
             val name = item.optString("name") ?: item.optString("title") ?: item.optString("songName") ?: return@mapNotNull null
             val title = item.optString("title") ?: name
@@ -325,10 +368,21 @@ class TengxRepositoryImpl(
             )
         }
 
-        val total = songNode.optInt("totalnum")
-            ?: songNode.optInt("totalNum")
-            ?: songNode.optInt("sum")
-            ?: data.optObject("meta")?.optInt("estimate_sum")
+        // Calculate total from new format meta or legacy format
+        val total = run {
+            val body = root.optObject("body")
+            val req = body?.optObject("req")
+            val data = req?.optObject("data")
+            val meta = data?.optObject("meta")
+            meta?.optInt("sum")
+        }
+            ?: run {
+                val data = root.optObject("data") ?: root
+                val songNode = data.optObject("song")
+                songNode?.optInt("totalnum")
+                    ?: songNode?.optInt("totalNum")
+                    ?: songNode?.optInt("sum")
+            }
             ?: songs.size
 
         return TengxSearchResponse(

@@ -3,6 +3,12 @@ package com.voxly.data.remote.tengx.model
 /**
  * TengX Music search request body for POST request.
  * Structure matches the music.search.SearchCgiService API.
+ *
+ * Based on any-listen-extension-online-metadata:
+ * https://github.com/any-listen/any-listen-extension-online-metadata
+ * Reference: src/qq_music/index.ts (search request body structure)
+ *
+ * Uses zzcSign signature for authentication.
  */
 data class TengxSearchRequest(
     /** Common request parameters */
@@ -16,7 +22,7 @@ data class TengxSearchRequest(
  */
 data class TengxCommParams(
     /** Client type: 11 for mobile */
-    val ct: Int = 11,
+    val ct: String = "11",
     /** Client version: TengX Music Android version */
     val cv: String = "14090508",
     /** Auth salt */
