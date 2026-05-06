@@ -22,16 +22,21 @@ class TengxRepositoryTest {
 
     @Before
     fun setup() {
-        MockKAnnotations.init(this)
+        api = mockk(relaxed = true)
         repository = TengxRepositoryImpl(api)
     }
 
     @Test
     fun searchSongs_returnsSuccess() = runBlocking {
-        val mockResponseBody = mockk<ResponseBody>()
+        val mockResponseBody: ResponseBody = mockk()
         every { mockResponseBody.string() } returns TengxFixtures.SEARCH_SUCCESS_JSON
-        val mockResponse = Response.success(mockResponseBody)
-        coEvery { api.search(keywords = any(), pageNum = any(), pageSize = any()) } returns mockResponse
+        
+        val mockResponse: Response<ResponseBody> = mockk()
+        every { mockResponse.isSuccessful } returns true
+        every { mockResponse.body() } returns mockResponseBody
+        every { mockResponse.code() } returns 200
+        
+        coEvery { api.search(sign = any(), body = any()) } returns mockResponse
 
         val result = repository.searchSongs("test song")
 
@@ -40,10 +45,15 @@ class TengxRepositoryTest {
 
     @Test
     fun searchSongs_returnsEmpty() = runBlocking {
-        val mockResponseBody = mockk<ResponseBody>()
+        val mockResponseBody: ResponseBody = mockk()
         every { mockResponseBody.string() } returns TengxFixtures.SEARCH_EMPTY_JSON
-        val mockResponse = Response.success(mockResponseBody)
-        coEvery { api.search(keywords = any(), pageNum = any(), pageSize = any()) } returns mockResponse
+        
+        val mockResponse: Response<ResponseBody> = mockk()
+        every { mockResponse.isSuccessful } returns true
+        every { mockResponse.body() } returns mockResponseBody
+        every { mockResponse.code() } returns 200
+        
+        coEvery { api.search(sign = any(), body = any()) } returns mockResponse
 
         val result = repository.searchSongs("nonexistent")
 
@@ -53,7 +63,7 @@ class TengxRepositoryTest {
 
     @Test
     fun searchSongs_returnsFailure_onNetworkError() = runBlocking {
-        coEvery { api.search(keywords = any(), pageNum = any(), pageSize = any()) } throws Exception("Network error")
+        coEvery { api.search(sign = any(), body = any()) } throws Exception("Network error")
 
         val result = repository.searchSongs("test")
 

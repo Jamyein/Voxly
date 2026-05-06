@@ -2,5 +2,5 @@
 <resources>
     <!-- Android 12+ dynamic color: both background and foreground follow wallpaper palette -->
     <color name="ic_launcher_background">@android:color/system_accent1_600</color>
-    <color name="ic_launcher_foreground">@android:color/system_accent1_0</color>
+    <color name="ic_launcher_foreground">#FFFFFF</color>
 </resources>
