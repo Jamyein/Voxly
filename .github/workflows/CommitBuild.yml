@@ -51,8 +51,8 @@ jobs:
         run: |
           set -euo pipefail
 
-          # Find APK (arm64-v8a only)
-          APK_PATH="$(find app/build -type f -name "*arm64*.apk" | head -n 1)"
+          # Find final APK (arm64-v8a only, match the named output from build.gradle.kts)
+          APK_PATH="$(find app/build/outputs/apk -type f -name "Voxly-*-arm64-v8a.apk" | head -n 1)"
           if [ -z "${APK_PATH}" ]; then
             echo "No APK found"
             exit 1
