@@ -276,8 +276,8 @@ dependencies {
     ksp("androidx.hilt:hilt-compiler:1.3.0")
 
     // Paging 3 for efficient large library handling
-    implementation("androidx.paging:paging-runtime-ktx:3.4.2")
-    implementation("androidx.paging:paging-compose:3.4.2")
+    implementation("androidx.paging:paging-runtime-ktx:3.5.0")
+    implementation("androidx.paging:paging-compose:3.5.0")
 
     // Timber for logging
     implementation("com.jakewharton.timber:timber:5.0.1")
