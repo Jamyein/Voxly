@@ -198,11 +198,11 @@ dependencies {
     implementation("androidx.compose.animation:animation-core:1.11.0")
     implementation("androidx.compose.animation:animation-graphics:1.11.0")
     // Material3 Alpha 版本 - 覆盖 BOM 中的稳定版以使用最新特性
-    implementation("androidx.compose.material3:material3:1.5.0-alpha18")
+    implementation("androidx.compose.material3:material3:1.5.0-alpha19")
     // Material Design 3 Expressive - RoundedPolygon 形状支持
     implementation("androidx.graphics:graphics-shapes:1.1.0")
-    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha18")
-    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha18")
+    implementation("androidx.compose.material3:material3-window-size-class:1.5.0-alpha19")
+    implementation("androidx.compose.material3:material3-adaptive-navigation-suite:1.5.0-alpha19")
     // Material3 Adaptive Layout - for dual-pane and three-pane layouts
     implementation("androidx.compose.material3.adaptive:adaptive-layout:1.2.0")
     implementation("androidx.compose.material3.adaptive:adaptive-navigation:1.2.0")
