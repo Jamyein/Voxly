@@ -58,6 +58,15 @@
 -keep class com.voxly.domain.model.** { *; }
 
 # ========================================
+# ComposeRuntimeFlags — SlotTable link buffer optimization
+# R8 在 release 构建中会编译期求值 isLinkBufferComposerEnabled 为 false，
+# 因为 setDefault 是空方法。使用 -assumevalues 强制 R8 保留 true 语义。
+# ========================================
+-assumevalues class androidx.compose.runtime.ComposeRuntimeFlags {
+    boolean isLinkBufferComposerEnabled return true;
+}
+
+# ========================================
 # JNI rules (ReplayGain native scanner)
 # Keep class name stable for JNI_OnLoad FindClass/RegisterNatives.
 # ========================================

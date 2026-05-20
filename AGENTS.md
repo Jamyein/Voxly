@@ -47,9 +47,10 @@ When any error occurs (build break, crash, test failure, wrong behavior):
 |-----------|---------|
 | AGP | 9.2.0 |
 | Kotlin | 2.3.21 |
-| Compose BOM | 2026.04.01 |
+| Compose BOM | 2026.05.01 |
 | Material3 | 1.5.0-alpha18 (overrides BOM) |
 | Compose Animation | 1.11.0 (overrides BOM) |
+| Foundation-layout | BOM-resolved (separate artifact for FlexBox/Grid APIs) |
 | Navigation3 | 1.1.1 |
 | Hilt | 2.59.2 |
 | Room | 2.8.4 (KSP, not kapt) |
@@ -101,6 +102,8 @@ When any error occurs (build break, crash, test failure, wrong behavior):
 - **`OverlayClip`** is an interface in `SharedTransitionScope`, not constructible from user code. Apply `.clip(shape)` directly on render targets.
 - **`ExpressiveScaffold`** must disable default insets: `WindowInsets(0, 0, 0, 0)`.
 - **`ExpressiveTopAppBar`** uses status bar insets only (top + horizontal).
+- **FlexBox** (`foundation-layout` artifact): Requires `@OptIn(ExperimentalFlexBoxApi::class)` + `import androidx.compose.foundation.layout.ExperimentalFlexBoxApi`. Config DSL uses `direction(FlexDirection.Row)`, `wrap(FlexWrap.Wrap)`, `justifyContent(FlexJustifyContent.Start)`, `alignItems(FlexAlignItems.Center)`, `gap(dp)`.
+- **SlotTable link buffer**: Set `ComposeRuntimeFlags.isLinkBufferComposerEnabled = true` in `Application.onCreate()` BEFORE `setContent()`. Requires `@OptIn(ExperimentalComposeApi::class)`. Must add `-assumevalues class androidx.compose.runtime.ComposeRuntimeFlags { boolean isLinkBufferComposerEnabled return true; }` in proguard-rules.pro to prevent R8 compile-time evaluation from forcing it false in release builds.
 - Theme uses `MotionScheme.expressive()`, dynamic colors (Android 12+), MD3 Expressive color schemes.
 
 ## Workflow rules

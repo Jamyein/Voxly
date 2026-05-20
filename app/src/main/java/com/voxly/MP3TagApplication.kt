@@ -2,6 +2,8 @@ package com.voxly
 
 import android.app.Application
 import android.content.Context
+import androidx.compose.runtime.ComposeRuntimeFlags
+import androidx.compose.runtime.ExperimentalComposeApi
 import androidx.hilt.work.HiltWorkerFactory
 import androidx.work.Configuration
 import coil3.ImageLoader
@@ -43,6 +45,8 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
 
     override fun onCreate() {
         super.onCreate()
+        @OptIn(ExperimentalComposeApi::class)
+        ComposeRuntimeFlags.isLinkBufferComposerEnabled = true
 
         Timber.tag("Voxly").i("Application created")
         Thread.setDefaultUncaughtExceptionHandler(CrashHandler())

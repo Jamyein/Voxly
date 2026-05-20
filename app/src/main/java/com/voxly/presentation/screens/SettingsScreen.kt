@@ -15,7 +15,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.ExperimentalFlexBoxApi
+import androidx.compose.foundation.layout.FlexAlignItems
+import androidx.compose.foundation.layout.FlexBox
+import androidx.compose.foundation.layout.FlexDirection
+import androidx.compose.foundation.layout.FlexJustifyContent
+import androidx.compose.foundation.layout.FlexWrap
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -112,7 +117,7 @@ import com.voxly.presentation.viewmodel.DragDialogSourceItem
 private val HorizontalPadding = 16.dp
 private val SectionSpacing = 16.dp
 
-@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalMaterial3Api::class, ExperimentalFlexBoxApi::class)
 @Composable
 private fun <T> ConnectedIconButtonGroup(
     options: List<ConnectedIconOption<T>>,
@@ -1492,7 +1497,7 @@ private fun SettingsSourceDialogs(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFlexBoxApi::class)
 @Composable
 private fun SettingsInlineDialogs(
     showSeparatorDialog: Boolean,
@@ -1518,10 +1523,15 @@ private fun SettingsInlineDialogs(
                     modifier = Modifier.fillMaxWidth(),
                     verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    FlowRow(
+                    FlexBox(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        config = {
+                            direction(FlexDirection.Row)
+                            wrap(FlexWrap.Wrap)
+                            justifyContent(FlexJustifyContent.Start)
+                            alignItems(FlexAlignItems.Center)
+                            gap(8.dp)
+                        }
                     ) {
                         dialogSeparatorTags.forEach { separator ->
                             SeparatorChip(
