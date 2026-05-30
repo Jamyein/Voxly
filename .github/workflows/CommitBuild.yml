@@ -62,14 +62,14 @@ jobs:
           exit 1
           fi
 
-# Extract versionName from build.gradle.kts
-VERSION_NAME=$(grep -oP 'versionName\s*=\s*"[^"]+"' app/build.gradle.kts | cut -d\" -f2)
-SHORT_SHA="${GITHUB_SHA::7}"
-OUT_DIR="${RELEASE_DIR}"
-mkdir -p "${OUT_DIR}"
-OUT_NAME="Voxly-${VERSION_NAME}-${SHORT_SHA}.apk"
-cp "${APK_PATH}" "${OUT_DIR}/${OUT_NAME}"
-echo "RENAMED_APK=${OUT_DIR}/${OUT_NAME}" >> "$GITHUB_ENV"
+          # Extract versionName from build.gradle.kts
+          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"[^"]+"' app/build.gradle.kts | cut -d\" -f2)
+          SHORT_SHA="${GITHUB_SHA::7}"
+          OUT_DIR="${RELEASE_DIR}"
+          mkdir -p "${OUT_DIR}"
+          OUT_NAME="Voxly-${VERSION_NAME}-${SHORT_SHA}.apk"
+          cp "${APK_PATH}" "${OUT_DIR}/${OUT_NAME}"
+          echo "RENAMED_APK=${OUT_DIR}/${OUT_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload Dev APK
         uses: actions/upload-artifact@v4
