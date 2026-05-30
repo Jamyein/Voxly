@@ -49,18 +49,18 @@ jobs:
       - name: Find and rename APK
         shell: bash
         run: |
-set -euo pipefail
+          set -euo pipefail
 
-# Gradle outputs the final release apk in this directory (verified locally)
-RELEASE_DIR="app/github/release"
-mkdir -p "${RELEASE_DIR}"
+          # Gradle outputs the final release apk in this directory (verified locally)
+          RELEASE_DIR="app/github/release"
+          mkdir -p "${RELEASE_DIR}"
 
-# Grab the first apk that matches our naming convention
-APK_PATH="$(find "${RELEASE_DIR}" -type f -name 'app-github-arm64-v8a-release.apk' | head -n 1)"
-if [ -z "${APK_PATH}" ]; then
-  echo "No APK found in ${RELEASE_DIR}"
-  exit 1
-fi
+          # Grab the first apk that matches our naming convention
+          APK_PATH="$(find "${RELEASE_DIR}" -type f -name 'app-github-arm64-v8a-release.apk' | head -n 1)"
+          if [ -z "${APK_PATH}" ]; then
+          echo "No APK found in ${RELEASE_DIR}"
+          exit 1
+          fi
 
 # Extract versionName from build.gradle.kts
 VERSION_NAME=$(grep -oP 'versionName\s*=\s*"[^"]+"' app/build.gradle.kts | cut -d\" -f2)
