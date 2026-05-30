@@ -49,24 +49,27 @@ jobs:
       - name: Find and rename APK
         shell: bash
         run: |
-          set -euo pipefail
+set -euo pipefail
 
-          # Find final APK (arm64‑v8a only, match the named output from build.gradle.kts)
-          # Find final APK in the GitHub flavor output directory
-          APK_PATH="$(find app/github/release -type f -name \"app-github-arm64-v8a-release.apk\" | head -n 1)"
-          if [ -z "${APK_PATH}" ]; then
-            echo "No APK found"
-            exit 1
-          fi
+# Gradle outputs the final release apk in this directory (verified locally)
+RELEASE_DIR="app/github/release"
+mkdir -p "${RELEASE_DIR}"
 
-          # Extract VERSION_NAME from build.gradle.kts
-          VERSION_NAME=$(grep -oP 'versionName\s*=\s*"\K[^"]+' app/build.gradle.kts)
-          SHORT_SHA="${GITHUB_SHA::7}"
-          OUT_DIR="app/github/release"
-          mkdir -p "${OUT_DIR}"
-          OUT_NAME="Voxly-${VERSION_NAME}-${SHORT_SHA}.apk"
-          cp "${APK_PATH}" "${OUT_DIR}/${OUT_NAME}"
-          echo "RENAMED_APK=${OUT_DIR}/${OUT_NAME}" >> "$GITHUB_ENV"
+# Grab the first apk that matches our naming convention
+APK_PATH="$(find "${RELEASE_DIR}" -type f -name 'app-github-arm64-v8a-release.apk' | head -n 1)"
+if [ -z "${APK_PATH}" ]; then
+  echo "No APK found in ${RELEASE_DIR}"
+  exit 1
+fi
+
+# Extract versionName from build.gradle.kts
+VERSION_NAME=$(grep -oP 'versionName\s*=\s*"[^"]+"' app/build.gradle.kts | cut -d\" -f2)
+SHORT_SHA="${GITHUB_SHA::7}"
+OUT_DIR="${RELEASE_DIR}"
+mkdir -p "${OUT_DIR}"
+OUT_NAME="Voxly-${VERSION_NAME}-${SHORT_SHA}.apk"
+cp "${APK_PATH}" "${OUT_DIR}/${OUT_NAME}"
+echo "RENAMED_APK=${OUT_DIR}/${OUT_NAME}" >> "$GITHUB_ENV"
 
       - name: Upload Dev APK
         uses: actions/upload-artifact@v4
