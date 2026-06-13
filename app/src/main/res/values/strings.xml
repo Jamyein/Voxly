@@ -359,6 +359,8 @@
     <string name="settings_dynamic_color_subtitle">Use colors from your wallpaper (Android 12+)</string>
     <string name="settings_metadata_editor_dynamic_album_color">Dynamic Album Color</string>
     <string name="settings_metadata_editor_dynamic_album_color_subtitle">Extract colors from album artwork in metadata editor</string>
+    <string name="settings_floating_bottom_nav">Floating Bottom Bar</string>
+    <string name="settings_floating_bottom_nav_subtitle">Render the bottom navigation bar as a floating M3E toolbar</string>
     <string name="settings_scan_quality_subtitle">Higher quality = slower scanning</string>
     <string name="settings_scan_mode">Scan Mode</string>
     <string name="settings_scan_mode_subtitle">Compatible with foobar2000: Track Only, Single Album, or Albums</string>

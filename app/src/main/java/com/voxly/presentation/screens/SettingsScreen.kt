@@ -842,12 +842,14 @@ fun SettingsScreen(
                 themeMode = uiState.themeMode,
                 dynamicColors = uiState.dynamicColors,
                 metadataEditorDynamicAlbumColor = uiState.metadataEditorDynamicAlbumColor,
+                floatingBottomNavEnabled = uiState.floatingBottomNavEnabled,
                 savedLanguageTag = effectiveLanguageTag,
                 languageExpanded = languageExpanded,
                 onLanguageExpandedChange = { languageExpanded = it },
                 onSetThemeMode = viewModel::setThemeMode,
                 onSetDynamicColors = viewModel::setDynamicColors,
                 onSetMetadataEditorDynamicAlbumColor = viewModel::setMetadataEditorDynamicAlbumColor,
+                onSetFloatingBottomNavEnabled = viewModel::setFloatingBottomNavEnabled,
                 onSetLanguage = { tag ->
                     viewModel.setLanguage(tag)
                     languageExpanded = false
@@ -987,12 +989,14 @@ private fun AppearanceSettingsSection(
     themeMode: String,
     dynamicColors: Boolean,
     metadataEditorDynamicAlbumColor: Boolean,
+    floatingBottomNavEnabled: Boolean,
     savedLanguageTag: String?,
     languageExpanded: Boolean,
     onLanguageExpandedChange: (Boolean) -> Unit,
     onSetThemeMode: (String) -> Unit,
     onSetDynamicColors: (Boolean) -> Unit,
     onSetMetadataEditorDynamicAlbumColor: (Boolean) -> Unit,
+    onSetFloatingBottomNavEnabled: (Boolean) -> Unit,
     onSetLanguage: (String?) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -1018,7 +1022,7 @@ private fun AppearanceSettingsSection(
             selectedValue = themeMode,
             onSelected = onSetThemeMode,
             index = 0,
-            count = 3
+            count = 5
         )
 
         SegmentedSwitchRow(
@@ -1027,7 +1031,7 @@ private fun AppearanceSettingsSection(
             checked = dynamicColors,
             onCheckedChange = onSetDynamicColors,
             index = 1,
-            count = 3
+            count = 5
         )
 
         SegmentedSwitchRow(
@@ -1036,7 +1040,16 @@ private fun AppearanceSettingsSection(
             checked = metadataEditorDynamicAlbumColor,
             onCheckedChange = onSetMetadataEditorDynamicAlbumColor,
             index = 2,
-            count = 4
+            count = 5
+        )
+
+        SegmentedSwitchRow(
+            title = stringResource(R.string.settings_floating_bottom_nav),
+            subtitle = stringResource(R.string.settings_floating_bottom_nav_subtitle),
+            checked = floatingBottomNavEnabled,
+            onCheckedChange = onSetFloatingBottomNavEnabled,
+            index = 3,
+            count = 5
         )
 
         SegmentedClickableRow(
@@ -1083,8 +1096,8 @@ private fun AppearanceSettingsSection(
                 }
             },
             onClick = { },
-            index = 3,
-            count = 4,
+            index = 4,
+            count = 5,
             modifier = Modifier.fillMaxWidth()
         )
     }

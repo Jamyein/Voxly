@@ -51,6 +51,7 @@ class SettingsDataStore @Inject constructor(
             val SELECTED_DIRECTORY_URIS = stringPreferencesKey("selected_directory_uris")
             val APPLE_COUNTRY_CODE = stringPreferencesKey("apple_country_code")
             val FILE_BROWSER_ROOT_TAB = stringPreferencesKey("file_browser_root_tab")
+            val FLOATING_BOTTOM_NAV = booleanPreferencesKey("floating_bottom_nav_enabled")
         }
 
         object OnlineSearch {
@@ -1199,11 +1200,31 @@ class SettingsDataStore @Inject constructor(
         }
 
     /**
+     * Floating bottom navigation bar preference flow.
+     * When enabled, the bottom NavigationBar uses the M3E floating toolbar style:
+     * pill-shaped rounded container, horizontal margins, floating above the gesture-nav
+     * inset, with tonal elevation and surfaceContainer color.
+     */
+    val floatingBottomNavEnabled: Flow<Boolean> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[Theme.FLOATING_BOTTOM_NAV] ?: false
+        }
+
+    /**
      * Save file browser root tab preference
      */
     suspend fun setFileBrowserRootTab(tab: String) {
         context.settingsDataStore.edit { preferences ->
             preferences[Theme.FILE_BROWSER_ROOT_TAB] = tab
+        }
+    }
+
+    /**
+     * Save floating bottom navigation bar preference
+     */
+    suspend fun setFloatingBottomNavEnabled(enabled: Boolean) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[Theme.FLOATING_BOTTOM_NAV] = enabled
         }
     }
 }

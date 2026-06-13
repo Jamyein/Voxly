@@ -123,5 +123,6 @@ data class SettingsUiState(
     val replayGainTargetLoudness: Float = -14f,
     val scanMode: String = "TRACK_ONLY",
     val minDurationFilterEnabled: Boolean = true,
-    val lyricsTimestampFormatEnabled: Boolean = false
+    val lyricsTimestampFormatEnabled: Boolean = false,
+    val floatingBottomNavEnabled: Boolean = false
 )

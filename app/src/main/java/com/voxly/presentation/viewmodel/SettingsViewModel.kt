@@ -811,6 +811,18 @@ class SettingsViewModel @Inject constructor(
         )
 
     /**
+     * Floating bottom navigation bar enabled state.
+     * When true, the bottom NavigationBar is rendered as a floating M3E toolbar:
+     * pill-shaped, with horizontal margins, floating above the gesture-nav inset.
+     */
+    val floatingBottomNavEnabled: StateFlow<Boolean> = settingsDataStore.floatingBottomNavEnabled
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = false
+        )
+
+    /**
      * Set proxy enabled preference
      */
     fun setProxyEnabled(enabled: Boolean) {
@@ -883,6 +895,15 @@ class SettingsViewModel @Inject constructor(
     }
 
     /**
+     * Set floating bottom navigation bar preference
+     */
+    fun setFloatingBottomNavEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            settingsDataStore.setFloatingBottomNavEnabled(enabled)
+        }
+    }
+
+    /**
      * Combined UI state for the settings screen.
      * Replaces 32 individual collectAsState() calls with a single state holder.
      */
@@ -905,7 +926,8 @@ class SettingsViewModel @Inject constructor(
         replayGainTargetLoudness,
         scanMode,
         minDurationFilterEnabled,
-        lyricsTimestampFormatEnabled
+        lyricsTimestampFormatEnabled,
+        floatingBottomNavEnabled
     ) { values ->
         SettingsUiState(
             dynamicColors = values[0] as Boolean,
@@ -926,7 +948,8 @@ class SettingsViewModel @Inject constructor(
             replayGainTargetLoudness = values[15] as Float,
             scanMode = values[16] as String,
             minDurationFilterEnabled = values[17] as Boolean,
-            lyricsTimestampFormatEnabled = values[18] as Boolean
+            lyricsTimestampFormatEnabled = values[18] as Boolean,
+            floatingBottomNavEnabled = values[19] as Boolean
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), SettingsUiState())
 }

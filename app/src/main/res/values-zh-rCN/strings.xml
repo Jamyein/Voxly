@@ -272,6 +272,8 @@
     <string name="settings_dynamic_color_subtitle">使用来自壁纸的颜色（Android 12+）</string>
     <string name="settings_metadata_editor_dynamic_album_color">动态专辑颜色</string>
     <string name="settings_metadata_editor_dynamic_album_color_subtitle">在元数据编辑器中从专辑封面提取颜色</string>
+    <string name="settings_floating_bottom_nav">悬浮底栏</string>
+    <string name="settings_floating_bottom_nav_subtitle">将底部导航栏渲染为 M3E 浮动工具栏样式</string>
     <string name="settings_scan_quality_subtitle">质量越高，扫描越慢</string>
     <string name="settings_scan_mode">扫描模式</string>
     <string name="settings_scan_mode_subtitle">单轨、单专辑、多专辑</string>
