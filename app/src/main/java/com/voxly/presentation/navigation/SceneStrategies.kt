@@ -53,8 +53,9 @@ internal class BottomSheetScene<T : Any>(
 /**
  * Bottom Sheet Scene Strategy - displays entries with bottomSheet metadata in a ModalBottomSheet
  *
- * Note: This is a custom implementation as official BottomSheetSceneStrategy is not available
- * in Navigation 3 1.1.1.
+ * Note: Navigation 3 does not ship an official BottomSheetSceneStrategy yet, so we provide a
+ * custom implementation that wraps a ModalBottomSheet around the entry's content. The
+ * ModalBottomSheetProperties are passed via the entry's metadata map.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 class BottomSheetSceneStrategy<T : Any> : SceneStrategy<T> {

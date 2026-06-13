@@ -41,6 +41,24 @@ import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 
+/**
+ * Apply a shared memory cache key to an [ImageRequest] for both the resolved bitmap and the
+ * placeholder. This keeps the list-page and detail-page renders pointing at the same cached entry,
+ * so the detail page can display the bitmap that the list page already decoded.
+ *
+ * @param memoryKey non-null key used for the actual bitmap lookup
+ * @param placeholderKey optional key used for the placeholder drawable. When `null`, Coil falls
+ *   back to its default placeholder behaviour (no shared key). Defaults to [memoryKey] so callers
+ *   that want the same key for both can pass a single argument.
+ */
+internal fun ImageRequest.Builder.applySharedMemoryCache(
+    memoryKey: String,
+    placeholderKey: String? = memoryKey,
+): ImageRequest.Builder = apply {
+    memoryCacheKey(memoryKey)
+    placeholderMemoryCacheKey(placeholderKey)
+}
+
 @Composable
 fun NetworkCoverImage(
     url: String?,
@@ -123,9 +141,7 @@ fun AlbumArtImage(
 
             model?.let { uri ->
                 val cacheKey = uri.toString()
-                imageRequestBuilder
-                    .memoryCacheKey(cacheKey)
-                    .placeholderMemoryCacheKey(cacheKey)
+                imageRequestBuilder.applySharedMemoryCache(cacheKey)
             }
 
             val asyncModifier = if (clipShape != null) {

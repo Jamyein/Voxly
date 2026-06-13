@@ -25,6 +25,7 @@ import coil3.request.ImageRequest
 import coil3.request.crossfade
 import coil3.size.Size
 import com.voxly.R
+import com.voxly.presentation.components.applySharedMemoryCache
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 /**
@@ -72,14 +73,14 @@ fun AlbumArtSection(
     ) {
         val albumArtRequest = remember(displayModel, coverKey) {
             displayModel?.let { model ->
+                val memoryKey = coverKey ?: when (model) {
+                    is ByteArray -> "album_art_${model.contentHashCode()}"
+                    else -> "album_art_${model.hashCode()}"
+                }
                 ImageRequest.Builder(context)
                     .data(model)
                     .size(Size.ORIGINAL)
-                    .memoryCacheKey(coverKey ?: when (model) {
-                        is ByteArray -> "album_art_${model.contentHashCode()}"
-                        else -> "album_art_${model.hashCode()}"
-                    })
-                    .placeholderMemoryCacheKey(coverKey)
+                    .applySharedMemoryCache(memoryKey, placeholderKey = coverKey)
                     .build()
             }
         }
