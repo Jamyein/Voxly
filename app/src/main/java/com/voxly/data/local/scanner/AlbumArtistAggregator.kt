@@ -23,7 +23,6 @@ import kotlinx.coroutines.flow.first
 import timber.log.Timber
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.runBlocking
 import kotlinx.collections.immutable.toImmutableList
 import javax.inject.Inject
 import javax.inject.Named
@@ -86,9 +85,11 @@ class AlbumArtistAggregator @Inject constructor(
     private val _artistsMap = MutableStateFlow<Map<String, ArtistGroup>>(emptyMap())
 
     // Reverse index: filePath -> albumKey for O(1) lookup when metadata changes
-    private val _fileAlbumMap = mutableMapOf<String, String>()
+    // ConcurrentHashMap because buildAlbumsFromFiles may run on a different coroutine
+    // than incrementalUpdateFile (e.g. via direct init rebuild vs changeFlow collect).
+    private val _fileAlbumMap = java.util.concurrent.ConcurrentHashMap<String, String>()
     // Reverse index: filePath -> artistKey for O(1) lookup when metadata changes
-    private val _fileArtistMap = mutableMapOf<String, String>()
+    private val _fileArtistMap = java.util.concurrent.ConcurrentHashMap<String, String>()
 
     private val baseFilterConfig = combine(
         settingsDataStore.whitelistEnabled,
@@ -139,14 +140,10 @@ class AlbumArtistAggregator @Inject constructor(
     }
 
     init {
-        runBlocking(Dispatchers.Default) {
-            val cachedFiles = libraryCache.getCachedAudioFilesOnce()
-            if (cachedFiles.isNotEmpty()) {
-                val config = aggregationConfig.first()
-                buildAggregatesFromFiles(cachedFiles, config)
-            }
-        }
-
+        // No runBlocking on the main thread here -- the initial load is driven by
+        // _changeFlow's initial FullRefresh, which the applicationScope collector below
+        // picks up asynchronously after construction returns. This keeps Hilt singleton
+        // construction cheap and avoids ANR risk on large libraries.
         applicationScope.launch(Dispatchers.Default) {
             libraryCache.changeFlow.collect { change ->
                 when (change) {
@@ -478,8 +475,8 @@ class AlbumArtistAggregator @Inject constructor(
                 whitelistEnabled = config.whitelistEnabled,
                 blacklistEnabled = config.blacklistEnabled,
                 minDurationEnabled = config.minDurationEnabled,
-                whitelistUris = config.whitelistPaths,
-                blacklistUris = config.blacklistPaths,
+                whitelistPaths = config.whitelistPaths,
+                blacklistPaths = config.blacklistPaths,
                 minDurationMs = config.minDurationMs
             )
         )
@@ -496,11 +493,28 @@ class AlbumArtistAggregator @Inject constructor(
 
     private suspend fun rebuildArtist(artistKey: String) {
         val config = aggregationConfig.first()
-        incrementalUpdateFile(
-            libraryCache.getCachedAudioFilesOnce().firstOrNull()?.path ?: return,
-            CacheChangeKeys.extractArtistKey(libraryCache.getCachedAudioFilesOnce().first()),
-            artistKey
-        )
+
+        // Look up all files belonging to this artist via the artist_links table.
+        // artistKey is either "id:<long>" (from MediaStore artist id) or a raw artist name.
+        val trackIds: List<String> = when {
+            artistKey.startsWith("id:") -> {
+                // For id: prefixed keys, the MediaStore id maps to the canonical artist name
+                // via the primary artist of each file. Fall back to scanning all files.
+                libraryCache.getCachedAudioFilesOnce()
+                    .filter { it.mediaStoreArtistId?.toString() == artistKey.removePrefix("id:") }
+                    .map { it.path }
+            }
+            else -> libraryCache.getTrackIdsForArtist(artistKey).mapNotNull { id ->
+                libraryCache.getCachedAudioFilesOnce().firstOrNull { it.id == id }?.path
+            }
+        }
+
+        if (trackIds.isEmpty()) return
+
+        // Re-process each file so the artist group gets re-derived correctly
+        trackIds.forEach { path ->
+            incrementalUpdateFile(path, null, artistKey)
+        }
     }
 
     private fun emitUpdatedLists() {
@@ -532,8 +546,8 @@ class AlbumArtistAggregator @Inject constructor(
                 whitelistEnabled = config.whitelistEnabled,
                 blacklistEnabled = config.blacklistEnabled,
                 minDurationEnabled = config.minDurationEnabled,
-                whitelistUris = config.whitelistPaths,
-                blacklistUris = config.blacklistPaths,
+                whitelistPaths = config.whitelistPaths,
+                blacklistPaths = config.blacklistPaths,
                 minDurationMs = config.minDurationMs
             )
         )
@@ -687,67 +701,7 @@ class AlbumArtistAggregator @Inject constructor(
         emitUpdatedLists()
     }
 
-    /**
-     * Derives albums from audio files.
-     * Groups by albumId if available, otherwise falls back to (albumName, albumArtist) string.
-     */
-    private suspend fun updateAlbumsFromFiles(files: List<AudioFile>) {
-        // First level: group by albumId or (albumName, albumArtist) string
-        val primaryGroups = mutableMapOf<String?, MutableList<AudioFile>>()
-        val albumIdSet = mutableSetOf<Long>()
-
-        files.forEach { file ->
-            val effectiveAlbumId = file.mediaStoreAlbumId?.takeIf { it > 0 }
-            val effectiveAlbumName = file.metadata.album?.takeIf { it.isNotBlank() }
-            val effectiveAlbumArtist = file.metadata.albumArtist?.takeIf { it.isNotBlank() }
-                ?: file.metadata.artist?.takeIf { it.isNotBlank() }
-
-            when {
-                effectiveAlbumId != null && effectiveAlbumName != null -> {
-                    primaryGroups.getOrPut("id:$effectiveAlbumId") { mutableListOf() }.add(file)
-                    albumIdSet.add(effectiveAlbumId)
-                }
-                effectiveAlbumName != null -> {
-                    val key = "str:$effectiveAlbumName|${effectiveAlbumArtist.orEmpty()}"
-                    primaryGroups.getOrPut(key) { mutableListOf() }.add(file)
-                }
-            }
-        }
-
-        val albumsList = primaryGroups.map { (key, albumFiles) ->
-            val albumName: String
-            val albumArtist: String?
-
-            if (key?.startsWith("id:") == true) {
-                // albumId group - use metadata values
-                albumName = albumFiles.firstOrNull()?.metadata?.album
-                    ?: key.removePrefix("id:")
-                albumArtist = albumFiles.firstOrNull()?.metadata?.albumArtist
-            } else {
-                // String fallback group
-                val parts = key?.removePrefix("str:")?.split("|") ?: listOf()
-                albumName = parts.firstOrNull() ?: ""
-                albumArtist = albumFiles.firstOrNull()?.metadata?.albumArtist?.takeIf { it.isNotBlank() }
-            }
-
-            val coverFile = albumFiles.firstOrNull {
-                it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0
-            } ?: albumFiles.firstOrNull()
-            val albumYear = albumFiles.mapNotNull { extractAlbumYear(it) }.maxOrNull()
-            AlbumGroup(
-                name = albumName,
-                albumArtist = albumArtist?.takeIf { it.isNotBlank() },
-                files = albumFiles.sortedBy { it.metadata.trackNumber }.toImmutableList(),
-                coverPath = coverFile?.path,
-                year = albumYear
-            )
-        }.sortedBy { SortUtil.toSortablePinyin(it.name) }
-
-        if (!areAlbumListsEqual(albumsList, _albums.value)) {
-            _albums.value = albumsList
-            computeAndCacheSortOrders(albumsList)
-        }
-    }
+    // updateAlbumsFromFiles was removed — all call sites use buildAlbumsFromFiles instead.
 
     private fun computeAndCacheSortOrders(albumsList: List<AlbumGroup>) {
         val sortedAlbumsByOption = mapOf(
@@ -769,99 +723,7 @@ class AlbumArtistAggregator @Inject constructor(
         return Regex("""\d{4}""").find(rawYear)?.value?.toIntOrNull()
     }
 
-    /**
-     * Derives artists from audio files.
-     * Two-level grouping:
-     * 1. Primary grouping by mediaStoreArtistId (if available)
-     * 2. Secondary splitting by separator within each artistId group
-     * A file can belong to multiple artist groups if separator splits its artist string.
-     */
-    private suspend fun updateArtistsFromFiles(
-        files: List<AudioFile>,
-        separatorEnabled: Boolean,
-        customSeparators: Set<String>
-    ) {
-        // First level: group by artistId or artist string
-        val primaryGroups = mutableMapOf<String?, MutableList<AudioFile>>()
-        val artistIdSet = mutableSetOf<Long>()
-
-        files.forEach { file ->
-            val effectiveArtistId = file.mediaStoreArtistId?.takeIf { it > 0 }
-            val effectiveArtistName = file.metadata.artist?.takeIf { it.isNotBlank() }
-
-            when {
-                effectiveArtistId != null && effectiveArtistName != null -> {
-                    primaryGroups.getOrPut("id:$effectiveArtistId") { mutableListOf() }.add(file)
-                    artistIdSet.add(effectiveArtistId)
-                }
-                effectiveArtistName != null -> {
-                    primaryGroups.getOrPut(effectiveArtistName) { mutableListOf() }.add(file)
-                }
-                else -> {
-                    // No artist info, skip
-                }
-            }
-        }
-
-        // Query artist names for artistIds
-        val artistIdNameMap = if (artistIdSet.isNotEmpty()) {
-            mediaStoreDataSource.queryArtistNames(artistIdSet.toList())
-        } else {
-            emptyMap()
-        }
-
-        // Second level: split by separator and build final artist groups
-        val artistFilesMap = mutableMapOf<String, MutableList<AudioFile>>()
-        val artistNameToId = mutableMapOf<String, Long?>()
-        val artistNameUseRawString = mutableSetOf<String>()
-
-        primaryGroups.forEach { (primaryKey, groupFiles) ->
-            val artistId = if (primaryKey?.startsWith("id:") == true) {
-                primaryKey.removePrefix("id:").toLongOrNull()
-            } else null
-
-            for (file in groupFiles) {
-                val artistName = file.metadata.artist ?: continue
-
-                if (separatorEnabled && customSeparators.isNotEmpty()) {
-                    val splitArtists = splitArtist(artistName, customSeparators)
-                    for (splitName in splitArtists) {
-                        artistFilesMap.getOrPut(splitName) { mutableListOf() }.add(file)
-                        artistNameToId[splitName] = artistId
-                        artistNameUseRawString.add(splitName)
-                    }
-                } else {
-                    artistFilesMap.getOrPut(artistName) { mutableListOf() }.add(file)
-                    artistNameToId[artistName] = artistId
-                }
-            }
-        }
-
-        val artistsList = artistFilesMap.map { (artistName, artistFiles) ->
-            val artistId = artistNameToId[artistName]
-            val displayName = when {
-                artistName in artistNameUseRawString -> artistName
-                artistId != null -> artistIdNameMap[artistId] ?: artistName
-                else -> artistName
-            }
-
-            val sortedForCover = artistFiles.sortedWith(
-                compareByDescending<AudioFile> { it.mediaStoreAlbumId != null && it.mediaStoreAlbumId > 0 }
-                    .thenBy { it.metadata.album }
-            )
-            val coverFile = sortedForCover.firstOrNull()
-            ArtistGroup(
-                name = displayName,
-                albums = artistFiles.mapNotNull { it.metadata.album }.distinct().sorted().toImmutableList(),
-                files = artistFiles.sortedBy { it.metadata.album }.toImmutableList(),
-                coverPath = coverFile?.path
-            )
-        }.sortedBy { SortUtil.toSortablePinyin(it.name) }
-
-        if (!areArtistListsEqual(artistsList, _artists.value)) {
-            _artists.value = artistsList
-        }
-    }
+    // updateArtistsFromFiles was removed — all call sites use buildArtistsFromFiles instead.
 
     /**
      * Lightweight equality check for album lists to avoid unnecessary emissions.

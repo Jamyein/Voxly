@@ -72,23 +72,36 @@ class RebuildDatabaseManagerImpl @Inject constructor(
                     whitelistEnabled = whitelistEnabled && whitelistPaths.isNotEmpty(),
                     blacklistEnabled = blacklistEnabled && blacklistPaths.isNotEmpty(),
                     minDurationEnabled = minDurationEnabled,
-                    whitelistUris = whitelistPaths,
-                    blacklistUris = blacklistPaths,
+                    whitelistPaths = whitelistPaths,
+                    blacklistPaths = blacklistPaths,
                     minDurationMs = minDurationMs
                 )
             )
             Timber.d(TAG, "After filtering: ${filteredFiles.size} files")
 
             val totalCount = filteredFiles.size
+            if (totalCount == 0) {
+                _state.value = RebuildDatabaseState.Completed(0, 0)
+                return
+            }
+
+            val enriched = mutableListOf<AudioFile>()
+            val batchSize = 500
             var processedCount = 0
             var lastProgressUpdate = 0L
 
-            filteredFiles.forEachIndexed { index, audioFile ->
+            for ((index, audioFile) in filteredFiles.withIndex()) {
                 try {
                     val enrichedFile = fileProcessor.createAudioFileFromPath(audioFile.path)
-                    musicLibraryCache.syncFileToCache(enrichedFile)
-
+                    enriched.add(enrichedFile)
                     processedCount++
+
+                    // Batch write every batchSize files, or at the end
+                    if (enriched.size >= batchSize || index == totalCount - 1) {
+                        musicLibraryCache.updateCache(enriched.toList())
+                        enriched.clear()
+                    }
+
                     val now = System.currentTimeMillis()
                     if (processedCount == totalCount ||
                         index % PROGRESS_UPDATE_THRESHOLD == 0 ||

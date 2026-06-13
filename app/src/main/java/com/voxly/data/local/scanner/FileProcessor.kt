@@ -3,6 +3,7 @@ package com.voxly.data.local.scanner
 import com.voxly.core.util.Constants
 import com.voxly.data.local.metadata.lightweight.LightweightMetadataParser
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.AudioFormat
 import com.voxly.domain.model.AudioMetadata
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,15 +31,26 @@ class FileProcessor @Inject constructor(
         val file = File(filePath)
         val extension = file.extension.lowercase()
 
-        val (duration, bitrate) = mediaStoreDataSource.queryFileDurationAndBitrate(filePath)
-        val mediaStoreMetadata = mediaStoreDataSource.queryBasicMetadata(filePath) ?: AudioMetadata()
-        val mediaStoreAlbumId = mediaStoreDataSource.queryMediaStoreAlbumId(filePath)
+        // Single MediaStore round-trip instead of 3 separate queries
+        val msData = mediaStoreDataSource.queryAllMediaStoreFields(filePath)
+        val mediaStoreMetadata = if (msData != null) {
+            AudioMetadata(
+                title = msData.title,
+                artist = msData.artist,
+                album = msData.album,
+                year = msData.year,
+                trackNumber = msData.trackNumber,
+                totalTracks = msData.totalTracks
+            )
+        } else AudioMetadata()
+        val duration = msData?.duration ?: 0L
+        val bitrate = msData?.bitrate ?: 0
+        val mediaStoreAlbumId = msData?.albumId
 
         val lightweightResult = LightweightMetadataParser.parse(file)
         val fullMetadata = when {
             lightweightResult != null -> {
                 val merged = mergeMetadata(lightweightResult.metadata, mediaStoreMetadata)
-                Timber.d("FileProcessor: path=${filePath}, lightweightAlbumArtist=${lightweightResult.metadata.albumArtist}, mediaStoreAlbumArtist=${mediaStoreMetadata.albumArtist}, mergedAlbumArtist=${merged.albumArtist}")
                 merged
             }
             else -> metadataProcessor.readAllMetadata(filePath, includeAlbumArt = false)?.metadata
@@ -55,7 +67,7 @@ class FileProcessor @Inject constructor(
             name = file.name,
             size = file.length(),
             duration = finalDuration,
-            format = extension.uppercase(),
+            format = AudioFormat.fromExtension(extension),
             bitrate = finalBitrate,
             sampleRate = audioInfo?.sampleRate ?: 0,
             channels = audioInfo?.channels ?: 0,

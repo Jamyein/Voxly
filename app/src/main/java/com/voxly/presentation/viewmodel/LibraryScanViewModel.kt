@@ -21,8 +21,6 @@ import com.voxly.domain.usecase.ScanState
 import com.voxly.domain.usecase.ScanTarget
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.core.util.Constants
-import androidx.paging.PagingData
-import androidx.paging.cachedIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CancellationException
@@ -30,7 +28,10 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -201,11 +202,53 @@ class LibraryScanViewModel @Inject constructor(
 
     private var scanJob: Job? = null
 
+    // Emitted when the scanner encounters an error. UI layers collect this to
+    // show a Snackbar / error banner — previously these errors were only logged.
+    private val _scanError = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val scanError: SharedFlow<String> = _scanError.asSharedFlow()
+
+    // Separate Job coordinator for directory-scoped scans. This guards every
+    // entry point that calls scanSelectedDirectories() so concurrent
+    // checkDirectorySnapshotsOnStart, refreshDirectoryIncremental, and addDirectory
+    // calls cannot race.
+    private var directoryScanJob: Job? = null
+
+    /**
+     * Runs a directory-scoped scan with proper cancellation of any prior run.
+     * All call sites of [scanSelectedDirectories] should funnel through here.
+     */
+    private fun launchDirectoryScan(
+        directories: List<SelectedDirectory>,
+        isIncremental: Boolean,
+        forceRefresh: Boolean
+    ) {
+        directoryScanJob?.cancel()
+        directoryScanJob = viewModelScope.launch {
+            scanSelectedDirectories(directories, isIncremental, forceRefresh)
+        }
+    }
+
     init {
         viewModelScope.launch {
             libraryDataHolder.collectRefreshTriggers { forceRefresh ->
                 loadAudioFiles(forceRefresh = forceRefresh, isIncremental = !forceRefresh)
             }
+        }
+
+        // React to changes in the selected directory URIs (written by
+        // DirectoryManagementViewModel via the settings screen). This keeps
+        // _selectedDirectories in sync without requiring the settings flow
+        // to call into LibraryScanViewModel directly.
+        viewModelScope.launch {
+            settingsDataStore.selectedDirectoryUris
+                .map { uris -> uris.toSet() }
+                .distinctUntilChanged()
+                .collect { uris ->
+                    val currentUris = _selectedDirectories.value.map { it.uri }.toSet()
+                    if (uris != currentUris) {
+                        syncSelectedDirectoriesFromStorage()
+                    }
+                }
         }
 
         viewModelScope.launch {
@@ -215,7 +258,10 @@ class LibraryScanViewModel @Inject constructor(
             unifiedScanManager.scanState.collect { state ->
                 when (state) {
                     is ScanState.Success -> Timber.d(TAG, "Scan completed")
-                    is ScanState.Error -> Timber.tag(TAG).e("Scan error: ${state.message}")
+                    is ScanState.Error -> {
+                        Timber.tag(TAG).e("Scan error: ${state.message}")
+                        _scanError.tryEmit(state.message)
+                    }
                     else -> { }
                 }
             }
@@ -267,7 +313,7 @@ class LibraryScanViewModel @Inject constructor(
         }
 
         if (needsIncrementalScan) {
-            scanSelectedDirectories(dirs, isIncremental = true, forceRefresh = false)
+            launchDirectoryScan(dirs, isIncremental = true, forceRefresh = false)
         }
     }
 
@@ -308,7 +354,7 @@ class LibraryScanViewModel @Inject constructor(
                         return@launch
                     }
                     val useIncremental = isIncremental && hasCache
-                    scanSelectedDirectories(_selectedDirectories.value, useIncremental, forceRefresh)
+                    launchDirectoryScan(_selectedDirectories.value, useIncremental, forceRefresh)
                     _isInitialLoad.update { false }
                     return@launch
                 }
@@ -350,18 +396,20 @@ class LibraryScanViewModel @Inject constructor(
     }
 
     fun refreshDirectoryIncremental(directoryUri: String) {
-        viewModelScope.launch {
-            val dirs = _selectedDirectories.value.filter { it.uri == directoryUri }
-            if (dirs.isEmpty()) return@launch
-            scanSelectedDirectories(dirs, isIncremental = true, forceRefresh = false)
-        }
+        val dirs = _selectedDirectories.value.filter { it.uri == directoryUri }
+        if (dirs.isEmpty()) return
+        launchDirectoryScan(dirs, isIncremental = true, forceRefresh = false)
     }
 
     fun syncAndScanDirectoriesIncremental() {
         viewModelScope.launch {
             syncSelectedDirectoriesFromStorage()
             if (_selectedDirectories.value.isNotEmpty()) {
-                scanSelectedDirectories(_selectedDirectories.value, isIncremental = true, forceRefresh = false)
+                launchDirectoryScan(
+                    _selectedDirectories.value,
+                    isIncremental = true,
+                    forceRefresh = false
+                )
             }
         }
     }
@@ -401,17 +449,12 @@ class LibraryScanViewModel @Inject constructor(
 
         if (alreadySelected) {
             if (alreadyLoaded) {
-                viewModelScope.launch {
-                    val dirs = _selectedDirectories.value.filter { it.uri == uriString }
-                    scanSelectedDirectories(dirs, isIncremental = true, forceRefresh = false)
-                }
+                val dirs = _selectedDirectories.value.filter { it.uri == uriString }
+                launchDirectoryScan(dirs, isIncremental = true, forceRefresh = false)
             } else {
-                scanJob?.cancel()
-                scanJob = viewModelScope.launch {
-                    _directoryFiles.update { it - uriString }
-                    val dirs = _selectedDirectories.value.filter { it.uri == uriString }
-                    scanSelectedDirectories(dirs, isIncremental = false, forceRefresh = true)
-                }
+                _directoryFiles.update { it - uriString }
+                val dirs = _selectedDirectories.value.filter { it.uri == uriString }
+                launchDirectoryScan(dirs, isIncremental = false, forceRefresh = true)
             }
             return
         }
@@ -423,14 +466,11 @@ class LibraryScanViewModel @Inject constructor(
 
         _selectedDirectories.update { updatedDirectories }
         persistSelectedDirectories(updatedDirectories)
-        scanJob?.cancel()
-        scanJob = viewModelScope.launch {
-            scanSelectedDirectories(
-                directories = updatedDirectories,
-                isIncremental = false,
-                forceRefresh = true
-            )
-        }
+        launchDirectoryScan(
+            directories = updatedDirectories,
+            isIncremental = false,
+            forceRefresh = true
+        )
     }
 
     /**
@@ -644,45 +684,9 @@ class LibraryScanViewModel @Inject constructor(
 
     /**
      * Converts a content URI to a file path.
+     * Delegates to the canonical implementation in PathUtils.
      */
-    fun getPathFromUri(uri: Uri): String {
-        return runCatching {
-            if (uri.scheme == "file") {
-                return@runCatching uri.path.orEmpty()
-            }
-
-            if (uri.scheme != "content") {
-                return@runCatching uri.path.orEmpty()
-            }
-
-            val documentId = DocumentsContract.getTreeDocumentId(uri)
-            if (documentId.startsWith("raw:")) {
-                return@runCatching documentId.removePrefix("raw:")
-            }
-
-            val idParts = documentId.split(":", limit = 2)
-            val volume = idParts.firstOrNull().orEmpty()
-            val relativePath = idParts.getOrNull(1)?.trim('/').orEmpty()
-
-            when {
-                volume.equals("primary", ignoreCase = true) -> {
-                    val externalRoot = Environment.getExternalStorageDirectory().absolutePath
-                    if (relativePath.isEmpty()) externalRoot else "$externalRoot/$relativePath"
-                }
-                volume.equals("home", ignoreCase = true) -> {
-                    val externalRoot = Environment.getExternalStorageDirectory().absolutePath
-                    val documentsRoot = "$externalRoot/Documents"
-                    if (relativePath.isEmpty()) documentsRoot else "$documentsRoot/$relativePath"
-                }
-                volume.isNotEmpty() -> {
-                    if (relativePath.isEmpty()) "/storage/$volume" else "/storage/$volume/$relativePath"
-                }
-                else -> uri.path.orEmpty()
-            }
-        }.getOrElse {
-            uri.path.orEmpty()
-        }
-    }
+    fun getPathFromUri(uri: Uri): String = com.voxly.core.util.PathUtils.getPathFromUri(uri)
 
     fun renameSingleFile(
         filePath: String,
@@ -747,7 +751,13 @@ class LibraryScanViewModel @Inject constructor(
 
             onComplete(result.first, result.second)
             if (result.first) {
-                loadAudioFiles(forceRefresh = true)
+                // Incremental: remove the old path from cache so the next scan
+                // does a complete re-index of the renamed file, but skip the
+                // expensive full-rescan path.
+                viewModelScope.launch {
+                    musicLibraryCache.removeFromCache(filePath)
+                }
+                loadAudioFiles(forceRefresh = false, isIncremental = true)
             }
         }
     }
@@ -773,7 +783,10 @@ class LibraryScanViewModel @Inject constructor(
 
             onComplete(result.first, result.second)
             if (result.first) {
-                loadAudioFiles(forceRefresh = true)
+                viewModelScope.launch {
+                    musicLibraryCache.removeFromCache(filePath)
+                }
+                loadAudioFiles(forceRefresh = false, isIncremental = true)
             }
         }
     }

@@ -152,28 +152,6 @@ class SafWriteAccessService @Inject constructor(
         }
     }
 
-    fun normalizeFilePath(filePath: String): String {
-        return try {
-            var normalized = filePath.replace('\\', '/')
-            normalized = normalized.replace(Regex("//+"), "/")
-            normalized = normalized.trimEnd('/')
-            normalized = Normalizer.normalize(normalized, Normalizer.Form.NFC)
-            normalized = try {
-                java.net.URLDecoder.decode(normalized, "UTF-8")
-            } catch (_: Exception) {
-                normalized
-            }
-
-            val file = File(normalized)
-            if (file.exists()) {
-                return Normalizer.normalize(file.canonicalPath.replace('\\', '/'), Normalizer.Form.NFC)
-            }
-            normalized
-        } catch (_: Exception) {
-            filePath.replace('\\', '/').replace(Regex("//+"), "/").trimEnd('/')
-        }
-    }
-
     fun mapTreeUriToPath(treeUri: Uri): String? {
         val treeDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
         return mapDocumentIdToPath(treeDocId)

@@ -6,6 +6,8 @@ import android.graphics.ImageDecoder
 import android.net.Uri
 import com.google.gson.Gson
 import com.voxly.data.local.SettingsDataStore
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
 import com.voxly.data.local.cache.*
 import com.voxly.data.local.cover.CoverDiskCache
@@ -25,10 +27,6 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
-import androidx.paging.Pager
-import androidx.paging.PagingConfig
-import androidx.paging.PagingData
-import androidx.paging.PagingSource
 import androidx.room.withTransaction
 
 @Singleton
@@ -58,8 +56,20 @@ class MusicLibraryCache @Inject constructor(
     val changeFlow: Flow<CacheChange> = _changeFlow.asStateFlow()
 
     // Hot in-memory cache for all audio files to avoid full entity re-mapping on every Room emission.
+    // Uses java.lang.ref.SoftReference so the GC can reclaim this under memory pressure.
+    // Under normal conditions with adequate heap this stays populated and gives fast access.
     private val hotCacheLock = Any()
-    private var hotAudioFiles: List<AudioFile>? = null
+    private var hotAudioFilesRef = java.lang.ref.SoftReference<List<AudioFile>>(null)
+
+    /** Snapshot of the hot cache under the hotCacheLock. Returns null if never populated or reclaimed by GC. */
+    private var hotAudioFiles: List<AudioFile>?
+        get() = synchronized(hotCacheLock) { hotAudioFilesRef.get() }
+        set(value) = synchronized(hotCacheLock) { hotAudioFilesRef = java.lang.ref.SoftReference(value) }
+
+    // Serializes write paths (updateCache / syncFileToCache / removeFromCache / clearCache)
+    // so a long-running scanner batch insert cannot interleave with a per-file edit
+    // or rename happening in the foreground. Reads are unaffected.
+    private val writeMutex = Mutex()
 
     // Tracks whether warmup completed successfully - used to skip redundant hasCache() queries
     @Volatile
@@ -174,8 +184,20 @@ class MusicLibraryCache @Inject constructor(
     /**
      * Updates the cache with new audio files.
      * Uses efficient batch insert for large libraries.
+     *
+     * DB writes (cached_audio_files + artist_links) happen inside a single Room transaction
+     * so a process crash between them cannot leave the tables inconsistent.
      */
     suspend fun updateCache(audioFiles: List<AudioFile>) = withContext(Dispatchers.IO) {
+        writeMutex.withLock { updateCacheInternal(audioFiles) }
+    }
+
+    private suspend fun updateCacheInternal(audioFiles: List<AudioFile>) {
+        if (audioFiles.isEmpty()) {
+            invalidateHotCache()
+            return
+        }
+
         val entities = audioFiles.map { audioFile ->
             val file = File(audioFile.path)
             val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
@@ -189,11 +211,19 @@ class MusicLibraryCache @Inject constructor(
             )
         }
 
-        // Use chunked insert for large libraries
-        audioFileDao.insertAllChunked(entities)
+        // Read settings once before opening the transaction (don't do I/O inside withTransaction)
+        val separatorEnabled = settingsDataStore.artistSeparatorEnabled.first()
+        val separators = if (separatorEnabled) {
+            settingsDataStore.artistSeparatorsSet.first()
+        } else emptySet()
 
-        // Update artist links for split artists
-        updateArtistLinksForFiles(audioFiles)
+        // DB writes (audio file rows + artist links) in one atomic transaction
+        database.withTransaction {
+            audioFileDao.insertAllChunked(entities)
+            if (separatorEnabled) {
+                updateArtistLinksForFilesInternal(audioFiles, separators)
+            }
+        }
 
         invalidateHotCache()
 
@@ -209,6 +239,36 @@ class MusicLibraryCache @Inject constructor(
 
         Timber.i("DB batch insert: ${entities.size} records")
     }
+
+    /**
+     * Internal helper that updates artist_links inside an existing transaction.
+     * Reads track IDs to delete in one batch, inserts new links in one batch.
+     */
+    private suspend fun updateArtistLinksForFilesInternal(
+        audioFiles: List<AudioFile>,
+        separators: Set<String>
+    ) {
+        val trackIds = audioFiles.map { it.id }
+        if (trackIds.isEmpty()) return
+
+        artistLinkDao.deleteByTrackIds(trackIds)
+
+        if (separators.isEmpty()) return
+
+        val regex = separators.sortedByDescending { it.length }
+            .joinToString("|") { Regex.escape(it) }
+
+        val newLinks = audioFiles.flatMap { file ->
+            val artistString = file.metadata.artist ?: file.metadata.albumArtist ?: return@flatMap emptyList()
+            artistString.split(Regex(regex))
+                .map { it.trim() }
+                .filter { it.isNotBlank() }
+                .map { ArtistLinkEntity(trackId = file.id, artistName = it) }
+        }
+        if (newLinks.isNotEmpty()) {
+            artistLinkDao.insertAll(newLinks)
+        }
+    }
     
     /**
      * Syncs a single file to cache (e.g., after metadata edit).
@@ -216,6 +276,10 @@ class MusicLibraryCache @Inject constructor(
      * DB operations are wrapped in a transaction for atomicity.
      */
     suspend fun syncFileToCache(audioFile: AudioFile) = withContext(Dispatchers.IO) {
+        writeMutex.withLock { syncFileToCacheInternal(audioFile) }
+    }
+
+    private suspend fun syncFileToCacheInternal(audioFile: AudioFile) {
         Timber.i("syncFileToCache: path=${audioFile.path}, album=${audioFile.metadata.album}, albumArtist=${audioFile.metadata.albumArtist}, albumId=${audioFile.mediaStoreAlbumId}")
 
         // Transaction ensures atomic read-modify-write on the entity
@@ -258,6 +322,10 @@ class MusicLibraryCache @Inject constructor(
      * This prevents EnrichmentWorker from overwriting user's manual edits.
      */
     suspend fun markFileAsEditedByUser(filePath: String) = withContext(Dispatchers.IO) {
+        writeMutex.withLock { markFileAsEditedByUserInternal(filePath) }
+    }
+
+    private suspend fun markFileAsEditedByUserInternal(filePath: String) {
         audioFileDao.updateLastEditedByUserAt(filePath, System.currentTimeMillis())
         invalidateHotCache()
         bumpCacheVersion()
@@ -268,6 +336,10 @@ class MusicLibraryCache @Inject constructor(
      * Removes a file from cache.
      */
     suspend fun removeFromCache(filePath: String) = withContext(Dispatchers.IO) {
+        writeMutex.withLock { removeFromCacheInternal(filePath) }
+    }
+
+    private suspend fun removeFromCacheInternal(filePath: String) {
         val existingFile = audioFileDao.getAudioFileByPath(filePath)
         val albumKey = existingFile?.let {
             val af = it.toAudioFile()
@@ -295,6 +367,11 @@ class MusicLibraryCache @Inject constructor(
      * Removes multiple files from cache.
      */
     suspend fun removeFromCache(filePaths: List<String>) = withContext(Dispatchers.IO) {
+        if (filePaths.isEmpty()) return@withContext
+        writeMutex.withLock { removeFromCacheBatchInternal(filePaths) }
+    }
+
+    private suspend fun removeFromCacheBatchInternal(filePaths: List<String>) {
         if (filePaths.isNotEmpty()) {
             val existingFiles = filePaths.mapNotNull { audioFileDao.getAudioFileByPath(it) }
             val albumKeys = existingFiles.mapNotNull {
@@ -324,13 +401,15 @@ class MusicLibraryCache @Inject constructor(
      * Clears the entire cache.
      */
     suspend fun clearCache() = withContext(Dispatchers.IO) {
-        audioFileDao.deleteAll()
-        albumThumbnailDao.deleteAll()
-        artistLinkDao.deleteAll()
-        invalidateHotCache()
-        bumpCacheVersion()
-        wasWarmedUp = false
-        Timber.i("DB: Cache cleared")
+        writeMutex.withLock {
+            audioFileDao.deleteAll()
+            albumThumbnailDao.deleteAll()
+            artistLinkDao.deleteAll()
+            invalidateHotCache()
+            bumpCacheVersion()
+            wasWarmedUp = false
+            Timber.i("DB: Cache cleared")
+        }
     }
     
     // ==================== Incremental Scan Support ====================
@@ -592,29 +671,6 @@ class MusicLibraryCache @Inject constructor(
     suspend fun clearFailedEnrichmentJobs() = withContext(Dispatchers.IO) {
         enrichmentJobDao.deleteByStatus(EnrichmentJobEntity.STATUS_FAILED)
         Timber.i("Cleared failed enrichment jobs")
-    }
-
-    // ==================== Paging Support ====================
-    
-    /**
-     * Creates a Pager for paged audio files.
-     * @param pageSize Number of items per page
-     * @param directoryPath Optional directory filter
-     */
-    fun getPagedAudioFiles(
-        pageSize: Int = 50,
-        directoryPath: String? = null
-    ): Flow<PagingData<CachedAudioFileEntity>> {
-        return Pager(
-            config = PagingConfig(
-                pageSize = pageSize,
-                enablePlaceholders = false,
-                initialLoadSize = pageSize * 2
-            ),
-            pagingSourceFactory = {
-                AudioFilePagingSource(audioFileDao, directoryPath)
-            }
-        ).flow
     }
 
     suspend fun getDirectorySnapshot(directoryUri: String): DirectorySnapshotEntity? {

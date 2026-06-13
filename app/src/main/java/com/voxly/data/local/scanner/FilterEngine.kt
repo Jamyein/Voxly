@@ -19,8 +19,8 @@ class FilterEngine @Inject constructor() {
         val whitelistEnabled: Boolean,
         val blacklistEnabled: Boolean,
         val minDurationEnabled: Boolean,
-        val whitelistUris: List<String>,
-        val blacklistUris: List<String>,
+        val whitelistPaths: List<String>,
+        val blacklistPaths: List<String>,
         val minDurationMs: Long
     )
 
@@ -45,12 +45,12 @@ class FilterEngine @Inject constructor() {
         }
 
         // Pre-compute whitelist and blacklist paths once (avoid repeated computation)
-        val whitelistPaths = if (settings.whitelistEnabled && settings.whitelistUris.isNotEmpty()) {
-            settings.whitelistUris
+        val whitelistPaths = if (settings.whitelistEnabled && settings.whitelistPaths.isNotEmpty()) {
+            settings.whitelistPaths
         } else null
 
-        val blacklistPaths = if (settings.blacklistEnabled && settings.blacklistUris.isNotEmpty()) {
-            settings.blacklistUris
+        val blacklistPaths = if (settings.blacklistEnabled && settings.blacklistPaths.isNotEmpty()) {
+            settings.blacklistPaths
         } else null
 
         // Optimization: Pre-compute directory prefixes for faster matching
@@ -98,8 +98,8 @@ class FilterEngine @Inject constructor() {
         result = 31 * result + if (settings.whitelistEnabled) 1 else 0
         result = 31 * result + if (settings.blacklistEnabled) 1 else 0
         result = 31 * result + if (settings.minDurationEnabled) 1 else 0
-        result = 31 * result + settings.whitelistUris.hashCode().toLong()
-        result = 31 * result + settings.blacklistUris.hashCode().toLong()
+        result = 31 * result + settings.whitelistPaths.hashCode().toLong()
+        result = 31 * result + settings.blacklistPaths.hashCode().toLong()
         result = 31 * result + settings.minDurationMs
         return result
     }

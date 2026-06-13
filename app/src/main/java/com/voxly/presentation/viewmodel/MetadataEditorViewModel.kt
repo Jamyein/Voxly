@@ -657,7 +657,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                     name = "",
                                     size = 0,
                                     duration = 0L,
-                                    format = "",
+                                    format = com.voxly.domain.model.AudioFormat.OTHER,
                                     bitrate = 0,
                                     sampleRate = 0,
                                     channels = 0,

@@ -4,7 +4,6 @@ import android.app.RecoverableSecurityException
 import android.content.Context
 import android.content.ContentUris
 import android.content.IntentSender
-import android.media.MediaScannerConnection
 import android.net.Uri
 import android.os.Environment
 import android.os.ParcelFileDescriptor
@@ -171,6 +170,16 @@ class TagLibMetadataProcessor @Inject constructor(
         memoryCache.evictAll()
         pathResolutionCache.evictAll()
         Timber.tag(TAG).d("Cache cleared")
+    }
+
+    /**
+     * Evicts cache entries for a single file. Should be called after a metadata write
+     * so the next read returns the fresh data rather than the pre-write cached value.
+     */
+    fun invalidateFile(filePath: String) {
+        val normalized = PathUtils.normalizeFilePath(filePath)
+        memoryCache.remove(normalized)
+        pathResolutionCache.remove(normalized)
     }
 
     /**
@@ -341,8 +350,16 @@ class TagLibMetadataProcessor @Inject constructor(
                 val cachedFile = musicLibraryCache.getCachedFile(normalizedPath)
                 if (cachedFile != null) {
                     val file = File(normalizedPath)
+                    // Validate the cache against the file on disk: mtime must match.
+                    // This prevents returning stale metadata when the file has been
+                    // modified outside the app (e.g. by another tool or by the user).
+                    val cachedEntity = musicLibraryCache.getCachedFileEntity(normalizedPath)
+                    val mtimeValid = cachedEntity != null &&
+                        file.exists() &&
+                        cachedEntity.fileLastModifiedAt == file.lastModified()
+
                     // Check if file exists and hasn't been modified since cache
-                    if (file.exists()) {
+                    if (mtimeValid) {
                         val hasValidAudioInfo = cachedFile.sampleRate > 0 && cachedFile.duration > 0
                         // If we need album art, try cache first
                         // Otherwise use cached data (no file read needed)
@@ -410,8 +427,21 @@ class TagLibMetadataProcessor @Inject constructor(
             }
 
             completeMetadata
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // Cancellation must always propagate.
+            throw e
+        } catch (e: SecurityException) {
+            // Missing permission for SAF / MediaStore. Caller may prompt user for access.
+            Timber.tag(TAG).w("SecurityException reading metadata: $filePath", e)
+            null
+        } catch (e: java.io.IOException) {
+            // I/O failure (file removed, device error, etc.). Expected runtime.
+            Timber.tag(TAG).w("IOException reading metadata: $filePath", e)
+            null
         } catch (e: Exception) {
-            Timber.tag(TAG).e("Failed to read complete metadata: $filePath", e)
+            // Programming error (NPE, IllegalState). Log with stack trace so it's
+            // visible during development without silently passing as a null result.
+            Timber.tag(TAG).e("Unexpected error reading metadata: $filePath", e)
             null
         }
     }
@@ -737,80 +767,7 @@ class TagLibMetadataProcessor @Inject constructor(
                 pfd.close()
             } ?: return@runCatching null
 
-            val propertyMap = metadata.propertyMap
-            
-            // Helper function to find property key case-insensitively (for FLAC/Vorbis Comments compatibility)
-            fun findKeyIgnoreCase(map: Map<String, Array<String>>, targetKey: String): String? {
-                val lowerTarget = targetKey.lowercase()
-                return map.keys.find { it.lowercase() == lowerTarget }
-            }
-            
-            val customFields = mutableMapOf<String, String>()
-            propertyMap[CUSTOM_RECORD_LABEL]?.firstOrNull()?.let { customFields[CUSTOM_RECORD_LABEL] = it }
-            propertyMap[CUSTOM_ENCODER]?.firstOrNull()?.let { customFields[CUSTOM_ENCODER] = it }
-            propertyMap[CUSTOM_ISRC]?.firstOrNull()?.let { customFields[CUSTOM_ISRC] = it }
-            propertyMap[CUSTOM_COPYRIGHT]?.firstOrNull()?.let { customFields[CUSTOM_COPYRIGHT] = it }
-            
-            // Read ReplayGain fields (case-insensitive for FLAC/Vorbis Comments compatibility)
-            findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_TRACK_GAIN)?.let { actualKey ->
-                propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_GAIN] = it }
-            }
-            findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_TRACK_PEAK)?.let { actualKey ->
-                propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_TRACK_PEAK] = it }
-            }
-            findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_ALBUM_GAIN)?.let { actualKey ->
-                propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_GAIN] = it }
-            }
-            findKeyIgnoreCase(propertyMap, CUSTOM_REPLAYGAIN_ALBUM_PEAK)?.let { actualKey ->
-                propertyMap[actualKey]?.firstOrNull()?.let { customFields[CUSTOM_REPLAYGAIN_ALBUM_PEAK] = it }
-            }
-
-            // Helper function to parse track field - handles both "1" and "1/10" formats
-            fun parseTrackField(value: String?): Pair<Int?, Int?> {
-                if (value.isNullOrBlank()) return Pair(null, null)
-                // Handle ID3v2 format: "1/10" where 10 is total tracks
-                return if (value.contains('/')) {
-                    val parts = value.split('/')
-                    val track = parts.getOrNull(0)?.toIntOrNull()
-                    val total = parts.getOrNull(1)?.toIntOrNull()
-                    Pair(track?.takeIf { it > 0 }, total?.takeIf { it > 0 })
-                } else {
-                    val track = value.toIntOrNull()
-                    Pair(track?.takeIf { it > 0 && it <= 9999 }, null)
-                }
-            }
-
-            // Read TRACKNUMBER field (case-insensitive for FLAC/Vorbis Comments compatibility)
-            val trackKey = findKeyIgnoreCase(propertyMap, "TRACKNUMBER")
-                ?: findKeyIgnoreCase(propertyMap, "TRACK") // Fallback to TRACK for older files
-            val trackValue = trackKey?.let { propertyMap[it]?.firstOrNull() }
-            val (parsedTrack, parsedTotalFromTrack) = parseTrackField(trackValue)
-
-            AudioMetadata(
-                title = propertyMap["TITLE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                artist = propertyMap["ARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                album = propertyMap["ALBUM"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                albumArtist = propertyMap["ALBUMARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                year = findKeyIgnoreCase(propertyMap, "DATE")?.let { propertyMap[it]?.firstOrNull()?.takeIf { y -> y.isNotBlank() } }
-                    ?: findKeyIgnoreCase(propertyMap, "YEAR")?.let { propertyMap[it]?.firstOrNull()?.takeIf { y -> y.isNotBlank() } },
-                genre = propertyMap["GENRE"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                trackNumber = parsedTrack,
-                totalTracks = parsedTotalFromTrack
-                    ?: findKeyIgnoreCase(propertyMap, "TRACKTOTAL")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } }
-                    ?: findKeyIgnoreCase(propertyMap, "TOTALTRACKS")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } },
-                discNumber = findKeyIgnoreCase(propertyMap, "DISCNUMBER")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { d -> d > 0 } },
-                totalDiscs = findKeyIgnoreCase(propertyMap, "DISCTOTAL")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } }
-                    ?: findKeyIgnoreCase(propertyMap, "TOTALDISCS")?.let { propertyMap[it]?.firstOrNull()?.toIntOrNull()?.takeIf { t -> t > 0 && t <= 9999 } },
-                composer = propertyMap["COMPOSER"]?.firstOrNull()?.takeIf { it.isNotBlank() }
-                    ?: propertyMap["AUTHOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                lyricist = propertyMap["LYRICIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                conductor = propertyMap["CONDUCTOR"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                originalArtist = propertyMap["ORIGINALARTIST"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                comment = propertyMap["COMMENT"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                lyrics = propertyMap["LYRICS"]?.firstOrNull()?.takeIf { it.isNotBlank() },
-                albumArt = if (includeAlbumArt) metadata.pictures.firstOrNull()?.data else null,
-                customFields = customFields
-            )
+            parseTagLibMetadata(metadata, includeAlbumArt)
         }.onFailure {
             Timber.tag(TAG).w( "Failed to read metadata from MediaStore URI for: $filePath", it)
         }.getOrNull()
@@ -862,7 +819,11 @@ class TagLibMetadataProcessor @Inject constructor(
             }
 
             if (result.isSuccess) {
-                scanMediaStore(filePath)
+                // Drop cached reads of this file so the next read goes to disk
+                // and returns the post-write data.
+                invalidateFile(filePath)
+                // MediaStore refresh is performed by TagWriteManager (the single owner
+                // of the write side-effect) to avoid duplicate scans.
             }
             result
         }
@@ -908,17 +869,7 @@ class TagLibMetadataProcessor @Inject constructor(
             
             // Save album art if provided
             metadata.albumArt?.let { albumArtBytes ->
-                val mimeType = detectImageMimeType(albumArtBytes)
-                val picture = Picture(
-                    data = albumArtBytes,
-                    description = "Front Cover",
-                    pictureType = "Front Cover",
-                    mimeType = mimeType
-                )
-                val pictureSaved = TagLib.savePictures(fdForTagLib, arrayOf(picture))
-                if (!pictureSaved) {
-                    Timber.tag(TAG).w( "Failed to save album art for: $filePath")
-                }
+                writeAlbumArt(fdForTagLib, albumArtBytes, filePath)
             }
             
             pfd.close()
@@ -962,23 +913,12 @@ class TagLibMetadataProcessor @Inject constructor(
             
             // Save album art if provided
             metadata.albumArt?.let { albumArtBytes ->
-                val mimeType = detectImageMimeType(albumArtBytes)
-                val picture = Picture(
-                    data = albumArtBytes,
-                    description = "Front Cover",
-                    pictureType = "Front Cover",
-                    mimeType = mimeType
-                )
                 val pfd2 = context.contentResolver.openFileDescriptor(mediaUri, "rw")
                     ?: return Result.failure(IllegalStateException("Cannot reopen file descriptor for picture save"))
                 val fdForTagLib2 = pfd2.dup().detachFd()
                 try {
-                    val pictureSaved = TagLib.savePictures(fdForTagLib2, arrayOf(picture))
-                    if (!pictureSaved) {
-                        Timber.tag(TAG).w( "Failed to save album art for: $filePath")
-                    }
+                    writeAlbumArt(fdForTagLib2, albumArtBytes, filePath)
                 } finally {
-                    // Best-effort cleanup; file descriptor will be released by system
                     try { pfd2.close() } catch (_: Exception) { /* ignore - best effort */ }
                 }
             }
@@ -1132,21 +1072,10 @@ class TagLibMetadataProcessor @Inject constructor(
 
             // Save album art if provided
             metadata.albumArt?.let { albumArtBytes ->
-                val mimeType = detectImageMimeType(albumArtBytes)
-                val picture = Picture(
-                    data = albumArtBytes,
-                    description = "Front Cover",
-                    pictureType = "Front Cover",
-                    mimeType = mimeType
-                )
-                // Reopen file descriptor for picture saving
                 val pfd2 = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_WRITE)
                 val fdForTagLib2 = pfd2.dup().detachFd()
                 try {
-                    val pictureSaved = TagLib.savePictures(fdForTagLib2, arrayOf(picture))
-                    if (!pictureSaved) {
-                        Timber.tag(TAG).w( "Failed to save album art for: $filePath")
-                    }
+                    writeAlbumArt(fdForTagLib2, albumArtBytes, filePath)
                 } finally {
                     pfd2.close()
                 }
@@ -1163,9 +1092,12 @@ class TagLibMetadataProcessor @Inject constructor(
                 stream.use { output ->
                     tempFile.inputStream().use { input ->
                         val buffer = ByteArray(Constants.FILE_BUFFER_SIZE)
-                        var bytesRead: Int
-                        while (input.read(buffer).also { bytesRead = it } != -1) {
-                            output.write(buffer, 0, bytesRead)
+                        var bytesRead = input.read(buffer)
+                        while (bytesRead >= 0) {
+                            if (bytesRead > 0) {
+                                output.write(buffer, 0, bytesRead)
+                            }
+                            bytesRead = input.read(buffer)
                         }
                         output.flush()
                     }
@@ -1223,9 +1155,12 @@ class TagLibMetadataProcessor @Inject constructor(
             outputStream.use { output ->
                 tempFile.inputStream().use { input ->
                     val buffer = ByteArray(Constants.FILE_BUFFER_SIZE)
-                    var bytesRead: Int
-                    while (input.read(buffer).also { bytesRead = it } != -1) {
-                        output.write(buffer, 0, bytesRead)
+                    var bytesRead = input.read(buffer)
+                    while (bytesRead >= 0) {
+                        if (bytesRead > 0) {
+                            output.write(buffer, 0, bytesRead)
+                        }
+                        bytesRead = input.read(buffer)
                     }
                     output.flush()
                 }
@@ -1263,21 +1198,11 @@ class TagLibMetadataProcessor @Inject constructor(
 
             // Save album art if provided (requires new FD since TagLib closes its copy)
             metadata.albumArt?.let { albumArtBytes ->
-                val mimeType = detectImageMimeType(albumArtBytes)
-                val picture = Picture(
-                    data = albumArtBytes,
-                    description = "Front Cover",
-                    pictureType = "Front Cover",
-                    mimeType = mimeType
-                )
                 val pfd2 = context.contentResolver.openFileDescriptor(targetDocUri, "rw")
                     ?: return Result.failure(IllegalStateException("Cannot reopen SAF file descriptor for picture save"))
                 val fdForTagLib2 = pfd2.dup().detachFd()
                 try {
-                    val pictureSaved = TagLib.savePictures(fdForTagLib2, arrayOf(picture))
-                    if (!pictureSaved) {
-                        Timber.tag(TAG).w("Failed to save album art for: $filePath")
-                    }
+                    writeAlbumArt(fdForTagLib2, albumArtBytes, filePath)
                 } finally {
                     pfd2.close()
                 }
@@ -1300,26 +1225,6 @@ class TagLibMetadataProcessor @Inject constructor(
             ?: context.contentResolver.openOutputStream(uri)
     } catch (e: Exception) {
         null
-    }
-
-    /**
-     * Notifies MediaStore to scan the updated file so other apps can see metadata changes.
-     */
-    private fun scanMediaStore(filePath: String) {
-        try {
-            val file = File(filePath)
-            if (file.exists()) {
-                MediaScannerConnection.scanFile(
-                    context,
-                    arrayOf(file.absolutePath),
-                    null,
-                    null
-                )
-                Timber.tag(TAG).d("MediaStore scan requested for: $filePath")
-            }
-        } catch (e: Exception) {
-            Timber.tag(TAG).w("Failed to scan file in MediaStore: $filePath", e)
-        }
     }
 
     /**
@@ -1468,253 +1373,6 @@ class TagLibMetadataProcessor @Inject constructor(
     }
 
     /**
-     * Validates if a permission is truly effective by attempting to open the file
-     */
-    private fun isPermissionValid(perm: android.content.UriPermission, filePath: String): Boolean {
-        return try {
-            // Try to open the file using the permission
-            context.contentResolver.openFileDescriptor(perm.uri, "r")?.use {
-                true
-            } ?: false
-        } catch (e: SecurityException) {
-            Timber.tag(TAG).w( "Permission validation failed (SecurityException) for: $filePath", e)
-            false
-        } catch (e: Exception) {
-            Timber.tag(TAG).w( "Permission validation failed for: $filePath", e)
-            false
-        }
-    }
-
-    /**
-     * Finds a valid persisted URI permission for the given file path
-     */
-    private fun findValidPermission(filePath: String): android.content.UriPermission? {
-        // Step 1: Normalize the file path
-        val normalizedFilePath = PathUtils.normalizeFilePath(filePath)
-        Timber.d(TAG, "findValidPermission: original path: $filePath")
-        Timber.d(TAG, "findValidPermission: normalized path: $normalizedFilePath")
-
-        val permissions = context.contentResolver.persistedUriPermissions
-            .filter { it.isReadPermission && it.isWritePermission }
-
-        Timber.d(TAG, "findValidPermission: found ${permissions.size} persisted write permissions")
-
-        for (perm in permissions) {
-            val treePath = mapTreeUriToPath(perm.uri)
-            if (treePath == null) {
-                Timber.d(TAG, "findValidPermission: could not map tree URI: ${perm.uri}")
-                continue
-            }
-
-            // Step 2: Normalize tree path the same way
-            val normalizedTreePath = PathUtils.normalizeFilePath(treePath)
-            Timber.d(TAG, "findValidPermission: checking permission tree: $normalizedTreePath")
-
-            // Step 3: Try multiple matching strategies
-            // Direct match
-            if (normalizedFilePath == normalizedTreePath) {
-                // Validate permission by actually trying to access the file
-                if (isPermissionValid(perm, filePath)) {
-                    Timber.d(TAG, "findValidPermission: found valid permission for: $normalizedTreePath")
-                    return perm
-                } else {
-                    Timber.tag(TAG).w( "findValidPermission: permission exists but invalid: $normalizedTreePath")
-                    // Continue to try other permissions
-                }
-            }
-            // Prefix match (file is inside the tree)
-            if (normalizedFilePath.startsWith("$normalizedTreePath/")) {
-                // Validate permission by actually trying to access the file
-                if (isPermissionValid(perm, filePath)) {
-                    Timber.d(TAG, "findValidPermission: found valid permission for: $normalizedTreePath")
-                    return perm
-                } else {
-                    Timber.tag(TAG).w( "findValidPermission: permission exists but invalid: $normalizedTreePath")
-                    // Continue to try other permissions
-                }
-            }
-        }
-        Timber.tag(TAG).w( "findValidPermission: no valid permission found for: $filePath")
-        return null
-    }
-
-    /**
-     * Gets relative path from file path and permission
-     */
-    private fun getRelativePath(filePath: String, permission: android.content.UriPermission): String {
-        val treePath = mapTreeUriToPath(permission.uri) ?: return filePath
-        val normalizedFilePath = PathUtils.normalizeFilePath(filePath)
-        val normalizedTreePath = PathUtils.normalizeFilePath(treePath)
-        return if (normalizedFilePath.startsWith("$normalizedTreePath/")) {
-            normalizedFilePath.removePrefix("$normalizedTreePath/")
-        } else {
-            File(filePath).name
-        }
-    }
-
-    /**
-     * Maps tree URI to file system path
-     */
-    private fun mapTreeUriToPath(treeUri: Uri): String? {
-        val documentId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
-        if (documentId.startsWith("raw:")) return documentId.removePrefix("raw:")
-
-        val parts = documentId.split(":", limit = 2)
-        val volume = parts.firstOrNull().orEmpty()
-        val relative = parts.getOrNull(1)?.trim('/').orEmpty()
-
-        val path = when {
-            volume.equals("primary", ignoreCase = true) -> {
-                val root = "/storage/emulated/0"
-                if (relative.isEmpty()) root else "$root/$relative"
-            }
-            volume.equals("home", ignoreCase = true) -> {
-                val root = "/storage/emulated/0/Documents"
-                if (relative.isEmpty()) root else "$root/$relative"
-            }
-            else -> if (relative.isEmpty()) "/storage/$volume" else "/storage/$volume/$relative"
-        }
-
-        // Apply normalization to ensure consistent path format
-        return PathUtils.normalizeFilePath(path)
-    }
-
-    private fun queryMediaStoreUriByPath(filePath: String): Uri? {
-        return runCatching {
-            fun queryBySelection(selection: String, selectionArgs: Array<String>): Uri? {
-                val cursor = context.contentResolver.query(
-                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-                    arrayOf(MediaStore.Audio.Media._ID),
-                    selection,
-                    selectionArgs,
-                    null
-                )
-                cursor?.use {
-                    if (it.moveToFirst()) {
-                        val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID))
-                        return ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
-                    }
-                }
-                return null
-            }
-
-            // Scoped-storage friendly lookup
-            val file = File(filePath)
-            val fileName = file.name
-            val relativePath = file.parentFile?.absolutePath
-                ?.removePrefix("/storage/emulated/0/")
-                ?.trim('/')
-                ?.let { if (it.isBlank()) "" else "$it/" }
-                ?: ""
-
-            queryBySelection(
-                "${MediaStore.Audio.Media.DISPLAY_NAME} = ? AND ${MediaStore.Audio.Media.RELATIVE_PATH} = ?",
-                arrayOf(fileName, relativePath)
-            )?.let { return@runCatching it }
-
-            queryBySelection(
-                "${MediaStore.Audio.Media.DISPLAY_NAME} = ?",
-                arrayOf(fileName)
-            )
-        }.getOrNull()
-    }
-
-    /**
-     * Finds document URI in tree using progressive query.
-     *
-     * Core principle: "Don't guess, query." Instead of manually constructing
-     * Document IDs, we query the system to get the correct ID. This is
-     * essential for compatibility with different storage providers
-     * (Google Drive, ExternalStorageProvider, OneDrive) that handle
-     * special characters and path separators differently.
-     *
-     * Uses cache for folder Document ID optimization.
-     */
-    private fun findDocumentUriInTree(treeUri: Uri, relativePath: String): Uri? {
-        val rootDocId = runCatching { DocumentsContract.getTreeDocumentId(treeUri) }.getOrNull() ?: return null
-        if (relativePath.isBlank()) {
-            return DocumentsContract.buildDocumentUriUsingTree(treeUri, rootDocId)
-        }
-
-        val normalizedRelative = relativePath.trim('/').replace('\\', '/')
-        val segments = normalizedRelative.split('/').filter { it.isNotBlank() }
-        val totalSegments = segments.size
-
-        // Try to use cached folder Document IDs first for performance
-        var currentDocId = rootDocId
-        var startIndex = 0
-
-        // Build cumulative folder paths for cache lookup
-        val folderPaths = mutableListOf<String>()
-        for (i in 0 until totalSegments - 1) {
-            folderPaths.add(segments.subList(0, i + 1).joinToString("/"))
-        }
-
-        // Check cached folder IDs
-        for ((index, folderPath) in folderPaths.withIndex()) {
-            val cachedFolderDocId = safPermissionCache.getOrFindFolderDocId(treeUri, folderPath)
-            if (cachedFolderDocId != null) {
-                currentDocId = cachedFolderDocId
-                startIndex = index + 1
-            } else {
-                break
-            }
-        }
-
-        // Progressive query: navigate through each segment, querying the system
-        // for the correct Document ID instead of guessing
-        for (i in startIndex until totalSegments) {
-            val segment = segments[i]
-            val childrenUri = DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, currentDocId)
-            var nextDocId: String? = null
-            val normalizedSegment = Normalizer.normalize(segment, Normalizer.Form.NFC)
-
-            context.contentResolver.query(
-                childrenUri,
-                arrayOf(
-                    DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-                    DocumentsContract.Document.COLUMN_DISPLAY_NAME
-                ),
-                null, null, null
-            )?.use { cursor ->
-                val idIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DOCUMENT_ID)
-                val nameIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
-
-                while (cursor.moveToNext()) {
-                    val displayName = cursor.getString(nameIndex)
-                    val normalizedName = Normalizer.normalize(displayName ?: "", Normalizer.Form.NFC)
-
-                    // Use system-returned name for matching (solves encoding issues)
-                    if (normalizedName.equals(normalizedSegment, ignoreCase = true)) {
-                        // Get the system-generated ID, never construct it manually
-                        nextDocId = cursor.getString(idIndex)
-                        break
-                    }
-                }
-            }
-
-            if (nextDocId == null) {
-                Timber.tag(TAG).w( "findDocumentUriInTree: segment not found: $segment")
-                return null
-            }
-
-            currentDocId = nextDocId
-
-            // Cache intermediate folder Document IDs (not the final file)
-            if (i < totalSegments - 1) {
-                val folderPath = segments.subList(0, i + 1).joinToString("/")
-                safPermissionCache.cacheFileDocId(treeUri, folderPath, currentDocId)
-            }
-        }
-
-        // Cache the final file Document ID for future batch operations
-        safPermissionCache.cacheFileDocId(treeUri, normalizedRelative, currentDocId)
-
-        // Only now build the URI with the system-verified Document ID
-        return DocumentsContract.buildDocumentUriUsingTree(treeUri, currentDocId)
-    }
-
-    /**
      * Gets MIME type for file extension
      */
     private fun getMimeType(extension: String): String {
@@ -1730,5 +1388,68 @@ class TagLibMetadataProcessor @Inject constructor(
             "wv" -> "audio/x-wavpack"
             else -> "application/octet-stream"
         }
+    }
+
+    /**
+     * Writes embedded album art to a file via the given native file descriptor.
+     * Centralizes the picture-construction logic that was previously repeated
+     * across the four write paths (direct / MediaStore / SAF-direct / SAF-temp).
+     */
+    private fun writeAlbumArt(fd: Int, albumArtBytes: ByteArray, filePath: String) {
+        val picture = Picture(
+            data = albumArtBytes,
+            description = "Front Cover",
+            pictureType = "Front Cover",
+            mimeType = detectImageMimeType(albumArtBytes)
+        )
+        val saved = TagLib.savePictures(fd, arrayOf(picture))
+        if (!saved) {
+            Timber.tag(TAG).w("Failed to save album art for: $filePath")
+        }
+    }
+
+    /**
+     * Resolves a file path to a MediaStore content URI. Used as a fallback for
+     * files that are not directly accessible (e.g. inside an SD card volume)
+     * but have been indexed by MediaStore.
+     */
+    private fun queryMediaStoreUriByPath(filePath: String): Uri? {
+        return runCatching {
+            val file = File(filePath)
+            val fileName = file.name
+            val relativePath = file.parentFile?.absolutePath
+                ?.removePrefix("/storage/emulated/0/")
+                ?.trim('/')
+                ?.let { if (it.isBlank()) "" else "$it/" }
+                ?: ""
+
+            fun query(selection: String, args: Array<String>): Uri? {
+                val cursor = context.contentResolver.query(
+                    MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                    arrayOf(MediaStore.Audio.Media._ID),
+                    selection,
+                    args,
+                    null
+                )
+                cursor?.use {
+                    if (it.moveToFirst()) {
+                        val id = it.getLong(it.getColumnIndexOrThrow(MediaStore.Audio.Media._ID))
+                        return ContentUris.withAppendedId(
+                            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+                            id
+                        )
+                    }
+                }
+                return null
+            }
+
+            query(
+                "${MediaStore.Audio.Media.DISPLAY_NAME} = ? AND ${MediaStore.Audio.Media.RELATIVE_PATH} = ?",
+                arrayOf(fileName, relativePath)
+            ) ?: query(
+                "${MediaStore.Audio.Media.DISPLAY_NAME} = ?",
+                arrayOf(fileName)
+            )
+        }.getOrNull()
     }
 }

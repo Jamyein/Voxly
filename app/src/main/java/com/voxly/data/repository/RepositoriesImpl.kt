@@ -13,6 +13,7 @@ import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.metadata.TagWriteManager
 import com.voxly.data.local.replaygain.ReplayGainScanner
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.AudioFormat
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.domain.model.parseMediaStoreTrackField
@@ -134,7 +135,7 @@ class AudioRepositoryImpl @Inject constructor(
                     name = javaFile.name,
                     size = javaFile.length(),
                     duration = finalDuration,
-                    format = extension.uppercase(),
+                    format = AudioFormat.fromExtension(extension),
                     bitrate = finalBitrate,
                     sampleRate = finalSampleRate,
                     channels = finalChannels,

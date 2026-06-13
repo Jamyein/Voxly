@@ -9,6 +9,7 @@ import com.voxly.data.local.cache.EnrichmentJobEntity
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.metadata.lightweight.LightweightMetadataParser
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.usecase.MemoryPressureMonitor
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
@@ -35,7 +36,8 @@ class EnrichmentWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
     private val musicLibraryCache: MusicLibraryCache,
-    private val metadataProcessor: TagLibMetadataProcessor
+    private val metadataProcessor: TagLibMetadataProcessor,
+    private val memoryPressureMonitor: MemoryPressureMonitor
 ) : CoroutineWorker(context, params) {
 
     companion object {
@@ -61,7 +63,7 @@ class EnrichmentWorker @AssistedInject constructor(
                     break
                 }
 
-                val semaphore = Semaphore(MAX_CONCURRENCY)
+                val semaphore = Semaphore(memoryPressureMonitor.getCurrentConcurrency(MAX_CONCURRENCY))
                 val enrichedFiles = mutableListOf<AudioFile>()
 
                 coroutineScope {

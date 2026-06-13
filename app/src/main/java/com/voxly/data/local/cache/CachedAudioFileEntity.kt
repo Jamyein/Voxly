@@ -5,6 +5,7 @@ import androidx.room.Fts4
 import androidx.room.Index
 import androidx.room.PrimaryKey
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.AudioFormat
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
 
@@ -60,12 +61,19 @@ data class CachedAudioFileEntity(
     val lyrics: String?,
     val customFieldsJson: String?,  // JSON-serialized Map<String, String>
     
-    // ReplayGain info
+    // ReplayGain info (1.0 + 2.0 fields)
     val replayGainTrackGain: Float?,
     val replayGainTrackPeak: Float?,
     val replayGainAlbumGain: Float?,
     val replayGainAlbumPeak: Float?,
-    
+    // ReplayGain 2.0 (EBU R128) - persisted so values survive a Room round-trip
+    val replayGainTruePeak: Float?,
+    val replayGainTrackLoudness: Float?,
+    val replayGainAlbumLoudness: Float?,
+    val replayGainTrackRange: Float?,
+    val replayGainAlbumRange: Float?,
+    val replayGainReferenceLoudness: Float?,
+
     // Timestamps for incremental scanning
     val lastScannedAt: Long,
     val fileLastModifiedAt: Long,
@@ -85,7 +93,7 @@ data class CachedAudioFileEntity(
             name = name,
             size = size,
             duration = duration,
-            format = format,
+            format = AudioFormat.fromExtension(format),
             mimeType = mimeType,
             bitrate = bitrate,
             sampleRate = sampleRate,
@@ -111,20 +119,42 @@ data class CachedAudioFileEntity(
                 comment = comment,
                 lyrics = lyrics,
                 albumArt = null,  // Always null in cache - use getAlbumArtUri() instead
-                customFields = emptyMap()  // Parsed separately if needed
+                customFields = parseCustomFields(customFieldsJson)
             ),
             replayGainInfo = if (replayGainTrackGain != null) {
                 ReplayGainInfo(
                     trackGain = replayGainTrackGain,
                     trackPeak = replayGainTrackPeak ?: 0f,
                     albumGain = replayGainAlbumGain,
-                    albumPeak = replayGainAlbumPeak
+                    albumPeak = replayGainAlbumPeak,
+                    truePeak = replayGainTruePeak,
+                    trackLoudness = replayGainTrackLoudness,
+                    albumLoudness = replayGainAlbumLoudness,
+                    trackRange = replayGainTrackRange,
+                    albumRange = replayGainAlbumRange,
+                    referenceLoudness = replayGainReferenceLoudness ?: -18f
                 )
             } else null
         )
     }
     
     companion object {
+        private val customFieldsGson = com.google.gson.Gson()
+
+        /**
+         * Deserializes the customFieldsJson column back into a Map.
+         * Returns emptyMap() if the JSON is null, blank, or malformed.
+         */
+        fun parseCustomFields(json: String?): Map<String, String> {
+            if (json.isNullOrBlank()) return emptyMap()
+            return try {
+                val type = object : com.google.gson.reflect.TypeToken<Map<String, String>>() {}.type
+                customFieldsGson.fromJson<Map<String, String>>(json, type) ?: emptyMap()
+            } catch (e: Exception) {
+                emptyMap()
+            }
+        }
+
         /**
          * Creates entity from domain model.
          */
@@ -140,7 +170,7 @@ data class CachedAudioFileEntity(
                 name = audioFile.name,
                 size = audioFile.size,
                 duration = audioFile.duration,
-                format = audioFile.format,
+                format = audioFile.format.name,
                 mimeType = audioFile.mimeType,
                 bitrate = audioFile.bitrate,
                 sampleRate = audioFile.sampleRate,
@@ -169,6 +199,12 @@ data class CachedAudioFileEntity(
                 replayGainTrackPeak = audioFile.replayGainInfo?.trackPeak,
                 replayGainAlbumGain = audioFile.replayGainInfo?.albumGain,
                 replayGainAlbumPeak = audioFile.replayGainInfo?.albumPeak,
+                replayGainTruePeak = audioFile.replayGainInfo?.truePeak,
+                replayGainTrackLoudness = audioFile.replayGainInfo?.trackLoudness,
+                replayGainAlbumLoudness = audioFile.replayGainInfo?.albumLoudness,
+                replayGainTrackRange = audioFile.replayGainInfo?.trackRange,
+                replayGainAlbumRange = audioFile.replayGainInfo?.albumRange,
+                replayGainReferenceLoudness = audioFile.replayGainInfo?.referenceLoudness,
                 lastScannedAt = System.currentTimeMillis(),
                 fileLastModifiedAt = fileLastModified,
                 lastEditedByUserAt = lastEditedByUserAt

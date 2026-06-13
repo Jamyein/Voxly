@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -58,13 +59,21 @@ class FastScanProcessor @Inject constructor(
                                 if (!file.exists() || !file.canRead()) return@async audioFile
 
                                 val lightweightResult = LightweightMetadataParser.parse(file)
+
+                                // Single combined MediaStore query instead of per-file albumId + year queries
+                                val needsMsData = (audioFile.mediaStoreAlbumId == null) ||
+                                    (lightweightResult == null && audioFile.metadata.year.isNullOrBlank())
+                                val msData = if (needsMsData) {
+                                    mediaStoreDataSource.queryAllMediaStoreFields(audioFile.path)
+                                } else null
+
                                 val mediaStoreAlbumId = audioFile.mediaStoreAlbumId
-                                    ?: mediaStoreDataSource.queryMediaStoreAlbumId(audioFile.path)
+                                    ?: msData?.albumId
 
                                 val effectiveYear = when {
                                     lightweightResult != null && !lightweightResult.metadata.year.isNullOrBlank() -> lightweightResult.metadata.year
                                     !audioFile.metadata.year.isNullOrBlank() -> audioFile.metadata.year
-                                    else -> mediaStoreDataSource.queryYearFromMediaStore(audioFile.path)
+                                    else -> msData?.year
                                 }
 
                                 audioFile.copy(
@@ -94,42 +103,5 @@ class FastScanProcessor @Inject constructor(
                 }.awaitAll()
         }
 
-    /**
-     * Legacy fast-scan entry point that reads per-file duration/bitrate from MediaStore.
-     * Kept for compatibility; prefer [enrichAll] when MediaStore data is already available.
-     */
-    suspend fun fastScan(files: List<Pair<String, Long>>): List<AudioFile> = withContext(Dispatchers.IO) {
-        val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
-        val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
 
-        files.mapNotNull { (path, _) ->
-            try {
-                val file = File(path)
-                if (!file.exists() || !file.canRead()) return@mapNotNull null
-
-                val extension = file.extension.lowercase()
-                val (duration, bitrate) = mediaStoreDataSource.queryFileDurationAndBitrate(path)
-
-                val lightweightResult = LightweightMetadataParser.parse(file)
-                val metadata = lightweightResult?.metadata
-                    ?: AudioMetadata(year = mediaStoreDataSource.queryYearFromMediaStore(path))
-
-                AudioFile(
-                    id = path.hashCode().toString(),
-                    path = path,
-                    name = file.name,
-                    size = file.length(),
-                    duration = duration,
-                    format = extension.uppercase(),
-                    bitrate = bitrate,
-                    sampleRate = lightweightResult?.audioInfo?.sampleRate ?: 0,
-                    channels = lightweightResult?.audioInfo?.channels ?: 0,
-                    metadata = metadata
-                )
-            } catch (e: Exception) {
-                Timber.w(TAG, "Fast scan failed: $path", e)
-                null
-            }
-        }
-    }
 }

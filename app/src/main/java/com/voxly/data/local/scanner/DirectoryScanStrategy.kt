@@ -2,6 +2,7 @@ package com.voxly.data.local.scanner
 
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
+import com.voxly.core.util.SortUtil
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
@@ -9,11 +10,10 @@ import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
-import java.text.Collator
-import java.util.Locale
 import javax.inject.Inject
 
 class DirectoryScanStrategy @Inject constructor(
@@ -27,9 +27,7 @@ class DirectoryScanStrategy @Inject constructor(
 ) : ScanStrategy {
     companion object {
         private const val TAG = "DirectoryScanStrategy"
-        private val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply {
-            strength = Collator.PRIMARY
-        }
+        private val chineseCollator = SortUtil.chineseCollator
     }
 
     suspend fun scanDirectories(
@@ -57,7 +55,7 @@ class DirectoryScanStrategy @Inject constructor(
         directoryPaths: List<String>
     ): List<AudioFile> = withContext(Dispatchers.IO) {
         Timber.tag("Voxly").i("DirectoryScanStrategy scanDirectoriesFull: dirs=${directoryPaths.size}")
-        directoryPaths.flatMap { dir ->
+        directoryPaths.filter { kotlinx.coroutines.currentCoroutineContext().isActive }.flatMap { dir ->
             scanDirectoryInternal(dir)
         }.distinctBy { it.path }
             .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })

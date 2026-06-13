@@ -324,7 +324,7 @@ private fun LyricsField(
 
 @Composable
 private fun FileInfoSection(audioFile: com.voxly.domain.model.AudioFile) {
-    FileInfoRow(stringResource(R.string.file_info_format), audioFile.format)
+    FileInfoRow(stringResource(R.string.file_info_format), audioFile.format.displayName)
     FileInfoRow(stringResource(R.string.metadata_bitrate), "${audioFile.bitrate} kbps")
     FileInfoRow(stringResource(R.string.metadata_sample_rate), "${audioFile.sampleRate} Hz")
     FileInfoRow(stringResource(R.string.file_info_channels), audioFile.channels.toString())

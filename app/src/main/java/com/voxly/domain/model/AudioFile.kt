@@ -16,7 +16,7 @@ data class AudioFile(
     val name: String,
     val size: Long,
     val duration: Long,
-    val format: String,
+    val format: AudioFormat,
     val mimeType: String? = null,
     val bitrate: Int,
     val sampleRate: Int,

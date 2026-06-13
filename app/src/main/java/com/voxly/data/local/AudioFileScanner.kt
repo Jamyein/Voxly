@@ -90,9 +90,7 @@ class AudioFileScanner @Inject constructor(
         private const val TAG = "AudioFileScanner"
 
         /** Collator for Chinese pinyin sorting */
-        private val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply {
-            strength = Collator.PRIMARY
-        }
+        private val chineseCollator = SortUtil.chineseCollator
 
         fun parseTrackField(value: Int): Pair<Int?, Int?> = 
             com.voxly.domain.model.parseMediaStoreTrackField(value)
@@ -171,13 +169,13 @@ class AudioFileScanner @Inject constructor(
             }
         }
 
-        // Update cache with scan results only if we actually scanned new data
-        // Skip updateCache when serving from cache to avoid triggering Flow emissions
+        // Update cache with scan results only if we actually scanned new data.
+        // Skip updateCache when serving from cache to avoid triggering Flow emissions.
+        // Single call instead of chunked(500).forEach { ... } so that the aggregator
+        // rebuilds only once, not N times per scan (N = ceil(files.size / 500)).
         val servedFromCache = !incremental && !forceRefresh && hasCachedData()
         if (!servedFromCache) {
-            files.chunked(500).forEach { chunk ->
-                libraryCache.updateCache(chunk)
-            }
+            libraryCache.updateCache(files)
         }
 
         // Bump cache version when serving from cache to trigger AlbumArtistAggregator's flatMapLatest
@@ -316,8 +314,8 @@ class AudioFileScanner @Inject constructor(
                         whitelistEnabled = whitelistEnabled && whitelistPaths.isNotEmpty(),
                         blacklistEnabled = blacklistEnabled && blacklistPaths.isNotEmpty(),
                         minDurationEnabled = false,
-                        whitelistUris = whitelistPaths,
-                        blacklistUris = blacklistPaths,
+                        whitelistPaths = whitelistPaths,
+                        blacklistPaths = blacklistPaths,
                         minDurationMs = 0L
                     )
                 )

@@ -67,7 +67,7 @@ fun TrackListItem(
                 )
                 // Show format info
                 Text(
-                    text = "${audioFile.format.uppercase()} • ${audioFile.getFormattedDuration()}",
+                    text = "${audioFile.format.displayName} • ${audioFile.getFormattedDuration()}",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,

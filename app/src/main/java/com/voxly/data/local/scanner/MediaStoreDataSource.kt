@@ -333,12 +333,87 @@ class MediaStoreDataSource @Inject constructor(
             name = file.name,
             size = file.length(),
             duration = duration,
-            format = extension.uppercase(),
+            format = AudioFormat.fromExtension(extension),
             bitrate = bitrate,
             sampleRate = audioInfo?.sampleRate ?: 0,
             channels = audioInfo?.channels ?: 0,
             metadata = fullMetadata
         )
+    }
+
+    /**
+     * Queries all MediaStore fields for a single file in one ContentResolver round-trip.
+     * Replaces the previous pattern of 3 separate queries (duration/bitrate, basic metadata, album id).
+     * Returns null if the file is not found in MediaStore.
+     */
+    data class FileMediaStoreData(
+        val duration: Long,
+        val bitrate: Int,
+        val albumId: Long?,
+        val artistId: Long?,
+        val title: String?,
+        val artist: String?,
+        val album: String?,
+        val year: String?,
+        val trackNumber: Int?,
+        val totalTracks: Int?
+    )
+
+    suspend fun queryAllMediaStoreFields(filePath: String): FileMediaStoreData? = withContext(Dispatchers.IO) {
+        val file = File(filePath)
+        val relativePath = getRelativePathFromAbsolute(file.parentFile?.absolutePath.orEmpty())
+        val selection: String
+        val selectionArgs: Array<String>
+
+        if (relativePath != null) {
+            selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ? AND ${MediaStore.Audio.Media.RELATIVE_PATH} = ?"
+            selectionArgs = arrayOf(file.name, relativePath)
+        } else {
+            selection = "${MediaStore.Audio.Media.DISPLAY_NAME} = ?"
+            selectionArgs = arrayOf(file.name)
+        }
+
+        contentResolver.query(
+            AUDIO_URI,
+            arrayOf(
+                MediaStore.Audio.Media.DURATION,
+                MediaStore.Audio.Media.BITRATE,
+                MediaStore.Audio.Media.ALBUM_ID,
+                MediaStore.Audio.Media.ARTIST_ID,
+                MediaStore.Audio.Media.TITLE,
+                MediaStore.Audio.Media.ARTIST,
+                MediaStore.Audio.Media.ALBUM,
+                MediaStore.Audio.Media.YEAR,
+                MediaStore.Audio.Media.TRACK
+            ),
+            selection,
+            selectionArgs,
+            null
+        )?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val duration = cursor.getLong(0)
+                val bitrate = cursor.getInt(1) / Constants.BPS_TO_KBPS
+                val albumId = cursor.getLong(2).takeIf { it > 0L }
+                val artistId = cursor.getLong(3).takeIf { it > 0L }
+                val title = cursor.getString(4)?.takeIf { it.isNotBlank() }
+                val artist = cursor.getString(5)?.takeIf { it.isNotBlank() }
+                val album = cursor.getString(6)?.takeIf { it.isNotBlank() }
+                val yearInt = cursor.getInt(7)
+                val (trackNumber, totalTracks) = parseMediaStoreTrackField(cursor.getInt(8))
+                FileMediaStoreData(
+                    duration = duration,
+                    bitrate = bitrate,
+                    albumId = albumId,
+                    artistId = artistId,
+                    title = title,
+                    artist = artist,
+                    album = album,
+                    year = if (yearInt > 0) yearInt.toString() else null,
+                    trackNumber = trackNumber,
+                    totalTracks = totalTracks
+                )
+            } else null
+        }
     }
 
     /**
@@ -555,7 +630,7 @@ class MediaStoreDataSource @Inject constructor(
                     name = displayName,
                     size = cursor.getLong(columns.size),
                     duration = duration,
-                    format = extension.uppercase(),
+                    format = AudioFormat.fromExtension(extension),
                     mimeType = cursor.getString(columns.mimeType),
                     bitrate = cursor.getInt(columns.bitrate) / Constants.BPS_TO_KBPS,
                     sampleRate = 0,
@@ -614,42 +689,9 @@ class MediaStoreDataSource @Inject constructor(
 
     /**
      * Convert content URI to filesystem path.
+     * Delegates to the canonical implementation in PathUtils.
      */
-    fun getPathFromUri(uri: Uri): String {
-        return runCatching {
-            when {
-                uri.scheme == "file" -> uri.path.orEmpty()
-                uri.scheme != "content" -> uri.path.orEmpty()
-                else -> {
-                    val documentId = DocumentsContract.getTreeDocumentId(uri)
-                    if (documentId.startsWith("raw:")) {
-                        documentId.removePrefix("raw:")
-                    } else {
-                        val parts = documentId.split(":", limit = 2)
-                        val volume = parts.firstOrNull().orEmpty()
-                        val relativePath = parts.getOrNull(1)?.trim('/').orEmpty()
-
-                        when {
-                            volume.equals("primary", ignoreCase = true) -> {
-                                val root = Environment.getExternalStorageDirectory().absolutePath
-                                if (relativePath.isEmpty()) root else "$root/$relativePath"
-                            }
-                            volume.equals("home", ignoreCase = true) -> {
-                                val root = Environment.getExternalStorageDirectory().absolutePath
-                                val docsRoot = "$root/Documents"
-                                if (relativePath.isEmpty()) docsRoot else "$docsRoot/$relativePath"
-                            }
-                            volume.isNotEmpty() -> {
-                                if (relativePath.isEmpty()) "/storage/$volume"
-                                else "/storage/$volume/$relativePath"
-                            }
-                            else -> uri.path.orEmpty()
-                        }
-                    }
-                }
-            }
-        }.getOrElse { uri.path.orEmpty() }
-    }
+    fun getPathFromUri(uri: Uri): String = com.voxly.core.util.PathUtils.getPathFromUri(uri)
 
     /**
      * Convert URI string to filesystem path.

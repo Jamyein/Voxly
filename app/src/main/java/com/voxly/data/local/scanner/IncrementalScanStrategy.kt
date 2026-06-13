@@ -1,5 +1,6 @@
 package com.voxly.data.local.scanner
 
+import com.voxly.core.util.SortUtil
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
@@ -7,8 +8,6 @@ import com.voxly.domain.model.AudioFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import timber.log.Timber
-import java.text.Collator
-import java.util.Locale
 import javax.inject.Inject
 
 class IncrementalScanStrategy @Inject constructor(
@@ -20,9 +19,7 @@ class IncrementalScanStrategy @Inject constructor(
 ) : ScanStrategy {
     companion object {
         private const val TAG = "IncrementalScanStrategy"
-        private val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply {
-            strength = Collator.PRIMARY
-        }
+        private val chineseCollator = SortUtil.chineseCollator
     }
 
     override suspend fun scan(): List<AudioFile> = withContext(Dispatchers.IO) {

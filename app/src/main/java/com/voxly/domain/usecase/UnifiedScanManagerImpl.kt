@@ -5,6 +5,8 @@ import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.AudioFormat
+import com.voxly.domain.repository.WhitelistRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -37,6 +39,7 @@ class UnifiedScanManagerImpl @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
     private val musicLibraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
+    private val whitelistRepository: WhitelistRepository,
     private val scope: CoroutineScope
 ) : UnifiedScanManager {
 
@@ -136,7 +139,7 @@ class UnifiedScanManagerImpl @Inject constructor(
                 name = filePath.substringAfterLast('/'),
                 size = fileSize,
                 duration = audioInfo?.durationMs ?: existingEntity?.duration ?: 0L,
-                format = filePath.substringAfterLast('.', "").uppercase(),
+                format = AudioFormat.fromExtension(filePath.substringAfterLast('.', "")),
                 bitrate = audioInfo?.bitrate?.let { it / Constants.BPS_TO_KBPS } ?: existingEntity?.bitrate ?: 0,
                 sampleRate = audioInfo?.sampleRate ?: existingEntity?.sampleRate ?: 0,
                 channels = audioInfo?.channels ?: existingEntity?.channels ?: 0,
@@ -222,12 +225,13 @@ class UnifiedScanManagerImpl @Inject constructor(
     }
 
     /**
-     * Syncs selected directories from storage and performs incremental scan.
+     * Syncs selected directories from whitelist repository and performs incremental scan.
+     * Uses filesystem paths (not URIs) from WhitelistRepository's in-memory state.
      */
     private suspend fun syncSelectedDirectoriesFromStorage() {
-        val dirs = settingsDataStore.selectedDirectoryUris.first()
-        if (dirs.isNotEmpty()) {
-            scan(ScanTarget.Directories(dirs), force = false)
+        val paths = whitelistRepository.getValidWhitelistPathsOnce()
+        if (paths.isNotEmpty()) {
+            scan(ScanTarget.Directories(paths), force = false)
         }
     }
 
@@ -288,7 +292,7 @@ class UnifiedScanManagerImpl @Inject constructor(
             name = filePath.substringAfterLast('/'),
             size = 0,
             duration = 0,
-            format = filePath.substringAfterLast('.', "").uppercase(),
+            format = AudioFormat.fromExtension(filePath.substringAfterLast('.', "")),
             bitrate = 0,
             sampleRate = 0,
             channels = 0,

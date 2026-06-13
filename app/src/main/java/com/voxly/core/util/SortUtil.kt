@@ -20,7 +20,8 @@ object SortUtil {
      */
     private val pinyinCache = ConcurrentHashMap<String, String>(256)
 
-    private val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply {
+    @JvmStatic
+    val chineseCollator: Collator = Collator.getInstance(Locale.CHINA).apply {
         strength = Collator.PRIMARY
     }
 

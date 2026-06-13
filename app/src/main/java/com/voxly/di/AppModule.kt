@@ -371,11 +371,12 @@ object AppModule {
         audioFileScanner: AudioFileScanner,
         musicLibraryCache: MusicLibraryCache,
         settingsDataStore: SettingsDataStore,
+        whitelistRepository: WhitelistRepository,
         @ApplicationContext context: Context,
         @Named("ApplicationScope") scope: CoroutineScope
     ): UnifiedScanManager {
         Timber.tag("Voxly").i("Creating UnifiedScanManager")
-        return UnifiedScanManagerImpl(audioFileScanner, musicLibraryCache, settingsDataStore, scope)
+        return UnifiedScanManagerImpl(audioFileScanner, musicLibraryCache, settingsDataStore, whitelistRepository, scope)
     }
 
     @Provides

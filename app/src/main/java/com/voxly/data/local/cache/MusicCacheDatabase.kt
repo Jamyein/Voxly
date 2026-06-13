@@ -25,8 +25,9 @@ import javax.inject.Singleton
         RecentEditEntity::class,
         EnrichmentJobEntity::class,
         DirectorySnapshotEntity::class,
+        AlbumSortOrderEntity::class,
     ],
-    version = 13,
+    version = 14,
     exportSchema = false
 )
 /**
@@ -237,6 +238,19 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `lastEditedByUserAt` INTEGER")
                     }
                 })
+                // Migration from version 12 to 13: adds ReplayGain 2.0 columns and registers
+                // AlbumSortOrderEntity. Missing column → destructive is acceptable per current
+                // policy, but a no-op explicit migration keeps the chain auditable.
+                .addMigrations(object : Migration(12, 13) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `replayGainTruePeak` REAL")
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `replayGainTrackLoudness` REAL")
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `replayGainAlbumLoudness` REAL")
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `replayGainTrackRange` REAL")
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `replayGainAlbumRange` REAL")
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `replayGainReferenceLoudness` REAL")
+                    }
+                })
 
             val newInstance = builder.build()
             prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
@@ -261,6 +275,8 @@ class MusicCacheDatabaseProvider @Inject constructor(
     companion object {
         private const val PREFS_NAME = "music_cache_meta"
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
-        private const val CURRENT_DATA_FORMAT_VERSION = 10  // FTS4 full-text search
+        // MUST match the Room @Database(version = ...) annotation above.
+        // Bump this whenever you add a new migration or change the version.
+        private const val CURRENT_DATA_FORMAT_VERSION = 14
     }
 }

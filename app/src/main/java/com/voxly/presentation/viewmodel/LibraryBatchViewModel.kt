@@ -1,7 +1,10 @@
 package com.voxly.presentation.viewmodel
 
+import android.content.Context
+import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.BatchResult
 import com.voxly.domain.model.BatchStatus
 import com.voxly.domain.repository.AudioRepository
@@ -9,6 +12,7 @@ import com.voxly.domain.repository.OnlineMetadataRepository
 import com.voxly.domain.usecase.BatchEngine
 import com.voxly.domain.usecase.BatchProgress
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -29,8 +33,10 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class LibraryBatchViewModel @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val audioRepository: AudioRepository,
     private val onlineMetadataRepository: OnlineMetadataRepository,
+    private val safWriteAccessService: SafWriteAccessService,
     private val batchEngine: BatchEngine<String>,
     private val libraryDataHolder: LibraryDataHolder
 ) : ViewModel() {
@@ -162,6 +168,8 @@ class LibraryBatchViewModel @Inject constructor(
 
     /**
      * Batch rename files based on pattern.
+     * Falls back to SAF DocumentsContract.renameDocument() when java.io.File.renameTo()
+     * fails (typical on Android 10+ for external storage).
      */
     fun batchRenameFiles(filePaths: List<String>, pattern: String, startNumber: Int) {
         executeBatch(
@@ -187,10 +195,21 @@ class LibraryBatchViewModel @Inject constructor(
 
                 val newFile = File(file.parent, newName)
                 if (file.renameTo(newFile)) {
-                    Result.success(Unit)
-                } else {
-                    Result.failure(Exception("Rename failed"))
+                    return@executeBatch Result.success(Unit)
                 }
+
+                // SAF fallback for Android 10+ scoped storage where direct rename fails
+                val targetDocUri = safWriteAccessService.resolveWritableDocumentUri(filePath)
+                if (targetDocUri != null) {
+                    val renamedUri = runCatching {
+                        DocumentsContract.renameDocument(context.contentResolver, targetDocUri, newName)
+                    }.getOrNull()
+                    if (renamedUri != null) {
+                        return@executeBatch Result.success(Unit)
+                    }
+                }
+
+                Result.failure(Exception("Rename failed (no write permission for $filePath)"))
             },
             itemName = { it }
         )
