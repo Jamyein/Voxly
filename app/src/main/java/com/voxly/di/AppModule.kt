@@ -160,6 +160,7 @@ object AppModule {
         return OkHttpClient.Builder()
             .cache(cache)
             .certificatePinner(certificatePinner)
+            .eventListenerFactory(OkHttpMetrics.Factory)
             .addInterceptor(userAgentInterceptor)
             .addInterceptor(cacheInterceptor)
             .addInterceptor(loggingInterceptor)
