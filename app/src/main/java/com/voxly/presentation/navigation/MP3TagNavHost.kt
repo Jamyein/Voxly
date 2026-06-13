@@ -14,24 +14,37 @@ import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.layout.calculatePaneScaffoldDirective
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldDefaults
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldState
-import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffoldValue
-import androidx.compose.material3.adaptive.navigationsuite.rememberNavigationSuiteScaffoldState
 import androidx.compose.material3.adaptive.navigation3.ListDetailSceneStrategy
+import androidx.compose.material3.adaptive.navigation3.SupportingPaneSceneStrategy
 import androidx.compose.material3.adaptive.navigation3.rememberListDetailSceneStrategy
+import androidx.compose.material3.adaptive.navigation3.rememberSupportingPaneSceneStrategy
+import androidx.compose.material3.ModalWideNavigationRail
+import androidx.compose.material3.WideNavigationRailItem
+import androidx.compose.material3.WideNavigationRailValue
+import androidx.compose.material3.rememberWideNavigationRailState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuOpen
+import androidx.compose.material.icons.filled.Menu
+import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.window.core.layout.WindowSizeClass
+import kotlinx.coroutines.launch
 
 import androidx.lifecycle.compose.dropUnlessResumed
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -149,16 +162,8 @@ fun MP3TagNavHost() {
     var pendingCoverArt by remember { mutableStateOf<ByteArray?>(null) }
 
     val topLevelRoute = topLevelBackStack.topLevelKey
-        val showNavigationBar = isMainScreenKey(topLevelBackStack.backStack.lastOrNull())
-        val navigationSuiteState = rememberNavigationSuiteScaffoldState(
-            initialValue = if (showNavigationBar) NavigationSuiteScaffoldValue.Visible
-            else NavigationSuiteScaffoldValue.Hidden
-        )
-        LaunchedEffect(showNavigationBar) {
-            if (showNavigationBar) navigationSuiteState.show()
-            else navigationSuiteState.hide()
-        }
-        val adaptiveInfo = currentWindowAdaptiveInfoV2()
+    val showNavigationBar = isMainScreenKey(topLevelBackStack.backStack.lastOrNull())
+    val adaptiveInfo = currentWindowAdaptiveInfoV2()
 
     SharedTransitionLayout {
         val sharedTransitionScope = this@SharedTransitionLayout
@@ -194,52 +199,149 @@ fun MP3TagNavHost() {
             if (!isArtistsSelected) topLevelBackStack.addTopLevel(Artists)
         }
 
-        NavigationSuiteScaffold(
-            layoutType = NavigationSuiteScaffoldDefaults.calculateFromAdaptiveInfo(adaptiveInfo),
-            state = navigationSuiteState,
-            navigationSuiteItems = {
-                    if (showNavigationBar) {
-                        item(
+        // Per the Navigation 3 official "Common UI" recipe
+        // (kb://android/guide/navigation/navigation-3/recipes/common-ui), the top-level shell
+        // is `Scaffold(bottomBar = { NavigationBar { ... } })` + `NavDisplay`. We extend the
+        // recipe for tablets: instead of NavigationSuiteScaffold's auto-rail (which mixes M3
+        // convenience into a Navigation 3 host), we render ModalWideNavigationRail ourselves
+        // and pass an EMPTY bottomBar on Expanded so the Scaffold reserves no bottom space —
+        // this avoids the gesture-nav ghost area entirely.
+        //
+        // M3 1.5.0-alpha21 does not ship a "modal wide rail" layout in NavigationSuiteScaffold
+        // (only WideNavigationRailCollapsed/Expanded, which are non-modal). The doc's
+        // "Customize navigation types" pattern uses NavigationSuiteType.NavigationDrawer
+        // (PermanentDrawerSheet); for the modal variant we follow the component sample at
+        // androidx.compose.material3.samples.ModalWideNavigationRailSample.
+        val windowSizeClass = adaptiveInfo.windowSizeClass
+        val isExpandedWidth = windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)
+        val railState = rememberWideNavigationRailState()
+        val railScope = rememberCoroutineScope()
+
+        Scaffold(
+            containerColor = MaterialTheme.colorScheme.background,
+            bottomBar = {
+                // Only show the bottom NavigationBar on compact widths. On Expanded we leave
+                // the slot empty (no composable) so Scaffold reserves zero bottom space.
+                if (!isExpandedWidth && showNavigationBar) {
+                    NavigationBar {
+                        NavigationBarItem(
+                            selected = isFileSelected,
+                            onClick = onFileBrowserClick,
                             icon = {
                                 Icon(
                                     imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
                                     contentDescription = "Files"
                                 )
                             },
-                            label = { Text("Files") },
-                            selected = isFileSelected,
-                            onClick = onFileBrowserClick
+                            label = { Text("Files") }
                         )
-
-                        item(
+                        NavigationBarItem(
+                            selected = isAlbumsSelected,
+                            onClick = onAlbumsClick,
                             icon = {
                                 Icon(
                                     imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
                                     contentDescription = "Albums"
                                 )
                             },
-                            label = { Text("Albums") },
-                            selected = isAlbumsSelected,
-                            onClick = onAlbumsClick
+                            label = { Text("Albums") }
                         )
-
-                        item(
+                        NavigationBarItem(
+                            selected = isArtistsSelected,
+                            onClick = onArtistsClick,
                             icon = {
                                 Icon(
                                     imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
                                     contentDescription = "Artists"
                                 )
                             },
-                            label = { Text("Artists") },
-                            selected = isArtistsSelected,
-                            onClick = onArtistsClick
+                            label = { Text("Artists") }
                         )
                     }
-                },
-                containerColor = MaterialTheme.colorScheme.background
-            ) {
-                navDisplayContent()
+                }
             }
+        ) { padding ->
+            if (isExpandedWidth) {
+                Row(
+                    modifier = Modifier
+                        .padding(padding)
+                        .fillMaxSize()
+                ) {
+                    if (showNavigationBar) {
+                        ModalWideNavigationRail(
+                            state = railState,
+                            header = {
+                                IconButton(onClick = { railScope.launch { railState.toggle() } }) {
+                                    Icon(
+                                        imageVector = if (railState.targetValue == WideNavigationRailValue.Expanded) {
+                                            Icons.AutoMirrored.Filled.MenuOpen
+                                        } else {
+                                            Icons.Filled.Menu
+                                        },
+                                        contentDescription = "Toggle navigation rail"
+                                    )
+                                }
+                            }
+                        ) {
+                            val railExpanded = railState.targetValue == WideNavigationRailValue.Expanded
+                            WideNavigationRailItem(
+                                selected = isFileSelected,
+                                onClick = onFileBrowserClick,
+                                icon = {
+                                    Icon(
+                                        imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
+                                        contentDescription = "Files"
+                                    )
+                                },
+                                label = { Text("Files") },
+                                railExpanded = railExpanded
+                            )
+                            WideNavigationRailItem(
+                                selected = isAlbumsSelected,
+                                onClick = onAlbumsClick,
+                                icon = {
+                                    Icon(
+                                        imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
+                                        contentDescription = "Albums"
+                                    )
+                                },
+                                label = { Text("Albums") },
+                                railExpanded = railExpanded
+                            )
+                            WideNavigationRailItem(
+                                selected = isArtistsSelected,
+                                onClick = onArtistsClick,
+                                icon = {
+                                    Icon(
+                                        imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
+                                        contentDescription = "Artists"
+                                    )
+                                },
+                                label = { Text("Artists") },
+                                railExpanded = railExpanded
+                            )
+                        }
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.background)
+                    ) {
+                        navDisplayContent()
+                    }
+                }
+            } else {
+                Box(
+                    modifier = Modifier
+                        .padding(padding)
+                        .fillMaxSize()
+                        .background(MaterialTheme.colorScheme.background)
+                ) {
+                    navDisplayContent()
+                }
+            }
+        }
     }
 }
 
@@ -391,21 +493,21 @@ private fun MP3TagNavDisplay(
 
             entry<OnlineMetadata>(
                 clazzContentKey = { key -> "OnlineMetadata_${key.filePath}" },
-                metadata = sharedAxisXMetadata
+                metadata = { key -> supportingPaneExtraMetadata(key.filePath) }
             ) { key ->
                 OnlineMetadataEntry(key, topLevelBackStack)
             }
 
             entry<OnlineLyricsSearch>(
                 clazzContentKey = { key -> "OnlineLyricsSearch_${key.filePath}" },
-                metadata = sharedAxisXMetadata
+                metadata = { key -> supportingPaneExtraMetadata(key.filePath) }
             ) { key ->
                 OnlineLyricsSearchEntry(key, topLevelBackStack, onPendingLyricsSet = onPendingLyricsSet)
             }
 
             entry<OnlineCoverSearch>(
                 clazzContentKey = { key -> "OnlineCoverSearch_${key.filePath}" },
-                metadata = sharedAxisXMetadata
+                metadata = { key -> supportingPaneExtraMetadata(key.filePath) }
             ) { key ->
                 OnlineCoverSearchEntry(key, topLevelBackStack, onPendingCoverArtSet = onPendingCoverArtSet)
             }
@@ -470,6 +572,7 @@ private fun MP3TagNavDisplay(
         },
         sharedTransitionScope = sharedTransitionScope,
         sceneStrategies = listOf(
+            rememberSupportingPaneSceneStrategy<NavKey>(),
             BottomSheetSceneStrategy()
         )
     )
@@ -785,3 +888,12 @@ private fun AnimatedContentTransitionScope<Scene<NavKey>>.computeTransition(
 private fun isMainScreenKey(key: Any?): Boolean = key == FileBrowser ||
     key == Albums ||
     key == Artists
+
+/**
+ * Marks a NavEntry as the "extra pane" of a [SupportingPaneSceneStrategy] scene, paired with
+ * the previous [MetadataEditor] entry on the back stack. Same `sceneKey` ⇒ same scene group;
+ * we use the audio file path because only one Online* search is open per file at a time.
+ */
+@OptIn(ExperimentalMaterial3AdaptiveApi::class)
+private fun supportingPaneExtraMetadata(sceneKey: Any): Map<String, Any> =
+    ListDetailSceneStrategy.extraPane(sceneKey)
