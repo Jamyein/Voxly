@@ -8,6 +8,7 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -212,6 +213,17 @@ fun MP3TagNavHost() {
         // "Customize navigation types" pattern uses NavigationSuiteType.NavigationDrawer
         // (PermanentDrawerSheet); for the modal variant we follow the component sample at
         // androidx.compose.material3.samples.ModalWideNavigationRailSample.
+        //
+        // **Edge-to-edge note**: M3 Scaffold's source comment says
+        //   "Scaffold will take the insets into account from the top/bottom only if the
+        //    topBar/bottomBar are not present, as the scaffold expect topBar/bottomBar to
+        //    handle insets instead."
+        // With our empty topBar slot, the default `contentWindowInsets` (system bars) would
+        // cause the outer Scaffold to consume the status-bar inset, pushing the inner screen
+        // Scaffolds' TopAppBars down so they cannot reach the status bar. The empty bottomBar
+        // on Expanded would do the same to the gesture-nav inset, leaving a non-immersive band.
+        // Setting `contentWindowInsets = WindowInsets(0)` makes the outer shell claim NO insets
+        // — each inner screen Scaffold (or M3 component) handles its own window insets.
         val windowSizeClass = adaptiveInfo.windowSizeClass
         val isExpandedWidth = windowSizeClass.isWidthAtLeastBreakpoint(WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND)
         val railState = rememberWideNavigationRailState()
@@ -219,6 +231,7 @@ fun MP3TagNavHost() {
 
         Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
                 // Only show the bottom NavigationBar on compact widths. On Expanded we leave
                 // the slot empty (no composable) so Scaffold reserves zero bottom space.
@@ -260,13 +273,14 @@ fun MP3TagNavHost() {
                     }
                 }
             }
-        ) { padding ->
+        ) { _ ->
+            // Note: we deliberately do NOT apply `padding` from the outer Scaffold here.
+            // With `contentWindowInsets = WindowInsets(0)`, the outer Scaffold's contentPadding
+            // is all zeros, so applying it would be a no-op — but we leave the `padding` arg
+            // unnamed to make the intent obvious: each inner screen Scaffold handles its own
+            // window insets (status bar via TopAppBar, gesture nav via contentPadding on lists).
             if (isExpandedWidth) {
-                Row(
-                    modifier = Modifier
-                        .padding(padding)
-                        .fillMaxSize()
-                ) {
+                Row(modifier = Modifier.fillMaxSize()) {
                     if (showNavigationBar) {
                         ModalWideNavigationRail(
                             state = railState,
@@ -334,7 +348,6 @@ fun MP3TagNavHost() {
             } else {
                 Box(
                     modifier = Modifier
-                        .padding(padding)
                         .fillMaxSize()
                         .background(MaterialTheme.colorScheme.background)
                 ) {
