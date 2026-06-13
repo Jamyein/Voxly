@@ -1080,7 +1080,7 @@ fun AudioFileStandardRowWithMenu(
         },
     trailingContent = {
         if (isSelected) Icon(Icons.Default.CheckCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(IconPadding))
-        else if (onAction != null) AudioFileActionsMenu(onAction)
+        else AudioFileActionsMenu(onAction)
     }
 )
 

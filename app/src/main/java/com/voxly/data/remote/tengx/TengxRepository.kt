@@ -160,7 +160,7 @@ class TengxRepositoryImpl(
                     val jsonObject = JsonParser.parseString(responseString).asJsonObject
                     val parsed = parseSearchResponse(jsonObject)
                     if (parsed != null && parsed.code == 0 && !parsed.data?.song?.list.isNullOrEmpty()) {
-                        val songCount = parsed.data?.song?.list?.size ?: 0
+                        val songCount = parsed.data.song.list.size
                         Timber.d(TAG, "QQ Music found $songCount songs for '$keywords'")
                         Timber.tag("Voxly").i("TengxRepository searchSongs completed: keywords='$keywords' resultCount=${parsed.data.song.list.size}")
                         return Result.success(parsed)

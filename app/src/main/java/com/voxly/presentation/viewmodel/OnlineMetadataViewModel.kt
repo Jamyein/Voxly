@@ -27,11 +27,11 @@ import dagger.assisted.AssistedFactory
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -547,112 +547,115 @@ class OnlineMetadataViewModel @AssistedInject constructor(
 
         Timber.d("selectRelease: candidate set, launching coroutines for details, cover and lyrics")
 
-        // Create a parent job to track all three coroutines
-        val parentJob = SupervisorJob()
-        activeSelectReleaseJob = parentJob
-
-        // Track if cover has been downloaded to avoid duplicate downloads
-        var coverDownloaded = false
-
         // 并行启动三个协程：封面图、详情、歌词
-        // 协程1：获取搜索结果中的封面图（优先缓存，带超时回退到下载）
-        viewModelScope.launch(parentJob) {
-            if (!release.coverArtUrl.isNullOrBlank()) {
-                try {
-                    // 优先从缓存获取，如果没有则下载，最多等待5秒
-                    val cover = kotlinx.coroutines.withTimeoutOrNull(Constants.COVER_ART_TIMEOUT_MS) {
-                        getCoverArtBytes(release.coverArtUrl)
-                    }
-                    if (cover != null) {
-                        _downloadedAlbumArt.update { cover }
-                        coverDownloaded = true
-                        Timber.d("selectRelease: cover art loaded from cache, size=${cover.size}")
-                    } else {
-                        // 超时或下载失败
-                        _isCoverArtTimeout.update { true }
-                        Timber.w("selectRelease: cover art load timeout or failed for ${release.coverArtUrl}")
-                    }
-                } catch (e: Exception) {
-                    _isCoverArtTimeout.update { true }
-                    Timber.e(e, "selectRelease: cover art load error")
-                }
-            }
-        }
+        // 用单个外层 launch + supervisorScope 包装,保留"任一失败不影响其他"语义,
+        // 同时让所有子任务成为 viewModelScope 的合法后代(viewModel 销毁时正确取消)。
+        // 外层 launch 的 Job 存进 activeSelectReleaseJob 以便下次 selectRelease 调用时取消整组。
+        activeSelectReleaseJob = viewModelScope.launch {
+            supervisorScope {
+                // Track if cover has been downloaded to avoid duplicate downloads
+                var coverDownloaded = false
 
-        viewModelScope.launch(parentJob) {
-            _isLoading.update { true }
-            try {
-                setRepositoryPreferredSource(release.source)
-                Timber.d("selectRelease: calling getReleaseDetails for ${release.id}")
-                val result = onlineMetadataRepository.getReleaseDetails(release.id)
-                result.fold(
-                    onSuccess = { details ->
-                        Timber.d("selectRelease: got details, title=${details.title}, tracks=${details.tracks.size}")
-                        _selectedRelease.update { details }
-                        // 获取封面图（如果尚未下载）
-                        val coverUrl = details.coverArtUrl ?: release.coverArtUrl
-                        if (!coverUrl.isNullOrBlank() && !coverDownloaded) {
-                            try {
-                                val cover = kotlinx.coroutines.withTimeoutOrNull(Constants.COVER_ART_TIMEOUT_MS) {
-                                    getCoverArtBytes(coverUrl)
-                                }
-                                if (cover != null) {
-                                    _downloadedAlbumArt.update { cover }
-                                    coverDownloaded = true
-                                    Timber.d("selectRelease: cover art loaded, size=${_downloadedAlbumArt.value?.size}")
-                                }
-                            } catch (e: Exception) {
-                                Timber.e(e, "selectRelease: cover art load from details failed")
+                // 协程1：获取搜索结果中的封面图（优先缓存，带超时回退到下载）
+                launch {
+                    if (!release.coverArtUrl.isNullOrBlank()) {
+                        try {
+                            // 优先从缓存获取，如果没有则下载，最多等待5秒
+                            val cover = kotlinx.coroutines.withTimeoutOrNull(Constants.COVER_ART_TIMEOUT_MS) {
+                                getCoverArtBytes(release.coverArtUrl)
                             }
-                        }
-                    },
-                    onFailure = { error ->
-                        Timber.e(error, "Failed to get release details for ${release.id} from ${release.source}")
-                        _errorMessage.emit("无法获取专辑详情，将应用基本信息 (来源: ${release.source})")
-                        _selectedRelease.update { null }
-                        // 即使获取详情失败，也尝试获取候选的封面图（如果尚未下载）
-                        if (!release.coverArtUrl.isNullOrBlank() && !coverDownloaded) {
-                            try {
-                                val cover = kotlinx.coroutines.withTimeoutOrNull(Constants.COVER_ART_TIMEOUT_MS) {
-                                    getCoverArtBytes(release.coverArtUrl)
-                                }
+                            if (cover != null) {
                                 _downloadedAlbumArt.update { cover }
                                 coverDownloaded = true
-                            } catch (e: Exception) {
-                                Timber.e(e, "selectRelease: fallback cover art load failed")
+                                Timber.d("selectRelease: cover art loaded from cache, size=${cover.size}")
+                            } else {
+                                // 超时或下载失败
+                                _isCoverArtTimeout.update { true }
+                                Timber.w("selectRelease: cover art load timeout or failed for ${release.coverArtUrl}")
                             }
+                        } catch (e: Exception) {
+                            _isCoverArtTimeout.update { true }
+                            Timber.e(e, "selectRelease: cover art load error")
                         }
                     }
-                )
-            } catch (e: Exception) {
-                Timber.e(e, "Exception while getting release details for ${release.id}")
-                _errorMessage.emit("获取专辑详情失败，将应用基本信息 (来源: ${release.source})")
-                _selectedRelease.update { null }
-            } finally {
-                setRepositoryPreferredSource(OnlineSource.UNKNOWN)
-                _isLoading.update { false }
-                Timber.d("selectRelease: coroutine finished, isLoading=false")
-            }
-        }
-
-        // 协程3：预加载歌词
-        viewModelScope.launch(parentJob) {
-            try {
-                val lyrics = fetchSyncedLyrics(release)
-                if (lyrics != null) {
-                    _syncedLyricsByReleaseId.update {
-                        _syncedLyricsByReleaseId.value.toMutableMap().apply {
-                            put(release.id, lyrics)
-                        }
-                    }
-                    // 如果是当前选中的候选，也更新 selectedSyncedLyrics
-                    if (_selectedReleaseCandidate.value?.id == release.id) {
-                        selectedSyncedLyrics = lyrics
-                    }
-                    Timber.d("selectRelease: lyrics preloaded for ${release.id}")
                 }
-            } catch (e: Exception) {
-                Timber.w(e, "selectRelease: failed to preload lyrics for ${release.id}")
+
+                launch {
+                    _isLoading.update { true }
+                    try {
+                        setRepositoryPreferredSource(release.source)
+                        Timber.d("selectRelease: calling getReleaseDetails for ${release.id}")
+                        val result = onlineMetadataRepository.getReleaseDetails(release.id)
+                        result.fold(
+                            onSuccess = { details ->
+                                Timber.d("selectRelease: got details, title=${details.title}, tracks=${details.tracks.size}")
+                                _selectedRelease.update { details }
+                                // 获取封面图（如果尚未下载）
+                                val coverUrl = details.coverArtUrl ?: release.coverArtUrl
+                                if (!coverUrl.isNullOrBlank() && !coverDownloaded) {
+                                    try {
+                                        val cover = kotlinx.coroutines.withTimeoutOrNull(Constants.COVER_ART_TIMEOUT_MS) {
+                                            getCoverArtBytes(coverUrl)
+                                        }
+                                        if (cover != null) {
+                                            _downloadedAlbumArt.update { cover }
+                                            coverDownloaded = true
+                                            Timber.d("selectRelease: cover art loaded, size=${_downloadedAlbumArt.value?.size}")
+                                        }
+                                    } catch (e: Exception) {
+                                        Timber.e(e, "selectRelease: cover art load from details failed")
+                                    }
+                                }
+                            },
+                            onFailure = { error ->
+                                Timber.e(error, "Failed to get release details for ${release.id} from ${release.source}")
+                                _errorMessage.emit("无法获取专辑详情，将应用基本信息 (来源: ${release.source})")
+                                _selectedRelease.update { null }
+                                // 即使获取详情失败，也尝试获取候选的封面图（如果尚未下载）
+                                if (!release.coverArtUrl.isNullOrBlank() && !coverDownloaded) {
+                                    try {
+                                        val cover = kotlinx.coroutines.withTimeoutOrNull(Constants.COVER_ART_TIMEOUT_MS) {
+                                            getCoverArtBytes(release.coverArtUrl)
+                                        }
+                                        _downloadedAlbumArt.update { cover }
+                                        coverDownloaded = true
+                                    } catch (e: Exception) {
+                                        Timber.e(e, "selectRelease: fallback cover art load failed")
+                                    }
+                                }
+                            }
+                        )
+                    } catch (e: Exception) {
+                        Timber.e(e, "Exception while getting release details for ${release.id}")
+                        _errorMessage.emit("获取专辑详情失败，将应用基本信息 (来源: ${release.source})")
+                        _selectedRelease.update { null }
+                    } finally {
+                        setRepositoryPreferredSource(OnlineSource.UNKNOWN)
+                        _isLoading.update { false }
+                        Timber.d("selectRelease: coroutine finished, isLoading=false")
+                    }
+                }
+
+                // 协程3：预加载歌词
+                launch {
+                    try {
+                        val lyrics = fetchSyncedLyrics(release)
+                        if (lyrics != null) {
+                            _syncedLyricsByReleaseId.update {
+                                _syncedLyricsByReleaseId.value.toMutableMap().apply {
+                                    put(release.id, lyrics)
+                                }
+                            }
+                            // 如果是当前选中的候选，也更新 selectedSyncedLyrics
+                            if (_selectedReleaseCandidate.value?.id == release.id) {
+                                selectedSyncedLyrics = lyrics
+                            }
+                            Timber.d("selectRelease: lyrics preloaded for ${release.id}")
+                        }
+                    } catch (e: Exception) {
+                        Timber.w(e, "selectRelease: failed to preload lyrics for ${release.id}")
+                    }
+                }
             }
         }
     }

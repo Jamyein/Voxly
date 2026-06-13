@@ -175,7 +175,7 @@ jobs:
           SIGNING_STORE_PASSWORD: ${{ secrets.SIGNING_STORE_PASSWORD || vars.SIGNING_STORE_PASSWORD }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || vars.SIGNING_KEY_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || vars.SIGNING_KEY_ALIAS || 'voxly' }}
-        run: ./gradlew assembleGithubRelease
+        run: ./gradlew assembleGithubRelease -PbuildAbi=arm64-v8a
 
       - name: Clean up keystore
         if: always()
@@ -185,11 +185,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          
-          # Find APK (github flavor + release build type)
-          APK_PATH="$(find app/build -type f -name "*arm64*.apk" | head -n 1)"
+
+          APK_DIR="app/build/outputs/apk/github/release"
+          APK_PATH="$(find "${APK_DIR}" -type f -name '*.apk' -not -name '*-unsigned*' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -n 1 | cut -d' ' -f2-)"
           if [ -z "${APK_PATH}" ]; then
-            echo "No APK found"
+            echo "No APK found in ${APK_DIR}, listing all APK files:"
+            find app -type f -name '*.apk' 2>/dev/null || echo "(no apk files found)"
             exit 1
           fi
 

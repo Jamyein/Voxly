@@ -45,17 +45,21 @@ When any error occurs (build break, crash, test failure, wrong behavior):
 ## Key versions (verified from build.gradle.kts)
 | Component | Version |
 |-----------|---------|
-| AGP | 9.2.0 |
-| Kotlin | 2.3.21 |
+| AGP | 9.2.1 |
+| Kotlin | 2.4.0 (via AGP built-in + Compose/Serialization plugins) |
+| Gradle | 9.4.1 |
+| KSP | 2.3.9 (KSP2 semver — supports current Kotlin) |
 | Compose BOM | 2026.05.01 |
-| Material3 | 1.5.0-alpha18 (overrides BOM) |
-| Compose Animation | 1.11.0 (overrides BOM) |
+| Material3 | 1.5.0-alpha21 (overrides BOM) |
+| Compose Animation | 1.11.2 (overrides BOM) |
 | Foundation-layout | BOM-resolved (separate artifact for FlexBox/Grid APIs) |
-| Navigation3 | 1.1.1 |
-| Hilt | 2.59.2 |
+| Navigation3 | 1.1.2 |
+| adaptive-navigation3 | 1.3.0-beta02 |
+| Hilt | 2.59.2 (requires `kotlin-metadata-jvm` override — see lesson #18) |
 | Room | 2.8.4 (KSP, not kapt) |
-| Coil | 3.4.0 |
+| Coil | 3.5.0 |
 | Retrofit | 3.0.0 |
+| OkHttp | 5.4.0 |
 | taglib (Kyant0) | 1.0.6 |
 | NDK | 29.0.14206865 |
 | CMake | 4.1.2 |
@@ -77,7 +81,7 @@ When any error occurs (build break, crash, test failure, wrong behavior):
 - CI signing: env vars `SIGNING_STORE_PASSWORD`, `SIGNING_KEY_PASSWORD`, `SIGNING_KEY_ALIAS` (default: voxly)
 - CI keystore: `SIGNING_KEYSTORE_BASE64` secret → decoded to `app/voxly-release.keystore`
 - CI workflows: CommitBuild (JDK 21, push to main/dev + PRs to main), NightlyBuild (manual), ReleaseBuild (manual, JDK 25)
-- **ABI split**: `build.gradle.kts` includes `armeabi-v7a`, `arm64-v8a`, `x86_64` (no universal APK). CI defaults to `arm64-v8a` only via `-PbuildAbi=arm64-v8a`. CI finds APK in `app/build/outputs/apk/github/release/` sorted by mtime.
+- **ABI split**: `build.gradle.kts` includes `arm64-v8a` only by default (no universal APK). minSdk=30 means no 32-bit-only devices exist; NDK 29 deprecates `armeabi-v7a`. The `-PbuildAbi` Gradle property is **comma-separated** (e.g. `-PbuildAbi=arm64-v8a,x86_64`) and a single invocation produces one split APK per ABI. CI defaults to `arm64-v8a` via `-PbuildAbi=arm64-v8a` (ReleaseBuild, NightlyBuild) or both arm64-v8a and x86_64 (CommitBuild for emulator/Chromebook testers) and finds APKs in `app/build/outputs/apk/github/{release,debug}/`.
 
 ## Native ReplayGain (NDK)
 - NDK/CMake is enabled: `libebur128` (pure C, ~50KB .so)

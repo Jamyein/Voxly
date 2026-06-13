@@ -111,7 +111,10 @@ fun AlbumArtOptionsSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         shape = MaterialTheme.shapes.large,
-        sheetState = rememberModalBottomSheetState()
+        sheetState = rememberBottomSheetState(
+            initialValue = SheetValue.Hidden,
+            enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+        )
     ) {
         Column(
             modifier = Modifier

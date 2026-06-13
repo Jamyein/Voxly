@@ -34,7 +34,8 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.material3.FloatingToolbarDefaults
 import androidx.compose.material3.FloatingToolbarExitDirection
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -107,7 +108,10 @@ fun MetadataEditorScreen(
     var showAlbumArtPreview by remember { mutableStateOf(false) }
     var showConversionDialog by remember { mutableStateOf(false) }
     var showMoreOptionsSheet by remember { mutableStateOf(false) }
-    val moreOptionsSheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val moreOptionsSheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
     var showReauthorizeDialog by remember { mutableStateOf(false) }
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     var exitAfterSave by remember { mutableStateOf(false) }
@@ -115,7 +119,10 @@ fun MetadataEditorScreen(
     var currentReplayGainInfo by remember(filePath) { mutableStateOf<ReplayGainInfo?>(null) }
 
     var showEditHistorySheet by remember { mutableStateOf(false) }
-    val editHistorySheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val editHistorySheetState = rememberBottomSheetState(
+        initialValue = SheetValue.Hidden,
+        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+    )
     val editHistoryViewModel: EditHistoryViewModel = hiltViewModel()
     val allRecentEdits by editHistoryViewModel.recentEdits.collectAsStateWithLifecycle()
     val currentFileEdits = remember(allRecentEdits, filePath) {

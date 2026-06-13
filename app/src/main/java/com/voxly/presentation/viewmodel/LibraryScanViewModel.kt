@@ -791,7 +791,6 @@ class LibraryScanViewModel @Inject constructor(
             if (renamed == null) {
                 throw IllegalStateException("Failed to rename file")
             }
-            Unit
         }
     }
 
@@ -804,7 +803,6 @@ class LibraryScanViewModel @Inject constructor(
             if (!deleted) {
                 throw IllegalStateException("Failed to delete file")
             }
-            Unit
         }
     }
 }

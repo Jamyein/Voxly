@@ -8,7 +8,6 @@ import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
@@ -184,7 +183,6 @@ fun MP3TagNavHost() {
         val isFileSelected = topLevelRoute is FileBrowser
         val isAlbumsSelected = topLevelRoute is Albums
         val isArtistsSelected = topLevelRoute is Artists
-        val isSettingsSelected = topLevelRoute is Settings
 
         val onFileBrowserClick = dropUnlessResumed {
             if (!isFileSelected) topLevelBackStack.addTopLevel(FileBrowser)
@@ -194,9 +192,6 @@ fun MP3TagNavHost() {
         }
         val onArtistsClick = dropUnlessResumed {
             if (!isArtistsSelected) topLevelBackStack.addTopLevel(Artists)
-        }
-        val onSettingsClick = dropUnlessResumed {
-            if (!isSettingsSelected) topLevelBackStack.addTopLevel(Settings)
         }
 
         NavigationSuiteScaffold(
@@ -238,18 +233,6 @@ fun MP3TagNavHost() {
                             label = { Text("Artists") },
                             selected = isArtistsSelected,
                             onClick = onArtistsClick
-                        )
-
-                        item(
-                            icon = {
-                                Icon(
-                                    imageVector = if (isSettingsSelected) AppIcon.Settings.vector else AppIcon.SettingsOutlined.vector,
-                                    contentDescription = "Settings"
-                                )
-                            },
-                            label = { Text("Settings") },
-                            selected = isSettingsSelected,
-                            onClick = onSettingsClick
                         )
                     }
                 },
@@ -299,6 +282,7 @@ private fun MP3TagNavDisplay(
                     onNavigateToOnlineLyricsSearch = {},
                     onNavigateToOnlineCoverSearch = {},
                     onNavigateToLyricsSelector = { _, _, _, _, _ -> },
+                    onNavigateToSettings = { topLevelBackStack.add(Settings) },
                     onNavigateBack = {},
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
@@ -495,7 +479,7 @@ private fun MP3TagNavDisplay(
 private fun SettingsEntry(topLevelBackStack: TopLevelBackStack<NavKey>, context: android.content.Context) {
     val logViewerViewModel = hiltViewModel<com.voxly.presentation.screens.log.LogViewerViewModel>()
     SettingsScreen(
-        outerPadding = PaddingValues(),
+        onNavigateBack = { topLevelBackStack.removeLast() },
         onNavigateToLogViewer = { topLevelBackStack.add(LogViewer) },
         onExportLogs = {
             logViewerViewModel.exportLogs(context) { uri ->
@@ -800,5 +784,4 @@ private fun AnimatedContentTransitionScope<Scene<NavKey>>.computeTransition(
 
 private fun isMainScreenKey(key: Any?): Boolean = key == FileBrowser ||
     key == Albums ||
-    key == Artists ||
-    key == Settings
+    key == Artists

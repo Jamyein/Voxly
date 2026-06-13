@@ -191,7 +191,7 @@ jobs:
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD || vars.SIGNING_KEY_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS || vars.SIGNING_KEY_ALIAS || 'voxly' }}
         with:
-          arguments: assembleGithubRelease
+          arguments: assembleGithubRelease -PbuildAbi=arm64-v8a
 
       - name: Clean up keystore
         if: always()

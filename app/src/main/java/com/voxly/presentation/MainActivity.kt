@@ -1,6 +1,7 @@
 package com.voxly.presentation
 
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
@@ -41,6 +42,12 @@ class MainActivity : AppCompatActivity() {
             statusBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT),
             navigationBarStyle = SystemBarStyle.auto(Color.TRANSPARENT, Color.TRANSPARENT)
         )
+
+        // Disable system-drawn translucent scrim behind the navigation bar so app
+        // content extends truly edge-to-edge (no white/colored band on gesture nav area).
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            window.isNavigationBarContrastEnforced = false
+        }
 
         setContent {
             var isReady by remember { mutableStateOf(false) }

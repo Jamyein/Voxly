@@ -97,7 +97,6 @@ fun AlbumAdaptiveScreen(
                     navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, album)
                 }
             }
-            Unit
         }
     }
 

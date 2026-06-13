@@ -109,7 +109,6 @@ fun ArtistAdaptiveScreen(
                     navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, navKey)
                 }
             }
-            Unit
         }
     }
 

@@ -848,7 +848,13 @@ private fun DirectoryDialogsAndSheets(
 
     if (showSearchSheet) {
         SearchBottomSheet(
-            sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
+            sheetState = androidx.compose.material3.rememberBottomSheetState(
+                initialValue = androidx.compose.material3.SheetValue.Hidden,
+                enabledValues = setOf(
+                    androidx.compose.material3.SheetValue.Hidden,
+                    androidx.compose.material3.SheetValue.Expanded
+                )
+            ),
             onDismiss = { onShowSearchSheetChange(false) },
             allFiles = files,
             onFileClick = { audioFile ->

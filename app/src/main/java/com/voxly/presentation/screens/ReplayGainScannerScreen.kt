@@ -115,7 +115,10 @@ fun ReplayGainScannerScreen(
             if (showSettingsSheet) {
                 ModalBottomSheet(
                     onDismissRequest = { showSettingsSheet = false },
-                    sheetState = rememberModalBottomSheetState(),
+                    sheetState = rememberBottomSheetState(
+                        initialValue = SheetValue.Hidden,
+                        enabledValues = setOf(SheetValue.Hidden, SheetValue.Expanded)
+                    ),
                     shape = MaterialTheme.shapes.medium
                 ) {
                     ScanSettingsSheet(

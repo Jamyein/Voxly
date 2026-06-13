@@ -3,7 +3,8 @@ package com.voxly.presentation.navigation
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
-import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.material3.SheetValue
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.BottomSheetDefaults
 import androidx.compose.runtime.Composable
@@ -31,8 +32,8 @@ internal class BottomSheetScene<T : Any>(
     override val entries: List<NavEntry<T>> = listOf(entry)
 
     override val content: @Composable () -> Unit = {
-        val sheetState = rememberModalBottomSheetState(
-            skipPartiallyExpanded = false  // 允许中间状态
+        val sheetState = rememberBottomSheetState(
+            initialValue = SheetValue.Hidden  // 允许中间状态 (默认 enabledValues 包含全部三个状态)
         )
         ModalBottomSheet(
             onDismissRequest = onBack,

@@ -87,6 +87,7 @@ fun FileBrowserAdaptiveScreen(
     onNavigateToOnlineLyricsSearch: () -> Unit,
     onNavigateToOnlineCoverSearch: () -> Unit,
     onNavigateToLyricsSelector: (String, String, String, String, ByteArray?) -> Unit,
+    onNavigateToSettings: () -> Unit,
     onNavigateBack: () -> Unit,
     modifier: Modifier = Modifier,
     viewModel: LibraryViewModel = hiltViewModel(),
@@ -209,6 +210,7 @@ fun FileBrowserAdaptiveScreen(
                         settingsViewModel.setFileBrowserRootTab(newTab)
                     },
                     onNavigateToDirectory = onNavigateToDirectory,
+                    onNavigateToSettings = onNavigateToSettings,
                     isSinglePane = isSinglePane,
                     isSelectionMode = isSelectionMode,
                     selectedFiles = selectedFiles,
@@ -270,7 +272,13 @@ fun FileBrowserAdaptiveScreen(
 
     if (showSearchSheet) {
         SearchBottomSheet(
-            sheetState = androidx.compose.material3.rememberModalBottomSheetState(),
+            sheetState = androidx.compose.material3.rememberBottomSheetState(
+                initialValue = androidx.compose.material3.SheetValue.Hidden,
+                enabledValues = setOf(
+                    androidx.compose.material3.SheetValue.Hidden,
+                    androidx.compose.material3.SheetValue.Expanded
+                )
+            ),
             onDismiss = { showSearchSheet = false },
             allFiles = allAudios,
             onFileClick = { audioFile ->
@@ -303,6 +311,7 @@ private fun FileBrowserListPane(
     onRefresh: () -> Unit,
     onToggleRootTab: () -> Unit,
     onNavigateToDirectory: (String, String) -> Unit,
+    onNavigateToSettings: () -> Unit,
     isSinglePane: Boolean,
     isSelectionMode: Boolean,
     selectedFiles: Set<String>,
@@ -382,6 +391,12 @@ private fun FileBrowserListPane(
                     Icon(
                         imageVector = Icons.Default.Refresh,
                         contentDescription = stringResource(R.string.refresh_files)
+                    )
+                }
+                IconButton(onClick = onNavigateToSettings) {
+                    Icon(
+                        imageVector = AppIcon.Settings.vector,
+                        contentDescription = stringResource(R.string.nav_settings)
                     )
                 }
             }

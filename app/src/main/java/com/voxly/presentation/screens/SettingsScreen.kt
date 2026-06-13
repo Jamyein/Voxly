@@ -33,7 +33,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.windowInsetsBottomHeight
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
@@ -48,6 +50,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.AllInclusive
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -747,7 +750,7 @@ private fun SearchLimitRow(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SettingsScreen(
-    outerPadding: PaddingValues = PaddingValues(),
+    onNavigateBack: () -> Unit = {},
     onNavigateToDirectoryManagement: () -> Unit = {},
     onNavigateToScanDirectorySettings: () -> Unit = {},
     onNavigateToLogViewer: () -> Unit = {},
@@ -809,6 +812,17 @@ fun SettingsScreen(
             MediumTopAppBar(
                 title = { Text(stringResource(R.string.nav_settings)) },
                 scrollBehavior = scrollBehavior,
+                navigationIcon = {
+                    FilledTonalIconButton(
+                        onClick = onNavigateBack,
+                        modifier = Modifier.padding(start = 12.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
+                    }
+                },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.surface,
                     titleContentColor = MaterialTheme.colorScheme.onSurface
@@ -819,10 +833,7 @@ fun SettingsScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(
-                    top = innerPadding.calculateTopPadding(),
-                    bottom = outerPadding.calculateBottomPadding()
-                )
+                .padding(top = innerPadding.calculateTopPadding())
                 .padding(horizontal = HorizontalPadding)
                 .imePadding()
                 .verticalScroll(rememberScrollState())
@@ -914,6 +925,11 @@ fun SettingsScreen(
             AboutSettingsSection(
                 modifier = Modifier.fillMaxWidth()
             )
+
+            // Trailing space equal to the navigation bar inset so the last section
+            // stays visible above the gesture bar — Column itself extends behind it
+            // for a truly immersive look.
+            Spacer(modifier = Modifier.windowInsetsBottomHeight(WindowInsets.navigationBars))
         }
     }
 
