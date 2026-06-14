@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.palette.graphics.Palette
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor

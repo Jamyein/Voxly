@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
+import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile

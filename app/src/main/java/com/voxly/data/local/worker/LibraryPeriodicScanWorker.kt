@@ -7,7 +7,7 @@ import androidx.work.WorkerParameters
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.scanner.MediaStoreDataSource
-import com.voxly.presentation.viewmodel.LibraryDataHolder
+import com.voxly.domain.repository.LibraryDataHolder
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import timber.log.Timber
