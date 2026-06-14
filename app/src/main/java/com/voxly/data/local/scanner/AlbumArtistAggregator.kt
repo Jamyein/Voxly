@@ -9,15 +9,20 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.CacheChange
 import com.voxly.domain.model.CacheChangeKeys
+import com.voxly.domain.model.IncrementalList
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -53,6 +58,31 @@ class AlbumArtistAggregator @Inject constructor(
 
     private val _filteredFiles = MutableStateFlow<List<AudioFile>>(emptyList())
     val filteredFiles: StateFlow<List<AudioFile>> = _filteredFiles.asStateFlow()
+
+    /**
+     * Diff-based album list updates, modelled after Gramophone's IncrementalList.
+     *
+     * For a 10000-item library, a single album added is a 1-element `Insert`
+     * event instead of a 10000-element list replacement. UI consumers
+     * (LazyColumn) can apply the diff locally.
+     *
+     * Replay = 1 so late subscribers (e.g. user navigates to Albums mid-scan)
+     * receive the most recent event to reconstruct current state.
+     */
+    private val _albumDiff = MutableSharedFlow<IncrementalList<AlbumGroup>>(
+        replay = 1,
+        extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = _albumDiff.asSharedFlow()
+
+    /** Diff-based artist list updates, same model as [albumDiff]. */
+    private val _artistDiff = MutableSharedFlow<IncrementalList<ArtistGroup>>(
+        replay = 1,
+        extraBufferCapacity = 16,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = _artistDiff.asSharedFlow()
 
     private val _albumsBySort = MutableStateFlow<Map<AlbumSortOption, List<AlbumGroup>>>(
         mapOf(
@@ -612,15 +642,81 @@ class AlbumArtistAggregator @Inject constructor(
         if (!areAlbumListsEqual(albumsList, _albums.value)) {
             _albums.value = albumsList
             computeAndCacheSortOrders(albumsList)
+            emitAlbumDiff(albumsList)
         }
 
         val artistsList = _artistsMap.value.values.sortedBy { SortUtil.toSortablePinyin(it.name) }
         if (!areArtistListsEqual(artistsList, _artists.value)) {
             _artists.value = artistsList
+            emitArtistDiff(artistsList)
         }
 
         _filteredFiles.value = _albumsMap.value.values.flatMap { it.files }.distinctBy { it.path }
     }
+
+    /**
+     * Compute and emit a coarse-grained [IncrementalList] diff between
+     * the previous album list and the new [albumsList]. For 10000-item
+     * libraries with rare changes, this is O(changes) instead of O(N).
+     */
+    private fun emitAlbumDiff(albumsList: List<AlbumGroup>) {
+        val previous = _albums.value
+        val prevMap = previous.associateBy { keyFor(it) }
+        val newMap = albumsList.associateBy { keyFor(it) }
+
+        val added = albumsList.filter { it.key() !in prevMap }
+        val removed = previous.filter { it.key() !in newMap }
+
+        when {
+            // Full reset: previous list is empty (initial load) or completely different
+            previous.isEmpty() || (added.size > previous.size / 2 && removed.size > previous.size / 2) -> {
+                _albumDiff.tryEmit(IncrementalList.Reset(albumsList))
+            }
+            // Only additions (typical scan-with-changes case)
+            added.isNotEmpty() && removed.isEmpty() -> {
+                _albumDiff.tryEmit(IncrementalList.Insert(added, albumsList))
+            }
+            // Only removals (deletion case)
+            removed.isNotEmpty() && added.isEmpty() -> {
+                _albumDiff.tryEmit(IncrementalList.Remove(removed, albumsList))
+            }
+            // Mixed changes — fall back to Reset for correctness
+            else -> {
+                _albumDiff.tryEmit(IncrementalList.Reset(albumsList))
+            }
+        }
+    }
+
+    private fun emitArtistDiff(artistsList: List<ArtistGroup>) {
+        val previous = _artists.value
+        val prevSet = previous.map { it.name }.toSet()
+        val newSet = artistsList.map { it.name }.toSet()
+
+        val added = artistsList.filter { it.name !in prevSet }
+        val removed = previous.filter { it.name !in newSet }
+
+        when {
+            previous.isEmpty() || (added.size > previous.size / 2 && removed.size > previous.size / 2) -> {
+                _artistDiff.tryEmit(IncrementalList.Reset(artistsList))
+            }
+            added.isNotEmpty() && removed.isEmpty() -> {
+                _artistDiff.tryEmit(IncrementalList.Insert(added, artistsList))
+            }
+            removed.isNotEmpty() && added.isEmpty() -> {
+                _artistDiff.tryEmit(IncrementalList.Remove(removed, artistsList))
+            }
+            else -> {
+                _artistDiff.tryEmit(IncrementalList.Reset(artistsList))
+            }
+        }
+    }
+
+    /** Stable identity key for an album (used to detect add/remove/update). */
+    private fun keyFor(album: AlbumGroup): String =
+        "${album.albumArtist.orEmpty()}|${album.name}"
+
+    /** Same as [keyFor] but as extension for readability. */
+    private fun AlbumGroup.key(): String = keyFor(this)
 
 /**
      * Builds complete aggregates from audio files.

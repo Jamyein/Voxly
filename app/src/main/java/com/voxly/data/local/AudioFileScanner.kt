@@ -15,6 +15,7 @@ import com.voxly.data.local.worker.EnrichmentWorker
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.model.IncrementalList
 import com.voxly.domain.repository.WhitelistRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +26,9 @@ import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
@@ -101,6 +104,8 @@ class AudioFileScanner @Inject constructor(
     val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = albumArtistAggregator.albumsBySort
     val artists: StateFlow<List<ArtistGroup>> = albumArtistAggregator.artists
     val filteredFiles: StateFlow<List<AudioFile>> = albumArtistAggregator.filteredFiles
+    val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = albumArtistAggregator.albumDiff
+    val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = albumArtistAggregator.artistDiff
 
     private val scanMutex = Mutex()
 
