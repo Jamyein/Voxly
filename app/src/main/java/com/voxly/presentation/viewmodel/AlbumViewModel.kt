@@ -7,6 +7,7 @@ import com.voxly.data.local.AlbumSortOption
 import com.voxly.data.local.UiStateDataStore
 import com.voxly.domain.model.AlbumGroup
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -47,6 +48,9 @@ class AlbumViewModel @Inject constructor(
      * spinner state immediately on subscribe, with no missed-trigger edge case.
      */
     val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
+
+    /** Scan error events propagated through [LibraryDataHolder]. */
+    val scanError: SharedFlow<String> = libraryDataHolder.scanError
 
     val sortOption = uiStateDataStore.albumSortOption
 

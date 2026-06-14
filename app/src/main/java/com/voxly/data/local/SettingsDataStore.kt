@@ -10,14 +10,15 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKey
 import dagger.hilt.android.qualifiers.ApplicationContext
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import com.voxly.core.util.Constants
@@ -141,6 +142,16 @@ class SettingsDataStore @Inject constructor(
 
         object Lyrics {
             val TIMESTAMP_FORMAT_ENABLED = booleanPreferencesKey("lyrics_timestamp_format_enabled")
+        }
+
+        object Library {
+            /**
+             * Last-seen [android.provider.MediaStore.getVersion] for the audio
+             * collection. Used by [MediaStoreVersionCache] + incremental scan
+             * to short-circuit when the collection is unchanged.
+             */
+            val LAST_KNOWN_MEDIASTORE_VERSION = stringPreferencesKey("last_known_mediastore_version")
+            val FILE_COUNT = intPreferencesKey("last_known_file_count")
         }
     }
 
@@ -1225,6 +1236,43 @@ class SettingsDataStore @Inject constructor(
     suspend fun setFloatingBottomNavEnabled(enabled: Boolean) {
         context.settingsDataStore.edit { preferences ->
             preferences[Theme.FLOATING_BOTTOM_NAV] = enabled
+        }
+    }
+
+    /**
+     * Last-seen [android.provider.MediaStore.getVersion] for the audio
+     * collection. Compared against the current value to short-circuit the
+     * incremental scan when the collection is unchanged.
+     *
+     * Empty string sentinel means "never recorded" — first scan always runs.
+     */
+    val lastKnownMediaStoreVersion: Flow<String> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[Library.LAST_KNOWN_MEDIASTORE_VERSION] ?: ""
+        }
+        .distinctUntilChanged()
+
+    suspend fun setLastKnownMediaStoreVersion(version: String) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[Library.LAST_KNOWN_MEDIASTORE_VERSION] = version
+        }
+    }
+
+    /**
+     * Number of cached audio files recorded after the last successful deletion
+     * cleanup. Compared against the current Room count in
+     * [IncrementalScanStrategy] to skip the full path-only MediaStore query
+     * when no deletions are likely.
+     */
+    val lastKnownFileCount: Flow<Int> = context.settingsDataStore.data
+        .map { preferences ->
+            preferences[Library.FILE_COUNT] ?: -1
+        }
+        .distinctUntilChanged()
+
+    suspend fun setLastKnownFileCount(count: Int) {
+        context.settingsDataStore.edit { preferences ->
+            preferences[Library.FILE_COUNT] = count
         }
     }
 }

@@ -22,6 +22,9 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarDuration
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.MediumTopAppBar
@@ -67,6 +70,13 @@ internal fun ArtistScreenContent(
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val listState = rememberLazyListState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(Unit) {
+        viewModel.scanError.collect { msg ->
+            snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
+        }
+    }
 
     LaunchedEffect(Unit) {
         if (artists.isEmpty() && !isRefreshing) {
@@ -76,6 +86,7 @@ internal fun ArtistScreenContent(
 
     Scaffold(
         modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             MediumTopAppBar(
                 title = {

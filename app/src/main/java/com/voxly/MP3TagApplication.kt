@@ -11,10 +11,17 @@ import coil3.SingletonImageLoader
 import com.voxly.core.util.CrashHandler
 import com.voxly.core.util.FileLoggingTree
 import com.voxly.core.util.LogManager
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.voxly.data.local.MusicLibraryCache
-import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.cover.CoverUriProvider
+import com.voxly.data.local.worker.LibraryPeriodicScanWorker
 import com.voxly.presentation.ui.coil.VoxlyImageLoader
+import com.voxly.presentation.viewmodel.MediaStoreChangeWatcher
+import java.util.concurrent.TimeUnit
 import dagger.hilt.android.HiltAndroidApp
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -43,6 +50,9 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
     @Inject
     lateinit var musicLibraryCache: MusicLibraryCache
 
+    @Inject
+    lateinit var mediaStoreChangeWatcher: MediaStoreChangeWatcher
+
     override fun onCreate() {
         super.onCreate()
         @OptIn(ExperimentalComposeApi::class)
@@ -60,6 +70,32 @@ class MP3TagApplication : Application(), Configuration.Provider, SingletonImageL
 
         warmUpCache()
         VoxlyImageLoader.getInstance(this)
+
+        // Semi-automatic scanning layers (phased rollout):
+        // Phase 1: MediaStore ContentObserver — detects audio changes while
+        //          the app is alive, debounced to 2.5s.
+        mediaStoreChangeWatcher.start()
+
+        // Phase 3: WorkManager periodic scan — runs every 6h with
+        //          charging + battery-not-low constraints. Covers background
+        //          MediaStore events missed by the observer (Android 14+
+        //          restriction) and SAF directory tree changes.
+        val periodicScan = PeriodicWorkRequestBuilder<LibraryPeriodicScanWorker>(
+            LibraryPeriodicScanWorker.INTERVAL_HOURS, TimeUnit.HOURS
+        )
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiresBatteryNotLow(true)
+                    .setRequiresCharging(true)
+                    .build()
+            )
+            .build()
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            LibraryPeriodicScanWorker.UNIQUE_WORK_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            periodicScan
+        )
+        Timber.tag(TAG).i("Periodic scan scheduled: ${LibraryPeriodicScanWorker.INTERVAL_HOURS}h")
     }
 
     override val workManagerConfiguration: Configuration

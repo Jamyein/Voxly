@@ -7,6 +7,7 @@ import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.ArtistListItemState
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -75,6 +76,9 @@ class ArtistViewModel @Inject constructor(
      * on subscribe, with no missed-trigger edge case.
      */
     val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
+
+    /** Scan error events propagated through [LibraryDataHolder]. */
+    val scanError: SharedFlow<String> = libraryDataHolder.scanError
 
     /**
      * Request a library refresh via [LibraryDataHolder]. Bursts are

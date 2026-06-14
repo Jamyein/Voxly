@@ -128,6 +128,8 @@ class MediaStoreDataSource @Inject constructor(
 
     /**
      * Query lightweight file info (path + modification time) for incremental scanning.
+     * Fetches ALL audio file paths + mtimes from MediaStore for in-memory diffing.
+     * Prefer [queryFilesChangedSince] when a last-scan timestamp is available.
      */
     fun queryFilePathsAndModificationTimes(): List<Pair<String, Long>> {
         val output = mutableListOf<Pair<String, Long>>()
@@ -167,6 +169,87 @@ class MediaStoreDataSource @Inject constructor(
     fun queryDirectoryFilePathsAndModificationTimes(directory: File): List<Pair<String, Long>> {
         val output = mutableListOf<Pair<String, Long>>()
         collectDirectoryFileModificationTimes(directory, output)
+        return output
+    }
+
+    /**
+     * Incremental-change query: returns only files whose `DATE_MODIFIED` is
+     * strictly greater than [timestampSecs] (Unix epoch seconds). This is the
+     * key optimization over [queryFilePathsAndModificationTimes]: instead of
+     * fetching ALL files and diffing mtime in-memory, the ContentProvider does
+     * the filtering for us (backed by an index on `date_modified`).
+     *
+     * Falls back to the full query when [timestampSecs] <= 0 (no scan history).
+     *
+     * @return list of (filePath, lastModifiedInMillis) for each changed file.
+     */
+    fun queryFilesChangedSince(timestampSecs: Long): List<Pair<String, Long>> {
+        if (timestampSecs <= 0L) return queryFilePathsAndModificationTimes()
+
+        val output = mutableListOf<Pair<String, Long>>()
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0 AND " +
+                "${MediaStore.Audio.Media.DATE_MODIFIED} > ?"
+        val selectionArgs = arrayOf(timestampSecs.toString())
+
+        contentResolver.query(
+            AUDIO_URI,
+            arrayOf(
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.RELATIVE_PATH,
+                MediaStore.Audio.Media.DATE_MODIFIED
+            ),
+            selection, selectionArgs, null
+        )?.use { cursor ->
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val relativeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
+            val modifiedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_MODIFIED)
+
+            while (cursor.moveToNext()) {
+                val displayName = cursor.getString(nameCol) ?: continue
+                val relativePath = cursor.getString(relativeCol)
+                val filePath = buildPathFromRelativePath(relativePath, displayName)
+                val extension = displayName.substringAfterLast('.', "")
+
+                if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
+                    val lastModified = cursor.getLong(modifiedCol) * Constants.MS_PER_SECOND
+                    output.add(filePath to lastModified)
+                }
+            }
+        }
+        return output
+    }
+
+    /**
+     * Fast path-only query for deletion detection. Returns the complete set of
+     * audio-file paths currently tracked by MediaStore, with only the
+     * minimum columns projected. Noticeably cheaper than the full mtime query.
+     */
+    fun queryAllPaths(): Set<String> {
+        val output = mutableSetOf<String>()
+        val selection = "${MediaStore.Audio.Media.IS_MUSIC} != 0"
+
+        contentResolver.query(
+            AUDIO_URI,
+            arrayOf(
+                MediaStore.Audio.Media.DISPLAY_NAME,
+                MediaStore.Audio.Media.RELATIVE_PATH
+            ),
+            selection, null, null
+        )?.use { cursor ->
+            val nameCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
+            val relativeCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.RELATIVE_PATH)
+
+            while (cursor.moveToNext()) {
+                val displayName = cursor.getString(nameCol) ?: continue
+                val relativePath = cursor.getString(relativeCol)
+                val filePath = buildPathFromRelativePath(relativePath, displayName)
+                val extension = displayName.substringAfterLast('.', "")
+
+                if (AudioFormat.fromExtension(extension) != AudioFormat.OTHER) {
+                    output.add(filePath)
+                }
+            }
+        }
         return output
     }
 

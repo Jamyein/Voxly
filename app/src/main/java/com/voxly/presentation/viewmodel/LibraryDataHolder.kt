@@ -1,12 +1,15 @@
 package com.voxly.presentation.viewmodel
 
+import java.util.concurrent.atomic.AtomicInteger
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
@@ -14,9 +17,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * Provides:
  *  - a conflated [refreshTriggers] flow that [LibraryScanViewModel] collects
  *    (composed with `collectLatest`) to know when to scan;
- *  - a global [isRefreshing] flag mirroring the current scan state so any
- *    per-screen ViewModel — even one created mid-scan — reflects the
- *    spinner state correctly without waiting for the next trigger emit.
+ *  - a refcounted [isRefreshing] flag: the spinner is on while any active
+ *    scan lifetime has called [beginScan] without a matching [endScan].
+ *    Multiple concurrent scans accumulate; cancellation-safe (decrement is
+ *    clamped at 0).
  *
  * Since @HiltViewModel cannot be injected into other @HiltViewModels,
  * we use this singleton to coordinate between them.
@@ -39,12 +43,29 @@ class LibraryDataHolder @Inject constructor() {
     fun refreshTriggers(): Flow<Boolean> = _refreshTrigger
 
     /**
-     * Global "is a library scan currently in flight" flag. Updated by the
-     * single [LibraryScanViewModel.loadAudioFiles] entry/exit, which is the
-     * only place that actually performs scans.
+     * Active-scan refcount. Spinner is on while > 0. Each scan lifetime
+     * (e.g. `loadAudioFiles`, `launchDirectoryScan`) must pair exactly one
+     * [beginScan] with one [endScan] in a finally block — concurrent scans
+     * correctly accumulate so the spinner stays on until all are done.
      */
+    private val activeScans = AtomicInteger(0)
+
     private val _isRefreshing = MutableStateFlow(false)
     val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+
+    /** Increment scan refcount; spinner turns on at 1. */
+    fun beginScan() {
+        if (activeScans.incrementAndGet() == 1) {
+            _isRefreshing.value = true
+        }
+    }
+
+    /** Decrement scan refcount; spinner turns off at 0. Clamped at 0 (defensive). */
+    fun endScan() {
+        if (maxOf(0, activeScans.decrementAndGet()) == 0) {
+            _isRefreshing.value = false
+        }
+    }
 
     /**
      * Convenience method to trigger refresh from any ViewModel.
@@ -55,11 +76,12 @@ class LibraryDataHolder @Inject constructor() {
         _refreshTrigger.tryEmit(forceRefresh)
     }
 
-    /**
-     * Set the global "refreshing" flag. Called by [LibraryScanViewModel] at
-     * scan entry/exit — the single producer of this state.
-     */
-    fun setRefreshing(refreshing: Boolean) {
-        _isRefreshing.value = refreshing
+    /** Scan error events — UI layers collect and show via Snackbar. */
+    private val _scanError = MutableSharedFlow<String>(extraBufferCapacity = 1)
+    val scanError: SharedFlow<String> = _scanError.asSharedFlow()
+
+    /** Emit a scan error message (called by [LibraryScanViewModel]). */
+    fun emitScanError(message: String) {
+        _scanError.tryEmit(message)
     }
 }

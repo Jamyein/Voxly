@@ -154,11 +154,20 @@ class AudioFileScanner @Inject constructor(
         incremental: Boolean = false,
         forceRefresh: Boolean = false
     ): List<AudioFile> = scanMutex.withLock {
+        val servedFromCache = hasCachedData() && !incremental && !forceRefresh
+
         val files = when {
             !directoryPaths.isNullOrEmpty() -> directoryScanStrategy.scanDirectories(directoryPaths, incremental, forceRefresh)
-            incremental && hasCachedData() -> incrementalScanStrategy.scan()
+            incremental && hasCachedData() -> {
+                // Progressive scan path: intermediate batches are written to
+                // cache as they arrive, so the UI sees results in stages.
+                incrementalScanStrategy.scan { batch ->
+                    libraryCache.updateCache(batch)
+                    libraryCache.bumpCacheVersion()
+                }
+            }
             else -> {
-                if (!forceRefresh && hasCachedData()) {
+                if (servedFromCache) {
                     val cachedCount = getCachedFileCount()
                     if (cachedCount > 0) {
                         Timber.tag("Voxly").i("Using cache: $cachedCount files")
@@ -169,22 +178,14 @@ class AudioFileScanner @Inject constructor(
             }
         }
 
-        // Update cache with scan results only if we actually scanned new data.
-        // Skip updateCache when serving from cache to avoid triggering Flow emissions.
-        // Single call instead of chunked(500).forEach { ... } so that the aggregator
-        // rebuilds only once, not N times per scan (N = ceil(files.size / 500)).
-        val servedFromCache = !incremental && !forceRefresh && hasCachedData()
-        if (!servedFromCache) {
+        // For non-incremental paths (global / directory): single cache write.
+        // For incremental: already written progressively in the callback above.
+        if (!servedFromCache && !incremental) {
             libraryCache.updateCache(files)
         }
 
-        // Bump cache version when serving from cache to trigger AlbumArtistAggregator's flatMapLatest
         if (servedFromCache) {
             libraryCache.bumpCacheVersion()
-        }
-
-        // Background backfill for missing year/sampleRate via persistent WorkManager queue
-        if (servedFromCache) {
             scheduleMetadataBackfill()
         }
 
