@@ -7,6 +7,8 @@ import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.MediaStore
+import com.voxly.data.local.SafTreeWatcher
+import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.repository.LibraryDataHolder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -15,6 +17,7 @@ import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import timber.log.Timber
 import java.util.concurrent.atomic.AtomicBoolean
@@ -47,6 +50,8 @@ import javax.inject.Singleton
 class MediaStoreChangeWatcher @Inject constructor(
     @ApplicationContext private val context: Context,
     private val libraryDataHolder: LibraryDataHolder,
+    private val safTreeWatcher: SafTreeWatcher,
+    private val settingsDataStore: SettingsDataStore,
     @Named("ApplicationScope") private val appScope: CoroutineScope
 ) {
     private val _changes = MutableSharedFlow<Unit>(
@@ -89,8 +94,17 @@ class MediaStoreChangeWatcher @Inject constructor(
             _changes
                 .debounce(DEBOUNCE_MS)
                 .collect {
-                    Timber.tag(TAG).d("MediaStore change → requestRefresh")
+                    Timber.tag(TAG).d("MediaStore change → requestRefresh → SAF walk")
                     libraryDataHolder.requestRefresh(forceRefresh = false)
+
+                    // Phase 4: detect changes in SAF-picked directories that
+                    // MediaStore observer doesn't cover (USB drives, SD roots).
+                    try {
+                        val uris = settingsDataStore.selectedDirectoryUris.first()
+                        safTreeWatcher.detectChanges(uris)
+                    } catch (e: Exception) {
+                        Timber.tag(TAG).w(e, "SAF walk failed")
+                    }
                 }
         }
         Timber.tag(TAG).i("MediaStore observer started")
