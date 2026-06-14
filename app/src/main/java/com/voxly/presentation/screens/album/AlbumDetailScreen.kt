@@ -65,6 +65,7 @@ import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createAlbumTitleSharedElementKey
 import com.voxly.presentation.components.createAlbumArtistTextSharedElementKey
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.components.openMetadataFor
 import androidx.compose.animation.core.spring
 import com.voxly.presentation.viewmodel.AlbumDetailViewModel
 import com.voxly.presentation.screens.album.formatBitrate
@@ -384,7 +385,7 @@ fun AlbumDetailScreen(
                     ) {
                         discFiles.forEachIndexed { index, audioFile ->
                             SegmentedListItem(
-                                onClick = { onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path)) },
+                                onClick = { openMetadataFor(onNavigateToMetadata, audioFile) },
                                 shapes = ListItemDefaults.segmentedShapes(
                                     index = index,
                                     count = discFiles.size

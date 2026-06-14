@@ -75,6 +75,8 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.components.FloatingNavBarItem
 import com.voxly.presentation.components.FloatingToolbarNavigationBar
+import com.voxly.presentation.components.LibrarySearchSheet
+import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.screens.ReplayGainScannerScreen
 import com.voxly.presentation.screens.SettingsScreen
 import com.voxly.presentation.screens.album.AlbumAdaptiveScreen
@@ -463,17 +465,34 @@ private fun MP3TagNavDisplay(
                 )
             }
 
+            @OptIn(ExperimentalMaterial3Api::class)
             entry<Artists> {
                 val animatedVisibilityScope = LocalNavAnimatedContentScope.current
                 val artistViewModel: ArtistViewModel = hiltViewModel()
+                var showSearchSheet by remember { mutableStateOf(false) }
                 ArtistScreenContent(
                     viewModel = artistViewModel,
                     onArtistClick = { artistGroup ->
                         topLevelBackStack.add(ArtistDetail(artistGroup.name))
                     },
+                    onShowSearchSheet = { showSearchSheet = true },
                     modifier = Modifier.fillMaxSize(),
                     sharedTransitionScope = sharedTransitionScope,
                     animatedVisibilityScope = animatedVisibilityScope
+                )
+
+                LibrarySearchSheet(
+                    visible = showSearchSheet,
+                    onDismiss = { showSearchSheet = false },
+                    onFileClick = { audioFile ->
+                        showSearchSheet = false
+                        topLevelBackStack.add(
+                            MetadataEditor(
+                                audioFile.path,
+                                createAlbumArtSharedElementKey(audioFile.path)
+                            )
+                        )
+                    }
                 )
             }
 

@@ -1,5 +1,7 @@
 package com.voxly.presentation.components
 
+import com.voxly.domain.model.AudioFile
+
 /**
  * Helper function to create unique keys for audio file shared elements.
  *
@@ -95,6 +97,22 @@ fun createAlbumTitleSharedElementKey(albumName: String, albumArtist: String?): S
 fun createAlbumArtistTextSharedElementKey(albumName: String, albumArtist: String?): String {
     val normalizedArtist = albumArtist?.takeIf { it.isNotBlank() }
     return "album-artist-text-$albumName-${normalizedArtist ?: "unknown"}"
+}
+
+/**
+ * Navigate to the metadata editor for [audioFile] via the screen's
+ * `onNavigateToMetadata` callback, deriving the cover-tag from
+ * [createAlbumArtSharedElementKey] so the destination page can pick up the
+ * shared-element transition. No-op when the callback is null.
+ */
+fun openMetadataFor(
+    onNavigateToMetadata: ((String, String?) -> Unit)?,
+    audioFile: AudioFile
+) {
+    onNavigateToMetadata?.invoke(
+        audioFile.path,
+        createAlbumArtSharedElementKey(audioFile.path)
+    )
 }
 
 

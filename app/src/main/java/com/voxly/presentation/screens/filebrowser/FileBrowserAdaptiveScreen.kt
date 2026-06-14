@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -27,7 +26,9 @@ import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.MediumTopAppBar
+import androidx.compose.material3.SheetValue
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
@@ -63,6 +64,7 @@ import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
+import com.voxly.presentation.components.openMetadataFor
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.navigation.MetadataEditor
@@ -219,7 +221,7 @@ fun FileBrowserAdaptiveScreen(
                             if (isSelectionMode) {
                                 viewModel.toggleFileSelection(audioFile.path)
                             } else if (isSinglePane) {
-                                onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                                openMetadataFor(onNavigateToMetadata, audioFile)
                             } else {
                                 coroutineScope.launch {
                                     fileSwitchCounter++
@@ -272,11 +274,11 @@ fun FileBrowserAdaptiveScreen(
 
     if (showSearchSheet) {
         SearchBottomSheet(
-            sheetState = androidx.compose.material3.rememberBottomSheetState(
-                initialValue = androidx.compose.material3.SheetValue.Hidden,
+            sheetState = rememberBottomSheetState(
+                initialValue = SheetValue.Hidden,
                 enabledValues = setOf(
-                    androidx.compose.material3.SheetValue.Hidden,
-                    androidx.compose.material3.SheetValue.Expanded
+                    SheetValue.Hidden,
+                    SheetValue.Expanded
                 )
             ),
             onDismiss = { showSearchSheet = false },
@@ -284,7 +286,7 @@ fun FileBrowserAdaptiveScreen(
             onFileClick = { audioFile ->
                 showSearchSheet = false
                 if (isSinglePane) {
-                    onNavigateToMetadata(audioFile.path, createAlbumArtSharedElementKey(audioFile.path))
+                    openMetadataFor(onNavigateToMetadata, audioFile)
                 } else {
                     coroutineScope.launch {
                         fileSwitchCounter++
@@ -379,18 +381,6 @@ private fun FileBrowserListPane(
                         optionLabelResId = { it.labelResId() },
                         contentDescription = "Sort",
                         onSortOptionChange = onSortOptionChange
-                    )
-                }
-                IconButton(onClick = {
-                    if (hasAudioPermission) {
-                        onRefresh()
-                    } else {
-                        onRequestAudioPermission()
-                    }
-                }) {
-                    Icon(
-                        imageVector = Icons.Default.Refresh,
-                        contentDescription = stringResource(R.string.refresh_files)
                     )
                 }
                 IconButton(onClick = onNavigateToSettings) {

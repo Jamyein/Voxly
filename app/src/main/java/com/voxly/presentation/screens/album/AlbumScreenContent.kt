@@ -25,9 +25,11 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Album
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -58,6 +60,7 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
+import com.voxly.presentation.components.LibraryRefreshBox
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
@@ -144,6 +147,7 @@ private fun AlbumArtWithSharedElement(
 internal fun AlbumScreenContent(
     viewModel: AlbumViewModel,
     onAlbumClick: (AlbumGroup) -> Unit,
+    onShowSearchSheet: () -> Unit,
     modifier: Modifier = Modifier,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
@@ -205,6 +209,12 @@ internal fun AlbumScreenContent(
                     titleContentColor = MaterialTheme.colorScheme.onSurface
                 ),
                 actions = {
+                    IconButton(onClick = onShowSearchSheet) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = stringResource(R.string.cd_search)
+                        )
+                    }
                     SortMenuButton(
                         expanded = isSortExpanded,
                         onExpandedChange = { isSortExpanded = it },
@@ -223,28 +233,33 @@ internal fun AlbumScreenContent(
                 .fillMaxSize()
                 .padding(top = innerPadding.calculateTopPadding())
         ) {
-            if (albums.isEmpty() && !isRefreshing) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    Text(
-                        text = stringResource(R.string.no_albums_found),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+            LibraryRefreshBox(
+                isRefreshing = isRefreshing,
+                onRefresh = { viewModel.refresh() }
+            ) {
+                if (albums.isEmpty() && !isRefreshing) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Text(
+                            text = stringResource(R.string.no_albums_found),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                } else {
+                    AlbumTabContent(
+                        albums = albums,
+                        onAlbumClick = onAlbumClick,
+                        scrollToTopTrigger = scrollToTopTrigger,
+                        sortOption = currentSortOption,
+                        savedScrollPosition = savedScrollPosition,
+                        onSaveScrollPosition = { index, offset ->
+                            val sortKey = previousSortOptionName ?: currentSortOption.name
+                            viewModel.saveScrollPosition("album_list_$sortKey", index, offset)
+                        },
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
                 }
-            } else {
-                AlbumTabContent(
-                    albums = albums,
-                    onAlbumClick = onAlbumClick,
-                    scrollToTopTrigger = scrollToTopTrigger,
-                    sortOption = currentSortOption,
-                    savedScrollPosition = savedScrollPosition,
-                    onSaveScrollPosition = { index, offset ->
-                        val sortKey = previousSortOptionName ?: currentSortOption.name
-                        viewModel.saveScrollPosition("album_list_$sortKey", index, offset)
-                    },
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope
-                )
             }
         }
     }

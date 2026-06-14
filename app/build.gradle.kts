@@ -53,8 +53,8 @@ android {
         minSdk = 30
         //noinspection OldTargetApi
         targetSdk = 36
-        versionCode = 49
-        versionName = "1.7.1"
+        versionCode = 50
+        versionName = "1.7.2"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")
@@ -127,6 +127,7 @@ android {
             reset()
             val buildAbi = project.findProperty("buildAbi")?.toString()
             if (buildAbi != null) {
+                //noinspection WrongGradleMethod
                 include(*buildAbi.split(",").map { it.trim() }.toTypedArray())
             } else {
                 include("arm64-v8a")
