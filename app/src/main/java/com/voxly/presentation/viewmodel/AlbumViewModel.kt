@@ -7,6 +7,7 @@ import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.data.local.UiStateDataStore
 import com.voxly.domain.model.AlbumGroup
+import com.voxly.domain.model.IncrementalList
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -52,6 +53,9 @@ class AlbumViewModel @Inject constructor(
 
     /** Scan error events propagated through [LibraryDataHolder]. */
     val scanError: SharedFlow<String> = libraryDataHolder.scanError
+
+    /** Diff-based album list updates from AlbumArtistAggregator. */
+    val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = audioFileScanner.albumDiff
 
     val sortOption = uiStateDataStore.albumSortOption
 

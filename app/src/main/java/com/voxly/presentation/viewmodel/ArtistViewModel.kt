@@ -7,6 +7,7 @@ import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.ArtistListItemState
+import com.voxly.domain.model.IncrementalList
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -80,6 +81,9 @@ class ArtistViewModel @Inject constructor(
 
     /** Scan error events propagated through [LibraryDataHolder]. */
     val scanError: SharedFlow<String> = libraryDataHolder.scanError
+
+    /** Diff-based artist list updates from AlbumArtistAggregator. */
+    val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = audioFileScanner.artistDiff
 
     /**
      * Request a library refresh via [LibraryDataHolder]. Bursts are
