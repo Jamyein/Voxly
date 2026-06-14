@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
@@ -163,10 +164,16 @@ class LibraryScanViewModel @Inject constructor(
     private val _openedDirectoryUri = MutableStateFlow<String?>(null)
     val openedDirectoryUri: StateFlow<String?> = _openedDirectoryUri.asStateFlow()
 
-    private val _isRefreshing = MutableStateFlow(false)
-    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
-
     private val _isInitialLoad = MutableStateFlow(true)
+
+    /**
+     * `isRefreshing` proxies [LibraryDataHolder.isRefreshing] — the global
+     * scan-activity flag. LibraryScanViewModel owns the producer side
+     * ([loadAudioFiles] / [scanSelectedDirectories]) by calling
+     * [LibraryDataHolder.setRefreshing]. External consumers (Files page,
+     * DirectoryContent, MainActivity) observe this StateFlow directly.
+     */
+    val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
 
     data class FileBrowserUiState(
         val allAudios: List<AudioFile> = emptyList(),
@@ -230,9 +237,16 @@ class LibraryScanViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
-            libraryDataHolder.collectRefreshTriggers { forceRefresh ->
-                loadAudioFiles(forceRefresh = forceRefresh, isIncremental = !forceRefresh)
-            }
+            // collectLatest cancels the in-flight loadAudioFiles when a new
+            // refresh request arrives. Combined with LibraryDataHolder's
+            // conflated SharedFlow (extraBufferCapacity=1, DROP_OLDEST), this
+            // collapses rapid bursts (e.g. user pulling on multiple screens in
+            // succession) into the latest request and discards intermediate
+            // work — preventing the "N concurrent scans queued" race.
+            libraryDataHolder.refreshTriggers()
+                .collectLatest { forceRefresh ->
+                    loadAudioFiles(forceRefresh = forceRefresh, isIncremental = !forceRefresh)
+                }
         }
 
         // React to changes in the selected directory URIs (written by
@@ -336,9 +350,13 @@ class LibraryScanViewModel @Inject constructor(
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
             val shouldShowRefresh = forceRefresh || _isInitialLoad.value
+            // Tracks whether this entry point handed off refreshing-state
+            // ownership to a directory scan. When true, the finally block
+            // does NOT clear refreshing — the directory scan owns it.
+            var handedOffToDirectoryScan = false
             try {
                 if (shouldShowRefresh) {
-                    _isRefreshing.update { true }
+                    libraryDataHolder.setRefreshing(true)
                 }
 
                 syncSelectedDirectoriesFromStorage()
@@ -349,11 +367,18 @@ class LibraryScanViewModel @Inject constructor(
                         val cachedFiles = musicLibraryCache.getCachedAudioFilesOnce()
                         val grouped = groupFilesBySelectedDirectory(cachedFiles, _selectedDirectories.value)
                         _directoryFiles.update { grouped }
-                        _isRefreshing.update { false }
+                        if (shouldShowRefresh) {
+                            libraryDataHolder.setRefreshing(false)
+                        }
                         _isInitialLoad.update { false }
                         return@launch
                     }
                     val useIncremental = isIncremental && hasCache
+                    // Directory scan runs async — hand off refreshing-state
+                    // ownership to scanSelectedDirectories so the spinner
+                    // stays up (and is mirrored to libraryDataHolder.isRefreshing)
+                    // until the directory scan actually finishes.
+                    handedOffToDirectoryScan = shouldShowRefresh
                     launchDirectoryScan(_selectedDirectories.value, useIncremental, forceRefresh)
                     _isInitialLoad.update { false }
                     return@launch
@@ -369,7 +394,9 @@ class LibraryScanViewModel @Inject constructor(
                 } else if (isIncremental) {
                     audioFileScanner.loadAudioFiles(isIncremental = true)
                 } else {
-                    _isRefreshing.update { false }
+                    if (shouldShowRefresh) {
+                        libraryDataHolder.setRefreshing(false)
+                    }
                 }
                 _isInitialLoad.update { false }
             } catch (e: CancellationException) {
@@ -378,8 +405,8 @@ class LibraryScanViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to load audio files")
             } finally {
-                if (shouldShowRefresh) {
-                    _isRefreshing.update { false }
+                if (shouldShowRefresh && !handedOffToDirectoryScan) {
+                    libraryDataHolder.setRefreshing(false)
                 }
             }
         }
@@ -516,6 +543,11 @@ class LibraryScanViewModel @Inject constructor(
         val allDirsLoaded = directories.all { it.uri in _directoryFiles.value }
         if (allDirsLoaded && !forceRefresh && !isIncremental) {
             Timber.d(TAG, "All directories already loaded in _directoryFiles, skipping scan")
+            // loadAudioFiles hands refreshing-state ownership to this method
+            // when it launches a directory scan; if we skip the actual scan,
+            // we still own the finally-style clear so the spinner doesn't
+            // stay up forever.
+            libraryDataHolder.setRefreshing(false)
             return
         }
 
@@ -559,6 +591,14 @@ class LibraryScanViewModel @Inject constructor(
             Timber.tag(TAG).e("Directory scan failed for ${directories.joinToString { it.path }}", e)
         } finally {
             _directoryLoadingState.update { it - dirUris }
+            // Clear refreshing state once the last directory scan finishes.
+            // loadAudioFiles defers clearing to scanSelectedDirectories when
+            // it hands off ownership; refreshDirectoryIncremental calls this
+            // directly without setting refreshing=true first, so we always
+            // clear when the set becomes empty.
+            if (_directoryLoadingState.value.isEmpty()) {
+                libraryDataHolder.setRefreshing(false)
+            }
         }
     }
 

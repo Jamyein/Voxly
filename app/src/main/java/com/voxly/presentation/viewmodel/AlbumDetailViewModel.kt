@@ -37,7 +37,8 @@ class AlbumDetailViewModel @AssistedInject constructor(
     private val audioFileScanner: AudioFileScanner,
     private val databaseProvider: MusicCacheDatabaseProvider,
     private val metadataProcessor: TagLibMetadataProcessor,
-    private val coverUriProvider: CoverUriProvider
+    private val coverUriProvider: CoverUriProvider,
+    private val libraryDataHolder: LibraryDataHolder
 ) : ViewModel() {
 
     private val _albumName = MutableStateFlow("")
@@ -64,8 +65,12 @@ class AlbumDetailViewModel @AssistedInject constructor(
     private val _files = MutableStateFlow<List<AudioFile>>(emptyList())
     val files: StateFlow<List<AudioFile>> = _files.asStateFlow()
 
-    private val _isRefreshing = MutableStateFlow(false)
-    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+    /**
+     * Mirrors the global scan activity maintained by [LibraryDataHolder].
+     * A VM created mid-scan picks up the current spinner state immediately
+     * on subscribe, with no missed-trigger edge case.
+     */
+    val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
 
     private val _dominantColor = MutableStateFlow<Color?>(null)
     val dominantColor: StateFlow<Color?> = _dominantColor.asStateFlow()
@@ -163,18 +168,17 @@ class AlbumDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * Refresh album data with optional full scan.
+     * Refresh album data. Routes the scan request through [LibraryDataHolder]
+     * (single fan-in) so concurrent refreshes from other screens collapse into
+     * one scan via the holder's conflated SharedFlow + the collector's
+     * `collectLatest`. The local `loadAlbum` re-read picks up the new
+     * aggregator output as soon as the incremental rebuild finishes.
      */
     fun refresh(forceRefresh: Boolean = false) {
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
-            try {
-                _isRefreshing.update { true }
-                audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
-                loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
-            } finally {
-                _isRefreshing.update { false }
-            }
+            libraryDataHolder.requestRefresh(forceRefresh)
+            loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
         }
     }
 

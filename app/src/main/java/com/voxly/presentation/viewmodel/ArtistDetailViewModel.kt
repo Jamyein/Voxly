@@ -37,7 +37,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
     @Assisted val navKey: ArtistDetail,
     @ApplicationContext private val context: Context,
     private val audioFileScanner: AudioFileScanner,
-    private val databaseProvider: MusicCacheDatabaseProvider
+    private val databaseProvider: MusicCacheDatabaseProvider,
+    private val libraryDataHolder: LibraryDataHolder
 ) : ViewModel() {
 
     private val _artistName = MutableStateFlow("")
@@ -64,8 +65,12 @@ class ArtistDetailViewModel @AssistedInject constructor(
     private val _albumYears = MutableStateFlow<Map<String, String?>>(emptyMap())
     val albumYears: StateFlow<Map<String, String?>> = _albumYears.asStateFlow()
 
-    private val _isRefreshing = MutableStateFlow(false)
-    val isRefreshing: StateFlow<Boolean> = _isRefreshing.asStateFlow()
+    /**
+     * Mirrors the global scan activity maintained by [LibraryDataHolder].
+     * A VM created mid-scan picks up the current spinner state immediately
+     * on subscribe, with no missed-trigger edge case.
+     */
+    val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
 
     private var preloadJob: Job? = null
     private var refreshJob: Job? = null
@@ -261,18 +266,18 @@ class ArtistDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * Refresh artist data with optional full scan.
+     * Refresh artist data. Routes the scan request through [LibraryDataHolder]
+     * (single fan-in) so that concurrent refreshes from other screens collapse
+     * into one scan via the holder's conflated SharedFlow + the collector's
+     * `collectLatest`. The local `loadArtist` re-read picks up the new
+     * aggregator output as soon as the incremental rebuild finishes — typically
+     * within one frame of the scan completing.
      */
     fun refresh(forceRefresh: Boolean = false) {
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
-            try {
-                _isRefreshing.update { true }
-                audioFileScanner.loadAudioFiles(isIncremental = !forceRefresh)
-                loadArtist(navKey.artistName)
-            } finally {
-                _isRefreshing.update { false }
-            }
+            libraryDataHolder.requestRefresh(forceRefresh)
+            loadArtist(navKey.artistName)
         }
     }
 
