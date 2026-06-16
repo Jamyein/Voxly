@@ -69,6 +69,7 @@ import kotlinx.collections.immutable.toPersistentSet
 import coil3.SingletonImageLoader
 import java.io.File
 import javax.inject.Inject
+import javax.inject.Named
 
 /**
  * ViewModel for the metadata editor screen.
@@ -102,10 +103,20 @@ class MetadataEditorViewModel @AssistedInject constructor(
     // Delegated helpers for separation of concerns
     val lyricsSearchHelper: LyricsSearchHelper,
     val coverSearchHelper: CoverSearchHelper,
-    val replayGainHelper: ReplayGainHelper
+    val replayGainHelper: ReplayGainHelper,
+    @Named("ApplicationScope") private val applicationScope: kotlinx.coroutines.CoroutineScope
 ) : ViewModel() {
 
     private val TAG = "MetadataEditorVM"
+
+    /**
+     * Long-lived scope used for post-save cache sync. We MUST run the sync here
+     * (not on `viewModelScope`) because users commonly navigate away from the
+     * editor immediately after the success snackbar appears; on `viewModelScope`
+     * the in-flight sync would be cancelled by `onCleared()` before the Room
+     * write and `CacheChange.FileUpdated` emission happen, leaving the song
+     * list page showing the OLD metadata.
+     */
 
     // Get filePath from NavKey instead of SavedStateHandle
     private val filePath: String = navKey.filePath
@@ -243,6 +254,12 @@ class MetadataEditorViewModel @AssistedInject constructor(
         searchSeedHolder.removeSeedForFile(filePath)
         debounceJobs.forEach { it.cancel() }
         debounceJobs.clear()
+        // Cancel any in-flight ReplayGain scan and dispose the helper's scope.
+        // Without this, the helper's internal CoroutineScope (which is independent
+        // of viewModelScope) would keep running after the ViewModel is destroyed,
+        // updating StateFlows that no one observes — and a subsequent open of the
+        // editor would create a fresh helper that never sees the scan result.
+        replayGainHelper.dispose()
     }
 
     /**
@@ -672,32 +689,40 @@ class MetadataEditorViewModel @AssistedInject constructor(
                             "MetadataEditor"
                         )
 
-                        // Sync file to cache so FileBrowser gets updated data
-                        val syncedFile = unifiedScanManager.syncFile(filePath).getOrNull()
-                        
-                        // Mark file as edited by user to prevent EnrichmentWorker overwrites
-                        musicLibraryCache.markFileAsEditedByUser(filePath)
-                        
-                        // Invalidate cover cache so FileBrowser shows updated cover
-                        // Re-query MediaStore for the correct album ID because it may have changed
-                        // after metadata update (e.g., album/artist changed)
-                        val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(filePath)
-                        val oldAlbumId = currentSuccessState?.audioFile?.mediaStoreAlbumId
-                        
-                        // Invalidate both old and new album IDs if they differ
-                        correctAlbumId?.let { albumId ->
-                            CoverUriProvider.invalidateAlbumId(albumId)
+                        // Post-save sync MUST run on applicationScope (not viewModelScope).
+                        // Users commonly navigate away from the editor immediately after
+                        // the success snackbar appears; on viewModelScope the in-flight
+                        // sync would be cancelled by onCleared() before the Room write
+                        // and CacheChange.FileUpdated emission happen, leaving the song
+                        // list page showing the OLD metadata.
+                        applicationScope.launch {
+                            // Sync file to cache so FileBrowser gets updated data
+                            val syncedFile = unifiedScanManager.syncFile(filePath).getOrNull()
+
+                            // Mark file as edited by user to prevent EnrichmentWorker overwrites
+                            musicLibraryCache.markFileAsEditedByUser(filePath)
+
+                            // Invalidate cover cache so FileBrowser shows updated cover
+                            // Re-query MediaStore for the correct album ID because it may have changed
+                            // after metadata update (e.g., album/artist changed)
+                            val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(filePath)
+                            val oldAlbumId = currentSuccessState?.audioFile?.mediaStoreAlbumId
+
+                            // Invalidate both old and new album IDs if they differ
+                            correctAlbumId?.let { albumId ->
+                                CoverUriProvider.invalidateAlbumId(albumId)
+                            }
+                            if (oldAlbumId != null && oldAlbumId != correctAlbumId) {
+                                CoverUriProvider.invalidateAlbumId(oldAlbumId)
+                            }
+
+                            // Invalidate embedded cover cache for this file to force re-extraction
+                            CoverUriProvider.invalidateFilePath(filePath)
+
+                            // Clear Coil memory and disk cache to force reload of album art images
+                            SingletonImageLoader.get(context).memoryCache?.clear()
+                            SingletonImageLoader.get(context).diskCache?.clear()
                         }
-                        if (oldAlbumId != null && oldAlbumId != correctAlbumId) {
-                            CoverUriProvider.invalidateAlbumId(oldAlbumId)
-                        }
-                        
-                        // Invalidate embedded cover cache for this file to force re-extraction
-                        CoverUriProvider.invalidateFilePath(filePath)
-                        
-                        // Clear Coil memory and disk cache to force reload of album art images
-                        SingletonImageLoader.get(context).memoryCache?.clear()
-                        SingletonImageLoader.get(context).diskCache?.clear()
                     }
                     is SaveMetadataResult.RecoverableError -> {
                         _saveResult.emit(result.message)
