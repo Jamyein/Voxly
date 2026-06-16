@@ -92,6 +92,7 @@ local.properties
 !readme.md
 !README*.md
 !readme*.md
+!CHANGELOG.md
 
 *.md
 /app/github
