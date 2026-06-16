@@ -8,6 +8,7 @@ import com.voxly.domain.model.ClipMode
 import com.voxly.domain.model.ReplayGainConfig
 import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.domain.model.ScanModeConstants
+import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanMode
 import com.voxly.domain.repository.ScanQuality
@@ -56,6 +57,7 @@ sealed class ReplayGainScanError {
  */
 class ReplayGainHelper @Inject constructor(
     private val replayGainRepository: ReplayGainRepository,
+    private val audioRepository: AudioRepository,
     private val settingsDataStore: SettingsDataStore,
     @ApplicationContext private val context: Context
 ) {
@@ -254,22 +256,44 @@ class ReplayGainHelper @Inject constructor(
      * Finds files in the same album using MediaStore.
      */
     private suspend fun findAlbumFiles(filePath: String): List<String> = withContext(Dispatchers.IO) {
-        // We need to read metadata from file to get album/artist info
-        // For now, we'll use the context to query MediaStore
-        // This is a simplified version - in practice you'd inject metadata read capability
-        
+        // Read the file's metadata to get album/artist identity, then query
+        // MediaStore for other files in the same album.
+        //
+        // The previous implementation used `${ALBUM} IS NOT NULL` as the
+        // selection, which matched EVERY album in the library. For SINGLE_ALBUM
+        // mode this caused the scan to process the entire music library, the
+        // UI stayed "scanning" until the very last track, and the user perceived
+        // it as "stuck".
+        val metadataResult = audioRepository.readMetadata(filePath)
+        val metadata = metadataResult.getOrNull()
+        val album = metadata?.album?.trim().orEmpty()
+        val artist = metadata?.artist?.trim().orEmpty()
+
+        if (album.isBlank()) {
+            Timber.tag("Voxly").i("findAlbumFiles: source has no album info, returning just the file itself")
+            return@withContext listOf(filePath)
+        }
+
         val files = mutableListOf<String>()
-        
         try {
-            // Query for files with same album/artist
+            val selection = buildString {
+                append("${MediaStore.Audio.Media.ALBUM} = ?")
+                if (artist.isNotBlank()) append(" AND ${MediaStore.Audio.Media.ARTIST} = ?")
+            }
+            val selectionArgs = if (artist.isNotBlank()) {
+                arrayOf(album, artist)
+            } else {
+                arrayOf(album)
+            }
+
             context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 arrayOf(
                     MediaStore.Audio.Media.DISPLAY_NAME,
                     MediaStore.Audio.Media.RELATIVE_PATH
                 ),
-                "${MediaStore.Audio.Media.ALBUM} IS NOT NULL",
-                null,
+                selection,
+                selectionArgs,
                 null
             )?.use { cursor ->
                 val nameColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DISPLAY_NAME)
@@ -284,10 +308,33 @@ class ReplayGainHelper @Inject constructor(
                 }
             }
         } catch (e: Exception) {
-            Timber.e("ReplayGainHelper: Failed to find album files: ${e.message}", e)
+            Timber.tag("Voxly").e(e, "findAlbumFiles: MediaStore query failed")
         }
-        
-        files
+
+        // Always include the source file (the user-initiated scan target) even if
+        // MediaStore missed it (e.g. SAF-only path not indexed yet).
+        if (files.none { it == filePath }) files.add(filePath)
+
+        if (files.isEmpty()) listOf(filePath) else files
+    }
+
+    /**
+     * Cancels any ongoing scan and disposes of the internal scope.
+     *
+     * MUST be called from [MetadataEditorViewModel.onCleared]. Previously the
+     * internal `scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)`
+     * was never cancelled: every navigation back into the editor created a fresh
+     * `ReplayGainHelper` with its own scope, and the old scope kept running its
+     * scanJob, leaking the helper reference and updating StateFlows that no
+     * Compose subscriber was collecting. The user-visible symptom was the UI
+     * staying "scanning" forever because the StateFlow update targeted the
+     * disposed helper.
+     */
+    fun dispose() {
+        scanJob?.cancel()
+        scanJob = null
+        scope.coroutineContext[kotlinx.coroutines.Job]?.cancel()
+        _isScanningReplayGain.update { false }
     }
 
     private fun buildPathFromRelativePath(relativePath: String?, displayName: String): String {

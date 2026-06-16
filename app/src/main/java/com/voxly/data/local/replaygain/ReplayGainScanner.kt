@@ -364,6 +364,26 @@ class ReplayGainScanner @Inject constructor(
                         )
                     }
                 }
+            } else {
+                // No track succeeded for this album — still emit COMPLETED so the
+                // UI's `isScanning` flag transitions out of "scanning" state. The
+                // previous implementation dropped the COMPLETED event entirely
+                // when trackGains was empty, leaving the UI stuck on the spinner
+                // for any album whose tracks all failed analysis (decode errors,
+                // codec init failures, etc.).
+                Timber.w(
+                    "Album scan produced no successful tracks album=$albumKey"
+                )
+                emit(
+                    ScanProgress(
+                        currentFile = processedFiles,
+                        totalFiles = totalFiles,
+                        percentage = processedFiles.toFloat() / totalFiles,
+                        currentFilePath = "",
+                        status = ScanStatus.COMPLETED,
+                        replayGainInfo = null
+                    )
+                )
             }
 
             processedAlbums++
