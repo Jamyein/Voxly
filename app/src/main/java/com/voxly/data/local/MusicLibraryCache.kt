@@ -16,10 +16,14 @@ import com.voxly.domain.model.CacheChange
 import com.voxly.domain.model.CacheChangeKeys
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -52,8 +56,29 @@ class MusicLibraryCache @Inject constructor(
     private val cacheVersion = MutableStateFlow(0L)
     val cacheVersionFlow: StateFlow<Long> = cacheVersion.asStateFlow()
 
-    private val _changeFlow = MutableStateFlow<CacheChange>(CacheChange.FullRefresh())
-    val changeFlow: Flow<CacheChange> = _changeFlow.asStateFlow()
+    /**
+     * Cache change notifications.
+     *
+     * Uses [MutableSharedFlow] with `replay = 1` + `extraBufferCapacity = 64` +
+     * `DROP_OLDEST` instead of [MutableStateFlow]. StateFlow conflates emissions:
+     * if two events arrive while the only subscriber (e.g. AlbumArtistAggregator
+     * running on `applicationScope` at `Dispatchers.Default`) is busy processing
+     * the previous one, the intermediate event is silently overwritten and lost.
+     * SharedFlow buffers up to 64 events; on overflow the oldest is dropped so the
+     * latest always reaches the collector.
+     *
+     * `replay = 1` preserves the contract that late subscribers (e.g. ViewModels
+     * created after an edit) still see the most recent change. New subscribers
+     * that join before any event has been emitted receive nothing — collectors
+     * that need an initial state (e.g. AlbumArtistAggregator) must trigger their
+     * own initial FullRefresh.
+     */
+    private val _changeFlow = MutableSharedFlow<CacheChange>(
+        replay = 1,
+        extraBufferCapacity = 64,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST
+    )
+    val changeFlow: SharedFlow<CacheChange> = _changeFlow.asSharedFlow()
 
     // Hot in-memory cache for all audio files to avoid full entity re-mapping on every Room emission.
     // Uses java.lang.ref.SoftReference so the GC can reclaim this under memory pressure.
@@ -229,10 +254,12 @@ class MusicLibraryCache @Inject constructor(
 
         val albumKeys = audioFiles.mapNotNull { CacheChangeKeys.extractAlbumKey(it) }.toSet()
         val artistKeys = audioFiles.mapNotNull { CacheChangeKeys.extractArtistKey(it) }.toSet()
-        _changeFlow.value = CacheChange.FilesBatchUpdated(
-            filePaths = audioFiles.map { it.path },
-            albumKeys = albumKeys,
-            artistKeys = artistKeys
+        _changeFlow.tryEmit(
+            CacheChange.FilesBatchUpdated(
+                filePaths = audioFiles.map { it.path },
+                albumKeys = albumKeys,
+                artistKeys = artistKeys
+            )
         )
 
         bumpCacheVersion()
@@ -307,10 +334,12 @@ class MusicLibraryCache @Inject constructor(
 
         val albumKey = CacheChangeKeys.extractAlbumKey(audioFile)
         val artistKey = CacheChangeKeys.extractArtistKey(audioFile)
-        _changeFlow.value = CacheChange.FileUpdated(
-            filePath = audioFile.path,
-            albumKey = albumKey,
-            artistKey = artistKey
+        _changeFlow.tryEmit(
+            CacheChange.FileUpdated(
+                filePath = audioFile.path,
+                albumKey = albumKey,
+                artistKey = artistKey
+            )
         )
 
         bumpCacheVersion()
@@ -353,10 +382,12 @@ class MusicLibraryCache @Inject constructor(
         audioFileDao.deleteByPath(filePath)
         invalidateHotCache()
 
-        _changeFlow.value = CacheChange.FileDeleted(
-            filePath = filePath,
-            albumKey = albumKey,
-            artistKey = artistKey
+        _changeFlow.tryEmit(
+            CacheChange.FileDeleted(
+                filePath = filePath,
+                albumKey = albumKey,
+                artistKey = artistKey
+            )
         )
 
         bumpCacheVersion()
@@ -386,10 +417,12 @@ class MusicLibraryCache @Inject constructor(
             audioFileDao.deleteByPaths(filePaths)
             invalidateHotCache()
 
-            _changeFlow.value = CacheChange.FilesBatchUpdated(
-                filePaths = filePaths,
-                albumKeys = albumKeys,
-                artistKeys = artistKeys
+            _changeFlow.tryEmit(
+                CacheChange.FilesBatchUpdated(
+                    filePaths = filePaths,
+                    albumKeys = albumKeys,
+                    artistKeys = artistKeys
+                )
             )
 
             bumpCacheVersion()

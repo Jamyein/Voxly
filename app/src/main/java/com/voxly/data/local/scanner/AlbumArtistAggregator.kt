@@ -192,9 +192,15 @@ class AlbumArtistAggregator @Inject constructor(
 
     init {
         // No runBlocking on the main thread here -- the initial load is driven by
-        // _changeFlow's initial FullRefresh, which the applicationScope collector below
-        // picks up asynchronously after construction returns. This keeps Hilt singleton
-        // construction cheap and avoids ANR risk on large libraries.
+        // an explicit kick-off below. The changeFlow is a SharedFlow (no initial
+        // value), so the collector below would never see a FullRefresh event on
+        // app startup. We do the initial build directly here, asynchronously on
+        // applicationScope. This keeps Hilt singleton construction cheap and
+        // avoids ANR risk on large libraries.
+        applicationScope.launch(Dispatchers.Default) {
+            kickOffInitialBuild()
+        }
+
         applicationScope.launch(Dispatchers.Default) {
             libraryCache.changeFlow.collect { change ->
                 when (change) {
@@ -258,6 +264,24 @@ class AlbumArtistAggregator @Inject constructor(
                 }
             }
         }
+    }
+
+    /**
+     * Initial aggregate build for app startup. Previously this was driven by the
+     * `MutableStateFlow(FullRefresh())` initial value of `_changeFlow`; after the
+     * migration to `MutableSharedFlow`, no initial value exists, so we trigger
+     * the build explicitly. Safe to call repeatedly — if the collector above
+     * has already produced aggregates from a `FullRefresh` event, the data is
+     * the same and the work is wasted but not incorrect.
+     */
+    private suspend fun kickOffInitialBuild() {
+        val files = libraryCache.getCachedAudioFilesOnce()
+        if (files.isEmpty()) {
+            Timber.d(TAG, "kickOffInitialBuild: cache empty, waiting for FullRefresh event")
+            return
+        }
+        val config = aggregationConfig.first()
+        buildAggregatesFromFiles(files, config)
     }
 
     private suspend fun incrementalUpdateFile(
