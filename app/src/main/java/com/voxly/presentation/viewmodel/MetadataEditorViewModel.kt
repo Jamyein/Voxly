@@ -669,7 +669,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                 )
                             ) ?: MetadataEditorUiState.Success(
                                 audioFile = AudioFile(
-                                    id = "",
                                     path = filePath,
                                     name = "",
                                     size = 0,

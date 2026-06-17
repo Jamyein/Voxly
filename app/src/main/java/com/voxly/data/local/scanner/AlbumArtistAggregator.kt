@@ -640,6 +640,9 @@ class AlbumArtistAggregator @Inject constructor(
 
         // Look up all files belonging to this artist via the artist_links table.
         // artistKey is either "id:<long>" (from MediaStore artist id) or a raw artist name.
+        // The values returned by `getTrackIdsForArtist` are file paths (the
+        // `ArtistLinkEntity.trackId` column now stores `file.path` instead of
+        // the previous 32-bit `file.id.hashCode()` — see lesson.md #24 + #25).
         val trackIds: List<String> = when {
             artistKey.startsWith("id:") -> {
                 // For id: prefixed keys, the MediaStore id maps to the canonical artist name
@@ -648,8 +651,8 @@ class AlbumArtistAggregator @Inject constructor(
                     .filter { it.mediaStoreArtistId?.toString() == artistKey.removePrefix("id:") }
                     .map { it.path }
             }
-            else -> libraryCache.getTrackIdsForArtist(artistKey).mapNotNull { id ->
-                libraryCache.getCachedAudioFilesOnce().firstOrNull { it.id == id }?.path
+            else -> libraryCache.getTrackIdsForArtist(artistKey).mapNotNull { path ->
+                libraryCache.getCachedAudioFilesOnce().firstOrNull { it.path == path }?.path
             }
         }
 

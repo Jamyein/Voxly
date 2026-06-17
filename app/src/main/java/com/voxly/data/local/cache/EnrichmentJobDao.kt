@@ -24,8 +24,8 @@ interface EnrichmentJobDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(jobs: List<EnrichmentJobEntity>)
 
-    @Query("UPDATE enrichment_jobs SET status = :status, attemptCount = attemptCount + 1, updatedAt = :updatedAt WHERE id = :id")
-    suspend fun updateStatus(id: String, status: Int, updatedAt: Long = System.currentTimeMillis())
+    @Query("UPDATE enrichment_jobs SET status = :status, attemptCount = attemptCount + 1, updatedAt = :updatedAt WHERE filePath = :filePath")
+    suspend fun updateStatus(filePath: String, status: Int, updatedAt: Long = System.currentTimeMillis())
 
     @Query("DELETE FROM enrichment_jobs WHERE status = :status")
     suspend fun deleteByStatus(status: Int)

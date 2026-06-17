@@ -142,6 +142,17 @@ android {
         checkDependencies = true
     }
 
+    // Unit tests: allow Android framework methods to return default values
+    // instead of throwing "not mocked". This is required by the regression
+    // test in `CachedAudioFileIdentityTest` (lesson.md #25) which exercises
+    // `AudioFile` in a plain JVM test — `AudioFile`'s companion initializer
+    // calls `android.net.Uri.parse`, which would otherwise blow up the
+    // test classloader. Default values (null / 0 / false) are acceptable
+    // because the test never dereferences the parsed Uri.
+    testOptions {
+        unitTests.isReturnDefaultValues = true
+    }
+
     externalNativeBuild {
         cmake {
             path = file("src/main/cpp/CMakeLists.txt")

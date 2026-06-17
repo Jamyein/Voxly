@@ -134,7 +134,6 @@ class UnifiedScanManagerImpl @Inject constructor(
             val fileSize = File(filePath).length()
 
             val audioFile = AudioFile(
-                id = filePath.hashCode().toString(),
                 path = filePath,
                 name = filePath.substringAfterLast('/'),
                 size = fileSize,
@@ -287,7 +286,6 @@ class UnifiedScanManagerImpl @Inject constructor(
             ?: throw IllegalStateException("Failed to read metadata for: $filePath")
 
         val audioFile = AudioFile(
-            id = filePath.hashCode().toString(),
             path = filePath,
             name = filePath.substringAfterLast('/'),
             size = 0,

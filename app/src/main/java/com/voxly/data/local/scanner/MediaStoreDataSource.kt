@@ -411,7 +411,6 @@ class MediaStoreDataSource @Inject constructor(
         if (bitrate == 0) bitrate = (audioInfo?.bitrate ?: 0) / Constants.BPS_TO_KBPS
 
         return AudioFile(
-            id = filePath.hashCode().toString(),
             path = filePath,
             name = file.name,
             size = file.length(),
@@ -708,7 +707,6 @@ class MediaStoreDataSource @Inject constructor(
 
             output.add(
                 AudioFile(
-                    id = cursor.getLong(columns.id).toString(),
                     path = filePath,
                     name = displayName,
                     size = cursor.getLong(columns.size),

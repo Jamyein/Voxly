@@ -62,7 +62,6 @@ class FileProcessor @Inject constructor(
         val finalBitrate = if (bitrate == 0) (audioInfo?.bitrate ?: 0) / Constants.BPS_TO_KBPS else bitrate
 
         AudioFile(
-            id = filePath.hashCode().toString(),
             path = filePath,
             name = file.name,
             size = file.length(),

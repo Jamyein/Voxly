@@ -70,12 +70,11 @@ class AudioFileTest {
         size: Long = 0
     ): AudioFile {
         return AudioFile(
-            id = "1",
             path = "/test/file.mp3",
             name = "file.mp3",
             size = size,
             duration = duration,
-            format = "MP3",
+            format = com.voxly.domain.model.AudioFormat.MP3,
             bitrate = 320,
             sampleRate = 44100,
             channels = 2,

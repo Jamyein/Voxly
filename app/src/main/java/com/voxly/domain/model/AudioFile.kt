@@ -8,10 +8,16 @@ import java.io.Serializable
 
 /**
  * Domain model representing an audio file with its metadata and replay gain information.
+ *
+ * NOTE: there is intentionally NO `id` field. The natural identity of a file in
+ * this domain is its filesystem `path`. The previous `id: String` was generated
+ * inconsistently across the codebase (MediaStore `_ID` at scan time, `path.hashCode()`
+ * after the first save) which caused cross-workspace cache collisions once two
+ * working directories happened to contain the same song at different paths.
+ * See lesson.md #24 + #25.
  */
 @Immutable
 data class AudioFile(
-    val id: String,
     val path: String,
     val name: String,
     val size: Long,

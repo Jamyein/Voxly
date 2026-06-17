@@ -16,7 +16,12 @@ import com.voxly.domain.model.ReplayGainInfo
 @Entity(
     tableName = "cached_audio_files",
     indices = [
-        Index(value = ["path"], unique = true),
+        // `path` is the PRIMARY KEY below — it is unique by definition.
+        // The previous `Index(value = ["path"], unique = true)` was removed when
+        // the primary key was migrated from the polymorphic `id` (MediaStore _ID
+        // at scan time, `path.hashCode()` after the first save) to `path` itself
+        // (see lesson.md #24 + #25). Carrying a parallel mutable `id` was the
+        // root cause of the cross-workspace cache collision bug.
         Index(value = ["albumId"]),
         Index(value = ["artistId"]),
         Index(value = ["artist"]),
@@ -26,7 +31,6 @@ import com.voxly.domain.model.ReplayGainInfo
 )
 data class CachedAudioFileEntity(
     @PrimaryKey
-    val id: String,
     val path: String,
     val name: String,
     val size: Long,
@@ -88,7 +92,6 @@ data class CachedAudioFileEntity(
      */
     fun toAudioFile(): AudioFile {
         return AudioFile(
-            id = id,
             path = path,
             name = name,
             size = size,
@@ -165,7 +168,6 @@ data class CachedAudioFileEntity(
             lastEditedByUserAt: Long? = null
         ): CachedAudioFileEntity {
             return CachedAudioFileEntity(
-                id = audioFile.id,
                 path = audioFile.path,
                 name = audioFile.name,
                 size = audioFile.size,

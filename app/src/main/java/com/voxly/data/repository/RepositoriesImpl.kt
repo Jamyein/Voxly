@@ -76,19 +76,23 @@ class AudioRepositoryImpl @Inject constructor(
     ): Result<AudioFile> =
         withContext(Dispatchers.IO) {
             try {
-                val javaFile = java.io.File(filePath)
-                val extension = filePath.substringAfterLast('.').lowercase()
+                // Normalize the input path so that `/foo/./bar` and `/foo/bar`
+                // (and case / NFC differences) hit the same cache row. `path` is
+                // now the primary key of `cached_audio_files` (see lesson.md #25).
+                val normalizedPath = com.voxly.core.util.PathUtils.normalizeFilePath(filePath)
+                val javaFile = java.io.File(normalizedPath)
+                val extension = normalizedPath.substringAfterLast('.').lowercase()
                 val fileLastModified = javaFile.lastModified()
 
                 // Try Room cache first — skip TagLib I/O if cache is valid
-                val cachedEntity = libraryCache.getCachedFileEntity(filePath)
+                val cachedEntity = libraryCache.getCachedFileEntity(normalizedPath)
                 val cachedFile = cachedEntity?.toAudioFile()
                 val isFileUnchanged = cachedEntity != null && javaFile.exists() &&
                     cachedEntity.fileLastModifiedAt == fileLastModified
 
                 if (cachedFile != null && isFileUnchanged) {
                     val completeMetadata = metadataProcessor.readAllMetadata(
-                        filePath,
+                        normalizedPath,
                         includeAlbumArt = includeAlbumArt,
                         bypassCache = true
                     )
@@ -106,13 +110,13 @@ class AudioRepositoryImpl @Inject constructor(
                 val (completeMetadata, mediaStoreInfo) = coroutineScope {
                     val tagLibDeferred = async {
                         metadataProcessor.readAllMetadata(
-                            filePath,
+                            normalizedPath,
                             includeAlbumArt = includeAlbumArt,
                             bypassCache = true
                         )
                     }
                     val mediaStoreDeferred = async {
-                        queryMediaStoreAudioInfo(filePath)
+                        queryMediaStoreAudioInfo(normalizedPath)
                     }
                     Pair(tagLibDeferred.await(), mediaStoreDeferred.await())
                 }
@@ -130,8 +134,7 @@ class AudioRepositoryImpl @Inject constructor(
                 }
 
                 val audioFile = AudioFile(
-                    id = filePath.hashCode().toString(),
-                    path = filePath,
+                    path = normalizedPath,
                     name = javaFile.name,
                     size = javaFile.length(),
                     duration = finalDuration,
@@ -144,7 +147,7 @@ class AudioRepositoryImpl @Inject constructor(
                     mediaStoreArtistId = mediaStoreInfo.mediaStoreArtistId
                 )
 
-                val mediaStoreFallbackMetadata = readMediaStoreBasicMetadata(filePath)
+                val mediaStoreFallbackMetadata = readMediaStoreBasicMetadata(normalizedPath)
                 val mergedMetadata = mergeWithFallback(audioFile.metadata, mediaStoreFallbackMetadata)
                 val resultFile = audioFile.copy(metadata = mergedMetadata ?: AudioMetadata())
 
@@ -315,18 +318,23 @@ class AudioRepositoryImpl @Inject constructor(
     override suspend fun updateMetadata(filePath: String, metadata: AudioMetadata): Result<Unit> =
         withContext(Dispatchers.IO) {
             try {
+                // Normalize the input path so that the write, the post-write
+                // re-read, and the cache sync all operate on the same canonical
+                // key. `path` is now the primary key of `cached_audio_files`.
+                val normalizedFilePath = com.voxly.core.util.PathUtils.normalizeFilePath(filePath)
+
                 // Get old metadata before update for cache invalidation
-                val oldFile = libraryCache.getCachedFile(filePath)
+                val oldFile = libraryCache.getCachedFile(normalizedFilePath)
                 val oldAlbumArtist = oldFile?.metadata?.albumArtist ?: oldFile?.metadata?.artist
                 val oldAlbumName = oldFile?.metadata?.album
 
                 // Use TagWriteManager for Android 16 safe write with whitelist support
-                tagWriteManager.writeMetadata(filePath, metadata).fold(
+                tagWriteManager.writeMetadata(normalizedFilePath, metadata).fold(
                     onSuccess = {
                         // After metadata update, re-query MediaStore to get the CORRECT album ID
                         // because album/artist changes can result in a different MediaStore album ID
-                        val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(filePath)
-                        val updatedFile = getAudioFile(filePath, includeAlbumArt = true).getOrNull()
+                        val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(normalizedFilePath)
+                        val updatedFile = getAudioFile(normalizedFilePath, includeAlbumArt = true).getOrNull()
 
                         // If album/artist changed, invalidate old cover disk cache
                         val newAlbumArtist = metadata.albumArtist ?: metadata.artist
@@ -341,18 +349,18 @@ class AudioRepositoryImpl @Inject constructor(
                         // Always invalidate the correct album ID from MediaStore
                         // Use the old album ID from cache for comparison
                         val oldAlbumId = oldFile?.mediaStoreAlbumId
-                        
+
                         if (correctAlbumId != null) {
                             CoverUriProvider.invalidateAlbumId(correctAlbumId)
                             Timber.d(TAG, "Invalidated correct album ID: $correctAlbumId")
                         }
-                        
+
                         // Also invalidate old album ID if it differs from the new one
                         if (oldAlbumId != null && oldAlbumId != correctAlbumId) {
                             CoverUriProvider.invalidateAlbumId(oldAlbumId)
                             Timber.d(TAG, "Invalidated old album ID: $oldAlbumId")
                         }
-                        
+
                         // Sync to cache with correct album ID
                         if (updatedFile != null) {
                             val fileToSync = if (correctAlbumId != null && updatedFile.mediaStoreAlbumId != correctAlbumId) {
@@ -366,7 +374,7 @@ class AudioRepositoryImpl @Inject constructor(
                     },
                     onFailure = { cause ->
                         Result.failure(
-                            Exception("Failed to update metadata for: $filePath. ${cause.message}", cause)
+                            Exception("Failed to update metadata for: $normalizedFilePath. ${cause.message}", cause)
                         )
                     }
                 )

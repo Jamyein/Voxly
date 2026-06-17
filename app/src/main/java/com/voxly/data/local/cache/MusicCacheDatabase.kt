@@ -27,7 +27,13 @@ import javax.inject.Singleton
         DirectorySnapshotEntity::class,
         AlbumSortOrderEntity::class,
     ],
-    version = 14,
+    // v15: replaced the polymorphic `id` String primary key (MediaStore _ID at
+    // scan time, `path.hashCode()` after the first save) with `path` itself on
+    // `CachedAudioFileEntity` and `EnrichmentJobEntity`. See lesson.md #24 + #25
+    // for the cross-workspace cache-collision bug this fixes. The migration is
+    // intentionally destructive: cache data is rebuildable from MediaStore, and
+    // the old `id` (32-bit hash) is meaningless under the new schema anyway.
+    version = 15,
     exportSchema = false
 )
 /**
@@ -277,6 +283,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
         // MUST match the Room @Database(version = ...) annotation above.
         // Bump this whenever you add a new migration or change the version.
-        private const val CURRENT_DATA_FORMAT_VERSION = 14
+        private const val CURRENT_DATA_FORMAT_VERSION = 15
     }
 }

@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.ImageDecoder
 import android.net.Uri
 import com.google.gson.Gson
+import com.voxly.core.util.PathUtils
 import com.voxly.data.local.SettingsDataStore
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -107,6 +108,18 @@ class MusicLibraryCache @Inject constructor(
     }
 
     /**
+     * Normalizes a file path before it is used as a cache key.
+     *
+     * `path` is now the primary key of `cached_audio_files` and `enrichment_jobs`
+     * (replacing the lossy 32-bit `path.hashCode()` ID — see lesson.md #24 + #25).
+     * Two callers that pass paths differing only in `./` segments, case
+     * (case-insensitive filesystems), or NFC/NFD Unicode must hit the same row,
+     * not two duplicate rows. Centralising the normalization here guarantees
+     * every read/write path applies the same rule.
+     */
+    private fun normalizedPath(filePath: String): String = PathUtils.normalizeFilePath(filePath)
+
+    /**
      * Warms up the cache by ensuring database is initialized and cache data is preloaded.
      * Call this early in app startup to avoid first-access delays and race conditions.
      */
@@ -175,14 +188,14 @@ class MusicLibraryCache @Inject constructor(
      * Gets a single cached audio file by path.
      */
     suspend fun getCachedFile(filePath: String): AudioFile? = withContext(Dispatchers.IO) {
-        audioFileDao.getAudioFileByPath(filePath)?.toAudioFile()
+        audioFileDao.getAudioFileByPath(normalizedPath(filePath))?.toAudioFile()
     }
 
     /**
      * Gets raw cached entity for accessing metadata timestamps.
      */
     suspend fun getCachedFileEntity(filePath: String): CachedAudioFileEntity? = withContext(Dispatchers.IO) {
-        audioFileDao.getAudioFileByPath(filePath)
+        audioFileDao.getAudioFileByPath(normalizedPath(filePath))
     }
     
     /**
@@ -270,12 +283,16 @@ class MusicLibraryCache @Inject constructor(
     /**
      * Internal helper that updates artist_links inside an existing transaction.
      * Reads track IDs to delete in one batch, inserts new links in one batch.
+     *
+     * `trackId` is now the file's path (the previous `file.id` — a 32-bit
+     * `path.hashCode()` — was the source of cross-workspace cache collisions;
+     * see lesson.md #24 + #25).
      */
     private suspend fun updateArtistLinksForFilesInternal(
         audioFiles: List<AudioFile>,
         separators: Set<String>
     ) {
-        val trackIds = audioFiles.map { it.id }
+        val trackIds = audioFiles.map { it.path }
         if (trackIds.isEmpty()) return
 
         artistLinkDao.deleteByTrackIds(trackIds)
@@ -290,7 +307,7 @@ class MusicLibraryCache @Inject constructor(
             artistString.split(Regex(regex))
                 .map { it.trim() }
                 .filter { it.isNotBlank() }
-                .map { ArtistLinkEntity(trackId = file.id, artistName = it) }
+                .map { ArtistLinkEntity(trackId = file.path, artistName = it) }
         }
         if (newLinks.isNotEmpty()) {
             artistLinkDao.insertAll(newLinks)
@@ -307,20 +324,25 @@ class MusicLibraryCache @Inject constructor(
     }
 
     private suspend fun syncFileToCacheInternal(audioFile: AudioFile) {
-        Timber.i("syncFileToCache: path=${audioFile.path}, album=${audioFile.metadata.album}, albumArtist=${audioFile.metadata.albumArtist}, albumId=${audioFile.mediaStoreAlbumId}")
+        // Normalize the path at the persistence boundary. `path` is now the
+        // primary key — without normalization two equivalent paths
+        // (e.g. `/foo/./bar` vs `/foo/bar`, or differing NFC/NFD forms) would
+        // create two cache rows. See lesson.md #25.
+        val normalized = audioFile.copy(path = normalizedPath(audioFile.path))
+        Timber.i("syncFileToCache: path=${normalized.path}, album=${normalized.metadata.album}, albumArtist=${normalized.metadata.albumArtist}, albumId=${normalized.mediaStoreAlbumId}")
 
         // Transaction ensures atomic read-modify-write on the entity
         database.withTransaction {
-            val file = File(audioFile.path)
-            val customFieldsJson = if (audioFile.metadata.customFields.isNotEmpty()) {
-                gson.toJson(audioFile.metadata.customFields)
+            val file = File(normalized.path)
+            val customFieldsJson = if (normalized.metadata.customFields.isNotEmpty()) {
+                gson.toJson(normalized.metadata.customFields)
             } else null
 
-            val existingEntity = audioFileDao.getAudioFileByPath(audioFile.path)
+            val existingEntity = audioFileDao.getAudioFileByPath(normalized.path)
             val lastEditedByUserAt = existingEntity?.lastEditedByUserAt
 
             val entity = CachedAudioFileEntity.fromAudioFile(
-                audioFile = audioFile,
+                audioFile = normalized,
                 fileLastModified = file.lastModified(),
                 customFieldsJson = customFieldsJson,
                 lastEditedByUserAt = lastEditedByUserAt
@@ -332,11 +354,11 @@ class MusicLibraryCache @Inject constructor(
         Timber.d("syncFileToCache: inserted to DB, invalidating hotCache")
         invalidateHotCache()
 
-        val albumKey = CacheChangeKeys.extractAlbumKey(audioFile)
-        val artistKey = CacheChangeKeys.extractArtistKey(audioFile)
+        val albumKey = CacheChangeKeys.extractAlbumKey(normalized)
+        val artistKey = CacheChangeKeys.extractArtistKey(normalized)
         _changeFlow.tryEmit(
             CacheChange.FileUpdated(
-                filePath = audioFile.path,
+                filePath = normalized.path,
                 albumKey = albumKey,
                 artistKey = artistKey
             )
@@ -355,10 +377,11 @@ class MusicLibraryCache @Inject constructor(
     }
 
     private suspend fun markFileAsEditedByUserInternal(filePath: String) {
-        audioFileDao.updateLastEditedByUserAt(filePath, System.currentTimeMillis())
+        val normalized = normalizedPath(filePath)
+        audioFileDao.updateLastEditedByUserAt(normalized, System.currentTimeMillis())
         invalidateHotCache()
         bumpCacheVersion()
-        Timber.i("markFileAsEditedByUser: path=$filePath")
+        Timber.i("markFileAsEditedByUser: path=$normalized")
     }
 
     /**
@@ -369,7 +392,8 @@ class MusicLibraryCache @Inject constructor(
     }
 
     private suspend fun removeFromCacheInternal(filePath: String) {
-        val existingFile = audioFileDao.getAudioFileByPath(filePath)
+        val normalized = normalizedPath(filePath)
+        val existingFile = audioFileDao.getAudioFileByPath(normalized)
         val albumKey = existingFile?.let {
             val af = it.toAudioFile()
             CacheChangeKeys.extractAlbumKey(af)
@@ -379,19 +403,19 @@ class MusicLibraryCache @Inject constructor(
             CacheChangeKeys.extractArtistKey(af)
         }
 
-        audioFileDao.deleteByPath(filePath)
+        audioFileDao.deleteByPath(normalized)
         invalidateHotCache()
 
         _changeFlow.tryEmit(
             CacheChange.FileDeleted(
-                filePath = filePath,
+                filePath = normalized,
                 albumKey = albumKey,
                 artistKey = artistKey
             )
         )
 
         bumpCacheVersion()
-        Timber.i("DB delete: $filePath")
+        Timber.i("DB delete: $normalized")
     }
 
     /**
@@ -404,7 +428,8 @@ class MusicLibraryCache @Inject constructor(
 
     private suspend fun removeFromCacheBatchInternal(filePaths: List<String>) {
         if (filePaths.isNotEmpty()) {
-            val existingFiles = filePaths.mapNotNull { audioFileDao.getAudioFileByPath(it) }
+            val normalized = filePaths.map { normalizedPath(it) }
+            val existingFiles = normalized.mapNotNull { audioFileDao.getAudioFileByPath(it) }
             val albumKeys = existingFiles.mapNotNull {
                 val af = it.toAudioFile()
                 CacheChangeKeys.extractAlbumKey(af)
@@ -414,19 +439,19 @@ class MusicLibraryCache @Inject constructor(
                 CacheChangeKeys.extractArtistKey(af)
             }.toSet()
 
-            audioFileDao.deleteByPaths(filePaths)
+            audioFileDao.deleteByPaths(normalized)
             invalidateHotCache()
 
             _changeFlow.tryEmit(
                 CacheChange.FilesBatchUpdated(
-                    filePaths = filePaths,
+                    filePaths = normalized,
                     albumKeys = albumKeys,
                     artistKeys = artistKeys
                 )
             )
 
             bumpCacheVersion()
-            Timber.i("DB batch delete: ${filePaths.size} files")
+            Timber.i("DB batch delete: ${normalized.size} files")
         }
     }
 
@@ -466,13 +491,14 @@ class MusicLibraryCache @Inject constructor(
      * Checks if a specific file needs rescanning.
      */
     suspend fun needsRescan(filePath: String): Boolean = withContext(Dispatchers.IO) {
-        val file = File(filePath)
+        val normalized = normalizedPath(filePath)
+        val file = File(normalized)
         if (!file.exists()) {
-            audioFileDao.deleteByPath(filePath)
+            audioFileDao.deleteByPath(normalized)
             return@withContext true
         }
-        
-        val cached = audioFileDao.getAudioFileByPath(filePath)
+
+        val cached = audioFileDao.getAudioFileByPath(normalized)
         cached == null || cached.fileLastModifiedAt != file.lastModified()
     }
     
@@ -480,7 +506,7 @@ class MusicLibraryCache @Inject constructor(
      * Cleans up deleted files from cache.
      */
     suspend fun cleanupDeletedFiles(currentPaths: List<String>): Int = withContext(Dispatchers.IO) {
-        val deletedCount = audioFileDao.deleteNotInPaths(currentPaths)
+        val deletedCount = audioFileDao.deleteNotInPaths(currentPaths.map { normalizedPath(it) })
         if (deletedCount > 0) {
             invalidateHotCache()
             bumpCacheVersion()
@@ -619,7 +645,8 @@ class MusicLibraryCache @Inject constructor(
             audioFiles.forEach { file ->
                 val artistString = file.metadata.artist ?: file.metadata.albumArtist
                 if (!artistString.isNullOrBlank()) {
-                    updateArtistLinks(file.id, artistString, separators)
+                    // `trackId` is now the file's path (see updateArtistLinksForFilesInternal).
+                    updateArtistLinks(file.path, artistString, separators)
                 }
             }
         } catch (e: Exception) {
@@ -674,9 +701,12 @@ class MusicLibraryCache @Inject constructor(
 
     suspend fun enqueueEnrichmentJobs(filePaths: List<String>) = withContext(Dispatchers.IO) {
         val jobs = filePaths.map { path ->
+            // `filePath` is the primary key of EnrichmentJobEntity — no separate
+            // `id` hash is needed (and was the source of cross-workspace collisions
+            // before this refactor; see lesson.md #24 + #25). Normalize so the
+            // PK matches what later lookups will use.
             EnrichmentJobEntity(
-                id = path.hashCode().toString(),
-                filePath = path,
+                filePath = normalizedPath(path),
                 status = EnrichmentJobEntity.STATUS_PENDING
             )
         }
@@ -688,12 +718,12 @@ class MusicLibraryCache @Inject constructor(
         enrichmentJobDao.getPendingJobs(limit)
     }
 
-    suspend fun updateEnrichmentJobStatus(id: String, status: Int) = withContext(Dispatchers.IO) {
-        enrichmentJobDao.updateStatus(id, status)
+    suspend fun updateEnrichmentJobStatus(filePath: String, status: Int) = withContext(Dispatchers.IO) {
+        enrichmentJobDao.updateStatus(normalizedPath(filePath), status)
     }
 
     suspend fun hasEnrichmentJobForPath(path: String): Boolean = withContext(Dispatchers.IO) {
-        enrichmentJobDao.hasJobForPath(path)
+        enrichmentJobDao.hasJobForPath(normalizedPath(path))
     }
 
     suspend fun clearCompletedEnrichmentJobs() = withContext(Dispatchers.IO) {

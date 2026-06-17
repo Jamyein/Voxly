@@ -93,20 +93,20 @@ class EnrichmentWorker @AssistedInject constructor(
 
     private suspend fun processJob(job: EnrichmentJobEntity): AudioFile? = withContext(Dispatchers.IO) {
         val cachedFile = musicLibraryCache.getCachedFile(job.filePath) ?: run {
-            musicLibraryCache.updateEnrichmentJobStatus(job.id, EnrichmentJobEntity.STATUS_COMPLETED)
+            musicLibraryCache.updateEnrichmentJobStatus(job.filePath, EnrichmentJobEntity.STATUS_COMPLETED)
             return@withContext null
         }
 
         val file = File(job.filePath)
         if (!file.exists() || !file.canRead()) {
-            musicLibraryCache.updateEnrichmentJobStatus(job.id, EnrichmentJobEntity.STATUS_COMPLETED)
+            musicLibraryCache.updateEnrichmentJobStatus(job.filePath, EnrichmentJobEntity.STATUS_COMPLETED)
             return@withContext null
         }
 
         val cachedEntity = musicLibraryCache.getCachedFileEntity(job.filePath)
         if (cachedEntity?.lastEditedByUserAt != null) {
             Timber.d(TAG, "Skipping enrichment for ${job.filePath}: user edited at ${cachedEntity.lastEditedByUserAt}")
-            musicLibraryCache.updateEnrichmentJobStatus(job.id, EnrichmentJobEntity.STATUS_COMPLETED)
+            musicLibraryCache.updateEnrichmentJobStatus(job.filePath, EnrichmentJobEntity.STATUS_COMPLETED)
             return@withContext null
         }
 
@@ -148,13 +148,13 @@ class EnrichmentWorker @AssistedInject constructor(
                 )
             }
 
-            musicLibraryCache.updateEnrichmentJobStatus(job.id, EnrichmentJobEntity.STATUS_COMPLETED)
+            musicLibraryCache.updateEnrichmentJobStatus(job.filePath, EnrichmentJobEntity.STATUS_COMPLETED)
             enriched
         } catch (e: Exception) {
             Timber.w(TAG, "Enrichment failed for ${job.filePath}", e)
             val attempts = job.attemptCount + 1
             val status = if (attempts >= 3) EnrichmentJobEntity.STATUS_FAILED else EnrichmentJobEntity.STATUS_PENDING
-            musicLibraryCache.updateEnrichmentJobStatus(job.id, status)
+            musicLibraryCache.updateEnrichmentJobStatus(job.filePath, status)
             null
         }
     }

@@ -7,17 +7,20 @@ import androidx.room.PrimaryKey
 /**
  * Room Entity for background metadata enrichment jobs.
  * Persistent queue used to backfill missing year/sampleRate in background via WorkManager.
+ *
+ * `filePath` is the PRIMARY KEY. The previous `id: String` (a 32-bit `path.hashCode()`)
+ * was removed in the same refactor as `CachedAudioFileEntity.id` — same bug class
+ * (32-bit hash collision on cross-workspace duplicates), same fix.
  */
 @Entity(
     tableName = "enrichment_jobs",
     indices = [
-        Index(value = ["filePath"], unique = true),
+        // `filePath` is the PRIMARY KEY below — it is unique by definition.
         Index(value = ["status"])
     ]
 )
 data class EnrichmentJobEntity(
     @PrimaryKey
-    val id: String,
     val filePath: String,
     val status: Int, // 0 = pending, 1 = running, 2 = completed, 3 = failed
     val attemptCount: Int = 0,
