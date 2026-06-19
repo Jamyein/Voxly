@@ -354,9 +354,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
      */
     private fun loadCoverArtAsync(filePath: String) {
         viewModelScope.launch {
-            val coverBytes = withContext(Dispatchers.IO) {
-                com.voxly.presentation.ui.getLocalCoverBytes(filePath)
-            }
+            val coverBytes = com.voxly.presentation.ui.getLocalCoverBytes(filePath)
             coverBytes?.let { bytes ->
                 val currentMetadata = _editedMetadata.value ?: return@let
                 if (currentMetadata.albumArt == null) {

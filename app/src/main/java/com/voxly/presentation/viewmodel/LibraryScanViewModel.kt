@@ -670,12 +670,10 @@ class LibraryScanViewModel @Inject constructor(
                 currentMap + filesByDir
             }
 
-            withContext(Dispatchers.IO) {
-                directories.forEach { dir ->
+            directories.forEach { dir ->
                     val fileCount = filesByDir[dir.uri]?.size ?: 0
                     musicLibraryCache.saveDirectorySnapshot(dir.uri, fileCount)
                 }
-            }
 
             if (_openedDirectoryUri.value != null && _openedDirectoryUri.value !in filesByDir.keys) {
                 _openedDirectoryUri.update { null }

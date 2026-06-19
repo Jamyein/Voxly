@@ -26,7 +26,11 @@ import com.voxly.domain.model.ReplayGainInfo
         Index(value = ["artistId"]),
         Index(value = ["artist"]),
         Index(value = ["album"]),
-        Index(value = ["year"])
+        Index(value = ["year"]),
+        // Pre-computed sort columns — avoid COALESCE in ORDER BY (can't use B-tree index)
+        Index(value = ["sortTitle"]),
+        Index(value = ["sortAlbum"]),
+        Index(value = ["artist", "sortAlbum", "trackNumber", "sortTitle"])
     ]
 )
 data class CachedAudioFileEntity(
@@ -50,6 +54,11 @@ data class CachedAudioFileEntity(
     val album: String?,
     val year: String?,
     val trackNumber: Int?,
+    
+    // Pre-computed sort keys (populated at insert/update time).
+    // Eliminates COALESCE in ORDER BY clauses so SQLite can use B-tree indices.
+    val sortTitle: String = "",
+    val sortAlbum: String = "",
     
     // Detailed metadata (loaded on-demand, cached when available)
     val albumArtist: String?,
@@ -185,6 +194,8 @@ data class CachedAudioFileEntity(
                 album = audioFile.metadata.album,
                 year = audioFile.metadata.year,
                 trackNumber = audioFile.metadata.trackNumber,
+                sortTitle = audioFile.metadata.title ?: audioFile.name,
+                sortAlbum = audioFile.metadata.album ?: "",
                 albumArtist = audioFile.metadata.albumArtist,
                 genre = audioFile.metadata.genre,
                 totalTracks = audioFile.metadata.totalTracks,

@@ -150,7 +150,7 @@ fun SkeletonListScreen(
     LazyColumn(
         modifier = modifier.fillMaxSize()
     ) {
-        items(itemCount) {
+        items(count = itemCount, key = { it }) {
             SkeletonListItem()
         }
     }

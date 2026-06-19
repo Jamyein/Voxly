@@ -1,0 +1,11 @@
+// Compose Stability Configuration
+// Marks all classes in these packages as stable for the Compose compiler.
+// This prevents unnecessary recompositions when passing these types as parameters.
+// Format: one class/package per line, // for comments, .* for package, .** for package + subpackages
+
+// Domain models (data classes, immutable by design)
+com.voxly.domain.model.**
+
+// UI state classes
+com.voxly.presentation.viewmodel.**
+com.voxly.presentation.screens.settings.**

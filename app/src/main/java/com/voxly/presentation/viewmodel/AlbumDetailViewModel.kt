@@ -118,12 +118,10 @@ class AlbumDetailViewModel @AssistedInject constructor(
                     _coverPath.update { albumGroup.coverPath }
 
                     val firstFile = albumGroup.files.firstOrNull()
-                    val resolvedUri = withContext(Dispatchers.IO) {
-                        coverUriProvider.getCoverUri(
+                    val resolvedUri = coverUriProvider.getCoverUri(
                             albumId = firstFile?.mediaStoreAlbumId,
                             filePath = albumGroup.coverPath ?: firstFile?.path
                         )
-                    }
                     _coverUri.update { resolvedUri }
 
                     val filesWithDiscNumber = withContext(Dispatchers.Default) {

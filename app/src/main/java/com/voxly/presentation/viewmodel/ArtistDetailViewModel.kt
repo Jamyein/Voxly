@@ -165,11 +165,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
                     return@launch
                 }
 
-                val summaries = withContext(Dispatchers.IO) {
-                    databaseProvider.getDatabase()
+                val summaries = databaseProvider.getDatabase()
                         .albumSummaryDao()
                         .getAlbumSummariesByNames(albumNames)
-                }
 
                 _albumYears.update { summaries.associate { it.albumTitle to it.year } }
             } catch (e: Exception) {

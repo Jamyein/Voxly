@@ -33,7 +33,9 @@ import javax.inject.Singleton
     // for the cross-workspace cache-collision bug this fixes. The migration is
     // intentionally destructive: cache data is rebuildable from MediaStore, and
     // the old `id` (32-bit hash) is meaningless under the new schema anyway.
-    version = 15,
+    // v16: added pre-computed sortTitle/sortAlbum columns to eliminate
+    // COALESCE in ORDER BY clauses so SQLite can use B-tree indices.
+    version = 16,
     exportSchema = false
 )
 /**
@@ -257,6 +259,21 @@ class MusicCacheDatabaseProvider @Inject constructor(
                         db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `replayGainReferenceLoudness` REAL")
                     }
                 })
+                // Migration from version 15 to 16: adds pre-computed sortTitle/sortAlbum
+                // columns to eliminate COALESCE in ORDER BY (COALESCE prevents B-tree
+                // index usage, forcing full-table scan + sort on every query).
+                .addMigrations(object : Migration(15, 16) {
+                    override fun migrate(db: androidx.sqlite.db.SupportSQLiteDatabase) {
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `sortTitle` TEXT NOT NULL DEFAULT ''")
+                        db.execSQL("ALTER TABLE `cached_audio_files` ADD COLUMN `sortAlbum` TEXT NOT NULL DEFAULT ''")
+                        // Populate from existing data
+                        db.execSQL("UPDATE `cached_audio_files` SET `sortTitle` = COALESCE(`title`, `name`), `sortAlbum` = COALESCE(`album`, '')")
+                        // Create indices for the new sort columns
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_sortTitle` ON `cached_audio_files` (`sortTitle`)")
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_sortAlbum` ON `cached_audio_files` (`sortAlbum`)")
+                        db.execSQL("CREATE INDEX IF NOT EXISTS `index_cached_audio_files_artist_sort` ON `cached_audio_files` (`artist`, `sortAlbum`, `trackNumber`, `sortTitle`)")
+                    }
+                })
 
             val newInstance = builder.build()
             prefs.edit().putInt(KEY_DATA_FORMAT_VERSION, CURRENT_DATA_FORMAT_VERSION).apply()
@@ -283,6 +300,6 @@ class MusicCacheDatabaseProvider @Inject constructor(
         private const val KEY_DATA_FORMAT_VERSION = "data_format_version"
         // MUST match the Room @Database(version = ...) annotation above.
         // Bump this whenever you add a new migration or change the version.
-        private const val CURRENT_DATA_FORMAT_VERSION = 15
+        private const val CURRENT_DATA_FORMAT_VERSION = 16
     }
 }

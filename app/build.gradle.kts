@@ -44,6 +44,10 @@ kotlin {
     }
 }
 
+composeCompiler {
+    stabilityConfigurationFiles.add(layout.projectDirectory.file("compose-stability-config.txt"))
+}
+
 android {
     namespace = "com.voxly"
     compileSdk = 37

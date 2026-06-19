@@ -30,6 +30,8 @@ import com.voxly.presentation.ui.loadAlbumArtOriginalBitmap
 import com.voxly.presentation.viewmodel.ConvertibleField
 import com.voxly.presentation.viewmodel.MetadataEditorUiState
 import com.voxly.presentation.viewmodel.MetadataField
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 
 /**
@@ -218,18 +220,17 @@ fun AlbumArtPreviewDialog(
     filePath: String? = null,
     onDismiss: () -> Unit
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
 
-    val previewBitmap = remember(albumArt?.contentHashCode(), filePath) {
-        when {
+    val previewBitmap by produceState<Bitmap?>(
+        initialValue = null,
+        key1 = albumArt?.contentHashCode(),
+        key2 = filePath
+    ) {
+        value = when {
             albumArt != null -> decodeAlbumArtPreview(albumArt, 2048)
-            !filePath.isNullOrBlank() -> {
-                val path = filePath
-                runCatching<android.graphics.Bitmap?> {
-                    kotlinx.coroutines.runBlocking(kotlinx.coroutines.Dispatchers.IO) {
-                        com.voxly.presentation.ui.loadAlbumArtOriginalBitmap(context, path, 2048)
-                    }
-                }.getOrNull()
+            !filePath.isNullOrBlank() -> withContext(Dispatchers.IO) {
+                runCatching { loadAlbumArtOriginalBitmap(context, filePath, 2048) }.getOrNull()
             }
             else -> null
         }
@@ -241,8 +242,8 @@ fun AlbumArtPreviewDialog(
         title = { Text(stringResource(R.string.metadata_album_art)) },
         text = {
             if (previewBitmap != null) {
-                androidx.compose.foundation.Image(
-                    bitmap = previewBitmap.asImageBitmap(),
+                Image(
+                    bitmap = previewBitmap!!.asImageBitmap(),
                     contentDescription = stringResource(R.string.cd_album_art),
                     modifier = Modifier.fillMaxWidth()
                 )

@@ -19,15 +19,16 @@ interface CachedAudioFileDao {
     /**
      * Gets all cached audio files, sorted by title.
      * Returns Flow for reactive UI updates.
+     * Uses pre-computed sortTitle column for B-tree index usage.
      */
-    @Query("SELECT * FROM cached_audio_files ORDER BY COALESCE(title, name) ASC")
+    @Query("SELECT * FROM cached_audio_files ORDER BY sortTitle ASC")
     fun getAllAudioFiles(): Flow<List<CachedAudioFileEntity>>
     
     /**
      * Gets audio files by directory path prefix.
-     * Uses GLOB instead of LIKE to avoid % and _ being interpreted as wildcards.
+     * Uses range query (>= / <) instead of GLOB for B-tree index usage on the primary key.
      */
-    @Query("SELECT * FROM cached_audio_files WHERE path GLOB :directoryPath || '*' ORDER BY path ASC")
+    @Query("SELECT * FROM cached_audio_files WHERE path >= :directoryPath AND path < :directoryPath || 'zzzzzzzz' ORDER BY path ASC")
     fun getAudioFilesByDirectory(directoryPath: String): Flow<List<CachedAudioFileEntity>>
     
     /**
@@ -38,30 +39,34 @@ interface CachedAudioFileDao {
     
     /**
      * Gets audio files by album ID.
+     * Uses pre-computed sortTitle column for B-tree index usage.
      */
-    @Query("SELECT * FROM cached_audio_files WHERE albumId = :albumId ORDER BY trackNumber ASC, COALESCE(title, name) ASC")
+    @Query("SELECT * FROM cached_audio_files WHERE albumId = :albumId ORDER BY trackNumber ASC, sortTitle ASC")
     fun getAudioFilesByAlbum(albumId: Long): Flow<List<CachedAudioFileEntity>>
 
     /**
      * Gets audio files by artist name.
+     * Uses pre-computed sortAlbum/sortTitle columns + composite index for efficient sorting.
      */
-    @Query("SELECT * FROM cached_audio_files WHERE artist = :artist ORDER BY COALESCE(album, ''), trackNumber ASC, COALESCE(title, name) ASC")
+    @Query("SELECT * FROM cached_audio_files WHERE artist = :artist ORDER BY sortAlbum ASC, trackNumber ASC, sortTitle ASC")
     fun getAudioFilesByArtist(artist: String): Flow<List<CachedAudioFileEntity>>
 
     /**
      * Gets audio files by artist name (one-shot).
+     * Uses pre-computed sortAlbum/sortTitle columns + composite index for efficient sorting.
      */
-    @Query("SELECT * FROM cached_audio_files WHERE artist = :artist ORDER BY COALESCE(album, ''), trackNumber ASC, COALESCE(title, name) ASC")
+    @Query("SELECT * FROM cached_audio_files WHERE artist = :artist ORDER BY sortAlbum ASC, trackNumber ASC, sortTitle ASC")
     suspend fun getAudioFilesByArtistOnce(artist: String): List<CachedAudioFileEntity>
     
     // ==================== Paging Support ====================
     
     /**
      * Gets paged audio files for large libraries.
+     * Uses pre-computed sortTitle column for B-tree index usage.
      * @param offset Starting position (0-based)
      * @param limit Number of items per page
      */
-    @Query("SELECT * FROM cached_audio_files ORDER BY COALESCE(title, name) ASC LIMIT :limit OFFSET :offset")
+    @Query("SELECT * FROM cached_audio_files ORDER BY sortTitle ASC LIMIT :limit OFFSET :offset")
     suspend fun getAudioFilesPaged(offset: Int, limit: Int): List<CachedAudioFileEntity>
     
     /**
@@ -72,21 +77,22 @@ interface CachedAudioFileDao {
     
     /**
      * Gets paged audio files with filtering by directory whitelist.
-     * Uses GLOB instead of LIKE to avoid % and _ being interpreted as wildcards.
+     * Uses range query (>= / <) instead of GLOB for B-tree index usage.
+     * Uses pre-computed sortTitle column for B-tree index usage.
      */
     @Query("""
         SELECT * FROM cached_audio_files 
-        WHERE path GLOB :directoryPath || '*'
-        ORDER BY COALESCE(title, name) ASC 
+        WHERE path >= :directoryPath AND path < :directoryPath || 'zzzzzzzz'
+        ORDER BY sortTitle ASC 
         LIMIT :limit OFFSET :offset
     """)
     suspend fun getAudioFilesPagedByDirectory(directoryPath: String, offset: Int, limit: Int): List<CachedAudioFileEntity>
     
     /**
      * Gets total count with directory filtering.
-     * Uses GLOB instead of LIKE to avoid % and _ being interpreted as wildcards.
+     * Uses range query (>= / <) instead of GLOB for B-tree index usage.
      */
-    @Query("SELECT COUNT(*) FROM cached_audio_files WHERE path GLOB :directoryPath || '*'")
+    @Query("SELECT COUNT(*) FROM cached_audio_files WHERE path >= :directoryPath AND path < :directoryPath || 'zzzzzzzz'")
     suspend fun getTotalCountByDirectory(directoryPath: String): Int
     
     /**
@@ -104,7 +110,7 @@ interface CachedAudioFileDao {
         SELECT cached_audio_files.* FROM cached_audio_files
         JOIN cached_audio_files_fts ON cached_audio_files.rowid = cached_audio_files_fts.rowid
         WHERE cached_audio_files_fts MATCH :query || '*'
-        ORDER BY COALESCE(cached_audio_files.title, cached_audio_files.name) ASC
+        ORDER BY cached_audio_files.sortTitle ASC
     """)
     fun searchAudioFiles(query: String): Flow<List<CachedAudioFileEntity>>
     
