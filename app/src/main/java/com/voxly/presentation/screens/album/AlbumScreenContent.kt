@@ -64,7 +64,9 @@ import com.voxly.R
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.presentation.components.LibraryRefreshBox
+import com.voxly.presentation.components.LocalBottomBarVisibilityController
 import com.voxly.presentation.components.SortMenuButton
+import com.voxly.presentation.components.chainNestedScrollConnections
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
@@ -188,6 +190,17 @@ internal fun AlbumScreenContent(
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Get the bottom-bar visibility controller (provided by the host Scaffold via
+    // ProvideBottomBarVisibilityController). Chained on the Scaffold modifier below so the
+    // LazyVerticalGrid / LazyColumn scroll events inside AlbumTabContent drive it.
+    val bottomBarController = LocalBottomBarVisibilityController.current
+    val bottomBarNestedScroll = remember(bottomBarController) {
+        bottomBarController.nestedScrollConnection("Albums")
+    }
+    val chainedNestedScroll = remember(scrollBehavior, bottomBarNestedScroll) {
+        chainNestedScrollConnections(scrollBehavior.nestedScrollConnection, bottomBarNestedScroll)
+    }
+
     LaunchedEffect(Unit) {
         viewModel.scanError.collect { msg ->
             snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
@@ -195,7 +208,7 @@ internal fun AlbumScreenContent(
     }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = Modifier.nestedScroll(chainedNestedScroll),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             MediumTopAppBar(
@@ -331,14 +344,14 @@ internal fun AlbumTabContent(
                     animatedVisibilityScope = animatedVisibilityScope
                 )
             } else {
-                LazyVerticalGrid(
-                    state = gridState,
-                    columns = GridCells.Fixed(2),
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
-                    verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
-                ) {
+               LazyVerticalGrid(
+                   state = gridState,
+                    columns = GridCells.Adaptive(160.dp),
+                   modifier = Modifier.fillMaxSize(),
+                   contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                   horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp),
+                   verticalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)
+               ) {
                     items(
                         count = albums.size,
                         key = { index -> albumStableKey(albums[index]) }

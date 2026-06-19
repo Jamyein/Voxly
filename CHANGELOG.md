@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Floating bottom navigation bar now hides on scroll-down and reappears on scroll-up.**
+  The pill-shaped floating bottom bar (and the standard M3 NavigationBar
+  variant) now slides out of view when the user scrolls the active list
+  (Files / Albums / Artists) down, and slides back in when they scroll up.
+  The bar also re-appears whenever the user lands at the top of a list.
+  Implementation follows the official M3 app-bars pattern
+  (`kb://android/develop/ui/compose/components/app-bars`) — since M3 does not
+  ship a `BottomAppBarScrollBehavior` (only the top-app-bar variant), the
+  equivalent is wired by hand: a shared `BottomBarVisibilityController`
+  receives scroll deltas from each screen's `NestedScrollConnection` and
+  the `Scaffold`'s `bottomBar` slot wraps its content in
+  `AnimatedBottomBarContainer`, an `AnimatedVisibility`-based slide-in /
+  slide-out container. The collapsing top-app-bar scroll behavior is chained
+  with the new hide/show connection via `chainNestedScrollConnections`, so
+  both behaviors react to the same scroll gesture.
+
 ### Fixed
 
 - **Song list now updates immediately after editing metadata.**

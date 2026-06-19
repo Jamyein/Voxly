@@ -60,6 +60,8 @@ import com.voxly.core.util.Constants
 import com.voxly.data.local.FileSortOption
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.RootTab
+import com.voxly.presentation.components.LocalBottomBarVisibilityController
+import com.voxly.presentation.components.chainNestedScrollConnections
 import com.voxly.presentation.components.SearchBottomSheet
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.adaptive.EmptyDetailPane
@@ -69,6 +71,7 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
+import com.voxly.presentation.viewmodel.LibraryRefreshCoordinator
 import com.voxly.presentation.viewmodel.LibraryScanViewModel
 import com.voxly.presentation.viewmodel.LibrarySettingsViewModel
 import com.voxly.presentation.viewmodel.LibraryViewModel
@@ -94,6 +97,7 @@ fun FileBrowserAdaptiveScreen(
     modifier: Modifier = Modifier,
     viewModel: LibraryViewModel = hiltViewModel(),
     scanViewModel: LibraryScanViewModel = hiltViewModel(),
+    refreshCoordinator: LibraryRefreshCoordinator = hiltViewModel(),
     settingsViewModel: LibrarySettingsViewModel = hiltViewModel(),
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
@@ -112,7 +116,12 @@ fun FileBrowserAdaptiveScreen(
     ) { granted ->
         hasAudioPermission = granted
         if (granted) {
-            scanViewModel.refresh(forceRefresh = true)
+            // First-time permission grant runs a full rescan via the shared
+            // refresh path so Files / Albums / Artists all observe it. The
+            // version-cache bypass is not strictly needed here because we
+            // also pass forceRefresh=true, but we route through the
+            // coordinator for consistency.
+            refreshCoordinator.requestUserRefresh(forceRefresh = true)
         } else {
             Toast.makeText(
                 context,
@@ -160,6 +169,29 @@ fun FileBrowserAdaptiveScreen(
         derivedStateOf { listState.firstVisibleItemIndex > 0 }
     }
 
+    // Get the bottom-bar visibility controller (provided by the host Scaffold via
+    // ProvideBottomBarVisibilityController). We chain a SECOND NestedScrollConnection on
+    // top of the collapsing top-app-bar connection so both the top bar collapse and the
+    // bottom bar hide/show can be driven by the same scroll gesture.
+    val bottomBarController = LocalBottomBarVisibilityController.current
+    val bottomBarScreenId = "FileBrowser"
+    val bottomBarNestedScroll = remember(bottomBarController, bottomBarScreenId) {
+        bottomBarController.nestedScrollConnection(bottomBarScreenId)
+    }
+    // Chain the collapsing top-app-bar connection with the bottom-bar hide/show connection
+    // so a single scroll gesture drives both. Compose's Modifier.nestedScroll only takes one
+    // connection, so we wrap them.
+    val chainedNestedScroll = remember(scrollBehavior, bottomBarNestedScroll) {
+        chainNestedScrollConnections(scrollBehavior.nestedScrollConnection, bottomBarNestedScroll)
+    }
+
+    // Pin the bar visible when the user is at the top of the list — they came to the top
+    // intentionally (FAB tap, system back, etc.) and we should not hide the bar on the next
+    // down-flick because that direction will read as "downward scroll" once content moves.
+    LaunchedEffect(canScrollToTop) {
+        bottomBarController.setForcedVisible(!canScrollToTop)
+    }
+
     var fileSwitchCounter by remember { mutableIntStateOf(0) }
     val isSinglePane = navigator.scaffoldValue.primary == PaneAdaptedValue.Hidden
     val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
@@ -203,7 +235,7 @@ fun FileBrowserAdaptiveScreen(
                     isInitialLoad = isInitialLoad,
                     hasAudioPermission = hasAudioPermission,
                     onRequestAudioPermission = { requestAudioPermission.launch(audioPermission) },
-                    onRefresh = { scanViewModel.refresh() },
+                    onRefresh = { refreshCoordinator.requestUserRefresh() },
                     onToggleRootTab = {
                         val newTab = if (effectiveRootTab == RootTab.DIRECTORIES)
                             RootTab.ALL.name
@@ -269,7 +301,7 @@ fun FileBrowserAdaptiveScreen(
                 )
             }
         },
-        modifier = modifier.nestedScroll(scrollBehavior.nestedScrollConnection)
+        modifier = modifier.nestedScroll(chainedNestedScroll)
     )
 
     if (showSearchSheet) {

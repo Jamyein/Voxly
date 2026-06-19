@@ -48,6 +48,8 @@ import com.voxly.R
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.ArtistListItemState
 import com.voxly.presentation.components.LibraryRefreshBox
+import com.voxly.presentation.components.LocalBottomBarVisibilityController
+import com.voxly.presentation.components.chainNestedScrollConnections
 import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.ArtistViewModel
@@ -72,6 +74,17 @@ internal fun ArtistScreenContent(
     val listState = rememberLazyListState()
     val snackbarHostState = remember { SnackbarHostState() }
 
+    // Get the bottom-bar visibility controller (provided by the host Scaffold via
+    // ProvideBottomBarVisibilityController). Chained on the Scaffold modifier below so the
+    // LazyColumn scroll events inside ArtistTabContent drive it.
+    val bottomBarController = LocalBottomBarVisibilityController.current
+    val bottomBarNestedScroll = remember(bottomBarController) {
+        bottomBarController.nestedScrollConnection("Artists")
+    }
+    val chainedNestedScroll = remember(scrollBehavior, bottomBarNestedScroll) {
+        chainNestedScrollConnections(scrollBehavior.nestedScrollConnection, bottomBarNestedScroll)
+    }
+
     LaunchedEffect(Unit) {
         viewModel.scanError.collect { msg ->
             snackbarHostState.showSnackbar(msg, duration = SnackbarDuration.Short)
@@ -85,7 +98,7 @@ internal fun ArtistScreenContent(
     }
 
     Scaffold(
-        modifier = Modifier.nestedScroll(scrollBehavior.nestedScrollConnection),
+        modifier = Modifier.nestedScroll(chainedNestedScroll),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             MediumTopAppBar(

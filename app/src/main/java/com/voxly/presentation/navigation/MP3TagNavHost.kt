@@ -73,9 +73,11 @@ import com.voxly.data.local.AlbumSortOption
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.icons.AppIcon
+import com.voxly.presentation.components.AnimatedBottomBarContainer
 import com.voxly.presentation.components.FloatingNavBarItem
 import com.voxly.presentation.components.FloatingToolbarNavigationBar
 import com.voxly.presentation.components.LibrarySearchSheet
+import com.voxly.presentation.components.ProvideBottomBarVisibilityController
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import com.voxly.presentation.screens.ReplayGainScannerScreen
 import com.voxly.presentation.screens.SettingsScreen
@@ -185,20 +187,27 @@ fun MP3TagNavHost() {
         val sharedTransitionScope = this@SharedTransitionLayout
 
         val navDisplayContent: @Composable () -> Unit = {
-            MP3TagNavDisplay(
-                topLevelBackStack = topLevelBackStack,
-                sharedTransitionScope = sharedTransitionScope,
-                libraryViewModel = libraryViewModel,
-                libraryScanViewModel = libraryScanViewModel,
-                librarySettingsViewModel = librarySettingsViewModel,
-                libraryBatchViewModel = libraryBatchViewModel,
-                pendingLyrics = pendingLyrics,
-                onPendingLyricsConsumed = { pendingLyrics = null },
-                pendingCoverArt = pendingCoverArt,
-                onPendingCoverArtConsumed = { pendingCoverArt = null },
-                onPendingLyricsSet = { pendingLyrics = it },
-                onPendingCoverArtSet = { pendingCoverArt = it }
-            )
+            // Provide the shared BottomBarVisibilityController to the whole nav subtree so
+            // inner screens (FileBrowser, Albums, Artists) can register a NestedScrollConnection
+            // that drives the bottomBar's hide-on-scroll behavior. The screenId changes when
+            // the top-level destination changes, which causes the controller to reset its
+            // scroll accumulator (see BottomBarVisibilityController.bind).
+            ProvideBottomBarVisibilityController(screenId = topLevelBackStack.topLevelKey.toString()) {
+                MP3TagNavDisplay(
+                    topLevelBackStack = topLevelBackStack,
+                    sharedTransitionScope = sharedTransitionScope,
+                    libraryViewModel = libraryViewModel,
+                    libraryScanViewModel = libraryScanViewModel,
+                    librarySettingsViewModel = librarySettingsViewModel,
+                    libraryBatchViewModel = libraryBatchViewModel,
+                    pendingLyrics = pendingLyrics,
+                    onPendingLyricsConsumed = { pendingLyrics = null },
+                    pendingCoverArt = pendingCoverArt,
+                    onPendingCoverArtConsumed = { pendingCoverArt = null },
+                    onPendingLyricsSet = { pendingLyrics = it },
+                    onPendingCoverArtSet = { pendingCoverArt = it }
+                )
+            }
         }
 
         val isFileSelected = topLevelRoute is FileBrowser
@@ -251,70 +260,77 @@ fun MP3TagNavHost() {
                 // Only show the bottom NavigationBar on compact widths. On Expanded we leave
                 // the slot empty (no composable) so Scaffold reserves zero bottom space.
                 if (!isExpandedWidth && showNavigationBar) {
-                    if (floatingBottomNavEnabled) {
-                        // M3E Floating Pill — use the custom FloatingNavBarItem (not
-                        // NavigationBarItem) so we suppress the icon ripple / gray
-                        // state-layer that M3 paints on selection. Each item paints its
-                        // WHOLE region as a capsule highlight when selected.
-                        FloatingToolbarNavigationBar {
-                            FloatingNavBarItem(
-                                selected = isFileSelected,
-                                onClick = onFileBrowserClick,
-                                icon = AppIcon.FolderOutlined.vector,
-                                selectedIcon = AppIcon.Folder.vector,
-                                label = "Files"
-                            )
-                            FloatingNavBarItem(
-                                selected = isAlbumsSelected,
-                                onClick = onAlbumsClick,
-                                icon = AppIcon.AlbumOutlined.vector,
-                                selectedIcon = AppIcon.Album.vector,
-                                label = "Albums"
-                            )
-                            FloatingNavBarItem(
-                                selected = isArtistsSelected,
-                                onClick = onArtistsClick,
-                                icon = AppIcon.ArtistOutlined.vector,
-                                selectedIcon = AppIcon.Artist.vector,
-                                label = "Artists"
-                            )
-                        }
-                    } else {
-                        // Standard M3 NavigationBar — built-in icon-only indicator pill.
-                        NavigationBar {
-                            NavigationBarItem(
-                                selected = isFileSelected,
-                                onClick = onFileBrowserClick,
-                                icon = {
-                                    Icon(
-                                        imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
-                                        contentDescription = "Files"
-                                    )
-                                },
-                                label = { Text("Files") }
-                            )
-                            NavigationBarItem(
-                                selected = isAlbumsSelected,
-                                onClick = onAlbumsClick,
-                                icon = {
-                                    Icon(
-                                        imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
-                                        contentDescription = "Albums"
-                                    )
-                                },
-                                label = { Text("Albums") }
-                            )
-                            NavigationBarItem(
-                                selected = isArtistsSelected,
-                                onClick = onArtistsClick,
-                                icon = {
-                                    Icon(
-                                        imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
-                                        contentDescription = "Artists"
-                                    )
-                                },
-                                label = { Text("Artists") }
-                            )
+                    // AnimatedBottomBarContainer reads the visibility state from the shared
+                    // BottomBarVisibilityController (provided by ProvideBottomBarVisibilityController
+                    // in navDisplayContent) and animates the slot's height in/out. When the bar
+                    // is hidden the Scaffold reserves no bottom space and the inner LazyColumn
+                    // gets more vertical room to scroll through.
+                    AnimatedBottomBarContainer {
+                        if (floatingBottomNavEnabled) {
+                            // M3E Floating Pill — use the custom FloatingNavBarItem (not
+                            // NavigationBarItem) so we suppress the icon ripple / gray
+                            // state-layer that M3 paints on selection. Each item paints its
+                            // WHOLE region as a capsule highlight when selected.
+                            FloatingToolbarNavigationBar {
+                                FloatingNavBarItem(
+                                    selected = isFileSelected,
+                                    onClick = onFileBrowserClick,
+                                    icon = AppIcon.FolderOutlined.vector,
+                                    selectedIcon = AppIcon.Folder.vector,
+                                    label = "Files"
+                                )
+                                FloatingNavBarItem(
+                                    selected = isAlbumsSelected,
+                                    onClick = onAlbumsClick,
+                                    icon = AppIcon.AlbumOutlined.vector,
+                                    selectedIcon = AppIcon.Album.vector,
+                                    label = "Albums"
+                                )
+                                FloatingNavBarItem(
+                                    selected = isArtistsSelected,
+                                    onClick = onArtistsClick,
+                                    icon = AppIcon.ArtistOutlined.vector,
+                                    selectedIcon = AppIcon.Artist.vector,
+                                    label = "Artists"
+                                )
+                            }
+                        } else {
+                            // Standard M3 NavigationBar — built-in icon-only indicator pill.
+                            NavigationBar {
+                                NavigationBarItem(
+                                    selected = isFileSelected,
+                                    onClick = onFileBrowserClick,
+                                    icon = {
+                                        Icon(
+                                            imageVector = if (isFileSelected) AppIcon.Folder.vector else AppIcon.FolderOutlined.vector,
+                                            contentDescription = "Files"
+                                        )
+                                    },
+                                    label = { Text("Files") }
+                                )
+                                NavigationBarItem(
+                                    selected = isAlbumsSelected,
+                                    onClick = onAlbumsClick,
+                                    icon = {
+                                        Icon(
+                                            imageVector = if (isAlbumsSelected) AppIcon.Album.vector else AppIcon.AlbumOutlined.vector,
+                                            contentDescription = "Albums"
+                                        )
+                                    },
+                                    label = { Text("Albums") }
+                                )
+                                NavigationBarItem(
+                                    selected = isArtistsSelected,
+                                    onClick = onArtistsClick,
+                                    icon = {
+                                        Icon(
+                                            imageVector = if (isArtistsSelected) AppIcon.Artist.vector else AppIcon.ArtistOutlined.vector,
+                                            contentDescription = "Artists"
+                                        )
+                                    },
+                                    label = { Text("Artists") }
+                                )
+                            }
                         }
                     }
                 }
