@@ -39,6 +39,8 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -92,6 +94,10 @@ class AudioFileScanner @Inject constructor(
     companion object {
         private const val TAG = "AudioFileScanner"
 
+        /** Timeout for WhileSubscribed on cachedAudioFilesStateFlow. Keeps the upstream
+         *  Room flow warm across screen navigations without holding it forever. */
+        private const val STATE_FLOW_TIMEOUT_MS = 5_000L
+
         /** Collator for Chinese pinyin sorting */
         private val chineseCollator = SortUtil.chineseCollator
 
@@ -99,21 +105,45 @@ class AudioFileScanner @Inject constructor(
             com.voxly.domain.model.parseMediaStoreTrackField(value)
     }
 
-    // Delegate albums/artists/filteredFiles to aggregator
+    // Delegate albums/artists to aggregator
     val albums: StateFlow<List<AlbumGroup>> = albumArtistAggregator.albums
     val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = albumArtistAggregator.albumsBySort
     val artists: StateFlow<List<ArtistGroup>> = albumArtistAggregator.artists
-    val filteredFiles: StateFlow<List<AudioFile>> = albumArtistAggregator.filteredFiles
     val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = albumArtistAggregator.albumDiff
     val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = albumArtistAggregator.artistDiff
 
     private val scanMutex = Mutex()
 
-    // Raw cached audio files from database
+    // Raw cached audio files from database (cold Flow; see [cachedAudioFilesStateFlow]
+    // for the hot StateFlow variant recommended for UI subscribers).
+    @Deprecated(
+        "Cold Flow triggers re-mapping on each subscription. Use cachedAudioFilesStateFlow for UI consumers."
+    )
     val cachedAudioFilesFlow: Flow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
         .catch { e ->
             Timber.e(e, "Error observing cached audio files")
         }
+
+    /**
+     * Hot [StateFlow] view of [cachedAudioFilesFlow] backed by `applicationScope`.
+     *
+     * Files/Albums/Artists screens all subscribe through this flow instead of
+     * a cold Flow, so Room emissions fan out to multiple collectors without
+     * re-running the entity-to-AudioFile mapping on every subscription. The
+     * `WhileSubscribed(5s)` policy keeps the upstream warm across screen
+     * navigations but tears it down once the library leaves the foreground for
+     * a meaningful interval — prevents the in-process Room Flow from holding
+     * large lists in memory permanently.
+     */
+    val cachedAudioFilesStateFlow: StateFlow<List<AudioFile>> = libraryCache.getCachedAudioFiles()
+        .catch { e ->
+            Timber.e(e, "Error observing cached audio files")
+        }
+        .stateIn(
+            scope = applicationScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = emptyList()
+        )
 
     /**
      * Get cached audio files (from Room database).
@@ -200,9 +230,20 @@ class AudioFileScanner @Inject constructor(
 
     /**
      * Loads audio files - compatibility method for existing code.
+     *
      * ALWAYS uses cached data if available. Never triggers a scan.
-     * For explicit scans, use scan() directly.
+     * For explicit scans, use [scan] directly.
+     *
+     * @deprecated Short-circuits on cache hits and silently skips the scan path,
+     *   which broke user-initiated pull-to-refresh (issue: Files / Albums /
+     *   Artists pages did not refresh after the cache was populated). Callers
+     *   that want to trigger a scan must call `scan(incremental=true, forceRefresh=false)`
+     *   directly. Retained for one release cycle to surface any external
+     *   callers via the deprecation warning before removal.
      */
+    @Deprecated(
+        "Short-circuits on cache hits; call scan(incremental=..., forceRefresh=...) directly when you want to scan."
+    )
     suspend fun loadAudioFiles(isIncremental: Boolean = false): List<AudioFile> = scanMutex.withLock {
         val hasCached = hasCachedData() && getCachedFileCount() > 0
         if (hasCached) {
@@ -297,10 +338,12 @@ class AudioFileScanner @Inject constructor(
             try {
                 val cached = libraryCache.getCachedAudioFilesOnce()
                 val needsEnrichment = cached.filter { audioFile ->
-                    audioFile.metadata.year.isNullOrBlank() || audioFile.sampleRate == 0
+                    audioFile.metadata.year.isNullOrBlank() ||
+                        audioFile.sampleRate == 0 ||
+                        audioFile.metadata.album.isNullOrBlank()
                 }
                 if (needsEnrichment.isEmpty()) {
-                    Timber.d(TAG, "No files need year/sampleRate backfill")
+                    Timber.d(TAG, "No files need year/sampleRate/album backfill")
                     return@launch
                 }
 

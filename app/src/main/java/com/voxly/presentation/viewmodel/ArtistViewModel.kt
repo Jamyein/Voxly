@@ -89,10 +89,17 @@ class ArtistViewModel @Inject constructor(
      * Request a library refresh via [LibraryDataHolder]. Bursts are
      * deduplicated by the holder's conflated SharedFlow + the collector's
      * `collectLatest`.
+     *
+     * `bypassVersionCache = true` ensures the user-visible spinner always
+     * corresponds to a real scan attempt, instead of returning early when
+     * the MediaStore version has not changed since the last scan.
      */
     fun refresh(forceRefresh: Boolean = false) {
         Timber.tag("Voxly").i("ArtistViewModel refresh -> LibraryDataHolder")
-        libraryDataHolder.requestRefresh(forceRefresh)
+        libraryDataHolder.requestRefresh(
+            forceRefresh = forceRefresh,
+            bypassVersionCache = true,
+        )
     }
 
 

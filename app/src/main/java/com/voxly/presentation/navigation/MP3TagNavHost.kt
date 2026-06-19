@@ -42,6 +42,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.window.core.layout.WindowSizeClass
 import kotlinx.coroutines.launch
@@ -53,6 +54,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -187,27 +189,25 @@ fun MP3TagNavHost() {
         val sharedTransitionScope = this@SharedTransitionLayout
 
         val navDisplayContent: @Composable () -> Unit = {
-            // Provide the shared BottomBarVisibilityController to the whole nav subtree so
-            // inner screens (FileBrowser, Albums, Artists) can register a NestedScrollConnection
-            // that drives the bottomBar's hide-on-scroll behavior. The screenId changes when
-            // the top-level destination changes, which causes the controller to reset its
-            // scroll accumulator (see BottomBarVisibilityController.bind).
-            ProvideBottomBarVisibilityController(screenId = topLevelBackStack.topLevelKey.toString()) {
-                MP3TagNavDisplay(
-                    topLevelBackStack = topLevelBackStack,
-                    sharedTransitionScope = sharedTransitionScope,
-                    libraryViewModel = libraryViewModel,
-                    libraryScanViewModel = libraryScanViewModel,
-                    librarySettingsViewModel = librarySettingsViewModel,
-                    libraryBatchViewModel = libraryBatchViewModel,
-                    pendingLyrics = pendingLyrics,
-                    onPendingLyricsConsumed = { pendingLyrics = null },
-                    pendingCoverArt = pendingCoverArt,
-                    onPendingCoverArtConsumed = { pendingCoverArt = null },
-                    onPendingLyricsSet = { pendingLyrics = it },
-                    onPendingCoverArtSet = { pendingCoverArt = it }
-                )
-            }
+            // The shared BottomBarVisibilityController is provided by the outer wrapper that
+            // wraps the Scaffold below (see comment at the Scaffold call). Both the bottomBar
+            // slot (which reads `isVisible` to slide the bar in/out) and inner screens
+            // (FileBrowser, Albums, Artists — which register a NestedScrollConnection) need to
+            // resolve the controller, so it MUST sit above the Scaffold so both slots see it.
+            MP3TagNavDisplay(
+                topLevelBackStack = topLevelBackStack,
+                sharedTransitionScope = sharedTransitionScope,
+                libraryViewModel = libraryViewModel,
+                libraryScanViewModel = libraryScanViewModel,
+                librarySettingsViewModel = librarySettingsViewModel,
+                libraryBatchViewModel = libraryBatchViewModel,
+                pendingLyrics = pendingLyrics,
+                onPendingLyricsConsumed = { pendingLyrics = null },
+                pendingCoverArt = pendingCoverArt,
+                onPendingCoverArtConsumed = { pendingCoverArt = null },
+                onPendingLyricsSet = { pendingLyrics = it },
+                onPendingCoverArtSet = { pendingCoverArt = it }
+            )
         }
 
         val isFileSelected = topLevelRoute is FileBrowser
@@ -253,13 +253,28 @@ fun MP3TagNavHost() {
         val railState = rememberWideNavigationRailState()
         val railScope = rememberCoroutineScope()
 
-        Scaffold(
+        // Wrap the Scaffold so BOTH the bottomBar slot (which calls
+        // AnimatedBottomBarContainer and reads LocalBottomBarVisibilityController.current)
+        // AND the inner content subtree (where FileBrowser/Albums/Artists bind their
+        // NestedScrollConnection) can resolve the controller. The previous design wrapped
+        // only navDisplayContent (a child of the content slot), which meant the bottomBar
+        // slot crashed on paths that previously never rendered the bar — e.g. large-screen
+        // + floating bottom bar enabled. The screenId changes when the top-level destination
+        // changes, which causes the controller to reset its scroll accumulator
+        // (see BottomBarVisibilityController.bind).
+        ProvideBottomBarVisibilityController(screenId = topLevelBackStack.topLevelKey.toString()) {
+            Scaffold(
             containerColor = MaterialTheme.colorScheme.background,
             contentWindowInsets = WindowInsets(0, 0, 0, 0),
             bottomBar = {
                 // Only show the bottom NavigationBar on compact widths. On Expanded we leave
                 // the slot empty (no composable) so Scaffold reserves zero bottom space.
-                if (!isExpandedWidth && showNavigationBar) {
+                // 大屏 + 悬浮底栏开启 → 走底部栏路径(覆盖 NavigationRail);
+                // 否则保持原行为:仅在非大屏显示底部栏,大屏留空给 rail 用。
+                val showBottomBar = showNavigationBar && (
+                    !isExpandedWidth || floatingBottomNavEnabled
+                )
+                if (showBottomBar) {
                     // AnimatedBottomBarContainer reads the visibility state from the shared
                     // BottomBarVisibilityController (provided by ProvideBottomBarVisibilityController
                     // in navDisplayContent) and animates the slot's height in/out. When the bar
@@ -343,19 +358,25 @@ fun MP3TagNavHost() {
             // window insets (status bar via TopAppBar, gesture nav via contentPadding on lists).
             if (isExpandedWidth) {
                 Row(modifier = Modifier.fillMaxSize()) {
-                    if (showNavigationBar) {
+                    // 大屏 + 悬浮底栏开启 → 不渲染 rail,把整行让给内容
+                    if (showNavigationBar && !floatingBottomNavEnabled) {
                         ModalWideNavigationRail(
                             state = railState,
                             header = {
-                                IconButton(onClick = { railScope.launch { railState.toggle() } }) {
-                                    Icon(
-                                        imageVector = if (railState.targetValue == WideNavigationRailValue.Expanded) {
-                                            Icons.AutoMirrored.Filled.MenuOpen
-                                        } else {
-                                            Icons.Filled.Menu
-                                        },
-                                        contentDescription = "Toggle navigation rail"
-                                    )
+                                Box(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    contentAlignment = Alignment.Center,
+                                ) {
+                                    IconButton(onClick = { railScope.launch { railState.toggle() } }) {
+                                        Icon(
+                                            imageVector = if (railState.targetValue == WideNavigationRailValue.Expanded) {
+                                                Icons.AutoMirrored.Filled.MenuOpen
+                                            } else {
+                                                Icons.Filled.Menu
+                                            },
+                                            contentDescription = "Toggle navigation rail"
+                                        )
+                                    }
                                 }
                             }
                         ) {
@@ -417,8 +438,10 @@ fun MP3TagNavHost() {
                 }
             }
         }
-    }
-}
+        }   // closes ProvideBottomBarVisibilityController
+    }       // closes SharedTransitionLayout
+}           // closes MP3TagNavHost
+
 
 @OptIn(
     ExperimentalSharedTransitionApi::class,

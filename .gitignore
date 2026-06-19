@@ -93,6 +93,8 @@ local.properties
 !README*.md
 !readme*.md
 !CHANGELOG.md
+!lesson.md
 
 *.md
 /app/github
+*.xml

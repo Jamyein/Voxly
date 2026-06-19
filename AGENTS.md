@@ -25,6 +25,7 @@ When any error occurs (build break, crash, test failure, wrong behavior):
 1. **Read `lesson.md`** — must load it into context with the Read tool before any code changes. Skipping this will re-introduce known errors.
 2. **Review AGENTS.md versions table** — verify Compose BOM / Kotlin / AGP versions match `build.gradle.kts`
 3. **Lint is non-blocking**: `abortOnError=false`. Ignore lint warnings; focus on compile errors only.
+4. This file `repomix-output.xml` contains all the files in the repository combined into one. If user want to refactor the code, please review it first.
 
 **During the session, on every error:**
 - Append root cause + rule to `lesson.md` immediately (before fixing). See protocol above.

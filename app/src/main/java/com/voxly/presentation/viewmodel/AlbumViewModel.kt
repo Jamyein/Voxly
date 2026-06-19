@@ -106,10 +106,17 @@ class AlbumViewModel @Inject constructor(
      * performed by [LibraryScanViewModel] (single fan-out point); this method
      * is non-suspending and returns immediately. Bursts are deduplicated by
      * the holder's conflated SharedFlow + the collector's `collectLatest`.
+     *
+     * `bypassVersionCache = true` ensures the user-visible spinner always
+     * corresponds to a real scan attempt, instead of returning early when
+     * the MediaStore version has not changed since the last scan.
      */
     fun refresh(forceRefresh: Boolean = false) {
         Timber.tag("Voxly").i("AlbumViewModel refresh -> LibraryDataHolder")
-        libraryDataHolder.requestRefresh(forceRefresh)
+        libraryDataHolder.requestRefresh(
+            forceRefresh = forceRefresh,
+            bypassVersionCache = true,
+        )
     }
 
     /**

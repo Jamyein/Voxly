@@ -13,6 +13,21 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
+ * Refresh request payload propagated through [LibraryDataHolder.refreshTriggers].
+ *
+ * @property forceRefresh True to ignore cache and perform a full rescan.
+ * @property bypassVersionCache True to skip the MediaStore version short-circuit
+ *   that [LibraryScanViewModel] normally applies. Set true for user-initiated
+ *   pull-to-refresh (the user is explicitly asking for a fresh scan); leave
+ *   false for system-triggered refreshes (MediaStore observer, periodic worker,
+ *   SAF tree walker) so they stay cheap when nothing changed.
+ */
+data class RefreshRequest(
+    val forceRefresh: Boolean,
+    val bypassVersionCache: Boolean,
+)
+
+/**
  * Singleton holder for library-wide shared scan coordination.
  * Provides:
  *  - a conflated [refreshTriggers] flow that [LibraryScanViewModel] collects
@@ -33,14 +48,14 @@ import kotlinx.coroutines.flow.asStateFlow
 @Singleton
 class LibraryDataHolder @Inject constructor() {
 
-    private val _refreshTrigger = MutableSharedFlow<Boolean>(
+    private val _refreshTrigger = MutableSharedFlow<RefreshRequest>(
         replay = 0,
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST
     )
 
     /** Composable trigger flow — see class kdoc for conflation policy. */
-    fun refreshTriggers(): Flow<Boolean> = _refreshTrigger
+    fun refreshTriggers(): Flow<RefreshRequest> = _refreshTrigger
 
     /**
      * Active-scan refcount. Spinner is on while > 0. Each scan lifetime
@@ -71,9 +86,19 @@ class LibraryDataHolder @Inject constructor() {
      * Convenience method to trigger refresh from any ViewModel.
      * Uses tryEmit but with the buffer-overflow policy we never lose requests
      * here -- the buffer is sized to keep at least one pending value.
+     *
+     * @param forceRefresh Full rescan, ignores cache.
+     * @param bypassVersionCache Skip the MediaStore version short-circuit.
+     *   Pass `true` from user-initiated pull-to-refresh so the spinner always
+     *   corresponds to a real scan attempt. System-driven refreshes
+     *   (MediaStore observer, periodic worker, SAF walker) keep the default
+     *   `false` to stay cheap when MediaStore has not changed.
      */
-    fun requestRefresh(forceRefresh: Boolean = false) {
-        _refreshTrigger.tryEmit(forceRefresh)
+    fun requestRefresh(
+        forceRefresh: Boolean = false,
+        bypassVersionCache: Boolean = false,
+    ) {
+        _refreshTrigger.tryEmit(RefreshRequest(forceRefresh, bypassVersionCache))
     }
 
     /** Scan error events — UI layers collect and show via Snackbar. */

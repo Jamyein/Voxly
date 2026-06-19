@@ -124,8 +124,8 @@ class EnrichmentWorker @AssistedInject constructor(
                     metadata = cachedFile.metadata.copy(
                         title = cachedFile.metadata.title ?: lightweightResult.metadata.title,
                         artist = cachedFile.metadata.artist ?: lightweightResult.metadata.artist,
-                        album = cachedFile.metadata.album,
-                        albumArtist = cachedFile.metadata.albumArtist,
+                        album = cachedFile.metadata.album ?: lightweightResult.metadata.album,
+                        albumArtist = cachedFile.metadata.albumArtist ?: lightweightResult.metadata.albumArtist,
                         year = cachedFile.metadata.year ?: lightweightResult.metadata.year,
                         genre = cachedFile.metadata.genre ?: lightweightResult.metadata.genre,
                         composer = cachedFile.metadata.composer ?: lightweightResult.metadata.composer
@@ -139,8 +139,8 @@ class EnrichmentWorker @AssistedInject constructor(
                     metadata = cachedFile.metadata.copy(
                         title = cachedFile.metadata.title ?: complete?.metadata?.title,
                         artist = cachedFile.metadata.artist ?: complete?.metadata?.artist,
-                        album = cachedFile.metadata.album,
-                        albumArtist = cachedFile.metadata.albumArtist,
+                        album = cachedFile.metadata.album ?: complete?.metadata?.album,
+                        albumArtist = cachedFile.metadata.albumArtist ?: complete?.metadata?.albumArtist,
                         year = cachedFile.metadata.year ?: complete?.metadata?.year,
                         genre = cachedFile.metadata.genre ?: complete?.metadata?.genre,
                         composer = cachedFile.metadata.composer ?: complete?.metadata?.composer

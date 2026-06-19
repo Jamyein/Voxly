@@ -277,7 +277,13 @@ class ArtistDetailViewModel @AssistedInject constructor(
     fun refresh(forceRefresh: Boolean = false) {
         refreshJob?.cancel()
         refreshJob = viewModelScope.launch {
-            libraryDataHolder.requestRefresh(forceRefresh)
+            // bypassVersionCache = true: user-initiated refresh should always
+            // trigger a real scan attempt, not short-circuit on MediaStore
+            // version equality.
+            libraryDataHolder.requestRefresh(
+                forceRefresh = forceRefresh,
+                bypassVersionCache = true,
+            )
             loadArtist(navKey.artistName)
         }
     }

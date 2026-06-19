@@ -56,9 +56,6 @@ class AlbumArtistAggregator @Inject constructor(
     private val _artists = MutableStateFlow<List<ArtistGroup>>(emptyList())
     val artists: StateFlow<List<ArtistGroup>> = _artists.asStateFlow()
 
-    private val _filteredFiles = MutableStateFlow<List<AudioFile>>(emptyList())
-    val filteredFiles: StateFlow<List<AudioFile>> = _filteredFiles.asStateFlow()
-
     /**
      * Diff-based album list updates, modelled after Gramophone's IncrementalList.
      *
@@ -677,8 +674,6 @@ class AlbumArtistAggregator @Inject constructor(
             _artists.value = artistsList
             emitArtistDiff(artistsList)
         }
-
-        _filteredFiles.value = _albumsMap.value.values.flatMap { it.files }.distinctBy { it.path }
     }
 
     /**
@@ -764,7 +759,6 @@ class AlbumArtistAggregator @Inject constructor(
                 minDurationMs = config.minDurationMs
             )
         )
-        _filteredFiles.value = filtered
         buildAlbumsFromFiles(filtered)
         buildArtistsFromFiles(
             files = filtered,

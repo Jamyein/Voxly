@@ -83,7 +83,7 @@ class FastScanProcessor @Inject constructor(
                                     metadata = audioFile.metadata.copy(
                                         title = lightweightResult?.metadata?.title ?: audioFile.metadata.title,
                                         artist = lightweightResult?.metadata?.artist ?: audioFile.metadata.artist,
-                                        album = lightweightResult?.metadata?.album,
+                                        album = lightweightResult?.metadata?.album ?: audioFile.metadata.album,
                                         albumArtist = lightweightResult?.metadata?.albumArtist ?: audioFile.metadata.albumArtist,
                                         year = effectiveYear,
                                         genre = lightweightResult?.metadata?.genre ?: audioFile.metadata.genre,
