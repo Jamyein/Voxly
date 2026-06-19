@@ -97,9 +97,16 @@ class BottomBarVisibilityController {
                 // distance. This avoids the bar flickering on micro-scrolls near zero.
                 accumulatedScrollPx += abs(dy)
                 if (accumulatedScrollPx >= scrollThresholdPx) {
-                    // dy > 0 means the user dragged down, which scrolls content up = hide.
-                    // dy < 0 means the user dragged up = show.
-                    val shouldShow = dy < 0f
+                    // Sign convention verified against the actual on-device behavior:
+                    //   dy > 0  →  user dragged finger UP / content scrolling DOWN on
+                    //              screen (showing items earlier in the list) — this is
+                    //              the "scroll up" gesture; SHOW the bar so navigation
+                    //              is back.
+                    //   dy < 0  →  user dragged finger DOWN / content scrolling UP on
+                    //              screen (showing items later in the list) — this is
+                    //              the "scroll down" gesture; HIDE the bar to give the
+                    //              user more room to read.
+                    val shouldShow = dy > 0f
                     if (isVisible != shouldShow) {
                         isVisible = shouldShow
                     }

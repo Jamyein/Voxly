@@ -11,10 +11,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -50,7 +51,7 @@ import com.voxly.domain.model.ArtistListItemState
 import com.voxly.presentation.components.LibraryRefreshBox
 import com.voxly.presentation.components.LocalBottomBarVisibilityController
 import com.voxly.presentation.components.chainNestedScrollConnections
-import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
+import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.screens.filebrowser.getLeadingCharacter
 import com.voxly.presentation.viewmodel.ArtistViewModel
 import kotlinx.coroutines.launch
@@ -71,7 +72,7 @@ internal fun ArtistScreenContent(
     val coroutineScope = rememberCoroutineScope()
 
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
-    val listState = rememberLazyListState()
+    val gridState = rememberLazyGridState()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Get the bottom-bar visibility controller (provided by the host Scaffold via
@@ -109,7 +110,7 @@ internal fun ArtistScreenContent(
                             .pointerInput(Unit) {
                                 detectTapGestures(onDoubleTap = {
                                     coroutineScope.launch {
-                                        listState.animateScrollToItem(0)
+                                        gridState.animateScrollToItem(0)
                                     }
                                 })
                             }
@@ -159,7 +160,7 @@ internal fun ArtistScreenContent(
                         artists = artists,
                         artistListItems = artistListItems,
                         onArtistClick = onArtistClick,
-                        listState = listState,
+                        gridState = gridState,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope
                     )
@@ -174,16 +175,16 @@ internal fun ArtistTabContent(
     artists: List<ArtistGroup>,
     artistListItems: List<ArtistListItemState>,
     onArtistClick: (ArtistGroup) -> Unit,
-    listState: LazyListState? = null,
+    gridState: LazyGridState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val lazyListState = listState ?: rememberLazyListState()
-    
+    val lazyGridState = gridState ?: rememberLazyGridState()
+
     val artistMap = remember(artists) {
         artists.associateBy { it.name }
     }
-    
+
     val bubbleFormatter: ((Int) -> String) = remember(artistListItems.size) {
         { index: Int ->
             artistListItems.getOrNull(index)?.let { getLeadingCharacter(it.name) } ?: "#"
@@ -200,10 +201,12 @@ internal fun ArtistTabContent(
                 )
             }
         } else {
-            LazyColumn(
-                state = lazyListState,
+            LazyVerticalGrid(
+                state = lazyGridState,
+                columns = GridCells.Adaptive(minSize = 160.dp),
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(artistListItems, key = { it.name }) { listItem ->
@@ -211,7 +214,7 @@ internal fun ArtistTabContent(
                     val onItemClick = remember(targetArtist) {
                         { if (targetArtist != null) onArtistClick(targetArtist) }
                     }
-                    ArtistListItem(
+                    ArtistGridItem(
                         artist = listItem,
                         onClick = onItemClick,
                         sharedTransitionScope = sharedTransitionScope,
@@ -222,11 +225,12 @@ internal fun ArtistTabContent(
         }
 
         if (artistListItems.isNotEmpty()) {
-            LazyColumnScrollbar(
-                state = lazyListState,
+            LazyVerticalGridScrollbar(
+                state = lazyGridState,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp),
+                showBubble = true,
                 bubbleFormatter = bubbleFormatter
             )
         }

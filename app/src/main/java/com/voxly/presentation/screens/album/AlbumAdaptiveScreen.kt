@@ -8,10 +8,12 @@ import androidx.compose.animation.core.SeekableTransitionState
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
+import androidx.window.core.layout.WindowSizeClass
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -50,6 +52,10 @@ fun AlbumAdaptiveScreen(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val coroutineScope = rememberCoroutineScope()
+    val adaptiveInfo = currentWindowAdaptiveInfoV2()
+    val isExpandedWidth = adaptiveInfo.windowSizeClass.isWidthAtLeastBreakpoint(
+        WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND
+    )
 
     val navigator = rememberListDetailPaneScaffoldNavigator<AlbumGroup>()
 
@@ -65,8 +71,8 @@ fun AlbumAdaptiveScreen(
 
     val canCloseDetailPane = !isSinglePane && navigator.currentDestination != null
 
-    LaunchedEffect(isSinglePane, onNavigateToAlbumDetail) {
-        if (isSinglePane && onNavigateToAlbumDetail != null) {
+    LaunchedEffect(isSinglePane, isExpandedWidth, onNavigateToAlbumDetail) {
+        if (!isExpandedWidth && isSinglePane && onNavigateToAlbumDetail != null) {
             navigator.navigateTo(ListDetailPaneScaffoldRole.List, null)
         }
     }
@@ -89,12 +95,12 @@ fun AlbumAdaptiveScreen(
         }
     }
 
-    val onAlbumClick: (AlbumGroup) -> Unit = remember(isSinglePane, onNavigateToAlbumDetail, coroutineScope) {
+    val onAlbumClick: (AlbumGroup) -> Unit = remember(isSinglePane, isExpandedWidth, onNavigateToAlbumDetail, coroutineScope) {
         { album ->
             coroutineScope.launch {
                 selectedFileForEditing = null
                 fileSwitchCounter++
-                if (isSinglePane && onNavigateToAlbumDetail != null) {
+                if ((isSinglePane || isExpandedWidth) && onNavigateToAlbumDetail != null) {
                     onNavigateToAlbumDetail(album)
                 } else {
                     selectedAlbum = album
@@ -104,20 +110,30 @@ fun AlbumAdaptiveScreen(
         }
     }
 
-    ListDetailPaneScaffold(
-        directive = navigator.scaffoldDirective,
-        value = navigator.scaffoldValue,
-        listPane = {
-            AlbumScreenContent(
-                viewModel = viewModel,
-                onAlbumClick = onAlbumClick,
-                onShowSearchSheet = { showSearchSheet = true },
-                modifier = Modifier.fillMaxSize(),
-                sharedTransitionScope = sharedTransitionScope,
-                animatedVisibilityScope = animatedVisibilityScope
-            )
-        },
-        detailPane = {
+    if (isExpandedWidth) {
+        AlbumScreenContent(
+            viewModel = viewModel,
+            onAlbumClick = onAlbumClick,
+            onShowSearchSheet = { showSearchSheet = true },
+            modifier = modifier.fillMaxSize(),
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
+        )
+    } else {
+        ListDetailPaneScaffold(
+            directive = navigator.scaffoldDirective,
+            value = navigator.scaffoldValue,
+            listPane = {
+                AlbumScreenContent(
+                    viewModel = viewModel,
+                    onAlbumClick = onAlbumClick,
+                    onShowSearchSheet = { showSearchSheet = true },
+                    modifier = Modifier.fillMaxSize(),
+                    sharedTransitionScope = sharedTransitionScope,
+                    animatedVisibilityScope = animatedVisibilityScope
+                )
+            },
+            detailPane = {
             AnimatedPane {
                 if (selectedFileForEditing != null) {
                     val selectedFile = selectedFileForEditing!!
@@ -168,7 +184,7 @@ fun AlbumAdaptiveScreen(
                                     }
                                 },
                                 onNavigateToMetadata = { filePath, coverTag ->
-                                    if (isSinglePane && onNavigateToMetadata != null) {
+                                    if ((isSinglePane || isExpandedWidth) && onNavigateToMetadata != null) {
                                         onNavigateToMetadata(filePath, coverTag)
                                     } else {
                                         fileSwitchCounter++
@@ -190,6 +206,7 @@ fun AlbumAdaptiveScreen(
         },
         modifier = modifier
     )
+    }
 
     LibrarySearchSheet(
         visible = showSearchSheet,

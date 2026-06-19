@@ -9,10 +9,12 @@ import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
@@ -25,7 +27,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
-import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
+import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
 internal fun getLeadingCharacter(text: String): String {
@@ -47,11 +49,11 @@ internal fun AllAudiosTabContent(
     isRefreshing: Boolean,
     isInitialLoad: Boolean = false,
     onRefresh: () -> Unit,
-    listState: LazyListState? = null,
+    listState: LazyGridState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
-    val lazyListState = listState ?: rememberLazyListState()
+    val lazyGridState = listState ?: rememberLazyGridState()
     val pullToRefreshState = rememberPullToRefreshState()
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         PullToRefreshBox(
@@ -78,11 +80,13 @@ internal fun AllAudiosTabContent(
                     )
                 }
             } else {
-                LazyColumn(
-                    state = lazyListState,
+                LazyVerticalGrid(
+                    state = lazyGridState,
+                    columns = GridCells.Adaptive(minSize = 300.dp),
                     modifier = Modifier.fillMaxSize(),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(audios, key = { it.path }) { audioFile ->
                         val isSelected = audioFile.path in selectedFiles
@@ -108,11 +112,12 @@ internal fun AllAudiosTabContent(
         }
         
         if (audios.isNotEmpty()) {
-            LazyColumnScrollbar(
-                state = lazyListState,
+            LazyVerticalGridScrollbar(
+                state = lazyGridState,
                 modifier = Modifier
                     .align(Alignment.CenterEnd)
                     .padding(end = 4.dp),
+                showBubble = true,
                 bubbleFormatter = { index ->
                     audios.getOrNull(index)?.let { audio ->
                         getLeadingCharacter(audio.metadata.getDisplayTitle(audio.name))

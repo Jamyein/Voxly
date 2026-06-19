@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.ArtistListItemState
+import androidx.compose.foundation.layout.aspectRatio
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createArtistAvatarSharedElementKey
@@ -115,5 +116,89 @@ internal fun ArtistListItem(
             style = MaterialTheme.typography.labelSmall,
             color = MaterialTheme.colorScheme.outline
         )
+    }
+}
+
+@OptIn(ExperimentalMaterial3ExpressiveApi::class, ExperimentalSharedTransitionApi::class)
+@Composable
+internal fun ArtistGridItem(
+    artist: ArtistListItemState,
+    onClick: () -> Unit,
+    sharedTransitionScope: SharedTransitionScope? = null,
+    animatedVisibilityScope: AnimatedVisibilityScope? = null
+) {
+    val avatarKey = createArtistAvatarSharedElementKey(artist.name)
+    val artistNameKey = createArtistNameSharedElementKey(artist.name)
+    val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
+    val albumCountText = stringResource(R.string.album_count, artist.albumCount)
+    val trackCountText = stringResource(R.string.track_count, artist.trackCount)
+    val infoText = remember(albumCountText, trackCountText) { "$albumCountText · $trackCountText" }
+
+    Column(
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Box(
+            modifier = if (canUseSharedTransition) {
+                with(sharedTransitionScope) {
+                    Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(1f)
+                        .sharedElement(
+                            rememberSharedContentState(key = avatarKey),
+                            animatedVisibilityScope = animatedVisibilityScope
+                        )
+                        .clickable(onClick = onClick)
+                        .clip(MaterialShapes.Sunny.toShape())
+                }
+            } else {
+                Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clickable(onClick = onClick)
+                    .clip(MaterialShapes.Sunny.toShape())
+            },
+            contentAlignment = Alignment.Center
+        ) {
+            if (!artist.coverPath.isNullOrBlank()) {
+                AlbumArtImage(
+                    filePath = artist.coverPath,
+                    albumId = artist.coverAlbumId,
+                    contentDescription = null,
+                    size = 200.dp,
+                    modifier = Modifier.fillMaxSize(),
+                    clipShape = MaterialShapes.Sunny.toShape()
+                )
+            } else {
+                DefaultAlbumArtPlaceholder(size = 200.dp)
+            }
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = artist.name,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = if (canUseSharedTransition) {
+                    with(sharedTransitionScope) {
+                        Modifier.sharedElement(
+                            rememberSharedContentState(key = artistNameKey),
+                            animatedVisibilityScope = animatedVisibilityScope,
+                            boundsTransform = { _, _ -> spring() }
+                        )
+                    }
+                } else Modifier
+            )
+            Text(
+                text = infoText,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
     }
 }

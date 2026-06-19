@@ -9,31 +9,23 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItemDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SegmentedListItem
 import androidx.compose.material3.SnackbarDuration
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -67,7 +59,6 @@ import com.voxly.presentation.components.LibraryRefreshBox
 import com.voxly.presentation.components.LocalBottomBarVisibilityController
 import com.voxly.presentation.components.SortMenuButton
 import com.voxly.presentation.components.chainNestedScrollConnections
-import com.voxly.presentation.components.scrollbar.LazyColumnScrollbar
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
@@ -293,7 +284,6 @@ internal fun AlbumScreenContent(
 internal fun AlbumTabContent(
     albums: List<AlbumGroup>,
     onAlbumClick: (AlbumGroup) -> Unit,
-    listState: LazyListState? = null,
     scrollToTopTrigger: Int = 0,
     sortOption: AlbumSortOption? = null,
     savedScrollPosition: com.voxly.presentation.viewmodel.ScrollPosition? = null,
@@ -384,7 +374,7 @@ internal fun AlbumTabContent(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3ExpressiveApi::class)
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 internal fun AlbumYearGroupedContent(
     albums: List<AlbumGroup>,
@@ -397,24 +387,24 @@ internal fun AlbumYearGroupedContent(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     // Restore scroll position
-    val listState = rememberLazyListState(
+    val gridState = rememberLazyGridState(
         initialFirstVisibleItemIndex = savedScrollPosition?.index ?: 0,
         initialFirstVisibleItemScrollOffset = savedScrollPosition?.offset ?: 0
     )
 
     LaunchedEffect(scrollToTopTrigger) {
         if (scrollToTopTrigger > 0) {
-            listState.scrollToItem(0)
+            gridState.scrollToItem(0)
         }
     }
 
     // Save scroll position when leaving
     DisposableEffect(albums.size) {
         onDispose {
-            onSaveScrollPosition?.invoke(listState.firstVisibleItemIndex, listState.firstVisibleItemScrollOffset)
+            onSaveScrollPosition?.invoke(gridState.firstVisibleItemIndex, gridState.firstVisibleItemScrollOffset)
         }
     }
-    
+
     val albumsByYear = remember(albums, isDescending) {
         albums.groupBy { album ->
             getAlbumDisplayYear(album) ?: 0
@@ -428,14 +418,19 @@ internal fun AlbumYearGroupedContent(
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
-            state = listState,
+        LazyVerticalGrid(
+            state = gridState,
+            columns = GridCells.Adaptive(160.dp),
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             yearGroups.forEach { yearGroup ->
-                item(key = "header_${yearGroup.year}") {
+                item(
+                    key = "header_${yearGroup.year}",
+                    span = { GridItemSpan(maxLineSpan) }
+                ) {
                     Text(
                         text = if (yearGroup.year == 0) "N/A" else yearGroup.year.toString(),
                         style = MaterialTheme.typography.titleMedium,
@@ -450,97 +445,18 @@ internal fun AlbumYearGroupedContent(
                 ) { albumIndex ->
                     val album = yearGroup.albums[albumIndex]
                     val onItemClick = remember(album) { { onAlbumClick(album) } }
-                    SegmentedListItem(
+                    AlbumGridItem(
+                        album = album,
                         onClick = onItemClick,
-                        shapes = ListItemDefaults.segmentedShapes(
-                            index = albumIndex,
-                            count = yearGroup.albums.size
-                        ),
-                        colors = ListItemDefaults.segmentedColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                        ),
-                        leadingContent = {
-                            val coverFile = album.coverFile()
-                            val albumCoverKey = createAlbumCoverSharedElementKey(album.name, album.albumArtist)
-                            AlbumArtWithSharedElement(
-                                filePath = coverFile?.path,
-                                albumId = coverFile?.mediaStoreAlbumId,
-                                sharedElementKey = albumCoverKey,
-                                size = 40.dp,
-                                sharedTransitionScope = sharedTransitionScope,
-                                animatedVisibilityScope = animatedVisibilityScope
-                            )
-                        },
-                        supportingContent = {
-                            val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
-                            val albumTitleKey = createAlbumTitleSharedElementKey(album.name, album.albumArtist)
-                            val albumArtistKey = album.albumArtist?.let { createAlbumArtistTextSharedElementKey(album.name, album.albumArtist) }
-                            val yearStr = getAlbumDisplayYearString(album)
-                            Column {
-                                Text(
-                                    text = album.name,
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = if (canUseSharedTransition) {
-                                        with(sharedTransitionScope) {
-                                            Modifier.sharedElement(
-                                                rememberSharedContentState(key = albumTitleKey),
-                                                animatedVisibilityScope = animatedVisibilityScope,
-                                                boundsTransform = { _, _ -> spring() }
-                                            )
-                                        }
-                                    } else Modifier
-                                )
-                                if (album.albumArtist != null) {
-                                    Text(
-                                        text = album.albumArtist,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = if (canUseSharedTransition && albumArtistKey != null) {
-                                            with(sharedTransitionScope) {
-                                                Modifier.sharedElement(
-                                                    rememberSharedContentState(key = albumArtistKey),
-                                                    animatedVisibilityScope = animatedVisibilityScope,
-                                                    boundsTransform = { _, _ -> spring() }
-                                                )
-                                            }
-                                        } else Modifier
-                                    )
-                                }
-                                if (yearStr != null) {
-                                    Text(
-                                        text = yearStr,
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.outline,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                }
-                            }
-                        },
-                        trailingContent = {
-                            Text(
-                                text = stringResource(R.string.track_count, album.files.size),
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.outline
-                            )
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                        content = {}
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
                     )
-                }
-
-                item(key = "spacer_${yearGroup.year}") {
-                    Spacer(modifier = Modifier.height(12.dp))
                 }
             }
         }
-        
-        LazyColumnScrollbar(
-            state = listState,
+
+        LazyVerticalGridScrollbar(
+            state = gridState,
             modifier = Modifier
                 .align(Alignment.CenterEnd)
                 .padding(end = 4.dp),

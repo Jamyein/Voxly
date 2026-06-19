@@ -2,10 +2,11 @@ package com.voxly.presentation.screens.filebrowser
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.LazyListState
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -94,10 +95,10 @@ fun DirectoryOverviewContent(
     isRefreshing: Boolean,
     isInitialLoad: Boolean = false,
     onRefresh: () -> Unit,
-    listState: LazyListState? = null,
+    listState: LazyGridState? = null,
     bottomPadding: Dp = 0.dp
 ) {
-    val lazyListState = listState ?: rememberLazyListState()
+    val gridState = listState ?: rememberLazyGridState()
     val pullToRefreshState = rememberPullToRefreshState()
     PullToRefreshBox(
         isRefreshing = isRefreshing,
@@ -124,8 +125,9 @@ fun DirectoryOverviewContent(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
                     )
 
-                    LazyColumn(
-                        state = lazyListState,
+                    LazyVerticalGrid(
+                        state = gridState,
+                        columns = GridCells.Adaptive(minSize = 300.dp),
                         modifier = Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(
                             start = 12.dp,
@@ -133,7 +135,8 @@ fun DirectoryOverviewContent(
                             top = 8.dp,
                             bottom = 8.dp + bottomPadding
                         ),
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         items(directories, key = { it.uri }) { directory ->
                             val dirName = directory.path.substringAfterLast("/").substringAfterLast(":")

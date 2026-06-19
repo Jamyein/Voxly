@@ -14,7 +14,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.LazyGridState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.Search
@@ -30,11 +31,13 @@ import androidx.compose.material3.SheetValue
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberBottomSheetState
 import androidx.compose.material3.adaptive.ExperimentalMaterial3AdaptiveApi
+import androidx.compose.material3.adaptive.currentWindowAdaptiveInfoV2
 import androidx.compose.material3.adaptive.layout.AnimatedPane
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffold
 import androidx.compose.material3.adaptive.layout.ListDetailPaneScaffoldRole
 import androidx.compose.material3.adaptive.navigation.rememberListDetailPaneScaffoldNavigator
 import androidx.compose.material3.adaptive.layout.PaneAdaptedValue
+import androidx.window.core.layout.WindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -104,6 +107,10 @@ fun FileBrowserAdaptiveScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
+    val adaptiveInfo = currentWindowAdaptiveInfoV2()
+    val isExpandedWidth = adaptiveInfo.windowSizeClass.isWidthAtLeastBreakpoint(
+        WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND
+    )
     val audioPermission = remember { Constants.mediaReadPermission(Build.VERSION.SDK_INT) }
     var hasAudioPermission by remember {
         mutableStateOf(
@@ -162,7 +169,7 @@ fun FileBrowserAdaptiveScreen(
 
     var showSearchSheet by remember { mutableStateOf(false) }
 
-    val listState = rememberLazyListState()
+    val listState = rememberLazyGridState()
     val scrollBehavior = TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     val isSelectionMode = selectedFiles.isNotEmpty()
     val canScrollToTop by remember {
@@ -220,89 +227,95 @@ fun FileBrowserAdaptiveScreen(
         }
     }
 
-    ListDetailPaneScaffold(
-        directive = navigator.scaffoldDirective,
-        value = navigator.scaffoldValue,
-        listPane = {
-            AnimatedPane {
-                FileBrowserListPane(
-                    effectiveRootTab = effectiveRootTab,
-                    hasWhitelistDirectories = hasWhitelistDirectories,
-                    displayedFiles = displayedFiles,
-                    selectedDirectories = selectedDirectories,
-                    directoryFiles = directoryFiles,
-                    isRefreshing = isRefreshing,
-                    isInitialLoad = isInitialLoad,
-                    hasAudioPermission = hasAudioPermission,
-                    onRequestAudioPermission = { requestAudioPermission.launch(audioPermission) },
-                    onRefresh = { refreshCoordinator.requestUserRefresh() },
-                    onToggleRootTab = {
-                        val newTab = if (effectiveRootTab == RootTab.DIRECTORIES)
-                            RootTab.ALL.name
-                        else
-                            RootTab.DIRECTORIES.name
-                        settingsViewModel.setFileBrowserRootTab(newTab)
-                    },
-                    onNavigateToDirectory = onNavigateToDirectory,
-                    onNavigateToSettings = onNavigateToSettings,
-                    isSinglePane = isSinglePane,
-                    isSelectionMode = isSelectionMode,
-                    selectedFiles = selectedFiles,
-                    onFileClick = remember(viewModel, isSelectionMode, isSinglePane, coroutineScope, navigator, onNavigateToMetadata) {
-                        { audioFile ->
-                            if (isSelectionMode) {
-                                viewModel.toggleFileSelection(audioFile.path)
-                            } else if (isSinglePane) {
-                                openMetadataFor(onNavigateToMetadata, audioFile)
-                            } else {
-                                coroutineScope.launch {
-                                    fileSwitchCounter++
-                                    navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
-                                }
-                            }
-                        }
-                    },
-                    onFileLongClick = remember(viewModel) {
-                        { audioFile ->
-                            viewModel.toggleFileSelection(audioFile.path)
-                        }
-                    },
-                    listState = listState,
-                    currentSortOption = currentSortOption,
-                    onSortOptionChange = { settingsViewModel.setFileBrowserSortOption(it.name) },
-                    onShowSearchSheet = { showSearchSheet = true },
-                    canScrollToTop = canScrollToTop,
-                    scrollBehavior = scrollBehavior,
-                    modifier = Modifier.fillMaxSize(),
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope
-                )
-            }
-        },
-        detailPane = {
-            AnimatedPane {
-                FileBrowserDetailPane(
-                    currentFile = navigator.currentDestination?.contentKey,
-                    fileSwitchCounter = fileSwitchCounter,
-                    onFileSwitch = { fileSwitchCounter++ },
-                    onNavigateBack = {
+    val listPaneContent: @Composable () -> Unit = {
+        FileBrowserListPane(
+            effectiveRootTab = effectiveRootTab,
+            hasWhitelistDirectories = hasWhitelistDirectories,
+            displayedFiles = displayedFiles,
+            selectedDirectories = selectedDirectories,
+            directoryFiles = directoryFiles,
+            isRefreshing = isRefreshing,
+            isInitialLoad = isInitialLoad,
+            hasAudioPermission = hasAudioPermission,
+            onRequestAudioPermission = { requestAudioPermission.launch(audioPermission) },
+            onRefresh = { refreshCoordinator.requestUserRefresh() },
+            onToggleRootTab = {
+                val newTab = if (effectiveRootTab == RootTab.DIRECTORIES)
+                    RootTab.ALL.name
+                else
+                    RootTab.DIRECTORIES.name
+                settingsViewModel.setFileBrowserRootTab(newTab)
+            },
+            onNavigateToDirectory = onNavigateToDirectory,
+            onNavigateToSettings = onNavigateToSettings,
+            isSinglePane = isSinglePane || isExpandedWidth,
+            isSelectionMode = isSelectionMode,
+            selectedFiles = selectedFiles,
+            onFileClick = remember(viewModel, isSelectionMode, isSinglePane, isExpandedWidth, coroutineScope, navigator, onNavigateToMetadata) {
+                { audioFile ->
+                    if (isSelectionMode) {
+                        viewModel.toggleFileSelection(audioFile.path)
+                    } else if (isSinglePane || isExpandedWidth) {
+                        openMetadataFor(onNavigateToMetadata, audioFile)
+                    } else {
                         coroutineScope.launch {
                             fileSwitchCounter++
-                            navigator.navigateBack()
+                            navigator.navigateTo(ListDetailPaneScaffoldRole.Detail, audioFile)
                         }
-                    },
-                    onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
-                    onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
-                    onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
-                    onNavigateToLyricsSelector = onNavigateToLyricsSelector,
-                    modifier = Modifier.fillMaxSize(),
-                    sharedTransitionScope = sharedTransitionScope,
-                    animatedVisibilityScope = animatedVisibilityScope
-                )
-            }
-        },
-        modifier = modifier.nestedScroll(chainedNestedScroll)
-    )
+                    }
+                }
+            },
+            onFileLongClick = remember(viewModel) {
+                { audioFile ->
+                    viewModel.toggleFileSelection(audioFile.path)
+                }
+            },
+            listState = listState,
+            currentSortOption = currentSortOption,
+            onSortOptionChange = { settingsViewModel.setFileBrowserSortOption(it.name) },
+            onShowSearchSheet = { showSearchSheet = true },
+            canScrollToTop = canScrollToTop,
+            scrollBehavior = scrollBehavior,
+            modifier = Modifier.fillMaxSize(),
+            sharedTransitionScope = sharedTransitionScope,
+            animatedVisibilityScope = animatedVisibilityScope
+        )
+    }
+
+    if (isExpandedWidth) {
+        Box(modifier = modifier.nestedScroll(chainedNestedScroll)) {
+            listPaneContent()
+        }
+    } else {
+        ListDetailPaneScaffold(
+            directive = navigator.scaffoldDirective,
+            value = navigator.scaffoldValue,
+            listPane = { AnimatedPane { listPaneContent() } },
+            detailPane = {
+                AnimatedPane {
+                    FileBrowserDetailPane(
+                        currentFile = navigator.currentDestination?.contentKey,
+                        fileSwitchCounter = fileSwitchCounter,
+                        onFileSwitch = { fileSwitchCounter++ },
+                        onNavigateBack = {
+                            coroutineScope.launch {
+                                fileSwitchCounter++
+                                navigator.navigateBack()
+                            }
+                        },
+                        onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
+                        onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
+                        onNavigateToOnlineCoverSearch = onNavigateToOnlineCoverSearch,
+                        onNavigateToLyricsSelector = onNavigateToLyricsSelector,
+                        modifier = Modifier.fillMaxSize(),
+                        sharedTransitionScope = sharedTransitionScope,
+                        animatedVisibilityScope = animatedVisibilityScope
+                    )
+                }
+            },
+            modifier = modifier.nestedScroll(chainedNestedScroll)
+        )
+    }
 
     if (showSearchSheet) {
         SearchBottomSheet(
@@ -317,7 +330,7 @@ fun FileBrowserAdaptiveScreen(
             allFiles = allAudios,
             onFileClick = { audioFile ->
                 showSearchSheet = false
-                if (isSinglePane) {
+                if (isSinglePane || isExpandedWidth) {
                     openMetadataFor(onNavigateToMetadata, audioFile)
                 } else {
                     coroutineScope.launch {
@@ -351,7 +364,7 @@ private fun FileBrowserListPane(
     selectedFiles: Set<String>,
     onFileClick: (AudioFile) -> Unit,
     onFileLongClick: (AudioFile) -> Unit,
-    listState: androidx.compose.foundation.lazy.LazyListState,
+    listState: LazyGridState,
     currentSortOption: FileSortOption,
     onSortOptionChange: (FileSortOption) -> Unit,
     onShowSearchSheet: () -> Unit,
