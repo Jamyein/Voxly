@@ -10,8 +10,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +58,23 @@ class MainActivity : AppCompatActivity() {
 
             val libraryScanViewModel: LibraryScanViewModel = hiltViewModel()
             val isRefreshing by libraryScanViewModel.isRefreshing.collectAsStateWithLifecycle()
+
+            // Trigger an incremental scan whenever the activity returns to the
+            // foreground. SAF-picked whitelist directories have no filesystem
+            // change notification, so the MediaStore observer never fires for
+            // external deletions in them; this covers the "delete in the
+            // system file manager → switch back to Voxly" flow. Throttled
+            // inside the ViewModel to coalesce rapid resume/pause bursts.
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME) {
+                        libraryScanViewModel.refreshOnResume()
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
 
             // Keep splash screen visible while initializing
             LaunchedEffect(Unit) {
