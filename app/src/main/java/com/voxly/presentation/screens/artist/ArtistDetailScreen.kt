@@ -291,7 +291,7 @@ fun ArtistDetailScreen(
                                         albumYear = albumInfo.year,
                                         albumArtPath = albumArtPath,
                                         albumId = albumId,
-                                        onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
+                                        onClick = { onNavigateToAlbumDetail(albumInfo.name, null) },
                                         modifier = Modifier
                                             .width(186.dp)
                                             .height(205.dp)
@@ -323,7 +323,7 @@ fun ArtistDetailScreen(
                                         albumYear = albumInfo.year,
                                         albumArtPath = albumArtPath,
                                         albumId = albumId,
-                                        onClick = { onNavigateToAlbumDetail(albumInfo.name, artistName) },
+                                        onClick = { onNavigateToAlbumDetail(albumInfo.name, null) },
                                         modifier = Modifier
                                             .width(186.dp)
                                             .height(205.dp)
