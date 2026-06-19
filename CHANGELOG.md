@@ -27,6 +27,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Bottom-bar hide direction is now page-down / page-up instead of reversed.**
+  The initial sign in `BottomBarVisibilityController.onPreScroll` was
+  inverted — `shouldShow = dy < 0f` produced "hide on scroll-up, show on
+  scroll-down" on actual devices, the opposite of the standard M3
+  bottom-app-bar pattern. Flipped to `shouldShow = dy > 0f` (hide when
+  the user drags the list downward to read more, show when they pull it
+  back up to navigate). The accompanying KDoc now documents the
+  verified `available.y` sign convention for `NestedScrollConnection`.
+
+### Changed
+
+- **Files / Albums / Artists pages now show adaptive grids on large screens.**
+  On tablets, foldables (unfolded), and desktop-width windows, each page
+  renders a single-pane adaptive grid instead of a side-by-side list-detail
+  layout. Column count is calculated automatically based on container width
+  via `GridCells.Adaptive`. Clicking an item navigates to the respective
+  detail screen rather than opening a second pane:
+  - **Files** page: audio files and directory overview both use
+    `LazyVerticalGrid` + `GridCells.Adaptive(300.dp)` for directories
+    and all-audios tabs. Click a file → metadata editor; click a directory →
+    directory content.
+  - **Albums** page: regular sort stays with `GridCells.Adaptive(160.dp)`;
+    year-sort now renders year-group headers spanning the full grid row
+    with `AlbumGridItem` cards beneath.
+  - **Artists** page: changed from `LazyColumn` to
+    `LazyVerticalGrid` + `GridCells.Adaptive(160.dp)` with new square-avatar
+    `ArtistGridItem` cards.
+  - Downlevel (phones, portrait foldable): the original side-by-side
+    `ListDetailPaneScaffold` is preserved.
+
+### Fixed
+
 - **Song list now updates immediately after editing metadata.**
   Saving a metadata change in the editor updates the file's title, artist,
   album, cover, etc. in the Files / Albums / Artists lists without requiring
