@@ -173,8 +173,8 @@ fun MP3TagNavHost() {
     val libraryBatchViewModel: LibraryBatchViewModel = hiltViewModel()
     val settingsViewModel: SettingsViewModel = hiltViewModel()
 
-    val floatingBottomNavEnabled by settingsViewModel.floatingBottomNavEnabled
-        .collectAsStateWithLifecycle()
+    val settingsUiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
+    val floatingBottomNavEnabled = settingsUiState.floatingBottomNavEnabled
 
     val topLevelBackStack = rememberTopLevelBackStack(FileBrowser)
 

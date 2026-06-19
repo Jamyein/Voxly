@@ -89,8 +89,9 @@ class MainActivity : AppCompatActivity() {
             splashScreen.setKeepOnScreenCondition { !isReady }
 
             val settingsViewModel: SettingsViewModel = hiltViewModel()
-            val dynamicColors by settingsViewModel.dynamicColors.collectAsStateWithLifecycle()
-            val themeMode by settingsViewModel.themeMode.collectAsStateWithLifecycle()
+            val settingsUiState by settingsViewModel.uiState.collectAsStateWithLifecycle()
+            val dynamicColors = settingsUiState.dynamicColors
+            val themeMode = settingsUiState.themeMode
             val systemDarkTheme = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {
                 "dark" -> true

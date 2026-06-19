@@ -62,257 +62,29 @@ class SettingsViewModel @Inject constructor(
     private val _dragDialogState = MutableStateFlow<DragDialogState?>(null)
     val dragDialogState: StateFlow<DragDialogState?> = _dragDialogState.asStateFlow()
 
-    /**
-     * Dark theme state
-     */
-    val darkTheme: StateFlow<Boolean> = settingsDataStore.darkTheme
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = false
-        )
+    // ==================== Settings Data (from DataStore) ====================
+    // Individual properties below are used in methods or UI. All other settings
+    // are accessed through the combined uiState flow which reads from DataStore
+    // directly, avoiding redundant stateIn() wrappers.
 
     /**
-     * Dynamic colors state
-     */
-    val dynamicColors: StateFlow<Boolean> = settingsDataStore.dynamicColors
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    /**
-     * Metadata editor dynamic album color state
-     */
-    val metadataEditorDynamicAlbumColor: StateFlow<Boolean> = settingsDataStore.metadataEditorDynamicAlbumColor
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    /**
-     * Language tag state (null means system default)
-     */
-    val languageTag: StateFlow<String?> = settingsDataStore.languageTag
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = null
-        )
-
-    /**
-     * Theme mode state (system | light | dark)
-     */
-    val themeMode: StateFlow<String> = settingsDataStore.themeMode
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = "system"
-        )
-
-    val appleCountryCode: StateFlow<String> = settingsDataStore.appleCountryCode
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = "us"
-        )
-
-    val onlineSearchLimit: StateFlow<Int> = settingsDataStore.onlineSearchLimit
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = 25
-        )
-
-    val onlineSearchLimitMusicBrainz: StateFlow<Int> = settingsDataStore.onlineSearchLimitMusicBrainz
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = 0
-        )
-
-    val onlineSearchLimitITunes: StateFlow<Int> = settingsDataStore.onlineSearchLimitITunes
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = 0
-        )
-
-    val onlineSearchLimitNetease: StateFlow<Int> = settingsDataStore.onlineSearchLimitNetease
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = 0
-        )
-
-    val onlineSearchLimitQQMusic: StateFlow<Int> = settingsDataStore.onlineSearchLimitQQMusic
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = 0
-        )
-
-    val sourceEnabledMusicBrainz: StateFlow<Boolean> = settingsDataStore.sourceEnabledMusicBrainz
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    val sourceEnabledITunes: StateFlow<Boolean> = settingsDataStore.sourceEnabledITunes
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    val sourceEnabledNetease: StateFlow<Boolean> = settingsDataStore.sourceEnabledNetease
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    val sourceEnabledQQMusic: StateFlow<Boolean> = settingsDataStore.sourceEnabledQQMusic
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    val metadataSourceEnabledMusicBrainz: StateFlow<Boolean> = settingsDataStore.metadataSourceEnabledMusicBrainz
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-    val metadataSourceEnabledITunes: StateFlow<Boolean> = settingsDataStore.metadataSourceEnabledITunes
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-    val metadataSourceEnabledNetease: StateFlow<Boolean> = settingsDataStore.metadataSourceEnabledNetease
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-    val metadataSourceEnabledQQMusic: StateFlow<Boolean> = settingsDataStore.metadataSourceEnabledQQMusic
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-
-    val lyricsSourceEnabledMusicBrainz: StateFlow<Boolean> = settingsDataStore.lyricsSourceEnabledMusicBrainz
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-    val lyricsSourceEnabledITunes: StateFlow<Boolean> = settingsDataStore.lyricsSourceEnabledITunes
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-    val lyricsSourceEnabledNetease: StateFlow<Boolean> = settingsDataStore.lyricsSourceEnabledNetease
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-    val lyricsSourceEnabledQQMusic: StateFlow<Boolean> = settingsDataStore.lyricsSourceEnabledQQMusic
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-
-    val coverSourceEnabledMusicBrainz: StateFlow<Boolean> = settingsDataStore.coverSourceEnabledMusicBrainz
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-    val coverSourceEnabledITunes: StateFlow<Boolean> = settingsDataStore.coverSourceEnabledITunes
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-    val coverSourceEnabledNetease: StateFlow<Boolean> = settingsDataStore.coverSourceEnabledNetease
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-    val coverSourceEnabledQQMusic: StateFlow<Boolean> = settingsDataStore.coverSourceEnabledQQMusic
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS), true)
-
-    val metadataSourcePriority: StateFlow<List<String>> = settingsDataStore.metadataSourcePriority
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = listOf("itunes", "musicbrainz", "netease", "qq_music")
-        )
-
-    val lyricsSourcePriority: StateFlow<List<String>> = settingsDataStore.lyricsSourcePriority
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = listOf("netease", "qq_music")
-        )
-
-    val coverSourcePriority: StateFlow<List<String>> = settingsDataStore.coverSourcePriority
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = listOf("itunes", "musicbrainz", "netease", "qq_music")
-        )
-
-    val loggingEnabled: StateFlow<Boolean> = settingsDataStore.loggingEnabled
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    val fileLoggingEnabled: StateFlow<Boolean> = settingsDataStore.fileLoggingEnabled
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    val consoleLoggingEnabled: StateFlow<Boolean> = settingsDataStore.consoleLoggingEnabled
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = false
-        )
-
-    val crashReportingEnabled: StateFlow<Boolean> = settingsDataStore.crashReportingEnabled
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    val replayGainTargetLoudness: StateFlow<Float> = settingsDataStore.replayGainTargetLoudness
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = -14f
-        )
-
-    /**
-     * Scan mode state (TRACK_ONLY, ALBUM_ONLY, TRACK_AND_ALBUM)
-     */
-    val scanMode: StateFlow<String> = settingsDataStore.scanMode
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = ScanModeConstants.TRACK_ONLY
-    )
-
-    /**
-     * ReplayGain clip mode state (n=none, p=positive, a=always)
-     */
-    val replayGainClipMode: StateFlow<String> = settingsDataStore.replayGainClipMode
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = "p"
-        )
-
-    /**
-     * Minimum duration filter enabled state
-     */
-    val minDurationFilterEnabled: StateFlow<Boolean> = settingsDataStore.minDurationFilterEnabled
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = false
-        )
-
-    /**
-     * Minimum duration filter threshold in milliseconds
-     */
-    val minDurationFilterThresholdMs: StateFlow<Int> = settingsDataStore.minDurationFilterThresholdMs
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = Constants.MIN_DURATION_FILTER_THRESHOLD_MS.toInt()
-        )
-
-    /**
-     * Unified source configurations (new approach)
+     * Unified source configurations (used synchronously in source-enabled methods)
      */
     val sourceConfigurations: StateFlow<SourceConfigurations> = settingsDataStore.sourceConfigurations
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
             initialValue = SourceConfigurations()
+        )
+
+    /**
+     * Artist separators as Set<String> for UI layer (collected directly in SettingsScreen)
+     */
+    val artistSeparatorsSet: StateFlow<Set<String>> = settingsDataStore.artistSeparatorsSet
+        .stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
+            initialValue = setOf("&", "/", "\\")
         )
 
     /**
@@ -728,99 +500,7 @@ class SettingsViewModel @Inject constructor(
         }
     }
 
-    // ==================== Proxy Settings ====================
-
-    /**
-     * Proxy enabled state
-     */
-    val proxyEnabled: StateFlow<Boolean> = settingsDataStore.proxyEnabled
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = false
-        )
-
-    /**
-     * Proxy type state (HTTP, SOCKS)
-     */
-    val proxyType: StateFlow<String> = settingsDataStore.proxyType
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = "HTTP"
-        )
-
-    /**
-     * Proxy host state
-     */
-    val proxyHost: StateFlow<String> = settingsDataStore.proxyHost
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = ""
-        )
-
-    /**
-     * Proxy port state
-     */
-    val proxyPort: StateFlow<Int> = settingsDataStore.proxyPort
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = 0
-        )
-
-    /**
-     * Artist separator enabled state
-     */
-    val artistSeparatorEnabled: StateFlow<Boolean> = settingsDataStore.artistSeparatorEnabled
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    /**
-     * Artist separators state
-     */
-    val artistSeparators: StateFlow<String> = settingsDataStore.artistSeparators
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = """["&","/","\\"]"""
-        )
-
-    /**
-     * Artist separators as Set<String> for UI layer (tag display)
-     */
-    val artistSeparatorsSet: StateFlow<Set<String>> = settingsDataStore.artistSeparatorsSet
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = setOf("&", "/", "\\")
-        )
-
-    /**
-     * Lyrics timestamp format enabled state (3-digit to 2-digit format)
-     */
-    val lyricsTimestampFormatEnabled: StateFlow<Boolean> = settingsDataStore.lyricsTimestampFormatEnabled
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = true
-        )
-
-    /**
-     * Floating bottom navigation bar enabled state.
-     * When true, the bottom NavigationBar is rendered as a floating M3E toolbar:
-     * pill-shaped, with horizontal margins, floating above the gesture-nav inset.
-     */
-    val floatingBottomNavEnabled: StateFlow<Boolean> = settingsDataStore.floatingBottomNavEnabled
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
-            initialValue = false
-        )
+    // ==================== Proxy, Artist, Lyrics & UI Settings ====================
 
     /**
      * Set proxy enabled preference
@@ -908,26 +588,26 @@ class SettingsViewModel @Inject constructor(
      * Replaces 32 individual collectAsState() calls with a single state holder.
      */
     val uiState: StateFlow<SettingsUiState> = combine(
-        dynamicColors,
-        metadataEditorDynamicAlbumColor,
-        languageTag,
-        themeMode,
-        appleCountryCode,
-        onlineSearchLimit,
-        onlineSearchLimitMusicBrainz,
-        onlineSearchLimitITunes,
-        onlineSearchLimitNetease,
-        onlineSearchLimitQQMusic,
+        settingsDataStore.dynamicColors,
+        settingsDataStore.metadataEditorDynamicAlbumColor,
+        settingsDataStore.languageTag,
+        settingsDataStore.themeMode,
+        settingsDataStore.appleCountryCode,
+        settingsDataStore.onlineSearchLimit,
+        settingsDataStore.onlineSearchLimitMusicBrainz,
+        settingsDataStore.onlineSearchLimitITunes,
+        settingsDataStore.onlineSearchLimitNetease,
+        settingsDataStore.onlineSearchLimitQQMusic,
         sourceConfigurations,
-        loggingEnabled,
-        fileLoggingEnabled,
-        consoleLoggingEnabled,
-        crashReportingEnabled,
-        replayGainTargetLoudness,
-        scanMode,
-        minDurationFilterEnabled,
-        lyricsTimestampFormatEnabled,
-        floatingBottomNavEnabled
+        settingsDataStore.loggingEnabled,
+        settingsDataStore.fileLoggingEnabled,
+        settingsDataStore.consoleLoggingEnabled,
+        settingsDataStore.crashReportingEnabled,
+        settingsDataStore.replayGainTargetLoudness,
+        settingsDataStore.scanMode,
+        settingsDataStore.minDurationFilterEnabled,
+        settingsDataStore.lyricsTimestampFormatEnabled,
+        settingsDataStore.floatingBottomNavEnabled
     ) { values ->
         SettingsUiState(
             dynamicColors = values[0] as Boolean,
