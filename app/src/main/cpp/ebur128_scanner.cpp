@@ -190,10 +190,23 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetAlbumG
 
     auto** states = new ScannerState*[count];
     auto** sts = new ebur128_state*[count];
+    jsize validCount = 0;
     for (jsize i = 0; i < count; i++) {
-        states[i] = reinterpret_cast<ScannerState*>(ptrs[i]);
-        sts[i] = states[i]->ebur;
+        if (ptrs[i] == 0) continue;
+        auto* s = reinterpret_cast<ScannerState*>(ptrs[i]);
+        if (!s || !s->ebur) continue;
+        states[validCount] = s;
+        sts[validCount] = s->ebur;
+        validCount++;
     }
+    if (validCount == 0) {
+        env->ReleaseLongArrayElements(scannerPtrs, ptrs, JNI_ABORT);
+        delete[] states;
+        delete[] sts;
+        jdoubleArray empty = env->NewDoubleArray(3);
+        return empty;
+    }
+    count = validCount;
 
     double albumLoudness = -HUGE_VAL;
     int rc = ebur128_loudness_global_multiple(sts, count, &albumLoudness);
@@ -202,14 +215,23 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetAlbumG
     }
 
     double albumRange = 0.0;
-    ebur128_loudness_range_multiple(sts, count, &albumRange);
+    int rcRange = ebur128_loudness_range_multiple(sts, count, &albumRange);
+    if (rcRange != EBUR128_SUCCESS) {
+        albumRange = 0.0;
+    }
 
     double albumPeak = 0.0;
     for (jsize i = 0; i < count; i++) {
-        for (int ch = 0; ch < states[i]->channels; ch++) {
-            double sp = 0.0;
-            ebur128_sample_peak(states[i]->ebur, ch, &sp);
-            if (sp > albumPeak) albumPeak = sp;
+        int ch_count = states[i]->channels;
+        for (int ch = 0; ch < ch_count; ch++) {
+            double p = 0.0;
+            if (states[i]->true_peak) {
+                ebur128_true_peak(states[i]->ebur, ch, &p);
+            } else {
+                // Sample peak is sufficient when true_peak mode is disabled
+                ebur128_sample_peak(states[i]->ebur, ch, &p);
+            }
+            if (p > albumPeak) albumPeak = p;
         }
     }
 

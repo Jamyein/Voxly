@@ -49,7 +49,7 @@ class EbuR128NativeScanner(
         }
     }
 
-    var scannerPtr: Long = 0
+    internal var scannerPtr: Long = 0
 
     private val resultArray = DoubleArray(6)
 
