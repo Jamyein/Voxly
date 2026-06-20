@@ -96,8 +96,10 @@ class ReplayGainScanner @Inject constructor(
 
     /**
      * Pool that reuses MediaCodec instances across same-format files within an album scan.
-     * Keyed by MIME type. On [acquire], a cached codec is flushed and reconfigured.
-     * On [release], the codec is stopped and returned to the pool for reuse.
+     * Keyed by MIME type. On [acquire], a cached codec (in Stopped state) is reconfigured
+     * and restarted via configure() + start(). On [release], the codec is stopped and
+     * returned to the pool only if stop() succeeded cleanly. Callers MUST call [closeAll]
+     * when the scan is done to release native resources.
      */
     private inner class CodecPool {
         private val pool = mutableMapOf<String, MediaCodec>()
@@ -107,7 +109,8 @@ class ReplayGainScanner @Inject constructor(
             val existing = mutex.withLock { pool.remove(mime) }
             if (existing != null) {
                 try {
-                    existing.flush()
+                    // Codec is in Stopped state (from release()). flush() requires Started state,
+                    // so go directly Stopped → Configured → Started via configure() + start().
                     existing.configure(format, null, null, 0)
                     existing.start()
                     Timber.v("CodecPool: reused codec for $mime")
@@ -139,15 +142,20 @@ class ReplayGainScanner @Inject constructor(
         }
 
         suspend fun release(codec: MediaCodec, mime: String) = withContext(Dispatchers.IO) {
-            try { codec.stop() } catch (_: Exception) {}
-            mutex.withLock {
-                pool[mime] = codec
+            val stoppedCleanly = try { codec.stop(); true } catch (_: Exception) { false }
+            if (stoppedCleanly) {
+                mutex.withLock { pool[mime] = codec }
+            } else {
+                // Codec in error/undefined state — release native resources instead of pooling
+                try { codec.release() } catch (_: Exception) {}
             }
         }
 
-        fun closeAll() {
-            pool.values.forEach { try { it.release() } catch (_: Exception) {} }
-            pool.clear()
+        suspend fun closeAll() = withContext(Dispatchers.IO) {
+            mutex.withLock {
+                pool.values.forEach { try { it.release() } catch (_: Exception) {} }
+                pool.clear()
+            }
         }
     }
 
@@ -162,6 +170,7 @@ class ReplayGainScanner @Inject constructor(
         targetLoudness: Float = -18f,
         config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress> = flow {
+        try {
         val totalFiles = filePaths.size
         val scanStartedAt = SystemClock.elapsedRealtime()
         Timber.i(
@@ -216,6 +225,9 @@ class ReplayGainScanner @Inject constructor(
         Timber.i(
             "ReplayGain scan finished. files=$totalFiles processed=${results.size} elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}"
         )
+        } finally {
+            codecPool.closeAll()
+        }
     }
 
     /**
@@ -259,6 +271,7 @@ class ReplayGainScanner @Inject constructor(
         targetLoudness: Float = -18f,
         config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress> = flow {
+        try {
         val scanStartedAt = SystemClock.elapsedRealtime()
         Timber.i(
             "ReplayGain album grouping started. files=${filePaths.size} quality=$scanQuality targetLoudness=$targetLoudness LUFS"
@@ -285,6 +298,9 @@ class ReplayGainScanner @Inject constructor(
         Timber.i(
             "ReplayGain album grouping finished. elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}"
         )
+        } finally {
+            codecPool.closeAll()
+        }
     }
 
     /**
@@ -297,6 +313,7 @@ class ReplayGainScanner @Inject constructor(
         targetLoudness: Float = -18f,
         config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress> = flow {
+        try {
         val totalAlbums = filesByAlbum.size
         val totalFiles = filesByAlbum.values.flatten().size
         var processedFiles = 0
@@ -537,6 +554,9 @@ class ReplayGainScanner @Inject constructor(
         Timber.i(
             "ReplayGain album scan finished. albums=$totalAlbums files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}"
         )
+        } finally {
+            codecPool.closeAll()
+        }
     }
 
     /**
