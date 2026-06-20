@@ -95,7 +95,7 @@ class MediaStoreChangeWatcher @Inject constructor(
                 .debounce(DEBOUNCE_MS)
                 .collect {
                     Timber.tag(TAG).d("MediaStore change → requestRefresh → SAF walk")
-                    libraryDataHolder.requestRefresh(forceRefresh = false)
+                    libraryDataHolder.requestRefresh(forceRefresh = false, bypassVersionCache = true)
 
                     // Phase 4: detect changes in SAF-picked directories that
                     // MediaStore observer doesn't cover (USB drives, SD roots).

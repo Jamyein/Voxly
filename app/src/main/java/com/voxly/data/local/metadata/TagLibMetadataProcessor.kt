@@ -736,24 +736,27 @@ class TagLibMetadataProcessor @Inject constructor(
         // Get file descriptor - use dup.detachFd to give TagLib its own copy
         // TagLib will close its copy, we close our ParcelFileDescriptor
         val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-        val fdForTagLib = pfd.dup().detachFd()
+        try {
+            val fdForTagLib = pfd.dup().detachFd()
 
-        // Read metadata using TagLib - TagLib takes ownership and closes its copy
-        val metadata = try {
-            TagLib.getMetadata(fdForTagLib, readPictures = includeAlbumArt)
-        } catch (e: Exception) {
-            Timber.tag(TAG).w( "TagLib.getMetadata failed", e)
-            null
+            // Read metadata using TagLib - TagLib takes ownership and closes its copy
+            val metadata = try {
+                TagLib.getMetadata(fdForTagLib, readPictures = includeAlbumArt)
+            } catch (e: Exception) {
+                Timber.tag(TAG).w( "TagLib.getMetadata failed", e)
+                try { ParcelFileDescriptor.adoptFd(fdForTagLib).close() } catch (_: Exception) {}
+                null
+            }
+
+            if (metadata == null) {
+                Timber.tag(TAG).w( "Failed to read metadata: ${file.absolutePath}")
+                return null
+            }
+
+            return parseTagLibMetadata(metadata, includeAlbumArt)
+        } finally {
+            pfd.close()
         }
-
-        pfd.close()
-
-        if (metadata == null) {
-            Timber.tag(TAG).w( "Failed to read metadata: ${file.absolutePath}")
-            return null
-        }
-
-        return parseTagLibMetadata(metadata, includeAlbumArt)
     }
 
     private fun readMetadataFromMediaStore(filePath: String, includeAlbumArt: Boolean): AudioMetadata? {
@@ -1061,14 +1064,18 @@ class TagLibMetadataProcessor @Inject constructor(
 
             // Edit metadata using TagLib on temp file - use MODE_READ_WRITE as TagLib may need to read while modifying
             val pfd = ParcelFileDescriptor.open(tempFile, ParcelFileDescriptor.MODE_READ_WRITE)
-            val fdForTagLib = pfd.dup().detachFd()
+            val success: Boolean
+            try {
+                val fdForTagLib = pfd.dup().detachFd()
 
-            // Build properties map
-            val properties = buildPropertiesMap(metadata)
+                // Build properties map
+                val properties = buildPropertiesMap(metadata)
 
-            // TagLib takes ownership and closes its copy
-            val success = TagLib.savePropertyMap(fdForTagLib, properties)
-            pfd.close()
+                // TagLib takes ownership and closes its copy
+                success = TagLib.savePropertyMap(fdForTagLib, properties)
+            } finally {
+                pfd.close()
+            }
 
             // Save album art if provided
             metadata.albumArt?.let { albumArtBytes ->
@@ -1260,13 +1267,16 @@ class TagLibMetadataProcessor @Inject constructor(
             }
 
             val pfd = ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_READ_ONLY)
-            val fdForTagLib = pfd.dup().detachFd()
-            
-            // TagLib takes ownership and closes its copy
-            val pictures = TagLib.getPictures(fdForTagLib)
-            pfd.close()
-            
-            pictures.firstOrNull()?.data
+            try {
+                val fdForTagLib = pfd.dup().detachFd()
+
+                // TagLib takes ownership and closes its copy
+                val pictures = TagLib.getPictures(fdForTagLib)
+
+                pictures.firstOrNull()?.data
+            } finally {
+                pfd.close()
+            }
         } catch (e: Exception) {
             Timber.tag(TAG).w( "Failed to extract album art: $filePath", e)
             null

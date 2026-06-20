@@ -79,7 +79,7 @@ import com.voxly.presentation.viewmodel.ReplayGainScanError
 @Composable
 fun MetadataEditorScreen(
     filePath: String,
-    viewModel: MetadataEditorViewModel = hiltViewModel(),
+    viewModel: MetadataEditorViewModel,
     onNavigateBack: () -> Unit,
     onNavigateToOnlineMetadata: () -> Unit,
     onNavigateToOnlineLyricsSearch: () -> Unit,

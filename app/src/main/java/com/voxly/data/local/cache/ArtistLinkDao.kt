@@ -68,6 +68,12 @@ interface ArtistLinkDao {
     suspend fun deleteAll()
 
     /**
+     * Delete artist links for tracks NOT in the valid list (orphan cleanup).
+     */
+    @Query("DELETE FROM artist_links WHERE trackId NOT IN (:validTrackIds)")
+    suspend fun deleteNotInTrackIds(validTrackIds: List<String>)
+
+    /**
      * Get count of artist links.
      */
     @Query("SELECT COUNT(*) FROM artist_links")

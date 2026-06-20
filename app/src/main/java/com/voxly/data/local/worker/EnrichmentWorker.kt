@@ -13,6 +13,7 @@ import com.voxly.domain.usecase.MemoryPressureMonitor
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -85,6 +86,8 @@ class EnrichmentWorker @AssistedInject constructor(
 
             Timber.tag("Voxly").i("EnrichmentWorker completed. Processed $processed jobs.")
             Result.success()
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             Timber.w(TAG, "EnrichmentWorker failed", e)
             Result.retry()

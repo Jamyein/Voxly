@@ -404,6 +404,7 @@ class MusicLibraryCache @Inject constructor(
         }
 
         audioFileDao.deleteByPath(normalized)
+        artistLinkDao.deleteByTrackId(normalized)
         invalidateHotCache()
 
         _changeFlow.tryEmit(
@@ -440,6 +441,7 @@ class MusicLibraryCache @Inject constructor(
             }.toSet()
 
             audioFileDao.deleteByPaths(normalized)
+            artistLinkDao.deleteByTrackIds(normalized)
             invalidateHotCache()
 
             _changeFlow.tryEmit(
@@ -495,6 +497,7 @@ class MusicLibraryCache @Inject constructor(
         val file = File(normalized)
         if (!file.exists()) {
             audioFileDao.deleteByPath(normalized)
+            artistLinkDao.deleteByTrackId(normalized)
             return@withContext true
         }
 
@@ -506,7 +509,9 @@ class MusicLibraryCache @Inject constructor(
      * Cleans up deleted files from cache.
      */
     suspend fun cleanupDeletedFiles(currentPaths: List<String>): Int = withContext(Dispatchers.IO) {
-        val deletedCount = audioFileDao.deleteNotInPaths(currentPaths.map { normalizedPath(it) })
+        val normalizedPaths = currentPaths.map { normalizedPath(it) }
+        val deletedCount = audioFileDao.deleteNotInPaths(normalizedPaths)
+        artistLinkDao.deleteNotInTrackIds(normalizedPaths)
         if (deletedCount > 0) {
             invalidateHotCache()
             bumpCacheVersion()

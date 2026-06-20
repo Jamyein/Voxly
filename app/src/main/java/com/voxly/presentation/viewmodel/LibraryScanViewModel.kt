@@ -469,6 +469,9 @@ class LibraryScanViewModel @Inject constructor(
                 throw e
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to load audio files")
+                val msg = e.message ?: "Unknown scan error"
+                _scanError.tryEmit(msg)
+                libraryDataHolder.emitScanError(msg)
             } finally {
                 if (shouldShowRefresh) {
                     libraryDataHolder.endScan()
@@ -683,6 +686,9 @@ class LibraryScanViewModel @Inject constructor(
             throw e
         } catch (e: Exception) {
             Timber.tag(TAG).e("Directory scan failed for ${directories.joinToString { it.path }}", e)
+            val msg = e.message ?: "Directory scan failed"
+            _scanError.tryEmit(msg)
+            libraryDataHolder.emitScanError(msg)
         } finally {
             _directoryLoadingState.update { it - dirUris }
         }
@@ -883,7 +889,7 @@ class LibraryScanViewModel @Inject constructor(
                 viewModelScope.launch {
                     musicLibraryCache.removeFromCache(filePath)
                 }
-                loadAudioFiles(forceRefresh = false, isIncremental = true)
+                loadAudioFiles(forceRefresh = false, isIncremental = true, bypassVersionCache = true)
             }
         }
     }
@@ -912,7 +918,7 @@ class LibraryScanViewModel @Inject constructor(
                 viewModelScope.launch {
                     musicLibraryCache.removeFromCache(filePath)
                 }
-                loadAudioFiles(forceRefresh = false, isIncremental = true)
+                loadAudioFiles(forceRefresh = false, isIncremental = true, bypassVersionCache = true)
             }
         }
     }

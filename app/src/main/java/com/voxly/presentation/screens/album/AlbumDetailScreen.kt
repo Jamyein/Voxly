@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -351,80 +352,82 @@ fun AlbumDetailScreen(
                     }
                 }
 
-                // Song list grouped by disc
+                // Song list grouped by disc — each song is a lazy item for
+                // efficient scrolling on multi-disc albums.
                 val groupedFiles = sortedFiles.groupBy { it.metadata.discNumber ?: 1 }
                 val sortedDiscNumbers = groupedFiles.keys.sorted()
 
-                items(sortedDiscNumbers.size, key = { sortedDiscNumbers[it] }) { discIndex ->
-                    val discNumber = sortedDiscNumbers[discIndex]
-                    val discFiles = groupedFiles[discNumber] ?: return@items
+                sortedDiscNumbers.forEach { discNumber ->
+                    val discFiles = groupedFiles[discNumber] ?: return@forEach
 
                     // Disc title with divider
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(bottom = 12.dp, top = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Text(
-                            text = "Disc $discNumber",
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        androidx.compose.material3.HorizontalDivider(
-                            modifier = Modifier.weight(1f),
-                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
-                        )
-                    }
-
-                    // Song list - grouped with spacing
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        discFiles.forEachIndexed { index, audioFile ->
-                            SegmentedListItem(
-                                onClick = { openMetadataFor(onNavigateToMetadata, audioFile) },
-                                shapes = ListItemDefaults.segmentedShapes(
-                                    index = index,
-                                    count = discFiles.size
-                                ),
-                                colors = ListItemDefaults.segmentedColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
-                                ),
-                                leadingContent = {
-                                    Text(
-                                        text = audioFile.metadata.trackNumber?.toString() ?: "-",
-                                        style = MaterialTheme.typography.bodyMedium,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier
-                                            .padding(start = 12.dp)
-                                            .width(28.dp),
-                                        textAlign = TextAlign.Start
-                                    )
-                                },
-                                content = {
-                                    Text(
-                                        text = audioFile.metadata.getDisplayTitle(audioFile.name),
-                                        style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
-                                        maxLines = 1
-                                    )
-                                },
-                                supportingContent = {
-                                    Text(
-                                        text = "${audioFile.metadata.artist ?: ""} • ${audioFile.getFormattedDuration()}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        maxLines = 1
-                                    )
-                                },
-                                modifier = Modifier.fillMaxWidth()
+                    item(key = "disc_header_$discNumber") {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp, top = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Text(
+                                text = "Disc $discNumber",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            androidx.compose.material3.HorizontalDivider(
+                                modifier = Modifier.weight(1f),
+                                color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)
                             )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                    // Songs as individual lazy items with stable keys
+                    itemsIndexed(
+                        items = discFiles,
+                        key = { _, audioFile -> "song_${audioFile.path}" }
+                    ) { index, audioFile ->
+                        SegmentedListItem(
+                            onClick = { openMetadataFor(onNavigateToMetadata, audioFile) },
+                            shapes = ListItemDefaults.segmentedShapes(
+                                index = index,
+                                count = discFiles.size
+                            ),
+                            colors = ListItemDefaults.segmentedColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceContainerLowest
+                            ),
+                            leadingContent = {
+                                Text(
+                                    text = audioFile.metadata.trackNumber?.toString() ?: "-",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier
+                                        .padding(start = 12.dp)
+                                        .width(28.dp),
+                                    textAlign = TextAlign.Start
+                                )
+                            },
+                            content = {
+                                Text(
+                                    text = audioFile.metadata.getDisplayTitle(audioFile.name),
+                                    style = MaterialTheme.typography.bodyMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.Bold),
+                                    maxLines = 1
+                                )
+                            },
+                            supportingContent = {
+                                Text(
+                                    text = "${audioFile.metadata.artist ?: ""} • ${audioFile.getFormattedDuration()}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1
+                                )
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+
+                    item(key = "disc_spacer_$discNumber") {
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
                 }
             }
         }

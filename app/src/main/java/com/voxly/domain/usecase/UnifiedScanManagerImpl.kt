@@ -10,6 +10,7 @@ import com.voxly.domain.repository.WhitelistRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -18,6 +19,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
@@ -66,9 +68,6 @@ class UnifiedScanManagerImpl @Inject constructor(
         force: Boolean
     ): ScanResult {
         Timber.tag("Voxly").i("UnifiedScanManager scan: target=$target force=$force")
-
-        // Cancel any existing scan
-        cancel()
 
         _scanState.value = ScanState.Scanning(target, 0f)
 
@@ -148,8 +147,9 @@ class UnifiedScanManagerImpl @Inject constructor(
                 metadata = metadata
             )
 
-            // Update cache
-            audioFileScanner.syncFileToCache(audioFile)
+            withContext(NonCancellable) {
+                audioFileScanner.syncFileToCache(audioFile)
+            }
 
             Timber.d(TAG, "File synced to cache: $filePath")
             Result.success(audioFile)

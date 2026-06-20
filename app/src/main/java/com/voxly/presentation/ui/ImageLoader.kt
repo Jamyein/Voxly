@@ -674,10 +674,9 @@ suspend fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
 
     val cacheKey = "mediastore_$albumId"
 
-    // Check cache first (thread-safe LRU cache)
-    mediaStoreAlbumCache[cacheKey]?.let { cached ->
-        if (!cached.isRecycled) return cached
-    }
+    // Check cache first (thread-safe — accessOrder=true makes get a structural op)
+    val cached = synchronized(mediaStoreAlbumCache) { mediaStoreAlbumCache[cacheKey] }
+    if (cached != null && !cached.isRecycled) return cached
 
     // Load from MediaStore on IO thread
     val bitmap = withContext(Dispatchers.IO) {
@@ -698,12 +697,14 @@ suspend fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
 
     // Cache the result on the calling thread
     if (bitmap != null) {
-        while (mediaStoreAlbumCache.size >= MAX_MEDIASTORE_CACHE_SIZE) {
-            mediaStoreAlbumCache.keys.firstOrNull()?.let { key ->
-                mediaStoreAlbumCache.remove(key)
+        synchronized(mediaStoreAlbumCache) {
+            while (mediaStoreAlbumCache.size >= MAX_MEDIASTORE_CACHE_SIZE) {
+                mediaStoreAlbumCache.keys.firstOrNull()?.let { key ->
+                    mediaStoreAlbumCache.remove(key)
+                }
             }
+            mediaStoreAlbumCache[cacheKey] = bitmap
         }
-        mediaStoreAlbumCache[cacheKey] = bitmap
     }
 
     return bitmap
@@ -715,7 +716,9 @@ suspend fun loadMediaStoreAlbumArt(context: Context, albumId: Long): Bitmap? {
  * referenced by Compose. The bitmaps will be garbage collected naturally.
  */
 fun clearMediaStoreAlbumCache() {
-    mediaStoreAlbumCache.clear()
+    synchronized(mediaStoreAlbumCache) {
+        mediaStoreAlbumCache.clear()
+    }
 }
 
 /**

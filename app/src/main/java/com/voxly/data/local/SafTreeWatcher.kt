@@ -57,7 +57,7 @@ class SafTreeWatcher @Inject constructor(
         }
 
         if (changed) {
-            libraryDataHolder.requestRefresh(forceRefresh = false)
+            libraryDataHolder.requestRefresh(forceRefresh = false, bypassVersionCache = true)
             Timber.tag(TAG).i("SAF tree change detected, refresh requested")
         }
     }

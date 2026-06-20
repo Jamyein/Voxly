@@ -59,7 +59,7 @@ object ExpressiveShapes {
     // ========== 扩展形状 ==========
     
     /** 完全圆形 - 用于头像、圆形按钮 */
-    val Circle = RoundedCornerShape(50.percent)
+    val Circle = CircleShape
     
     /** 极度圆润 - 用于特殊强调元素 */
     val ExtraRounded = RoundedCornerShape(32.dp)
@@ -98,12 +98,6 @@ val Shapes = Shapes(
     large = ExpressiveShapes.Large,
     extraLarge = ExpressiveShapes.ExtraLarge
 )
-
-/**
- * 百分比扩展
- */
-private val Int.percent: androidx.compose.ui.unit.Dp
-    get() = (this / 100f).dp
 
 /**
  * Material Design 3 Expressive (M3E) Shapes
