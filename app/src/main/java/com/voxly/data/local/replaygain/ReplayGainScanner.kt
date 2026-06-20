@@ -47,7 +47,8 @@ import javax.inject.Singleton
 @Singleton
 class ReplayGainScanner @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val metadataProcessor: TagLibMetadataProcessor
+    private val metadataProcessor: TagLibMetadataProcessor,
+    private val albumGroupingProvider: AlbumGroupingProvider
 ) {
 
     companion object {
@@ -191,50 +192,23 @@ class ReplayGainScanner @Inject constructor(
         config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): Flow<ScanProgress> = flow {
         val scanStartedAt = SystemClock.elapsedRealtime()
-        val totalFiles = filePaths.size
-
         Timber.i(
-            "ReplayGain album grouping started. files=$totalFiles quality=$scanQuality targetLoudness=$targetLoudness LUFS"
+            "ReplayGain album grouping started. files=${filePaths.size} quality=$scanQuality targetLoudness=$targetLoudness LUFS"
         )
 
         emit(
             ScanProgress(
                 currentFile = 0,
-                totalFiles = totalFiles,
+                totalFiles = filePaths.size,
                 percentage = 0f,
-                currentFilePath = "Reading metadata...",
+                currentFilePath = "Grouping by album...",
                 status = ScanStatus.SCANNING
             )
         )
 
-        val filesByAlbum = mutableMapOf<String, MutableList<String>>()
-        var singletonIndex = 0
+        val filesByAlbum = albumGroupingProvider.groupByAlbum(filePaths)
 
-        for (filePath in filePaths) {
-            try {
-                val metadata = metadataProcessor.readMetadata(filePath, includeAlbumArt = false)
-                val album = metadata?.album?.trim() ?: ""
-                val artist = metadata?.artist?.trim() ?: ""
-                val albumKey = "${album}_$artist"
-
-                if (album.isEmpty() && artist.isEmpty()) {
-                    val singletonKey = "singleton_${singletonIndex++}"
-                    filesByAlbum.getOrPut(singletonKey) { mutableListOf() }.add(filePath)
-                } else if (album.isNotEmpty()) {
-                    filesByAlbum.getOrPut(albumKey) { mutableListOf() }.add(filePath)
-                } else {
-                    filesByAlbum.getOrPut(albumKey) { mutableListOf() }.add(filePath)
-                }
-            } catch (e: Exception) {
-                val singletonKey = "singleton_${singletonIndex++}"
-                filesByAlbum.getOrPut(singletonKey) { mutableListOf() }.add(filePath)
-                Timber.w("Failed to read metadata for grouping: $filePath")
-            }
-        }
-
-        Timber.i(
-            "Grouped $totalFiles files into ${filesByAlbum.size} albums"
-        )
+        Timber.i("Grouped ${filePaths.size} files into ${filesByAlbum.size} albums")
 
         scanReplayGainByAlbum(filesByAlbum, scanQuality, targetLoudness, config).collect { progress ->
             emit(progress)
