@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteBuffer
@@ -58,6 +60,8 @@ class ReplayGainScanner @Inject constructor(
         const val MIN_GAIN_DB = -50f
         const val MAX_GAIN_DB = 50f
         const val BATCH_BUFFER_SIZE = 2 * 1024 * 1024 // 2MB batch buffer
+        val MAX_CONCURRENT_SCANS = Runtime.getRuntime().availableProcessors()
+            .coerceIn(2, 6)
         @Volatile
         private var nativeScannerAvailable = true
 
@@ -82,6 +86,8 @@ class ReplayGainScanner @Inject constructor(
             scanResultCache.clear()
         }
     }
+
+    private val scanSemaphore = Semaphore(MAX_CONCURRENT_SCANS)
 
     /**
      * Scans audio files and calculates ReplayGain values.
@@ -399,106 +405,108 @@ class ReplayGainScanner @Inject constructor(
         targetLoudness: Float,
         config: ReplayGainConfig = ReplayGainConfig.DEFAULT
     ): ReplayGainInfo? = withContext(Dispatchers.IO) {
-        try {
-            if (!nativeScannerAvailable) {
-                return@withContext null
-            }
+        val file = File(filePath)
+        if (!file.exists()) return@withContext null
 
-            // Lower thread priority for CPU-intensive audio processing to reduce overheating
-            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+        // Check cache first - cache hits don't need semaphore permit
+        getCachedResult(filePath)?.let { cached ->
+            Timber.v("ReplayGain cache hit: ${file.name}")
+            return@withContext cached
+        }
 
-            val file = File(filePath)
-            if (!file.exists()) return@withContext null
-
-            // Check cache first for repeated scans
-            getCachedResult(filePath)?.let { cached ->
-                Timber.v("ReplayGain cache hit: ${file.name}")
-                return@withContext cached
-            }
-
-            val extractor = MediaExtractor()
-            extractor.setDataSource(filePath)
-
-            var audioTrackIndex = -1
-            for (i in 0 until extractor.trackCount) {
-                val format = extractor.getTrackFormat(i)
-                val mime = format.getString(MediaFormat.KEY_MIME)
-                if (mime?.startsWith("audio/") == true) {
-                    audioTrackIndex = i
-                    break
+        scanSemaphore.withPermit {
+            try {
+                if (!nativeScannerAvailable) {
+                    return@withPermit null
                 }
-            }
 
-            if (audioTrackIndex == -1) {
-                extractor.release()
-                return@withContext null
-            }
+                // Lower thread priority for CPU-intensive audio processing to reduce overheating
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
 
-            extractor.selectTrack(audioTrackIndex)
-            val format = extractor.getTrackFormat(audioTrackIndex)
+                val extractor = MediaExtractor()
+                extractor.setDataSource(filePath)
 
-            val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                var audioTrackIndex = -1
+                for (i in 0 until extractor.trackCount) {
+                    val format = extractor.getTrackFormat(i)
+                    val mime = format.getString(MediaFormat.KEY_MIME)
+                    if (mime?.startsWith("audio/") == true) {
+                        audioTrackIndex = i
+                        break
+                    }
+                }
 
-            val scanner = try {
-                EbuR128NativeScanner(
-                    channels = channelCount,
-                    sampleRate = sampleRate,
-                    targetLoudness = targetLoudness.toDouble(),
-                    truePeak = false,
-                    dualMono = config.dualMono
-                )
+                if (audioTrackIndex == -1) {
+                    extractor.release()
+                    return@withPermit null
+                }
+
+                extractor.selectTrack(audioTrackIndex)
+                val format = extractor.getTrackFormat(audioTrackIndex)
+
+                val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+
+                val scanner = try {
+                    EbuR128NativeScanner(
+                        channels = channelCount,
+                        sampleRate = sampleRate,
+                        targetLoudness = targetLoudness.toDouble(),
+                        truePeak = false,
+                        dualMono = config.dualMono
+                    )
+                } catch (t: Throwable) {
+                    if (t is CancellationException) throw t
+                    if (t is LinkageError || t.cause is LinkageError) {
+                        nativeScannerAvailable = false
+                        Timber.e(
+                            t,
+                            "Disabling native ReplayGain scanner due to JNI/linkage failure: ${t.message}"
+                        )
+                    } else {
+                        Timber.e(t, "Failed to create native scanner for $filePath")
+                    }
+                    extractor.release()
+                    return@withPermit null
+                }
+
+                scanner.use { nativeScanner ->
+                    decodeAndFeedScanner(
+                        extractor = extractor,
+                        format = format,
+                        channelCount = channelCount,
+                        nativeScanner = nativeScanner
+                    )
+
+                    val replayGainInfo = nativeScanner.getResult()
+                        ?: run {
+                            Timber.w("Native scanner returned null for $filePath")
+                            return@withPermit null
+                        }
+
+                    Timber.v(
+                        "Native ReplayGain result: file=${file.name} loudness=${replayGainInfo.trackLoudness} LUFS gainDb=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak}"
+                    )
+
+                    val clampedTrackGain = applyClipProtection(
+                        gain = replayGainInfo.trackGain,
+                        peak = replayGainInfo.trackPeak,
+                        clipMode = config.clipMode,
+                        maxPeakLevel = config.maxPeakLevel.toFloat()
+                    )
+
+                    val result = replayGainInfo.copy(trackGain = clampedTrackGain)
+
+                    // Cache the result for future repeated scans
+                    cacheResult(filePath, result)
+
+                    result
+                }
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
-                if (t is LinkageError || t.cause is LinkageError) {
-                    nativeScannerAvailable = false
-                    Timber.e(
-                        t,
-                        "Disabling native ReplayGain scanner due to JNI/linkage failure: ${t.message}"
-                    )
-                } else {
-                    Timber.e(t, "Failed to create native scanner for $filePath")
-                }
-                extractor.release()
-                return@withContext null
+                Timber.e(t, "analyzeAudioFile exception: ${t.message}")
+                null
             }
-
-            scanner.use { nativeScanner ->
-                decodeAndFeedScanner(
-                    extractor = extractor,
-                    format = format,
-                    channelCount = channelCount,
-                    nativeScanner = nativeScanner
-                )
-
-                val replayGainInfo = nativeScanner.getResult()
-                    ?: run {
-                        Timber.w("Native scanner returned null for $filePath")
-                        return@withContext null
-                    }
-
-                Timber.v(
-                    "Native ReplayGain result: file=${file.name} loudness=${replayGainInfo.trackLoudness} LUFS gainDb=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak}"
-                )
-
-                val clampedTrackGain = applyClipProtection(
-                    gain = replayGainInfo.trackGain,
-                    peak = replayGainInfo.trackPeak,
-                    clipMode = config.clipMode,
-                    maxPeakLevel = config.maxPeakLevel.toFloat()
-                )
-
-                val result = replayGainInfo.copy(trackGain = clampedTrackGain)
-
-                // Cache the result for future repeated scans
-                cacheResult(filePath, result)
-
-                result
-            }
-        } catch (t: Throwable) {
-            if (t is CancellationException) throw t
-            Timber.e(t, "analyzeAudioFile exception: ${t.message}")
-            null
         }
     }
 
