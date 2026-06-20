@@ -29,7 +29,9 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -90,6 +92,64 @@ class ReplayGainScanner @Inject constructor(
     }
 
     private val scanSemaphore = Semaphore(MAX_CONCURRENT_SCANS)
+    private val codecPool = CodecPool()
+
+    /**
+     * Pool that reuses MediaCodec instances across same-format files within an album scan.
+     * Keyed by MIME type. On [acquire], a cached codec is flushed and reconfigured.
+     * On [release], the codec is stopped and returned to the pool for reuse.
+     */
+    private inner class CodecPool {
+        private val pool = mutableMapOf<String, MediaCodec>()
+        private val mutex = Mutex()
+
+        suspend fun acquire(mime: String, format: MediaFormat): MediaCodec? = withContext(Dispatchers.IO) {
+            val existing = mutex.withLock { pool.remove(mime) }
+            if (existing != null) {
+                try {
+                    existing.flush()
+                    existing.configure(format, null, null, 0)
+                    existing.start()
+                    Timber.v("CodecPool: reused codec for $mime")
+                    return@withContext existing
+                } catch (e: Exception) {
+                    Timber.w("CodecPool: reuse failed for $mime, creating new: ${e.message}")
+                    try { existing.release() } catch (_: Exception) {}
+                }
+            }
+            try {
+                MediaCodec.createDecoderByType(mime).also {
+                    it.configure(format, null, null, 0)
+                    it.start()
+                }
+            } catch (e: Exception) {
+                Timber.w("CodecPool: createDecoderByType failed for $mime: ${e.message}")
+                findBestDecoder(mime)?.let { name ->
+                    try {
+                        MediaCodec.createByCodecName(name).also {
+                            it.configure(format, null, null, 0)
+                            it.start()
+                        }
+                    } catch (e2: Exception) {
+                        Timber.w("CodecPool: fallback decoder $name failed: ${e2.message}")
+                        null
+                    }
+                }
+            }
+        }
+
+        suspend fun release(codec: MediaCodec, mime: String) = withContext(Dispatchers.IO) {
+            try { codec.stop() } catch (_: Exception) {}
+            mutex.withLock {
+                pool[mime] = codec
+            }
+        }
+
+        fun closeAll() {
+            pool.values.forEach { try { it.release() } catch (_: Exception) {} }
+            pool.clear()
+        }
+    }
 
     /**
      * Scans audio files and calculates ReplayGain values.
@@ -781,31 +841,14 @@ class ReplayGainScanner @Inject constructor(
         nativeScanner: EbuR128NativeScanner
     ) {
         val mime = format.getString(MediaFormat.KEY_MIME) ?: return
-        val codec = try {
-            MediaCodec.createDecoderByType(mime).also {
-                Timber.i("Using decoder: ${it.name} (hw=${isHardwareAccelerated(it.name)})")
-            }
-        } catch (e: Exception) {
-            Timber.w("System decoder failed for $mime: ${e.message}")
-            findBestDecoder(mime)?.let { name ->
-                try {
-                    MediaCodec.createByCodecName(name).also {
-                        Timber.i("Using fallback decoder: $name (hw=${isHardwareAccelerated(name)})")
-                    }
-                } catch (e2: Exception) {
-                    Timber.w("Fallback decoder $name failed: ${e2.message}")
-                    null
-                }
-            }
-        }
+        val codec = codecPool.acquire(mime, format)
         if (codec == null) {
             Timber.w("No decoder found for $mime")
             return
         }
+        Timber.i("Using decoder: ${codec.name} (hw=${isHardwareAccelerated(codec.name)})")
 
         try {
-            codec.configure(format, null, null, 0)
-            codec.start()
 
             var inputDone = false
             var outputDone = false
@@ -955,9 +998,7 @@ class ReplayGainScanner @Inject constructor(
                 nativeScanner.processBuffer(batchBuffer, batchPos)
             }
         } finally {
-            // Best-effort cleanup; codec state is unknown after error
-            try { codec.stop() } catch (_: Exception) { /* ignore - best effort */ }
-            try { codec.release() } catch (_: Exception) { /* ignore - best effort */ }
+            codecPool.release(codec, mime)
         }
     }
 
