@@ -217,6 +217,29 @@ class MetadataEditorViewModel @AssistedInject constructor(
             }
         }
 
+        // When ReplayGain scan completes and a result arrives, reload file metadata
+        // to reflect the newly written ReplayGain tags in the UI.
+        viewModelScope.launch {
+            var lastScanState = replayGainHelper.isScanningReplayGain.value
+            replayGainHelper.isScanningReplayGain.collect { scanning ->
+                if (lastScanState && !scanning) {
+                    // Transitioned from scanning → not scanning: reload metadata
+                    val pending = replayGainHelper.pendingReplayGainInfo.value
+                    if (pending != null) {
+                        val currentState = _uiState.value as? MetadataEditorUiState.Success
+                        if (currentState != null) {
+                            _uiState.update {
+                                currentState.copy(
+                                    audioFile = currentState.audioFile.copy(replayGainInfo = pending)
+                                )
+                            }
+                        }
+                    }
+                }
+                lastScanState = scanning
+            }
+        }
+
         // Setup debounced text field updates - moved from Composable to avoid recomposition issues
         setupDebouncedTextField(MetadataField.TITLE, _titleTextFlow)
         setupDebouncedTextField(MetadataField.ARTIST, _artistTextFlow)
