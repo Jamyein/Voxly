@@ -327,7 +327,7 @@ class ReplayGainScanner @Inject constructor(
                                 totalFiles = totalFiles,
                                 percentage = processedFiles.toFloat() / totalFiles,
                                 currentFilePath = filePath,
-                                status = ScanStatus.COMPLETED,
+                                status = ScanStatus.TRACK_COMPLETED,
                                 replayGainInfo = combinedInfo
                             )
                         )
@@ -338,6 +338,17 @@ class ReplayGainScanner @Inject constructor(
                         )
                     }
                 }
+
+                emit(
+                    ScanProgress(
+                        currentFile = processedFiles,
+                        totalFiles = totalFiles,
+                        percentage = processedFiles.toFloat() / totalFiles,
+                        currentFilePath = "",
+                        status = ScanStatus.ALBUM_COMPLETED
+                    )
+                )
+
             } else {
                 // No track succeeded for this album — still emit COMPLETED so the
                 // UI's `isScanning` flag transitions out of "scanning" state. The
@@ -354,7 +365,7 @@ class ReplayGainScanner @Inject constructor(
                         totalFiles = totalFiles,
                         percentage = processedFiles.toFloat() / totalFiles,
                         currentFilePath = "",
-                        status = ScanStatus.COMPLETED,
+                        status = ScanStatus.ALBUM_COMPLETED,
                         replayGainInfo = null
                     )
                 )
@@ -362,6 +373,16 @@ class ReplayGainScanner @Inject constructor(
 
             processedAlbums++
         }
+
+        emit(
+            ScanProgress(
+                currentFile = processedFiles,
+                totalFiles = totalFiles,
+                percentage = 1f,
+                currentFilePath = "",
+                status = ScanStatus.COMPLETED
+            )
+        )
 
         Timber.i(
             "ReplayGain album scan finished. albums=$totalAlbums files=$totalFiles elapsedMs=${SystemClock.elapsedRealtime() - scanStartedAt}"
