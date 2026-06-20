@@ -112,28 +112,33 @@ jobs:
             fi
           done < <(git log --pretty=format:"%H %s" $COMMIT_RANGE)
 
-          # Build markdown output
-          AUTO_CHANGELOG=""
+          # Build markdown output to file
+          AUTO_CHANGELOG_FILE="${TEMP_DIR}/auto_changelog.md"
+          touch "$AUTO_CHANGELOG_FILE"
           
           for type in "${ORDER[@]}"; do
             if [ -s "${TEMP_DIR}/${type}.txt" ]; then
-              AUTO_CHANGELOG+="### ${SECTIONS[$type]}"$'\n\n'
-              AUTO_CHANGELOG+=$(cat "${TEMP_DIR}/${type}.txt")$'\n\n'
+              echo "### ${SECTIONS[$type]}" >> "$AUTO_CHANGELOG_FILE"
+              echo "" >> "$AUTO_CHANGELOG_FILE"
+              cat "${TEMP_DIR}/${type}.txt" >> "$AUTO_CHANGELOG_FILE"
+              echo "" >> "$AUTO_CHANGELOG_FILE"
+              echo "" >> "$AUTO_CHANGELOG_FILE"
             fi
           done
           
           if [ -s "${TEMP_DIR}/others.txt" ]; then
-            AUTO_CHANGELOG+="### 📦 其他"$'\n\n'
-            AUTO_CHANGELOG+=$(cat "${TEMP_DIR}/others.txt")$'\n\n'
+            echo "### 📦 其他" >> "$AUTO_CHANGELOG_FILE"
+            echo "" >> "$AUTO_CHANGELOG_FILE"
+            cat "${TEMP_DIR}/others.txt" >> "$AUTO_CHANGELOG_FILE"
+            echo "" >> "$AUTO_CHANGELOG_FILE"
+            echo "" >> "$AUTO_CHANGELOG_FILE"
           fi
 
-          # Clean up
+          # Move to workspace for next step
+          mv "$AUTO_CHANGELOG_FILE" ./auto_changelog.md
           rm -rf "$TEMP_DIR"
-
-          # Save to env
-          echo "AUTO_CHANGELOG<<GITHUB_ENV_EOF" >> "$GITHUB_ENV"
-          echo "$AUTO_CHANGELOG" >> "$GITHUB_ENV"
-          echo "GITHUB_ENV_EOF" >> "$GITHUB_ENV"
+          
+          echo "Changelog generated"
 
       - name: Assemble release body
         shell: bash
@@ -141,27 +146,32 @@ jobs:
           set -euo pipefail
 
           MANUAL="${{ github.event.inputs.changelog }}"
-          AUTO="${AUTO_CHANGELOG}"
-          BODY=""
+          BODY_FILE="release_body.md"
+          touch "$BODY_FILE"
 
           if [ -n "$MANUAL" ]; then
-            BODY+="## 📋 更新说明"$'\n\n'
-            BODY+="${MANUAL}"$'\n\n'
-            BODY+="---"$'\n\n'
+            echo "## 📋 更新说明" >> "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+            echo "$MANUAL" >> "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+            echo "---" >> "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
           fi
 
-          if [ -n "$AUTO" ]; then
-            BODY+="## 🔄 变更日志"$'\n\n'
-            BODY+="${AUTO}"
+          if [ -f ./auto_changelog.md ] && [ -s ./auto_changelog.md ]; then
+            echo "## 🔄 变更日志" >> "$BODY_FILE"
+            echo "" >> "$BODY_FILE"
+            cat ./auto_changelog.md >> "$BODY_FILE"
           fi
 
-          if [ -z "$BODY" ]; then
-            BODY="Voxly v${{ steps.version.outputs.VERSION }}"
+          if [ ! -s "$BODY_FILE" ]; then
+            echo "Voxly v${{ steps.version.outputs.VERSION }}" > "$BODY_FILE"
           fi
 
-          echo "RELEASE_BODY<<GITHUB_ENV_EOF" >> "$GITHUB_ENV"
-          echo "$BODY" >> "$GITHUB_ENV"
-          echo "GITHUB_ENV_EOF" >> "$GITHUB_ENV"
+          # Clean up temp file
+          rm -f ./auto_changelog.md
+
+          echo "Release body assembled"
 
       - name: Set up JDK 25
         uses: actions/setup-java@v4
@@ -234,5 +244,5 @@ jobs:
         with:
           tag_name: v${{ steps.version.outputs.VERSION }}
           name: Voxly v${{ steps.version.outputs.VERSION }}
-          body: ${{ env.RELEASE_BODY }}
+          body_path: release_body.md
           files: ${{ env.RELEASE_APKS }}
