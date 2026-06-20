@@ -265,30 +265,30 @@ class ReplayGainScanner @Inject constructor(
             }
 
             val trackGains = mutableListOf<Pair<String, ReplayGainInfo>>()
+            val trackScanners = mutableListOf<EbuR128NativeScanner>()
 
             coroutineScope {
                 val deferred = albumFiles.map { filePath ->
                     async(Dispatchers.IO) {
-                        val result = analyzeAudioFile(filePath, scanQuality, targetLoudness, config)
-                        filePath to result
+                        val (scanner, trackInfo) = analyzeAudioFileKeepScanner(filePath, scanQuality, targetLoudness, config)
+                        Triple(filePath, scanner, trackInfo)
                     }
                 }
 
                 for (deferredResult in deferred) {
                     kotlin.coroutines.coroutineContext.ensureActive()
 
-                    val (filePath, replayGainInfo) = deferredResult.await()
+                    val (filePath, scanner, replayGainInfo) = deferredResult.await()
                     processedFiles++
 
+                    if (scanner != null) {
+                        synchronized(trackScanners) { trackScanners.add(scanner) }
+                    }
                     if (replayGainInfo != null) {
                         trackGains.add(filePath to replayGainInfo)
-                        Timber.v(
-                            "Track gain calculated file=${File(filePath).name} gain=${replayGainInfo.trackGain}"
-                        )
+                        Timber.v("Track gain calculated file=${File(filePath).name} gain=${replayGainInfo.trackGain}")
                     } else {
-                        Timber.w(
-                            "Track gain analysis failed file=${File(filePath).name}"
-                        )
+                        Timber.w("Track gain analysis failed file=${File(filePath).name}")
                     }
 
                     emit(
@@ -303,31 +303,41 @@ class ReplayGainScanner @Inject constructor(
                 }
             }
 
-            if (trackGains.isNotEmpty()) {
-                val albumGainInfo = calculateAlbumGain(trackGains.map { it.second }, config)
-                Timber.i(
-                    "Album gain calculated album=$albumKey tracks=${trackGains.size} albumGain=${albumGainInfo.albumGain} albumPeak=${albumGainInfo.albumPeak}"
+            if (trackScanners.isNotEmpty()) {
+                // Use ebur128_loudness_global_multiple for EBU R128 compliant album gain
+                val albumResult = EbuR128NativeScanner.getAlbumGain(trackScanners)
+                val albumLoudness = albumResult?.get(0) ?: targetLoudness.toDouble()
+                val albumRange = albumResult?.get(1) ?: 0.0
+                val albumPeak = albumResult?.get(2) ?: 0.0
+                val albumGainDb = (targetLoudness.toDouble() - albumLoudness).toFloat()
+                val maxPeak = albumPeak.toFloat()
+
+                val clampedAlbumGain = applyClipProtection(
+                    gain = albumGainDb,
+                    peak = maxPeak,
+                    clipMode = config.clipMode,
+                    maxPeakLevel = config.maxPeakLevel.toFloat()
                 )
+
+                Timber.i("Album gain (EBU R128) album=$albumKey tracks=${trackGains.size} albumGain=$clampedAlbumGain albumLoudness=$albumLoudness")
 
                 for ((filePath, trackInfo) in trackGains) {
                     try {
                         val combinedInfo = ReplayGainInfo(
                             trackGain = trackInfo.trackGain,
                             trackPeak = trackInfo.trackPeak,
-                            albumGain = albumGainInfo.albumGain,
-                            albumPeak = albumGainInfo.albumPeak,
+                            albumGain = clampedAlbumGain,
+                            albumPeak = maxPeak,
                             truePeak = trackInfo.truePeak,
                             trackLoudness = trackInfo.trackLoudness,
-                            albumLoudness = albumGainInfo.albumLoudness,
+                            albumLoudness = albumLoudness.toFloat(),
                             trackRange = trackInfo.trackRange,
-                            albumRange = albumGainInfo.albumRange,
+                            albumRange = albumRange.toFloat(),
                             referenceLoudness = trackInfo.referenceLoudness
                         )
                         val saved = saveReplayGainToFile(filePath, combinedInfo)
                         if (!saved) {
-                            Timber.w(
-                                "Album gain save failed but analysis complete file=$filePath"
-                            )
+                            Timber.w("Album gain save failed but analysis complete file=$filePath")
                         }
                         emit(
                             ScanProgress(
@@ -340,10 +350,7 @@ class ReplayGainScanner @Inject constructor(
                             )
                         )
                     } catch (e: Exception) {
-                        Timber.e(
-                            e,
-                            "Failed to save album gain for file=$filePath reason=${e.message}"
-                        )
+                        Timber.e(e, "Failed to save album gain for file=$filePath reason=${e.message}")
                     }
                 }
 
@@ -357,16 +364,13 @@ class ReplayGainScanner @Inject constructor(
                     )
                 )
 
+                // Close all scanners after album gain calculation
+                trackScanners.forEach { try { it.close() } catch (_: Exception) {} }
+
             } else {
                 // No track succeeded for this album — still emit ALBUM_COMPLETED so the
-                // UI's `isScanning` flag transitions out of "scanning" state. The
-                // previous implementation dropped the ALBUM_COMPLETED event entirely
-                // when trackGains was empty, leaving the UI stuck on the spinner
-                // for any album whose tracks all failed analysis (decode errors,
-                // codec init failures, etc.).
-                Timber.w(
-                    "Album scan produced no successful tracks album=$albumKey"
-                )
+                // UI's `isScanning` flag transitions out of "scanning" state.
+                Timber.w("Album scan produced no successful tracks album=$albumKey")
                 emit(
                     ScanProgress(
                         currentFile = processedFiles,
@@ -551,6 +555,136 @@ class ReplayGainScanner @Inject constructor(
                 if (t is CancellationException) throw t
                 Timber.e(t, "analyzeAudioFile exception: ${t.message}")
                 null
+            }
+        }
+    }
+
+    /**
+     * Analyzes a single file and returns both the track gain info AND the native scanner
+     * (state preserved for album-level ebur128_loudness_global_multiple calculation).
+     * Caller MUST close the returned scanner after album gain calculation.
+     */
+    private suspend fun analyzeAudioFileKeepScanner(
+        filePath: String,
+        scanQuality: ScanQuality,
+        targetLoudness: Float,
+        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
+    ): Pair<EbuR128NativeScanner?, ReplayGainInfo?> = withContext(Dispatchers.IO) {
+        val file = File(filePath)
+        if (!file.exists()) return@withContext null to null
+
+        // Check cache first - cache hits don't need semaphore permit
+        getCachedResult(filePath)?.let { cached ->
+            Timber.v("ReplayGain cache hit: ${file.name}")
+            return@withContext null to cached
+        }
+
+        // Check Room cache if skipExisting is enabled
+        if (config.skipExisting) {
+            val cachedEntity = cachedAudioFileDao.getAudioFileByPath(filePath)
+            if (cachedEntity?.replayGainTrackGain != null) {
+                val existing = ReplayGainInfo(
+                    trackGain = cachedEntity.replayGainTrackGain,
+                    trackPeak = cachedEntity.replayGainTrackPeak ?: 0f,
+                    albumGain = cachedEntity.replayGainAlbumGain,
+                    albumPeak = cachedEntity.replayGainAlbumPeak,
+                    truePeak = cachedEntity.replayGainTruePeak,
+                    trackLoudness = cachedEntity.replayGainTrackLoudness,
+                    albumLoudness = cachedEntity.replayGainAlbumLoudness,
+                    trackRange = cachedEntity.replayGainTrackRange,
+                    albumRange = cachedEntity.replayGainAlbumRange,
+                    referenceLoudness = cachedEntity.replayGainReferenceLoudness ?: -18f
+                )
+                cacheResult(filePath, existing)
+                Timber.v("ReplayGain skipExisting hit: ${file.name}")
+                return@withContext null to existing
+            }
+        }
+
+        scanSemaphore.withPermit {
+            var scanner: EbuR128NativeScanner? = null
+            try {
+                if (!nativeScannerAvailable) {
+                    return@withPermit null to null
+                }
+
+                android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
+
+                val extractor = MediaExtractor()
+                extractor.setDataSource(filePath)
+
+                var audioTrackIndex = -1
+                for (i in 0 until extractor.trackCount) {
+                    val format = extractor.getTrackFormat(i)
+                    val mime = format.getString(MediaFormat.KEY_MIME)
+                    if (mime?.startsWith("audio/") == true) {
+                        audioTrackIndex = i
+                        break
+                    }
+                }
+
+                if (audioTrackIndex == -1) {
+                    extractor.release()
+                    return@withPermit null to null
+                }
+
+                extractor.selectTrack(audioTrackIndex)
+                val format = extractor.getTrackFormat(audioTrackIndex)
+
+                val originalSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+                val decimationFactor = if (scanQuality != ScanQuality.ACCURATE &&
+                    originalSampleRate > scanQuality.maxSampleRate) {
+                    (originalSampleRate / scanQuality.maxSampleRate).coerceAtLeast(1)
+                } else {
+                    1
+                }
+                val effectiveSampleRate = originalSampleRate / decimationFactor
+
+                scanner = try {
+                    EbuR128NativeScanner(
+                        channels = channelCount,
+                        sampleRate = effectiveSampleRate,
+                        targetLoudness = targetLoudness.toDouble(),
+                        truePeak = false,
+                        dualMono = config.dualMono
+                    )
+                } catch (t: Throwable) {
+                    if (t is CancellationException) throw t
+                    if (t is LinkageError || t.cause is LinkageError) {
+                        nativeScannerAvailable = false
+                        Timber.e(t, "Disabling native ReplayGain scanner: ${t.message}")
+                    } else {
+                        Timber.e(t, "Failed to create native scanner for $filePath")
+                    }
+                    extractor.release()
+                    return@withPermit null to null
+                }
+
+                decodeAndFeedScanner(extractor, format, channelCount, decimationFactor, scanner)
+
+                val replayGainInfo = scanner.getResult() ?: run {
+                    scanner.close()
+                    return@withPermit null to null
+                }
+
+                val clampedTrackGain = applyClipProtection(
+                    gain = replayGainInfo.trackGain,
+                    peak = replayGainInfo.trackPeak,
+                    clipMode = config.clipMode,
+                    maxPeakLevel = config.maxPeakLevel.toFloat()
+                )
+
+                val result = replayGainInfo.copy(trackGain = clampedTrackGain)
+                cacheResult(filePath, result)
+
+                // Don't close scanner - return it for album gain calculation
+                scanner to result
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                Timber.e(t, "analyzeAudioFileKeepScanner exception: ${t.message}")
+                try { scanner?.close() } catch (_: Exception) {}
+                null to null
             }
         }
     }
@@ -831,83 +965,6 @@ class ReplayGainScanner @Inject constructor(
         }
 
         return gain.coerceIn(MIN_GAIN_DB, MAX_GAIN_DB)
-    }
-
-    /**
-     * Calculates album gain from a list of track gains using energy average.
-     */
-    fun calculateAlbumGain(
-        trackGains: List<ReplayGainInfo>,
-        config: ReplayGainConfig = ReplayGainConfig.DEFAULT
-    ): ReplayGainInfo {
-        Timber.i(
-            "calculateAlbumGain: input trackGains count=${trackGains.size} gains=${trackGains.map { it.trackGain }}"
-        )
-
-        if (trackGains.isEmpty()) return ReplayGainInfo()
-
-        val validTrackGains = trackGains.filter { trackGain ->
-            trackGain.trackGain.isFinite() &&
-            trackGain.trackGain > -100f &&
-            trackGain.trackGain < 100f
-        }
-
-        Timber.i("calculateAlbumGain: valid trackGains count=${validTrackGains.size}")
-
-        if (validTrackGains.isEmpty()) {
-            Timber.w("calculateAlbumGain: no valid track gains found")
-            return ReplayGainInfo()
-        }
-
-        val referenceLoudness = validTrackGains.first().referenceLoudness.toDouble()
-
-        val albumLoudness = if (validTrackGains.all { it.trackLoudness != null }) {
-            val linearLoudness = validTrackGains.mapNotNull { it.trackLoudness?.toDouble() }
-                .map { 10.0.pow(it / 10.0) }
-
-            if (linearLoudness.isEmpty()) {
-                referenceLoudness
-            } else {
-                val meanEnergy = linearLoudness.average()
-                10.0 * log10(meanEnergy)
-            }
-        } else {
-            val trackLoudnessValues = validTrackGains.map { trackGain ->
-                referenceLoudness - trackGain.trackGain
-            }
-            val linearLoudness = trackLoudnessValues.map { 10.0.pow(it / 10.0) }
-            val meanEnergy = linearLoudness.average()
-            10.0 * log10(meanEnergy)
-        }
-
-        val albumGainDb = (referenceLoudness - albumLoudness).toFloat()
-
-        val maxPeak = validTrackGains.maxOf { it.trackPeak }
-        val clampedAlbumGain = applyClipProtection(
-            gain = albumGainDb,
-            peak = maxPeak,
-            clipMode = config.clipMode,
-            maxPeakLevel = config.maxPeakLevel.toFloat()
-        )
-
-        val albumRange = validTrackGains.mapNotNull { it.trackRange }.maxOrNull()
-
-        Timber.v(
-            "Album gain calculated: trackCount=${validTrackGains.size} albumGainDb=$clampedAlbumGain albumLoudness=$albumLoudness"
-        )
-
-        return ReplayGainInfo(
-            trackGain = validTrackGains.first().trackGain,
-            trackPeak = validTrackGains.first().trackPeak,
-            albumGain = clampedAlbumGain,
-            albumPeak = maxPeak,
-            truePeak = validTrackGains.first().truePeak,
-            trackLoudness = validTrackGains.first().trackLoudness,
-            albumLoudness = albumLoudness.toFloat(),
-            trackRange = validTrackGains.first().trackRange,
-            albumRange = albumRange,
-            referenceLoudness = validTrackGains.first().referenceLoudness
-        )
     }
 
     /**
