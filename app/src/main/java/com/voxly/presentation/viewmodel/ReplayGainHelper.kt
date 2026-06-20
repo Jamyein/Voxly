@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Environment
 import android.provider.MediaStore
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.replaygain.AlbumGroupingProvider
 import com.voxly.domain.model.ClipMode
 import com.voxly.domain.model.ReplayGainConfig
 import com.voxly.domain.model.ReplayGainInfo
@@ -12,6 +13,7 @@ import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.ScanMode
 import com.voxly.domain.repository.ScanQuality
+import com.voxly.domain.repository.ScanStatus
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +61,7 @@ class ReplayGainHelper @Inject constructor(
     private val replayGainRepository: ReplayGainRepository,
     private val audioRepository: AudioRepository,
     private val settingsDataStore: SettingsDataStore,
+    private val albumGroupingProvider: AlbumGroupingProvider,
     @ApplicationContext private val context: Context
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -138,57 +141,31 @@ class ReplayGainHelper @Inject constructor(
                         targetLoudness,
                         scanConfig
                     )
-                    ScanMode.ALBUMS -> replayGainRepository.scanReplayGainWithAlbumGrouping(
-                        filesToScan,
-                        scanQuality,
-                        targetLoudness,
-                        scanConfig
-                    )
+                    ScanMode.ALBUMS -> {
+                        val filesByAlbum = albumGroupingProvider.groupByAlbum(filesToScan)
+                        replayGainRepository.scanReplayGainByAlbum(
+                            filesByAlbum,
+                            scanQuality,
+                            targetLoudness,
+                            scanConfig
+                        )
+                    }
                 }
 
                 scanFlow.collect { progress ->
                     when (progress.status) {
-                        com.voxly.domain.repository.ScanStatus.COMPLETED -> {
-                            // Use ReplayGainInfo directly from progress if available
-                            val info = progress.replayGainInfo
-                            if (info != null) {
-                                _pendingReplayGainInfo.update { info }
-                                Timber.tag("Voxly").i("ReplayGainHelper: Scan completed (from progress). mode=${currentScanMode.name}")
-                            } else {
-                                // Fallback: read from file if not in progress
-                                val replayGainReadResult = replayGainRepository.readReplayGain(filePath)
-                                replayGainReadResult.getOrNull()?.let { readInfo ->
-                                    _pendingReplayGainInfo.update { readInfo }
-                                }
-                                Timber.tag("Voxly").i("ReplayGainHelper: Scan completed (from file). mode=${currentScanMode.name}")
-                            }
+                        ScanStatus.COMPLETED -> {
+                            _pendingReplayGainInfo.update { progress.replayGainInfo }
                             _isScanningReplayGain.update { false }
                         }
-                        com.voxly.domain.repository.ScanStatus.FAILED -> {
-                            // Determine error type based on reason
-                            val error: ReplayGainScanError = when {
-                                progress.currentFilePath.contains("Permission") ||
-                                progress.currentFilePath.contains("EACCES") ->
-                                    ReplayGainScanError.PermissionDenied(progress.currentFilePath)
-                                progress.currentFilePath.contains("audio track") ||
-                                progress.currentFilePath.contains("no audio") ||
-                                progress.currentFilePath.contains("NO_AUDIO_TRACK") ->
-                                    ReplayGainScanError.NoAudioTrack(progress.currentFilePath)
-                                progress.currentFilePath.contains("ALL_FALLBACKS_EXHAUSTED") ->
-                                    ReplayGainScanError.AllFallbacksFailed(progress.currentFilePath)
-                                progress.currentFilePath.contains("decode") ||
-                                progress.currentFilePath.contains("codec") ||
-                                progress.currentFilePath.contains("DECODER_INIT_FAILED") ||
-                                progress.currentFilePath.contains("fallback") ->
-                                    ReplayGainScanError.DecodeFailed("解码失败", progress.currentFilePath)
-                                else ->
-                                    ReplayGainScanError.Unknown(progress.currentFilePath)
-                            }
-                            _replayGainScanError.emit(error.toString())
+                        ScanStatus.FAILED,
+                        ScanStatus.CANCELLED -> {
+                            _replayGainScanError.tryEmit("Scan failed/cancelled for: ${progress.currentFilePath}")
                             _isScanningReplayGain.update { false }
-                            Timber.tag("Voxly").e("ReplayGainHelper: Scan failed.")
                         }
-                        else -> { /* scanning in progress */ }
+                        else -> {
+                            _pendingReplayGainInfo.update { progress.replayGainInfo }
+                        }
                     }
                 }
             } catch (e: Exception) {
