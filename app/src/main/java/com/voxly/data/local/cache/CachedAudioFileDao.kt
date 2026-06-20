@@ -166,6 +166,18 @@ interface CachedAudioFileDao {
         val fileLastModifiedAt: Long
     )
     
+    @Query("SELECT path, album, artist FROM cached_audio_files WHERE path IN (:paths)")
+    suspend fun getAlbumInfoByPaths(paths: List<String>): List<AlbumPathInfo>
+
+    /**
+     * Minimal projection used by [com.voxly.data.local.replaygain.AlbumGroupingProvider].
+     */
+    data class AlbumPathInfo(
+        val path: String,
+        val album: String?,
+        val artist: String?
+    )
+    
     // ==================== Inserts/Updates ====================
     
     /**
