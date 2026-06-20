@@ -142,17 +142,19 @@ jobs:
 
       - name: Assemble release body
         shell: bash
+        env:
+          MANUAL_CHANGELOG: ${{ github.event.inputs.changelog }}
         run: |
           set -euo pipefail
 
-          MANUAL="${{ github.event.inputs.changelog }}"
+          MANUAL="$MANUAL_CHANGELOG"
           BODY_FILE="release_body.md"
           touch "$BODY_FILE"
 
           if [ -n "$MANUAL" ]; then
             echo "## 📋 更新说明" >> "$BODY_FILE"
             echo "" >> "$BODY_FILE"
-            echo "$MANUAL" >> "$BODY_FILE"
+            printf '%s\n' "$MANUAL" >> "$BODY_FILE"
             echo "" >> "$BODY_FILE"
             echo "---" >> "$BODY_FILE"
             echo "" >> "$BODY_FILE"
