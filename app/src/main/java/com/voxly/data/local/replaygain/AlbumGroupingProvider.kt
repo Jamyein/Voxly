@@ -37,7 +37,7 @@ class AlbumGroupingProvider @Inject constructor(
         cachedInfo.forEach { info ->
             cachedPaths.add(info.path)
             val album = info.album?.trim() ?: ""
-            val groupingArtist = info.albumArtist?.trim() ?: ""
+            val groupingArtist = info.albumArtist?.trim() ?: info.artist?.trim() ?: ""
             addToGroup(filesByAlbum, info.path, album, groupingArtist) { "singleton_${singletonIndex++}" }
         }
         remaining.removeAll(cachedPaths)
@@ -68,7 +68,7 @@ class AlbumGroupingProvider @Inject constructor(
                 val albumArtist = metadata?.albumArtist?.trim() ?: metadata?.artist?.trim() ?: ""
                 addToGroup(filesByAlbum, path, album, albumArtist) { "singleton_${singletonIndex++}" }
             } catch (e: Exception) {
-                Timber.w("AlbumGroupingProvider: failed to read metadata for $path")
+                Timber.w(e, "AlbumGroupingProvider: failed to read metadata for $path")
                 filesByAlbum.getOrPut("singleton_${singletonIndex++}") { mutableListOf() }.add(path)
             }
         }

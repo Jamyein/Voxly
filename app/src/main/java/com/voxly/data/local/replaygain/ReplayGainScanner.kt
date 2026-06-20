@@ -350,9 +350,9 @@ class ReplayGainScanner @Inject constructor(
                 )
 
             } else {
-                // No track succeeded for this album — still emit COMPLETED so the
+                // No track succeeded for this album — still emit ALBUM_COMPLETED so the
                 // UI's `isScanning` flag transitions out of "scanning" state. The
-                // previous implementation dropped the COMPLETED event entirely
+                // previous implementation dropped the ALBUM_COMPLETED event entirely
                 // when trackGains was empty, leaving the UI stuck on the spinner
                 // for any album whose tracks all failed analysis (decode errors,
                 // codec init failures, etc.).

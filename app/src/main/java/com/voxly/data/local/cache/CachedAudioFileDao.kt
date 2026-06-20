@@ -166,7 +166,7 @@ interface CachedAudioFileDao {
         val fileLastModifiedAt: Long
     )
     
-    @Query("SELECT path, album, albumArtist FROM cached_audio_files WHERE path IN (:paths)")
+    @Query("SELECT path, album, albumArtist, artist FROM cached_audio_files WHERE path IN (:paths)")
     suspend fun getAlbumInfoByPaths(paths: List<String>): List<AlbumPathInfo>
 
     /**
@@ -176,7 +176,8 @@ interface CachedAudioFileDao {
     data class AlbumPathInfo(
         val path: String,
         val album: String?,
-        val albumArtist: String?
+        val albumArtist: String?,
+        val artist: String?
     )
     
     // ==================== Inserts/Updates ====================

@@ -155,7 +155,7 @@ class ReplayGainHelper @Inject constructor(
                 scanFlow.collect { progress ->
                     when (progress.status) {
                         ScanStatus.COMPLETED -> {
-                            _pendingReplayGainInfo.update { progress.replayGainInfo }
+                            progress.replayGainInfo?.let { _pendingReplayGainInfo.update { it } }
                             _isScanningReplayGain.update { false }
                         }
                         ScanStatus.FAILED,
@@ -164,7 +164,7 @@ class ReplayGainHelper @Inject constructor(
                             _isScanningReplayGain.update { false }
                         }
                         else -> {
-                            _pendingReplayGainInfo.update { progress.replayGainInfo }
+                            progress.replayGainInfo?.let { _pendingReplayGainInfo.update { it } }
                         }
                     }
                 }

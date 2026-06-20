@@ -27,9 +27,9 @@ class AlbumGroupingProviderTest {
     fun `groups by album_artist from Room cache`() = runTest {
         val paths = listOf("/music/a/1.mp3", "/music/a/2.mp3", "/music/b/3.mp3")
         coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
-            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A"),
-            AlbumPathInfo("/music/a/2.mp3", "Album A", "Artist A"),
-            AlbumPathInfo("/music/b/3.mp3", "Album B", "Artist B")
+            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A", "Artist A"),
+            AlbumPathInfo("/music/a/2.mp3", "Album A", "Artist A", "Artist A"),
+            AlbumPathInfo("/music/b/3.mp3", "Album B", "Artist B", "Artist B")
         )
 
         val result = provider.groupByAlbum(paths)
@@ -47,7 +47,7 @@ class AlbumGroupingProviderTest {
     fun `falls back to disk read when cache misses some paths`() = runTest {
         val paths = listOf("/music/a/1.mp3", "/music/a/2.mp3")
         coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
-            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A")
+            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A", "Artist A")
         )
         every { aggregator.albums } returns MutableStateFlow(emptyList<AlbumGroup>())
         coEvery { metadataProcessor.readMetadata("/music/a/2.mp3", false) } returns AudioMetadata(
@@ -71,9 +71,9 @@ class AlbumGroupingProviderTest {
             "/music/various/3.mp3"
         )
         coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
-            AlbumPathInfo("/music/various/1.mp3", "Compilation Album", "Various Artists"),
-            AlbumPathInfo("/music/various/2.mp3", "Compilation Album", "Various Artists"),
-            AlbumPathInfo("/music/various/3.mp3", "Compilation Album", "Various Artists")
+            AlbumPathInfo("/music/various/1.mp3", "Compilation Album", "Various Artists", "Various Artists"),
+            AlbumPathInfo("/music/various/2.mp3", "Compilation Album", "Various Artists", "Various Artists"),
+            AlbumPathInfo("/music/various/3.mp3", "Compilation Album", "Various Artists", "Various Artists")
         )
 
         val result = provider.groupByAlbum(paths)
@@ -95,7 +95,7 @@ class AlbumGroupingProviderTest {
         val paths = listOf("/music/a/1.mp3", "/music/a/2.mp3")
         // Cache has correct albumArtist for file 1
         coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
-            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A")
+            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A", "Artist A")
         )
         every { aggregator.albums } returns MutableStateFlow(emptyList<AlbumGroup>())
         // Disk read for file 2 has null albumArtist — tests fallback to artist
@@ -117,8 +117,8 @@ class AlbumGroupingProviderTest {
     fun `puts files with empty album and artist into singleton groups`() = runTest {
         val paths = listOf("/music/a/1.mp3", "/music/b/2.mp3")
         coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
-            AlbumPathInfo("/music/a/1.mp3", "", ""),
-            AlbumPathInfo("/music/b/2.mp3", null, null)
+            AlbumPathInfo("/music/a/1.mp3", "", "", ""),
+            AlbumPathInfo("/music/b/2.mp3", null, null, null)
         )
 
         val result = provider.groupByAlbum(paths)
@@ -133,7 +133,7 @@ class AlbumGroupingProviderTest {
         val paths = listOf("/music/a/1.mp3", "/music/b/2.mp3")
         // Room only returns the first path
         coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
-            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A")
+            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A", "Artist A")
         )
         // Aggregator has the second path
         val aggregatorGroup = AlbumGroup(
@@ -170,7 +170,7 @@ class AlbumGroupingProviderTest {
         // Each chunk only returns info for the paths it was actually queried with
         coEvery { dao.getAlbumInfoByPaths(any()) } answers {
             val chunkPaths = firstArg<List<String>>()
-            chunkPaths.map { AlbumPathInfo(it, "Album X", "Artist X") }
+            chunkPaths.map { AlbumPathInfo(it, "Album X", "Artist X", "Artist X") }
         }
 
         val result = provider.groupByAlbum(paths)
@@ -179,5 +179,17 @@ class AlbumGroupingProviderTest {
             mapOf("Album X_Artist X" to paths),
             result
         )
+    }
+
+    @Test
+    fun `room cache falls back to artist when albumArtist is null`() = runTest {
+        val paths = listOf("/music/a/1.mp3")
+        coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
+            AlbumPathInfo("/music/a/1.mp3", "Album A", null, "Artist A")
+        )
+
+        val result = provider.groupByAlbum(paths)
+
+        assertEquals(mapOf("Album A_Artist A" to listOf("/music/a/1.mp3")), result)
     }
 }
