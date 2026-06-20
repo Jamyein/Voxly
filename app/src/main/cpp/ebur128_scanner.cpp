@@ -171,6 +171,62 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult
     return JNI_TRUE;
 }
 
+extern "C" JNIEXPORT jdoubleArray JNICALL
+Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetAlbumGain(
+    JNIEnv* env, jobject thiz,
+    jlongArray scannerPtrs
+) {
+    jsize count = env->GetArrayLength(scannerPtrs);
+    if (count <= 0) {
+        jdoubleArray empty = env->NewDoubleArray(3);
+        return empty;
+    }
+
+    jlong* ptrs = env->GetLongArrayElements(scannerPtrs, nullptr);
+    if (!ptrs) {
+        jdoubleArray empty = env->NewDoubleArray(3);
+        return empty;
+    }
+
+    auto** states = new ScannerState*[count];
+    auto** sts = new ebur128_state*[count];
+    for (jsize i = 0; i < count; i++) {
+        states[i] = reinterpret_cast<ScannerState*>(ptrs[i]);
+        sts[i] = states[i]->ebur;
+    }
+
+    double albumLoudness = -HUGE_VAL;
+    int rc = ebur128_loudness_global_multiple(sts, count, &albumLoudness);
+    if (rc != EBUR128_SUCCESS) {
+        albumLoudness = states[0]->target_loudness;
+    }
+
+    double albumRange = 0.0;
+    ebur128_loudness_range_multiple(sts, count, &albumRange);
+
+    double albumPeak = 0.0;
+    for (jsize i = 0; i < count; i++) {
+        for (int ch = 0; ch < states[i]->channels; ch++) {
+            double sp = 0.0;
+            ebur128_sample_peak(states[i]->ebur, ch, &sp);
+            if (sp > albumPeak) albumPeak = sp;
+        }
+    }
+
+    delete[] sts;
+    delete[] states;
+    env->ReleaseLongArrayElements(scannerPtrs, ptrs, JNI_ABORT);
+
+    jdouble values[3] = {albumLoudness, albumRange, albumPeak};
+    jdoubleArray result = env->NewDoubleArray(3);
+    env->SetDoubleArrayRegion(result, 0, 3, values);
+
+    LOGD("Album gain: loudness=%.2f range=%.2f peak=%.6f tracks=%d",
+         albumLoudness, albumRange, albumPeak, count);
+
+    return result;
+}
+
 extern "C" JNIEXPORT void JNICALL
 Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeDestroy(
     JNIEnv* env, jobject thiz,

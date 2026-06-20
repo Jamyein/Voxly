@@ -33,15 +33,29 @@ class EbuR128NativeScanner(
         init {
             System.loadLibrary("ebur128-scanner")
         }
+
+        @FastNative
+        private external fun nativeGetAlbumGain(scannerPtrs: LongArray): DoubleArray
+
+        /**
+         * Calculates album gain from multiple track scanners using
+         * ebur128_loudness_global_multiple (EBU R128 compliant).
+         * Returns DoubleArray of [albumLoudness, albumRange, albumPeak].
+         */
+        fun getAlbumGain(scanners: List<EbuR128NativeScanner>): DoubleArray? {
+            val ptrs = scanners.mapNotNull { it.scannerPtr.takeIf { p -> p != 0L } }.toLongArray()
+            if (ptrs.isEmpty()) return null
+            return nativeGetAlbumGain(ptrs)
+        }
     }
 
-    private var nativePtr: Long = 0
+    var scannerPtr: Long = 0
 
     private val resultArray = DoubleArray(6)
 
     init {
-        nativePtr = nativeCreate(channels, sampleRate, truePeak, dualMono, targetLoudness)
-        if (nativePtr == 0L) {
+        scannerPtr = nativeCreate(channels, sampleRate, truePeak, dualMono, targetLoudness)
+        if (scannerPtr == 0L) {
             throw IllegalStateException("Failed to create native ebur128 scanner")
         }
     }
@@ -59,19 +73,19 @@ class EbuR128NativeScanner(
     private external fun nativeDestroy(scannerPtr: Long)
 
     fun processFrames(samples: ShortArray, frameCount: Int) {
-        if (nativePtr == 0L) return
-        nativeProcessFrames(nativePtr, samples, frameCount)
+        if (scannerPtr == 0L) return
+        nativeProcessFrames(scannerPtr, samples, frameCount)
     }
 
     fun processBuffer(buffer: ByteBuffer, size: Int): Int {
-        if (nativePtr == 0L) return 0
-        return nativeProcessBuffer(nativePtr, buffer, size)
+        if (scannerPtr == 0L) return 0
+        return nativeProcessBuffer(scannerPtr, buffer, size)
     }
 
     fun getResult(): ReplayGainInfo? {
-        if (nativePtr == 0L) return null
+        if (scannerPtr == 0L) return null
 
-        if (!nativeGetResult(nativePtr, resultArray)) return null
+        if (!nativeGetResult(scannerPtr, resultArray)) return null
 
         return ReplayGainInfo(
             trackGain = resultArray[0].toFloat(),
@@ -90,9 +104,9 @@ class EbuR128NativeScanner(
     fun getVersion(): String = nativeGetVersion()
 
     override fun close() {
-        if (nativePtr != 0L) {
-            nativeDestroy(nativePtr)
-            nativePtr = 0
+        if (scannerPtr != 0L) {
+            nativeDestroy(scannerPtr)
+            scannerPtr = 0
         }
     }
 
