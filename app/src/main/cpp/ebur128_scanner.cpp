@@ -52,7 +52,7 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeCreate(
     jint channels, jint sample_rate,
     jboolean true_peak, jboolean dual_mono, jdouble target_loudness
 ) {
-    int mode = EBUR128_MODE_I | EBUR128_MODE_SAMPLE_PEAK;
+    int mode = EBUR128_MODE_I | EBUR128_MODE_SAMPLE_PEAK | EBUR128_MODE_HISTOGRAM;
     if (true_peak) mode |= EBUR128_MODE_TRUE_PEAK;
 
     int ebur_channels = (channels == 1 && dual_mono) ? 2 : channels;
