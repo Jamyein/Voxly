@@ -285,6 +285,8 @@ data class ScanProgress(
  */
 enum class ScanStatus {
     SCANNING,
+    TRACK_COMPLETED,
+    ALBUM_COMPLETED,
     COMPLETED,
     FAILED,
     CANCELLED
