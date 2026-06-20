@@ -112,12 +112,21 @@ class ReplayGainViewModel @AssistedInject constructor(
                 scanFlow.collect { progress ->
                         _scanProgress.update { progress }
 
-                        if (progress.status == ScanStatus.COMPLETED) {
-                            _scanComplete.update { true }
-                            _isScanning.update { false }
-                        } else if (progress.status == ScanStatus.FAILED) {
-                            _error.emit("Scan failed for: ${progress.currentFilePath}")
-                            _isScanning.update { false }
+                        when (progress.status) {
+                            ScanStatus.COMPLETED -> {
+                                _scanComplete.update { true }
+                                _isScanning.update { false }
+                            }
+                            ScanStatus.FAILED,
+                            ScanStatus.CANCELLED -> {
+                                _error.emit("Scan failed/cancelled for: ${progress.currentFilePath}")
+                                _isScanning.update { false }
+                            }
+                            ScanStatus.SCANNING,
+                            ScanStatus.TRACK_COMPLETED,
+                            ScanStatus.ALBUM_COMPLETED -> {
+                                // still scanning — no state change
+                            }
                         }
                     }
             } catch (e: Exception) {
