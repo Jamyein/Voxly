@@ -60,7 +60,10 @@ class ReplayGainScanner @Inject constructor(
     companion object {
         const val REFERENCE_LUFS = -18.0
         const val SAMPLES_PER_CHUNK = 4096
-        private const val DECODE_TIMEOUT_US = 100_000L
+        // 10ms instead of 100ms — tighter end-of-stream detection matters when the
+        // decoder has just consumed the last packet. The previous 100ms wait
+        // multiplied across many drain loops at the tail of each file.
+        private const val DECODE_TIMEOUT_US = 10_000L
         const val MIN_GAIN_DB = -50f
         const val MAX_GAIN_DB = 50f
         const val BATCH_BUFFER_SIZE = 2 * 1024 * 1024 // 2MB batch buffer
@@ -661,24 +664,34 @@ class ReplayGainScanner @Inject constructor(
                 val originalSampleRate = trackFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 val channelCount = trackFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
-                // Some extractors (notably on emulators) report "audio/raw" for compressed
-                // formats like FLAC. Override with file-extension-based MIME and create a
-                // clean format — raw PCM properties (pcm-encoding, etc.) corrupt compressed
-                // decoder configuration (causing "config failed => CORRUPTED").
-                val codecFormat = if (trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw") {
+                // When the extractor already reports audio/raw (common on emulators that
+                // transparently decode FLAC/Opus/MP3 to PCM), prefer the raw decoder first
+                // — the raw decoder handles the data the extractor is handing us. The
+                // previous version preferred the file-extension-based MIME, which selected
+                // the FLAC decoder; that decoder then received raw PCM bytes and failed
+                // at runtime ("work failed to complete: 14"), forcing a full second
+                // decode pass through the raw decoder. We only fall back to the
+                // corrected MIME if the raw path itself fails.
+                val isRawExtractor = trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw"
+                val primaryFormat: MediaFormat
+                val fallbackFormat: MediaFormat?
+                if (isRawExtractor) {
                     val correctedMime = getMimeFromExtension(filePath)
                     if (correctedMime != null && correctedMime != "audio/raw") {
-                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — creating clean format for decoder")
-                        MediaFormat().apply {
+                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — trying raw decoder first, then $correctedMime on failure")
+                        primaryFormat = trackFormat
+                        fallbackFormat = MediaFormat().apply {
                             setString(MediaFormat.KEY_MIME, correctedMime)
                             setInteger(MediaFormat.KEY_SAMPLE_RATE, originalSampleRate)
                             setInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
                         }
                     } else {
-                        trackFormat
+                        primaryFormat = trackFormat
+                        fallbackFormat = null
                     }
                 } else {
-                    trackFormat
+                    primaryFormat = trackFormat
+                    fallbackFormat = null
                 }
 
                 // PCM-level decimation: skip samples in decoded output to reduce effective rate.
@@ -726,23 +739,20 @@ class ReplayGainScanner @Inject constructor(
 
                 scanner.use { nativeScanner ->
                     val decodeResult = try {
-                        // Try primary format (e.g. audio/flac for real devices)
-                        decodeAndFeedScanner(extractor, codecFormat, channelCount, decimationFactor, nativeScanner)
+                        // Try the primary format (raw on emulators that pre-decode, the
+                        // extracted format on real devices).
+                        decodeAndFeedScanner(extractor, primaryFormat, channelCount, decimationFactor, nativeScanner)
                         nativeScanner.getResult()
                     } catch (t: Throwable) {
                         if (t is CancellationException) throw t
-                        // Some emulators transparently decode FLAC to raw PCM and report
-                        // audio/raw. Our clean format override selects the FLAC decoder,
-                        // which then receives raw PCM and fails at runtime (UNKNOWN_ERROR).
-                        // Fall back to the original format (raw decoder) in this case.
-                        if (codecFormat != trackFormat) {
-                            Timber.w("Primary decoder failed for ${file.name}, falling back to original format")
+                        if (fallbackFormat != null) {
+                            Timber.w("Primary decoder failed for ${file.name}, falling back to corrected format")
                             // Recreate extractor for fallback attempt
                             extractor.release()
                             val fallbackExtractor = MediaExtractor()
                             fallbackExtractor.setDataSource(filePath)
                             fallbackExtractor.selectTrack(audioTrackIndex)
-                            decodeAndFeedScanner(fallbackExtractor, trackFormat, channelCount, decimationFactor, nativeScanner)
+                            decodeAndFeedScanner(fallbackExtractor, fallbackFormat, channelCount, decimationFactor, nativeScanner)
                             fallbackExtractor.release()
                             nativeScanner.getResult()
                         } else {
@@ -863,21 +873,16 @@ class ReplayGainScanner @Inject constructor(
                 val originalSampleRate = trackFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 val channelCount = trackFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
-                // Some extractors (notably on emulators) report "audio/raw" for compressed
-                // formats like FLAC. Override with file-extension-based MIME and create a
-                // clean format — raw PCM properties corrupt compressed decoder config.
-                val codecFormat = if (trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw") {
-                    val correctedMime = getMimeFromExtension(filePath)
-                    if (correctedMime != null && correctedMime != "audio/raw") {
-                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — creating clean format for decoder")
-                        MediaFormat().apply {
-                            setString(MediaFormat.KEY_MIME, correctedMime)
-                            setInteger(MediaFormat.KEY_SAMPLE_RATE, originalSampleRate)
-                            setInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
+                // When the extractor already reports audio/raw (common on emulators),
+                // prefer the raw decoder — see analyzeAudioFile for full rationale.
+                val isRawExtractor = trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw"
+                val codecFormat = if (isRawExtractor) {
+                    getMimeFromExtension(filePath)?.let { correctedMime ->
+                        if (correctedMime != "audio/raw") {
+                            Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — using raw decoder first")
                         }
-                    } else {
-                        trackFormat
                     }
+                    trackFormat
                 } else {
                     trackFormat
                 }
@@ -1001,7 +1006,10 @@ class ReplayGainScanner @Inject constructor(
                     }
                 }
 
-                val outputIndex = codec.dequeueOutputBuffer(bufferInfo, DECODE_TIMEOUT_US)
+                val outputIndex = codec.dequeueOutputBuffer(
+                    bufferInfo,
+                    if (inputDone) 5_000L else DECODE_TIMEOUT_US
+                )
                 when {
                     outputIndex >= 0 -> {
                         val outputBuffer = codec.getOutputBuffer(outputIndex)

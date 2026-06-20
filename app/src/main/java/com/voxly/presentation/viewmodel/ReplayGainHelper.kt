@@ -87,6 +87,10 @@ class ReplayGainHelper @Inject constructor(
     fun scanReplayGain(filePath: String) {
         scanJob?.cancel()
         scanJob = scope.launch {
+            // Clear any previous result so the UI shows the spinner state, not a
+            // stale value from a prior scan. The new value is written back when
+            // the scan emits progress with replayGainInfo.
+            _pendingReplayGainInfo.update { null }
             _isScanningReplayGain.update { true }
 
             // Using ACCURATE mode for best results - dynamic sampling handles high-res files
@@ -155,7 +159,15 @@ class ReplayGainHelper @Inject constructor(
                 scanFlow.collect { progress ->
                     when (progress.status) {
                         ScanStatus.COMPLETED -> {
-                            progress.replayGainInfo?.let { _pendingReplayGainInfo.update { it } }
+                            // Always set the value from the event, even if null — this
+                            // ensures the StateFlow reflects the actual scan result and
+                            // doesn't stay stuck at the reset value. Also re-read from
+                            // disk as a belt-and-suspenders: the scanner writes RG to the
+                            // file during the scan, so the disk is the source of truth.
+                            if (progress.replayGainInfo != null) {
+                                _pendingReplayGainInfo.update { progress.replayGainInfo }
+                            }
+                            readReplayGain(filePath)
                             _isScanningReplayGain.update { false }
                         }
                         ScanStatus.FAILED,

@@ -644,16 +644,46 @@ class MetadataEditorViewModel @AssistedInject constructor(
      */
     fun saveMetadata() {
         Timber.tag("Voxly").i("MetadataEditorViewModel: action=save filePath=$filePath")
-        val metadataToSave = _editedMetadata.value ?: return
+        val baseMetadata = _editedMetadata.value ?: return
         val replayGainToSave = replayGainHelper.pendingReplayGainInfo.value
 
         viewModelScope.launch {
             val startedAt = SystemClock.elapsedRealtime()
+            val currentSuccessState = _uiState.value as? MetadataEditorUiState.Success
+
+            // Preserve existing ReplayGain custom fields on the file. The editor's
+            // edited metadata doesn't track RG as a typed field, so the save would
+            // otherwise drop the RG fields that the scanner wrote to the file during
+            // a scan. Read them from disk and merge into the metadata we'll save.
+            val preservedRg: ReplayGainInfo? = if (replayGainToSave != null) {
+                replayGainToSave
+            } else {
+                replayGainHelper.readReplayGain(filePath)
+                replayGainHelper.pendingReplayGainInfo.value
+            }
+            val metadataToSave = if (preservedRg != null) {
+                val rgCustomFields = buildMap {
+                    put("REPLAYGAIN_TRACK_GAIN", String.format("%.2f dB", preservedRg.trackGain))
+                    put("REPLAYGAIN_TRACK_PEAK", String.format("%.6f", preservedRg.trackPeak))
+                    preservedRg.albumGain?.let { put("REPLAYGAIN_ALBUM_GAIN", String.format("%.2f dB", it)) }
+                    preservedRg.albumPeak?.let { put("REPLAYGAIN_ALBUM_PEAK", String.format("%.6f", it)) }
+                    preservedRg.trackLoudness?.let { put("REPLAYGAIN_TRACK_LOUDNESS", String.format("%.2f LUFS", it)) }
+                    preservedRg.albumLoudness?.let { put("REPLAYGAIN_ALBUM_LOUDNESS", String.format("%.2f LUFS", it)) }
+                    preservedRg.trackRange?.let { put("REPLAYGAIN_TRACK_RANGE", String.format("%.2f LU", it)) }
+                    preservedRg.albumRange?.let { put("REPLAYGAIN_ALBUM_RANGE", String.format("%.2f LU", it)) }
+                    put("REPLAYGAIN_REFERENCE_LOUDNESS", String.format("%.1f LUFS", preservedRg.referenceLoudness))
+                }
+                baseMetadata.copy(
+                    customFields = baseMetadata.customFields + rgCustomFields
+                )
+            } else {
+                baseMetadata
+            }
+
             Timber.i(
-                "Save metadata started file=$filePath hasReplayGain=${replayGainToSave != null}",
+                "Save metadata started file=$filePath hasReplayGain=${preservedRg != null}",
                 "MetadataEditor"
             )
-            val currentSuccessState = _uiState.value as? MetadataEditorUiState.Success
             _uiState.update { MetadataEditorUiState.Saving }
 
             saveMetadataUseCase(
@@ -663,13 +693,14 @@ class MetadataEditorViewModel @AssistedInject constructor(
             ).collect { result ->
                 when (result) {
                     is SaveMetadataResult.Success -> {
-                        // If we have pending ReplayGain info, save it too
+                        // If we have pending ReplayGain info, save it too as a
+                        // belt-and-suspenders. The merged custom fields above
+                        // already include the RG; this just makes sure the helper
+                        // tracks it.
                         var replayGainSuccess = true
                         if (replayGainToSave != null) {
                             replayGainSuccess = saveReplayGainToFile(replayGainToSave)
-                            if (replayGainSuccess) {
-                                replayGainHelper.clearReplayGainInfo()
-                            } else {
+                            if (!replayGainSuccess) {
                                 Timber.w(
                                     "Save replaygain failed file=$filePath",
                                     "MetadataEditor"
@@ -686,7 +717,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                 editedMetadata = metadataToSave,
                                 audioFile = currentSuccessState.audioFile.copy(
                                     metadata = metadataToSave,
-                                    replayGainInfo = replayGainToSave ?: currentSuccessState.audioFile.replayGainInfo
+                                    replayGainInfo = preservedRg ?: currentSuccessState.audioFile.replayGainInfo
                                 )
                             ) ?: MetadataEditorUiState.Success(
                                 audioFile = AudioFile(
@@ -699,7 +730,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
                                     sampleRate = 0,
                                     channels = 0,
                                     metadata = metadataToSave,
-                                    replayGainInfo = replayGainToSave
+                                    replayGainInfo = preservedRg
                                 ),
                                 editedMetadata = metadataToSave
                             )

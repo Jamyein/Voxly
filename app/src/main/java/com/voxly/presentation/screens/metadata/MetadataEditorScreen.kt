@@ -50,7 +50,6 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.data.local.saf.SafGrantType
-import com.voxly.domain.model.ReplayGainInfo
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.ui.loadMediaStoreAlbumArt
@@ -115,8 +114,6 @@ fun MetadataEditorScreen(
     var showReauthorizeDialog by remember { mutableStateOf(false) }
     var conversionType by remember { mutableStateOf(ConversionType.TO_SIMPLIFIED) }
     var exitAfterSave by remember { mutableStateOf(false) }
-
-    var currentReplayGainInfo by remember(filePath) { mutableStateOf<ReplayGainInfo?>(null) }
 
     var showEditHistorySheet by remember { mutableStateOf(false) }
     val editHistorySheetState = rememberBottomSheetState(
@@ -325,8 +322,6 @@ fun MetadataEditorScreen(
                 coverTag = coverTag,
                 hasUnsavedChanges = hasUnsavedChanges,
                 viewModel = viewModel,
-                currentReplayGainInfo = currentReplayGainInfo,
-                onCurrentReplayGainInfoChange = { currentReplayGainInfo = it },
                 onTitleChange = { viewModel.updateDebouncedTextField(MetadataField.TITLE, it) },
                 onArtistChange = { viewModel.updateDebouncedTextField(MetadataField.ARTIST, it) },
                 onAlbumChange = { viewModel.updateDebouncedTextField(MetadataField.ALBUM, it) },
@@ -352,10 +347,7 @@ fun MetadataEditorScreen(
                 },
                 onRemoveAlbumArt = { viewModel.updateAlbumArt(null) },
                 onScanReplayGain = { viewModel.scanReplayGain() },
-                onClearReplayGain = {
-                    viewModel.clearReplayGainInfo()
-                    currentReplayGainInfo = null
-                },
+                onClearReplayGain = { viewModel.clearReplayGainInfo() },
                 onNavigateToOnlineMetadata = onNavigateToOnlineMetadata,
                 onNavigateToOnlineLyricsSearch = onNavigateToOnlineLyricsSearch,
                 onNavigateToLyricsSelector = onNavigateToLyricsSelector,
@@ -450,8 +442,6 @@ private fun MetadataEditorScaffoldContent(
     coverTag: String?,
     hasUnsavedChanges: Boolean,
     viewModel: MetadataEditorViewModel,
-    currentReplayGainInfo: ReplayGainInfo?,
-    onCurrentReplayGainInfoChange: (ReplayGainInfo?) -> Unit,
     onTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
     onAlbumChange: (String) -> Unit,
@@ -520,8 +510,6 @@ private fun MetadataEditorScaffoldContent(
                     coverTag = coverTag,
                     hasUnsavedChanges = hasUnsavedChanges,
                     viewModel = viewModel,
-                    currentReplayGainInfo = currentReplayGainInfo,
-                    onCurrentReplayGainInfoChange = onCurrentReplayGainInfoChange,
                     onTitleChange = onTitleChange,
                     onArtistChange = onArtistChange,
                     onAlbumChange = onAlbumChange,
@@ -581,8 +569,6 @@ private fun MetadataEditorSuccessContent(
     coverTag: String?,
     hasUnsavedChanges: Boolean,
     viewModel: MetadataEditorViewModel,
-    currentReplayGainInfo: ReplayGainInfo?,
-    onCurrentReplayGainInfoChange: (ReplayGainInfo?) -> Unit,
     onTitleChange: (String) -> Unit,
     onArtistChange: (String) -> Unit,
     onAlbumChange: (String) -> Unit,
@@ -612,10 +598,6 @@ private fun MetadataEditorSuccessContent(
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val context = LocalContext.current
-
-    LaunchedEffect(filePath, state.audioFile.path) {
-        onCurrentReplayGainInfoChange(state.audioFile.replayGainInfo)
-    }
 
     val scrollState = rememberScrollState()
     val shouldEnhanceToolbarShadow by remember {
@@ -665,7 +647,6 @@ private fun MetadataEditorSuccessContent(
             replayGainSection = {
                 MetadataReplayGainSection(
                     viewModel = viewModel,
-                    currentReplayGainInfo = currentReplayGainInfo,
                     onScanReplayGain = onScanReplayGain,
                     onClearReplayGain = onClearReplayGain
                 )
@@ -911,7 +892,6 @@ private fun MetadataEditorDialogsAndSheets(
 @Composable
 private fun MetadataReplayGainSection(
     viewModel: MetadataEditorViewModel,
-    currentReplayGainInfo: ReplayGainInfo?,
     onScanReplayGain: () -> Unit,
     onClearReplayGain: () -> Unit
 ) {
@@ -920,7 +900,7 @@ private fun MetadataReplayGainSection(
     val replayGainScanError by viewModel.replayGainScanError.collectAsStateWithLifecycle(initialValue = null)
 
     ReplayGainSection(
-        replayGainInfo = pendingReplayGainInfo ?: currentReplayGainInfo,
+        replayGainInfo = pendingReplayGainInfo,
         isScanning = isScanningReplayGain,
         onScan = onScanReplayGain,
         onClear = onClearReplayGain,
