@@ -725,15 +725,32 @@ class ReplayGainScanner @Inject constructor(
                 }
 
                 scanner.use { nativeScanner ->
-                    decodeAndFeedScanner(
-                        extractor = extractor,
-                        format = codecFormat,
-                        channelCount = channelCount,
-                        decimationFactor = decimationFactor,
-                        nativeScanner = nativeScanner
-                    )
+                    val decodeResult = try {
+                        // Try primary format (e.g. audio/flac for real devices)
+                        decodeAndFeedScanner(extractor, codecFormat, channelCount, decimationFactor, nativeScanner)
+                        nativeScanner.getResult()
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        // Some emulators transparently decode FLAC to raw PCM and report
+                        // audio/raw. Our clean format override selects the FLAC decoder,
+                        // which then receives raw PCM and fails at runtime (UNKNOWN_ERROR).
+                        // Fall back to the original format (raw decoder) in this case.
+                        if (codecFormat != trackFormat) {
+                            Timber.w("Primary decoder failed for ${file.name}, falling back to original format")
+                            // Recreate extractor for fallback attempt
+                            extractor.release()
+                            val fallbackExtractor = MediaExtractor()
+                            fallbackExtractor.setDataSource(filePath)
+                            fallbackExtractor.selectTrack(audioTrackIndex)
+                            decodeAndFeedScanner(fallbackExtractor, trackFormat, channelCount, decimationFactor, nativeScanner)
+                            fallbackExtractor.release()
+                            nativeScanner.getResult()
+                        } else {
+                            throw t
+                        }
+                    }
 
-                    val replayGainInfo = nativeScanner.getResult()
+                    val replayGainInfo = decodeResult
                         ?: run {
                             Timber.w("Native scanner returned null for $filePath")
                             return@withPermit null
