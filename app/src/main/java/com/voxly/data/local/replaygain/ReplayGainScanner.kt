@@ -303,9 +303,26 @@ class ReplayGainScanner @Inject constructor(
                 }
             }
 
-            if (trackScanners.isNotEmpty()) {
-                // Use ebur128_loudness_global_multiple for EBU R128 compliant album gain
-                val albumResult = EbuR128NativeScanner.getAlbumGain(trackScanners)
+            // Check cancellation before album gain calculation
+            kotlin.coroutines.coroutineContext.ensureActive()
+
+            // Determine if all tracks were freshly scanned (have native scanners)
+            // Cached tracks return null scanner, so album gain can only use native
+            // ebur128_loudness_global_multiple when ALL tracks were freshly scanned.
+            val allTracksFreshlyScanned = trackScanners.size == trackGains.size
+
+            if (allTracksFreshlyScanned && trackScanners.isNotEmpty()) {
+                // Use EBU R128 compliant native calculation (ebur128_loudness_global_multiple)
+                val albumResult = try {
+                    EbuR128NativeScanner.getAlbumGain(trackScanners)
+                } finally {
+                    trackScanners.forEach { try { it.close() } catch (_: Exception) {} }
+                }
+
+                if (albumResult == null) {
+                    Timber.w("getAlbumGain returned null for album=$albumKey, using fallback values")
+                }
+
                 val albumLoudness = albumResult?.get(0) ?: targetLoudness.toDouble()
                 val albumRange = albumResult?.get(1) ?: 0.0
                 val albumPeak = albumResult?.get(2) ?: 0.0
@@ -364,13 +381,74 @@ class ReplayGainScanner @Inject constructor(
                     )
                 )
 
-                // Close all scanners after album gain calculation
+            } else if (trackGains.isNotEmpty()) {
+                // Some or all tracks were cached (no scanner available).
+                // Fall back to energy-average album gain calculation.
+                val gainValues = trackGains.map { it.second }
+                val (albumLoudness, albumRange, albumPeak) = calculateEnergyAverageAlbumGain(gainValues, targetLoudness)
+                val albumGainDb = targetLoudness - albumLoudness
+
+                val clampedAlbumGain = applyClipProtection(
+                    gain = albumGainDb,
+                    peak = albumPeak,
+                    clipMode = config.clipMode,
+                    maxPeakLevel = config.maxPeakLevel.toFloat()
+                )
+
+                Timber.i("Album gain (energy-average) album=$albumKey tracks=${trackGains.size} albumGain=$clampedAlbumGain albumLoudness=$albumLoudness")
+
+                // Close any scanners that were created (mixed cached/fresh case)
                 trackScanners.forEach { try { it.close() } catch (_: Exception) {} }
+
+                for ((filePath, trackInfo) in trackGains) {
+                    try {
+                        val combinedInfo = ReplayGainInfo(
+                            trackGain = trackInfo.trackGain,
+                            trackPeak = trackInfo.trackPeak,
+                            albumGain = clampedAlbumGain,
+                            albumPeak = albumPeak,
+                            truePeak = trackInfo.truePeak,
+                            trackLoudness = trackInfo.trackLoudness,
+                            albumLoudness = albumLoudness,
+                            trackRange = trackInfo.trackRange,
+                            albumRange = albumRange,
+                            referenceLoudness = trackInfo.referenceLoudness
+                        )
+                        val saved = saveReplayGainToFile(filePath, combinedInfo)
+                        if (!saved) {
+                            Timber.w("Album gain save failed but analysis complete file=$filePath")
+                        }
+                        emit(
+                            ScanProgress(
+                                currentFile = processedFiles,
+                                totalFiles = totalFiles,
+                                percentage = processedFiles.toFloat() / totalFiles,
+                                currentFilePath = filePath,
+                                status = ScanStatus.TRACK_COMPLETED,
+                                replayGainInfo = combinedInfo
+                            )
+                        )
+                    } catch (e: Exception) {
+                        Timber.e(e, "Failed to save album gain for file=$filePath reason=${e.message}")
+                    }
+                }
+
+                emit(
+                    ScanProgress(
+                        currentFile = processedFiles,
+                        totalFiles = totalFiles,
+                        percentage = processedFiles.toFloat() / totalFiles,
+                        currentFilePath = "",
+                        status = ScanStatus.ALBUM_COMPLETED
+                    )
+                )
 
             } else {
                 // No track succeeded for this album — still emit ALBUM_COMPLETED so the
                 // UI's `isScanning` flag transitions out of "scanning" state.
                 Timber.w("Album scan produced no successful tracks album=$albumKey")
+                // Close any scanners that were created
+                trackScanners.forEach { try { it.close() } catch (_: Exception) {} }
                 emit(
                     ScanProgress(
                         currentFile = processedFiles,
@@ -920,6 +998,39 @@ class ReplayGainScanner @Inject constructor(
         } catch (e: IllegalArgumentException) {
             false
         }
+    }
+
+    /**
+     * Calculates album gain using energy-average method.
+     * Used as fallback when some tracks are cached (no native scanner available).
+     * Converts track loudness values to linear energy, averages them, then converts back.
+     *
+     * @return Triple of (albumLoudness, albumRange, albumPeak)
+     */
+    private fun calculateEnergyAverageAlbumGain(
+        trackGains: List<ReplayGainInfo>,
+        targetLoudness: Float
+    ): Triple<Float, Float, Float> {
+        if (trackGains.isEmpty()) return Triple(targetLoudness, 0f, 0f)
+
+        val validGains = trackGains.filter {
+            it.trackGain.isFinite() && it.trackGain > -100f && it.trackGain < 100f
+        }
+        if (validGains.isEmpty()) return Triple(targetLoudness, 0f, 0f)
+
+        // Energy average of loudness: convert LUFS to linear, average, convert back
+        val albumLoudness = if (validGains.all { it.trackLoudness != null }) {
+            val linearLoudness = validGains.mapNotNull { it.trackLoudness }
+                .map { 10.0.pow(it / 10.0) }
+            10.0 * log10(linearLoudness.average())
+        } else {
+            targetLoudness.toDouble()
+        }
+
+        val albumRange = validGains.mapNotNull { it.trackRange }.maxOrNull() ?: 0f
+        val albumPeak = validGains.maxOf { it.trackPeak }
+
+        return Triple(albumLoudness.toFloat(), albumRange, albumPeak)
     }
 
     /**
