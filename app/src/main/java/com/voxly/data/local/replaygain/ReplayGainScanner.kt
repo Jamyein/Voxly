@@ -50,7 +50,8 @@ import javax.inject.Singleton
 class ReplayGainScanner @Inject constructor(
     @ApplicationContext private val context: Context,
     private val metadataProcessor: TagLibMetadataProcessor,
-    private val albumGroupingProvider: AlbumGroupingProvider
+    private val albumGroupingProvider: AlbumGroupingProvider,
+    private val cachedAudioFileDao: com.voxly.data.local.cache.CachedAudioFileDao
 ) {
 
     companion object {
@@ -412,6 +413,28 @@ class ReplayGainScanner @Inject constructor(
         getCachedResult(filePath)?.let { cached ->
             Timber.v("ReplayGain cache hit: ${file.name}")
             return@withContext cached
+        }
+
+        // Check Room cache if skipExisting is enabled
+        if (config.skipExisting) {
+            val cachedEntity = cachedAudioFileDao.getAudioFileByPath(filePath)
+            if (cachedEntity?.replayGainTrackGain != null) {
+                val existing = ReplayGainInfo(
+                    trackGain = cachedEntity.replayGainTrackGain,
+                    trackPeak = cachedEntity.replayGainTrackPeak ?: 0f,
+                    albumGain = cachedEntity.replayGainAlbumGain,
+                    albumPeak = cachedEntity.replayGainAlbumPeak,
+                    truePeak = cachedEntity.replayGainTruePeak,
+                    trackLoudness = cachedEntity.replayGainTrackLoudness,
+                    albumLoudness = cachedEntity.replayGainAlbumLoudness,
+                    trackRange = cachedEntity.replayGainTrackRange,
+                    albumRange = cachedEntity.replayGainAlbumRange,
+                    referenceLoudness = cachedEntity.replayGainReferenceLoudness ?: -18f
+                )
+                cacheResult(filePath, existing)
+                Timber.v("ReplayGain skipExisting hit: ${file.name}")
+                return@withContext existing
+            }
         }
 
         scanSemaphore.withPermit {
