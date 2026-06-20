@@ -656,7 +656,11 @@ class ReplayGainScanner @Inject constructor(
                     val correctedMime = getMimeFromExtension(filePath)
                     if (correctedMime != null && correctedMime != "audio/raw") {
                         Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — creating clean format for decoder")
-                        MediaFormat().apply { setString(MediaFormat.KEY_MIME, correctedMime) }
+                        MediaFormat().apply {
+                            setString(MediaFormat.KEY_MIME, correctedMime)
+                            setInteger(MediaFormat.KEY_SAMPLE_RATE, originalSampleRate)
+                            setInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
+                        }
                     } else {
                         trackFormat
                     }
@@ -830,7 +834,11 @@ class ReplayGainScanner @Inject constructor(
                     val correctedMime = getMimeFromExtension(filePath)
                     if (correctedMime != null && correctedMime != "audio/raw") {
                         Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — creating clean format for decoder")
-                        MediaFormat().apply { setString(MediaFormat.KEY_MIME, correctedMime) }
+                        MediaFormat().apply {
+                            setString(MediaFormat.KEY_MIME, correctedMime)
+                            setInteger(MediaFormat.KEY_SAMPLE_RATE, originalSampleRate)
+                            setInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
+                        }
                     } else {
                         trackFormat
                     }
