@@ -50,7 +50,57 @@ class AlbumGroupingProviderTest {
         every { aggregator.albums } returns MutableStateFlow(emptyList<AlbumGroup>())
         coEvery { metadataProcessor.readMetadata("/music/a/2.mp3", false) } returns AudioMetadata(
             album = "Album A",
-            artist = "Artist A"
+            albumArtist = "Artist A"
+        )
+
+        val result = provider.groupByAlbum(paths)
+
+        assertEquals(
+            mapOf("Album A_Artist A" to listOf("/music/a/1.mp3", "/music/a/2.mp3")),
+            result
+        )
+    }
+
+    @Test
+    fun `groups compilation album by albumArtist with different track artists`() = runTest {
+        val paths = listOf(
+            "/music/various/1.mp3",
+            "/music/various/2.mp3",
+            "/music/various/3.mp3"
+        )
+        coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
+            AlbumPathInfo("/music/various/1.mp3", "Compilation Album", "Various Artists"),
+            AlbumPathInfo("/music/various/2.mp3", "Compilation Album", "Various Artists"),
+            AlbumPathInfo("/music/various/3.mp3", "Compilation Album", "Various Artists")
+        )
+
+        val result = provider.groupByAlbum(paths)
+
+        assertEquals(
+            mapOf(
+                "Compilation Album_Various Artists" to listOf(
+                    "/music/various/1.mp3",
+                    "/music/various/2.mp3",
+                    "/music/various/3.mp3"
+                )
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun `falls back to track artist when albumArtist is null in disk read`() = runTest {
+        val paths = listOf("/music/a/1.mp3", "/music/a/2.mp3")
+        // Cache has correct albumArtist for file 1
+        coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
+            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A")
+        )
+        every { aggregator.albums } returns MutableStateFlow(emptyList<AlbumGroup>())
+        // Disk read for file 2 has null albumArtist — tests fallback to artist
+        coEvery { metadataProcessor.readMetadata("/music/a/2.mp3", false) } returns AudioMetadata(
+            album = "Album A",
+            artist = "Artist A",
+            albumArtist = null
         )
 
         val result = provider.groupByAlbum(paths)

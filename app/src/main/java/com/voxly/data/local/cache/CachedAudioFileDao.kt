@@ -3,8 +3,8 @@ package com.voxly.data.local.cache
 import androidx.room.*
 import androidx.sqlite.db.SimpleSQLiteQuery
 import androidx.sqlite.db.SupportSQLiteQuery
+import com.voxly.core.util.PathUtils
 import kotlinx.coroutines.flow.Flow
-import java.text.Normalizer
 import kotlin.text.RegexOption
 
 /**
@@ -166,16 +166,17 @@ interface CachedAudioFileDao {
         val fileLastModifiedAt: Long
     )
     
-    @Query("SELECT path, album, artist FROM cached_audio_files WHERE path IN (:paths)")
+    @Query("SELECT path, album, albumArtist FROM cached_audio_files WHERE path IN (:paths)")
     suspend fun getAlbumInfoByPaths(paths: List<String>): List<AlbumPathInfo>
 
     /**
      * Minimal projection used by [com.voxly.data.local.replaygain.AlbumGroupingProvider].
+     * Contains the album identity fields needed for ReplayGain album grouping.
      */
     data class AlbumPathInfo(
         val path: String,
         val album: String?,
-        val artist: String?
+        val albumArtist: String?
     )
     
     // ==================== Inserts/Updates ====================
@@ -419,7 +420,7 @@ interface CachedAudioFileDao {
         // Whitelist: file must start with one of the whitelist prefixes
         if (!whitelist.isNullOrEmpty()) {
             val whitelistConditions = whitelist.map { path ->
-                val normalizedPath = Normalizer.normalize(path.trimEnd('/'), Normalizer.Form.NFC)
+                val normalizedPath = PathUtils.normalizeFilePath(path)
                 args.add("$normalizedPath/%")
                 "path LIKE ?"
             }
@@ -429,7 +430,7 @@ interface CachedAudioFileDao {
         // Blacklist: file must NOT start with any of the blacklist prefixes
         if (!blacklist.isNullOrEmpty()) {
             val blacklistConditions = blacklist.map { path ->
-                val normalizedPath = Normalizer.normalize(path.trimEnd('/'), Normalizer.Form.NFC)
+                val normalizedPath = PathUtils.normalizeFilePath(path)
                 args.add("$normalizedPath/%")
                 "path LIKE ?"
             }
