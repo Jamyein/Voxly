@@ -34,6 +34,7 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 import kotlin.math.log10
 import kotlin.math.pow
 import javax.inject.Inject
@@ -470,19 +471,25 @@ class ReplayGainScanner @Inject constructor(
                 val originalSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
-                // Request lower sample rate for non-ACCURATE modes on hi-res files
-                val effectiveSampleRate = if (scanQuality != ScanQuality.ACCURATE &&
+                // PCM-level decimation: skip samples in decoded output to reduce effective rate.
+                // MediaCodec decoders ignore KEY_SAMPLE_RATE changes on the input format,
+                // so we must downsample the PCM output ourselves.
+                val decimationFactor = if (scanQuality != ScanQuality.ACCURATE &&
                     originalSampleRate > scanQuality.maxSampleRate
                 ) {
-                    format.setInteger(MediaFormat.KEY_SAMPLE_RATE, scanQuality.maxSampleRate)
+                    val factor = originalSampleRate / scanQuality.maxSampleRate
                     Timber.d(
-                        "Downsampling ${file.name} from ${originalSampleRate}Hz " +
-                            "to ${scanQuality.maxSampleRate}Hz"
+                        "PCM decimation for ${file.name}: factor=$factor " +
+                            "(${originalSampleRate}Hz -> ${originalSampleRate / factor}Hz)"
                     )
-                    scanQuality.maxSampleRate
+                    factor.coerceAtLeast(1)
                 } else {
-                    originalSampleRate
+                    1
                 }
+
+                // Scanner must be initialized with the effective sample rate of the data
+                // it will actually receive (after decimation), not the original file rate.
+                val effectiveSampleRate = originalSampleRate / decimationFactor
 
                 val scanner = try {
                     EbuR128NativeScanner(
@@ -512,7 +519,7 @@ class ReplayGainScanner @Inject constructor(
                         extractor = extractor,
                         format = format,
                         channelCount = channelCount,
-                        effectiveSampleRate = effectiveSampleRate,
+                        decimationFactor = decimationFactor,
                         nativeScanner = nativeScanner
                     )
 
@@ -558,7 +565,7 @@ class ReplayGainScanner @Inject constructor(
         extractor: MediaExtractor,
         format: MediaFormat,
         channelCount: Int,
-        effectiveSampleRate: Int,
+        decimationFactor: Int,
         nativeScanner: EbuR128NativeScanner
     ) {
         val mime = format.getString(MediaFormat.KEY_MIME) ?: return
@@ -628,30 +635,84 @@ class ReplayGainScanner @Inject constructor(
                         if (outputBuffer != null && bufferInfo.size > 0) {
                             val safeOffset = bufferInfo.offset.coerceIn(0, outputBuffer.capacity() - 1)
                             val safeLimit = minOf(safeOffset + bufferInfo.size, outputBuffer.capacity())
+
                             if (safeLimit > safeOffset) {
-                                outputBuffer.position(safeOffset)
-                                outputBuffer.limit(safeLimit)
+                                if (decimationFactor > 1) {
+                                    // PCM-level decimation: skip samples to reduce effective sample rate.
+                                    // MediaCodec outputs 16-bit PCM in interleaved format (L, R, L, R, ...).
+                                    // We keep one frame every decimationFactor frames, discarding the rest.
+                                    outputBuffer.order(ByteOrder.LITTLE_ENDIAN)
+                                    batchBuffer.order(ByteOrder.LITTLE_ENDIAN)
+                                    val bytesPerSample = 2
+                                    val bytesPerFrame = channelCount * bytesPerSample
+                                    val totalFrames = bufferInfo.size / bytesPerFrame
+                                    val decimatedFrames = (totalFrames + decimationFactor - 1) / decimationFactor
+                                    val decimatedBytes = decimatedFrames * bytesPerFrame
+                                    val spaceInBatch = batchBuffer.capacity() - batchPos
 
-                                val bytesToRead = outputBuffer.remaining()
-                                val spaceInBatch = batchBuffer.capacity() - batchPos
-
-                                if (bytesToRead <= spaceInBatch) {
-                                    batchBuffer.put(outputBuffer)
-                                    batchPos += bytesToRead
-                                } else {
-                                    if (batchPos > 0) {
-                                        batchBuffer.flip()
-                                        nativeScanner.processBuffer(batchBuffer, batchPos)
-                                        batchBuffer.clear()
-                                        batchPos = 0
+                                    if (decimatedBytes <= spaceInBatch) {
+                                        var keptFrames = 0
+                                        for (frameIndex in 0 until totalFrames step decimationFactor) {
+                                            for (ch in 0 until channelCount) {
+                                                val srcByteOffset = safeOffset + (frameIndex * channelCount + ch) * bytesPerSample
+                                                batchBuffer.putShort(outputBuffer.getShort(srcByteOffset))
+                                            }
+                                            keptFrames++
+                                        }
+                                        batchPos += keptFrames * bytesPerFrame
+                                    } else {
+                                        // Flush existing batch first
+                                        if (batchPos > 0) {
+                                            batchBuffer.flip()
+                                            nativeScanner.processBuffer(batchBuffer, batchPos)
+                                            batchBuffer.clear()
+                                            batchBuffer.order(ByteOrder.LITTLE_ENDIAN)
+                                            batchPos = 0
+                                        }
+                                        // Write decimated frames one-by-one, flushing when full
+                                        var keptFrames = 0
+                                        for (frameIndex in 0 until totalFrames step decimationFactor) {
+                                            if (batchPos + bytesPerFrame > batchBuffer.capacity()) {
+                                                batchBuffer.flip()
+                                                nativeScanner.processBuffer(batchBuffer, batchPos)
+                                                batchBuffer.clear()
+                                                batchBuffer.order(ByteOrder.LITTLE_ENDIAN)
+                                                batchPos = 0
+                                            }
+                                            for (ch in 0 until channelCount) {
+                                                val srcByteOffset = safeOffset + (frameIndex * channelCount + ch) * bytesPerSample
+                                                batchBuffer.putShort(outputBuffer.getShort(srcByteOffset))
+                                            }
+                                            batchPos += bytesPerFrame
+                                            keptFrames++
+                                        }
                                     }
+                                } else {
+                                    // No decimation — copy raw PCM bytes
+                                    outputBuffer.position(safeOffset)
+                                    outputBuffer.limit(safeLimit)
 
-                                    val canFit = minOf(bytesToRead, batchBuffer.capacity())
-                                    val oldLimit = outputBuffer.limit()
-                                    outputBuffer.limit(outputBuffer.position() + canFit)
-                                    batchBuffer.put(outputBuffer)
-                                    batchPos = canFit
-                                    outputBuffer.limit(oldLimit)
+                                    val bytesToRead = outputBuffer.remaining()
+                                    val spaceInBatch = batchBuffer.capacity() - batchPos
+
+                                    if (bytesToRead <= spaceInBatch) {
+                                        batchBuffer.put(outputBuffer)
+                                        batchPos += bytesToRead
+                                    } else {
+                                        if (batchPos > 0) {
+                                            batchBuffer.flip()
+                                            nativeScanner.processBuffer(batchBuffer, batchPos)
+                                            batchBuffer.clear()
+                                            batchPos = 0
+                                        }
+
+                                        val canFit = minOf(bytesToRead, batchBuffer.capacity())
+                                        val oldLimit = outputBuffer.limit()
+                                        outputBuffer.limit(outputBuffer.position() + canFit)
+                                        batchBuffer.put(outputBuffer)
+                                        batchPos = canFit
+                                        outputBuffer.limit(oldLimit)
+                                    }
                                 }
                             }
                         }
@@ -666,15 +727,6 @@ class ReplayGainScanner @Inject constructor(
                         val newFormat = codec.outputFormat
                         val newChannelCount =
                             newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
-                        val actualSampleRate =
-                            newFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE, effectiveSampleRate)
-
-                        if (actualSampleRate != effectiveSampleRate) {
-                            Timber.w(
-                                "Decoder ignored sample rate request: " +
-                                    "expected ${effectiveSampleRate}Hz, got ${actualSampleRate}Hz"
-                            )
-                        }
 
                         if (newChannelCount != channelCount) {
                             Timber.w(
