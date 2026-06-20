@@ -467,13 +467,27 @@ class ReplayGainScanner @Inject constructor(
                 extractor.selectTrack(audioTrackIndex)
                 val format = extractor.getTrackFormat(audioTrackIndex)
 
-                val sampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                val originalSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+
+                // Request lower sample rate for non-ACCURATE modes on hi-res files
+                val effectiveSampleRate = if (scanQuality != ScanQuality.ACCURATE &&
+                    originalSampleRate > scanQuality.maxSampleRate
+                ) {
+                    format.setInteger(MediaFormat.KEY_SAMPLE_RATE, scanQuality.maxSampleRate)
+                    Timber.d(
+                        "Downsampling ${file.name} from ${originalSampleRate}Hz " +
+                            "to ${scanQuality.maxSampleRate}Hz"
+                    )
+                    scanQuality.maxSampleRate
+                } else {
+                    originalSampleRate
+                }
 
                 val scanner = try {
                     EbuR128NativeScanner(
                         channels = channelCount,
-                        sampleRate = sampleRate,
+                        sampleRate = effectiveSampleRate,
                         targetLoudness = targetLoudness.toDouble(),
                         truePeak = false,
                         dualMono = config.dualMono
@@ -498,6 +512,7 @@ class ReplayGainScanner @Inject constructor(
                         extractor = extractor,
                         format = format,
                         channelCount = channelCount,
+                        effectiveSampleRate = effectiveSampleRate,
                         nativeScanner = nativeScanner
                     )
 
@@ -543,6 +558,7 @@ class ReplayGainScanner @Inject constructor(
         extractor: MediaExtractor,
         format: MediaFormat,
         channelCount: Int,
+        effectiveSampleRate: Int,
         nativeScanner: EbuR128NativeScanner
     ) {
         val mime = format.getString(MediaFormat.KEY_MIME) ?: return
@@ -650,9 +666,20 @@ class ReplayGainScanner @Inject constructor(
                         val newFormat = codec.outputFormat
                         val newChannelCount =
                             newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
+                        val actualSampleRate =
+                            newFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE, effectiveSampleRate)
+
+                        if (actualSampleRate != effectiveSampleRate) {
+                            Timber.w(
+                                "Decoder ignored sample rate request: " +
+                                    "expected ${effectiveSampleRate}Hz, got ${actualSampleRate}Hz"
+                            )
+                        }
+
                         if (newChannelCount != channelCount) {
                             Timber.w(
-                                "Native ReplayGain channelCount changed $channelCount -> $newChannelCount"
+                                "Native ReplayGain channelCount changed " +
+                                    "$channelCount -> $newChannelCount"
                             )
                         }
                     }
