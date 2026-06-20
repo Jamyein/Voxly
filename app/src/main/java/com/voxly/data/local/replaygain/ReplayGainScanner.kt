@@ -642,21 +642,27 @@ class ReplayGainScanner @Inject constructor(
                 }
 
                 extractor.selectTrack(audioTrackIndex)
-                val format = extractor.getTrackFormat(audioTrackIndex)
+                val trackFormat = extractor.getTrackFormat(audioTrackIndex)
+
+                // Read sample rate and channel count from extractor format (before any override)
+                val originalSampleRate = trackFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                val channelCount = trackFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
                 // Some extractors (notably on emulators) report "audio/raw" for compressed
-                // formats like FLAC. Detect the actual format from file extension and override.
-                var mime = format.getString(MediaFormat.KEY_MIME)
-                if (mime == "audio/raw") {
-                    val expectedMime = getMimeFromExtension(filePath)
-                    if (expectedMime != null && expectedMime != "audio/raw") {
-                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $expectedMime — overriding MIME")
-                        format.setString(MediaFormat.KEY_MIME, expectedMime)
+                // formats like FLAC. Override with file-extension-based MIME and create a
+                // clean format — raw PCM properties (pcm-encoding, etc.) corrupt compressed
+                // decoder configuration (causing "config failed => CORRUPTED").
+                val codecFormat = if (trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw") {
+                    val correctedMime = getMimeFromExtension(filePath)
+                    if (correctedMime != null && correctedMime != "audio/raw") {
+                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — creating clean format for decoder")
+                        MediaFormat().apply { setString(MediaFormat.KEY_MIME, correctedMime) }
+                    } else {
+                        trackFormat
                     }
+                } else {
+                    trackFormat
                 }
-
-                val originalSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
                 // PCM-level decimation: skip samples in decoded output to reduce effective rate.
                 // MediaCodec decoders ignore KEY_SAMPLE_RATE changes on the input format,
@@ -704,7 +710,7 @@ class ReplayGainScanner @Inject constructor(
                 scanner.use { nativeScanner ->
                     decodeAndFeedScanner(
                         extractor = extractor,
-                        format = format,
+                        format = codecFormat,
                         channelCount = channelCount,
                         decimationFactor = decimationFactor,
                         nativeScanner = nativeScanner
@@ -812,21 +818,26 @@ class ReplayGainScanner @Inject constructor(
                 }
 
                 extractor.selectTrack(audioTrackIndex)
-                val format = extractor.getTrackFormat(audioTrackIndex)
+                val trackFormat = extractor.getTrackFormat(audioTrackIndex)
+
+                val originalSampleRate = trackFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+                val channelCount = trackFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
                 // Some extractors (notably on emulators) report "audio/raw" for compressed
-                // formats like FLAC. Detect the actual format from file extension and override.
-                var mime = format.getString(MediaFormat.KEY_MIME)
-                if (mime == "audio/raw") {
-                    val expectedMime = getMimeFromExtension(filePath)
-                    if (expectedMime != null && expectedMime != "audio/raw") {
-                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $expectedMime — overriding MIME")
-                        format.setString(MediaFormat.KEY_MIME, expectedMime)
+                // formats like FLAC. Override with file-extension-based MIME and create a
+                // clean format — raw PCM properties corrupt compressed decoder config.
+                val codecFormat = if (trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw") {
+                    val correctedMime = getMimeFromExtension(filePath)
+                    if (correctedMime != null && correctedMime != "audio/raw") {
+                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — creating clean format for decoder")
+                        MediaFormat().apply { setString(MediaFormat.KEY_MIME, correctedMime) }
+                    } else {
+                        trackFormat
                     }
+                } else {
+                    trackFormat
                 }
 
-                val originalSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
                 val decimationFactor = if (scanQuality != ScanQuality.ACCURATE &&
                     originalSampleRate > scanQuality.maxSampleRate) {
                     (originalSampleRate / scanQuality.maxSampleRate).coerceAtLeast(1)
@@ -855,7 +866,7 @@ class ReplayGainScanner @Inject constructor(
                     return@withPermit null to null
                 }
 
-                decodeAndFeedScanner(extractor, format, channelCount, decimationFactor, scanner)
+                decodeAndFeedScanner(extractor, codecFormat, channelCount, decimationFactor, scanner)
 
                 val replayGainInfo = scanner.getResult() ?: run {
                     scanner.close()
