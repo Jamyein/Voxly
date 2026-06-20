@@ -109,8 +109,6 @@ class ReplayGainScanner @Inject constructor(
             val existing = mutex.withLock { pool.remove(mime) }
             if (existing != null) {
                 try {
-                    // Codec is in Stopped state (from release()). flush() requires Started state,
-                    // so go directly Stopped → Configured → Started via configure() + start().
                     existing.configure(format, null, null, 0)
                     existing.start()
                     Timber.v("CodecPool: reused codec for $mime")
@@ -120,23 +118,34 @@ class ReplayGainScanner @Inject constructor(
                     try { existing.release() } catch (_: Exception) {}
                 }
             }
+
+            // Use findDecoderForFormat (recommended by Android API reference) instead of
+            // createDecoderByType. createDecoderByType may return a codec that cannot handle
+            // the specific format (e.g., returning c2.android.raw.decoder for FLAC files).
+            val decoderName = findBestDecoderForFormat(format)
+                ?: findBestDecoder(mime)
+
+            if (decoderName == null) {
+                Timber.w("CodecPool: no decoder found for mime=$mime")
+                return@withContext null
+            }
+
             try {
-                MediaCodec.createDecoderByType(mime).also {
+                MediaCodec.createByCodecName(decoderName).also {
                     it.configure(format, null, null, 0)
                     it.start()
                 }
             } catch (e: Exception) {
-                Timber.w("CodecPool: createDecoderByType failed for $mime: ${e.message}")
-                findBestDecoder(mime)?.let { name ->
-                    try {
-                        MediaCodec.createByCodecName(name).also {
-                            it.configure(format, null, null, 0)
-                            it.start()
-                        }
-                    } catch (e2: Exception) {
-                        Timber.w("CodecPool: fallback decoder $name failed: ${e2.message}")
-                        null
+                Timber.w("CodecPool: createByCodecName($decoderName) failed: ${e.message}")
+                // Last resort: try createDecoderByType
+                try {
+                    MediaCodec.createDecoderByType(mime).also {
+                        it.configure(format, null, null, 0)
+                        it.start()
                     }
+                } catch (e2: Exception) {
+                    Timber.w("CodecPool: all decoder creation methods failed for $mime: ${e2.message}")
+                    null
                 }
             }
         }
@@ -1020,6 +1029,48 @@ class ReplayGainScanner @Inject constructor(
         } finally {
             codecPool.release(codec, mime)
         }
+    }
+
+    /**
+     * Finds the best available decoder for the given MediaFormat using
+     * MediaCodecList.findDecoderForFormat (recommended by Android API reference).
+     *
+     * Unlike createDecoderByType which may return a codec that cannot handle the
+     * specific format (e.g., c2.android.raw.decoder for FLAC), findDecoderForFormat
+     * considers the full format (MIME, sample rate, channels) to find a compatible decoder.
+     *
+     * Prefers hardware-accelerated decoders when available.
+     */
+    private fun findBestDecoderForFormat(format: MediaFormat): String? {
+        val mime = format.getString(MediaFormat.KEY_MIME) ?: return null
+        val codecList = MediaCodecList(MediaCodecList.REGULAR_CODECS)
+
+        // First, enumerate all decoders supporting this format and prefer hardware
+        val hardwareDecoders = codecList.codecInfos.filter { info ->
+            !info.isEncoder &&
+            info.isHardwareAccelerated &&
+            info.supportsType(mime) &&
+            try {
+                info.getCapabilitiesForType(mime).isFormatSupported(format)
+            } catch (e: IllegalArgumentException) {
+                false
+            }
+        }
+        if (hardwareDecoders.isNotEmpty()) {
+            return hardwareDecoders.first().name
+        }
+
+        // Fallback: use findDecoderForFormat which returns the platform-preferred decoder
+        val preferred = codecList.findDecoderForFormat(format)
+        if (preferred != null) {
+            return preferred
+        }
+
+        // Last resort: find any software decoder for the MIME type
+        val softwareDecoders = codecList.codecInfos.filter { info ->
+            !info.isEncoder && info.supportsType(mime)
+        }
+        return softwareDecoders.firstOrNull()?.name
     }
 
     /**
