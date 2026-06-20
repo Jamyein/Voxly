@@ -55,6 +55,9 @@ class AlbumGroupingProvider @Inject constructor(
                     }
                 }
             }
+            // Sync remaining with the set so disk fallback doesn't re-process matched paths
+            remaining.clear()
+            remaining.addAll(remainingSet)
         }
 
         // 3. Disk read fallback (stragglers / cache misses)
