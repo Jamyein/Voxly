@@ -644,6 +644,17 @@ class ReplayGainScanner @Inject constructor(
                 extractor.selectTrack(audioTrackIndex)
                 val format = extractor.getTrackFormat(audioTrackIndex)
 
+                // Some extractors (notably on emulators) report "audio/raw" for compressed
+                // formats like FLAC. Detect the actual format from file extension and override.
+                var mime = format.getString(MediaFormat.KEY_MIME)
+                if (mime == "audio/raw") {
+                    val expectedMime = getMimeFromExtension(filePath)
+                    if (expectedMime != null && expectedMime != "audio/raw") {
+                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $expectedMime — overriding MIME")
+                        format.setString(MediaFormat.KEY_MIME, expectedMime)
+                    }
+                }
+
                 val originalSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
@@ -802,6 +813,17 @@ class ReplayGainScanner @Inject constructor(
 
                 extractor.selectTrack(audioTrackIndex)
                 val format = extractor.getTrackFormat(audioTrackIndex)
+
+                // Some extractors (notably on emulators) report "audio/raw" for compressed
+                // formats like FLAC. Detect the actual format from file extension and override.
+                var mime = format.getString(MediaFormat.KEY_MIME)
+                if (mime == "audio/raw") {
+                    val expectedMime = getMimeFromExtension(filePath)
+                    if (expectedMime != null && expectedMime != "audio/raw") {
+                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $expectedMime — overriding MIME")
+                        format.setString(MediaFormat.KEY_MIME, expectedMime)
+                    }
+                }
 
                 val originalSampleRate = format.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 val channelCount = format.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
@@ -1033,6 +1055,23 @@ class ReplayGainScanner @Inject constructor(
             }
         } finally {
             codecPool.release(codec, mime)
+        }
+    }
+
+    /**
+     * Maps file extension to MIME type for audio formats.
+     */
+    private fun getMimeFromExtension(filePath: String): String? {
+        return when (filePath.substringAfterLast('.', "").lowercase()) {
+            "flac" -> "audio/flac"
+            "mp3" -> "audio/mpeg"
+            "m4a" -> "audio/mp4"
+            "aac" -> "audio/aac"
+            "ogg" -> "audio/vorbis"
+            "opus" -> "audio/opus"
+            "wav" -> "audio/wav"
+            "wma" -> "audio/x-ms-wma"
+            else -> null
         }
     }
 
