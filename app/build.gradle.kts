@@ -57,8 +57,8 @@ android {
         minSdk = 30
         //noinspection OldTargetApi
         targetSdk = 36
-        versionCode = 50
-        versionName = "1.7.2"
+        versionCode = 51
+        versionName = "1.7.3"
 
         @Suppress("DEPRECATION")
         resourceConfigurations += listOf("en", "zh-rCN")

@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.3]
+
 ### Added
 
 - **Floating bottom navigation bar now hides on scroll-down and reappears on scroll-up.**
@@ -24,17 +26,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   slide-out container. The collapsing top-app-bar scroll behavior is chained
   with the new hide/show connection via `chainNestedScrollConnections`, so
   both behaviors react to the same scroll gesture.
-
-### Fixed
-
-- **Bottom-bar hide direction is now page-down / page-up instead of reversed.**
-  The initial sign in `BottomBarVisibilityController.onPreScroll` was
-  inverted — `shouldShow = dy < 0f` produced "hide on scroll-up, show on
-  scroll-down" on actual devices, the opposite of the standard M3
-  bottom-app-bar pattern. Flipped to `shouldShow = dy > 0f` (hide when
-  the user drags the list downward to read more, show when they pull it
-  back up to navigate). The accompanying KDoc now documents the
-  verified `available.y` sign convention for `NestedScrollConnection`.
+- **M3E Floating Pill / Capsule bottom navigation bar** as an alternative
+  to the standard M3 `NavigationBar`, toggleable from settings. Uses the
+  expressive pill / capsule shape from Material 3 Expressive.
+- **EBU R128-compliant album gain** in the native libebur128 scanner.
+  Computed via `ebur128_loudness_global_multiple` for true multi-track
+  loudness integration. Adds a `nativeGetAlbumGain` JNI bridge,
+  true-peak support, null-safety hardening, and album-grouping-aware
+  cache keys.
+- **Track-level / album-level scan events** for ReplayGain. `ScanStatus`
+  now exposes `TRACK_COMPLETED` and `ALBUM_COMPLETED` per-track /
+  per-album events, with a single terminal `COMPLETED` guaranteeing no
+  duplicate completion callbacks and a progress-semantics fix in the
+  helper `ALBUMS` mode.
+- **`AlbumGroupingProvider` with cache-first album grouping.** Replaces
+  disk reads during scan aggregation with a Room-backed projection DAO;
+  the helper `ALBUMS` mode reuses the same provider. Includes DI wiring
+  and unit tests covering fallback / chunking paths.
+- **`skipExisting` ReplayGain scan mode.** A scan started with
+  `skipExisting` reuses the cached result for any file already in the
+  cache, dramatically shortening re-scans and library touch-ups.
+- **Chainable `MediaQueryDispatcher` builder** for MediaStore-backed
+  scans. Composes `MediaStore` queries through a fluent Builder,
+  enabling incremental `DATE_MODIFIED` filtering and progressive
+  emission without re-implementing the cursor lifecycle for each query
+  variant.
+- **SAF tree watcher with G1 orphan detection** across SAF-backed
+  libraries. Reacts within milliseconds to external file additions /
+  removals without polling.
+- **`FilesBatchUpdated` event stream + cross-screen refresh sync.**
+  Scan results stream add / remove / update deltas (`albumDiff`,
+  `artistDiff`) to every consumer through a single broadcast channel,
+  eliminating the full-list-replacement pattern in `LazyColumn`
+  consumers.
+- **Albums / Artists pages: search icon + pull-to-refresh** matching
+  the existing Files-page UX.
+- **FlexBox wrapping layout** via the `foundation-layout` artifact for
+  adaptive row / wrap content. Enables the slot-table link-buffer
+  composer flag in `Application.onCreate` for faster first-frame
+  composition.
+- **OkHttp 5.4 `EventListener`** wired to the existing `FileLoggingTree`
+  so network errors (cache misses, connect / call / response body
+  metrics) appear in logcat alongside scan errors.
+- **Paging `totalCount` caching.** `AudioFilePagingSource` now caches
+  `totalCount` across pages and refreshes on `LoadType.REFRESH`,
+  removing redundant count queries during incremental pagination.
 
 ### Changed
 
@@ -56,9 +92,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
     `ArtistGridItem` cards.
   - Downlevel (phones, portrait foldable): the original side-by-side
     `ListDetailPaneScaffold` is preserved.
+- **`ScanRepository` infrastructure moved to the domain layer.** The
+  scan pipeline and the legacy `LibraryDataHolder` migrated from
+  `data/` to `domain/`, mirroring the BoomingMusic layered architecture
+  so the data layer can stay focused on Room / SAF / cache concerns.
+- **Adaptive top-level navigation now uses the common-ui
+  `Scaffold + NavigationBar` recipe**, with `WindowInsets(0)` on the
+  outer Scaffold so the top app bar reaches the status bar and
+  gesture-nav areas stay immersive.
+- **QQ Music search migrated to the POST API with `zzcSign` signature**,
+  with a GET fallback path for environments where the signed POST is
+  unavailable.
+- **`OnlineSearchSorter` rewritten with Levenshtein distance** for
+  relevance scoring across MusicBrainz / NetEase / QQ Music results.
+- **Compose stability, Room queries, and coroutine-dispatch patterns
+  tuned.** Removed 45+ redundant `stateIn()` wrappers, switched hot
+  Room queries to `Dispatchers.IO`-bound flows, and tightened
+  `@Stable` / `@Immutable` annotations on shared models.
+- **ReplayGain scanner performance hardened.** `EBUR128_MODE_HISTOGRAM`
+  enabled for faster `loudness_range`; a `Semaphore` limits concurrent
+  scans to prevent codec starvation; `scanQuality` downsampling
+  delivers faster hi-res analysis (with PCM-level downsampling
+  replacing decoder-format modification); a `CodecPool` reuses
+  `MediaCodec` instances across same-format files with proper
+  `flush` on stopped codecs and `closeAll` cleanup.
+- **ReplayGain decoder selection strictly follows the Android docs.**
+  Uses `findDecoderForFormat` instead of `createDecoderByType` for
+  proper codec selection. MIME is overridden from `audio/raw` to the
+  file-extension-suggested compressed format on a clean `MediaFormat`
+  that includes sample rate and channel count.
 
 ### Fixed
 
+- **Bottom-bar hide direction is now page-down / page-up instead of reversed.**
+  The initial sign in `BottomBarVisibilityController.onPreScroll` was
+  inverted — `shouldShow = dy < 0f` produced "hide on scroll-up, show on
+  scroll-down" on actual devices, the opposite of the standard M3
+  bottom-app-bar pattern. Flipped to `shouldShow = dy > 0f` (hide when
+  the user drags the list downward to read more, show when they pull it
+  back up to navigate). The accompanying KDoc now documents the
+  verified `available.y` sign convention for `NestedScrollConnection`.
 - **Song list now updates immediately after editing metadata.**
   Saving a metadata change in the editor updates the file's title, artist,
   album, cover, etc. in the Files / Albums / Artists lists without requiring
@@ -69,6 +142,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   a single track and no longer takes many minutes for "scan album" mode.
   The scanning indicator now transitions to the result as soon as the scan
   completes, even if all tracks in an album failed to decode.
+- **ReplayGain cache no longer serves garbage results.** Non-finite
+  gains are rejected at insert time; `pendingReplayGainInfo` null
+  overwrite is guarded; album-grouping falls back to `albumArtist`
+  then `artist`.
+- **ReplayGain album scan reports accurate progress.** Filters by
+  source album; always emits terminal `COMPLETED`; disposes the helper
+  scope; updates the "remaining" list after the aggregator fallback;
+  only marks the scan complete on the terminal `COMPLETED` event.
+- **ReplayGain auto-refreshes the metadata editor UI on scan
+  completion** and preserves the scan result across save and
+  clear / rescan cycles so users no longer have to re-scan after
+  editing metadata.
+- **ReplayGain falls back to the original format** when the FLAC
+  decoder fails at runtime on emulators, so scans succeed even when
+  the system codec is missing.
+- **ReplayGain scanner no longer leaks resources** — close-out paths
+  release `MediaCodec` / extractor / `FileDescriptor` handles; cached
+  tracks are excluded from album-gain aggregation.
+- **Audio file cache uses path as the sole identity key**, with
+  change events emitted via `SharedFlow` to prevent conflation drops
+  during high-frequency scans. Post-save cache sync moved to
+  `applicationScope`.
+- **Album detail navigation from the artist page** now resolves to the
+  correct album rather than the first item.
+- **Whitelist directory songs sync after external deletion** — files
+  removed from a whitelist path while the app is open are pruned on
+  the next scan instead of lingering in the cache.
+- **Launcher icon sizing and foreground color** corrected for adaptive
+  icon masks on Android 13+.
+- **CI: `CommitBuild` APK resolution is now robust** against
+  intermediate path changes — uses the final APK path directly,
+  handles `-PbuildAbi` correctly, and the workflow YAML is
+  consistently indented.
+
+### Removed
+
+- **`LibraryDataHolder`** (legacy in-memory scan cache) — fully
+  replaced by `ScanRepository` in the domain layer.
+- **CI `-Pandroid.injected.build.abi`** internal property — replaced
+  by the documented `-PbuildAbi` Gradle property.
 
 ## [1.7.2]
 
@@ -111,6 +224,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Initial public release.
 
-[Unreleased]: https://github.com/voxly/voxly/compare/v1.7.2...HEAD
+[Unreleased]: https://github.com/voxly/voxly/compare/v1.7.3...HEAD
+[1.7.3]: https://github.com/voxly/voxly/compare/v1.7.2...v1.7.3
 [1.7.2]: https://github.com/voxly/voxly/compare/v1.7.1...v1.7.2
 [1.7.1]: https://github.com/voxly/voxly/releases/tag/v1.7.1
