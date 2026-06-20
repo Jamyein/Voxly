@@ -78,10 +78,23 @@ class ReplayGainScanner @Inject constructor(
         }
 
         @Synchronized
-        fun getCachedResult(filePath: String): ReplayGainInfo? = scanResultCache[filePath]
+        fun getCachedResult(filePath: String): ReplayGainInfo? {
+            val cached = scanResultCache[filePath]
+            // Reject cached results with invalid gain (decoder failure, no audio data)
+            if (cached != null && !cached.trackGain.isFinite()) {
+                scanResultCache.remove(filePath)
+                return null
+            }
+            return cached
+        }
 
         @Synchronized
         fun cacheResult(filePath: String, result: ReplayGainInfo) {
+            // Don't cache non-finite results (decoder failure produced no audio data)
+            if (!result.trackGain.isFinite()) {
+                Timber.w("Refusing to cache invalid ReplayGain for $filePath: gain=${result.trackGain}")
+                return
+            }
             scanResultCache[filePath] = result
         }
 
@@ -737,6 +750,12 @@ class ReplayGainScanner @Inject constructor(
                         maxPeakLevel = config.maxPeakLevel.toFloat()
                     )
 
+                    // Don't cache/results for infinite gain (no audio data was decoded)
+                    if (!replayGainInfo.trackGain.isFinite()) {
+                        Timber.w("Invalid gain ${replayGainInfo.trackGain} for ${file.name} — likely decoder failure, not caching")
+                        return@withPermit null
+                    }
+
                     val result = replayGainInfo.copy(trackGain = clampedTrackGain)
 
                     // Cache the result for future repeated scans
@@ -887,6 +906,13 @@ class ReplayGainScanner @Inject constructor(
                     clipMode = config.clipMode,
                     maxPeakLevel = config.maxPeakLevel.toFloat()
                 )
+
+                // Don't cache infinite gain (no audio data decoded — decoder failure)
+                if (!replayGainInfo.trackGain.isFinite()) {
+                    Timber.w("Invalid gain ${replayGainInfo.trackGain} for ${file.name} — likely decoder failure, not caching")
+                    scanner.close()
+                    return@withPermit null to null
+                }
 
                 val result = replayGainInfo.copy(trackGain = clampedTrackGain)
                 cacheResult(filePath, result)
