@@ -1,0 +1,78 @@
+package com.voxly.data.local.replaygain
+
+import com.voxly.data.local.cache.CachedAudioFileDao
+import com.voxly.data.local.cache.CachedAudioFileDao.AlbumPathInfo
+import com.voxly.data.local.scanner.AlbumArtistAggregator
+import com.voxly.data.local.metadata.TagLibMetadataProcessor
+import com.voxly.domain.model.AlbumGroup
+import com.voxly.domain.model.AudioMetadata
+import io.mockk.coEvery
+import io.mockk.every
+import io.mockk.mockk
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.test.runTest
+import org.junit.Assert.assertEquals
+import org.junit.Test
+
+class AlbumGroupingProviderTest {
+    private val dao = mockk<CachedAudioFileDao>()
+    private val aggregator = mockk<AlbumArtistAggregator>()
+    private val metadataProcessor = mockk<TagLibMetadataProcessor>()
+
+    private val provider = AlbumGroupingProvider(dao, aggregator, metadataProcessor)
+
+    @Test
+    fun `groups by album_artist from Room cache`() = runTest {
+        val paths = listOf("/music/a/1.mp3", "/music/a/2.mp3", "/music/b/3.mp3")
+        coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
+            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A"),
+            AlbumPathInfo("/music/a/2.mp3", "Album A", "Artist A"),
+            AlbumPathInfo("/music/b/3.mp3", "Album B", "Artist B")
+        )
+
+        val result = provider.groupByAlbum(paths)
+
+        assertEquals(
+            mapOf(
+                "Album A_Artist A" to listOf("/music/a/1.mp3", "/music/a/2.mp3"),
+                "Album B_Artist B" to listOf("/music/b/3.mp3")
+            ),
+            result
+        )
+    }
+
+    @Test
+    fun `falls back to disk read when cache misses some paths`() = runTest {
+        val paths = listOf("/music/a/1.mp3", "/music/a/2.mp3")
+        coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
+            AlbumPathInfo("/music/a/1.mp3", "Album A", "Artist A")
+        )
+        every { aggregator.albums } returns MutableStateFlow(emptyList<AlbumGroup>())
+        coEvery { metadataProcessor.readMetadata("/music/a/2.mp3", false) } returns AudioMetadata(
+            album = "Album A",
+            artist = "Artist A"
+        )
+
+        val result = provider.groupByAlbum(paths)
+
+        assertEquals(
+            mapOf("Album A_Artist A" to listOf("/music/a/1.mp3", "/music/a/2.mp3")),
+            result
+        )
+    }
+
+    @Test
+    fun `puts files with empty album and artist into singleton groups`() = runTest {
+        val paths = listOf("/music/a/1.mp3", "/music/b/2.mp3")
+        coEvery { dao.getAlbumInfoByPaths(any()) } returns listOf(
+            AlbumPathInfo("/music/a/1.mp3", "", ""),
+            AlbumPathInfo("/music/b/2.mp3", null, null)
+        )
+
+        val result = provider.groupByAlbum(paths)
+
+        assertEquals(2, result.size)
+        assertEquals(listOf("/music/a/1.mp3"), result["singleton_0"])
+        assertEquals(listOf("/music/b/2.mp3"), result["singleton_1"])
+    }
+}
