@@ -6,6 +6,7 @@ import android.content.Context
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.data.local.cache.CachedAudioFileDao
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.replaygain.ReplayGainScanner
@@ -363,6 +364,14 @@ object AppModule {
     ): MusicCacheDatabaseProvider {
         Timber.tag("Voxly").i("Initializing MusicCacheDatabaseProvider")
         return MusicCacheDatabaseProvider(context)
+    }
+
+    @Provides
+    @Singleton
+    fun provideCachedAudioFileDao(
+        databaseProvider: MusicCacheDatabaseProvider
+    ): CachedAudioFileDao {
+        return databaseProvider.getDatabase().audioFileDao()
     }
 
     @Provides
