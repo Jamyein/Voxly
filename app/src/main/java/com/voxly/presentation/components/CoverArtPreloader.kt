@@ -10,6 +10,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import coil3.imageLoader
 import coil3.request.ImageRequest
+import coil3.size.Precision
 import coil3.size.Size
 import com.voxly.data.local.cover.CoverUriProvider
 import kotlinx.coroutines.delay
@@ -85,6 +86,8 @@ private fun CoverPreloader(
                         ImageRequest.Builder(platformContext)
                             .data(coverUri)
                             .size(Size(PRELOAD_SIZE_PX, PRELOAD_SIZE_PX))
+                            .precision(Precision.INEXACT)
+                            .memoryCacheKey(coverUri.toString())
                             .build()
                     )
                 }

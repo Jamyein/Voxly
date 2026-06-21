@@ -5,6 +5,7 @@ import coil3.ImageLoader
 import coil3.SingletonImageLoader
 import coil3.disk.DiskCache
 import coil3.memory.MemoryCache
+import coil3.memoryCacheMaxSizePercentWhileInBackground
 import coil3.request.crossfade
 import coil3.util.DebugLogger
 import com.voxly.BuildConfig
@@ -21,13 +22,14 @@ class VoxlyImageLoader private constructor(
                     .maxSizePercent(appContext, 0.25)
                     .build()
             }
+            .memoryCacheMaxSizePercentWhileInBackground(0.25)
             .diskCache {
                 DiskCache.Builder()
                     .directory("${appContext.cacheDir}/image_cache".toPath())
                     .maxSizeBytes(50L * 1024 * 1024)
                     .build()
             }
-            .crossfade(300)
+            .crossfade(100)
             .apply {
                 if (BuildConfig.DEBUG) {
                     logger(DebugLogger())

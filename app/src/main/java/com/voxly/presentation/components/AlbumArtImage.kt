@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
+import coil3.size.Precision
 import coil3.size.Scale
 import com.voxly.R
 import com.voxly.data.local.cover.CoverUriProvider
@@ -136,6 +137,7 @@ fun AlbumArtImage(
             val imageRequestBuilder = ImageRequest.Builder(LocalContext.current)
                 .data(model)
                 .size(px)
+                .precision(Precision.INEXACT)
                 .scale(Scale.FILL)
                 .crossfade(crossfade)
 
