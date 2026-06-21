@@ -98,3 +98,4 @@ local.properties
 *.md
 /app/github
 *.xml
+/github

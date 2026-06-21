@@ -8,6 +8,7 @@ import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.repository.WhitelistRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -23,7 +24,9 @@ class DirectoryScanStrategy @Inject constructor(
     private val metadataProcessor: TagLibMetadataProcessor,
     private val fileProcessor: FileProcessor,
     private val fastScanProcessor: FastScanProcessor,
-    private val safWriteAccessService: SafWriteAccessService
+    private val safWriteAccessService: SafWriteAccessService,
+    private val filterEngine: FilterEngine,
+    private val whitelistRepository: WhitelistRepository
 ) : ScanStrategy {
     companion object {
         private const val TAG = "DirectoryScanStrategy"
@@ -110,11 +113,24 @@ class DirectoryScanStrategy @Inject constructor(
         val allFiles = (retainedFiles + updatedFiles + newFiles)
             .distinctBy { it.path }
 
+        val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
+        val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
+        val whitelistPaths = if (whitelistEnabled) whitelistRepository.getValidWhitelistPathsOnce() else emptyList()
+        val blacklistPaths = if (blacklistEnabled) whitelistRepository.getValidBlacklistPathsOnce() else emptyList()
+        val filteredFiles = filterEngine.applyFilters(allFiles, FilterEngine.FilterSettings(
+            whitelistEnabled = whitelistEnabled && whitelistPaths.isNotEmpty(),
+            blacklistEnabled = blacklistEnabled && blacklistPaths.isNotEmpty(),
+            minDurationEnabled = false,
+            whitelistPaths = whitelistPaths,
+            blacklistPaths = blacklistPaths,
+            minDurationMs = 0L
+        ))
+
         if (updatedFiles.isNotEmpty() || newFiles.isNotEmpty()) {
-            libraryCache.updateCache(allFiles)
+            libraryCache.updateCache(filteredFiles)
         }
 
-        allFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
+        filteredFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
     }
 
     private suspend fun scanDirectoryInternal(
@@ -127,7 +143,21 @@ class DirectoryScanStrategy @Inject constructor(
 
         val relativeDir = mediaStoreDataSource.getRelativePathFromAbsolute(normalizedDir)
         val audioFiles = if (relativeDir != null) {
-            val storeFiles = mediaStoreDataSource.queryFromDirectory(relativeDir, minDurationEnabled, minDurationMs)
+            var storeFiles = mediaStoreDataSource.queryFromDirectory(relativeDir, minDurationEnabled, minDurationMs)
+
+            val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
+            val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
+            val whitelistPaths = if (whitelistEnabled) whitelistRepository.getValidWhitelistPathsOnce() else emptyList()
+            val blacklistPaths = if (blacklistEnabled) whitelistRepository.getValidBlacklistPathsOnce() else emptyList()
+            storeFiles = filterEngine.applyFilters(storeFiles, FilterEngine.FilterSettings(
+                whitelistEnabled = whitelistEnabled && whitelistPaths.isNotEmpty(),
+                blacklistEnabled = blacklistEnabled && blacklistPaths.isNotEmpty(),
+                minDurationEnabled = false,
+                whitelistPaths = whitelistPaths,
+                blacklistPaths = blacklistPaths,
+                minDurationMs = 0L
+            ))
+
             fastScanProcessor.enrichAll(storeFiles)
         } else {
             emptyList()

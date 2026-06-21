@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.7.4]
+
+### Fixed
+
+- **8 critical + 10 high code-audit findings resolved across the codebase.**
+- **CR-1: NDK decoder readSampleData zero-copy bug** — `AMediaExtractor_readSampleData` called with buffer size 0, decoder decoded uninitialized memory. Changed to `bufSize`.
+- **CR-2: JNI function name mismatch** — C++ exported `nativeDecodeFileGain` but Kotlin declared `decodeFileGain`, causing `UnsatisfiedLinkError` at runtime. Renamed symbol and updated linker version script.
+- **CR-3: Stack buffer overflow in decimation path** — Removed fixed-size `batchBuf[16384]`, feeds PCM directly to ebur128 from codec output buffer.
+- **CR-4: MediaExtractor FD leak** — Extractor never released in success paths, leaking ~10k FDs per large scan. Extracted shared `decodeFile()` with `try-finally` lifecycle management.
+- **CR-5: Silent album gain 0dB fallback** — When `nativeGetAlbumGain` returned null, album gain silently defaulted to 0 dB. Falls back to energy-average now.
+- **CR-6: PCM data loss on >8MB decoder output** — Batch copy replaced with chunked-read loop flushing between iterations.
+- **CR-7: Non-reentrant Mutex deadlock** — Removed deprecated `loadAudioFiles()` that wrapped `scan()` in the same `scanMutex`.
+- **CR-8: Fragile album-scan freshness check** — Replaced `trackScanners.size == trackGains.size` with `all { scanner != null }` for correct mixed cache/fresh results.
+- **HI-1: Decoder loop infinite hang** — Added consecutive-error counter with 100-try abort.
+- **HI-2: Missing JNI exception checks** — Added `ExceptionCheck` after `GetShortArrayRegion`, `SetDoubleArrayRegion`, `GetLongArrayElements`.
+- **HI-3: Channel count change ignored** — Aborts decode instead of silently using stale channel count.
+- **HI-4: God ViewModel refactoring** — Extracted `MetadataSaveCoordinator` from 1072-line `MetadataEditorViewModel`.
+- **HI-5: Large composable breaking** — Extracted `MetadataEditorTopAppBar` and `MetadataEditorLaunchers` from 1007-line screen.
+- **HI-6: Dead code in navigation** — Removed unused `computeTransition` + `TransitionType` (50 lines).
+- **HI-7: Channel leak on source error** — Wrapped 4 source `launch` blocks in `try-finally` to guarantee channel closure.
+- **HI-8: Extraneous TagLib I/O on cache hit** — Cache-hit path skips TagLib parsing when `includeAlbumArt=false`.
+- **HI-9: Sequential DataStore `.first()` storm** — Combined 15 individual settings flows into a single `StateFlow` via `combine()`.
+- **HI-10: Missing navigation tests** — Added `TopLevelNavigationTest` with 6 test cases for backstack, pop, and multi-tab behavior.
+
 ## [1.7.3]
 
 ### Added

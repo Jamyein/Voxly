@@ -5,6 +5,7 @@ import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.repository.WhitelistRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
@@ -18,7 +19,9 @@ class GlobalScanStrategy @Inject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val metadataProcessor: TagLibMetadataProcessor,
     private val fileProcessor: FileProcessor,
-    private val fastScanProcessor: FastScanProcessor
+    private val fastScanProcessor: FastScanProcessor,
+    private val filterEngine: FilterEngine,
+    private val whitelistRepository: WhitelistRepository
 ) : ScanStrategy {
     companion object {
         private const val TAG = "GlobalScanStrategy"
@@ -31,7 +34,22 @@ class GlobalScanStrategy @Inject constructor(
         val minDurationEnabled = settingsDataStore.minDurationFilterEnabled.first()
         val minDurationMs = settingsDataStore.minDurationFilterThresholdMs.first().toLong()
 
-        val files: List<AudioFile> = mediaStoreDataSource.queryAll(minDurationEnabled, minDurationMs)
+        var files: List<AudioFile> = mediaStoreDataSource.queryAll(minDurationEnabled, minDurationMs)
+
+        // Apply whitelist/blacklist filters before lightweight metadata parsing
+        val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
+        val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
+        val whitelistPaths = if (whitelistEnabled) whitelistRepository.getValidWhitelistPathsOnce() else emptyList()
+        val blacklistPaths = if (blacklistEnabled) whitelistRepository.getValidBlacklistPathsOnce() else emptyList()
+        files = filterEngine.applyFilters(files, FilterEngine.FilterSettings(
+            whitelistEnabled = whitelistEnabled && whitelistPaths.isNotEmpty(),
+            blacklistEnabled = blacklistEnabled && blacklistPaths.isNotEmpty(),
+            minDurationEnabled = false,
+            whitelistPaths = whitelistPaths,
+            blacklistPaths = blacklistPaths,
+            minDurationMs = 0L
+        ))
+
         val enrichedFiles = fastScanProcessor.enrichAll(files)
         enrichedFiles.sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
     }

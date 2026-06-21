@@ -5,7 +5,9 @@ import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
 import com.voxly.domain.model.AudioFile
+import com.voxly.domain.repository.WhitelistRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import timber.log.Timber
 import javax.inject.Inject
@@ -15,7 +17,9 @@ class IncrementalScanStrategy @Inject constructor(
     private val libraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
     private val metadataProcessor: TagLibMetadataProcessor,
-    private val fileProcessor: FileProcessor
+    private val fileProcessor: FileProcessor,
+    private val filterEngine: FilterEngine,
+    private val whitelistRepository: WhitelistRepository
 ) : ScanStrategy {
     companion object {
         private const val TAG = "IncrementalScanStrategy"
@@ -77,12 +81,27 @@ class IncrementalScanStrategy @Inject constructor(
         val filteredRetained = retainedFiles.filter { it.path in validPathsSet }
         settingsDataStore.setLastKnownFileCount(allCurrentPaths.size)
 
+        val whitelistEnabled = settingsDataStore.whitelistEnabled.first()
+        val blacklistEnabled = settingsDataStore.blacklistEnabled.first()
+        val whitelistPaths = if (whitelistEnabled) whitelistRepository.getValidWhitelistPathsOnce() else emptyList()
+        val blacklistPaths = if (blacklistEnabled) whitelistRepository.getValidBlacklistPathsOnce() else emptyList()
+        val filterSettings = FilterEngine.FilterSettings(
+            whitelistEnabled = whitelistEnabled && whitelistPaths.isNotEmpty(),
+            blacklistEnabled = blacklistEnabled && blacklistPaths.isNotEmpty(),
+            minDurationEnabled = false,
+            whitelistPaths = whitelistPaths,
+            blacklistPaths = blacklistPaths,
+            minDurationMs = 0L
+        )
+
         if (updatedFiles.isEmpty()) {
-            return@withContext filteredRetained
+            return@withContext filterEngine.applyFilters(filteredRetained, filterSettings)
         }
 
-        (filteredRetained + updatedFiles)
+        val merged = (filteredRetained + updatedFiles)
             .distinctBy { it.path }
+
+        filterEngine.applyFilters(merged, filterSettings)
             .sortedWith(compareBy(chineseCollator) { it.metadata.getDisplayTitle(it.name) })
     }
 }
