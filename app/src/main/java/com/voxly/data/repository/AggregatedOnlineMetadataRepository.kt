@@ -16,11 +16,17 @@ import com.voxly.domain.repository.OnlineReleaseDetails
 import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.OnlineSource
 import com.voxly.domain.repository.OnlineSourceResult
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.sync.Semaphore
@@ -57,6 +63,44 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
 
     // Semaphore to limit concurrent detail/lyrics fetching (max 5 concurrent)
     private val detailSemaphore = Semaphore(5)
+
+    private val settingsScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
+
+    private val settingsFlow: StateFlow<OnlineSourceSettings> = combine(
+        settingsDataStore.metadataSourceEnabledMusicBrainz,
+        settingsDataStore.metadataSourceEnabledITunes,
+        settingsDataStore.metadataSourceEnabledNetease,
+        settingsDataStore.metadataSourceEnabledQQMusic,
+        settingsDataStore.coverSourceEnabledMusicBrainz,
+        settingsDataStore.coverSourceEnabledITunes,
+        settingsDataStore.coverSourceEnabledNetease,
+        settingsDataStore.coverSourceEnabledQQMusic,
+        settingsDataStore.onlineSearchLimit,
+        settingsDataStore.onlineSearchLimitMusicBrainz,
+        settingsDataStore.onlineSearchLimitITunes,
+        settingsDataStore.onlineSearchLimitNetease,
+        settingsDataStore.onlineSearchLimitQQMusic,
+        settingsDataStore.metadataSourcePriority,
+        settingsDataStore.coverSourcePriority
+    ) { values ->
+        OnlineSourceSettings(
+            enableMusicBrainz = values[0] as Boolean,
+            enableITunes = values[1] as Boolean,
+            enableNetease = values[2] as Boolean,
+            enableQQMusic = values[3] as Boolean,
+            coverEnableMusicBrainz = values[4] as Boolean,
+            coverEnableITunes = values[5] as Boolean,
+            coverEnableNetease = values[6] as Boolean,
+            coverEnableQQMusic = values[7] as Boolean,
+            searchLimit = values[8] as Int,
+            searchLimitMusicBrainz = values[9] as Int,
+            searchLimitITunes = values[10] as Int,
+            searchLimitNetease = values[11] as Int,
+            searchLimitQQMusic = values[12] as Int,
+            metadataPriority = values[13] as List<String>,
+            coverPriority = values[14] as List<String>
+        )
+    }.stateIn(settingsScope, SharingStarted.Eagerly, OnlineSourceSettings.EMPTY)
 
     /**
      * Data source preference for metadata lookup.
@@ -463,33 +507,45 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
         supervisorScope {
             if (settings.coverEnableMusicBrainz) {
                 launch {
-                    musicBrainzMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
-                        .collect { result -> trySend(result) }
-                    markSourceCompleted(OnlineSource.MUSICBRAINZ)
+                    try {
+                        musicBrainzMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
+                            .collect { result -> trySend(result) }
+                    } finally {
+                        markSourceCompleted(OnlineSource.MUSICBRAINZ)
+                    }
                 }
             }
 
             if (settings.coverEnableITunes) {
                 launch {
-                    itunesMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
-                        .collect { result -> trySend(result) }
-                    markSourceCompleted(OnlineSource.ITUNES)
+                    try {
+                        itunesMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
+                            .collect { result -> trySend(result) }
+                    } finally {
+                        markSourceCompleted(OnlineSource.ITUNES)
+                    }
                 }
             }
 
             if (settings.coverEnableNetease) {
                 launch {
-                    netEaseMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
-                        .collect { result -> trySend(result) }
-                    markSourceCompleted(OnlineSource.NETEASE)
+                    try {
+                        netEaseMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
+                            .collect { result -> trySend(result) }
+                    } finally {
+                        markSourceCompleted(OnlineSource.NETEASE)
+                    }
                 }
             }
 
             if (settings.coverEnableQQMusic) {
                 launch {
-                    qqMusicMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
-                        .collect { result -> trySend(result) }
-                    markSourceCompleted(OnlineSource.QQ_MUSIC)
+                    try {
+                        qqMusicMetadataRepository.searchByTrackForCoverFlow(title, artist, settings.requestLimit)
+                            .collect { result -> trySend(result) }
+                    } finally {
+                        markSourceCompleted(OnlineSource.QQ_MUSIC)
+                    }
                 }
             }
         }
@@ -834,23 +890,7 @@ class AggregatedOnlineMetadataRepository @Inject constructor(
     }
 
     private suspend fun getOnlineSourceSettings(): OnlineSourceSettings {
-        return OnlineSourceSettings(
-            enableMusicBrainz = settingsDataStore.metadataSourceEnabledMusicBrainz.first(),
-            enableITunes = settingsDataStore.metadataSourceEnabledITunes.first(),
-            enableNetease = settingsDataStore.metadataSourceEnabledNetease.first(),
-            enableQQMusic = settingsDataStore.metadataSourceEnabledQQMusic.first(),
-            coverEnableMusicBrainz = settingsDataStore.coverSourceEnabledMusicBrainz.first(),
-            coverEnableITunes = settingsDataStore.coverSourceEnabledITunes.first(),
-            coverEnableNetease = settingsDataStore.coverSourceEnabledNetease.first(),
-            coverEnableQQMusic = settingsDataStore.coverSourceEnabledQQMusic.first(),
-            searchLimit = normalizeSearchLimit(settingsDataStore.onlineSearchLimit.first()),
-            searchLimitMusicBrainz = settingsDataStore.onlineSearchLimitMusicBrainz.first(),
-            searchLimitITunes = settingsDataStore.onlineSearchLimitITunes.first(),
-            searchLimitNetease = settingsDataStore.onlineSearchLimitNetease.first(),
-            searchLimitQQMusic = settingsDataStore.onlineSearchLimitQQMusic.first(),
-            metadataPriority = settingsDataStore.metadataSourcePriority.first(),
-            coverPriority = settingsDataStore.coverSourcePriority.first()
-        )
+        return settingsFlow.value
     }
 
     private fun normalizeSearchLimit(limit: Int): Int {

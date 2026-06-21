@@ -99,6 +99,11 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeProcessFr
     for (jsize offset = 0; offset < totalSamples; offset += 8192) {
         jsize chunkSize = std::min((jsize)8192, totalSamples - offset);
         env->GetShortArrayRegion(samples, offset, chunkSize, buffer);
+        if (env->ExceptionCheck()) {
+            env->ExceptionClear();
+            LOGE("GetShortArrayRegion failed");
+            return;
+        }
         ebur128_add_frames_short(state->ebur, buffer, chunkSize / state->channels);
     }
 }
@@ -164,6 +169,11 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult
     values[5] = state->target_loudness;
 
     env->SetDoubleArrayRegion(result, 0, 6, values);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        LOGE("SetDoubleArrayRegion failed in nativeGetResult");
+        return JNI_FALSE;
+    }
 
     LOGD("Result: gain=%.2f peak=%.6f loudness=%.2f range=%.2f",
          gain, peak, loudness, range);
@@ -183,6 +193,12 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_00024Companion_
     }
 
     jlong* ptrs = env->GetLongArrayElements(scannerPtrs, nullptr);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        LOGE("GetLongArrayElements failed");
+        jdoubleArray empty = env->NewDoubleArray(3);
+        return empty;
+    }
     if (!ptrs) {
         jdoubleArray empty = env->NewDoubleArray(3);
         return empty;
@@ -242,6 +258,11 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_00024Companion_
     jdouble values[3] = {albumLoudness, albumRange, albumPeak};
     jdoubleArray result = env->NewDoubleArray(3);
     env->SetDoubleArrayRegion(result, 0, 3, values);
+    if (env->ExceptionCheck()) {
+        env->ExceptionClear();
+        LOGE("SetDoubleArrayRegion failed in nativeGetAlbumGain");
+        return result;
+    }
 
     LOGD("Album gain: loudness=%.2f range=%.2f peak=%.6f tracks=%d",
          albumLoudness, albumRange, albumPeak, count);

@@ -6,6 +6,7 @@ import android.widget.Toast
 import androidx.activity.compose.PredictiveBackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
@@ -205,20 +206,10 @@ fun MetadataEditorScreen(
         }
     }
 
-    val galleryPickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
-    ) { uri: Uri? ->
-        val bytes = uri?.let { readBytesFromUri(context, it) }
-        bytes?.let { viewModel.updateAlbumArt(it) }
-    }
-
-    val cameraLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.TakePicturePreview()
-    ) { bitmap: Bitmap? ->
-        bitmap?.let { image ->
-            bitmapToJpegBytes(image)?.let { bytes -> viewModel.updateAlbumArt(bytes) }
-        }
-    }
+    val launcherState = MetadataEditorLaunchers(
+        onImageResult = { bytes -> viewModel.updateAlbumArt(bytes) },
+        onTakePhotoResult = { bytes -> viewModel.updateAlbumArt(bytes) },
+    )
 
     val reauthorizeFileLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocument()
@@ -277,29 +268,10 @@ fun MetadataEditorScreen(
                 .nestedScroll(floatingToolbarScrollBehavior)
                 .background(backgroundColor),
             topBar = {
-                TopAppBar(
-                    title = { Text(stringResource(R.string.edit_metadata)) },
-                    scrollBehavior = scrollBehavior,
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = backgroundColor,
-                        scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                        titleContentColor = onBackgroundColor,
-                        navigationIconContentColor = onBackgroundColor,
-                        actionIconContentColor = onBackgroundColor
-                    ),
-                    navigationIcon = {
-                        FilledTonalIconButton(onClick = handleNavigateBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(R.string.cd_back)
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(onClick = { showMoreOptionsSheet = true }) {
-                            Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
-                        }
-                    }
+                MetadataEditorTopAppBar(
+                    onBack = handleNavigateBack,
+                    onMoreOptions = { showMoreOptionsSheet = true },
+                    scrollBehavior = scrollBehavior
                 )
             },
             floatingActionButton = {}
@@ -399,8 +371,8 @@ fun MetadataEditorScreen(
         showAlbumArtOptions = showAlbumArtOptions,
         onShowAlbumArtOptionsChange = { showAlbumArtOptions = it },
         hasAlbumArt = editedMetadata?.albumArt != null,
-        onPickFromGallery = { galleryPickerLauncher.launch("image/*") },
-        onTakePhoto = { cameraLauncher.launch(null) },
+        onPickFromGallery = { launcherState.galleryPickerLauncher.launch("image/*") },
+        onTakePhoto = { launcherState.cameraLauncher.launch(null) },
         onFetchOnlineCover = onNavigateToOnlineCoverSearch,
         onViewArt = { showAlbumArtPreview = true },
         onRotateArt = {
@@ -1004,4 +976,66 @@ onLyricsChange = onLyricsChange,
 
         replayGainSection?.invoke()
     }
+}
+
+@Composable
+private fun MetadataEditorTopAppBar(
+    onBack: () -> Unit,
+    onMoreOptions: () -> Unit,
+    scrollBehavior: TopAppBarScrollBehavior? = null,
+    modifier: Modifier = Modifier
+) {
+    TopAppBar(
+        title = { Text(stringResource(R.string.edit_metadata)) },
+        scrollBehavior = scrollBehavior,
+        colors = TopAppBarDefaults.topAppBarColors(
+            containerColor = MaterialTheme.colorScheme.background,
+            scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+            titleContentColor = MaterialTheme.colorScheme.onBackground,
+            navigationIconContentColor = MaterialTheme.colorScheme.onBackground,
+            actionIconContentColor = MaterialTheme.colorScheme.onBackground
+        ),
+        navigationIcon = {
+            FilledTonalIconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.cd_back)
+                )
+            }
+        },
+        actions = {
+            IconButton(onClick = onMoreOptions) {
+                Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.cd_more_options))
+            }
+        }
+    )
+}
+
+data class LauncherState(
+    val galleryPickerLauncher: ActivityResultLauncher<String>,
+    val cameraLauncher: ActivityResultLauncher<Void?>,
+)
+
+@Composable
+private fun MetadataEditorLaunchers(
+    onImageResult: (ByteArray) -> Unit,
+    onTakePhotoResult: (ByteArray) -> Unit,
+): LauncherState {
+    val context = LocalContext.current
+    val galleryPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        val bytes = uri?.let { readBytesFromUri(context, it) }
+        bytes?.let { onImageResult(it) }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicturePreview()
+    ) { bitmap: Bitmap? ->
+        bitmap?.let { image ->
+            bitmapToJpegBytes(image)?.let { onTakePhotoResult(it) }
+        }
+    }
+
+    return LauncherState(galleryPickerLauncher, cameraLauncher)
 }

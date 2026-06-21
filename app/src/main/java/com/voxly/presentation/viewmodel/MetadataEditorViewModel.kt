@@ -10,7 +10,6 @@ import timber.log.Timber
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.MusicLibraryCache
-import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.saf.SafGrantType
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.data.repository.AggregatedOnlineMetadataRepository
@@ -25,7 +24,6 @@ import com.voxly.domain.repository.OnlineRecording
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.usecase.ApplyOnlineMetadataUseCase
-import com.voxly.domain.usecase.SaveMetadataResult
 import com.voxly.domain.usecase.SaveMetadataUseCase
 import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.presentation.components.lyricsposter.ColorExtractor
@@ -66,7 +64,6 @@ import kotlinx.coroutines.withContext
 import kotlinx.collections.immutable.toImmutableList
 import kotlinx.collections.immutable.toPersistentMap
 import kotlinx.collections.immutable.toPersistentSet
-import coil3.SingletonImageLoader
 import java.io.File
 import javax.inject.Inject
 import javax.inject.Named
@@ -104,6 +101,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
     val lyricsSearchHelper: LyricsSearchHelper,
     val coverSearchHelper: CoverSearchHelper,
     val replayGainHelper: ReplayGainHelper,
+    private val metadataSaveCoordinator: MetadataSaveCoordinator,
     @Named("ApplicationScope") private val applicationScope: kotlinx.coroutines.CoroutineScope
 ) : ViewModel() {
 
@@ -566,15 +564,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
     }
     
     /**
-     * Saves ReplayGain info to the file.
-     * @param replayGainInfo ReplayGain info to save
-     * @return true if save was successful
-     */
-    private suspend fun saveReplayGainToFile(replayGainInfo: ReplayGainInfo): Boolean {
-        return replayGainHelper.saveReplayGain(filePath, replayGainInfo)
-    }
-
-    /**
      * Finds files in the same album using MediaStore.
      */
     private suspend fun findAlbumFiles(): List<String> = withContext(Dispatchers.IO) {
@@ -641,6 +630,7 @@ class MetadataEditorViewModel @AssistedInject constructor(
 
     /**
      * Saves the edited metadata and ReplayGain to the file.
+     * Delegates to MetadataSaveCoordinator for persistence work.
      */
     fun saveMetadata() {
         Timber.tag("Voxly").i("MetadataEditorViewModel: action=save filePath=$filePath")
@@ -651,149 +641,66 @@ class MetadataEditorViewModel @AssistedInject constructor(
             val startedAt = SystemClock.elapsedRealtime()
             val currentSuccessState = _uiState.value as? MetadataEditorUiState.Success
 
-            // Preserve existing ReplayGain custom fields on the file. The editor's
-            // edited metadata doesn't track RG as a typed field, so the save would
-            // otherwise drop the RG fields that the scanner wrote to the file during
-            // a scan. Read them from disk and merge into the metadata we'll save.
-            val preservedRg: ReplayGainInfo? = if (replayGainToSave != null) {
-                replayGainToSave
-            } else {
-                replayGainHelper.readReplayGain(filePath)
-                replayGainHelper.pendingReplayGainInfo.value
-            }
-            val metadataToSave = if (preservedRg != null) {
-                val rgCustomFields = buildMap {
-                    put("REPLAYGAIN_TRACK_GAIN", String.format("%.2f dB", preservedRg.trackGain))
-                    put("REPLAYGAIN_TRACK_PEAK", String.format("%.6f", preservedRg.trackPeak))
-                    preservedRg.albumGain?.let { put("REPLAYGAIN_ALBUM_GAIN", String.format("%.2f dB", it)) }
-                    preservedRg.albumPeak?.let { put("REPLAYGAIN_ALBUM_PEAK", String.format("%.6f", it)) }
-                    preservedRg.trackLoudness?.let { put("REPLAYGAIN_TRACK_LOUDNESS", String.format("%.2f LUFS", it)) }
-                    preservedRg.albumLoudness?.let { put("REPLAYGAIN_ALBUM_LOUDNESS", String.format("%.2f LUFS", it)) }
-                    preservedRg.trackRange?.let { put("REPLAYGAIN_TRACK_RANGE", String.format("%.2f LU", it)) }
-                    preservedRg.albumRange?.let { put("REPLAYGAIN_ALBUM_RANGE", String.format("%.2f LU", it)) }
-                    put("REPLAYGAIN_REFERENCE_LOUDNESS", String.format("%.1f LUFS", preservedRg.referenceLoudness))
-                }
-                baseMetadata.copy(
-                    customFields = baseMetadata.customFields + rgCustomFields
-                )
-            } else {
-                baseMetadata
-            }
-
-            Timber.i(
-                "Save metadata started file=$filePath hasReplayGain=${preservedRg != null}",
-                "MetadataEditor"
-            )
             _uiState.update { MetadataEditorUiState.Saving }
 
-            saveMetadataUseCase(
+            val result = metadataSaveCoordinator.save(
                 filePath = filePath,
-                originalMetadata = _originalMetadata ?: metadataToSave,
-                editedMetadata = metadataToSave
-            ).collect { result ->
-                when (result) {
-                    is SaveMetadataResult.Success -> {
-                        // If we have pending ReplayGain info, save it too as a
-                        // belt-and-suspenders. The merged custom fields above
-                        // already include the RG; this just makes sure the helper
-                        // tracks it.
-                        var replayGainSuccess = true
-                        if (replayGainToSave != null) {
-                            replayGainSuccess = saveReplayGainToFile(replayGainToSave)
-                            if (!replayGainSuccess) {
-                                Timber.w(
-                                    "Save replaygain failed file=$filePath",
-                                    "MetadataEditor"
-                                )
-                            }
-                        }
-                        
-                        _hasUnsavedChanges.update { false }
-                        _modifiedFields.update { emptySet() }
-                        _saveResult.emit("Save successful")
+                baseMetadata = baseMetadata,
+                originalMetadata = _originalMetadata,
+                pendingReplayGainInfo = replayGainToSave,
+                currentSuccessAudioFile = currentSuccessState?.audioFile,
+            )
 
-                        _uiState.update {
-                            currentSuccessState?.copy(
-                                editedMetadata = metadataToSave,
-                                audioFile = currentSuccessState.audioFile.copy(
-                                    metadata = metadataToSave,
-                                    replayGainInfo = preservedRg ?: currentSuccessState.audioFile.replayGainInfo
-                                )
-                            ) ?: MetadataEditorUiState.Success(
-                                audioFile = AudioFile(
-                                    path = filePath,
-                                    name = "",
-                                    size = 0,
-                                    duration = 0L,
-                                    format = com.voxly.domain.model.AudioFormat.OTHER,
-                                    bitrate = 0,
-                                    sampleRate = 0,
-                                    channels = 0,
-                                    metadata = metadataToSave,
-                                    replayGainInfo = preservedRg
-                                ),
-                                editedMetadata = metadataToSave
+            when (result) {
+                is MetadataSaveCoordinatorResult.Success -> {
+                    _hasUnsavedChanges.update { false }
+                    _modifiedFields.update { emptySet() }
+                    _saveResult.emit("Save successful")
+
+                    _uiState.update {
+                        currentSuccessState?.copy(
+                            editedMetadata = result.metadataToSave,
+                            audioFile = currentSuccessState.audioFile.copy(
+                                metadata = result.metadataToSave,
+                                replayGainInfo = result.preservedRg
+                                    ?: currentSuccessState.audioFile.replayGainInfo
                             )
-                        }
-                        Timber.i(
-                            "Save metadata success file=$filePath replayGainSuccess=$replayGainSuccess elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
-                            "MetadataEditor"
+                        ) ?: MetadataEditorUiState.Success(
+                            audioFile = AudioFile(
+                                path = filePath,
+                                name = "",
+                                size = 0,
+                                duration = 0L,
+                                format = com.voxly.domain.model.AudioFormat.OTHER,
+                                bitrate = 0,
+                                sampleRate = 0,
+                                channels = 0,
+                                metadata = result.metadataToSave,
+                                replayGainInfo = result.preservedRg
+                            ),
+                            editedMetadata = result.metadataToSave
                         )
-
-                        // Post-save sync MUST run on applicationScope (not viewModelScope).
-                        // Users commonly navigate away from the editor immediately after
-                        // the success snackbar appears; on viewModelScope the in-flight
-                        // sync would be cancelled by onCleared() before the Room write
-                        // and CacheChange.FileUpdated emission happen, leaving the song
-                        // list page showing the OLD metadata.
-                        applicationScope.launch {
-                            // Sync file to cache so FileBrowser gets updated data
-                            val syncedFile = unifiedScanManager.syncFile(filePath).getOrNull()
-
-                            // Mark file as edited by user to prevent EnrichmentWorker overwrites
-                            musicLibraryCache.markFileAsEditedByUser(filePath)
-
-                            // Invalidate cover cache so FileBrowser shows updated cover
-                            // Re-query MediaStore for the correct album ID because it may have changed
-                            // after metadata update (e.g., album/artist changed)
-                            val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(filePath)
-                            val oldAlbumId = currentSuccessState?.audioFile?.mediaStoreAlbumId
-
-                            // Invalidate both old and new album IDs if they differ
-                            correctAlbumId?.let { albumId ->
-                                CoverUriProvider.invalidateAlbumId(albumId)
-                            }
-                            if (oldAlbumId != null && oldAlbumId != correctAlbumId) {
-                                CoverUriProvider.invalidateAlbumId(oldAlbumId)
-                            }
-
-                            // Invalidate embedded cover cache for this file to force re-extraction
-                            CoverUriProvider.invalidateFilePath(filePath)
-
-                            // Clear Coil memory and disk cache to force reload of album art images
-                            SingletonImageLoader.get(context).memoryCache?.clear()
-                            SingletonImageLoader.get(context).diskCache?.clear()
-                        }
                     }
-                    is SaveMetadataResult.RecoverableError -> {
-                        _saveResult.emit(result.message)
-                        _uiState.update { MetadataEditorUiState.Error(result.message) }
-                    }
-                    is SaveMetadataResult.Error -> {
-                        val errorMessage = result.message
-                        val requiresReauthorization = errorMessage.contains("SAF write permission") ||
-                                errorMessage.contains("Permission denied") ||
-                                errorMessage.contains("EACCES") ||
-                                errorMessage.contains("write permission")
 
-                        _saveResult.emit(errorMessage)
-                        val currentState = _uiState.value
-                        if (currentState is MetadataEditorUiState.Saving) {
-                            _uiState.update {
-                                MetadataEditorUiState.Error(
-                                    errorMessage + if (requiresReauthorization) "\n\n请重新选择文件以恢复写入权限。" else ""
-                                )
-                            }
+                    Timber.i(
+                        "Save metadata success file=$filePath elapsedMs=${SystemClock.elapsedRealtime() - startedAt}",
+                        "MetadataEditor"
+                    )
+                }
+                is MetadataSaveCoordinatorResult.RecoverableError -> {
+                    _saveResult.emit(result.message)
+                    _uiState.update { MetadataEditorUiState.Error(result.message) }
+                }
+                is MetadataSaveCoordinatorResult.Error -> {
+                    val errorMessage = result.message
+                    _saveResult.emit(errorMessage)
+                    val currentState = _uiState.value
+                    if (currentState is MetadataEditorUiState.Saving) {
+                        _uiState.update {
+                            MetadataEditorUiState.Error(
+                                errorMessage + if (result.requiresReauthorization)
+                                    "\n\n请重新选择文件以恢复写入权限。" else ""
+                            )
                         }
                     }
                 }

@@ -1,7 +1,6 @@
 package com.voxly.presentation.navigation
 
 import android.widget.Toast
-import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionLayout
@@ -950,65 +949,13 @@ private fun ArtistDetailEntry(
     )
 }
 
-private enum class TransitionType {
-    TRANSITION, POP, PREDICTIVE_POP
-}
-
-private fun AnimatedContentTransitionScope<Scene<NavKey>>.computeTransition(
-    isPush: Boolean,
-    transitionType: TransitionType = TransitionType.TRANSITION
-): androidx.compose.animation.ContentTransform {
-    val from = initialState.key
-    val to = targetState.key
-    val isMainToMain = isMainScreenKey(from) && isMainScreenKey(to)
-
-    // 根据 transitionType 选择正确的 key
-    val transitionKey = when (transitionType) {
-        TransitionType.TRANSITION -> NavDisplay.TransitionKey
-        TransitionType.POP -> NavDisplay.PopTransitionKey
-        TransitionType.PREDICTIVE_POP -> NavDisplay.PredictivePopTransitionKey
-    }
-
-    // 检查 target entry 是否有自定义 metadata
-    val targetEntry = targetState.entries.lastOrNull()
-    val metadataMap = targetEntry?.metadata
-    Timber.d("computeTransition: INITIAL TYPE=${initialState::class.simpleName}, KEY TYPE=${from::class.simpleName}, from=$from, to=$to, isPush=$isPush, transitionType=$transitionType, " +
-            "transitionKey=$transitionKey, metadataKeys=${metadataMap?.keys}, targetEntry=$targetEntry")
-
-    // 尝试获取 entry-level 自定义 transition
-    @Suppress("UNCHECKED_CAST")
-    val customTransition = (metadataMap as? Map<Any, Any?>)?.get(transitionKey) as? androidx.compose.animation.ContentTransform
-
-    // 如果有 entry-level 自定义 metadata，优先使用它
-    if (customTransition != null) {
-        Timber.d("computeTransition: using custom $transitionType transition for $to")
-        return customTransition
-    }
-
-    return if (isMainToMain) {
-        ExpressiveAnimations.FadeThroughEnter togetherWith ExpressiveAnimations.FadeThroughExit
-    } else {
-        val enter = if (isPush) ExpressiveAnimations.SharedAxisXEnter else ExpressiveAnimations.SharedAxisXPopEnter
-        val exit = if (isPush) ExpressiveAnimations.SharedAxisXExit else ExpressiveAnimations.SharedAxisXPopExit
-        enter togetherWith exit
-    }.apply {
-        targetContentZIndex = when {
-            isMainToMain -> 0f
-            isPush -> 1f
-            else -> 0f
-        }
-    }
-}
-
-private fun isMainScreenKey(key: Any?): Boolean = key == FileBrowser ||
-    key == Albums ||
-    key == Artists
-
 /**
  * Marks a NavEntry as the "extra pane" of a [SupportingPaneSceneStrategy] scene, paired with
  * the previous [MetadataEditor] entry on the back stack. Same `sceneKey` ⇒ same scene group;
  * we use the audio file path because only one Online* search is open per file at a time.
  */
+private fun isMainScreenKey(key: Any?): Boolean = key in BottomNavItem.entries.map { it.key }
+
 @OptIn(ExperimentalMaterial3AdaptiveApi::class)
 private fun supportingPaneExtraMetadata(sceneKey: Any): Map<String, Any> =
     ListDetailSceneStrategy.extraPane(sceneKey)

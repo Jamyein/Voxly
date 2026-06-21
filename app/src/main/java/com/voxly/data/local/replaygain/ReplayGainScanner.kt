@@ -112,6 +112,11 @@ class ReplayGainScanner @Inject constructor(
         }
     }
 
+    private data class DecoderScanResult(
+        val scanner: EbuR128NativeScanner?,
+        val info: ReplayGainInfo?
+    )
+
     private val scanSemaphore = Semaphore(MAX_CONCURRENT_SCANS)
     private val codecPool = CodecPool()
     private val nativeFlacDecoder = NativeFlacDecoder()
@@ -406,6 +411,7 @@ private val nativeAudioDecoder = NativeAudioDecoder()
                 return@flow
             }
 
+            val trackResults = mutableListOf<Triple<String, EbuR128NativeScanner?, ReplayGainInfo?>>()
             val trackGains = mutableListOf<Pair<String, ReplayGainInfo>>()
             val trackScanners = mutableListOf<EbuR128NativeScanner>()
 
@@ -420,7 +426,9 @@ private val nativeAudioDecoder = NativeAudioDecoder()
                 for (deferredResult in deferred) {
                     kotlin.coroutines.coroutineContext.ensureActive()
 
-                    val (filePath, scanner, replayGainInfo) = deferredResult.await()
+                    val result = deferredResult.await()
+                    trackResults.add(result)
+                    val (filePath, scanner, replayGainInfo) = result
                     processedFiles++
 
                     if (scanner != null) {
@@ -445,162 +453,156 @@ private val nativeAudioDecoder = NativeAudioDecoder()
                 }
             }
 
-            // Check cancellation before album gain calculation
             kotlin.coroutines.coroutineContext.ensureActive()
 
-            // Determine if all tracks were freshly scanned (have native scanners)
-            // Cached tracks return null scanner, so album gain can only use native
-            // ebur128_loudness_global_multiple when ALL tracks were freshly scanned.
-            val allTracksFreshlyScanned = trackScanners.size == trackGains.size
+            val allTracksFreshlyScanned = trackResults.all { (_, scanner, _) -> scanner != null }
+            var ebuR128Handled = false
 
             if (allTracksFreshlyScanned && trackScanners.isNotEmpty()) {
-                // Use EBU R128 compliant native calculation (ebur128_loudness_global_multiple)
                 val albumResult = try {
                     EbuR128NativeScanner.getAlbumGain(trackScanners)
                 } finally {
                     trackScanners.forEach { try { it.close() } catch (_: Exception) {} }
                 }
 
-                if (albumResult == null) {
-                    Timber.w("getAlbumGain returned null for album=$albumKey, using fallback values")
-                }
+                if (albumResult != null) {
+                    ebuR128Handled = true
+                    val albumLoudness = albumResult[0]
+                    val albumRange = albumResult[1]
+                    val albumPeak = albumResult[2]
+                    val albumGainDb = (targetLoudness.toDouble() - albumLoudness).toFloat()
+                    val maxPeak = albumPeak.toFloat()
 
-                val albumLoudness = albumResult?.get(0) ?: targetLoudness.toDouble()
-                val albumRange = albumResult?.get(1) ?: 0.0
-                val albumPeak = albumResult?.get(2) ?: 0.0
-                val albumGainDb = (targetLoudness.toDouble() - albumLoudness).toFloat()
-                val maxPeak = albumPeak.toFloat()
+                    val clampedAlbumGain = applyClipProtection(
+                        gain = albumGainDb,
+                        peak = maxPeak,
+                        clipMode = config.clipMode,
+                        maxPeakLevel = config.maxPeakLevel.toFloat()
+                    )
 
-                val clampedAlbumGain = applyClipProtection(
-                    gain = albumGainDb,
-                    peak = maxPeak,
-                    clipMode = config.clipMode,
-                    maxPeakLevel = config.maxPeakLevel.toFloat()
-                )
+                    Timber.i("Album gain (EBU R128) album=$albumKey tracks=${trackGains.size} albumGain=$clampedAlbumGain albumLoudness=$albumLoudness")
 
-                Timber.i("Album gain (EBU R128) album=$albumKey tracks=${trackGains.size} albumGain=$clampedAlbumGain albumLoudness=$albumLoudness")
-
-                for ((filePath, trackInfo) in trackGains) {
-                    try {
-                        val combinedInfo = ReplayGainInfo(
-                            trackGain = trackInfo.trackGain,
-                            trackPeak = trackInfo.trackPeak,
-                            albumGain = clampedAlbumGain,
-                            albumPeak = maxPeak,
-                            truePeak = trackInfo.truePeak,
-                            trackLoudness = trackInfo.trackLoudness,
-                            albumLoudness = albumLoudness.toFloat(),
-                            trackRange = trackInfo.trackRange,
-                            albumRange = albumRange.toFloat(),
-                            referenceLoudness = trackInfo.referenceLoudness
-                        )
-                        val saved = saveReplayGainToFile(filePath, combinedInfo)
-                        if (!saved) {
-                            Timber.w("Album gain save failed but analysis complete file=$filePath")
-                        }
-                        emit(
-                            ScanProgress(
-                                currentFile = processedFiles,
-                                totalFiles = totalFiles,
-                                percentage = processedFiles.toFloat() / totalFiles,
-                                currentFilePath = filePath,
-                                status = ScanStatus.TRACK_COMPLETED,
-                                replayGainInfo = combinedInfo
+                    for ((filePath, trackInfo) in trackGains) {
+                        try {
+                            val combinedInfo = ReplayGainInfo(
+                                trackGain = trackInfo.trackGain,
+                                trackPeak = trackInfo.trackPeak,
+                                albumGain = clampedAlbumGain,
+                                albumPeak = maxPeak,
+                                truePeak = trackInfo.truePeak,
+                                trackLoudness = trackInfo.trackLoudness,
+                                albumLoudness = albumLoudness.toFloat(),
+                                trackRange = trackInfo.trackRange,
+                                albumRange = albumRange.toFloat(),
+                                referenceLoudness = trackInfo.referenceLoudness
                             )
-                        )
-                    } catch (e: Exception) {
-                        Timber.e(e, "Failed to save album gain for file=$filePath reason=${e.message}")
-                    }
-                }
-
-                emit(
-                    ScanProgress(
-                        currentFile = processedFiles,
-                        totalFiles = totalFiles,
-                        percentage = processedFiles.toFloat() / totalFiles,
-                        currentFilePath = "",
-                        status = ScanStatus.ALBUM_COMPLETED
-                    )
-                )
-
-            } else if (trackGains.isNotEmpty()) {
-                // Some or all tracks were cached (no scanner available).
-                // Fall back to energy-average album gain calculation.
-                val gainValues = trackGains.map { it.second }
-                val (albumLoudness, albumRange, albumPeak) = calculateEnergyAverageAlbumGain(gainValues, targetLoudness)
-                val albumGainDb = targetLoudness - albumLoudness
-
-                val clampedAlbumGain = applyClipProtection(
-                    gain = albumGainDb,
-                    peak = albumPeak,
-                    clipMode = config.clipMode,
-                    maxPeakLevel = config.maxPeakLevel.toFloat()
-                )
-
-                Timber.i("Album gain (energy-average) album=$albumKey tracks=${trackGains.size} albumGain=$clampedAlbumGain albumLoudness=$albumLoudness")
-
-                // Close any scanners that were created (mixed cached/fresh case)
-                trackScanners.forEach { try { it.close() } catch (_: Exception) {} }
-
-                for ((filePath, trackInfo) in trackGains) {
-                    try {
-                        val combinedInfo = ReplayGainInfo(
-                            trackGain = trackInfo.trackGain,
-                            trackPeak = trackInfo.trackPeak,
-                            albumGain = clampedAlbumGain,
-                            albumPeak = albumPeak,
-                            truePeak = trackInfo.truePeak,
-                            trackLoudness = trackInfo.trackLoudness,
-                            albumLoudness = albumLoudness,
-                            trackRange = trackInfo.trackRange,
-                            albumRange = albumRange,
-                            referenceLoudness = trackInfo.referenceLoudness
-                        )
-                        val saved = saveReplayGainToFile(filePath, combinedInfo)
-                        if (!saved) {
-                            Timber.w("Album gain save failed but analysis complete file=$filePath")
-                        }
-                        emit(
-                            ScanProgress(
-                                currentFile = processedFiles,
-                                totalFiles = totalFiles,
-                                percentage = processedFiles.toFloat() / totalFiles,
-                                currentFilePath = filePath,
-                                status = ScanStatus.TRACK_COMPLETED,
-                                replayGainInfo = combinedInfo
+                            val saved = saveReplayGainToFile(filePath, combinedInfo)
+                            if (!saved) {
+                                Timber.w("Album gain save failed but analysis complete file=$filePath")
+                            }
+                            emit(
+                                ScanProgress(
+                                    currentFile = processedFiles,
+                                    totalFiles = totalFiles,
+                                    percentage = processedFiles.toFloat() / totalFiles,
+                                    currentFilePath = filePath,
+                                    status = ScanStatus.TRACK_COMPLETED,
+                                    replayGainInfo = combinedInfo
+                                )
                             )
-                        )
-                    } catch (e: Exception) {
-                        Timber.e(e, "Failed to save album gain for file=$filePath reason=${e.message}")
+                        } catch (e: Exception) {
+                            Timber.e(e, "Failed to save album gain for file=$filePath reason=${e.message}")
+                        }
                     }
+
+                    emit(
+                        ScanProgress(
+                            currentFile = processedFiles,
+                            totalFiles = totalFiles,
+                            percentage = processedFiles.toFloat() / totalFiles,
+                            currentFilePath = "",
+                            status = ScanStatus.ALBUM_COMPLETED
+                        )
+                    )
+                } else {
+                    Timber.w("getAlbumGain returned null for album=$albumKey, falling back to energy-average")
                 }
+            }
 
-                emit(
-                    ScanProgress(
-                        currentFile = processedFiles,
-                        totalFiles = totalFiles,
-                        percentage = processedFiles.toFloat() / totalFiles,
-                        currentFilePath = "",
-                        status = ScanStatus.ALBUM_COMPLETED
-                    )
-                )
+            if (!ebuR128Handled) {
+                if (trackGains.isNotEmpty()) {
+                    val gainValues = trackGains.map { it.second }
+                    val (albumLoudness, albumRange, albumPeak) = calculateEnergyAverageAlbumGain(gainValues, targetLoudness)
+                    val albumGainDb = targetLoudness - albumLoudness
 
-            } else {
-                // No track succeeded for this album — still emit ALBUM_COMPLETED so the
-                // UI's `isScanning` flag transitions out of "scanning" state.
-                Timber.w("Album scan produced no successful tracks album=$albumKey")
-                // Close any scanners that were created
-                trackScanners.forEach { try { it.close() } catch (_: Exception) {} }
-                emit(
-                    ScanProgress(
-                        currentFile = processedFiles,
-                        totalFiles = totalFiles,
-                        percentage = processedFiles.toFloat() / totalFiles,
-                        currentFilePath = "",
-                        status = ScanStatus.ALBUM_COMPLETED,
-                        replayGainInfo = null
+                    val clampedAlbumGain = applyClipProtection(
+                        gain = albumGainDb,
+                        peak = albumPeak,
+                        clipMode = config.clipMode,
+                        maxPeakLevel = config.maxPeakLevel.toFloat()
                     )
-                )
+
+                    Timber.i("Album gain (energy-average) album=$albumKey tracks=${trackGains.size} albumGain=$clampedAlbumGain albumLoudness=$albumLoudness")
+
+                    trackScanners.forEach { try { it.close() } catch (_: Exception) {} }
+
+                    for ((filePath, trackInfo) in trackGains) {
+                        try {
+                            val combinedInfo = ReplayGainInfo(
+                                trackGain = trackInfo.trackGain,
+                                trackPeak = trackInfo.trackPeak,
+                                albumGain = clampedAlbumGain,
+                                albumPeak = albumPeak,
+                                truePeak = trackInfo.truePeak,
+                                trackLoudness = trackInfo.trackLoudness,
+                                albumLoudness = albumLoudness,
+                                trackRange = trackInfo.trackRange,
+                                albumRange = albumRange,
+                                referenceLoudness = trackInfo.referenceLoudness
+                            )
+                            val saved = saveReplayGainToFile(filePath, combinedInfo)
+                            if (!saved) {
+                                Timber.w("Album gain save failed but analysis complete file=$filePath")
+                            }
+                            emit(
+                                ScanProgress(
+                                    currentFile = processedFiles,
+                                    totalFiles = totalFiles,
+                                    percentage = processedFiles.toFloat() / totalFiles,
+                                    currentFilePath = filePath,
+                                    status = ScanStatus.TRACK_COMPLETED,
+                                    replayGainInfo = combinedInfo
+                                )
+                            )
+                        } catch (e: Exception) {
+                            Timber.e(e, "Failed to save album gain for file=$filePath reason=${e.message}")
+                        }
+                    }
+
+                    emit(
+                        ScanProgress(
+                            currentFile = processedFiles,
+                            totalFiles = totalFiles,
+                            percentage = processedFiles.toFloat() / totalFiles,
+                            currentFilePath = "",
+                            status = ScanStatus.ALBUM_COMPLETED
+                        )
+                    )
+
+                } else {
+                    Timber.w("Album scan produced no successful tracks album=$albumKey")
+                    trackScanners.forEach { try { it.close() } catch (_: Exception) {} }
+                    emit(
+                        ScanProgress(
+                            currentFile = processedFiles,
+                            totalFiles = totalFiles,
+                            percentage = processedFiles.toFloat() / totalFiles,
+                            currentFilePath = "",
+                            status = ScanStatus.ALBUM_COMPLETED,
+                            replayGainInfo = null
+                        )
+                    )
+                }
             }
 
             processedAlbums++
@@ -625,6 +627,214 @@ private val nativeAudioDecoder = NativeAudioDecoder()
     }
 
     /**
+     * Extracts, decodes, and scans a single audio file.
+     * Caller decides via [keepScanner] whether to retain the native scanner
+     * (for album gain calculation) or close it.
+     * Extractor lifecycle is fully managed here (try-finally release).
+     */
+    private suspend fun decodeFile(
+        filePath: String,
+        file: File,
+        scanQuality: ScanQuality,
+        targetLoudness: Float,
+        config: ReplayGainConfig,
+        keepScanner: Boolean
+    ): DecoderScanResult {
+        val extractor = MediaExtractor()
+        var scanner: EbuR128NativeScanner? = null
+        try {
+            extractor.setDataSource(filePath)
+
+            var audioTrackIndex = -1
+            for (i in 0 until extractor.trackCount) {
+                val format = extractor.getTrackFormat(i)
+                val mime = format.getString(MediaFormat.KEY_MIME)
+                if (mime?.startsWith("audio/") == true) {
+                    audioTrackIndex = i
+                    break
+                }
+            }
+            if (audioTrackIndex == -1) return DecoderScanResult(null, null)
+
+            extractor.selectTrack(audioTrackIndex)
+            val trackFormat = extractor.getTrackFormat(audioTrackIndex)
+            val originalSampleRate = trackFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            val channelCount = trackFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
+
+            val isRawExtractor = trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw"
+            val primaryFormat: MediaFormat
+            val fallbackFormat: MediaFormat?
+            if (isRawExtractor) {
+                val correctedMime = getMimeFromExtension(filePath)
+                if (correctedMime != null && correctedMime != "audio/raw") {
+                    Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — trying $correctedMime decoder first, then raw on failure")
+                    primaryFormat = MediaFormat().apply {
+                        setString(MediaFormat.KEY_MIME, correctedMime)
+                        setInteger(MediaFormat.KEY_SAMPLE_RATE, originalSampleRate)
+                        setInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
+                    }
+                    fallbackFormat = trackFormat
+                } else {
+                    primaryFormat = trackFormat
+                    fallbackFormat = null
+                }
+            } else {
+                primaryFormat = trackFormat
+                fallbackFormat = null
+            }
+
+            val decimationFactor = if (scanQuality != ScanQuality.ACCURATE &&
+                originalSampleRate > scanQuality.maxSampleRate
+            ) {
+                (originalSampleRate / scanQuality.maxSampleRate).coerceAtLeast(1)
+            } else {
+                1
+            }
+            val effectiveSampleRate = originalSampleRate / decimationFactor
+
+            scanner = try {
+                EbuR128NativeScanner(
+                    channels = channelCount,
+                    sampleRate = effectiveSampleRate,
+                    targetLoudness = targetLoudness.toDouble(),
+                    truePeak = false,
+                    dualMono = config.dualMono
+                )
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                if (t is LinkageError || t.cause is LinkageError) {
+                    nativeScannerAvailable = false
+                    Timber.e(t, "Disabling native ReplayGain scanner due to JNI/linkage failure: ${t.message}")
+                } else {
+                    Timber.e(t, "Failed to create native scanner for $filePath")
+                }
+                return DecoderScanResult(null, null)
+            }
+
+            var decodeResult: ReplayGainInfo? = null
+            var primaryFailed = false
+
+            try {
+                decodeAndFeedScanner(extractor, primaryFormat, channelCount, decimationFactor, scanner)
+                decodeResult = scanner.getResult()
+                if (decodeResult == null || !decodeResult.trackGain.isFinite()) {
+                    primaryFailed = true
+                }
+            } catch (t: Throwable) {
+                if (t is CancellationException) throw t
+                primaryFailed = true
+            }
+
+            if (primaryFailed && fallbackFormat != null) {
+                val fallbackMime = fallbackFormat.getString(MediaFormat.KEY_MIME) ?: "unknown"
+                Timber.w("Primary decoder failed for ${file.name}, falling back to $fallbackMime")
+
+                if (fallbackMime == "audio/raw") {
+                    try {
+                        val natResult = nativeAudioDecoder.decodeFileGain(
+                            filePath,
+                            targetLoudness.toDouble(),
+                            truePeak = false,
+                            dualMono = config.dualMono,
+                            maxSampleRate = if (scanQuality != ScanQuality.ACCURATE)
+                                scanQuality.maxSampleRate else 0
+                        )
+                        if (natResult != null) {
+                            decodeResult = ReplayGainInfo(
+                                trackGain = natResult[0].toFloat(),
+                                trackPeak = natResult[1].toFloat(),
+                                albumGain = null, albumPeak = null,
+                                truePeak = natResult[4].toFloat().takeIf { it > 0f },
+                                trackLoudness = natResult[2].toFloat(),
+                                albumLoudness = null,
+                                trackRange = natResult[3].toFloat(),
+                                albumRange = null,
+                                referenceLoudness = natResult[5].toFloat()
+                            )
+                            scanner?.close()
+                            scanner = null
+                            primaryFailed = false
+                        } else {
+                            Timber.w("Native decode returned null for ${file.name}")
+                        }
+                    } catch (t: Throwable) {
+                        if (t is CancellationException) throw t
+                        Timber.w("Native decode failed for ${file.name}: ${t.message}")
+                    }
+                }
+
+                if (primaryFailed) {
+                    scanner?.close()
+                    scanner = EbuR128NativeScanner(
+                        channels = channelCount,
+                        sampleRate = effectiveSampleRate,
+                        targetLoudness = targetLoudness.toDouble(),
+                        truePeak = false,
+                        dualMono = config.dualMono
+                    )
+                    val fallbackExtractor = MediaExtractor()
+                    try {
+                        fallbackExtractor.setDataSource(filePath)
+                        fallbackExtractor.selectTrack(audioTrackIndex)
+                        if (fallbackMime == "audio/raw") {
+                            feedRawPcmFromExtractor(fallbackExtractor, channelCount, decimationFactor, scanner)
+                        } else {
+                            decodeAndFeedScanner(fallbackExtractor, fallbackFormat, channelCount, decimationFactor, scanner)
+                        }
+                        decodeResult = scanner.getResult()
+                    } finally {
+                        fallbackExtractor.release()
+                    }
+                }
+            } else if (primaryFailed) {
+                Timber.w("Decoder failed for ${file.name} (no fallback available)")
+                scanner?.close()
+                return DecoderScanResult(null, null)
+            }
+
+            val replayGainInfo = decodeResult ?: run {
+                Timber.w("Native scanner returned null for $filePath")
+                scanner?.close()
+                return DecoderScanResult(null, null)
+            }
+
+            if (!replayGainInfo.trackGain.isFinite()) {
+                Timber.w("Invalid gain ${replayGainInfo.trackGain} for ${file.name} — likely decoder failure, not caching")
+                scanner?.close()
+                return DecoderScanResult(null, null)
+            }
+
+            Timber.v(
+                "Native ReplayGain result: file=${file.name} loudness=${replayGainInfo.trackLoudness} LUFS gainDb=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak}"
+            )
+
+            val clampedTrackGain = applyClipProtection(
+                gain = replayGainInfo.trackGain,
+                peak = replayGainInfo.trackPeak,
+                clipMode = config.clipMode,
+                maxPeakLevel = config.maxPeakLevel.toFloat()
+            )
+
+            val result = replayGainInfo.copy(trackGain = clampedTrackGain)
+            cacheResult(filePath, result)
+
+            return if (keepScanner) {
+                DecoderScanResult(scanner, result)
+            } else {
+                scanner?.close()
+                DecoderScanResult(null, result)
+            }
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            Timber.e(t, "decodeFile exception: ${t.message}")
+            scanner?.close()
+            return DecoderScanResult(null, null)
+        } finally {
+            extractor.release()
+        }
+    }
+
+    /**
      * Analyzes a single audio file using native libebur128 (via JNI).
      * Uses Android MediaCodec for decoding and native libebur128 for computation.
      */
@@ -637,13 +847,11 @@ private val nativeAudioDecoder = NativeAudioDecoder()
         val file = File(filePath)
         if (!file.exists()) return@withContext null
 
-        // Check cache first - cache hits don't need semaphore permit
         getCachedResult(filePath)?.let { cached ->
             Timber.v("ReplayGain cache hit: ${file.name}")
             return@withContext cached
         }
 
-        // Check Room cache if skipExisting is enabled
         if (config.skipExisting) {
             val cachedEntity = cachedAudioFileDao.getAudioFileByPath(filePath)
             if (cachedEntity?.replayGainTrackGain != null) {
@@ -667,223 +875,12 @@ private val nativeAudioDecoder = NativeAudioDecoder()
 
         scanSemaphore.withPermit {
             try {
-                if (!nativeScannerAvailable) {
-                    return@withPermit null
-                }
+                if (!nativeScannerAvailable) return@withPermit null
 
-                // Lower thread priority for CPU-intensive audio processing to reduce overheating
                 android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
 
-                val extractor = MediaExtractor()
-                extractor.setDataSource(filePath)
-
-                var audioTrackIndex = -1
-                for (i in 0 until extractor.trackCount) {
-                    val format = extractor.getTrackFormat(i)
-                    val mime = format.getString(MediaFormat.KEY_MIME)
-                    if (mime?.startsWith("audio/") == true) {
-                        audioTrackIndex = i
-                        break
-                    }
-                }
-
-                if (audioTrackIndex == -1) {
-                    extractor.release()
-                    return@withPermit null
-                }
-
-                extractor.selectTrack(audioTrackIndex)
-                val trackFormat = extractor.getTrackFormat(audioTrackIndex)
-
-                // Read sample rate and channel count from extractor format (before any override)
-                val originalSampleRate = trackFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                val channelCount = trackFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-
-                // When the extractor reports audio/raw for a file whose extension
-                // suggests a compressed format, the extractor may have pre-decoded
-                // to PCM (emulator) or misreported the MIME (some real devices).
-                // Strategy: try the extension-based decoder FIRST (correct for real
-                // devices, uses hardware acceleration), then fall back to raw
-                // (correct for emulator pre-decode). The FLAC decoder fails FAST
-                // on raw PCM input (no sync code found), so the emulator overhead
-                // is minimal.
-                val isRawExtractor = trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw"
-                val primaryFormat: MediaFormat
-                val fallbackFormat: MediaFormat?
-                if (isRawExtractor) {
-                    val correctedMime = getMimeFromExtension(filePath)
-                    if (correctedMime != null && correctedMime != "audio/raw") {
-                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — trying $correctedMime decoder first, then raw on failure")
-                        primaryFormat = MediaFormat().apply {
-                            setString(MediaFormat.KEY_MIME, correctedMime)
-                            setInteger(MediaFormat.KEY_SAMPLE_RATE, originalSampleRate)
-                            setInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
-                        }
-                        fallbackFormat = trackFormat
-                    } else {
-                        primaryFormat = trackFormat
-                        fallbackFormat = null
-                    }
-                } else {
-                    primaryFormat = trackFormat
-                    fallbackFormat = null
-                }
-
-                // PCM-level decimation: skip samples in decoded output to reduce effective rate.
-                // MediaCodec decoders ignore KEY_SAMPLE_RATE changes on the input format,
-                // so we must downsample the PCM output ourselves.
-                val decimationFactor = if (scanQuality != ScanQuality.ACCURATE &&
-                    originalSampleRate > scanQuality.maxSampleRate
-                ) {
-                    val factor = originalSampleRate / scanQuality.maxSampleRate
-                    Timber.d(
-                        "PCM decimation for ${file.name}: factor=$factor " +
-                            "(${originalSampleRate}Hz -> ${originalSampleRate / factor}Hz)"
-                    )
-                    factor.coerceAtLeast(1)
-                } else {
-                    1
-                }
-
-                // Scanner must be initialized with the effective sample rate of the data
-                // it will actually receive (after decimation), not the original file rate.
-                val effectiveSampleRate = originalSampleRate / decimationFactor
-
-                val scanner = try {
-                    EbuR128NativeScanner(
-                        channels = channelCount,
-                        sampleRate = effectiveSampleRate,
-                        targetLoudness = targetLoudness.toDouble(),
-                        truePeak = false,
-                        dualMono = config.dualMono
-                    )
-                } catch (t: Throwable) {
-                    if (t is CancellationException) throw t
-                    if (t is LinkageError || t.cause is LinkageError) {
-                        nativeScannerAvailable = false
-                        Timber.e(
-                            t,
-                            "Disabling native ReplayGain scanner due to JNI/linkage failure: ${t.message}"
-                        )
-                    } else {
-                        Timber.e(t, "Failed to create native scanner for $filePath")
-                    }
-                    extractor.release()
-                    return@withPermit null
-                }
-
-                scanner.use { nativeScanner ->
-                    var decodeResult: ReplayGainInfo? = null
-                    var primaryFailed = false
-
-                    try {
-                        decodeAndFeedScanner(extractor, primaryFormat, channelCount, decimationFactor, nativeScanner)
-                        decodeResult = nativeScanner.getResult()
-                        if (decodeResult == null || !decodeResult.trackGain.isFinite()) {
-                            primaryFailed = true
-                        }
-                    } catch (t: Throwable) {
-                        if (t is CancellationException) throw t
-                        primaryFailed = true
-                    }
-
-                    if (primaryFailed && fallbackFormat != null) {
-                        val fallbackMime = fallbackFormat.getString(MediaFormat.KEY_MIME) ?: "unknown"
-                        Timber.w("Primary decoder failed for ${file.name}, falling back to $fallbackMime")
-
-                        // Try native decode via AMediaExtractor+AMediaCodec — single JNI
-                        // call for the entire file, all processing in native code.
-                        if (fallbackMime == "audio/raw") {
-                            try {
-                                val natResult = nativeAudioDecoder.decodeFileGain(
-                                    filePath,
-                                    targetLoudness.toDouble(),
-                                    truePeak = false,
-                                    dualMono = config.dualMono,
-                                    maxSampleRate = if (scanQuality != ScanQuality.ACCURATE)
-                                        scanQuality.maxSampleRate else 0
-                                )
-                                if (natResult != null) {
-                                    primaryFailed = false
-                                    decodeResult = ReplayGainInfo(
-                                        trackGain = natResult[0].toFloat(),
-                                        trackPeak = natResult[1].toFloat(),
-                                        albumGain = null, albumPeak = null,
-                                        truePeak = natResult[4].toFloat().takeIf { it > 0f },
-                                        trackLoudness = natResult[2].toFloat(),
-                                        albumLoudness = null,
-                                        trackRange = natResult[3].toFloat(),
-                                        albumRange = null,
-                                        referenceLoudness = natResult[5].toFloat()
-                                    )
-                                    Timber.i("Native decode succeeded for ${file.name}")
-                                } else {
-                                    Timber.w("Native decode returned null for ${file.name}")
-                                }
-                            } catch (t: Throwable) {
-                                if (t is CancellationException) throw t
-                                Timber.w("Native decode failed for ${file.name}: ${t.message}")
-                            }
-                        }
-
-                        if (primaryFailed) {
-                            try { extractor.release() } catch (_: Exception) {}
-                            nativeScanner.close()
-                            EbuR128NativeScanner(
-                                channels = channelCount,
-                                sampleRate = effectiveSampleRate,
-                                targetLoudness = targetLoudness.toDouble(),
-                                truePeak = false,
-                                dualMono = config.dualMono
-                            ).use { fallbackScanner ->
-                                val fallbackExtractor = MediaExtractor()
-                                fallbackExtractor.setDataSource(filePath)
-                                fallbackExtractor.selectTrack(audioTrackIndex)
-                                try {
-                                    if (fallbackMime == "audio/raw") {
-                                        feedRawPcmFromExtractor(fallbackExtractor, channelCount, decimationFactor, fallbackScanner)
-                                    } else {
-                                        decodeAndFeedScanner(fallbackExtractor, fallbackFormat, channelCount, decimationFactor, fallbackScanner)
-                                    }
-                                    decodeResult = fallbackScanner.getResult()
-                                } finally {
-                                    fallbackExtractor.release()
-                                }
-                            }
-                        }
-                    } else if (primaryFailed) {
-                        Timber.w("Decoder failed for ${file.name} (no fallback available)")
-                        return@withPermit null
-                    }
-
-                    val replayGainInfo = decodeResult
-                        ?: run {
-                            Timber.w("Native scanner returned null for $filePath")
-                            return@withPermit null
-                        }
-
-                    Timber.v(
-                        "Native ReplayGain result: file=${file.name} loudness=${replayGainInfo.trackLoudness} LUFS gainDb=${replayGainInfo.trackGain} peak=${replayGainInfo.trackPeak}"
-                    )
-
-                    val clampedTrackGain = applyClipProtection(
-                        gain = replayGainInfo.trackGain,
-                        peak = replayGainInfo.trackPeak,
-                        clipMode = config.clipMode,
-                        maxPeakLevel = config.maxPeakLevel.toFloat()
-                    )
-
-                    if (!replayGainInfo.trackGain.isFinite()) {
-                        Timber.w("Invalid gain ${replayGainInfo.trackGain} for ${file.name} — likely decoder failure, not caching")
-                        return@withPermit null
-                    }
-
-                    val result = replayGainInfo.copy(trackGain = clampedTrackGain)
-
-                    cacheResult(filePath, result)
-
-                    result
-                }
+                val result = decodeFile(filePath, file, scanQuality, targetLoudness, config, keepScanner = false)
+                result.info
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 Timber.e(t, "analyzeAudioFile exception: ${t.message}")
@@ -906,13 +903,11 @@ private val nativeAudioDecoder = NativeAudioDecoder()
         val file = File(filePath)
         if (!file.exists()) return@withContext null to null
 
-        // Check cache first - cache hits don't need semaphore permit
         getCachedResult(filePath)?.let { cached ->
             Timber.v("ReplayGain cache hit: ${file.name}")
             return@withContext null to cached
         }
 
-        // Check Room cache if skipExisting is enabled
         if (config.skipExisting) {
             val cachedEntity = cachedAudioFileDao.getAudioFileByPath(filePath)
             if (cachedEntity?.replayGainTrackGain != null) {
@@ -935,211 +930,16 @@ private val nativeAudioDecoder = NativeAudioDecoder()
         }
 
         scanSemaphore.withPermit {
-            var scanner: EbuR128NativeScanner? = null
             try {
-                if (!nativeScannerAvailable) {
-                    return@withPermit null to null
-                }
+                if (!nativeScannerAvailable) return@withPermit null to null
 
                 android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND)
 
-                val extractor = MediaExtractor()
-                extractor.setDataSource(filePath)
-
-                var audioTrackIndex = -1
-                for (i in 0 until extractor.trackCount) {
-                    val format = extractor.getTrackFormat(i)
-                    val mime = format.getString(MediaFormat.KEY_MIME)
-                    if (mime?.startsWith("audio/") == true) {
-                        audioTrackIndex = i
-                        break
-                    }
-                }
-
-                if (audioTrackIndex == -1) {
-                    extractor.release()
-                    return@withPermit null to null
-                }
-
-                extractor.selectTrack(audioTrackIndex)
-                val trackFormat = extractor.getTrackFormat(audioTrackIndex)
-
-                val originalSampleRate = trackFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-                val channelCount = trackFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
-
-                // When the extractor reports audio/raw for a compressed extension,
-                // try the extension-based decoder first, then fall back to raw.
-                // See analyzeAudioFile for full rationale.
-                val isRawExtractor = trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw"
-                val primaryFormat: MediaFormat
-                val fallbackFormat: MediaFormat?
-                if (isRawExtractor) {
-                    val correctedMime = getMimeFromExtension(filePath)
-                    if (correctedMime != null && correctedMime != "audio/raw") {
-                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — trying $correctedMime decoder first, then raw on failure")
-                        primaryFormat = MediaFormat().apply {
-                            setString(MediaFormat.KEY_MIME, correctedMime)
-                            setInteger(MediaFormat.KEY_SAMPLE_RATE, originalSampleRate)
-                            setInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
-                        }
-                        fallbackFormat = trackFormat
-                    } else {
-                        primaryFormat = trackFormat
-                        fallbackFormat = null
-                    }
-                } else {
-                    primaryFormat = trackFormat
-                    fallbackFormat = null
-                }
-
-                val decimationFactor = if (scanQuality != ScanQuality.ACCURATE &&
-                    originalSampleRate > scanQuality.maxSampleRate) {
-                    (originalSampleRate / scanQuality.maxSampleRate).coerceAtLeast(1)
-                } else {
-                    1
-                }
-                val effectiveSampleRate = originalSampleRate / decimationFactor
-
-                scanner = try {
-                    EbuR128NativeScanner(
-                        channels = channelCount,
-                        sampleRate = effectiveSampleRate,
-                        targetLoudness = targetLoudness.toDouble(),
-                        truePeak = false,
-                        dualMono = config.dualMono
-                    )
-                } catch (t: Throwable) {
-                    if (t is CancellationException) throw t
-                    if (t is LinkageError || t.cause is LinkageError) {
-                        nativeScannerAvailable = false
-                        Timber.e(t, "Disabling native ReplayGain scanner: ${t.message}")
-                    } else {
-                        Timber.e(t, "Failed to create native scanner for $filePath")
-                    }
-                    extractor.release()
-                    return@withPermit null to null
-                }
-
-                var decodeResult: ReplayGainInfo? = null
-                var primaryFailed = false
-
-                try {
-                    decodeAndFeedScanner(extractor, primaryFormat, channelCount, decimationFactor, scanner)
-                    decodeResult = scanner.getResult()
-                    if (decodeResult == null || !decodeResult.trackGain.isFinite()) {
-                        primaryFailed = true
-                    }
-                } catch (t: Throwable) {
-                    if (t is CancellationException) throw t
-                    primaryFailed = true
-                }
-
-                if (primaryFailed && fallbackFormat != null) {
-                    val fallbackMime = fallbackFormat.getString(MediaFormat.KEY_MIME) ?: "unknown"
-                    Timber.w("Primary decoder failed for ${file.name}, falling back to $fallbackMime")
-
-                    // Try native decode via AMediaExtractor+AMediaCodec — single JNI
-                    // call for the entire file, all processing in native code.
-                    // Returns null scanner since album gain falls back to energy-average.
-                    var nativeDecodeResult: ReplayGainInfo? = null
-                    if (fallbackMime == "audio/raw") {
-                        try {
-                            val natResult = nativeAudioDecoder.decodeFileGain(
-                                filePath,
-                                targetLoudness.toDouble(),
-                                truePeak = false,
-                                dualMono = config.dualMono,
-                                maxSampleRate = if (scanQuality != ScanQuality.ACCURATE)
-                                    scanQuality.maxSampleRate else 0
-                            )
-                            if (natResult != null) {
-                                nativeDecodeResult = ReplayGainInfo(
-                                    trackGain = natResult[0].toFloat(),
-                                    trackPeak = natResult[1].toFloat(),
-                                    albumGain = null, albumPeak = null,
-                                    truePeak = natResult[4].toFloat().takeIf { it > 0f },
-                                    trackLoudness = natResult[2].toFloat(),
-                                    albumLoudness = null,
-                                    trackRange = natResult[3].toFloat(),
-                                    albumRange = null,
-                                    referenceLoudness = natResult[5].toFloat()
-                                )
-                                Timber.i("Native decode succeeded for ${file.name}")
-                            }
-                        } catch (t: Throwable) {
-                            if (t is CancellationException) throw t
-                            Timber.w("Native decode failed for ${file.name}: ${t.message}")
-                        }
-                    }
-
-                    if (nativeDecodeResult != null) {
-                        try { scanner.close() } catch (_: Exception) {}
-                        try { extractor.release() } catch (_: Exception) {}
-                        val result = nativeDecodeResult.copy(trackGain = applyClipProtection(
-                            gain = nativeDecodeResult.trackGain,
-                            peak = nativeDecodeResult.trackPeak,
-                            clipMode = config.clipMode,
-                            maxPeakLevel = config.maxPeakLevel.toFloat()
-                        ))
-                        cacheResult(filePath, result)
-                        return@withPermit null to result
-                    }
-
-                    try { extractor.release() } catch (_: Exception) {}
-                    scanner.close()
-                    scanner = EbuR128NativeScanner(
-                        channels = channelCount,
-                        sampleRate = effectiveSampleRate,
-                        targetLoudness = targetLoudness.toDouble(),
-                        truePeak = false,
-                        dualMono = config.dualMono
-                    )
-                    val fallbackExtractor = MediaExtractor()
-                    fallbackExtractor.setDataSource(filePath)
-                    fallbackExtractor.selectTrack(audioTrackIndex)
-                    try {
-                        if (fallbackMime == "audio/raw") {
-                            feedRawPcmFromExtractor(fallbackExtractor, channelCount, decimationFactor, scanner)
-                        } else {
-                            decodeAndFeedScanner(fallbackExtractor, fallbackFormat, channelCount, decimationFactor, scanner)
-                        }
-                        decodeResult = scanner.getResult()
-                    } finally {
-                        fallbackExtractor.release()
-                    }
-                } else if (primaryFailed) {
-                    Timber.w("Decoder failed for ${file.name} (no fallback available)")
-                    scanner.close()
-                    return@withPermit null to null
-                }
-
-                val replayGainInfo = decodeResult ?: run {
-                    scanner.close()
-                    return@withPermit null to null
-                }
-
-                val clampedTrackGain = applyClipProtection(
-                    gain = replayGainInfo.trackGain,
-                    peak = replayGainInfo.trackPeak,
-                    clipMode = config.clipMode,
-                    maxPeakLevel = config.maxPeakLevel.toFloat()
-                )
-
-                if (!replayGainInfo.trackGain.isFinite()) {
-                    Timber.w("Invalid gain ${replayGainInfo.trackGain} for ${file.name} — likely decoder failure, not caching")
-                    scanner.close()
-                    return@withPermit null to null
-                }
-
-                val result = replayGainInfo.copy(trackGain = clampedTrackGain)
-                cacheResult(filePath, result)
-
-                // Don't close scanner - return it for album gain calculation
-                scanner to result
+                val result = decodeFile(filePath, file, scanQuality, targetLoudness, config, keepScanner = true)
+                result.scanner to result.info
             } catch (t: Throwable) {
                 if (t is CancellationException) throw t
                 Timber.e(t, "analyzeAudioFileKeepScanner exception: ${t.message}")
-                try { scanner?.close() } catch (_: Exception) {}
                 null to null
             }
         }
@@ -1321,18 +1121,20 @@ private val nativeAudioDecoder = NativeAudioDecoder()
                                 } else {
                                     outputBuffer.position(safeOffset)
                                     outputBuffer.limit(safeLimit)
-                                    val bytesToRead = outputBuffer.remaining()
-                                    if (batchPos + bytesToRead <= batchBuffer.capacity()) {
+                                    var bytesRemaining = outputBuffer.remaining()
+                                    var byteOffset = safeOffset
+                                    while (bytesRemaining > 0) {
+                                        val spaceAvailable = batchBuffer.capacity() - batchPos
+                                        val chunkBytes = minOf(bytesRemaining, spaceAvailable)
+                                        outputBuffer.position(byteOffset)
+                                        outputBuffer.limit(byteOffset + chunkBytes)
                                         batchBuffer.put(outputBuffer)
-                                        batchPos += bytesToRead
-                                    } else {
-                                        flushBatch()
-                                        val canFit = minOf(bytesToRead, batchBuffer.capacity())
-                                        val oldLimit = outputBuffer.limit()
-                                        outputBuffer.limit(outputBuffer.position() + canFit)
-                                        batchBuffer.put(outputBuffer)
-                                        batchPos = canFit
-                                        outputBuffer.limit(oldLimit)
+                                        batchPos += chunkBytes
+                                        byteOffset += chunkBytes
+                                        bytesRemaining -= chunkBytes
+                                        if (batchPos >= batchBuffer.capacity()) {
+                                            flushBatch()
+                                        }
                                     }
                                 }
                             }

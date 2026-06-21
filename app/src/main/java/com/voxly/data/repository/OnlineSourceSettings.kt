@@ -36,4 +36,24 @@ data class OnlineSourceSettings(
 
     val hasAnyCoverEnabledSource: Boolean
         get() = coverEnableMusicBrainz || coverEnableITunes || coverEnableNetease || coverEnableQQMusic
+
+    companion object {
+        val EMPTY = OnlineSourceSettings(
+            enableMusicBrainz = false,
+            enableITunes = false,
+            enableNetease = false,
+            enableQQMusic = false,
+            coverEnableMusicBrainz = false,
+            coverEnableITunes = false,
+            coverEnableNetease = false,
+            coverEnableQQMusic = false,
+            searchLimit = 200,
+            searchLimitMusicBrainz = 0,
+            searchLimitITunes = 0,
+            searchLimitNetease = 0,
+            searchLimitQQMusic = 0,
+            metadataPriority = emptyList(),
+            coverPriority = emptyList()
+        )
+    }
 }

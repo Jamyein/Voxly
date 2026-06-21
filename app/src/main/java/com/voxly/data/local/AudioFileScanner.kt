@@ -229,35 +229,6 @@ class AudioFileScanner @Inject constructor(
     }
 
     /**
-     * Loads audio files - compatibility method for existing code.
-     *
-     * ALWAYS uses cached data if available. Never triggers a scan.
-     * For explicit scans, use [scan] directly.
-     *
-     * @deprecated Short-circuits on cache hits and silently skips the scan path,
-     *   which broke user-initiated pull-to-refresh (issue: Files / Albums /
-     *   Artists pages did not refresh after the cache was populated). Callers
-     *   that want to trigger a scan must call `scan(incremental=true, forceRefresh=false)`
-     *   directly. Retained for one release cycle to surface any external
-     *   callers via the deprecation warning before removal.
-     */
-    @Deprecated(
-        "Short-circuits on cache hits; call scan(incremental=..., forceRefresh=...) directly when you want to scan."
-    )
-    suspend fun loadAudioFiles(isIncremental: Boolean = false): List<AudioFile> = scanMutex.withLock {
-        val hasCached = hasCachedData() && getCachedFileCount() > 0
-        if (hasCached) {
-            Timber.tag("Voxly").i("loadAudioFiles: returning cached data directly, no scan")
-            return@withLock libraryCache.getCachedAudioFilesOnce()
-        }
-        scan(
-            directoryPaths = emptyList(),
-            incremental = isIncremental,
-            forceRefresh = false
-        )
-    }
-
-    /**
      * Gets the album art URI for a specific album ID.
      */
     fun getAlbumArtUri(albumId: Long): android.net.Uri {

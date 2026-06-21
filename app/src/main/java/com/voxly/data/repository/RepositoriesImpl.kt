@@ -91,14 +91,12 @@ class AudioRepositoryImpl @Inject constructor(
                     cachedEntity.fileLastModifiedAt == fileLastModified
 
                 if (cachedFile != null && isFileUnchanged) {
-                    val completeMetadata = metadataProcessor.readAllMetadata(
-                        normalizedPath,
-                        includeAlbumArt = includeAlbumArt,
-                        bypassCache = true
-                    )
-                    val mergedMeta = if (completeMetadata?.metadata != null) {
-                        mergeWithFallback(completeMetadata.metadata, cachedFile.metadata)
-                            ?: completeMetadata.metadata
+                    val mergedMeta = if (includeAlbumArt) {
+                        val complete = metadataProcessor.readAllMetadata(
+                            normalizedPath, includeAlbumArt = true, bypassCache = true
+                        )
+                        val primary = complete?.metadata
+                        mergeWithFallback(primary, cachedFile.metadata) ?: primary ?: cachedFile.metadata
                     } else {
                         cachedFile.metadata
                     }

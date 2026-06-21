@@ -154,7 +154,8 @@ static jdoubleArray decode_compressed(JNIEnv* env, AMediaExtractor* extractor,
 
     bool inputDone = false;
     bool outputDone = false;
-    short batchBuf[BATCH_FRAMES * 2];
+
+    int consecutiveErrors = 0;
 
     while (!outputDone) {
         // Feed input
@@ -164,7 +165,7 @@ static jdoubleArray decode_compressed(JNIEnv* env, AMediaExtractor* extractor,
                 size_t bufSize;
                 uint8_t* buf = AMediaCodec_getInputBuffer(codec, inputIdx, &bufSize);
                 if (buf) {
-                    ssize_t sampleSize = AMediaExtractor_readSampleData(extractor, buf, 0);
+                    ssize_t sampleSize = AMediaExtractor_readSampleData(extractor, buf, bufSize);
                     if (sampleSize < 0) {
                         AMediaCodec_queueInputBuffer(codec, inputIdx, 0, 0, 0,
                                                      AMEDIACODEC_BUFFER_FLAG_END_OF_STREAM);
@@ -192,15 +193,8 @@ static jdoubleArray decode_compressed(JNIEnv* env, AMediaExtractor* extractor,
 
                     // Copy to batch buffer to handle decimation
                     if (decimationFactor > 1) {
-                        int kept = 0;
                         for (int i = 0; i < frames; i += decimationFactor) {
-                            for (int ch = 0; ch < channels; ch++) {
-                                batchBuf[kept * channels + ch] = pcm[i * channels + ch];
-                            }
-                            kept++;
-                        }
-                        if (kept > 0) {
-                            ebur128_add_frames_short(ebur, batchBuf, kept);
+                            ebur128_add_frames_short(ebur, pcm + i * channels, 1);
                         }
                     } else {
                         ebur128_add_frames_short(ebur, pcm, frames);
@@ -217,13 +211,22 @@ static jdoubleArray decode_compressed(JNIEnv* env, AMediaExtractor* extractor,
                 int32_t newCh;
                 if (AMediaFormat_getInt32(newFmt, AMEDIAFORMAT_KEY_CHANNEL_COUNT, &newCh)) {
                     if (newCh != channels) {
-                        LOGW("Channel count changed: %d -> %d", channels, newCh);
+                        LOGE("Unexpected channel count change: %d -> %d. Aborting decode.", channels, newCh);
+                        AMediaFormat_delete(newFmt);
+                        outputDone = true;
+                        continue;
                     }
                 }
                 AMediaFormat_delete(newFmt);
             }
         } else if (outputIdx == AMEDIACODEC_INFO_TRY_AGAIN_LATER) {
             // No output available yet — keep waiting
+        } else {
+            LOGE("dequeueOutputBuffer error: %zd", outputIdx);
+            if (++consecutiveErrors > 100) {
+                LOGE("Too many consecutive errors, aborting decode");
+                break;
+            }
         }
     }
 
@@ -238,7 +241,7 @@ static jdoubleArray decode_compressed(JNIEnv* env, AMediaExtractor* extractor,
 // JNI entry point
 // ============================================================
 extern "C" JNIEXPORT jdoubleArray JNICALL
-Java_com_voxly_data_local_replaygain_native_NativeAudioDecoder_nativeDecodeFileGain(
+Java_com_voxly_data_local_replaygain_native_NativeAudioDecoder_decodeFileGain(
     JNIEnv* env, jobject thiz,
     jstring filePath,
     jdouble targetLoudness,
