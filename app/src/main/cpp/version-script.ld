@@ -6,6 +6,9 @@
         Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult;
         Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeDestroy;
         Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetVersion;
+        Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_00024Companion_nativeGetAlbumGain;
+        Java_com_voxly_data_local_replaygain_native_NativeFlacDecoder_decodeFlacGain;
+        Java_com_voxly_data_local_replaygain_native_NativeAudioDecoder_nativeDecodeFileGain;
     local:
         *;
 };

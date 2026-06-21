@@ -14,6 +14,8 @@ set(EBUR128_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/external/libebur128)
 # Build shared library
 add_library(ebur128-scanner SHARED
     ebur128_scanner.cpp
+    flac_decoder_jni.cpp
+    native_decoder_jni.cpp
     ${EBUR128_SRC_DIR}/ebur128.c
 )
 
@@ -21,6 +23,7 @@ add_library(ebur128-scanner SHARED
 target_include_directories(ebur128-scanner PRIVATE
     ${EBUR128_SRC_DIR}/include
     ${EBUR128_SRC_DIR}/queue
+    ${CMAKE_CURRENT_SOURCE_DIR}/external
 )
 
 # Find system libraries
@@ -48,6 +51,7 @@ target_link_options(ebur128-scanner PRIVATE
 
 target_link_libraries(ebur128-scanner
     ${log-lib}
+    mediandk
 )
 
 if(ENABLE_LINKER_WARNINGS_AS_ERROR)

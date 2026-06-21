@@ -69,5 +69,9 @@
 # ========================================
 # JNI rules (ReplayGain native scanner)
 # Keep class name stable for JNI_OnLoad FindClass/RegisterNatives.
+# The Companion object declares nativeGetAlbumGain — its JNI name encodes
+# '$' as 00024 (Java_..._EbuR128NativeScanner_00024Companion_nativeGetAlbumGain).
+# R8 keeps classes with native methods automatically, but explicit keep is safer.
 # ========================================
 -keep class com.voxly.data.local.replaygain.native.EbuR128NativeScanner { *; }
+-keep class com.voxly.data.local.replaygain.native.EbuR128NativeScanner$Companion { *; }

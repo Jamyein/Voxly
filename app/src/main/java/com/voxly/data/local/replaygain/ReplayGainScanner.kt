@@ -17,6 +17,8 @@ import com.voxly.domain.repository.ScanProgress
 import com.voxly.domain.repository.ScanQuality
 import com.voxly.domain.repository.ScanStatus
 import com.voxly.data.local.replaygain.native.EbuR128NativeScanner
+import com.voxly.data.local.replaygain.native.NativeAudioDecoder
+import com.voxly.data.local.replaygain.native.NativeFlacDecoder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
@@ -37,6 +39,9 @@ import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.LinkedBlockingQueue
+import java.util.concurrent.TimeUnit
 import kotlin.math.log10
 import kotlin.math.pow
 import javax.inject.Inject
@@ -66,7 +71,7 @@ class ReplayGainScanner @Inject constructor(
         private const val DECODE_TIMEOUT_US = 10_000L
         const val MIN_GAIN_DB = -50f
         const val MAX_GAIN_DB = 50f
-        const val BATCH_BUFFER_SIZE = 2 * 1024 * 1024 // 2MB batch buffer
+        const val BATCH_BUFFER_SIZE = 8 * 1024 * 1024 // 8MB batch buffer
         val MAX_CONCURRENT_SCANS = Runtime.getRuntime().availableProcessors()
             .coerceIn(2, 6)
         @Volatile
@@ -109,6 +114,22 @@ class ReplayGainScanner @Inject constructor(
 
     private val scanSemaphore = Semaphore(MAX_CONCURRENT_SCANS)
     private val codecPool = CodecPool()
+    private val nativeFlacDecoder = NativeFlacDecoder()
+private val nativeAudioDecoder = NativeAudioDecoder()
+
+    /**
+     * Finds a hardware-accelerated decoder for the given MIME type.
+     * Returns null if no hardware decoder is available — caller should fall back
+     * to MediaCodecList.findDecoderForFormat (which may return a software decoder).
+     */
+    private fun findHardwareDecoder(mime: String): String? {
+        return MediaCodecList(MediaCodecList.REGULAR_CODECS).codecInfos
+            .firstOrNull { info ->
+                !info.isAlias &&
+                    info.isHardwareAccelerated &&
+                    info.supportedTypes.any { it.equals(mime, ignoreCase = true) }
+            }?.name
+    }
 
     /**
      * Pool that reuses MediaCodec instances across same-format files within an album scan.
@@ -116,15 +137,24 @@ class ReplayGainScanner @Inject constructor(
      * and restarted via configure() + start(). On [release], the codec is stopped and
      * returned to the pool only if stop() succeeded cleanly. Callers MUST call [closeAll]
      * when the scan is done to release native resources.
+     *
+     * Decoder priority: 1) hardware-accelerated (isHardwareAccelerated, API 29+)
+     *                   2) MediaCodecList.findDecoderForFormat (official recommended API)
+     *                   3) createDecoderByType (last resort)
      */
     private inner class CodecPool {
         private val pool = mutableMapOf<String, MediaCodec>()
         private val mutex = Mutex()
 
-        suspend fun acquire(mime: String, format: MediaFormat): MediaCodec? = withContext(Dispatchers.IO) {
+        suspend fun acquire(
+            mime: String,
+            format: MediaFormat,
+            callback: MediaCodec.Callback? = null
+        ): MediaCodec? = withContext(Dispatchers.IO) {
             val existing = mutex.withLock { pool.remove(mime) }
             if (existing != null) {
                 try {
+                    if (callback != null) existing.setCallback(callback)
                     existing.configure(format, null, null, 0)
                     existing.start()
                     Timber.v("CodecPool: reused codec for $mime")
@@ -135,36 +165,42 @@ class ReplayGainScanner @Inject constructor(
                 }
             }
 
-            // Per Android API reference:
-            // "It is preferred to use MediaCodecList.findDecoderForFormat and
-            //  createByCodecName(String) to ensure that the resulting codec can
-            //  handle the specific desired media format."
-            //
-            // createDecoderByType cannot inject features and may create a codec
-            // that cannot handle the specific format (e.g., c2.android.raw.decoder
-            // for FLAC files), so it is only used as a last-resort fallback.
+            // Pass 1: hardware-accelerated decoder (API 29+, minSdk=30)
+            val hwName = findHardwareDecoder(mime)
+            if (hwName != null) {
+                try {
+                    val codec = MediaCodec.createByCodecName(hwName)
+                    if (callback != null) codec.setCallback(callback)
+                    codec.configure(format, null, null, 0)
+                    codec.start()
+                    return@withContext codec
+                } catch (e: Exception) {
+                    Timber.w("CodecPool: hw decoder $hwName failed, falling back: ${e.message}")
+                }
+            }
+
+            // Pass 2: findDecoderForFormat (official recommended API)
             val codecList = MediaCodecList(MediaCodecList.REGULAR_CODECS)
             val decoderName = codecList.findDecoderForFormat(format)
-
             if (decoderName != null) {
                 try {
-                    return@withContext MediaCodec.createByCodecName(decoderName).also {
-                        it.configure(format, null, null, 0)
-                        it.start()
-                    }
+                    val codec = MediaCodec.createByCodecName(decoderName)
+                    if (callback != null) codec.setCallback(callback)
+                    codec.configure(format, null, null, 0)
+                    codec.start()
+                    return@withContext codec
                 } catch (e: Exception) {
                     Timber.w("CodecPool: createByCodecName($decoderName) failed: ${e.message}")
                 }
-            } else {
-                Timber.w("CodecPool: findDecoderForFormat returned null for mime=$mime")
             }
 
-            // Last resort: createDecoderByType (may not handle the specific format)
+            // Pass 3: createDecoderByType (last resort)
             try {
-                return@withContext MediaCodec.createDecoderByType(mime).also {
-                    it.configure(format, null, null, 0)
-                    it.start()
-                }
+                val codec = MediaCodec.createDecoderByType(mime)
+                if (callback != null) codec.setCallback(callback)
+                codec.configure(format, null, null, 0)
+                codec.start()
+                return@withContext codec
             } catch (e: Exception) {
                 Timber.w("CodecPool: createDecoderByType($mime) also failed: ${e.message}")
                 null
@@ -176,7 +212,6 @@ class ReplayGainScanner @Inject constructor(
             if (stoppedCleanly) {
                 mutex.withLock { pool[mime] = codec }
             } else {
-                // Codec in error/undefined state — release native resources instead of pooling
                 try { codec.release() } catch (_: Exception) {}
             }
         }
@@ -664,27 +699,27 @@ class ReplayGainScanner @Inject constructor(
                 val originalSampleRate = trackFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 val channelCount = trackFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
-                // When the extractor already reports audio/raw (common on emulators that
-                // transparently decode FLAC/Opus/MP3 to PCM), prefer the raw decoder first
-                // — the raw decoder handles the data the extractor is handing us. The
-                // previous version preferred the file-extension-based MIME, which selected
-                // the FLAC decoder; that decoder then received raw PCM bytes and failed
-                // at runtime ("work failed to complete: 14"), forcing a full second
-                // decode pass through the raw decoder. We only fall back to the
-                // corrected MIME if the raw path itself fails.
+                // When the extractor reports audio/raw for a file whose extension
+                // suggests a compressed format, the extractor may have pre-decoded
+                // to PCM (emulator) or misreported the MIME (some real devices).
+                // Strategy: try the extension-based decoder FIRST (correct for real
+                // devices, uses hardware acceleration), then fall back to raw
+                // (correct for emulator pre-decode). The FLAC decoder fails FAST
+                // on raw PCM input (no sync code found), so the emulator overhead
+                // is minimal.
                 val isRawExtractor = trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw"
                 val primaryFormat: MediaFormat
                 val fallbackFormat: MediaFormat?
                 if (isRawExtractor) {
                     val correctedMime = getMimeFromExtension(filePath)
                     if (correctedMime != null && correctedMime != "audio/raw") {
-                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — trying raw decoder first, then $correctedMime on failure")
-                        primaryFormat = trackFormat
-                        fallbackFormat = MediaFormat().apply {
+                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — trying $correctedMime decoder first, then raw on failure")
+                        primaryFormat = MediaFormat().apply {
                             setString(MediaFormat.KEY_MIME, correctedMime)
                             setInteger(MediaFormat.KEY_SAMPLE_RATE, originalSampleRate)
                             setInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
                         }
+                        fallbackFormat = trackFormat
                     } else {
                         primaryFormat = trackFormat
                         fallbackFormat = null
@@ -738,26 +773,87 @@ class ReplayGainScanner @Inject constructor(
                 }
 
                 scanner.use { nativeScanner ->
-                    val decodeResult = try {
-                        // Try the primary format (raw on emulators that pre-decode, the
-                        // extracted format on real devices).
+                    var decodeResult: ReplayGainInfo? = null
+                    var primaryFailed = false
+
+                    try {
                         decodeAndFeedScanner(extractor, primaryFormat, channelCount, decimationFactor, nativeScanner)
-                        nativeScanner.getResult()
+                        decodeResult = nativeScanner.getResult()
+                        if (decodeResult == null || !decodeResult.trackGain.isFinite()) {
+                            primaryFailed = true
+                        }
                     } catch (t: Throwable) {
                         if (t is CancellationException) throw t
-                        if (fallbackFormat != null) {
-                            Timber.w("Primary decoder failed for ${file.name}, falling back to corrected format")
-                            // Recreate extractor for fallback attempt
-                            extractor.release()
-                            val fallbackExtractor = MediaExtractor()
-                            fallbackExtractor.setDataSource(filePath)
-                            fallbackExtractor.selectTrack(audioTrackIndex)
-                            decodeAndFeedScanner(fallbackExtractor, fallbackFormat, channelCount, decimationFactor, nativeScanner)
-                            fallbackExtractor.release()
-                            nativeScanner.getResult()
-                        } else {
-                            throw t
+                        primaryFailed = true
+                    }
+
+                    if (primaryFailed && fallbackFormat != null) {
+                        val fallbackMime = fallbackFormat.getString(MediaFormat.KEY_MIME) ?: "unknown"
+                        Timber.w("Primary decoder failed for ${file.name}, falling back to $fallbackMime")
+
+                        // Try native decode via AMediaExtractor+AMediaCodec — single JNI
+                        // call for the entire file, all processing in native code.
+                        if (fallbackMime == "audio/raw") {
+                            try {
+                                val natResult = nativeAudioDecoder.decodeFileGain(
+                                    filePath,
+                                    targetLoudness.toDouble(),
+                                    truePeak = false,
+                                    dualMono = config.dualMono,
+                                    maxSampleRate = if (scanQuality != ScanQuality.ACCURATE)
+                                        scanQuality.maxSampleRate else 0
+                                )
+                                if (natResult != null) {
+                                    primaryFailed = false
+                                    decodeResult = ReplayGainInfo(
+                                        trackGain = natResult[0].toFloat(),
+                                        trackPeak = natResult[1].toFloat(),
+                                        albumGain = null, albumPeak = null,
+                                        truePeak = natResult[4].toFloat().takeIf { it > 0f },
+                                        trackLoudness = natResult[2].toFloat(),
+                                        albumLoudness = null,
+                                        trackRange = natResult[3].toFloat(),
+                                        albumRange = null,
+                                        referenceLoudness = natResult[5].toFloat()
+                                    )
+                                    Timber.i("Native decode succeeded for ${file.name}")
+                                } else {
+                                    Timber.w("Native decode returned null for ${file.name}")
+                                }
+                            } catch (t: Throwable) {
+                                if (t is CancellationException) throw t
+                                Timber.w("Native decode failed for ${file.name}: ${t.message}")
+                            }
                         }
+
+                        if (primaryFailed) {
+                            try { extractor.release() } catch (_: Exception) {}
+                            nativeScanner.close()
+                            EbuR128NativeScanner(
+                                channels = channelCount,
+                                sampleRate = effectiveSampleRate,
+                                targetLoudness = targetLoudness.toDouble(),
+                                truePeak = false,
+                                dualMono = config.dualMono
+                            ).use { fallbackScanner ->
+                                val fallbackExtractor = MediaExtractor()
+                                fallbackExtractor.setDataSource(filePath)
+                                fallbackExtractor.selectTrack(audioTrackIndex)
+                                try {
+                                    if (fallbackMime == "audio/raw") {
+                                        feedRawPcmFromExtractor(fallbackExtractor, channelCount, decimationFactor, fallbackScanner)
+                                    } else {
+                                        decodeAndFeedScanner(fallbackExtractor, fallbackFormat, channelCount, decimationFactor, fallbackScanner)
+                                    }
+                                    decodeResult = fallbackScanner.getResult()
+                                } finally {
+                                    fallbackExtractor.release()
+                                }
+                            }
+                        }
+                    } else if (primaryFailed) {
+                        Timber.w("Decoder failed for ${file.name} (no fallback available)")
+                        return@withPermit null
                     }
 
                     val replayGainInfo = decodeResult
@@ -777,7 +873,6 @@ class ReplayGainScanner @Inject constructor(
                         maxPeakLevel = config.maxPeakLevel.toFloat()
                     )
 
-                    // Don't cache/results for infinite gain (no audio data was decoded)
                     if (!replayGainInfo.trackGain.isFinite()) {
                         Timber.w("Invalid gain ${replayGainInfo.trackGain} for ${file.name} — likely decoder failure, not caching")
                         return@withPermit null
@@ -785,7 +880,6 @@ class ReplayGainScanner @Inject constructor(
 
                     val result = replayGainInfo.copy(trackGain = clampedTrackGain)
 
-                    // Cache the result for future repeated scans
                     cacheResult(filePath, result)
 
                     result
@@ -873,18 +967,29 @@ class ReplayGainScanner @Inject constructor(
                 val originalSampleRate = trackFormat.getInteger(MediaFormat.KEY_SAMPLE_RATE)
                 val channelCount = trackFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
 
-                // When the extractor already reports audio/raw (common on emulators),
-                // prefer the raw decoder — see analyzeAudioFile for full rationale.
+                // When the extractor reports audio/raw for a compressed extension,
+                // try the extension-based decoder first, then fall back to raw.
+                // See analyzeAudioFile for full rationale.
                 val isRawExtractor = trackFormat.getString(MediaFormat.KEY_MIME) == "audio/raw"
-                val codecFormat = if (isRawExtractor) {
-                    getMimeFromExtension(filePath)?.let { correctedMime ->
-                        if (correctedMime != "audio/raw") {
-                            Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — using raw decoder first")
+                val primaryFormat: MediaFormat
+                val fallbackFormat: MediaFormat?
+                if (isRawExtractor) {
+                    val correctedMime = getMimeFromExtension(filePath)
+                    if (correctedMime != null && correctedMime != "audio/raw") {
+                        Timber.w("Extractor reported audio/raw for ${file.name} but extension suggests $correctedMime — trying $correctedMime decoder first, then raw on failure")
+                        primaryFormat = MediaFormat().apply {
+                            setString(MediaFormat.KEY_MIME, correctedMime)
+                            setInteger(MediaFormat.KEY_SAMPLE_RATE, originalSampleRate)
+                            setInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
                         }
+                        fallbackFormat = trackFormat
+                    } else {
+                        primaryFormat = trackFormat
+                        fallbackFormat = null
                     }
-                    trackFormat
                 } else {
-                    trackFormat
+                    primaryFormat = trackFormat
+                    fallbackFormat = null
                 }
 
                 val decimationFactor = if (scanQuality != ScanQuality.ACCURATE &&
@@ -915,9 +1020,100 @@ class ReplayGainScanner @Inject constructor(
                     return@withPermit null to null
                 }
 
-                decodeAndFeedScanner(extractor, codecFormat, channelCount, decimationFactor, scanner)
+                var decodeResult: ReplayGainInfo? = null
+                var primaryFailed = false
 
-                val replayGainInfo = scanner.getResult() ?: run {
+                try {
+                    decodeAndFeedScanner(extractor, primaryFormat, channelCount, decimationFactor, scanner)
+                    decodeResult = scanner.getResult()
+                    if (decodeResult == null || !decodeResult.trackGain.isFinite()) {
+                        primaryFailed = true
+                    }
+                } catch (t: Throwable) {
+                    if (t is CancellationException) throw t
+                    primaryFailed = true
+                }
+
+                if (primaryFailed && fallbackFormat != null) {
+                    val fallbackMime = fallbackFormat.getString(MediaFormat.KEY_MIME) ?: "unknown"
+                    Timber.w("Primary decoder failed for ${file.name}, falling back to $fallbackMime")
+
+                    // Try native decode via AMediaExtractor+AMediaCodec — single JNI
+                    // call for the entire file, all processing in native code.
+                    // Returns null scanner since album gain falls back to energy-average.
+                    var nativeDecodeResult: ReplayGainInfo? = null
+                    if (fallbackMime == "audio/raw") {
+                        try {
+                            val natResult = nativeAudioDecoder.decodeFileGain(
+                                filePath,
+                                targetLoudness.toDouble(),
+                                truePeak = false,
+                                dualMono = config.dualMono,
+                                maxSampleRate = if (scanQuality != ScanQuality.ACCURATE)
+                                    scanQuality.maxSampleRate else 0
+                            )
+                            if (natResult != null) {
+                                nativeDecodeResult = ReplayGainInfo(
+                                    trackGain = natResult[0].toFloat(),
+                                    trackPeak = natResult[1].toFloat(),
+                                    albumGain = null, albumPeak = null,
+                                    truePeak = natResult[4].toFloat().takeIf { it > 0f },
+                                    trackLoudness = natResult[2].toFloat(),
+                                    albumLoudness = null,
+                                    trackRange = natResult[3].toFloat(),
+                                    albumRange = null,
+                                    referenceLoudness = natResult[5].toFloat()
+                                )
+                                Timber.i("Native decode succeeded for ${file.name}")
+                            }
+                        } catch (t: Throwable) {
+                            if (t is CancellationException) throw t
+                            Timber.w("Native decode failed for ${file.name}: ${t.message}")
+                        }
+                    }
+
+                    if (nativeDecodeResult != null) {
+                        try { scanner.close() } catch (_: Exception) {}
+                        try { extractor.release() } catch (_: Exception) {}
+                        val result = nativeDecodeResult.copy(trackGain = applyClipProtection(
+                            gain = nativeDecodeResult.trackGain,
+                            peak = nativeDecodeResult.trackPeak,
+                            clipMode = config.clipMode,
+                            maxPeakLevel = config.maxPeakLevel.toFloat()
+                        ))
+                        cacheResult(filePath, result)
+                        return@withPermit null to result
+                    }
+
+                    try { extractor.release() } catch (_: Exception) {}
+                    scanner.close()
+                    scanner = EbuR128NativeScanner(
+                        channels = channelCount,
+                        sampleRate = effectiveSampleRate,
+                        targetLoudness = targetLoudness.toDouble(),
+                        truePeak = false,
+                        dualMono = config.dualMono
+                    )
+                    val fallbackExtractor = MediaExtractor()
+                    fallbackExtractor.setDataSource(filePath)
+                    fallbackExtractor.selectTrack(audioTrackIndex)
+                    try {
+                        if (fallbackMime == "audio/raw") {
+                            feedRawPcmFromExtractor(fallbackExtractor, channelCount, decimationFactor, scanner)
+                        } else {
+                            decodeAndFeedScanner(fallbackExtractor, fallbackFormat, channelCount, decimationFactor, scanner)
+                        }
+                        decodeResult = scanner.getResult()
+                    } finally {
+                        fallbackExtractor.release()
+                    }
+                } else if (primaryFailed) {
+                    Timber.w("Decoder failed for ${file.name} (no fallback available)")
+                    scanner.close()
+                    return@withPermit null to null
+                }
+
+                val replayGainInfo = decodeResult ?: run {
                     scanner.close()
                     return@withPermit null to null
                 }
@@ -929,7 +1125,6 @@ class ReplayGainScanner @Inject constructor(
                     maxPeakLevel = config.maxPeakLevel.toFloat()
                 )
 
-                // Don't cache infinite gain (no audio data decoded — decoder failure)
                 if (!replayGainInfo.trackGain.isFinite()) {
                     Timber.w("Invalid gain ${replayGainInfo.trackGain} for ${file.name} — likely decoder failure, not caching")
                     scanner.close()
@@ -951,10 +1146,75 @@ class ReplayGainScanner @Inject constructor(
     }
 
     /**
+     * Reads raw PCM data directly from MediaExtractor, bypassing MediaCodec entirely.
+     *
+     * When the extractor reports audio/raw, it has already decoded the audio to PCM.
+     * Uses readSampleData(byteBuf, offset) to write directly into the batch buffer,
+     * eliminating the intermediate readBuffer copy (API 21+ updates position/limit
+     * to the data just read, but we use absolute getShort/putShort for decimation).
+     */
+    private suspend fun feedRawPcmFromExtractor(
+        extractor: MediaExtractor,
+        channelCount: Int,
+        decimationFactor: Int,
+        nativeScanner: EbuR128NativeScanner
+    ) {
+        val batchBuffer = ByteBuffer.allocateDirect(BATCH_BUFFER_SIZE)
+        batchBuffer.order(ByteOrder.LITTLE_ENDIAN)
+        var batchPos = 0
+
+        fun flushBatch() {
+            if (batchPos > 0) {
+                batchBuffer.flip()
+                nativeScanner.processBuffer(batchBuffer, batchPos)
+                batchBuffer.clear()
+                batchBuffer.order(ByteOrder.LITTLE_ENDIAN)
+                batchPos = 0
+            }
+        }
+
+        val bytesPerFrame = channelCount * 2
+
+        while (true) {
+            kotlin.coroutines.coroutineContext.ensureActive()
+
+            // Ensure enough room — flush if <4096 frames remaining
+            if (batchPos + bytesPerFrame * 4096 > batchBuffer.capacity()) flushBatch()
+
+            // Read raw PCM directly into batchBuffer at current position
+            val sampleSize = extractor.readSampleData(batchBuffer, batchPos)
+            if (sampleSize < 0) break
+
+            if (decimationFactor > 1) {
+                val totalFrames = sampleSize / bytesPerFrame
+                var writePos = batchPos
+                for (frameIndex in 0 until totalFrames step decimationFactor) {
+                    for (ch in 0 until channelCount) {
+                        val srcOffset = batchPos + (frameIndex * channelCount + ch) * 2
+                        batchBuffer.putShort(writePos, batchBuffer.getShort(srcOffset))
+                        writePos += 2
+                    }
+                }
+                batchPos = writePos
+            } else {
+                batchPos += sampleSize
+            }
+
+            extractor.advance()
+        }
+
+        flushBatch()
+    }
+
+    /**
      * Decodes audio and feeds PCM samples to native EBU R128 scanner.
-     * Uses Direct ByteBuffer for zero-copy JNI transfer.
-     * Uses hardware-accelerated decoder when available.
-     * Optimized with pooled 2MB batch buffer to reduce allocations.
+     * Uses synchronous mode with getInputBuffer/getOutputBuffer (modern API 21+ pattern).
+     * When the decoder can't handle the format (e.g. FLAC decoder receiving raw PCM),
+     * dequeueOutputBuffer(timeout) reliably signals failure via exception or timeout,
+     * unlike async callback mode where the decoder may silently stall without triggering
+     * onInputBufferAvailable or onError.
+     *
+     * Optimized with pooled 2MB batch buffer to reduce JNI call frequency.
      */
     private suspend fun decodeAndFeedScanner(
         extractor: MediaExtractor,
@@ -972,17 +1232,26 @@ class ReplayGainScanner @Inject constructor(
         Timber.i("Using decoder: ${codec.name} (hw=${isHardwareAccelerated(codec.name)})")
 
         try {
-
             var inputDone = false
             var outputDone = false
             val bufferInfo = MediaCodec.BufferInfo()
-
-            // Use 2MB buffer to reduce JNI call frequency by 8x vs 256KB
             val batchBuffer = ByteBuffer.allocateDirect(BATCH_BUFFER_SIZE)
+            batchBuffer.order(ByteOrder.LITTLE_ENDIAN)
             var batchPos = 0
+
+            fun flushBatch() {
+                if (batchPos > 0) {
+                    batchBuffer.flip()
+                    nativeScanner.processBuffer(batchBuffer, batchPos)
+                    batchBuffer.clear()
+                    batchBuffer.order(ByteOrder.LITTLE_ENDIAN)
+                    batchPos = 0
+                }
+            }
 
             while (!outputDone) {
                 kotlin.coroutines.coroutineContext.ensureActive()
+
                 if (!inputDone) {
                     val inputIndex = codec.dequeueInputBuffer(DECODE_TIMEOUT_US)
                     if (inputIndex >= 0) {
@@ -1019,16 +1288,11 @@ class ReplayGainScanner @Inject constructor(
 
                             if (safeLimit > safeOffset) {
                                 if (decimationFactor > 1) {
-                                    // PCM-level decimation: skip samples to reduce effective sample rate.
-                                    // MediaCodec outputs 16-bit PCM in interleaved format (L, R, L, R, ...).
-                                    // We keep one frame every decimationFactor frames, discarding the rest.
                                     outputBuffer.order(ByteOrder.LITTLE_ENDIAN)
-                                    batchBuffer.order(ByteOrder.LITTLE_ENDIAN)
                                     val bytesPerSample = 2
                                     val bytesPerFrame = channelCount * bytesPerSample
                                     val totalFrames = bufferInfo.size / bytesPerFrame
-                                    val decimatedFrames = (totalFrames + decimationFactor - 1) / decimationFactor
-                                    val decimatedBytes = decimatedFrames * bytesPerFrame
+                                    val decimatedBytes = ((totalFrames + decimationFactor - 1) / decimationFactor) * bytesPerFrame
                                     val spaceInBatch = batchBuffer.capacity() - batchPos
 
                                     if (decimatedBytes <= spaceInBatch) {
@@ -1042,51 +1306,27 @@ class ReplayGainScanner @Inject constructor(
                                         }
                                         batchPos += keptFrames * bytesPerFrame
                                     } else {
-                                        // Flush existing batch first
-                                        if (batchPos > 0) {
-                                            batchBuffer.flip()
-                                            nativeScanner.processBuffer(batchBuffer, batchPos)
-                                            batchBuffer.clear()
-                                            batchBuffer.order(ByteOrder.LITTLE_ENDIAN)
-                                            batchPos = 0
-                                        }
-                                        // Write decimated frames one-by-one, flushing when full
-                                        var keptFrames = 0
+                                        flushBatch()
                                         for (frameIndex in 0 until totalFrames step decimationFactor) {
                                             if (batchPos + bytesPerFrame > batchBuffer.capacity()) {
-                                                batchBuffer.flip()
-                                                nativeScanner.processBuffer(batchBuffer, batchPos)
-                                                batchBuffer.clear()
-                                                batchBuffer.order(ByteOrder.LITTLE_ENDIAN)
-                                                batchPos = 0
+                                                flushBatch()
                                             }
                                             for (ch in 0 until channelCount) {
                                                 val srcByteOffset = safeOffset + (frameIndex * channelCount + ch) * bytesPerSample
                                                 batchBuffer.putShort(outputBuffer.getShort(srcByteOffset))
                                             }
                                             batchPos += bytesPerFrame
-                                            keptFrames++
                                         }
                                     }
                                 } else {
-                                    // No decimation — copy raw PCM bytes
                                     outputBuffer.position(safeOffset)
                                     outputBuffer.limit(safeLimit)
-
                                     val bytesToRead = outputBuffer.remaining()
-                                    val spaceInBatch = batchBuffer.capacity() - batchPos
-
-                                    if (bytesToRead <= spaceInBatch) {
+                                    if (batchPos + bytesToRead <= batchBuffer.capacity()) {
                                         batchBuffer.put(outputBuffer)
                                         batchPos += bytesToRead
                                     } else {
-                                        if (batchPos > 0) {
-                                            batchBuffer.flip()
-                                            nativeScanner.processBuffer(batchBuffer, batchPos)
-                                            batchBuffer.clear()
-                                            batchPos = 0
-                                        }
-
+                                        flushBatch()
                                         val canFit = minOf(bytesToRead, batchBuffer.capacity())
                                         val oldLimit = outputBuffer.limit()
                                         outputBuffer.limit(outputBuffer.position() + canFit)
@@ -1105,24 +1345,18 @@ class ReplayGainScanner @Inject constructor(
                     }
 
                     outputIndex == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> {
-                        val newFormat = codec.outputFormat
-                        val newChannelCount =
-                            newFormat.getInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
-
-                        if (newChannelCount != channelCount) {
-                            Timber.w(
-                                "Native ReplayGain channelCount changed " +
-                                    "$channelCount -> $newChannelCount"
-                            )
+                        val newChannels = codec.outputFormat
+                            .getInteger(MediaFormat.KEY_CHANNEL_COUNT, channelCount)
+                        if (newChannels != channelCount) {
+                            Timber.w("ReplayGain channelCount changed $channelCount -> $newChannels")
                         }
                     }
                 }
             }
 
-            if (batchPos > 0) {
-                batchBuffer.flip()
-                nativeScanner.processBuffer(batchBuffer, batchPos)
-            }
+            flushBatch()
+
+            Timber.v("Decode complete: $mime ${codec.name}")
         } finally {
             codecPool.release(codec, mime)
         }

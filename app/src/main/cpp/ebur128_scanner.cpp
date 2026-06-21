@@ -172,7 +172,7 @@ Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetResult
 }
 
 extern "C" JNIEXPORT jdoubleArray JNICALL
-Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_nativeGetAlbumGain(
+Java_com_voxly_data_local_replaygain_native_EbuR128NativeScanner_00024Companion_nativeGetAlbumGain(
     JNIEnv* env, jobject thiz,
     jlongArray scannerPtrs
 ) {
