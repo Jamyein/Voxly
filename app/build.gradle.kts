@@ -64,6 +64,13 @@ android {
         resourceConfigurations += listOf("en", "zh-rCN")
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        externalNativeBuild {
+            cmake {
+                arguments("-DANDROID_STL=c++_static")
+            }
+        }
+
         vectorDrawables {
             useSupportLibrary = true
         }
