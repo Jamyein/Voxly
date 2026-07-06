@@ -236,8 +236,8 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.1")
 
     // Navigation 3 - 使用新的导航架构解决退出页面点击穿透问题
-    implementation("androidx.navigation3:navigation3-runtime:1.1.3")
-    implementation("androidx.navigation3:navigation3-ui:1.1.3")
+    implementation("androidx.navigation3:navigation3-runtime:1.1.4")
+    implementation("androidx.navigation3:navigation3-ui:1.1.4")
     implementation("androidx.lifecycle:lifecycle-viewmodel-navigation3:2.11.0")
     // Navigation3 Scene Strategies (BottomSheet, ListDetail)
     // Using 1.3.0-alpha10 (latest available version with Navigation 3 + Adaptive integration)
