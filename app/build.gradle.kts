@@ -216,9 +216,9 @@ dependencies {
     implementation("androidx.compose.foundation:foundation")
     implementation("androidx.compose.foundation:foundation-layout")
     // 使用 Kotlin 2.3.10 配合 Compose alpha 版本
-    implementation("androidx.compose.animation:animation:1.11.3")
-    implementation("androidx.compose.animation:animation-core:1.11.3")
-    implementation("androidx.compose.animation:animation-graphics:1.11.3")
+    implementation("androidx.compose.animation:animation:1.11.4")
+    implementation("androidx.compose.animation:animation-core:1.11.4")
+    implementation("androidx.compose.animation:animation-graphics:1.11.4")
     // Material3 Alpha 版本 - 覆盖 BOM 中的稳定版以使用最新特性
     implementation("androidx.compose.material3:material3:1.5.0-alpha22")
     // Material Design 3 Expressive - RoundedPolygon 形状支持
