@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryDataHolder
+import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
@@ -40,7 +41,8 @@ class ArtistDetailViewModel @AssistedInject constructor(
     @ApplicationContext private val context: Context,
     private val audioFileScanner: AudioFileScanner,
     private val databaseProvider: MusicCacheDatabaseProvider,
-    private val libraryDataHolder: LibraryDataHolder
+    private val libraryDataHolder: LibraryDataHolder,
+    private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
     private val _artistName = MutableStateFlow("")
@@ -266,9 +268,9 @@ class ArtistDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * Refresh artist data. Routes the scan request through [LibraryDataHolder]
+     * Refresh artist data. Routes the scan request through [LibraryRepository]
      * (single fan-in) so that concurrent refreshes from other screens collapse
-     * into one scan via the holder's conflated SharedFlow + the collector's
+     * into one scan via the repository's conflated SharedFlow + the collector's
      * `collectLatest`. The local `loadArtist` re-read picks up the new
      * aggregator output as soon as the incremental rebuild finishes — typically
      * within one frame of the scan completing.
@@ -279,7 +281,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
             // bypassVersionCache = true: user-initiated refresh should always
             // trigger a real scan attempt, not short-circuit on MediaStore
             // version equality.
-            libraryDataHolder.requestGlobalRefresh(
+            libraryRepository.refresh(
                 forceRefresh = forceRefresh,
                 bypassVersionCache = true,
                 source = ChangeSource.PULL_TO_REFRESH

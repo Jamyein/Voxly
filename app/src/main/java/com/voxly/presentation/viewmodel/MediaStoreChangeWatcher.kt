@@ -10,7 +10,7 @@ import android.provider.MediaStore
 import com.voxly.data.local.SafTreeWatcher
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.repository.ChangeSource
-import com.voxly.domain.repository.LibraryDataHolder
+import com.voxly.domain.repository.LibraryRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
@@ -27,8 +27,8 @@ import javax.inject.Named
 import javax.inject.Singleton
 
 /**
- * Process-lifetime watcher that emits a [LibraryChangeEvent.Global] on
- * [LibraryDataHolder.changeEvents] when MediaStore audio content changes are
+ * Process-lifetime watcher that requests a library refresh via
+ * [LibraryRepository.refresh] when MediaStore audio content changes are
  * observed.
  *
  * Pattern follows the mainstream open-source music apps (Auxio, Phonograph,
@@ -51,7 +51,7 @@ import javax.inject.Singleton
 @Singleton
 class MediaStoreChangeWatcher @Inject constructor(
     @ApplicationContext private val context: Context,
-    private val libraryDataHolder: LibraryDataHolder,
+    private val libraryRepository: LibraryRepository,
     private val safTreeWatcher: SafTreeWatcher,
     private val settingsDataStore: SettingsDataStore,
     @Named("ApplicationScope") private val appScope: CoroutineScope
@@ -97,7 +97,7 @@ class MediaStoreChangeWatcher @Inject constructor(
                 .debounce(DEBOUNCE_MS)
                 .collect {
                     Timber.tag(TAG).d("MediaStore change → global refresh → SAF walk")
-                    libraryDataHolder.requestGlobalRefresh(
+                    libraryRepository.refresh(
                         forceRefresh = false,
                         bypassVersionCache = true,
                         source = ChangeSource.MEDIA_STORE

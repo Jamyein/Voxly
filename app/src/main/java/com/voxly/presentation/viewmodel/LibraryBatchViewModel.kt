@@ -6,7 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.saf.SafWriteAccessService
 import com.voxly.domain.repository.ChangeSource
-import com.voxly.domain.repository.LibraryDataHolder
+import com.voxly.domain.repository.LibraryRepository
 import com.voxly.domain.model.BatchResult
 import com.voxly.domain.model.BatchStatus
 import com.voxly.domain.repository.AudioRepository
@@ -40,7 +40,7 @@ class LibraryBatchViewModel @Inject constructor(
     private val onlineMetadataRepository: OnlineMetadataRepository,
     private val safWriteAccessService: SafWriteAccessService,
     private val batchEngine: BatchEngine<String>,
-    private val libraryDataHolder: LibraryDataHolder
+    private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
     companion object {
@@ -89,7 +89,7 @@ class LibraryBatchViewModel @Inject constructor(
                 Timber.tag(TAG).e(e, "Batch operation failed")
             } finally {
                 _isBatchProcessing.update { false }
-                libraryDataHolder.requestGlobalRefresh(
+                libraryRepository.refresh(
                     forceRefresh = false,
                     bypassVersionCache = true,
                     source = ChangeSource.BATCH_EDIT

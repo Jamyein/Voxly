@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryDataHolder
+import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.data.local.UiStateDataStore
 import com.voxly.domain.model.AlbumGroup
@@ -37,7 +38,8 @@ import javax.inject.Inject
 class AlbumViewModel @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
     private val uiStateDataStore: UiStateDataStore,
-    private val libraryDataHolder: LibraryDataHolder
+    private val libraryDataHolder: LibraryDataHolder,
+    private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
     // Albums sorted by different options - pre-computed by aggregator
@@ -103,18 +105,18 @@ class AlbumViewModel @Inject constructor(
     }
 
     /**
-     * Request a library refresh via [LibraryDataHolder]. The actual scan is
+     * Request a library refresh via [LibraryRepository]. The actual scan is
      * performed by [LibraryScanViewModel] (single fan-out point); this method
      * is non-suspending and returns immediately. Bursts are deduplicated by
-     * the holder's conflated SharedFlow + the collector's `collectLatest`.
+     * the repository's conflated SharedFlow + the collector's `collectLatest`.
      *
      * `bypassVersionCache = true` ensures the user-visible spinner always
      * corresponds to a real scan attempt, instead of returning early when
      * the MediaStore version has not changed since the last scan.
      */
     fun refresh(forceRefresh: Boolean = false) {
-        Timber.tag("Voxly").i("AlbumViewModel refresh -> LibraryDataHolder")
-        libraryDataHolder.requestGlobalRefresh(
+        Timber.tag("Voxly").i("AlbumViewModel refresh -> LibraryRepository")
+        libraryRepository.refresh(
             forceRefresh = forceRefresh,
             bypassVersionCache = true,
             source = ChangeSource.PULL_TO_REFRESH

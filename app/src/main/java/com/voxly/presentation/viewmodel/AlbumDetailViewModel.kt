@@ -9,6 +9,7 @@ import androidx.palette.graphics.Palette
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryDataHolder
+import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.data.local.metadata.TagLibMetadataProcessor
@@ -40,7 +41,8 @@ class AlbumDetailViewModel @AssistedInject constructor(
     private val databaseProvider: MusicCacheDatabaseProvider,
     private val metadataProcessor: TagLibMetadataProcessor,
     private val coverUriProvider: CoverUriProvider,
-    private val libraryDataHolder: LibraryDataHolder
+    private val libraryDataHolder: LibraryDataHolder,
+    private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
     private val _albumName = MutableStateFlow("")
@@ -168,9 +170,9 @@ class AlbumDetailViewModel @AssistedInject constructor(
     }
 
     /**
-     * Refresh album data. Routes the scan request through [LibraryDataHolder]
+     * Refresh album data. Routes the scan request through [LibraryRepository]
      * (single fan-in) so concurrent refreshes from other screens collapse into
-     * one scan via the holder's conflated SharedFlow + the collector's
+     * one scan via the repository's conflated SharedFlow + the collector's
      * `collectLatest`. The local `loadAlbum` re-read picks up the new
      * aggregator output as soon as the incremental rebuild finishes.
      */
@@ -180,7 +182,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
             // bypassVersionCache = true: user-initiated refresh should always
             // trigger a real scan attempt, not short-circuit on MediaStore
             // version equality.
-            libraryDataHolder.requestGlobalRefresh(
+            libraryRepository.refresh(
                 forceRefresh = forceRefresh,
                 bypassVersionCache = true,
                 source = ChangeSource.PULL_TO_REFRESH

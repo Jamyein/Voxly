@@ -8,7 +8,7 @@ import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.scanner.MediaStoreDataSource
 import com.voxly.domain.repository.ChangeSource
-import com.voxly.domain.repository.LibraryDataHolder
+import com.voxly.domain.repository.LibraryRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
 import timber.log.Timber
@@ -20,7 +20,7 @@ import timber.log.Timber
  * the device is plugged in — no battery cost to the user.
  *
  * Responsibilities (in order):
- * 1. Trigger an incremental scan via [LibraryDataHolder.requestRefresh].
+ * 1. Trigger an incremental scan via [LibraryRepository.refresh].
  * 2. Purge cached entries for files that have been deleted from MediaStore.
  *    This is the primary cleanup path; the incremental scan path defers
  *    deletion detection here.
@@ -30,7 +30,7 @@ import timber.log.Timber
 class LibraryPeriodicScanWorker @AssistedInject constructor(
     @Assisted context: Context,
     @Assisted params: WorkerParameters,
-    private val libraryDataHolder: LibraryDataHolder,
+    private val libraryRepository: LibraryRepository,
     private val musicLibraryCache: MusicLibraryCache,
     private val mediaStoreDataSource: MediaStoreDataSource,
     private val settingsDataStore: SettingsDataStore
@@ -41,7 +41,7 @@ class LibraryPeriodicScanWorker @AssistedInject constructor(
         return try {
             // 1. Trigger an incremental scan. The scan path skips deletion
             //    detection; we do it here afterward.
-            libraryDataHolder.requestGlobalRefresh(
+            libraryRepository.refresh(
                 forceRefresh = false,
                 bypassVersionCache = false,
                 source = ChangeSource.PERIODIC_WORKER

@@ -74,7 +74,6 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.navigation.MetadataEditor
 import com.voxly.presentation.screens.metadata.AdaptiveMetadataEditorContainer
-import com.voxly.presentation.viewmodel.LibraryRefreshCoordinator
 import com.voxly.presentation.viewmodel.LibraryScanViewModel
 import com.voxly.presentation.viewmodel.LibrarySettingsViewModel
 import com.voxly.presentation.viewmodel.LibraryViewModel
@@ -100,7 +99,6 @@ fun FileBrowserAdaptiveScreen(
     modifier: Modifier = Modifier,
     viewModel: LibraryViewModel = hiltViewModel(),
     scanViewModel: LibraryScanViewModel = hiltViewModel(),
-    refreshCoordinator: LibraryRefreshCoordinator = hiltViewModel(),
     settingsViewModel: LibrarySettingsViewModel = hiltViewModel(),
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
@@ -127,8 +125,8 @@ fun FileBrowserAdaptiveScreen(
             // refresh path so Files / Albums / Artists all observe it. The
             // version-cache bypass is not strictly needed here because we
             // also pass forceRefresh=true, but we route through the
-            // coordinator for consistency.
-            refreshCoordinator.requestUserRefresh(forceRefresh = true)
+            // scanViewModel for consistency.
+            scanViewModel.refresh(forceRefresh = true)
         } else {
             Toast.makeText(
                 context,
@@ -238,7 +236,7 @@ fun FileBrowserAdaptiveScreen(
             isInitialLoad = isInitialLoad,
             hasAudioPermission = hasAudioPermission,
             onRequestAudioPermission = { requestAudioPermission.launch(audioPermission) },
-            onRefresh = { refreshCoordinator.requestUserRefresh() },
+            onRefresh = { scanViewModel.refresh() },
             onToggleRootTab = {
                 val newTab = if (effectiveRootTab == RootTab.DIRECTORIES)
                     RootTab.ALL.name

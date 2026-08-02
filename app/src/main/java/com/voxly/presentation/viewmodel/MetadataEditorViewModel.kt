@@ -25,7 +25,6 @@ import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.repository.RecentEditsRepository
 import com.voxly.domain.usecase.ApplyOnlineMetadataUseCase
 import com.voxly.domain.usecase.SaveMetadataUseCase
-import com.voxly.domain.usecase.UnifiedScanManager
 import com.voxly.presentation.components.lyricsposter.ColorExtractor
 import com.voxly.presentation.components.lyricsposter.ColorExtractor.M3EColors
 import com.voxly.presentation.navigation.MetadataEditor
@@ -90,7 +89,6 @@ class MetadataEditorViewModel @AssistedInject constructor(
     private val settingsDataStore: SettingsDataStore,
     private val safWriteAccessService: SafWriteAccessService,
     private val recentEditsRepository: RecentEditsRepository,
-    private val unifiedScanManager: UnifiedScanManager,
     private val audioFileScanner: AudioFileScanner,
     private val musicLibraryCache: MusicLibraryCache,
     private val searchSeedHolder: SearchSeedHolder,

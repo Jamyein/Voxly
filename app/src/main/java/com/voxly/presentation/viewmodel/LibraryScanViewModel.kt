@@ -20,9 +20,8 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.CacheChange
 import com.voxly.domain.repository.AudioRepository
-import com.voxly.domain.usecase.ScanState
-import com.voxly.domain.usecase.ScanTarget
-import com.voxly.domain.usecase.UnifiedScanManager
+import com.voxly.domain.repository.LibraryRepository
+import com.voxly.domain.repository.ScanState
 import com.voxly.core.util.Constants
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -64,7 +63,7 @@ class LibraryScanViewModel @Inject constructor(
     private val mediaStoreVersionCache: com.voxly.data.local.MediaStoreVersionCache,
     private val settingsDataStore: SettingsDataStore,
     private val uiStateDataStore: UiStateDataStore,
-    private val unifiedScanManager: UnifiedScanManager,
+    private val libraryRepository: LibraryRepository,
     private val safWriteAccessService: SafWriteAccessService,
     private val audioRepository: AudioRepository,
     private val libraryDataHolder: LibraryDataHolder
@@ -102,7 +101,7 @@ class LibraryScanViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    val scanState: StateFlow<ScanState> = unifiedScanManager.scanState
+    val scanState: StateFlow<ScanState> = libraryRepository.scanState
 
     val hasWhitelistDirectories: StateFlow<Boolean> = settingsDataStore.selectedDirectoryUris
         .map { uris -> uris.isNotEmpty() }
@@ -175,14 +174,14 @@ class LibraryScanViewModel @Inject constructor(
     private val _isInitialLoad = MutableStateFlow(true)
 
     /**
-     * `isRefreshing` proxies [LibraryDataHolder.isRefreshing] — the global
+     * `isRefreshing` proxies [LibraryRepository.isRefreshing] — the global
      * scan-activity refcount (1+ while any scan is in flight). Each scan
      * lifetime here pairs [LibraryDataHolder.beginScan] with
      * [LibraryDataHolder.endScan] in a finally block; concurrent scans
      * correctly accumulate. External consumers (Files page, DirectoryContent,
      * MainActivity) observe this StateFlow directly.
      */
-    val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
+    val isRefreshing: StateFlow<Boolean> = libraryRepository.isRefreshing
 
     data class FileBrowserUiState(
         val allAudios: List<AudioFile> = emptyList(),
@@ -321,7 +320,7 @@ class LibraryScanViewModel @Inject constructor(
      */
     private fun handleSingleFileSync(filePath: String) {
         viewModelScope.launch {
-            unifiedScanManager.syncFile(filePath)
+            libraryRepository.syncFile(filePath)
         }
     }
 
@@ -376,9 +375,9 @@ class LibraryScanViewModel @Inject constructor(
 
         viewModelScope.launch {
             delay(300L)
-            unifiedScanManager.startWatchingSettings()
+            libraryRepository.startWatchingSettings()
             checkDirectorySnapshotsOnStart()
-            unifiedScanManager.scanState.collect { state ->
+            libraryRepository.scanState.collect { state ->
                 when (state) {
                     is ScanState.Success -> Timber.d(TAG, "Scan completed")
                     is ScanState.Error -> {
@@ -568,7 +567,7 @@ class LibraryScanViewModel @Inject constructor(
      */
     fun refresh(forceRefresh: Boolean = false) {
         Timber.tag("Voxly").i("LibraryScanViewModel scan triggered: incremental=${!forceRefresh}")
-        libraryDataHolder.requestGlobalRefresh(
+        libraryRepository.refresh(
             forceRefresh = forceRefresh,
             bypassVersionCache = true,
             source = ChangeSource.PULL_TO_REFRESH
@@ -606,7 +605,7 @@ class LibraryScanViewModel @Inject constructor(
         val now = System.currentTimeMillis()
         if (now - lastResumeRefreshAt < RESUME_REFRESH_THROTTLE_MS) return
         lastResumeRefreshAt = now
-        libraryDataHolder.requestGlobalRefresh(
+        libraryRepository.refresh(
             forceRefresh = false,
             bypassVersionCache = true,
             source = ChangeSource.ON_RESUME
@@ -709,7 +708,7 @@ class LibraryScanViewModel @Inject constructor(
             _openedDirectoryUri.update { null }
         }
         persistSelectedDirectories(updatedDirectories)
-        libraryDataHolder.requestGlobalRefresh(
+        libraryRepository.refresh(
             forceRefresh = false,
             bypassVersionCache = true,
             source = ChangeSource.DIRECTORY_MANAGEMENT
@@ -724,7 +723,7 @@ class LibraryScanViewModel @Inject constructor(
         _directoryFiles.update { emptyMap() }
         _openedDirectoryUri.update { null }
         persistSelectedDirectories(emptyList())
-        libraryDataHolder.requestGlobalRefresh(
+        libraryRepository.refresh(
             forceRefresh = false,
             bypassVersionCache = true,
             source = ChangeSource.DIRECTORY_MANAGEMENT
@@ -995,7 +994,7 @@ class LibraryScanViewModel @Inject constructor(
                 viewModelScope.launch {
                     musicLibraryCache.removeFromCache(filePath)
                 }
-                libraryDataHolder.requestGlobalRefresh(
+                libraryRepository.refresh(
                     forceRefresh = false,
                     bypassVersionCache = true,
                     source = ChangeSource.FILE_EDIT
@@ -1028,7 +1027,7 @@ class LibraryScanViewModel @Inject constructor(
                 viewModelScope.launch {
                     musicLibraryCache.removeFromCache(filePath)
                 }
-                libraryDataHolder.requestGlobalRefresh(
+                libraryRepository.refresh(
                     forceRefresh = false,
                     bypassVersionCache = true,
                     source = ChangeSource.FILE_EDIT

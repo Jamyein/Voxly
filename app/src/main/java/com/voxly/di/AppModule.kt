@@ -3,8 +3,6 @@ package com.voxly.di
 import com.voxly.data.remote.NetworkConstants
 
 import android.content.Context
-import com.voxly.data.local.AudioFileScanner
-import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.cache.CachedAudioFileDao
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
@@ -40,8 +38,8 @@ import com.voxly.domain.usecase.BatchReplayGainUseCase
 import com.voxly.domain.usecase.MemoryPressureMonitor
 import com.voxly.domain.usecase.RebuildDatabaseManager
 import com.voxly.domain.usecase.RebuildDatabaseManagerImpl
-import com.voxly.domain.usecase.UnifiedScanManager
-import com.voxly.domain.usecase.UnifiedScanManagerImpl
+import com.voxly.data.repository.LibraryRepositoryImpl
+import com.voxly.domain.repository.LibraryRepository
 import com.voxly.presentation.viewmodel.CoverRepositorySearchStrategy
 import com.voxly.presentation.viewmodel.CoverSearchStrategy
 import com.voxly.presentation.viewmodel.LyricsRepositorySearchStrategy
@@ -102,7 +100,7 @@ object AppModule {
      * - Do NOT launch infinite loops or tasks requiring graceful shutdown.
      * - If you need cancellable scopes, inject Application and use its lifecycle.
      *
-     * Currently used by: [UnifiedScanManager] for background library scanning.
+     * Currently used by: [LibraryRepositoryImpl] for background library scanning.
      */
     @Provides
     @Singleton
@@ -376,20 +374,6 @@ object AppModule {
 
     @Provides
     @Singleton
-    fun provideUnifiedScanManager(
-        audioFileScanner: AudioFileScanner,
-        musicLibraryCache: MusicLibraryCache,
-        settingsDataStore: SettingsDataStore,
-        whitelistRepository: WhitelistRepository,
-        @ApplicationContext context: Context,
-        @Named("ApplicationScope") scope: CoroutineScope
-    ): UnifiedScanManager {
-        Timber.tag("Voxly").i("Creating UnifiedScanManager")
-        return UnifiedScanManagerImpl(audioFileScanner, musicLibraryCache, settingsDataStore, whitelistRepository, scope)
-    }
-
-    @Provides
-    @Singleton
     @Named("io")
     fun provideIoDispatcher(): CoroutineDispatcher = Dispatchers.IO
 }
@@ -415,6 +399,12 @@ abstract class RepositoryModule {
     abstract fun bindAudioRepository(
         audioRepositoryImpl: AudioRepositoryImpl
     ): AudioRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindLibraryRepository(
+        libraryRepositoryImpl: LibraryRepositoryImpl
+    ): LibraryRepository
 
     @Binds
     @Singleton

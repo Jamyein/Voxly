@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.voxly.core.util.SortUtil
 import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryDataHolder
+import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.ArtistListItemState
@@ -33,7 +34,8 @@ import javax.inject.Inject
 @HiltViewModel
 class ArtistViewModel @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
-    private val libraryDataHolder: LibraryDataHolder
+    private val libraryDataHolder: LibraryDataHolder,
+    private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
     val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
@@ -87,8 +89,8 @@ class ArtistViewModel @Inject constructor(
     val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = audioFileScanner.artistDiff
 
     /**
-     * Request a library refresh via [LibraryDataHolder]. Bursts are
-     * deduplicated by the holder's conflated SharedFlow + the collector's
+     * Request a library refresh via [LibraryRepository]. Bursts are
+     * deduplicated by the repository's conflated SharedFlow + the collector's
      * `collectLatest`.
      *
      * `bypassVersionCache = true` ensures the user-visible spinner always
@@ -96,8 +98,8 @@ class ArtistViewModel @Inject constructor(
      * the MediaStore version has not changed since the last scan.
      */
     fun refresh(forceRefresh: Boolean = false) {
-        Timber.tag("Voxly").i("ArtistViewModel refresh -> LibraryDataHolder")
-        libraryDataHolder.requestGlobalRefresh(
+        Timber.tag("Voxly").i("ArtistViewModel refresh -> LibraryRepository")
+        libraryRepository.refresh(
             forceRefresh = forceRefresh,
             bypassVersionCache = true,
             source = ChangeSource.PULL_TO_REFRESH

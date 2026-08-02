@@ -1,17 +1,27 @@
-package com.voxly.domain.usecase
+package com.voxly.data.repository
 
 import com.voxly.core.util.Constants
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.SettingsDataStore
+import com.voxly.domain.model.AlbumGroup
+import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioFormat
+import com.voxly.domain.model.IncrementalList
+import com.voxly.domain.repository.ChangeSource
+import com.voxly.domain.repository.LibraryDataHolder
+import com.voxly.domain.repository.LibraryRepository
+import com.voxly.domain.repository.ScanResult
+import com.voxly.domain.repository.ScanState
+import com.voxly.domain.repository.ScanTarget
 import com.voxly.domain.repository.WhitelistRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -23,10 +33,17 @@ import kotlinx.coroutines.withContext
 import timber.log.Timber
 import java.io.File
 import javax.inject.Inject
+import javax.inject.Named
 import javax.inject.Singleton
 
 /**
- * Implementation of [UnifiedScanManager]
+ * Real implementation of [LibraryRepository].
+ *
+ * Wires together [LibraryDataHolder] (event bus + refresh counter),
+ * [AudioFileScanner] (data flows + scan implementation), and the unified
+ * scan coordination (formerly UnifiedScanManagerImpl) behind a single
+ * interface. ViewModels that inject this class depend on one abstraction
+ * instead of multiple data-layer classes.
  *
  * Provides unified scanning operations for:
  * - Global device scan
@@ -37,13 +54,14 @@ import javax.inject.Singleton
  * Also watches settings changes for auto-refresh.
  */
 @Singleton
-class UnifiedScanManagerImpl @Inject constructor(
+class LibraryRepositoryImpl @Inject constructor(
+    private val libraryDataHolder: LibraryDataHolder,
     private val audioFileScanner: AudioFileScanner,
     private val musicLibraryCache: MusicLibraryCache,
     private val settingsDataStore: SettingsDataStore,
     private val whitelistRepository: WhitelistRepository,
-    private val scope: CoroutineScope
-) : UnifiedScanManager {
+    @Named("ApplicationScope") private val scope: CoroutineScope,
+) : LibraryRepository {
 
     companion object {
         private const val TAG = "UnifiedScanManager"
@@ -63,7 +81,32 @@ class UnifiedScanManagerImpl @Inject constructor(
     // Current scan job for cancellation
     private var currentScanJob: Job? = null
 
-    override suspend fun scan(
+    override val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
+    override val scanError: SharedFlow<String> = libraryDataHolder.scanError
+
+    // Data flows delegate to the scanner.
+    // allAudios now reads the raw Room-backed StateFlow so callers see EVERY
+    // cached audio file (including those without an album key). Album /
+    // artist flows continue to come from the aggregator.
+    override val allAudios: StateFlow<List<AudioFile>> = audioFileScanner.cachedAudioFilesStateFlow
+    override val albums: StateFlow<List<AlbumGroup>> = audioFileScanner.albums
+    override val artists: StateFlow<List<ArtistGroup>> = audioFileScanner.artists
+    override val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = audioFileScanner.albumDiff
+    override val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = audioFileScanner.artistDiff
+
+    override fun refresh(
+        forceRefresh: Boolean,
+        bypassVersionCache: Boolean,
+        source: ChangeSource,
+    ) {
+        libraryDataHolder.requestGlobalRefresh(
+            forceRefresh = forceRefresh,
+            bypassVersionCache = bypassVersionCache,
+            source = source
+        )
+    }
+
+    suspend fun scan(
         target: ScanTarget,
         force: Boolean
     ): ScanResult {
@@ -103,10 +146,10 @@ class UnifiedScanManagerImpl @Inject constructor(
         }
     }
 
-    override fun scanAsync(
+    fun scanAsync(
         target: ScanTarget,
         force: Boolean,
-        onComplete: ((ScanResult) -> Unit)?
+        onComplete: ((ScanResult) -> Unit)? = null
     ) {
         currentScanJob?.cancel()
         currentScanJob = scope.launch {
@@ -115,7 +158,7 @@ class UnifiedScanManagerImpl @Inject constructor(
         }
     }
 
-    override fun cancel() {
+    fun cancel() {
         currentScanJob?.cancel()
         currentScanJob = null
     }
