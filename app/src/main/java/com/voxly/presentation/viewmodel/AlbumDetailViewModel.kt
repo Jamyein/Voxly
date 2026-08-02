@@ -7,7 +7,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.palette.graphics.Palette
 import com.voxly.data.local.AudioFileScanner
-import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.cover.CoverUriProvider
@@ -182,8 +181,7 @@ class AlbumDetailViewModel @AssistedInject constructor(
             // version equality.
             libraryRepository.refresh(
                 forceRefresh = forceRefresh,
-                bypassVersionCache = true,
-                source = ChangeSource.PULL_TO_REFRESH
+                bypassVersionCache = true
             )
             loadAlbum(navKey.albumName, navKey.albumArtist.takeIf { it.isNotEmpty() })
         }

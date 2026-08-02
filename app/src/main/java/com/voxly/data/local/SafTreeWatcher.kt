@@ -4,7 +4,6 @@ import android.content.Context
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import com.voxly.core.util.PathUtils
-import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryDataHolder
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
@@ -64,8 +63,7 @@ class SafTreeWatcher @Inject constructor(
             libraryDataHolder.requestDirectoryRefresh(
                 directoryUri = uri,
                 directoryPath = path,
-                forceRefresh = false,
-                source = ChangeSource.SAF_TREE
+                forceRefresh = false
             )
         }
         if (changedDirs.isNotEmpty()) {

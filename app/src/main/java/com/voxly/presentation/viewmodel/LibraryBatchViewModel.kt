@@ -5,7 +5,6 @@ import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.saf.SafWriteAccessService
-import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.domain.model.BatchResult
 import com.voxly.domain.model.BatchStatus
@@ -91,8 +90,7 @@ class LibraryBatchViewModel @Inject constructor(
                 _isBatchProcessing.update { false }
                 libraryRepository.refresh(
                     forceRefresh = false,
-                    bypassVersionCache = true,
-                    source = ChangeSource.BATCH_EDIT
+                    bypassVersionCache = true
                 )
             }
         }.also { batchJob = it }

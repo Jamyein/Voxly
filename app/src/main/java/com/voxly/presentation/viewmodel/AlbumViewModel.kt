@@ -3,7 +3,6 @@ package com.voxly.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
-import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.data.local.UiStateDataStore
@@ -116,8 +115,7 @@ class AlbumViewModel @Inject constructor(
         Timber.tag("Voxly").i("AlbumViewModel refresh -> LibraryRepository")
         libraryRepository.refresh(
             forceRefresh = forceRefresh,
-            bypassVersionCache = true,
-            source = ChangeSource.PULL_TO_REFRESH
+            bypassVersionCache = true
         )
     }
 

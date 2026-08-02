@@ -7,8 +7,7 @@ import com.voxly.data.local.cover.CoverUriProvider
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.model.ReplayGainInfo
-import com.voxly.domain.repository.ChangeSource
-import com.voxly.domain.repository.LibraryDataHolder
+import com.voxly.domain.repository.LibraryRepository
 import com.voxly.domain.repository.ReplayGainRepository
 import com.voxly.domain.usecase.SaveMetadataResult
 import com.voxly.domain.usecase.SaveMetadataUseCase
@@ -38,7 +37,7 @@ class MetadataSaveCoordinator @Inject constructor(
     @ApplicationContext private val context: Context,
     private val saveMetadataUseCase: SaveMetadataUseCase,
     private val replayGainRepository: ReplayGainRepository,
-    private val libraryDataHolder: LibraryDataHolder,
+    private val libraryRepository: LibraryRepository,
     private val musicLibraryCache: MusicLibraryCache,
     private val audioFileScanner: AudioFileScanner,
     @Named("ApplicationScope") private val applicationScope: CoroutineScope
@@ -89,7 +88,9 @@ class MetadataSaveCoordinator @Inject constructor(
                     }
 
                     applicationScope.launch {
-                        libraryDataHolder.requestSingleFileSync(filePath, source = ChangeSource.FILE_EDIT)
+                        // Sync straight to the cache — no event-bus hop, so it
+                        // can't be dropped if no VM collector is alive.
+                        libraryRepository.syncFile(filePath)
                         musicLibraryCache.markFileAsEditedByUser(filePath)
 
                         val correctAlbumId = audioFileScanner.queryMediaStoreAlbumId(filePath)

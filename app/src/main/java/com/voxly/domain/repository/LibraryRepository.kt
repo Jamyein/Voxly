@@ -8,92 +8,6 @@ import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
- * Unified scan target types for the scanning system.
- */
-sealed class ScanTarget {
-    /**
-     * Global scan - scans entire device for music files
-     */
-    object Global : ScanTarget()
-
-    /**
-     * Incremental scan - only scans new/modified files
-     */
-    object Incremental : ScanTarget()
-
-    /**
-     * Scan specific directories only
-     */
-    data class Directories(val paths: List<String>) : ScanTarget()
-
-    /**
-     * Single file update - used for metadata editing sync
-     */
-    data class SingleFile(val path: String) : ScanTarget()
-}
-
-/**
- * Unified scan result types
- */
-sealed class ScanResult {
-    /**
-     * Scan completed successfully
-     */
-    data class Success(
-        val files: List<AudioFile>,
-        val scannedAt: Long = System.currentTimeMillis(),
-        val scannedCount: Int = files.size
-    ) : ScanResult()
-
-    /**
-     * Scan failed with an error
-     */
-    data class Error(val message: String, val cause: Throwable? = null) : ScanResult()
-
-    /**
-     * Scan was cancelled
-     */
-    object Cancelled : ScanResult()
-}
-
-/**
- * Unified scan state - represents the current state of scanning
- */
-sealed class ScanState {
-    /**
-     * No scan in progress
-     */
-    object Idle : ScanState()
-
-    /**
-     * Currently scanning
-     */
-    data class Scanning(
-        val target: ScanTarget?,
-        val progress: Float = 0f,
-        val currentFile: String? = null
-    ) : ScanState()
-
-    /**
-     * Scan completed successfully
-     */
-    data class Success(
-        val count: Int,
-        val target: ScanTarget?
-    ) : ScanState()
-
-    /**
-     * Scan failed with an error
-     */
-    data class Error(val message: String) : ScanState()
-
-    /**
-     * Scan was cancelled
-     */
-    object Cancelled : ScanState()
-}
-
-/**
  * Centralized library repository — the single entry point for all
  * library refresh / sync related operations.
  *
@@ -121,9 +35,6 @@ interface LibraryRepository {
     /** Emitted on scan errors — UI collects and shows Snackbar. */
     val scanError: SharedFlow<String>
 
-    /** Current unified scan state. */
-    val scanState: StateFlow<ScanState>
-
     // ─── Scan trigger (fire-and-forget) ────────────────────
 
     /**
@@ -136,12 +47,10 @@ interface LibraryRepository {
      *   always corresponds to a real scan attempt. System-driven refreshes
      *   (MediaStore observer, periodic worker, SAF walker) keep the default
      *   `false` to stay cheap when MediaStore has not changed.
-     * @param source Origin of the refresh, used for merge-window tuning.
      */
     fun refresh(
         forceRefresh: Boolean = false,
         bypassVersionCache: Boolean = false,
-        source: ChangeSource = ChangeSource.PULL_TO_REFRESH,
     )
 
     // ─── Single-file sync (metadata edit) ──────────────────
@@ -154,22 +63,11 @@ interface LibraryRepository {
      */
     suspend fun syncFile(filePath: String): Result<AudioFile>
 
-    // ─── Settings-driven auto-refresh / scan lifecycle ─────
+    // ─── Settings-driven auto-refresh ──────────────────────
 
     /**
      * Starts watching settings changes for auto-refresh.
      * Should be called once at app startup.
      */
     fun startWatchingSettings()
-
-    /**
-     * Resets scan state to Idle after UI has consumed it.
-     */
-    fun resetState()
-
-    /**
-     * Syncs selected directories and performs incremental scan.
-     * Called when directory settings change.
-     */
-    fun syncDirectories()
 }

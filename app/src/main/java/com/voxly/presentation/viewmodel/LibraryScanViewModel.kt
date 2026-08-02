@@ -7,7 +7,6 @@ import android.provider.DocumentsContract
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.core.util.SortUtil
-import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryChangeEvent
 import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.data.local.SettingsDataStore
@@ -20,7 +19,6 @@ import com.voxly.domain.model.ArtistGroup
 import com.voxly.domain.model.AudioFile
 import com.voxly.domain.repository.AudioRepository
 import com.voxly.domain.repository.LibraryRepository
-import com.voxly.domain.repository.ScanState
 import com.voxly.core.util.Constants
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -29,10 +27,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -100,8 +95,6 @@ class LibraryScanViewModel @Inject constructor(
             initialValue = emptyList()
         )
 
-    val scanState: StateFlow<ScanState> = libraryRepository.scanState
-
     val hasWhitelistDirectories: StateFlow<Boolean> = settingsDataStore.selectedDirectoryUris
         .map { uris -> uris.isNotEmpty() }
         .stateIn(
@@ -153,7 +146,9 @@ class LibraryScanViewModel @Inject constructor(
         selectedDirectories
     ) { audios, dirs ->
         groupFilesBySelectedDirectory(audios, dirs)
-    }.stateIn(
+    }.flowOn(Dispatchers.Default)
+        .distinctUntilChanged()
+        .stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(STATE_FLOW_TIMEOUT_MS),
         initialValue = emptyMap()
@@ -237,11 +232,6 @@ class LibraryScanViewModel @Inject constructor(
      */
     private var lastResumeRefreshAt = 0L
 
-    // Emitted when the scanner encounters an error. UI layers collect this to
-    // show a Snackbar / error banner — previously these errors were only logged.
-    private val _scanError = MutableSharedFlow<String>(extraBufferCapacity = 1)
-    val scanError: SharedFlow<String> = _scanError.asSharedFlow()
-
     // Separate Job coordinator for directory-scoped scans. This guards every
     // entry point that calls scanSelectedDirectories() so concurrent
     // checkDirectorySnapshotsOnStart, refreshDirectoryIncremental, and addDirectory
@@ -258,14 +248,12 @@ class LibraryScanViewModel @Inject constructor(
 
     /**
      * Merges a [LibraryChangeEvent] into the pending state.
-     *  - [LibraryChangeEvent.SingleFile] hot-syncs immediately (no merge).
      *  - [LibraryChangeEvent.Directory] coalesces per directory URI.
      *  - [LibraryChangeEvent.Global] / [LibraryChangeEvent.SnapshotCheck]
      *    supersede all pending directory work and schedule one merged scan.
      */
     private fun handleChangeEvent(event: LibraryChangeEvent) {
         when (event) {
-            is LibraryChangeEvent.SingleFile -> handleSingleFileSync(event.filePath)
             is LibraryChangeEvent.Directory -> {
                 if (pendingGlobal != null) return
                 pendingDirectories[event.directoryUri] = event
@@ -280,8 +268,7 @@ class LibraryScanViewModel @Inject constructor(
                 if (pendingGlobal == null) {
                     pendingGlobal = LibraryChangeEvent.Global(
                         forceRefresh = false,
-                        bypassVersionCache = true,
-                        source = ChangeSource.COLD_START
+                        bypassVersionCache = true
                     )
                 }
                 scheduleFlush()
@@ -303,7 +290,6 @@ class LibraryScanViewModel @Inject constructor(
         if (global != null) {
             loadAudioFiles(
                 forceRefresh = global.forceRefresh,
-                isIncremental = !global.forceRefresh,
                 bypassVersionCache = global.bypassVersionCache,
             )
             return
@@ -322,17 +308,6 @@ class LibraryScanViewModel @Inject constructor(
             isIncremental = true,
             forceRefresh = dirs.any { it.forceRefresh }
         )
-    }
-
-    /**
-     * Hot-syncs a single file to the cache (metadata edit / file change).
-     * Runs immediately — not debounced — so the edited metadata reaches the
-     * UI in the same frame as the save completes.
-     */
-    private fun handleSingleFileSync(filePath: String) {
-        viewModelScope.launch {
-            libraryRepository.syncFile(filePath)
-        }
     }
 
     /**
@@ -359,10 +334,9 @@ class LibraryScanViewModel @Inject constructor(
         // Unified change-event bus consumer. Every refresh trigger
         // (MediaStore observer, SAF watcher, pull-to-refresh, batch edits,
         // metadata save, on-resume, cold start) emits a LibraryChangeEvent via
-        // LibraryDataHolder. Events are merged here: SingleFile hot-syncs run
-        // immediately, Directory events coalesce per directory, and a Global
-        // request supersedes all pending directory scans — so a burst of
-        // triggers collapses into a single merged scan.
+        // LibraryDataHolder. Events are merged here: Directory events coalesce
+        // per directory, and a Global request supersedes all pending directory
+        // scans — so a burst of triggers collapses into a single merged scan.
         viewModelScope.launch {
             libraryDataHolder.changeEvents()
                 .collect { event -> handleChangeEvent(event) }
@@ -388,17 +362,6 @@ class LibraryScanViewModel @Inject constructor(
             delay(300L)
             libraryRepository.startWatchingSettings()
             checkDirectorySnapshotsOnStart()
-            libraryRepository.scanState.collect { state ->
-                when (state) {
-                    is ScanState.Success -> Timber.d(TAG, "Scan completed")
-                    is ScanState.Error -> {
-                        Timber.tag(TAG).e("Scan error: ${state.message}")
-                        _scanError.tryEmit(state.message)
-                        libraryDataHolder.emitScanError(state.message)
-                    }
-                    else -> { }
-                }
-            }
         }
     }
 
@@ -444,11 +407,11 @@ class LibraryScanViewModel @Inject constructor(
      */
     fun loadAudioFiles(
         forceRefresh: Boolean = false,
-        isIncremental: Boolean = false,
         bypassVersionCache: Boolean = false,
     ) {
         scanJob?.cancel()
         scanJob = viewModelScope.launch {
+            val isIncremental = !forceRefresh
             val shouldShowRefresh = forceRefresh || _isInitialLoad.value
             if (shouldShowRefresh) {
                 libraryDataHolder.beginScan()
@@ -465,11 +428,10 @@ class LibraryScanViewModel @Inject constructor(
 
                 if (_selectedDirectories.value.isNotEmpty()) {
                     val hasCache = audioFileScanner.hasCachedData()
-                    if (!forceRefresh && hasCache && !bypassVersionCache) {
-                        // Cache-served path: directoryFiles is derived from
-                        // allAudios (Room-backed), so the cache already
-                        // populates it. Nothing to write here.
-                    } else {
+                    // Cache-served path needs no write here — directoryFiles is
+                    // derived from allAudios (Room-backed). Only a real scan
+                    // (no cache, force, or bypassVersionCache) runs.
+                    if (forceRefresh || !hasCache || bypassVersionCache) {
                         val useIncremental = isIncremental && hasCache
                         // Awaited synchronously so cancellation of scanJob
                         // (e.g. via collectLatest on a new refresh) also
@@ -516,7 +478,6 @@ class LibraryScanViewModel @Inject constructor(
             } catch (e: Exception) {
                 Timber.tag(TAG).e(e, "Failed to load audio files")
                 val msg = e.message ?: "Unknown scan error"
-                _scanError.tryEmit(msg)
                 libraryDataHolder.emitScanError(msg)
             } finally {
                 if (shouldShowRefresh) {
@@ -535,8 +496,7 @@ class LibraryScanViewModel @Inject constructor(
         Timber.tag("Voxly").i("LibraryScanViewModel scan triggered: incremental=${!forceRefresh}")
         libraryRepository.refresh(
             forceRefresh = forceRefresh,
-            bypassVersionCache = true,
-            source = ChangeSource.PULL_TO_REFRESH
+            bypassVersionCache = true
         )
     }
 
@@ -574,7 +534,6 @@ class LibraryScanViewModel @Inject constructor(
         libraryRepository.refresh(
             forceRefresh = false,
             bypassVersionCache = true,
-            source = ChangeSource.ON_RESUME
         )
     }
 
@@ -583,8 +542,7 @@ class LibraryScanViewModel @Inject constructor(
         libraryDataHolder.requestDirectoryRefresh(
             directoryUri = dir.uri,
             directoryPath = dir.path,
-            forceRefresh = false,
-            source = ChangeSource.PULL_TO_REFRESH
+            forceRefresh = false
         )
     }
 
@@ -641,8 +599,7 @@ class LibraryScanViewModel @Inject constructor(
             libraryDataHolder.requestDirectoryRefresh(
                 directoryUri = uriString,
                 directoryPath = filePath,
-                forceRefresh = force,
-                source = ChangeSource.DIRECTORY_MANAGEMENT
+                forceRefresh = force
             )
             return
         }
@@ -657,8 +614,7 @@ class LibraryScanViewModel @Inject constructor(
         libraryDataHolder.requestDirectoryRefresh(
             directoryUri = uriString,
             directoryPath = filePath,
-            forceRefresh = true,
-            source = ChangeSource.DIRECTORY_MANAGEMENT
+            forceRefresh = true
         )
     }
 
@@ -674,8 +630,7 @@ class LibraryScanViewModel @Inject constructor(
         persistSelectedDirectories(updatedDirectories)
         libraryRepository.refresh(
             forceRefresh = false,
-            bypassVersionCache = true,
-            source = ChangeSource.DIRECTORY_MANAGEMENT
+            bypassVersionCache = true
         )
     }
 
@@ -688,8 +643,7 @@ class LibraryScanViewModel @Inject constructor(
         persistSelectedDirectories(emptyList())
         libraryRepository.refresh(
             forceRefresh = false,
-            bypassVersionCache = true,
-            source = ChangeSource.DIRECTORY_MANAGEMENT
+            bypassVersionCache = true
         )
     }
 
@@ -744,7 +698,6 @@ class LibraryScanViewModel @Inject constructor(
         } catch (e: Exception) {
             Timber.tag(TAG).e("Directory scan failed for ${directories.joinToString { it.path }}", e)
             val msg = e.message ?: "Directory scan failed"
-            _scanError.tryEmit(msg)
             libraryDataHolder.emitScanError(msg)
         } finally {
             _directoryLoadingState.update { it - dirUris }
@@ -947,8 +900,7 @@ class LibraryScanViewModel @Inject constructor(
                 }
                 libraryRepository.refresh(
                     forceRefresh = false,
-                    bypassVersionCache = true,
-                    source = ChangeSource.FILE_EDIT
+                    bypassVersionCache = true
                 )
             }
         }
@@ -980,8 +932,7 @@ class LibraryScanViewModel @Inject constructor(
                 }
                 libraryRepository.refresh(
                     forceRefresh = false,
-                    bypassVersionCache = true,
-                    source = ChangeSource.FILE_EDIT
+                    bypassVersionCache = true
                 )
             }
         }

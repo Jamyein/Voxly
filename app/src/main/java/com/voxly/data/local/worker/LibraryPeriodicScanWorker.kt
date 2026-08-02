@@ -7,7 +7,6 @@ import androidx.work.WorkerParameters
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.data.local.MusicLibraryCache
 import com.voxly.data.local.scanner.MediaStoreDataSource
-import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryRepository
 import dagger.assisted.Assisted
 import dagger.assisted.AssistedInject
@@ -43,8 +42,7 @@ class LibraryPeriodicScanWorker @AssistedInject constructor(
             //    detection; we do it here afterward.
             libraryRepository.refresh(
                 forceRefresh = false,
-                bypassVersionCache = false,
-                source = ChangeSource.PERIODIC_WORKER
+                bypassVersionCache = false
             )
 
             // 2. Deletion cleanup: fast path-only query to find files no

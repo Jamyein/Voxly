@@ -44,9 +44,9 @@ class DirectoryScanStrategy @Inject constructor(
 
         if (normalizedDirs.isEmpty()) return emptyList()
 
-        return if (forceRefresh) {
-            scanDirectoriesFull(normalizedDirs, filterSettings)
-        } else if (incremental) {
+        // forceRefresh forces a full re-read; otherwise incremental skips
+        // unchanged files. A non-incremental, non-forced request is a full scan.
+        return if (incremental && !forceRefresh) {
             scanDirectoriesIncremental(normalizedDirs, filterSettings)
         } else {
             scanDirectoriesFull(normalizedDirs, filterSettings)

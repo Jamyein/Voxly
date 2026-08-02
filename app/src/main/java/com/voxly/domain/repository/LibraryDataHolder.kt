@@ -13,23 +13,6 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Origin of a [LibraryChangeEvent]. Used for merge-window tuning and logging.
- */
-enum class ChangeSource {
-    MEDIA_STORE,
-    SAF_TREE,
-    PULL_TO_REFRESH,
-    ON_RESUME,
-    PERIODIC_WORKER,
-    SETTINGS,
-    FILE_EDIT,
-    DIRECTORY_MANAGEMENT,
-    BATCH_EDIT,
-    COLD_START,
-    APP
-}
-
-/**
  * Typed change events pushed by every library refresh trigger — MediaStore
  * observer, SAF tree watcher, pull-to-refresh, on-resume, batch edits,
  * metadata save, directory management, periodic worker — onto the unified
@@ -40,27 +23,19 @@ enum class ChangeSource {
  *  - [Global] scans the whole library (full or incremental);
  *  - [Directory] scans a single SAF/whitelist directory incrementally and is
  *    coalesced with other [Directory] events before one merged scan runs;
- *  - [SingleFile] hot-syncs one file to the cache immediately (metadata edits);
  *  - [SnapshotCheck] requests an on-demand incremental scan (cold start,
  *    directory snapshot verification).
  */
 sealed class LibraryChangeEvent {
     data class Global(
         val forceRefresh: Boolean = false,
-        val bypassVersionCache: Boolean = false,
-        val source: ChangeSource = ChangeSource.APP
+        val bypassVersionCache: Boolean = false
     ) : LibraryChangeEvent()
 
     data class Directory(
         val directoryUri: String,
         val directoryPath: String,
-        val forceRefresh: Boolean = false,
-        val source: ChangeSource = ChangeSource.APP
-    ) : LibraryChangeEvent()
-
-    data class SingleFile(
-        val filePath: String,
-        val source: ChangeSource = ChangeSource.FILE_EDIT
+        val forceRefresh: Boolean = false
     ) : LibraryChangeEvent()
 
     data object SnapshotCheck : LibraryChangeEvent()
@@ -126,25 +101,18 @@ class LibraryDataHolder @Inject constructor() {
      */
     fun requestGlobalRefresh(
         forceRefresh: Boolean = false,
-        bypassVersionCache: Boolean = false,
-        source: ChangeSource = ChangeSource.APP
+        bypassVersionCache: Boolean = false
     ) {
-        _changeEvents.tryEmit(LibraryChangeEvent.Global(forceRefresh, bypassVersionCache, source))
+        _changeEvents.tryEmit(LibraryChangeEvent.Global(forceRefresh, bypassVersionCache))
     }
 
     /** Request an incremental scan of a single directory (merged by the consumer). */
     fun requestDirectoryRefresh(
         directoryUri: String,
         directoryPath: String,
-        forceRefresh: Boolean = false,
-        source: ChangeSource = ChangeSource.APP
+        forceRefresh: Boolean = false
     ) {
-        _changeEvents.tryEmit(LibraryChangeEvent.Directory(directoryUri, directoryPath, forceRefresh, source))
-    }
-
-    /** Request an immediate single-file cache hot-sync (e.g. after a metadata edit). */
-    fun requestSingleFileSync(filePath: String, source: ChangeSource = ChangeSource.FILE_EDIT) {
-        _changeEvents.tryEmit(LibraryChangeEvent.SingleFile(filePath, source))
+        _changeEvents.tryEmit(LibraryChangeEvent.Directory(directoryUri, directoryPath, forceRefresh))
     }
 
     /** Request an on-demand incremental scan (cold start / directory snapshot check). */

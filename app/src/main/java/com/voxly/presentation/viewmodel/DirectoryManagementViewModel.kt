@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.SettingsDataStore
 import com.voxly.domain.model.WhitelistDirectory
-import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.domain.repository.WhitelistRepository
 import com.voxly.domain.usecase.RebuildDatabaseManager
@@ -57,8 +56,7 @@ class DirectoryManagementViewModel @Inject constructor(
                 whitelistRepository.addWhitelistDirectory(directoryUri.toString(), path)
                 libraryRepository.refresh(
                     forceRefresh = false,
-                    bypassVersionCache = true,
-                    source = ChangeSource.DIRECTORY_MANAGEMENT
+                    bypassVersionCache = true
                 )
             }
         }
@@ -69,8 +67,7 @@ class DirectoryManagementViewModel @Inject constructor(
             whitelistRepository.removeWhitelistDirectory(directoryUri)
             libraryRepository.refresh(
                 forceRefresh = false,
-                bypassVersionCache = true,
-                source = ChangeSource.DIRECTORY_MANAGEMENT
+                bypassVersionCache = true
             )
         }
     }

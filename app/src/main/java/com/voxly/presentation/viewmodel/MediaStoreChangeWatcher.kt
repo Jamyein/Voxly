@@ -9,7 +9,6 @@ import android.os.Looper
 import android.provider.MediaStore
 import com.voxly.data.local.SafTreeWatcher
 import com.voxly.data.local.SettingsDataStore
-import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -99,8 +98,7 @@ class MediaStoreChangeWatcher @Inject constructor(
                     Timber.tag(TAG).d("MediaStore change → global refresh → SAF walk")
                     libraryRepository.refresh(
                         forceRefresh = false,
-                        bypassVersionCache = true,
-                        source = ChangeSource.MEDIA_STORE
+                        bypassVersionCache = true
                     )
 
                     // Phase 4: detect changes in SAF-picked directories that

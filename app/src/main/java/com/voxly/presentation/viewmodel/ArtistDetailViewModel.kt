@@ -4,7 +4,6 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
-import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.domain.model.ArtistGroup
@@ -281,8 +280,7 @@ class ArtistDetailViewModel @AssistedInject constructor(
             // version equality.
             libraryRepository.refresh(
                 forceRefresh = forceRefresh,
-                bypassVersionCache = true,
-                source = ChangeSource.PULL_TO_REFRESH
+                bypassVersionCache = true
             )
             loadArtist(navKey.artistName)
         }

@@ -3,7 +3,6 @@ package com.voxly.presentation.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.core.util.SortUtil
-import com.voxly.domain.repository.ChangeSource
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.model.ArtistGroup
@@ -99,8 +98,7 @@ class ArtistViewModel @Inject constructor(
         Timber.tag("Voxly").i("ArtistViewModel refresh -> LibraryRepository")
         libraryRepository.refresh(
             forceRefresh = forceRefresh,
-            bypassVersionCache = true,
-            source = ChangeSource.PULL_TO_REFRESH
+            bypassVersionCache = true
         )
     }
 
