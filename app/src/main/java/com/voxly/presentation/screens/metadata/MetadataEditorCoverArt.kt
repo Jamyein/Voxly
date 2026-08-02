@@ -5,7 +5,6 @@ import android.os.Build
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
@@ -15,10 +14,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -31,7 +28,9 @@ import coil3.size.Size
 import com.voxly.R
 import com.voxly.presentation.components.applySharedMemoryCache
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
-import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.components.RoleGradientBadge
+import com.voxly.presentation.components.rememberRoleAccent
+import com.voxly.presentation.theme.emphasizedTitleMedium
 
 /**
  * Album art section for metadata editor.
@@ -71,10 +70,7 @@ fun AlbumArtSection(
     val displayModel: Any? = albumArt ?: fallbackBitmap
 
     // 空态占位用角色渐变，filePath hash 保证同一文件颜色稳定
-    val colorScheme = MaterialTheme.colorScheme
-    val accents = listOf(colorScheme.primary, colorScheme.secondary, colorScheme.tertiary)
-    val onAccents = listOf(colorScheme.onPrimary, colorScheme.onSecondary, colorScheme.onTertiary)
-    val roleIndex = (filePath?.hashCode() ?: 0).mod(3)
+    val roleAccent = rememberRoleAccent(filePath ?: "")
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -150,8 +146,8 @@ fun AlbumArtSection(
                         contentAlignment = Alignment.Center
                     ) {
                         EmptyAlbumArtContent(
-                            accent = accents[roleIndex],
-                            onAccent = onAccents[roleIndex]
+                            accent = roleAccent.accent,
+                            onAccent = roleAccent.onAccent
                         )
                     }
                 }
@@ -209,24 +205,18 @@ fun EmptyAlbumArtContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier.padding(16.dp)
     ) {
-        Box(
-            modifier = Modifier
-                .size(72.dp)
-                .clip(MaterialShapes.Cookie9Sided.toShape())
-                .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.72f)))),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                painter = com.voxly.presentation.icons.appIconPainter(com.voxly.presentation.icons.AppIcon.MusicNote),
-                contentDescription = stringResource(R.string.cd_album_art),
-                tint = onAccent,
-                modifier = Modifier.size(32.dp)
-            )
-        }
+        RoleGradientBadge(
+            painter = com.voxly.presentation.icons.appIconPainter(com.voxly.presentation.icons.AppIcon.MusicNote),
+            contentDescription = stringResource(R.string.cd_album_art),
+            accent = accent,
+            onAccent = onAccent,
+            badgeSize = 72.dp,
+            iconSize = 32.dp
+        )
         Spacer(modifier = Modifier.height(12.dp))
         Text(
             text = stringResource(R.string.tap_to_add_album_art),
-            style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+            style = emphasizedTitleMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
     }

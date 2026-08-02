@@ -55,7 +55,9 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import com.voxly.R
 import com.voxly.domain.repository.OnlineLyricsResult
+import com.voxly.presentation.components.SourceTag
 import com.voxly.presentation.theme.ExpressiveAnimations
+import com.voxly.presentation.theme.emphasizedTitleMedium
 import com.voxly.presentation.viewmodel.OnlineLyricsSearchViewModel
 import kotlinx.coroutines.launch
 
@@ -279,7 +281,7 @@ private fun LyricsResultItem(
             ) {
                 Text(
                     text = item.trackName,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    style = emphasizedTitleMedium,
                     color = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.weight(1f)
                 )
@@ -291,17 +293,7 @@ private fun LyricsResultItem(
                 }
                 // LRC 标签使用 tertiary 颜色
                 if (item.hasSyncedLyrics && !isLoading) {
-                    Surface(
-                        shape = MaterialTheme.shapes.extraLarge,
-                        color = MaterialTheme.colorScheme.tertiaryContainer
-                    ) {
-                        Text(
-                            text = "LRC",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                        )
-                    }
+                    SourceTag(text = "LRC")
                 }
             }
             Text(
@@ -310,17 +302,7 @@ private fun LyricsResultItem(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             // Source tag - unified tertiary color scheme for metadata labels
-            Surface(
-                shape = MaterialTheme.shapes.extraLarge,
-                color = MaterialTheme.colorScheme.tertiaryContainer
-            ) {
-                Text(
-                    text = item.source,
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onTertiaryContainer,
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                )
-            }
+            SourceTag(text = item.source)
         }
     }
 }

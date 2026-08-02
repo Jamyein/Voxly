@@ -58,7 +58,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -69,6 +68,7 @@ import com.voxly.presentation.components.AlbumArtImage
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.theme.emphasizedTitleMedium
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 import kotlinx.coroutines.launch
 
@@ -844,13 +844,8 @@ fun AudioFileStandardRow(
         .combinedClickable(onClick = onClick, onLongClick = onLongClick)
 
     // 无封面占位用角色渐变，title hash 保证同一首歌颜色稳定（同紧凑行）
-    val colorScheme = MaterialTheme.colorScheme
     val title = audioFile.metadata.getDisplayTitle(audioFile.name)
-    val accents = listOf(colorScheme.primary, colorScheme.secondary, colorScheme.tertiary)
-    val onAccents = listOf(colorScheme.onPrimary, colorScheme.onSecondary, colorScheme.onTertiary)
-    val roleIndex = title.hashCode().mod(3)
-    val accent = accents[roleIndex]
-    val onAccent = onAccents[roleIndex]
+    val roleAccent = rememberRoleAccent(title)
     val coverSize = 72.dp
 
     ListItem(
@@ -859,7 +854,7 @@ fun AudioFileStandardRow(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         content = {
-        Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(title, style = emphasizedTitleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {
         Column {
@@ -903,10 +898,10 @@ fun AudioFileStandardRow(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.72f)))),
+                        .background(roleAccentGradient(roleAccent.accent)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(appIconPainter(AppIcon.MusicNote), null, tint = onAccent, modifier = Modifier.size(IconSizeLarge))
+                    Icon(appIconPainter(AppIcon.MusicNote), null, tint = roleAccent.onAccent, modifier = Modifier.size(IconSizeLarge))
                 }
             }
         }
@@ -1079,11 +1074,7 @@ fun AudioFileStandardRowCompact(
     val colorScheme = MaterialTheme.colorScheme
     val title = audioFile.metadata.getDisplayTitle(audioFile.name)
     // 无封面占位用角色渐变，title hash 保证同一首歌颜色稳定
-    val accents = listOf(colorScheme.primary, colorScheme.secondary, colorScheme.tertiary)
-    val onAccents = listOf(colorScheme.onPrimary, colorScheme.onSecondary, colorScheme.onTertiary)
-    val roleIndex = title.hashCode().mod(3)
-    val accent = accents[roleIndex]
-    val onAccent = onAccents[roleIndex]
+    val roleAccent = rememberRoleAccent(title)
     // 封面主导：72dp 封面作为视觉主角，颜色来自封面/占位 + pill
     val coverSize = 72.dp
 
@@ -1094,7 +1085,7 @@ fun AudioFileStandardRowCompact(
         // 扁平行：无卡片背景，靠封面/占位 + 时长 pill 提供颜色
         contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 8.dp),
         content = {
-        Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Text(title, style = emphasizedTitleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
     },
     supportingContent = {
         val displayText = buildString {
@@ -1161,10 +1152,10 @@ fun AudioFileStandardRowCompact(
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
-                                .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.72f)))),
+                                .background(roleAccentGradient(roleAccent.accent)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(Icons.Default.MusicNote, null, tint = onAccent, modifier = Modifier.size(IconSizeLarge))
+                            Icon(Icons.Default.MusicNote, null, tint = roleAccent.onAccent, modifier = Modifier.size(IconSizeLarge))
                         }
                     }
             }

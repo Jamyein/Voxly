@@ -16,20 +16,12 @@ import androidx.compose.material3.toShape
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.pulltorefresh.PullToRefreshState
 import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -39,7 +31,9 @@ import com.voxly.R
 import com.voxly.domain.model.AudioFile
 import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
-import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.components.RoleGradientBadge
+import com.voxly.presentation.components.rememberRoleAccentAt
+import com.voxly.presentation.theme.scaleOnPress
 import com.voxly.presentation.viewmodel.SelectedDirectory
 
 /**
@@ -284,39 +278,13 @@ fun DirectoryItem(
     modifier: Modifier = Modifier
 ) {
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "directoryItemScale"
-    )
 
-    val colorScheme = MaterialTheme.colorScheme
-    val roleIndex = index % 3
-    val accents = listOf(colorScheme.primary, colorScheme.secondary, colorScheme.tertiary)
-    val onAccents = listOf(colorScheme.onPrimary, colorScheme.onSecondary, colorScheme.onTertiary)
-    val containers = listOf(
-        colorScheme.primaryContainer,
-        colorScheme.secondaryContainer,
-        colorScheme.tertiaryContainer
-    )
-    val onContainers = listOf(
-        colorScheme.onPrimaryContainer,
-        colorScheme.onSecondaryContainer,
-        colorScheme.onTertiaryContainer
-    )
-    val accent = accents[roleIndex]
-    val onAccent = onAccents[roleIndex]
-    val container = containers[roleIndex]
-    val onContainer = onContainers[roleIndex]
+    val roleAccent = rememberRoleAccentAt(index)
 
     Card(
-        modifier = modifier.scale(scale),
+        modifier = modifier.scaleOnPress(interactionSource, pressedScale = 0.97f, label = "directoryItemScale"),
         shape = MaterialTheme.shapes.extraLarge,
-        colors = CardDefaults.cardColors(containerColor = container),
+        colors = CardDefaults.cardColors(containerColor = roleAccent.container),
         interactionSource = interactionSource,
         onClick = onClick
     ) {
@@ -325,25 +293,19 @@ fun DirectoryItem(
                 .fillMaxWidth()
                 .padding(20.dp)
         ) {
-            Box(
-                modifier = Modifier
-                    .size(64.dp)
-                    .clip(MaterialShapes.Cookie9Sided.toShape())
-                    .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.72f)))),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    painter = appIconPainter(AppIcon.FolderOpen),
-                    contentDescription = stringResource(R.string.cd_directory),
-                    tint = onAccent,
-                    modifier = Modifier.size(30.dp)
-                )
-            }
+            RoleGradientBadge(
+                painter = appIconPainter(AppIcon.FolderOpen),
+                contentDescription = stringResource(R.string.cd_directory),
+                accent = roleAccent.accent,
+                onAccent = roleAccent.onAccent,
+                badgeSize = 64.dp,
+                iconSize = 30.dp
+            )
             Spacer(modifier = Modifier.height(16.dp))
             Text(
                 text = directory.path.substringAfterLast('/').ifBlank { directory.path },
                 style = MaterialTheme.typography.titleLarge,
-                color = onContainer,
+                color = roleAccent.onContainer,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
@@ -358,8 +320,8 @@ fun DirectoryItem(
             Spacer(modifier = Modifier.height(12.dp))
             Surface(
                 shape = MaterialTheme.shapes.extraLarge,
-                color = onContainer.copy(alpha = 0.10f),
-                contentColor = onContainer
+                color = roleAccent.onContainer.copy(alpha = 0.10f),
+                contentColor = roleAccent.onContainer
             ) {
                 Text(
                     text = stringResource(R.string.file_count, fileCount),

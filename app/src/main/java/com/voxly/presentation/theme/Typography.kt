@@ -1,6 +1,8 @@
 package com.voxly.presentation.theme
 
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Typography
+import androidx.compose.runtime.Composable
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
@@ -282,3 +284,11 @@ val Typography = Typography(
         letterSpacing = 0.5.sp
     )
 )
+
+/**
+ * Emphasized title used for page/section/row titles — `titleMedium` at
+ * SemiBold weight. Screens used to inline this `copy(...)`; centralizing it
+ * keeps the "titles are SemiBold" intent in one place.
+ */
+val emphasizedTitleMedium: TextStyle
+    @Composable get() = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold)

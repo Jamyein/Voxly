@@ -3,13 +3,10 @@ package com.voxly.presentation.screens.filebrowser
 import androidx.compose.animation.AnimatedVisibilityScope
 import androidx.compose.animation.ExperimentalSharedTransitionApi
 import androidx.compose.animation.SharedTransitionScope
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,8 +35,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,6 +43,8 @@ import com.voxly.R
 import com.voxly.domain.model.AlbumGroup
 import com.voxly.domain.model.ArtistGroup
 import com.voxly.presentation.components.AlbumArtImage
+import com.voxly.presentation.components.rememberRoleAccent
+import com.voxly.presentation.components.roleAccentGradient
 import com.voxly.presentation.components.DefaultAlbumArtPlaceholder
 import com.voxly.presentation.components.createAlbumCoverSharedElementKey
 import com.voxly.presentation.components.createAlbumTitleSharedElementKey
@@ -57,6 +54,7 @@ import com.voxly.presentation.icons.AppIcon
 import com.voxly.presentation.icons.appIconPainter
 import com.voxly.presentation.screens.album.getAlbumDisplayYearString
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.theme.scaleOnPress
 import timber.log.Timber
 
 @Composable
@@ -173,23 +171,9 @@ internal fun AlbumGridItem(
     val canUseSharedTransition = sharedTransitionScope != null && animatedVisibilityScope != null
 
     // 无封面时用角色渐变 + 首字母占位；name hash 保证同一专辑颜色稳定（无需调用点传 index）
-    val colorScheme = MaterialTheme.colorScheme
-    val accents = listOf(colorScheme.primary, colorScheme.secondary, colorScheme.tertiary)
-    val onAccents = listOf(colorScheme.onPrimary, colorScheme.onSecondary, colorScheme.onTertiary)
-    val roleIndex = album.name.hashCode().mod(3)
-    val accent = accents[roleIndex]
-    val onAccent = onAccents[roleIndex]
+    val roleAccent = rememberRoleAccent(album.name)
 
     val interactionSource = remember { MutableInteractionSource() }
-    val isPressed by interactionSource.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "albumGridItemScale"
-    )
 
     Column(
         modifier = Modifier.fillMaxWidth()
@@ -205,17 +189,17 @@ internal fun AlbumGridItem(
                             animatedVisibilityScope = animatedVisibilityScope,
                             boundsTransform = { _, _ -> spring() }
                         )
-                        .clickable(onClick = onClick)
+                        .clickable(interactionSource = interactionSource, onClick = onClick)
                         .clip(MaterialTheme.shapes.medium)
-                        .scale(scale)
+                        .scaleOnPress(interactionSource, label = "albumGridItemScale")
                 }
             } else {
                 Modifier
                     .fillMaxWidth()
                     .aspectRatio(1f)
-                    .clickable(onClick = onClick)
+                    .clickable(interactionSource = interactionSource, onClick = onClick)
                     .clip(MaterialTheme.shapes.medium)
-                    .scale(scale)
+                    .scaleOnPress(interactionSource, label = "albumGridItemScale")
             },
             contentAlignment = Alignment.Center
         ) {
@@ -232,14 +216,14 @@ internal fun AlbumGridItem(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(Brush.verticalGradient(listOf(accent, accent.copy(alpha = 0.72f)))),
+                        .background(roleAccentGradient(roleAccent.accent)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
                         text = album.name.trim().firstOrNull()?.uppercase() ?: "?",
                         style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.SemiBold,
-                        color = onAccent
+                        color = roleAccent.onAccent
                     )
                 }
             }

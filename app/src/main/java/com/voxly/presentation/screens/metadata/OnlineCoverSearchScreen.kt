@@ -25,7 +25,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ImageNotSupported
 import androidx.compose.material.icons.filled.Refresh
+import com.voxly.presentation.components.SourceTag
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.theme.emphasizedTitleMedium
 import androidx.compose.material3.toShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -254,7 +256,7 @@ private fun CoverResultItem(
             ) {
                 Text(
                     text = item.title,
-                    style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                    style = emphasizedTitleMedium,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
@@ -263,17 +265,7 @@ private fun CoverResultItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 // Source tag - unified with tertiary color scheme
-                Surface(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    color = MaterialTheme.colorScheme.tertiaryContainer
-                ) {
-                    Text(
-                        text = item.source.toDisplayString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onTertiaryContainer,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp)
-                    )
-                }
+                SourceTag(text = item.source.toDisplayString())
             }
         }
     }

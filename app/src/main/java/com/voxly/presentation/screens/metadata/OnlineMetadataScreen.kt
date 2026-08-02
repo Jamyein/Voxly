@@ -57,7 +57,9 @@ import com.voxly.domain.model.AudioMetadata
 import com.voxly.domain.repository.OnlineRelease
 import com.voxly.domain.repository.OnlineSource
 import com.voxly.presentation.components.NetworkCoverImage
+import com.voxly.presentation.components.SourceTag
 import com.voxly.presentation.theme.MaterialShapes
+import com.voxly.presentation.theme.emphasizedTitleMedium
 import androidx.compose.material3.toShape
 import com.voxly.presentation.ui.clearSearchResultImageCache
 import com.voxly.presentation.viewmodel.OnlineMetadataUiState
@@ -267,7 +269,7 @@ private fun OnlineReleaseList(
                                 ?: release.title.ifBlank { "-" }
                             Text(
                                 text = songTitle,
-                                style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.SemiBold),
+                                style = emphasizedTitleMedium,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
@@ -286,17 +288,7 @@ private fun OnlineReleaseList(
                                 overflow = TextOverflow.Ellipsis
                             )
                             Spacer(modifier = Modifier.height(8.dp))
-                            Surface(
-                                shape = MaterialTheme.shapes.extraLarge,
-                                color = MaterialTheme.colorScheme.tertiaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
-                            ) {
-                                Text(
-                                    text = displaySource(release),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
-                                )
-                            }
+                            SourceTag(text = displaySource(release))
                         }
                     }
                 }

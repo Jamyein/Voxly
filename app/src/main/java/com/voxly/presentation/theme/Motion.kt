@@ -30,10 +30,14 @@ import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.ExitTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -740,4 +744,24 @@ object MotionLogger {
         Timber.tag(TAG).d("Animation END: $animationType (${durationMs}ms)")
     }
 }
+}
+
+/**
+ * Scales the modifier down while pressed, with a bouncy spring release.
+ * Pass the same [interactionSource] the clickable uses so press state and
+ * ripple stay in sync. Uses [androidx.compose.ui.composed] so this stays a
+ * plain (non-@Composable) Modifier extension that can be imported anywhere.
+ */
+fun Modifier.scaleOnPress(
+    interactionSource: MutableInteractionSource,
+    pressedScale: Float = 0.96f,
+    label: String = "scaleOnPress"
+): Modifier = composed {
+    val isPressed by interactionSource.collectIsPressedAsState()
+    val scale by animateFloatAsState(
+        targetValue = if (isPressed) pressedScale else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy, stiffness = Spring.StiffnessMedium),
+        label = label
+    )
+    Modifier.scale(scale)
 }
