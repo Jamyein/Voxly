@@ -122,23 +122,8 @@ class LibraryDataHolder @Inject constructor() {
     }
 
     /**
-     * Legacy convenience — emits a [LibraryChangeEvent.Global].
-     *
-     * @param forceRefresh Full rescan, ignores cache.
-     * @param bypassVersionCache Skip the MediaStore version short-circuit.
-     *   Pass `true` from user-initiated pull-to-refresh so the spinner always
-     *   corresponds to a real scan attempt. System-driven refreshes
-     *   (MediaStore observer, periodic worker, SAF walker) keep the default
-     *   `false` to stay cheap when MediaStore has not changed.
+     * Request a whole-library refresh (full when [forceRefresh], else incremental).
      */
-    fun requestRefresh(
-        forceRefresh: Boolean = false,
-        bypassVersionCache: Boolean = false,
-    ) {
-        _changeEvents.tryEmit(LibraryChangeEvent.Global(forceRefresh, bypassVersionCache, ChangeSource.APP))
-    }
-
-    /** Request a whole-library refresh (full when [forceRefresh], else incremental). */
     fun requestGlobalRefresh(
         forceRefresh: Boolean = false,
         bypassVersionCache: Boolean = false,

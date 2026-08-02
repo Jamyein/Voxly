@@ -154,7 +154,7 @@ interface LibraryRepository {
      */
     suspend fun syncFile(filePath: String): Result<AudioFile>
 
-    // ─── UnifiedScanManager surface ────────────────────────
+    // ─── Settings-driven auto-refresh / scan lifecycle ─────
 
     /**
      * Starts watching settings changes for auto-refresh.

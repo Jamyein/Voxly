@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.core.util.SortUtil
 import com.voxly.domain.repository.ChangeSource
-import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.model.ArtistGroup
@@ -27,14 +26,13 @@ import javax.inject.Inject
  * ViewModel for the Artists list screen.
  *
  * Refresh coordination: pull-to-refresh and initial-load refreshes go through
- * [LibraryDataHolder.requestRefresh], the single fan-in point. The actual
+ * [LibraryRepository.refresh], the single fan-in point. The actual
  * scan runs in [LibraryScanViewModel], which updates
- * [LibraryDataHolder.isRefreshing] for global visibility across screens.
+ * [LibraryRepository.isRefreshing] for global visibility across screens.
  */
 @HiltViewModel
 class ArtistViewModel @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
-    private val libraryDataHolder: LibraryDataHolder,
     private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
@@ -76,14 +74,14 @@ class ArtistViewModel @Inject constructor(
         )
 
     /**
-     * Mirrors the global scan activity maintained by [LibraryDataHolder].
+     * Mirrors the global scan activity maintained by [LibraryRepository].
      * A VM created mid-scan picks up the current spinner state immediately
      * on subscribe, with no missed-trigger edge case.
      */
-    val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
+    val isRefreshing: StateFlow<Boolean> = libraryRepository.isRefreshing
 
-    /** Scan error events propagated through [LibraryDataHolder]. */
-    val scanError: SharedFlow<String> = libraryDataHolder.scanError
+    /** Scan error events propagated through [LibraryRepository]. */
+    val scanError: SharedFlow<String> = libraryRepository.scanError
 
     /** Diff-based artist list updates from AlbumArtistAggregator. */
     val artistDiff: SharedFlow<IncrementalList<ArtistGroup>> = audioFileScanner.artistDiff

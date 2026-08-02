@@ -8,7 +8,6 @@ import androidx.lifecycle.viewModelScope
 import androidx.palette.graphics.Palette
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.repository.ChangeSource
-import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.data.local.cover.CoverUriProvider
@@ -41,7 +40,6 @@ class AlbumDetailViewModel @AssistedInject constructor(
     private val databaseProvider: MusicCacheDatabaseProvider,
     private val metadataProcessor: TagLibMetadataProcessor,
     private val coverUriProvider: CoverUriProvider,
-    private val libraryDataHolder: LibraryDataHolder,
     private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
@@ -70,11 +68,11 @@ class AlbumDetailViewModel @AssistedInject constructor(
     val files: StateFlow<List<AudioFile>> = _files.asStateFlow()
 
     /**
-     * Mirrors the global scan activity maintained by [LibraryDataHolder].
+     * Mirrors the global scan activity maintained by [LibraryRepository].
      * A VM created mid-scan picks up the current spinner state immediately
      * on subscribe, with no missed-trigger edge case.
      */
-    val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
+    val isRefreshing: StateFlow<Boolean> = libraryRepository.isRefreshing
 
     private val _dominantColor = MutableStateFlow<Color?>(null)
     val dominantColor: StateFlow<Color?> = _dominantColor.asStateFlow()

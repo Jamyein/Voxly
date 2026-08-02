@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.repository.ChangeSource
-import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.cache.MusicCacheDatabaseProvider
 import com.voxly.domain.model.ArtistGroup
@@ -41,7 +40,6 @@ class ArtistDetailViewModel @AssistedInject constructor(
     @ApplicationContext private val context: Context,
     private val audioFileScanner: AudioFileScanner,
     private val databaseProvider: MusicCacheDatabaseProvider,
-    private val libraryDataHolder: LibraryDataHolder,
     private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
@@ -70,11 +68,11 @@ class ArtistDetailViewModel @AssistedInject constructor(
     val albumYears: StateFlow<Map<String, String?>> = _albumYears.asStateFlow()
 
     /**
-     * Mirrors the global scan activity maintained by [LibraryDataHolder].
+     * Mirrors the global scan activity maintained by [LibraryRepository].
      * A VM created mid-scan picks up the current spinner state immediately
      * on subscribe, with no missed-trigger edge case.
      */
-    val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
+    val isRefreshing: StateFlow<Boolean> = libraryRepository.isRefreshing
 
     private var preloadJob: Job? = null
     private var refreshJob: Job? = null

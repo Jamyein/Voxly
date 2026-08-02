@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.voxly.data.local.AudioFileScanner
 import com.voxly.domain.repository.ChangeSource
-import com.voxly.domain.repository.LibraryDataHolder
 import com.voxly.domain.repository.LibraryRepository
 import com.voxly.data.local.AlbumSortOption
 import com.voxly.data.local.UiStateDataStore
@@ -30,15 +29,14 @@ import javax.inject.Inject
  * AlbumViewModel selects the correct pre-sorted list based on current sort option.
  *
  * Refresh coordination: pull-to-refresh and initial-load refreshes go through
- * [LibraryDataHolder.requestRefresh], the single fan-in point for all
+ * [LibraryRepository.refresh], the single fan-in point for all
  * ViewModels. [LibraryScanViewModel] collects from it and runs the actual scan,
- * updating [LibraryDataHolder.isRefreshing] for global visibility.
+ * updating [LibraryRepository.isRefreshing] for global visibility.
  */
 @HiltViewModel
 class AlbumViewModel @Inject constructor(
     private val audioFileScanner: AudioFileScanner,
     private val uiStateDataStore: UiStateDataStore,
-    private val libraryDataHolder: LibraryDataHolder,
     private val libraryRepository: LibraryRepository
 ) : ViewModel() {
 
@@ -46,16 +44,16 @@ class AlbumViewModel @Inject constructor(
     private val albumsBySort: StateFlow<Map<AlbumSortOption, List<AlbumGroup>>> = audioFileScanner.albumsBySort
 
     /**
-     * Mirrors the global scan activity maintained by [LibraryDataHolder].
-     * Observing the holder (instead of inferring from refresh triggers +
+     * Mirrors the global scan activity maintained by [LibraryRepository].
+     * Observing the repository (instead of inferring from refresh triggers +
      * filteredFiles emissions) means a VM created mid-scan — e.g. user
      * navigates to Albums while Artists is refreshing — picks up the current
      * spinner state immediately on subscribe, with no missed-trigger edge case.
      */
-    val isRefreshing: StateFlow<Boolean> = libraryDataHolder.isRefreshing
+    val isRefreshing: StateFlow<Boolean> = libraryRepository.isRefreshing
 
-    /** Scan error events propagated through [LibraryDataHolder]. */
-    val scanError: SharedFlow<String> = libraryDataHolder.scanError
+    /** Scan error events propagated through [LibraryRepository]. */
+    val scanError: SharedFlow<String> = libraryRepository.scanError
 
     /** Diff-based album list updates from AlbumArtistAggregator. */
     val albumDiff: SharedFlow<IncrementalList<AlbumGroup>> = audioFileScanner.albumDiff

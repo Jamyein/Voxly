@@ -64,7 +64,7 @@ class LibraryRepositoryImpl @Inject constructor(
 ) : LibraryRepository {
 
     companion object {
-        private const val TAG = "UnifiedScanManager"
+        private const val TAG = "LibraryRepository"
     }
 
     // Flag to prevent duplicate settings watching
@@ -106,13 +106,14 @@ class LibraryRepositoryImpl @Inject constructor(
         )
     }
 
-    suspend fun scan(
+    private suspend fun scan(
         target: ScanTarget,
         force: Boolean
     ): ScanResult {
-        Timber.tag("Voxly").i("UnifiedScanManager scan: target=$target force=$force")
+        Timber.tag("Voxly").i("LibraryRepository scan: target=$target force=$force")
 
         _scanState.value = ScanState.Scanning(target, 0f)
+        libraryDataHolder.beginScan()
 
         return try {
             val files = when (target) {
@@ -143,10 +144,12 @@ class LibraryRepositoryImpl @Inject constructor(
             _scanState.value = ScanState.Error(errorMessage)
             Timber.tag(TAG).e(e, "Scan failed: $errorMessage")
             ScanResult.Error(errorMessage, e)
+        } finally {
+            libraryDataHolder.endScan()
         }
     }
 
-    fun scanAsync(
+    private fun scanAsync(
         target: ScanTarget,
         force: Boolean,
         onComplete: ((ScanResult) -> Unit)? = null
@@ -156,11 +159,6 @@ class LibraryRepositoryImpl @Inject constructor(
             val result = scan(target, force)
             onComplete?.invoke(result)
         }
-    }
-
-    fun cancel() {
-        currentScanJob?.cancel()
-        currentScanJob = null
     }
 
     override suspend fun syncFile(filePath: String): Result<AudioFile> {
