@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
 import coil3.request.ImageRequest
 import coil3.request.crossfade
-import coil3.size.Size
 import com.voxly.R
 import com.voxly.presentation.components.applySharedMemoryCache
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
@@ -88,7 +87,6 @@ fun AlbumArtSection(
                     }
                     ImageRequest.Builder(context)
                         .data(model)
-                        .size(Size.ORIGINAL)
                         .applySharedMemoryCache(memoryKey, placeholderKey = coverKey)
                         .build()
                 }

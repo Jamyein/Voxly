@@ -451,6 +451,7 @@ private fun FileBrowserListPane(
                                 onRequestAudioPermission()
                             }
                         },
+                        scrollBehavior = scrollBehavior,
                         listState = listState,
                         bottomPadding = 16.dp
                     )
@@ -469,6 +470,7 @@ private fun FileBrowserListPane(
                                 onRequestAudioPermission()
                             }
                         },
+                        scrollBehavior = scrollBehavior,
                         listState = listState,
                         sharedTransitionScope = sharedTransitionScope,
                         animatedVisibilityScope = animatedVisibilityScope

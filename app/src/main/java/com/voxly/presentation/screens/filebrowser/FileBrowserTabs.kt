@@ -16,10 +16,8 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
-import androidx.compose.material3.pulltorefresh.PullToRefreshDefaults.LoadingIndicator
-import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -27,6 +25,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.voxly.R
 import com.voxly.domain.model.AudioFile
+import com.voxly.presentation.components.LibraryRefreshBox
 import com.voxly.presentation.components.scrollbar.LazyVerticalGridScrollbar
 import com.voxly.presentation.components.createAlbumArtSharedElementKey
 
@@ -49,25 +48,18 @@ internal fun AllAudiosTabContent(
     isRefreshing: Boolean,
     isInitialLoad: Boolean = false,
     onRefresh: () -> Unit,
+    scrollBehavior: TopAppBarScrollBehavior? = null,
     listState: LazyGridState? = null,
     sharedTransitionScope: SharedTransitionScope? = null,
     animatedVisibilityScope: AnimatedVisibilityScope? = null
 ) {
     val lazyGridState = listState ?: rememberLazyGridState()
-    val pullToRefreshState = rememberPullToRefreshState()
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        PullToRefreshBox(
+        LibraryRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
-            state = pullToRefreshState,
-            modifier = Modifier.fillMaxSize(),
-            indicator = {
-                LoadingIndicator(
-                    state = pullToRefreshState,
-                    isRefreshing = isRefreshing,
-                    modifier = Modifier.align(Alignment.TopCenter)
-                )
-            }
+            scrollBehavior = scrollBehavior,
+            modifier = Modifier.fillMaxSize()
         ) {
             if (isInitialLoad) {
                 com.voxly.presentation.components.SkeletonListScreen(modifier = Modifier.fillMaxSize())
